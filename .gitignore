@@ -1,1 +1,8 @@
+target/
+**/*.rs.bk
+/.env
+**/.DS_Store
+coverage/
+/.idea/
+/.vscode/
 /target

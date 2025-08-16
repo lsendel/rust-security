@@ -1,0 +1,47 @@
+[
+  {
+    "uid": {"type": "User", "id": "u1"},
+    "attrs": {
+      "tenant": "t1",
+      "allowed_brands": {"__extn": {"fn": "set", "args": ["brandA", "brandB"]}},
+      "allowed_locations": {"__extn": {"fn": "set", "args": ["loc-ny", "loc-sf"]}}
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "User", "id": "u2"},
+    "attrs": {
+      "tenant": "t2",
+      "allowed_brands": {"__extn": {"fn": "set", "args": ["brandC"]}},
+      "allowed_locations": {"__extn": {"fn": "set", "args": ["loc-la"]}}
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Order", "id": "o1"},
+    "attrs": {
+      "tenant": "t1",
+      "brand": "brandA",
+      "location": "loc-ny"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Order", "id": "o2"},
+    "attrs": {
+      "tenant": "t1",
+      "brand": "brandZ",
+      "location": "loc-ny"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Order", "id": "o3"},
+    "attrs": {
+      "tenant": "t2",
+      "brand": "brandC",
+      "location": "loc-la"
+    },
+    "parents": []
+  }
+]

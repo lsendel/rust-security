@@ -1,0 +1,65 @@
+# Multi-stage build for security and size optimization
+FROM rust:1.81-slim as builder
+
+# Install security updates and required packages
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user for security
+RUN useradd -m -u 1001 appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+# Build the application in release mode
+RUN cargo build --release --locked
+
+# Runtime stage with minimal base image
+FROM debian:bookworm-slim
+
+# Install security updates and minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN useradd -m -u 1001 -s /bin/bash appuser
+
+# Create app directory
+WORKDIR /app
+
+# Copy the binary from builder stage
+COPY --from=builder /app/target/release/auth-service /app/auth-service
+
+# Copy configuration template
+COPY .env.example /app/.env.example
+
+# Set ownership and permissions
+RUN chown -R appuser:appuser /app && \
+    chmod 755 /app/auth-service
+
+# Switch to non-root user
+USER appuser
+
+# Expose port (non-privileged)
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Set environment variables
+ENV RUST_LOG=info
+ENV BIND_ADDR=0.0.0.0:8080
+
+# Run the application
+CMD ["./auth-service"]
