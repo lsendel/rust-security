@@ -1,0 +1,275 @@
+# Threat Intelligence Configuration
+# Configuration for automated threat intelligence gathering and processing
+
+# General settings
+general:
+  update_interval: 3600  # seconds (1 hour)
+  log_level: "INFO"
+  log_file: "logs/threat-intelligence.log"
+  max_log_size: "100MB"
+  backup_logs: true
+  
+# Threat intelligence feeds
+feeds:
+  # Open Source Intelligence Feeds
+  abuse_ch_malware:
+    enabled: true
+    url: "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-agh.txt"
+    type: "malware_urls"
+    format: "text"
+    update_frequency: 3600
+    description: "Abuse.ch URLhaus malware URLs"
+    
+  firehol_level1:
+    enabled: true
+    url: "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"
+    type: "malicious_ips"
+    format: "netset"
+    update_frequency: 3600
+    description: "FireHOL Level 1 - High confidence malicious IPs"
+    
+  tor_exit_nodes:
+    enabled: true
+    url: "https://check.torproject.org/api/bulk"
+    type: "tor_nodes"
+    format: "json"
+    update_frequency: 1800
+    description: "Tor exit nodes list"
+    
+  # Mock threat feeds for testing (replace with real feeds in production)
+  security_vendors:
+    enabled: false
+    url: "https://api.example-threat-intel.com/v1/indicators"
+    type: "mixed_indicators"
+    format: "json"
+    headers:
+      Authorization: "Bearer ${THREAT_INTEL_API_KEY}"
+    update_frequency: 1800
+    description: "Commercial threat intelligence feed"
+
+# Indicator processing
+indicators:
+  # IP address indicators
+  ip_addresses:
+    enabled: true
+    confidence_threshold: 0.7
+    max_age_days: 30
+    whitelist:
+      - "127.0.0.1"
+      - "::1"
+      - "10.0.0.0/8"
+      - "172.16.0.0/12"
+      - "192.168.0.0/16"
+    
+  # Domain indicators  
+  domains:
+    enabled: true
+    confidence_threshold: 0.8
+    max_age_days: 30
+    whitelist:
+      - "localhost"
+      - "*.local"
+      - "*.internal"
+    
+  # URL indicators
+  urls:
+    enabled: true
+    confidence_threshold: 0.8
+    max_age_days: 7
+    
+  # File hash indicators
+  file_hashes:
+    enabled: true
+    confidence_threshold: 0.9
+    max_age_days: 90
+    supported_types:
+      - "md5"
+      - "sha1"
+      - "sha256"
+
+# Rule generation
+rule_generation:
+  enabled: true
+  output_formats:
+    - "prometheus"
+    - "fluentd" 
+    - "sigma"
+    - "json"
+  
+  # Prometheus alerting rules
+  prometheus:
+    enabled: true
+    output_file: "monitoring/prometheus/threat-intel-alerts.yml"
+    rule_groups:
+      - name: "threat_intelligence"
+        interval: "30s"
+    
+  # Fluentd rules for log filtering
+  fluentd:
+    enabled: true
+    output_file: "monitoring/fluentd/threat-intel-filters.conf"
+    
+  # Sigma rules for SIEM integration
+  sigma:
+    enabled: true
+    output_dir: "config/threat-intelligence/sigma-rules"
+    
+  # JSON indicators for application integration
+  json:
+    enabled: true
+    output_file: "config/threat-intelligence/indicators.json"
+
+# Integration settings
+integrations:
+  # Elasticsearch integration
+  elasticsearch:
+    enabled: false
+    url: "http://localhost:9200"
+    index_pattern: "threat-intel-{YYYY.MM.DD}"
+    
+  # Prometheus integration
+  prometheus:
+    enabled: true
+    pushgateway_url: "http://localhost:9091"
+    job_name: "threat-intelligence"
+    
+  # Alert manager integration
+  alertmanager:
+    enabled: true
+    webhook_url: "http://localhost:9093/api/v1/alerts"
+
+# Security settings
+security:
+  # TLS verification
+  verify_ssl: true
+  ssl_cert_path: ""
+  ssl_key_path: ""
+  
+  # API authentication
+  api_keys:
+    threat_vendor_1: "${THREAT_VENDOR_1_API_KEY}"
+    threat_vendor_2: "${THREAT_VENDOR_2_API_KEY}"
+  
+  # Rate limiting
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    
+  # Data validation
+  validation:
+    enabled: true
+    strict_mode: false
+    reject_invalid_indicators: true
+
+# Storage settings
+storage:
+  # Local file storage
+  local:
+    enabled: true
+    base_path: "config/threat-intelligence"
+    backup_enabled: true
+    backup_retention_days: 30
+    
+  # Database storage (optional)
+  database:
+    enabled: false
+    type: "sqlite"  # sqlite, postgresql, mysql
+    connection_string: "sqlite:///threat_intel.db"
+    
+# Notification settings
+notifications:
+  # Email notifications
+  email:
+    enabled: false
+    smtp_server: "smtp.company.com"
+    smtp_port: 587
+    username: "${SMTP_USERNAME}"
+    password: "${SMTP_PASSWORD}"
+    recipients:
+      - "security-team@company.com"
+    
+  # Slack notifications
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_THREAT_INTEL_WEBHOOK}"
+    channel: "#threat-intelligence"
+    
+  # Microsoft Teams
+  teams:
+    enabled: false
+    webhook_url: "${TEAMS_THREAT_INTEL_WEBHOOK}"
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  collection_interval: 300  # 5 minutes
+  
+  # Metrics to collect
+  indicators:
+    - "total_indicators_processed"
+    - "indicators_by_type"
+    - "indicators_by_confidence"
+    - "feed_update_success_rate"
+    - "feed_update_duration"
+    - "rule_generation_success"
+    
+  # Export metrics
+  export:
+    prometheus:
+      enabled: true
+      port: 8080
+      endpoint: "/metrics"
+    
+    json:
+      enabled: true
+      file: "logs/threat-intel-metrics.json"
+
+# Automation settings
+automation:
+  # Automatic rule deployment
+  auto_deploy_rules: false
+  deploy_approval_required: true
+  
+  # Automatic indicator aging
+  auto_expire_indicators: true
+  expire_check_interval: 86400  # 24 hours
+  
+  # Automatic feed validation
+  validate_feeds: true
+  validation_interval: 3600
+  
+  # Automatic backup
+  auto_backup: true
+  backup_interval: 86400
+  backup_retention: 30
+
+# Development and testing
+development:
+  # Mock data generation
+  generate_mock_data: true
+  mock_indicators_count: 1000
+  
+  # Testing feeds
+  test_feeds:
+    enabled: true
+    feeds:
+      - name: "test_malicious_ips"
+        type: "ip_addresses"
+        indicators:
+          - "192.0.2.1"    # RFC5737 test network
+          - "198.51.100.1" # RFC5737 test network
+          - "203.0.113.1"  # RFC5737 test network
+      
+      - name: "test_malicious_domains"
+        type: "domains"
+        indicators:
+          - "evil.example.com"
+          - "malware.test"
+          - "phishing.invalid"
+  
+  # Debug settings
+  debug:
+    enabled: false
+    verbose_logging: false
+    save_raw_feeds: false
+    dry_run_mode: false

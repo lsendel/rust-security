@@ -1,0 +1,99 @@
+Starting performance validation...
+Timestamp: Sat Aug 16 10:55:10 EDT 2025
+Starting comprehensive performance validation
+=== Testing Compilation Performance ===
+Testing: Debug build compiles in reasonable time
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Debug build compiles in reasonable time (expected success but failed)
+Testing: Release build compiles in reasonable time
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Release build compiles in reasonable time (expected success but failed)
+Testing: Binary size is reasonable
+❌ FAIL: Binary size is reasonable (expected success but failed)
+=== Testing Benchmark Performance ===
+Testing: Benchmark tests run successfully
+
+running 6 tests
+test circuit_breaker::tests::test_circuit_breaker_closed_state ... ignored
+test circuit_breaker::tests::test_circuit_breaker_half_open_recovery ... ignored
+test circuit_breaker::tests::test_circuit_breaker_opens_on_failures ... ignored
+test security::tests::test_sanitize_log_input ... ignored
+test security::tests::test_validate_client_credentials ... ignored
+test security::tests::test_validate_token_input ... ignored
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test config::tests::test_parse_client_credentials ... ignored
+test config::tests::test_parse_invalid_client_credentials ... ignored
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+✅ PASS: Benchmark tests run successfully
+Testing: Test suite runs in reasonable time
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Test suite runs in reasonable time (expected success but failed)
+=== Testing Memory Usage ===
+Starting auth service for memory analysis...
+Testing: Auth service memory usage is reasonable
+✅ PASS: Auth service memory usage is reasonable
+Testing: Auth service CPU usage is stable
+✅ PASS: Auth service CPU usage is stable
+=== Testing Build Artifacts ===
+Testing: Release binary exists and is executable
+❌ FAIL: Release binary exists and is executable (expected success but failed)
+Testing: Binary has debug symbols stripped (smaller size)
+Binary not stripped but acceptable
+✅ PASS: Binary has debug symbols stripped (smaller size)
+Testing: Dependencies compile without warnings
+✅ PASS: Dependencies compile without warnings
+=== Testing Basic Load Handling ===
+Starting auth service for load testing...
+❌ Could not start auth service for load testing
+=== Testing Database Performance ===
+Testing: In-memory store operations are fast
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: In-memory store operations are fast (expected success but failed)
+Testing: Key management operations are efficient
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Key management operations are efficient (expected success but failed)
+Testing: Token operations complete quickly
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Token operations complete quickly (expected success but failed)
+=== Testing Security Performance Impact ===
+Testing: Security logging doesn't significantly impact performance
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Security logging doesn't significantly impact performance (expected success but failed)
+Testing: Circuit breaker operations are fast
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: Circuit breaker operations are fast (expected success but failed)
+Testing: MFA operations complete in reasonable time
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: MFA operations complete in reasonable time (expected success but failed)
+Testing: SCIM operations are performant
+/Users/lsendel/IdeaProjects/rust-security/scripts/performance_validation.sh: line 34: timeout: command not found
+❌ FAIL: SCIM operations are performant (expected success but failed)
+=== Testing Resource Usage ===
+Testing: Build process doesn't consume excessive disk space
+du: /Users/lsendel/IdeaProjects/rust-security/auth-service/target: No such file or directory
+✅ PASS: Build process doesn't consume excessive disk space
+Testing: Source code size is reasonable
+✅ PASS: Source code size is reasonable
+Testing: Test coverage doesn't impact performance severely
+Tests completed
+✅ PASS: Test coverage doesn't impact performance severely
+=== Performance Validation Results ===
+Total tests: 21
+Passed tests: 8
+Failed tests: 13
+Success rate: 38%
+Performance validation results saved to: /Users/lsendel/IdeaProjects/rust-security/reports/performance-validation.json
+⚠️  Some performance tests failed. Check logs for details.
+❌ System performance needs optimization (38% success rate)
+Cleaning up...

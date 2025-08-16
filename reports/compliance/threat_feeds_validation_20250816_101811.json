@@ -1,0 +1,224 @@
+{
+  "metadata": {
+    "validation_timestamp": "2025-08-16T10:18:11.341310",
+    "validator_version": "1.0.0"
+  },
+  "summary": {
+    "total_feeds": 15,
+    "accessible_feeds": 11,
+    "total_content_size": 2788463,
+    "estimated_indicators": 34601,
+    "feed_types": {
+      "malware_urls": 1,
+      "ssl_certificates": 1,
+      "malicious_ips": 4,
+      "phishing_urls": 2,
+      "botnet_ips": 1,
+      "tor_nodes": 1,
+      "vulnerabilities": 1
+    },
+    "errors": []
+  },
+  "feed_results": [
+    {
+      "feed_name": "malware_domain_list",
+      "url": "https://www.malwaredomainlist.com/hostslist/hosts.txt",
+      "enabled": true,
+      "status": "timeout",
+      "response_time": 0,
+      "content_size": 0,
+      "content_preview": "",
+      "errors": [
+        "Request timeout"
+      ],
+      "feed_type": "malware_domains"
+    },
+    {
+      "feed_name": "urlhaus_malware",
+      "url": "https://urlhaus.abuse.ch/downloads/text_recent/",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.13,
+      "content_size": 806836,
+      "content_preview": "http://175.175.20.4:58273/bin.sh\r\nhttp://113.65.162.21:38747/bin.sh\r\nhttp://103.238.235.157/bot.spc\r\nhttp://103.191.63.174/hiddenbin/boatnet.i686\r\nhttp://87.121.84.134/hiddenbin/boatnet.x86_64\r\nhttp:/",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "malware_urls"
+    },
+    {
+      "feed_name": "abuse_ch_ssl_blacklist",
+      "url": "https://sslbl.abuse.ch/blacklist/sslblacklist.csv",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.12,
+      "content_size": 554640,
+      "content_preview": "################################################################\r\n# abuse.ch SSLBL SSL Certificate Blacklist (SHA1 Fingerprints) #\r\n# Last updated: 2025-06-25 06:50:28 UTC                        #\r\n#",
+      "errors": [
+        "Invalid CSV format"
+      ],
+      "format_valid": false,
+      "feed_type": "ssl_certificates"
+    },
+    {
+      "feed_name": "firehol_level1",
+      "url": "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.04,
+      "content_size": 72542,
+      "content_preview": "#\n# firehol_level1\n#\n# ipv4 hash:net ipset\n#\n# A firewall blacklist composed from IP lists, providing \n# maximum protection with minimum false positives. Suitable \n# for basic protection on all intern",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "malicious_ips"
+    },
+    {
+      "feed_name": "firehol_level2",
+      "url": "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level2.netset",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.03,
+      "content_size": 214732,
+      "content_preview": "#\n# firehol_level2\n#\n# ipv4 hash:net ipset\n#\n# An ipset made from blocklists that track attacks, during \n# about the last 48 hours. (includes: blocklist_de dshield_1d \n# greensnow)\n#\n# Maintainer",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "malicious_ips"
+    },
+    {
+      "feed_name": "spamhaus_drop",
+      "url": "https://www.spamhaus.org/drop/drop.txt",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.08,
+      "content_size": 44994,
+      "content_preview": "; Spamhaus DROP List 2025/08/16 - (c) 2025 The Spamhaus Project SLU\n; https://www.spamhaus.org/drop/drop.txt\n; Last-Modified: Fri, 15 Aug 2025 10:16:55 GMT\n; Expires: Sat, 16 Aug 2025 05:33:10 GMT\n1.1",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "malicious_ips"
+    },
+    {
+      "feed_name": "emerging_threats_compromised",
+      "url": "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.06,
+      "content_size": 27900,
+      "content_preview": "#\n# Emerging Threats fwip rules.\n#\n# Raw IPs for the firewall block lists. These come from:\n#\n# Spam nets identified by Spamhaus (www.spamhaus.org)\n# Top Attackers listed by DShield (www.dshield.org)",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "malicious_ips"
+    },
+    {
+      "feed_name": "phishtank",
+      "url": "http://data.phishtank.com/data/online-valid.csv",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.29,
+      "content_size": 1049600,
+      "content_preview": "phish_id,url,phish_detail_url,submission_time,verified,verification_time,online,target\n9185839,https://bookme.com/btwebmail,http://www.phishtank.com/phish_detail.php?phish_id=9185839,2025-08-16T13:00:",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "phishing_urls"
+    },
+    {
+      "feed_name": "openphish",
+      "url": "https://openphish.com/feed.txt",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.39,
+      "content_size": 13928,
+      "content_preview": "http://oyrxqgsmie.duckdns.org/en/\nhttp://drive.timc.workers.dev/\nhttps://pancakeswap-finance.serveftp.com/home/\nhttp://tap03647gg.top/\nhttp://hyxczuywas.blogspot.com/\nhttp://kuroneskoyamato.sbs/\nhttps",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "phishing_urls"
+    },
+    {
+      "feed_name": "feodo_tracker",
+      "url": "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.06,
+      "content_size": 489,
+      "content_preview": "################################################################\r\n# abuse.ch Feodo Tracker Botnet C2 IP Blocklist (recommended)  #\r\n# Last updated: 2025-07-05 17:05:46 UTC                        #\r\n#",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "botnet_ips"
+    },
+    {
+      "feed_name": "zeus_tracker",
+      "url": "https://zeustracker.abuse.ch/blocklist.php?download=badips",
+      "enabled": true,
+      "status": "connection_error",
+      "response_time": 0,
+      "content_size": 0,
+      "content_preview": "",
+      "errors": [
+        "Connection failed"
+      ],
+      "feed_type": "botnet_ips"
+    },
+    {
+      "feed_name": "tor_exit_nodes",
+      "url": "https://check.torproject.org/api/bulk",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.35,
+      "content_size": 2797,
+      "content_preview": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n  <title>Bulk Tor Exit Exporter</title>\n  <link rel=\"icon\"",
+      "errors": [
+        "Invalid JSON format"
+      ],
+      "format_valid": false,
+      "feed_type": "tor_nodes"
+    },
+    {
+      "feed_name": "cve_recent",
+      "url": "https://cve.circl.lu/api/cve/recent",
+      "enabled": true,
+      "status": "accessible",
+      "response_time": 0.33,
+      "content_size": 5,
+      "content_preview": "null",
+      "errors": [],
+      "format_valid": true,
+      "feed_type": "vulnerabilities"
+    },
+    {
+      "feed_name": "us_cert_alerts",
+      "url": "https://www.cisa.gov/cybersecurity-advisories",
+      "enabled": true,
+      "status": "timeout",
+      "response_time": 0,
+      "content_size": 0,
+      "content_preview": "",
+      "errors": [
+        "Request timeout"
+      ],
+      "feed_type": "threat_alerts"
+    },
+    {
+      "feed_name": "test_indicators",
+      "url": "N/A",
+      "enabled": true,
+      "status": "static",
+      "response_time": 0,
+      "content_size": 246,
+      "content_preview": "",
+      "errors": [],
+      "feed_type": "mixed"
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "MEDIUM",
+      "category": "Reliability",
+      "recommendation": "Some feeds have validation errors that should be addressed.",
+      "affected_feeds": [
+        "malware_domain_list: Request timeout",
+        "abuse_ch_ssl_blacklist: Invalid CSV format",
+        "zeus_tracker: Connection failed",
+        "tor_exit_nodes: Invalid JSON format",
+        "us_cert_alerts: Request timeout"
+      ]
+    }
+  ]
+}

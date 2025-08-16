@@ -1,0 +1,327 @@
+# Enhanced Threat Intelligence Feeds Configuration
+# Comprehensive threat feed sources for the Rust Security Workspace
+
+feeds:
+  # === Malware & URLs ===
+  malware_domain_list:
+    enabled: true
+    url: "https://www.malwaredomainlist.com/hostslist/hosts.txt"
+    type: "malware_domains"
+    format: "hosts"
+    update_frequency: 3600
+    confidence: 0.9
+    description: "Malware Domain List - High confidence malicious domains"
+    
+  urlhaus_malware:
+    enabled: true
+    url: "https://urlhaus.abuse.ch/downloads/text_recent/"
+    type: "malware_urls" 
+    format: "text"
+    update_frequency: 1800
+    confidence: 0.95
+    description: "URLhaus recent malware URLs"
+    
+  abuse_ch_ssl_blacklist:
+    enabled: true
+    url: "https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
+    type: "ssl_certificates"
+    format: "csv"
+    update_frequency: 3600
+    confidence: 0.9
+    description: "Abuse.ch SSL blacklist"
+
+  # === IP Reputation Feeds ===
+  firehol_level1:
+    enabled: true
+    url: "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"
+    type: "malicious_ips"
+    format: "netset"
+    update_frequency: 3600
+    confidence: 0.9
+    description: "FireHOL Level 1 - High confidence attacking IPs"
+    
+  firehol_level2:
+    enabled: true
+    url: "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level2.netset" 
+    type: "malicious_ips"
+    format: "netset"
+    update_frequency: 3600
+    confidence: 0.8
+    description: "FireHOL Level 2 - Medium confidence attacking IPs"
+    
+  spamhaus_drop:
+    enabled: true
+    url: "https://www.spamhaus.org/drop/drop.txt"
+    type: "malicious_ips"
+    format: "text"
+    update_frequency: 3600
+    confidence: 0.95
+    description: "Spamhaus DROP list - hijacked/compromised networks"
+    
+  emerging_threats_compromised:
+    enabled: true
+    url: "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt"
+    type: "malicious_ips"
+    format: "text"
+    update_frequency: 1800
+    confidence: 0.85
+    description: "Emerging Threats compromised IPs"
+
+  # === Phishing & Fraud ===
+  phishtank:
+    enabled: true
+    url: "http://data.phishtank.com/data/online-valid.csv"
+    type: "phishing_urls"
+    format: "csv"
+    update_frequency: 3600
+    confidence: 0.9
+    description: "PhishTank verified phishing URLs"
+    
+  openphish:
+    enabled: true
+    url: "https://openphish.com/feed.txt"
+    type: "phishing_urls"
+    format: "text"
+    update_frequency: 1800
+    confidence: 0.85
+    description: "OpenPhish phishing URL feed"
+
+  # === Bot Networks & C&C ===
+  feodo_tracker:
+    enabled: true
+    url: "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt"
+    type: "botnet_ips"
+    format: "text"
+    update_frequency: 1800
+    confidence: 0.95
+    description: "Feodo Tracker botnet C&C IPs"
+    
+  zeus_tracker:
+    enabled: true
+    url: "https://zeustracker.abuse.ch/blocklist.php?download=badips"
+    type: "botnet_ips"
+    format: "text"
+    update_frequency: 3600
+    confidence: 0.9
+    description: "Zeus Tracker C&C IPs"
+
+  # === Tor & Anonymization ===
+  tor_exit_nodes:
+    enabled: true
+    url: "https://check.torproject.org/api/bulk"
+    type: "tor_nodes"
+    format: "json"
+    update_frequency: 1800
+    confidence: 1.0
+    description: "Tor exit nodes (not malicious but worth monitoring)"
+
+  # === CVE & Vulnerability ===
+  cve_recent:
+    enabled: true
+    url: "https://cve.circl.lu/api/cve/recent"
+    type: "vulnerabilities"
+    format: "json"
+    update_frequency: 3600
+    confidence: 1.0
+    description: "Recent CVE entries"
+
+  # === Government & Threat Intel ===
+  us_cert_alerts:
+    enabled: true
+    url: "https://www.cisa.gov/cybersecurity-advisories"
+    type: "threat_alerts"
+    format: "rss"
+    update_frequency: 3600
+    confidence: 1.0
+    description: "US-CERT cybersecurity alerts"
+
+  # === Testing & Development Feeds ===
+  test_indicators:
+    enabled: true
+    type: "mixed"
+    static_data:
+      malicious_ips:
+        - "192.0.2.100"     # RFC5737 test network
+        - "198.51.100.100"  # RFC5737 test network
+        - "203.0.113.100"   # RFC5737 test network
+      malicious_domains:
+        - "malware.example.com"
+        - "phishing.test"
+        - "evil.invalid"
+      malicious_urls:
+        - "http://malware.example.com/payload.exe"
+        - "https://phishing.test/login.html"
+    confidence: 0.5
+    description: "Test indicators for development and testing"
+
+# Feed processing configuration
+processing:
+  # Deduplication
+  deduplication:
+    enabled: true
+    algorithm: "sha256"
+    
+  # Validation
+  validation:
+    enabled: true
+    ip_validation: true
+    domain_validation: true
+    url_validation: true
+    
+  # Normalization
+  normalization:
+    enabled: true
+    lowercase_domains: true
+    remove_protocols: false
+    
+  # Enrichment
+  enrichment:
+    enabled: true
+    geolocation: true
+    asn_lookup: true
+    dns_resolution: false  # Disabled to avoid alerting malicious actors
+    
+  # Filtering
+  filtering:
+    enabled: true
+    confidence_threshold: 0.7
+    max_age_days: 30
+    
+    # Whitelist patterns
+    whitelist:
+      ips:
+        - "127.0.0.0/8"     # Localhost
+        - "10.0.0.0/8"      # Private
+        - "172.16.0.0/12"   # Private
+        - "192.168.0.0/16"  # Private
+        - "::1/128"         # IPv6 localhost
+        - "fc00::/7"        # IPv6 private
+      domains:
+        - "*.local"
+        - "*.localhost"
+        - "*.internal"
+        - "*.corp"
+      urls:
+        - "http://localhost/*"
+        - "https://localhost/*"
+        - "http://127.0.0.1/*"
+
+# Integration with security controls
+security_integration:
+  # Prometheus metrics generation
+  prometheus:
+    enabled: true
+    metrics_file: "monitoring/prometheus/threat-intel-metrics.yml"
+    
+  # Fluentd log filtering
+  fluentd:
+    enabled: true
+    filters_file: "monitoring/fluentd/threat-intel-filters.conf"
+    
+  # Auth service integration
+  auth_service:
+    enabled: true
+    blocklist_file: "auth-service/src/threat_indicators.json"
+    update_interval: 300  # 5 minutes
+    
+  # Rate limiting rules
+  rate_limiting:
+    enabled: true
+    aggressive_sources: true
+    known_bad_multiplier: 0.1  # 10x more restrictive for known bad IPs
+
+# Alerting configuration
+alerting:
+  # Real-time alerts
+  realtime:
+    enabled: true
+    high_confidence_threshold: 0.9
+    immediate_notification: true
+    
+  # Batch alerts
+  batch:
+    enabled: true
+    interval: 3600  # Hourly
+    summary_threshold: 10  # Alert if >10 new indicators
+    
+  # Alert channels
+  channels:
+    slack:
+      enabled: false
+      webhook: "${SLACK_THREAT_INTEL_WEBHOOK}"
+      channel: "#threat-intelligence"
+    
+    email:
+      enabled: false
+      recipients:
+        - "security-team@company.com"
+        
+    webhook:
+      enabled: true
+      url: "http://localhost:9093/api/v1/alerts"  # Alertmanager
+
+# Storage and retention
+storage:
+  # Local storage
+  local:
+    base_path: "config/threat-intelligence/feeds"
+    backup_enabled: true
+    compression: true
+    
+  # Retention policies
+  retention:
+    raw_feeds: 7      # Keep raw feed data for 7 days
+    processed: 30     # Keep processed indicators for 30 days
+    high_confidence: 90  # Keep high confidence indicators for 90 days
+    
+  # Archive settings
+  archive:
+    enabled: true
+    compress: true
+    location: "archives/threat-intelligence"
+
+# Performance and scaling
+performance:
+  # Concurrent processing
+  max_concurrent_feeds: 5
+  download_timeout: 30
+  processing_timeout: 120
+  
+  # Memory limits
+  max_memory_usage: "512MB"
+  max_indicators_memory: 1000000
+  
+  # Caching
+  cache:
+    enabled: true
+    ttl: 3600
+    max_size: "100MB"
+
+# Monitoring and metrics
+monitoring:
+  # Health checks
+  health_check:
+    enabled: true
+    interval: 300
+    timeout: 30
+    
+  # Performance metrics
+  metrics:
+    enabled: true
+    collection_interval: 60
+    
+    # Metrics to track
+    track:
+      - "feed_update_duration"
+      - "indicators_processed"
+      - "processing_errors"
+      - "memory_usage"
+      - "cache_hit_ratio"
+      
+  # Logging
+  logging:
+    level: "INFO"
+    structured: true
+    file: "logs/threat-intelligence.log"
+    max_size: "100MB"
+    backup_count: 5

@@ -1,0 +1,261 @@
+groups:
+- name: security_alerts
+  interval: 30s
+  rules:
+  
+  # Critical Security Alerts
+  - alert: TokenBindingViolationDetected
+    expr: increase(token_binding_violations_total[1m]) > 0
+    for: 0m
+    labels:
+      severity: critical
+      category: security
+      service: auth-service
+    annotations:
+      summary: "Token binding violation detected"
+      description: "Token binding violation detected - possible token theft attempt. Immediate investigation required."
+      runbook_url: "https://docs.company.com/runbooks/security/token-binding-violation"
+      
+  - alert: HighAuthenticationFailureRate
+    expr: rate(auth_failures_total[5m]) > 10
+    for: 2m
+    labels:
+      severity: critical
+      category: security
+      service: auth-service
+    annotations:
+      summary: "High authentication failure rate detected"
+      description: "Authentication failure rate is {{ $value }} failures per second over the last 5 minutes. This may indicate a brute force attack."
+      runbook_url: "https://docs.company.com/runbooks/security/high-auth-failure-rate"
+      
+  - alert: RequestSignatureFailures
+    expr: increase(request_signature_failures_total[5m]) > 5
+    for: 1m
+    labels:
+      severity: critical
+      category: security
+      service: auth-service
+    annotations:
+      summary: "Multiple request signature failures detected"
+      description: "{{ $value }} request signature failures in the last 5 minutes. This may indicate tampering or replay attacks."
+      runbook_url: "https://docs.company.com/runbooks/security/signature-failures"
+      
+  - alert: SuspiciousActivitySpike
+    expr: rate(suspicious_activity_total[10m]) > 5
+    for: 3m
+    labels:
+      severity: critical
+      category: security
+      service: auth-service
+    annotations:
+      summary: "Spike in suspicious activity detected"
+      description: "Suspicious activity rate is {{ $value }} events per second. Immediate security review required."
+      runbook_url: "https://docs.company.com/runbooks/security/suspicious-activity"
+      
+  # High Priority Security Alerts
+  - alert: RateLimitExceededFrequently
+    expr: rate(rate_limit_hits_total[15m]) > 2
+    for: 5m
+    labels:
+      severity: high
+      category: security
+      service: auth-service
+    annotations:
+      summary: "Frequent rate limit violations"
+      description: "Rate limit is being exceeded {{ $value }} times per second over 15 minutes. May indicate abuse or misconfiguration."
+      runbook_url: "https://docs.company.com/runbooks/security/rate-limit-exceeded"
+      
+  - alert: InputValidationFailureSpike
+    expr: rate(input_validation_failures_total[10m]) > 1
+    for: 5m
+    labels:
+      severity: high
+      category: security
+      service: auth-service
+    annotations:
+      summary: "High rate of input validation failures"
+      description: "Input validation failures occurring at {{ $value }} per second. May indicate injection attack attempts."
+      runbook_url: "https://docs.company.com/runbooks/security/input-validation-failures"
+      
+  - alert: MFAFailureRateHigh
+    expr: rate(mfa_failures_total[10m]) > 0.5
+    for: 5m
+    labels:
+      severity: high
+      category: security
+      service: auth-service
+    annotations:
+      summary: "High MFA failure rate"
+      description: "MFA failures occurring at {{ $value }} per second. May indicate account compromise attempts."
+      runbook_url: "https://docs.company.com/runbooks/security/mfa-failures"
+      
+  - alert: UnusualTokenRevocationPattern
+    expr: rate(tokens_revoked_total[30m]) > 0.1
+    for: 10m
+    labels:
+      severity: high
+      category: security
+      service: auth-service
+    annotations:
+      summary: "Unusual token revocation pattern"
+      description: "Token revocation rate is {{ $value }} per second over 30 minutes. May indicate security incident."
+      runbook_url: "https://docs.company.com/runbooks/security/token-revocation-pattern"
+      
+  # Medium Priority Security Alerts
+  - alert: AuthenticationLatencyHigh
+    expr: histogram_quantile(0.95, rate(auth_duration_seconds_bucket[10m])) > 2.0
+    for: 10m
+    labels:
+      severity: medium
+      category: performance
+      service: auth-service
+    annotations:
+      summary: "High authentication latency"
+      description: "95th percentile authentication latency is {{ $value }}s. May indicate system stress or attack."
+      runbook_url: "https://docs.company.com/runbooks/performance/auth-latency"
+      
+  - alert: TokenValidationLatencyHigh
+    expr: histogram_quantile(0.95, rate(token_validation_duration_seconds_bucket[10m])) > 0.1
+    for: 10m
+    labels:
+      severity: medium
+      category: performance
+      service: auth-service
+    annotations:
+      summary: "High token validation latency"
+      description: "95th percentile token validation latency is {{ $value }}s. Performance degradation detected."
+      runbook_url: "https://docs.company.com/runbooks/performance/token-validation-latency"
+      
+  - alert: ActiveSessionsUnusuallyHigh
+    expr: active_sessions > 1000
+    for: 15m
+    labels:
+      severity: medium
+      category: capacity
+      service: auth-service
+    annotations:
+      summary: "Unusually high number of active sessions"
+      description: "{{ $value }} active sessions detected. May indicate unusual usage patterns or potential issues."
+      runbook_url: "https://docs.company.com/runbooks/capacity/high-active-sessions"
+      
+  # Service Health Alerts
+  - alert: AuthServiceDown
+    expr: up{job="auth-service"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: availability
+      service: auth-service
+    annotations:
+      summary: "Auth service is down"
+      description: "Auth service has been down for more than 1 minute."
+      runbook_url: "https://docs.company.com/runbooks/availability/service-down"
+      
+  - alert: PolicyServiceDown
+    expr: up{job="policy-service"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      category: availability
+      service: policy-service
+    annotations:
+      summary: "Policy service is down"
+      description: "Policy service has been down for more than 1 minute."
+      runbook_url: "https://docs.company.com/runbooks/availability/service-down"
+      
+  - alert: HighErrorRate
+    expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: high
+      category: reliability
+    annotations:
+      summary: "High error rate detected"
+      description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.service }}."
+      runbook_url: "https://docs.company.com/runbooks/reliability/high-error-rate"
+      
+  # Security Metrics Baseline Alerts
+  - alert: SecurityMetricsCollectionFailed
+    expr: up{job=~".*security.*"} == 0
+    for: 5m
+    labels:
+      severity: high
+      category: monitoring
+    annotations:
+      summary: "Security metrics collection failed"
+      description: "Security metrics collection has failed for {{ $labels.job }}. Security monitoring may be compromised."
+      runbook_url: "https://docs.company.com/runbooks/monitoring/metrics-collection-failed"
+      
+  - alert: AuditLogIngestionFailed
+    expr: increase(log_ingestion_errors_total[10m]) > 0
+    for: 2m
+    labels:
+      severity: high
+      category: monitoring
+    annotations:
+      summary: "Audit log ingestion failures"
+      description: "{{ $value }} audit log ingestion failures in the last 10 minutes. Security audit trail may be incomplete."
+      runbook_url: "https://docs.company.com/runbooks/monitoring/log-ingestion-failed"
+      
+  # Compliance and Audit Alerts
+  - alert: SecurityEventVolumeUnusual
+    expr: |
+      (
+        rate(security_events_total[1h]) > 
+        (avg_over_time(rate(security_events_total[1h])[7d]) + 3 * stddev_over_time(rate(security_events_total[1h])[7d]))
+      ) or (
+        rate(security_events_total[1h]) < 
+        (avg_over_time(rate(security_events_total[1h])[7d]) - 3 * stddev_over_time(rate(security_events_total[1h])[7d]))
+      )
+    for: 30m
+    labels:
+      severity: medium
+      category: anomaly
+    annotations:
+      summary: "Unusual security event volume"
+      description: "Security event volume is {{ $value }} events per second, which is unusual compared to the 7-day average."
+      runbook_url: "https://docs.company.com/runbooks/anomaly/security-event-volume"
+      
+  - alert: ComplianceViolationDetected
+    expr: increase(compliance_violations_total[1h]) > 0
+    for: 0m
+    labels:
+      severity: critical
+      category: compliance
+    annotations:
+      summary: "Compliance violation detected"
+      description: "{{ $value }} compliance violations detected in the last hour. Immediate review required."
+      runbook_url: "https://docs.company.com/runbooks/compliance/violation-detected"
+
+- name: security_sla_alerts
+  interval: 60s
+  rules:
+  
+  # SLA-based alerts
+  - alert: AuthenticationSLABreach
+    expr: |
+      (
+        rate(auth_attempts_total{result="success"}[5m]) / 
+        rate(auth_attempts_total[5m])
+      ) < 0.99
+    for: 10m
+    labels:
+      severity: high
+      category: sla
+      service: auth-service
+    annotations:
+      summary: "Authentication SLA breach"
+      description: "Authentication success rate is {{ $value | humanizePercentage }}, below the 99% SLA threshold."
+      runbook_url: "https://docs.company.com/runbooks/sla/authentication-sla-breach"
+      
+  - alert: TokenIssuanceSLABreach
+    expr: histogram_quantile(0.95, rate(auth_duration_seconds_bucket{method="token_issue"}[10m])) > 1.0
+    for: 15m
+    labels:
+      severity: high
+      category: sla
+      service: auth-service
+    annotations:
+      summary: "Token issuance SLA breach"
+      description: "95th percentile token issuance time is {{ $value }}s, exceeding the 1s SLA threshold."
+      runbook_url: "https://docs.company.com/runbooks/sla/token-issuance-sla-breach"

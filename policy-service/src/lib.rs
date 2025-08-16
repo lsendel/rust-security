@@ -13,7 +13,7 @@ use thiserror::Error;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
-use utoipa::ToSchema;
+use utoipa::{OpenApi, ToSchema};
 
 #[derive(Debug, Error)]
 pub enum PolicyError {
@@ -101,35 +101,39 @@ pub async fn authorize(
     State(state): State<Arc<AppState>>,
     Json(body): Json<AuthorizeRequest>,
 ) -> Result<Json<AuthorizeResponse>, PolicyError> {
+    // Validate action is non-empty and basic format (e.g., contains a colon like "domain:verb")
+    if body.action.trim().is_empty() {
+        return Err(PolicyError::Parse("Action cannot be empty".to_string()));
+    }
     let action = cedar_policy::EntityUid::from_json(serde_json::json!({
         "type": "Action",
         "id": body.action
     }))
     .map_err(|e| PolicyError::Parse(format!("Failed to parse action '{}': {}", body.action, e)))?;
-    
+
     let principal = parse_entity(&body.principal)
         .map_err(|e| PolicyError::Parse(format!("Failed to parse principal: {}", e)))?;
-    
+
     let resource = parse_entity(&body.resource)
         .map_err(|e| PolicyError::Parse(format!("Failed to parse resource: {}", e)))?;
-    
+
     let context = Context::from_json_value(body.context, None)
         .map_err(|e| PolicyError::Parse(format!("Failed to parse context: {}", e)))?;
-    
+
     let request = Request::new(Some(principal), Some(action), Some(resource), context, None)
         .map_err(|e| PolicyError::Parse(format!("Failed to create authorization request: {}", e)))?;
-    
+
     let decision = state
         .authorizer
         .is_authorized(&request, &state.policies, &state.entities)
         .decision();
-    
+
     let decision_str = if decision == cedar_policy::Decision::Allow {
         "Allow"
     } else {
         "Deny"
     };
-    
+
     // Log authorization decision for audit
     tracing::info!(
         request_id = %body.request_id,
@@ -137,7 +141,7 @@ pub async fn authorize(
         action = %body.action,
         "Authorization decision made"
     );
-    
+
     Ok(Json(AuthorizeResponse {
         decision: decision_str.to_string(),
     }))
@@ -162,7 +166,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         _ => CorsLayer::new().allow_origin(Any),
     };
 
-    Router::new()
+    let router = Router::new()
         .route(
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
@@ -172,7 +176,11 @@ pub fn app(state: Arc<AppState>) -> Router {
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .with_state(state);
+
+    // Expose OpenAPI JSON for tests
+    let openapi = ApiDoc::openapi();
+    router.route("/openapi.json", get(|| async { Json(openapi) }))
 }
 
 #[derive(utoipa::OpenApi)]

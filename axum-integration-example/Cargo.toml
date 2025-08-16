@@ -30,7 +30,7 @@ utoipa = { version = "4.0", features = ["axum_extras", "chrono", "uuid"], option
 utoipa-swagger-ui = { version = "6.0", features = ["axum"], optional = true }
 
 # Monitoring dependencies
-prometheus = { version = "0.13", optional = true }
+prometheus = { version = "0.14", optional = true }
 metrics = { version = "0.22", optional = true }
 metrics-prometheus = { version = "0.6", optional = true }
 
@@ -42,7 +42,7 @@ async-trait = "0.1"
 anyhow = "1.0"
 
 [features]
-default = ["sqlite"]
+default = ["auth"]
 postgres = ["dep:sqlx", "sqlx/postgres"]
 sqlite = ["dep:sqlx", "sqlx/sqlite"]
 auth = ["dep:jsonwebtoken", "dep:bcrypt"]
@@ -54,3 +54,4 @@ full = ["postgres", "sqlite", "auth", "docs", "monitoring"]
 http-body-util = "0.1"
 http = "1.0"
 tokio-test = "0.4"
+reqwest = { version = "0.12", features = ["json"] }

@@ -2,6 +2,49 @@ use crate::IntrospectionRecord;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use once_cell::sync::Lazy;
+
+// Simple in-memory auth code store (JSON-encoded records), with optional Redis fallback
+static AUTH_CODES_MEM: Lazy<RwLock<HashMap<String, String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+
+async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
+    let url = std::env::var("REDIS_URL").ok()?;
+    let client = redis::Client::open(url).ok()?;
+    client.get_connection_manager().await.ok()
+}
+
+pub async fn set_auth_code(code: &str, record_json: String, ttl_secs: u64) -> anyhow::Result<()> {
+    // In-memory
+    {
+        let mut m = AUTH_CODES_MEM.write().await;
+        m.insert(code.to_string(), record_json.clone());
+    }
+    // Redis if available
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("authcode:{}", code);
+        let _: () = redis::Cmd::set_ex(&key, record_json, ttl_secs)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
+    }
+    Ok(())
+}
+
+pub async fn consume_auth_code(code: &str) -> anyhow::Result<Option<String>> {
+    // Try Redis first
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("authcode:{}", code);
+        // Use GETDEL if available; fallback to GET then DEL
+        let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
+        let _: () = redis::Cmd::del(&key).query_async(&mut conn).await.unwrap_or(());
+        if val.is_some() {
+            return Ok(val);
+        }
+    }
+    // Fallback to in-memory
+    let mut m = AUTH_CODES_MEM.write().await;
+    Ok(m.remove(code))
+}
 
 #[derive(Clone)]
 pub enum TokenStore {
@@ -39,13 +82,15 @@ impl TokenStore {
                 let key_exp = format!("token:{}:exp", token);
                 let key_iat = format!("token:{}:iat", token);
                 let key_sub = format!("token:{}:sub", token);
+                let key_token_binding = format!("token:{}:token_binding", token);
                 #[allow(clippy::type_complexity)]
-                let (active, scope, client_id, exp, iat, sub): (
+                let (active, scope, client_id, exp, iat, sub, token_binding): (
                     Option<i64>,
                     Option<String>,
                     Option<String>,
                     Option<i64>,
                     Option<i64>,
+                    Option<String>,
                     Option<String>,
                 ) = redis::pipe()
                     .get(&key_active)
@@ -54,6 +99,7 @@ impl TokenStore {
                     .get(&key_exp)
                     .get(&key_iat)
                     .get(&key_sub)
+                    .get(&key_token_binding)
                     .query_async(&mut conn)
                     .await?;
                 Ok(crate::IntrospectionRecord {
@@ -63,7 +109,7 @@ impl TokenStore {
                     exp,
                     iat,
                     sub,
-                    token_binding: None, // TODO: Implement Redis token binding storage
+                    token_binding,
                 })
             }
         }

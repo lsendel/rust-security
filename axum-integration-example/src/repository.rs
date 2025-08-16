@@ -155,7 +155,7 @@ impl UserRepository for InMemoryUserRepository {
                 }
             }
         }
-        
+
         if let Some(existing_user) = users.get_mut(&id) {
             if let Some(new_email) = &user_update.email {
                 existing_user.email = new_email.trim().to_string();
@@ -208,97 +208,134 @@ impl UserRepository for PostgresUserRepository {
         user: CreateUserRequest,
         password_hash: String,
     ) -> Result<User, DbError> {
-        let row = sqlx::query!(
+        let row = sqlx::query(
             r#"
             INSERT INTO users (name, email, password_hash, role)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+            VALUES ($1, $2, $3, $4::user_role)
+            RETURNING id, name, email, password_hash, role::text as role,
+                      to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                      to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
             "#,
-            user.name.trim(),
-            user.email.trim(),
-            password_hash,
-            user.role.unwrap_or_default() as UserRole
         )
+        .bind(user.name.trim())
+        .bind(user.email.trim())
+        .bind(password_hash)
+        .bind(match user.role.unwrap_or_default() {
+            UserRole::User => "user",
+            UserRole::Admin => "admin",
+        })
         .fetch_one(&self.pool)
         .await?;
 
+        let role_str: String = row.try_get("role").map_err(|e| DbError::Query(e.to_string()))?;
+        let role = match role_str.as_str() {
+            "admin" => UserRole::Admin,
+            _ => UserRole::User,
+        };
+
+        let created_str: String = row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let updated_str: String = row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
         Ok(User {
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            password_hash: row.password_hash,
-            role: row.role,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
+            id: row.try_get("id").map_err(|e| DbError::Query(e.to_string()))?,
+            name: row.try_get("name").map_err(|e| DbError::Query(e.to_string()))?,
+            email: row.try_get("email").map_err(|e| DbError::Query(e.to_string()))?,
+            password_hash: row.try_get("password_hash").map_err(|e| DbError::Query(e.to_string()))?,
+            role,
+            created_at: chrono::DateTime::parse_from_rfc3339(&created_str).map_err(|_| DbError::Internal)?.with_timezone(&chrono::Utc),
+            updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).map_err(|_| DbError::Internal)?.with_timezone(&chrono::Utc),
         })
     }
 
     async fn find_by_id(&self, id: i32) -> Result<Option<User>, DbError> {
-        let row = sqlx::query!(
+        let row = sqlx::query(
             r#"
-            SELECT id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+            SELECT id, name, email, password_hash, role::text as role,
+                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
             FROM users WHERE id = $1
             "#,
-            id
         )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| User {
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            password_hash: r.password_hash,
-            role: r.role,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
+        Ok(row.map(|r| {
+            let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            User {
+                id: r.try_get("id").unwrap_or_default(),
+                name: r.try_get("name").unwrap_or_default(),
+                email: r.try_get("email").unwrap_or_default(),
+                password_hash: r.try_get("password_hash").unwrap_or_default(),
+                role,
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+            }
         }))
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, DbError> {
-        let row = sqlx::query!(
+        let row = sqlx::query(
             r#"
-            SELECT id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+            SELECT id, name, email, password_hash, role::text as role,
+                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
             FROM users WHERE email = $1
             "#,
-            email
         )
+        .bind(email)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| User {
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            password_hash: r.password_hash,
-            role: r.role,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
+        Ok(row.map(|r| {
+            let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            User {
+                id: r.try_get("id").unwrap_or_default(),
+                name: r.try_get("name").unwrap_or_default(),
+                email: r.try_get("email").unwrap_or_default(),
+                password_hash: r.try_get("password_hash").unwrap_or_default(),
+                role,
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+            }
         }))
     }
 
     async fn list(&self, limit: i32, offset: i32) -> Result<Vec<User>, DbError> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query(
             r#"
-            SELECT id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+            SELECT id, name, email, password_hash, role::text as role,
+                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                   to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
             FROM users ORDER BY id LIMIT $1 OFFSET $2
             "#,
-            limit as i64,
-            offset as i64
         )
+        .bind(limit as i64)
+        .bind(offset as i64)
         .fetch_all(&self.pool)
         .await?;
 
         Ok(rows
             .into_iter()
-            .map(|r| User {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                password_hash: r.password_hash,
-                role: r.role,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
+            .map(|r| {
+                let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+                let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+                let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                User {
+                    id: r.try_get("id").unwrap_or_default(),
+                    name: r.try_get("name").unwrap_or_default(),
+                    email: r.try_get("email").unwrap_or_default(),
+                    password_hash: r.try_get("password_hash").unwrap_or_default(),
+                    role,
+                    created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                }
             })
             .collect())
     }
@@ -308,79 +345,74 @@ impl UserRepository for PostgresUserRepository {
         id: i32,
         user_update: UpdateUserRequest,
     ) -> Result<Option<User>, DbError> {
-        let mut query = "UPDATE users SET updated_at = NOW()".to_string();
-        let mut params = vec![];
-        let mut param_count = 1;
-
-        if let Some(name) = &user_update.name {
-            query.push_str(&format!(", name = ${}", param_count));
-            params.push(name.trim());
-            param_count += 1;
-        }
-
-        if let Some(email) = &user_update.email {
-            query.push_str(&format!(", email = ${}", param_count));
-            params.push(email.trim());
-            param_count += 1;
-        }
-
-        query.push_str(&format!(" WHERE id = ${} RETURNING id, name, email, role as \"role: UserRole\", created_at, updated_at", param_count));
-
         // This is a simplified version - in practice, you'd use a query builder or dynamic query construction
         let result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 UPDATE users SET name = $1, email = $2, updated_at = NOW()
                 WHERE id = $3
-                RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+                RETURNING id, name, email, password_hash, role::text as role,
+                          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                          to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
                 "#,
-                name.trim(),
-                email.trim(),
-                id
             )
+            .bind(name.trim())
+            .bind(email.trim())
+            .bind(id)
             .fetch_optional(&self.pool)
             .await?
         } else if let Some(name) = &user_update.name {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 UPDATE users SET name = $1, updated_at = NOW()
                 WHERE id = $2
-                RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+                RETURNING id, name, email, password_hash, role::text as role,
+                          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                          to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
                 "#,
-                name.trim(),
-                id
             )
+            .bind(name.trim())
+            .bind(id)
             .fetch_optional(&self.pool)
             .await?
         } else if let Some(email) = &user_update.email {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 UPDATE users SET email = $1, updated_at = NOW()
                 WHERE id = $2
-                RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
+                RETURNING id, name, email, password_hash, role::text as role,
+                          to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as created_at,
+                          to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"') as updated_at
                 "#,
-                email.trim(),
-                id
             )
+            .bind(email.trim())
+            .bind(id)
             .fetch_optional(&self.pool)
             .await?
         } else {
             return Ok(None);
         };
 
-        Ok(result.map(|r| User {
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            password_hash: r.password_hash,
-            role: r.role,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
+        Ok(result.map(|r| {
+            let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            User {
+                id: r.try_get("id").unwrap_or_default(),
+                name: r.try_get("name").unwrap_or_default(),
+                email: r.try_get("email").unwrap_or_default(),
+                password_hash: r.try_get("password_hash").unwrap_or_default(),
+                role,
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+            }
         }))
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let result = sqlx::query!("DELETE FROM users WHERE id = $1", id)
+        let result = sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(id)
             .execute(&self.pool)
             .await?;
 
@@ -388,11 +420,11 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn count(&self) -> Result<i64, DbError> {
-        let row = sqlx::query!("SELECT COUNT(*) as count FROM users")
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
             .fetch_one(&self.pool)
-            .await?;
-
-        Ok(row.count.unwrap_or(0))
+            .await
+            .map_err(|e| DbError::Query(e.to_string()))?;
+        Ok(count)
     }
 }
 
@@ -422,129 +454,117 @@ impl UserRepository for SqliteUserRepository {
             UserRole::Admin => "admin",
         };
 
-        let row = sqlx::query!(
+        let row = sqlx::query(
             r#"
             INSERT INTO users (name, email, password_hash, role)
             VALUES (?, ?, ?, ?)
             RETURNING id, name, email, password_hash, role, created_at, updated_at
             "#,
-            user.name.trim(),
-            user.email.trim(),
-            password_hash,
-            role_str
         )
+        .bind(user.name.trim())
+        .bind(user.email.trim())
+        .bind(password_hash)
+        .bind(role_str)
         .fetch_one(&self.pool)
         .await?;
 
-        let role = match row.role.as_str() {
+        let role_col: String = row.try_get("role").map_err(|e| DbError::Query(e.to_string()))?;
+        let role = match role_col.as_str() {
             "admin" => UserRole::Admin,
             _ => UserRole::User,
         };
 
+        let created_str: String = row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let updated_str: String = row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
         Ok(User {
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            password_hash: row.password_hash,
+            id: row.try_get("id").map_err(|e| DbError::Query(e.to_string()))?,
+            name: row.try_get("name").map_err(|e| DbError::Query(e.to_string()))?,
+            email: row.try_get("email").map_err(|e| DbError::Query(e.to_string()))?,
+            password_hash: row.try_get("password_hash").map_err(|e| DbError::Query(e.to_string()))?,
             role,
-            created_at: chrono::DateTime::parse_from_rfc3339(&row.created_at)
+            created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
                 .map_err(|_| DbError::Internal)?
                 .with_timezone(&chrono::Utc),
-            updated_at: chrono::DateTime::parse_from_rfc3339(&row.updated_at)
+            updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
                 .map_err(|_| DbError::Internal)?
                 .with_timezone(&chrono::Utc),
         })
     }
 
     async fn find_by_id(&self, id: i32) -> Result<Option<User>, DbError> {
-        let row = sqlx::query!(
+        let row = sqlx::query(
             "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users WHERE id = ?",
-            id
         )
+        .bind(id)
         .fetch_optional(&self.pool)
         .await?;
 
         Ok(row.map(|r| {
-            let role = match r.role.as_str() {
-                "admin" => UserRole::Admin,
-                _ => UserRole::User,
-            };
-
+            let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                password_hash: r.password_hash,
+                id: r.try_get("id").unwrap_or_default(),
+                name: r.try_get("name").unwrap_or_default(),
+                email: r.try_get("email").unwrap_or_default(),
+                password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                    .unwrap_or_else(|_| chrono::Utc::now().into())
-                    .with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                    .unwrap_or_else(|_| chrono::Utc::now().into())
-                    .with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
             }
         }))
     }
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, DbError> {
-        let row = sqlx::query!(
+        let row = sqlx::query(
             "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users WHERE email = ?",
-            email
         )
+        .bind(email)
         .fetch_optional(&self.pool)
         .await?;
 
         Ok(row.map(|r| {
-            let role = match r.role.as_str() {
-                "admin" => UserRole::Admin,
-                _ => UserRole::User,
-            };
-
+            let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                password_hash: r.password_hash,
+                id: r.try_get("id").unwrap_or_default(),
+                name: r.try_get("name").unwrap_or_default(),
+                email: r.try_get("email").unwrap_or_default(),
+                password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                    .unwrap_or_else(|_| chrono::Utc::now().into())
-                    .with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                    .unwrap_or_else(|_| chrono::Utc::now().into())
-                    .with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
             }
         }))
     }
 
     async fn list(&self, limit: i32, offset: i32) -> Result<Vec<User>, DbError> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query(
             "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users ORDER BY id LIMIT ? OFFSET ?",
-            limit,
-            offset
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
         Ok(rows
             .into_iter()
             .map(|r| {
-                let role = match r.role.as_str() {
-                    "admin" => UserRole::Admin,
-                    _ => UserRole::User,
-                };
-
+                let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+                let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+                let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
                 User {
-                    id: r.id,
-                    name: r.name,
-                    email: r.email,
-                    password_hash: r.password_hash,
+                    id: r.try_get("id").unwrap_or_default(),
+                    name: r.try_get("name").unwrap_or_default(),
+                    email: r.try_get("email").unwrap_or_default(),
+                    password_hash: r.try_get("password_hash").unwrap_or_default(),
                     role,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                        .unwrap_or_else(|_| chrono::Utc::now().into())
-                        .with_timezone(&chrono::Utc),
-                    updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                        .unwrap_or_else(|_| chrono::Utc::now().into())
-                        .with_timezone(&chrono::Utc),
+                    created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
                 }
             })
             .collect())
@@ -557,40 +577,40 @@ impl UserRepository for SqliteUserRepository {
     ) -> Result<Option<User>, DbError> {
         // Similar to PostgreSQL but with SQLite syntax
         let result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 RETURNING id, name, email, password_hash, role, created_at, updated_at
                 "#,
-                name.trim(),
-                email.trim(),
-                id
             )
+            .bind(name.trim())
+            .bind(email.trim())
+            .bind(id)
             .fetch_optional(&self.pool)
             .await?
         } else if let Some(name) = &user_update.name {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 RETURNING id, name, email, password_hash, role, created_at, updated_at
                 "#,
-                name.trim(),
-                id
             )
+            .bind(name.trim())
+            .bind(id)
             .fetch_optional(&self.pool)
             .await?
         } else if let Some(email) = &user_update.email {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 RETURNING id, name, email, password_hash, role, created_at, updated_at
                 "#,
-                email.trim(),
-                id
             )
+            .bind(email.trim())
+            .bind(id)
             .fetch_optional(&self.pool)
             .await?
         } else {
@@ -598,29 +618,25 @@ impl UserRepository for SqliteUserRepository {
         };
 
         Ok(result.map(|r| {
-            let role = match r.role.as_str() {
-                "admin" => UserRole::Admin,
-                _ => UserRole::User,
-            };
-
+            let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
+            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
+            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
-                id: r.id,
-                name: r.name,
-                email: r.email,
-                password_hash: r.password_hash,
+                id: r.try_get("id").unwrap_or_default(),
+                name: r.try_get("name").unwrap_or_default(),
+                email: r.try_get("email").unwrap_or_default(),
+                password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
-                    .unwrap_or_else(|_| chrono::Utc::now().into())
-                    .with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&r.updated_at)
-                    .unwrap_or_else(|_| chrono::Utc::now().into())
-                    .with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
             }
         }))
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let result = sqlx::query!("DELETE FROM users WHERE id = ?", id)
+        let result = sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(id)
             .execute(&self.pool)
             .await?;
 
@@ -628,10 +644,10 @@ impl UserRepository for SqliteUserRepository {
     }
 
     async fn count(&self) -> Result<i64, DbError> {
-        let row = sqlx::query!("SELECT COUNT(*) as count FROM users")
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
             .fetch_one(&self.pool)
-            .await?;
-
-        Ok(row.count)
+            .await
+            .map_err(|e| DbError::Query(e.to_string()))?;
+        Ok(count)
     }
 }

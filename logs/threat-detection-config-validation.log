@@ -1,0 +1,77 @@
+Starting threat detection configuration validation...
+Timestamp: Sat Aug 16 10:24:57 EDT 2025
+Starting comprehensive threat detection configuration validation
+=== Testing Threat Intelligence Configuration ===
+Testing: Threat intelligence feeds configuration exists
+✅ PASS: Threat intelligence feeds configuration exists
+Testing: Auth service integration config exists
+✅ PASS: Auth service integration config exists
+Testing: Integration config contains threat intelligence settings
+✅ PASS: Integration config contains threat intelligence settings
+Testing: Integration config has malicious IP blocklist
+✅ PASS: Integration config has malicious IP blocklist
+Testing: Integration config has rate limiting settings
+✅ PASS: Integration config has rate limiting settings
+=== Testing Prometheus Rules ===
+Testing: Prometheus threat intelligence rules file exists
+✅ PASS: Prometheus threat intelligence rules file exists
+Testing: Prometheus rules contain malicious IP detection
+✅ PASS: Prometheus rules contain malicious IP detection
+Testing: Prometheus rules contain high frequency request detection
+✅ PASS: Prometheus rules contain high frequency request detection
+Testing: Prometheus rules contain authentication failure detection
+✅ PASS: Prometheus rules contain authentication failure detection
+Testing: Prometheus rules have proper YAML syntax
+✅ PASS: Prometheus rules have proper YAML syntax
+=== Testing Fluentd Configuration ===
+Testing: Fluentd threat intelligence filters file exists
+✅ PASS: Fluentd threat intelligence filters file exists
+Testing: Fluentd filters contain IP blocking configuration
+✅ PASS: Fluentd filters contain IP blocking configuration
+Testing: Fluentd filters contain malicious domain detection
+✅ PASS: Fluentd filters contain malicious domain detection
+Testing: Fluentd filters contain file extension checking
+✅ PASS: Fluentd filters contain file extension checking
+=== Testing Sigma Rules ===
+Testing: Sigma rules directory exists
+✅ PASS: Sigma rules directory exists
+Testing: Sigma rules for malicious IP detection exist
+✅ PASS: Sigma rules for malicious IP detection exist
+Testing: Sigma rules for suspicious user agents exist
+✅ PASS: Sigma rules for suspicious user agents exist
+Testing: Malicious IP rule contains proper detection logic
+✅ PASS: Malicious IP rule contains proper detection logic
+Testing: Suspicious UA rule contains proper detection logic
+✅ PASS: Suspicious UA rule contains proper detection logic
+Testing: Sigma rules have proper YAML syntax
+✅ PASS: Sigma rules have proper YAML syntax
+=== Testing Rule Generation Results ===
+Testing: Rule generation test report exists
+✅ PASS: Rule generation test report exists
+Testing: Rule generation achieved full test coverage
+✅ PASS: Rule generation achieved full test coverage
+Testing: Generated adequate number of rules
+✅ PASS: Generated adequate number of rules
+Testing: Generated Prometheus rules
+✅ PASS: Generated Prometheus rules
+Testing: Generated Fluentd filters
+✅ PASS: Generated Fluentd filters
+Testing: Generated Sigma rules
+✅ PASS: Generated Sigma rules
+=== Testing Integration Readiness ===
+Testing: All required configuration files present
+✅ PASS: All required configuration files present
+Testing: All monitoring rules deployed
+✅ PASS: All monitoring rules deployed
+Testing: Sigma rules ready for SIEM integration
+✅ PASS: Sigma rules ready for SIEM integration
+Testing: Threat intelligence feeds configured
+✅ PASS: Threat intelligence feeds configured
+=== Configuration Validation Results ===
+Total tests: 30
+Passed tests: 30
+Failed tests: 0
+Success rate: 100%
+Configuration validation results saved to: /Users/lsendel/IdeaProjects/rust-security/reports/threat-detection-config-validation.json
+🎉 All threat detection configuration tests passed!
+✅ Threat detection system is ready for deployment

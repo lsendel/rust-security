@@ -43,26 +43,37 @@ impl Database {
     #[cfg(feature = "sqlite")]
     /// Create a new SQLite database connection
     pub async fn new_sqlite(config: DatabaseConfig) -> Result<Self, DbError> {
-        // Create database if it doesn't exist
-        if !Sqlite::database_exists(&config.url).await.unwrap_or(false) {
-            Sqlite::create_database(&config.url)
-                .await
-                .map_err(|e| DbError::Connection(e.to_string()))?;
+        // Normalize in-memory URL to a named shared in-memory DB so multiple connections share state
+        let normalized_url = if config.url.contains(":memory:") {
+            // Use a named shared in-memory database per sqlite docs
+            "sqlite:file:memdb?mode=memory&cache=shared".to_string()
+        } else {
+            config.url.clone()
+        };
+
+        // Skip creation checks for in-memory SQLite URLs
+        if !normalized_url.contains(":memory:") {
+            // Create database if it doesn't exist (file-based SQLite)
+            if !Sqlite::database_exists(&normalized_url).await.unwrap_or(false) {
+                Sqlite::create_database(&normalized_url)
+                    .await
+                    .map_err(|e| DbError::Connection(e.to_string()))?;
+            }
         }
 
         let pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(config.max_connections)
-            .connect(&config.url)
+            .connect(&normalized_url)
             .await
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
-        // Run migrations
+        // Run migrations (SQLite-compatible migrations only)
         sqlx::migrate!("./migrations")
             .run(&pool)
             .await
             .map_err(|e| DbError::Connection(format!("Migration failed: {}", e)))?;
 
-        let any_pool = AnyPool::connect(&config.url).await
+        let any_pool = AnyPool::connect(&normalized_url).await
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
         Ok(Self {
@@ -90,8 +101,8 @@ impl Database {
             .await
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
-        // Run migrations
-        sqlx::migrate!("./migrations")
+        // Run migrations (PostgreSQL-specific migrations)
+        sqlx::migrate!("./migrations_postgres")
             .run(&pool)
             .await
             .map_err(|e| DbError::Connection(format!("Migration failed: {}", e)))?;

@@ -1,0 +1,41 @@
+{
+  "threat_intelligence": {
+    "enabled": true,
+    "last_updated": "2025-08-16T10:19:55.310236",
+    "blocklists": {
+      "malicious_ips": [
+        "198.51.100.100",
+        "203.0.113.100",
+        "192.0.2.100"
+      ],
+      "malicious_domains": [
+        "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">",
+        "malware.example.com",
+        "phishing.test",
+        "evil.invalid",
+        "<p>The requested URL was not found on this server.</p>"
+      ],
+      "high_risk_patterns": [
+        ".*\\.exe$",
+        ".*\\.bat$",
+        ".*\\.cmd$",
+        ".*\\.scr$"
+      ]
+    },
+    "rate_limiting": {
+      "known_bad_ips": {
+        "requests_per_minute": 1,
+        "burst_limit": 3
+      },
+      "suspicious_patterns": {
+        "requests_per_minute": 10,
+        "burst_limit": 20
+      }
+    },
+    "monitoring": {
+      "log_blocked_requests": true,
+      "alert_on_block": true,
+      "metrics_enabled": true
+    }
+  }
+}

@@ -7,19 +7,14 @@ use axum::{
 };
 use std::sync::Arc;
 
-#[cfg(feature = "auth")]
-use {
-    bcrypt::{hash, verify, DEFAULT_COST},
-    jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation},
-    std::time::{SystemTime, UNIX_EPOCH},
-};
+use bcrypt::{hash, verify, DEFAULT_COST};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// JWT service for token generation and validation
 #[derive(Clone)]
 pub struct JwtService {
-    #[cfg(feature = "auth")]
     secret: String,
-    #[cfg(feature = "auth")]
     expiration_hours: u64,
 }
 
@@ -27,14 +22,11 @@ impl JwtService {
     /// Create a new JWT service
     pub fn new(secret: String, expiration_hours: Option<u64>) -> Self {
         Self {
-            #[cfg(feature = "auth")]
             secret,
-            #[cfg(feature = "auth")]
             expiration_hours: expiration_hours.unwrap_or(24),
         }
     }
 
-    #[cfg(feature = "auth")]
     /// Generate a JWT token for a user
     pub fn generate_token(&self, user_id: i32, email: &str, role: UserRole) -> Result<String, AppError> {
         let now = SystemTime::now()
@@ -59,7 +51,6 @@ impl JwtService {
         .map_err(|_| AppError::Auth("Failed to generate token".to_string()))
     }
 
-    #[cfg(feature = "auth")]
     /// Validate a JWT token and return claims
     pub fn validate_token(&self, token: &str) -> Result<Claims, AppError> {
         let token_data = decode::<Claims>(
@@ -72,48 +63,26 @@ impl JwtService {
         Ok(token_data.claims)
     }
 
-    #[cfg(not(feature = "auth"))]
-    /// Generate a JWT token for a user (stub implementation)
-    pub fn generate_token(&self, _user_id: i32, _email: &str, _role: UserRole) -> Result<String, AppError> {
-        Err(AppError::Auth("Authentication feature not enabled".to_string()))
-    }
-
-    #[cfg(not(feature = "auth"))]
-    /// Validate a JWT token and return claims (stub implementation)
-    pub fn validate_token(&self, _token: &str) -> Result<Claims, AppError> {
-        Err(AppError::Auth("Authentication feature not enabled".to_string()))
-    }
+    // No stub implementations when auth is not enabled because `auth` is now default
 }
 
 /// Password service for hashing and verification
 pub struct PasswordService;
 
 impl PasswordService {
-    #[cfg(feature = "auth")]
     /// Hash a password using bcrypt
     pub fn hash_password(password: &str) -> Result<String, AppError> {
         hash(password, DEFAULT_COST)
             .map_err(|_| AppError::Auth("Failed to hash password".to_string()))
     }
 
-    #[cfg(feature = "auth")]
     /// Verify a password against a hash
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
         verify(password, hash)
             .map_err(|_| AppError::Auth("Failed to verify password".to_string()))
     }
 
-    #[cfg(not(feature = "auth"))]
-    /// Hash a password using bcrypt (stub implementation)
-    pub fn hash_password(_password: &str) -> Result<String, AppError> {
-        Ok("stub_hash".to_string())
-    }
-
-    #[cfg(not(feature = "auth"))]
-    /// Verify a password against a hash (stub implementation)
-    pub fn verify_password(_password: &str, _hash: &str) -> Result<bool, AppError> {
-        Ok(true) // Always return true for stub
-    }
+    // No stub implementations when auth is not enabled because `auth` is now default
 }
 
 /// Authentication middleware to validate JWT tokens
@@ -183,7 +152,7 @@ mod tests {
     fn test_password_hashing() {
         let password = "test_password";
         let hash = PasswordService::hash_password(password).unwrap();
-        
+
         assert!(PasswordService::verify_password(password, &hash).unwrap());
         assert!(!PasswordService::verify_password("wrong_password", &hash).unwrap());
     }
@@ -192,10 +161,10 @@ mod tests {
     #[test]
     fn test_jwt_token_generation_and_validation() {
         let service = JwtService::new("test_secret".to_string(), Some(1));
-        
+
         let token = service.generate_token(1, "test@example.com", UserRole::User).unwrap();
         let claims = service.validate_token(&token).unwrap();
-        
+
         assert_eq!(claims.sub, 1);
         assert_eq!(claims.email, "test@example.com");
         assert_eq!(claims.role, UserRole::User);
@@ -206,7 +175,7 @@ mod tests {
         // This should work even without auth feature
         let hash = PasswordService::hash_password("test").unwrap();
         let verified = PasswordService::verify_password("test", &hash).unwrap();
-        
+
         #[cfg(not(feature = "auth"))]
         {
             assert_eq!(hash, "stub_hash");

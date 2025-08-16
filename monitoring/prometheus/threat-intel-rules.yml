@@ -1,0 +1,41 @@
+groups:
+- interval: 30s
+  name: threat_intelligence_generated
+  rules:
+  - alert: MaliciousIPDetected
+    annotations:
+      description: Request received from IP {{ $labels.remote_addr }} which is listed
+        in threat intelligence feeds
+      runbook_url: https://security-wiki.company.com/threats/malicious-ip
+      summary: Request from known malicious IP detected
+    expr: rate(http_requests_total{remote_addr=~"(198.51.100.100|203.0.113.100|192.0.2.100)"}[5m])
+      > 0
+    for: 0s
+    labels:
+      category: threat_intelligence
+      severity: critical
+      threat_type: malicious_ip
+  - alert: HighFrequencyRequests
+    annotations:
+      description: Instance {{ $labels.instance }} is receiving {{ $value }} requests
+        per second
+      runbook_url: https://security-wiki.company.com/threats/high-frequency
+      summary: High frequency requests detected
+    expr: rate(http_requests_total[1m]) > 100
+    for: 2m
+    labels:
+      category: threat_intelligence
+      severity: warning
+      threat_type: suspicious_activity
+  - alert: RepeatedAuthenticationFailures
+    annotations:
+      description: 'High rate of authentication failures: {{ $value }} failures per
+        second'
+      runbook_url: https://security-wiki.company.com/threats/brute-force
+      summary: Repeated authentication failures detected
+    expr: rate(auth_failures_total[5m]) > 5
+    for: 1m
+    labels:
+      category: threat_intelligence
+      severity: warning
+      threat_type: brute_force

@@ -1,0 +1,159 @@
+{
+  "index_patterns": ["security-audit-*"],
+  "settings": {
+    "index": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "refresh_interval": "5s",
+      "max_result_window": 50000,
+      "codec": "best_compression",
+      "lifecycle": {
+        "name": "security-audit-policy",
+        "rollover_alias": "security-audit"
+      }
+    },
+    "analysis": {
+      "analyzer": {
+        "security_event_analyzer": {
+          "type": "standard",
+          "stopwords": "_none_"
+        },
+        "ip_analyzer": {
+          "tokenizer": "keyword",
+          "filter": ["lowercase"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "event_id": {
+        "type": "keyword",
+        "index": true
+      },
+      "timestamp": {
+        "type": "date",
+        "format": "strict_date_optional_time||epoch_millis"
+      },
+      "event_type": {
+        "type": "keyword",
+        "index": true
+      },
+      "severity": {
+        "type": "keyword",
+        "index": true
+      },
+      "source": {
+        "type": "keyword",
+        "index": true
+      },
+      "client_id": {
+        "type": "keyword",
+        "index": true
+      },
+      "user_id": {
+        "type": "keyword",
+        "index": true
+      },
+      "ip_address": {
+        "type": "ip",
+        "index": true
+      },
+      "user_agent": {
+        "type": "text",
+        "analyzer": "security_event_analyzer",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "request_id": {
+        "type": "keyword",
+        "index": true
+      },
+      "session_id": {
+        "type": "keyword",
+        "index": true
+      },
+      "description": {
+        "type": "text",
+        "analyzer": "security_event_analyzer"
+      },
+      "details": {
+        "type": "object",
+        "enabled": true,
+        "dynamic": true
+      },
+      "outcome": {
+        "type": "keyword",
+        "index": true
+      },
+      "resource": {
+        "type": "keyword",
+        "index": true
+      },
+      "action": {
+        "type": "keyword",
+        "index": true
+      },
+      "risk_score": {
+        "type": "integer",
+        "index": true
+      },
+      "calculated_risk_score": {
+        "type": "integer",
+        "index": true
+      },
+      "location": {
+        "type": "keyword",
+        "index": true
+      },
+      "device_fingerprint": {
+        "type": "keyword",
+        "index": true
+      },
+      "service_name": {
+        "type": "keyword",
+        "index": true
+      },
+      "log_type": {
+        "type": "keyword",
+        "index": true
+      },
+      "environment": {
+        "type": "keyword",
+        "index": true
+      },
+      "cluster": {
+        "type": "keyword",
+        "index": true
+      },
+      "namespace": {
+        "type": "keyword",
+        "index": true
+      },
+      "retention_years": {
+        "type": "integer",
+        "index": false
+      },
+      "geo_country": {
+        "type": "keyword",
+        "index": true
+      },
+      "geo_city": {
+        "type": "keyword",
+        "index": true
+      },
+      "threat_intel_score": {
+        "type": "integer",
+        "index": true
+      },
+      "compliance_relevant": {
+        "type": "keyword",
+        "index": true
+      }
+    }
+  }
+}

@@ -1,0 +1,202 @@
+Starting comprehensive security posture verification...
+Timestamp: Sat Aug 16 11:00:38 EDT 2025
+Starting comprehensive security posture verification
+=== Authentication Security Assessment ===
+Assessing: OAuth2 authorization code flow implemented
+✅ SECURE: OAuth2 authorization code flow implemented
+Assessing: PKCE (Proof Key for Code Exchange) support
+✅ SECURE: PKCE (Proof Key for Code Exchange) support
+Assessing: JWT token security with RSA signing
+✅ SECURE: JWT token security with RSA signing
+Assessing: Secure random token generation
+✅ SECURE: Secure random token generation
+Assessing: Token expiration and TTL enforcement
+✅ SECURE: Token expiration and TTL enforcement
+Assessing: Client authentication validation
+🔴 VULNERABLE: Client authentication validation (control failed)
+=== Multi-Factor Authentication Security ===
+Assessing: TOTP (Time-based OTP) implementation
+✅ SECURE: TOTP (Time-based OTP) implementation
+Assessing: Secure secret generation for TOTP
+✅ SECURE: Secure secret generation for TOTP
+Assessing: TOTP verification with time window
+🔴 VULNERABLE: TOTP verification with time window (control failed)
+Assessing: Rate limiting for MFA attempts
+✅ SECURE: Rate limiting for MFA attempts
+=== Input Validation Security ===
+Assessing: SCIM input validation and sanitization
+✅ SECURE: SCIM input validation and sanitization
+Assessing: OAuth parameter validation
+✅ SECURE: OAuth parameter validation
+Assessing: URL and redirect URI validation
+🔴 VULNERABLE: URL and redirect URI validation (control failed)
+Assessing: SQL injection prevention (no raw SQL)
+✅ SECURE: SQL injection prevention (no raw SQL)
+Assessing: Request size limits implemented
+Size limits via framework
+✅ SECURE: Request size limits implemented
+=== Access Control Security ===
+Assessing: Role-based access control in SCIM
+🔴 VULNERABLE: Role-based access control in SCIM (control failed)
+Assessing: Scope validation for OAuth tokens
+✅ SECURE: Scope validation for OAuth tokens
+Assessing: Admin endpoint protection
+Admin endpoints secured
+✅ SECURE: Admin endpoint protection
+Assessing: CORS policy configuration
+✅ SECURE: CORS policy configuration
+=== Rate Limiting and DDoS Protection ===
+Assessing: Global rate limiting implementation
+✅ SECURE: Global rate limiting implementation
+Assessing: Per-IP rate limiting
+🔴 VULNERABLE: Per-IP rate limiting (control failed)
+Assessing: Circuit breaker pattern implementation
+✅ SECURE: Circuit breaker pattern implementation
+Assessing: Request timeout configuration
+✅ SECURE: Request timeout configuration
+=== Logging and Monitoring Security ===
+Assessing: Security event logging implemented
+✅ SECURE: Security event logging implemented
+Assessing: Authentication failure logging
+🔴 VULNERABLE: Authentication failure logging (control failed)
+Assessing: Sensitive data not logged
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/lib.rs:// Helper to mint local tokens for a subject (e.g., after federated login)
+No sensitive data in logs
+✅ SECURE: Sensitive data not logged
+Assessing: Structured logging format
+🔴 VULNERABLE: Structured logging format (control failed)
+Assessing: Security monitoring alerts configured
+✅ SECURE: Security monitoring alerts configured
+=== Cryptographic Security ===
+Assessing: Strong RSA key generation (2048+ bits)
+✅ SECURE: Strong RSA key generation (2048+ bits)
+Assessing: Secure random number generation
+🔴 VULNERABLE: Secure random number generation (control failed)
+Assessing: Key rotation mechanism
+✅ SECURE: Key rotation mechanism
+Assessing: Secure password hashing (Argon2)
+✅ SECURE: Secure password hashing (Argon2)
+Assessing: TLS configuration for external connections
+✅ SECURE: TLS configuration for external connections
+=== Threat Intelligence Security ===
+Assessing: Malicious IP blocking capability
+✅ SECURE: Malicious IP blocking capability
+Assessing: Threat feed integration
+✅ SECURE: Threat feed integration
+Assessing: SIEM integration via Sigma rules
+✅ SECURE: SIEM integration via Sigma rules
+Assessing: Suspicious user agent detection
+🔴 VULNERABLE: Suspicious user agent detection (control failed)
+=== Configuration Security ===
+Assessing: No hardcoded secrets in source code
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:    ensure_initialized().await; maybe_rotate().await; let guard = ACTIVE_KEYS.read().await; let key = guard.first().expect("signing key present").clone();
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:pub async fn jwks_document() -> serde_json::Value { ensure_initialized().await; maybe_rotate().await; let guard = ACTIVE_KEYS.read().await; let keys: Vec<serde_json::Value> = guard.iter().map(|k| k.public_jwk.clone()).collect(); serde_json::json!({ "keys": keys }) }
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                let key = format!("token:{}", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                let key = format!("token:{}", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                    let key = format!("token:{}", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                let key = format!("token:{}", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                    let key = format!("token:{}", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                let keys: Vec<String> = redis::cmd("KEYS")
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:        let full_key = format!("{}{}", self.config.key_prefix, key);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                    debug!(key = %key, "Cache hit (Redis)");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                    debug!(key = %key, "Cache miss (Redis)");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                    warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                debug!(key = %key, "Cache hit (Memory)");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                debug!(key = %key, "Cache miss (Memory)");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:        let full_key = format!("{}{}", self.config.key_prefix, key);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                warn!(key = %key, error = %e, "Failed to set in Redis cache");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                debug!(key = %key, ttl = ttl_seconds, "Set in Redis cache");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:        debug!(key = %key, ttl = ttl_seconds, "Set in memory cache");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:        let full_key = format!("{}{}", self.config.key_prefix, key);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                warn!(key = %key, error = %e, "Failed to delete from Redis cache");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:        debug!(key = %key, "Deleted from cache");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:    let cache_key = format!("token_introspect:{}", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/key_rotation.rs:        let keys = jwks["keys"].as_array().unwrap_or(&vec![]);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/security.rs:    let secret = std::env::var("REQUEST_SIGNING_SECRET")
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/config.rs:                if secret == "default_jwt_secret_change_in_production"
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/rate_limit_optimized.rs:        let key = format!("{}:{}", self.key_prefix, client_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/rate_limit_optimized.rs:        let client_key = "test_client";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/rate_limit_optimized.rs:                let client_key = format!("client_{}", i);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:        let key = format!("authcode:{}", code);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:        let key = format!("authcode:{}", code);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_active = format!("token:{}:active", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_scope = format!("token:{}:scope", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_client_id = format!("token:{}:client_id", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_exp = format!("token:{}:exp", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_iat = format!("token:{}:iat", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_sub = format!("token:{}:sub", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_token_binding = format!("token:{}:token_binding", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:active", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:active", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:scope", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:client_id", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:exp", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:sub", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:iat", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:refresh", refresh);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:token_binding", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:refresh", refresh);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:secret", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:verified", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:backup", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:backup", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        "otpauth://totp/{}?secret={}&issuer={}",
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_google.rs:    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_microsoft.rs:	let client_secret = std::env::var("MICROSOFT_CLIENT_SECRET").unwrap_or_default();
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_microsoft.rs:	let Some(keys) = jwks.and_then(|v| v.get("keys").cloned()) else { return (false, None) };
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_github.rs:    let client_secret = std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_default();
+No hardcoded secrets found
+✅ SECURE: No hardcoded secrets in source code
+Assessing: Environment variable usage for secrets
+✅ SECURE: Environment variable usage for secrets
+Assessing: Secure default configurations
+Secure defaults assumed
+✅ SECURE: Secure default configurations
+Assessing: Security policy enforcement (deny.toml)
+✅ SECURE: Security policy enforcement (deny.toml)
+=== Dependency Security ===
+Assessing: Security-focused dependencies used
+✅ SECURE: Security-focused dependencies used
+Assessing: No known vulnerable dependencies (via deny.toml)
+✅ SECURE: No known vulnerable dependencies (via deny.toml)
+Assessing: Minimal dependency surface
+🔴 VULNERABLE: Minimal dependency surface (control failed)
+Assessing: Security audit workflow exists
+✅ SECURE: Security audit workflow exists
+=== Infrastructure Security ===
+Assessing: Container security configuration
+✅ SECURE: Container security configuration
+Assessing: Kubernetes security policies
+✅ SECURE: Kubernetes security policies
+Assessing: GitOps security practices
+✅ SECURE: GitOps security practices
+Assessing: Infrastructure as Code
+✅ SECURE: Infrastructure as Code
+=== Compliance and Governance ===
+Assessing: SOC2 compliance controls
+✅ SECURE: SOC2 compliance controls
+Assessing: ISO 27001 compliance controls
+✅ SECURE: ISO 27001 compliance controls
+Assessing: GDPR privacy controls
+✅ SECURE: GDPR privacy controls
+Assessing: Compliance reporting mechanism
+✅ SECURE: Compliance reporting mechanism
+Assessing: Security documentation exists
+✅ SECURE: Security documentation exists
+=== Security Posture Verification Results ===
+Total security checks: 54
+Passed checks: 44
+Failed checks: 10
+Security score: 91%
+
+Issues by severity:
+  Critical: 2
+  High: 4
+  Medium: 2
+  Low: 2
+Security posture verification results saved to: /Users/lsendel/IdeaProjects/rust-security/reports/security-posture-verification.json
+Security recommendations saved to: /Users/lsendel/IdeaProjects/rust-security/reports/security-recommendations.md
+❌ Security posture verification FAILED
+🚨 System has critical security issues that must be addressed before production
+🔒 Security score: 91% - Needs Improvement
+Cleaning up...

@@ -1,0 +1,70 @@
+# Cargo deny configuration for Rust Security Workspace
+# This file defines policies for dependencies, licenses, and security
+
+[graph]
+# Deny multiple versions of the same crate
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-apple-darwin" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+]
+
+[output]
+feature-depth = 1
+
+[advisories]
+# Deny security vulnerabilities
+vulnerability = "deny"
+# Warn about unmaintained crates
+unmaintained = "warn"
+# Deny yanked crates
+yanked = "deny"
+# Ignore specific advisories if needed (use sparingly)
+ignore = [
+    # Example: "RUSTSEC-2020-0001",
+]
+
+[licenses]
+# Allow only specific licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+]
+# Deny copyleft licenses for this project
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-1.0",
+    "AGPL-3.0",
+]
+# Confidence threshold for license detection
+confidence-threshold = 0.8
+
+[bans]
+# Deny specific crates
+deny = [
+    # Example: { name = "openssl", version = "*" },
+]
+# Skip certain crates from duplicate version checking
+skip = [
+    # Example: { name = "winapi", version = "=0.2.8" },
+]
+# Skip tree checking for certain crates
+skip-tree = [
+    # Example: { name = "windows-sys", version = "=0.45.0" },
+]
+
+[sources]
+# Deny git sources in favor of crates.io
+unknown-registry = "deny"
+unknown-git = "deny"
+# Allow specific git sources if needed
+allow-git = [
+    # Example: "https://github.com/rust-lang/crates.io-index",
+]

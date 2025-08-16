@@ -1,0 +1,213 @@
+# Default values for auth-service
+replicaCount: 3
+
+image:
+  repository: rust-security/auth-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: auth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: auth-service-tls
+      hosts:
+        - auth.example.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - auth-service
+        topologyKey: kubernetes.io/hostname
+
+# Application configuration
+config:
+  environment: production
+  logLevel: info
+  bindAddr: "0.0.0.0:8080"
+  tokenExpirySeconds: 3600
+  rateLimitRequestsPerMinute: 120
+  allowedOrigins: "https://app.example.com,https://admin.example.com"
+  
+  # External services
+  jaegerEndpoint: "http://jaeger-collector:14268/api/traces"
+  
+  # Security settings
+  jwtSecret: ""  # Will be set from secret
+  clientCredentials: ""  # Will be set from secret
+  requestSigningSecret: ""  # Will be set from secret
+  
+  # Google OAuth (optional)
+  googleClientId: ""
+  googleClientSecret: ""
+  googleRedirectUri: "https://auth.example.com/oauth/google/callback"
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "redis-password"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# PostgreSQL configuration (if needed for future features)
+postgresql:
+  enabled: false
+  auth:
+    postgresPassword: "postgres-password"
+    database: "auth_service"
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+
+# Secrets (these should be created separately)
+secrets:
+  jwtSecret: "your-super-secret-jwt-key-change-in-production"
+  clientCredentials: "client1:secret1;client2:secret2"
+  requestSigningSecret: "your-request-signing-secret"
+  redisPassword: "redis-password"
+
+# Health checks
+healthCheck:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+    labels:
+      app: auth-service
+
+# Network policies
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      ports:
+      - protocol: TCP
+        port: 8080
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: monitoring
+      ports:
+      - protocol: TCP
+        port: 8080
+  egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: kube-system
+      ports:
+      - protocol: TCP
+        port: 53
+      - protocol: UDP
+        port: 53
+    - to: []
+      ports:
+      - protocol: TCP
+        port: 6379  # Redis
+      - protocol: TCP
+        port: 443   # HTTPS
+      - protocol: TCP
+        port: 14268 # Jaeger
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

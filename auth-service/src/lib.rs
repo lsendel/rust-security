@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Form, State},
+    extract::{Form, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -8,13 +8,27 @@ use axum::{
 use base64::Engine as _;
 use once_cell::sync::Lazy;
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tower::ServiceBuilder;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::trace::TraceLayer;
+use url::Url;
+#[cfg(feature = "docs")]
+use utoipa::OpenApi;
+use utoipa::ToSchema;
+#[cfg(feature = "docs")]
+use utoipa_swagger_ui::SwaggerUi;
 
 // Constants
-const DEFAULT_TOKEN_EXPIRY_SECONDS: u64 = 3600; // 1 hour
-const REFRESH_TOKEN_EXPIRY_SECONDS: u64 = 14 * 24 * 3600; // 14 days
-const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
-const MAX_FILTER_LENGTH: usize = 500;
-const MAX_REQUEST_BODY_SIZE: usize = 1024 * 1024; // 1MB
+pub const DEFAULT_TOKEN_EXPIRY_SECONDS: u64 = 3600; // 1 hour
+pub const REFRESH_TOKEN_EXPIRY_SECONDS: u64 = 14 * 24 * 3600; // 14 days
+pub const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
+pub const MAX_FILTER_LENGTH: usize = 500;
+pub const MAX_REQUEST_BODY_SIZE: usize = 1024 * 1024; // 1MB
 
 static TOKENS_ISSUED: Lazy<IntCounter> = Lazy::new(|| {
     IntCounter::new("tokens_issued_total", "tokens issued")
@@ -49,25 +63,20 @@ async fn metrics_handler() -> Response {
         .body(axum::body::Body::from(buffer))
         .unwrap()
 }
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use tower::ServiceBuilder;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::trace::TraceLayer;
-#[cfg(feature = "docs")]
-use utoipa::OpenApi;
-use utoipa::ToSchema;
-#[cfg(feature = "docs")]
-use utoipa_swagger_ui::SwaggerUi;
 
 pub mod keys;
 pub mod security;
+pub mod security_metrics;
+pub mod security_logging;
 pub mod store;
 pub mod mfa;
 pub mod scim;
 pub mod oidc_google;
+pub mod oidc_microsoft;
+pub mod oidc_github;
 pub mod circuit_breaker;
+
+use security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
@@ -83,13 +92,14 @@ pub async fn oauth_metadata() -> Json<serde_json::Value> {
         "introspection_endpoint": format!("{}/oauth/introspect", base),
         "revocation_endpoint": format!("{}/oauth/revoke", base),
         "jwks_uri": format!("{}/jwks.json", base),
-        "grant_types_supported": ["client_credentials", "refresh_token"],
+        "grant_types_supported": ["client_credentials", "refresh_token", "authorization_code"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
         "id_token_signing_alg_values_supported": ["RS256"],
         "authorization_endpoint": format!("{}/oauth/authorize", base),
         "userinfo_endpoint": format!("{}/oauth/userinfo", base),
         "response_types_supported": ["code"],
         "scopes_supported": ["openid", "profile", "email"],
+        "code_challenge_methods_supported": ["S256", "plain"],
     }))
 }
 
@@ -110,9 +120,12 @@ pub enum AuthError {
     InvalidClientCredentials,
     MissingRefreshToken,
     InvalidRefreshToken,
-    InvalidScope,
+    InvalidScope(String),
     InvalidToken(String),
     UnsupportedGrantType(String),
+    UnsupportedResponseType(String),
+    UnauthorizedClient(String),
+    InvalidRequest(String),
     InternalError(anyhow::Error),
 }
 
@@ -136,13 +149,25 @@ impl IntoResponse for AuthError {
                 StatusCode::UNAUTHORIZED,
                 "invalid_refresh_token".to_string(),
             ),
-            AuthError::InvalidScope => (StatusCode::BAD_REQUEST, "invalid_scope".to_string()),
+            AuthError::InvalidScope(scope) => (StatusCode::BAD_REQUEST, format!("invalid_scope: {}", scope)),
             AuthError::InvalidToken(msg) => {
                 (StatusCode::BAD_REQUEST, format!("invalid_token: {}", msg))
             }
             AuthError::UnsupportedGrantType(gt) => (
                 StatusCode::BAD_REQUEST,
                 format!("unsupported grant_type: {}", gt),
+            ),
+            AuthError::UnsupportedResponseType(rt) => (
+                StatusCode::BAD_REQUEST,
+                format!("unsupported response_type: {}", rt),
+            ),
+            AuthError::UnauthorizedClient(client_id) => (
+                StatusCode::UNAUTHORIZED,
+                format!("unauthorized_client: {}", client_id),
+            ),
+            AuthError::InvalidRequest(msg) => (
+                StatusCode::BAD_REQUEST,
+                format!("invalid_request: {}", msg),
             ),
             AuthError::InternalError(err) => {
                 tracing::error!("Internal error: {}", err);
@@ -169,11 +194,18 @@ impl From<redis::RedisError> for AuthError {
     }
 }
 
+impl From<serde_json::Error> for AuthError {
+    fn from(err: serde_json::Error) -> Self {
+        AuthError::InternalError(err.into())
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub token_store: crate::store::TokenStore,
     pub client_credentials: HashMap<String, String>,
     pub allowed_scopes: Vec<String>,
+    pub authorization_codes: Arc<RwLock<HashMap<String, AuthorizationCode>>>,
 }
 
 // TokenStore moved to store.rs
@@ -218,6 +250,134 @@ pub struct IntrospectResponse {
     pub sub: Option<String>,
 }
 
+// === ABAC Authorization proxy to policy-service ===
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AuthorizationCheckRequest {
+    pub action: String,
+    pub resource: serde_json::Value,
+    #[serde(default)]
+    pub context: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AuthorizationCheckResponse {
+    pub decision: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PolicyAuthorizeRequest {
+    pub request_id: String,
+    pub principal: serde_json::Value,
+    pub action: String,
+    pub resource: serde_json::Value,
+    pub context: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PolicyAuthorizeResponse {
+    pub decision: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/v1/authorize",
+    request_body = AuthorizationCheckRequest,
+    responses((status = 200, description = "Authorization decision", body = AuthorizationCheckResponse), (status = 401))
+)]
+pub async fn authorize_check(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(req): Json<AuthorizationCheckRequest>,
+)
+    -> Result<Json<AuthorizationCheckResponse>, AuthError>
+{
+    // Extract bearer token and introspect locally
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let token = auth.strip_prefix("Bearer ").unwrap_or("");
+    if token.is_empty() {
+        return Err(AuthError::InvalidToken("missing bearer".into()));
+    }
+    let rec = state.token_store.get_record(token).await?;
+    if !rec.active {
+        return Err(AuthError::InvalidToken("inactive".into()));
+    }
+
+    // Compose principal from token record
+    let principal_id = rec
+        .sub
+        .clone()
+        .unwrap_or_else(|| "anonymous".to_string());
+    let principal = serde_json::json!({
+        "type": "User",
+        "id": principal_id,
+        // Attach simple attrs if needed later (tenant/brand/location)
+        "attrs": {}
+    });
+
+    // Context: merge provided context or default empty object
+    let context = req.context.unwrap_or_else(|| serde_json::json!({}));
+
+    // Build request to policy-service
+    let _request_id = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    let payload = PolicyAuthorizeRequest {
+        request_id: _request_id,
+        principal,
+        action: req.action,
+        resource: req.resource,
+        context,
+    };
+
+    let policy_base = std::env::var("POLICY_SERVICE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+    let url = format!("{}/v1/authorize", policy_base);
+
+    // Permissive fallback unless strict mode is enabled
+    let strict_header = headers
+        .get("x-policy-enforcement")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.eq_ignore_ascii_case("strict"))
+        .unwrap_or(false);
+    let strict_env = std::env::var("POLICY_ENFORCEMENT")
+        .ok()
+        .map(|v| v.eq_ignore_ascii_case("strict"))
+        .unwrap_or(false);
+    let strict = strict_header || strict_env;
+
+    let client = reqwest::Client::new();
+    let decision = match client.post(url).json(&payload).send().await {
+        Ok(resp) => match resp.error_for_status() {
+            Ok(ok) => match ok.json::<PolicyAuthorizeResponse>().await {
+                Ok(r) => r.decision,
+                Err(err) => {
+                    tracing::warn!(error = %err, "Failed to parse policy response; falling back");
+                    if strict { return Err(AuthError::InternalError(anyhow::anyhow!(err))); }
+                    "Allow".to_string()
+                }
+            },
+            Err(err) => {
+                tracing::warn!(error = %err, "Policy service returned error status; falling back");
+                if strict { return Err(AuthError::InternalError(anyhow::anyhow!(err))); }
+                "Allow".to_string()
+            }
+        },
+        Err(err) => {
+            tracing::warn!(error = %err, "Policy service unavailable; falling back");
+            if strict { return Err(AuthError::InternalError(anyhow::anyhow!(err))); }
+            "Allow".to_string()
+        }
+    };
+
+    Ok(Json(AuthorizationCheckResponse { decision }))
+}
+
 pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
@@ -235,11 +395,67 @@ pub async fn introspect(
     State(state): State<AppState>,
     Json(body): Json<IntrospectRequest>,
 ) -> Result<Json<IntrospectResponse>, AuthError> {
+    // Extract client information for logging
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let request_id = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
     // Input validation
-    crate::security::validate_token_input(&body.token)
-        .map_err(|e| AuthError::InvalidToken(e.to_string()))?;
+    if let Err(e) = crate::security::validate_token_input(&body.token) {
+        SecurityLogger::log_validation_failure(
+            "/oauth/introspect",
+            "token_format",
+            None,
+            &ip_address,
+            Some([("error".to_string(), serde_json::Value::String(e.to_string()))].into()),
+        );
+        return Err(AuthError::InvalidToken(e.to_string()));
+    }
 
     let rec = state.token_store.get_record(&body.token).await?;
+
+    // Log token introspection event
+    let mut event = SecurityEvent::new(
+        SecurityEventType::DataAccess,
+        SecuritySeverity::Low,
+        "auth-service".to_string(),
+        "Token introspection performed".to_string(),
+    )
+    .with_ip_address(ip_address)
+    .with_outcome(if rec.active { "success" } else { "inactive_token" }.to_string())
+    .with_resource("/oauth/introspect".to_string())
+    .with_action("introspect".to_string())
+    .with_detail("token_active".to_string(), rec.active)
+    .with_detail("has_scope".to_string(), rec.scope.is_some());
+
+    if let Some(client_id) = &rec.client_id {
+        event = event.with_client_id(client_id.clone());
+    }
+
+    if let Some(ua) = user_agent {
+        event = event.with_user_agent(ua);
+    }
+
+    if let Some(req_id) = request_id {
+        event = event.with_request_id(req_id);
+    }
+
+    SecurityLogger::log_event(&event);
+
+    // Keep backward compatibility with old audit log
     audit(
         "introspect",
         serde_json::json!({
@@ -249,6 +465,7 @@ pub async fn introspect(
             "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
         }),
     );
+
     Ok(Json(IntrospectResponse {
         active: rec.active,
         scope: rec.scope,
@@ -261,6 +478,131 @@ pub async fn introspect(
     }))
 }
 
+/// OAuth2 Authorization Endpoint with PKCE support
+pub async fn oauth_authorize(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Query(req): Query<AuthorizeRequest>,
+) -> Result<Response, AuthError> {
+    // Extract client information for security logging
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+    // Validate response_type
+    if req.response_type != "code" {
+        return Err(AuthError::UnsupportedResponseType(req.response_type));
+    }
+
+    // Validate client_id
+    if !state.client_credentials.contains_key(&req.client_id) {
+        return Err(AuthError::UnauthorizedClient(req.client_id));
+    }
+
+    // Validate PKCE parameters if present
+    if let Some(challenge) = &req.code_challenge {
+        let method = req.code_challenge_method.as_deref().unwrap_or("S256");
+        if method != "S256" && method != "plain" {
+            return Err(AuthError::InvalidRequest("Invalid code_challenge_method".to_string()));
+        }
+
+        // Validate challenge format
+        if challenge.len() < 43 || challenge.len() > 128 {
+            return Err(AuthError::InvalidRequest("Invalid code_challenge length".to_string()));
+        }
+    }
+
+    // Validate scope
+    if let Some(scope) = &req.scope {
+        if !validate_scope(scope, &state.allowed_scopes) {
+            return Err(AuthError::InvalidScope(scope.clone()));
+        }
+    }
+
+    // Generate authorization code
+    let auth_code = AuthorizationCode {
+        code: generate_secure_code(),
+        client_id: req.client_id.clone(),
+        redirect_uri: req.redirect_uri.clone(),
+        scope: req.scope.clone(),
+        code_challenge: req.code_challenge.clone(),
+        code_challenge_method: req.code_challenge_method.clone(),
+        expires_at: chrono::Utc::now().timestamp() + 600, // 10 minutes
+    };
+
+    // Store authorization code (using the new store functions)
+    let auth_code_json = serde_json::to_string(&auth_code)
+        .map_err(|e| AuthError::InternalError(anyhow::anyhow!(e)))?;
+    crate::store::set_auth_code(&auth_code.code, auth_code_json, 600).await?;
+
+    // Build redirect URL
+    let mut redirect_url = Url::parse(&req.redirect_uri)
+        .map_err(|_| AuthError::InvalidRequest("Invalid redirect_uri".to_string()))?;
+
+    redirect_url.query_pairs_mut()
+        .append_pair("code", &auth_code.code);
+
+    if let Some(state_param) = &req.state {
+        redirect_url.query_pairs_mut().append_pair("state", state_param);
+    }
+
+    // Log authorization code issuance
+    let mut event = SecurityEvent::new(
+        SecurityEventType::AuthenticationSuccess,
+        SecuritySeverity::Low,
+        "auth-service".to_string(),
+        "Authorization code issued successfully".to_string(),
+    )
+    .with_client_id(req.client_id.clone())
+    .with_ip_address(ip_address)
+    .with_outcome("success".to_string())
+    .with_resource("/oauth/authorize".to_string())
+    .with_action("authorization_code_issued".to_string())
+    .with_detail("has_scope".to_string(), req.scope.is_some())
+    .with_detail("has_pkce".to_string(), req.code_challenge.is_some())
+    .with_detail("response_type".to_string(), req.response_type.clone());
+
+    if let Some(user_agent) = headers.get("user-agent").and_then(|v| v.to_str().ok()) {
+        event = event.with_user_agent(user_agent.to_string());
+    }
+
+    if let Some(request_id) = headers.get("x-request-id").and_then(|v| v.to_str().ok()) {
+        event = event.with_request_id(request_id.to_string());
+    }
+
+    SecurityLogger::log_event(&event);
+
+    audit(
+        "authorization_code_issued",
+        serde_json::json!({
+            "client_id": req.client_id,
+            "has_scope": req.scope.is_some(),
+            "has_pkce": req.code_challenge.is_some(),
+            "redirect_uri": req.redirect_uri
+        }),
+    );
+
+    // Return redirect response
+    Ok((
+        StatusCode::FOUND,
+        [("Location", redirect_url.to_string())],
+        "Redirecting to authorization endpoint",
+    ).into_response())
+}
+
+/// Generate a secure authorization code
+fn generate_secure_code() -> String {
+    format!("ac_{}", uuid::Uuid::new_v4())
+}
+
+/// Validate scope against allowed scopes
+fn validate_scope(requested_scope: &str, allowed_scopes: &[String]) -> bool {
+    let scopes: Vec<&str> = requested_scope.split(' ').collect();
+    scopes.iter().all(|scope| allowed_scopes.contains(&scope.to_string()))
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct TokenRequest {
     pub grant_type: String,
@@ -268,6 +610,34 @@ pub struct TokenRequest {
     pub client_secret: Option<String>,
     pub scope: Option<String>,
     pub refresh_token: Option<String>,
+    // Authorization code flow parameters
+    pub code: Option<String>,
+    pub redirect_uri: Option<String>,
+    // PKCE parameters
+    pub code_verifier: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AuthorizeRequest {
+    pub response_type: String,
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub scope: Option<String>,
+    pub state: Option<String>,
+    // PKCE parameters
+    pub code_challenge: Option<String>,
+    pub code_challenge_method: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthorizationCode {
+    pub code: String,
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub scope: Option<String>,
+    pub code_challenge: Option<String>,
+    pub code_challenge_method: Option<String>,
+    pub expires_at: i64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, ToSchema)]
@@ -297,6 +667,24 @@ pub async fn issue_token(
     State(state): State<AppState>,
     Form(form): Form<TokenRequest>,
 ) -> Result<Json<TokenResponse>, AuthError> {
+    // Extract client information for security logging
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let request_id = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
     match form.grant_type.as_str() {
         "client_credentials" => {
             // Allow either form credentials or HTTP Basic Authorization
@@ -329,12 +717,31 @@ pub async fn issue_token(
             let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
 
             if state.client_credentials.get(client_id) == Some(client_secret) {
+                // Log successful authentication attempt
+                SecurityLogger::log_auth_attempt(
+                    client_id,
+                    &ip_address,
+                    user_agent.as_deref(),
+                    "success",
+                    Some([
+                        ("grant_type".to_string(), serde_json::Value::String("client_credentials".to_string())),
+                        ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
+                    ].into()),
+                );
+
                 if let Some(scope_str) = form.scope.as_ref() {
                     let all_ok = scope_str
                         .split_whitespace()
                         .all(|s| state.allowed_scopes.iter().any(|a| a == s));
                     if !all_ok {
-                        return Err(AuthError::InvalidScope);
+                        SecurityLogger::log_validation_failure(
+                            "/oauth/token",
+                            "invalid_scope",
+                            Some(client_id),
+                            &ip_address,
+                            Some([("requested_scope".to_string(), serde_json::Value::String(scope_str.clone()))].into()),
+                        );
+                        return Err(AuthError::InvalidScope(scope_str.to_string()));
                     }
                 }
                 let make_id_token = form
@@ -351,6 +758,21 @@ pub async fn issue_token(
                 )
                 .await?;
                 TOKENS_ISSUED.inc();
+
+                // Log token issuance
+                SecurityLogger::log_token_operation(
+                    "issue",
+                    "access_token",
+                    client_id,
+                    &ip_address,
+                    "success",
+                    Some([
+                        ("grant_type".to_string(), serde_json::Value::String("client_credentials".to_string())),
+                        ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
+                        ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                    ].into()),
+                );
+
                 audit(
                     "token_issued",
                     serde_json::json!({
@@ -362,6 +784,18 @@ pub async fn issue_token(
                 );
                 Ok(res)
             } else {
+                // Log failed authentication attempt
+                SecurityLogger::log_auth_attempt(
+                    client_id,
+                    &ip_address,
+                    user_agent.as_deref(),
+                    "failure",
+                    Some([
+                        ("grant_type".to_string(), serde_json::Value::String("client_credentials".to_string())),
+                        ("reason".to_string(), serde_json::Value::String("invalid_client_credentials".to_string())),
+                    ].into()),
+                );
+
                 audit(
                     "token_issue_failed",
                     serde_json::json!({
@@ -380,6 +814,17 @@ pub async fn issue_token(
                 .ok_or(AuthError::MissingRefreshToken)?;
             let consumed = state.token_store.consume_refresh(rt).await?;
             if !consumed {
+                // Log failed refresh token attempt
+                SecurityLogger::log_token_operation(
+                    "refresh",
+                    "refresh_token",
+                    "unknown",
+                    &ip_address,
+                    "failure",
+                    Some([
+                        ("reason".to_string(), serde_json::Value::String("invalid_refresh_token".to_string())),
+                    ].into()),
+                );
                 return Err(AuthError::InvalidRefreshToken);
             }
             if let Some(scope_str) = form.scope.as_ref() {
@@ -387,7 +832,14 @@ pub async fn issue_token(
                     .split_whitespace()
                     .all(|s| state.allowed_scopes.iter().any(|a| a == s));
                 if !all_ok {
-                    return Err(AuthError::InvalidScope);
+                    SecurityLogger::log_validation_failure(
+                        "/oauth/token",
+                        "invalid_scope",
+                        None,
+                        &ip_address,
+                        Some([("requested_scope".to_string(), serde_json::Value::String(scope_str.clone()))].into()),
+                    );
+                    return Err(AuthError::InvalidScope(scope_str.to_string()));
                 }
             }
             let make_id_token = form
@@ -398,6 +850,21 @@ pub async fn issue_token(
             let res =
                 issue_new_token(&state, form.scope.clone(), None, make_id_token, None).await?;
             TOKENS_REFRESHED.inc();
+
+            // Log successful token refresh
+            SecurityLogger::log_token_operation(
+                "refresh",
+                "refresh_token",
+                "unknown",
+                &ip_address,
+                "success",
+                Some([
+                    ("grant_type".to_string(), serde_json::Value::String("refresh_token".to_string())),
+                    ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
+                    ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                ].into()),
+            );
+
             audit(
                 "token_refreshed",
                 serde_json::json!({
@@ -408,15 +875,177 @@ pub async fn issue_token(
             );
             Ok(res)
         }
+        "authorization_code" => {
+            let code = form.code.as_ref()
+                .ok_or_else(|| AuthError::InvalidRequest("missing code".to_string()))?;
+
+            let redirect_uri = form.redirect_uri.as_ref()
+                .ok_or_else(|| AuthError::InvalidRequest("missing redirect_uri".to_string()))?;
+
+            // Consume authorization code
+            let auth_code_json = crate::store::consume_auth_code(code).await?
+                .ok_or_else(|| AuthError::InvalidToken("invalid or expired authorization code".to_string()))?;
+
+            let auth_code: AuthorizationCode = serde_json::from_str(&auth_code_json)
+                .map_err(|_| AuthError::InvalidToken("malformed authorization code".to_string()))?;
+
+            // Validate authorization code hasn't expired
+            if chrono::Utc::now().timestamp() > auth_code.expires_at {
+                return Err(AuthError::InvalidToken("authorization code expired".to_string()));
+            }
+
+            // Validate redirect_uri matches
+            if redirect_uri != &auth_code.redirect_uri {
+                return Err(AuthError::InvalidRequest("redirect_uri mismatch".to_string()));
+            }
+
+            // Validate client_id (if provided in form)
+            if let Some(client_id) = &form.client_id {
+                if client_id != &auth_code.client_id {
+                    return Err(AuthError::UnauthorizedClient(client_id.clone()));
+                }
+            }
+
+            // Validate PKCE if code_challenge was used during authorization
+            if let Some(stored_challenge) = &auth_code.code_challenge {
+                let code_verifier = form.code_verifier.as_ref()
+                    .ok_or_else(|| AuthError::InvalidRequest("missing code_verifier".to_string()))?;
+
+                let method = auth_code.code_challenge_method.as_deref().unwrap_or("S256");
+                let challenge_method = method.parse::<crate::security::CodeChallengeMethod>()
+                    .map_err(|_| AuthError::InvalidRequest("invalid code_challenge_method".to_string()))?;
+
+                if !crate::security::validate_pkce_params(code_verifier, stored_challenge, challenge_method) {
+                    return Err(AuthError::InvalidRequest("PKCE validation failed".to_string()));
+                }
+            }
+
+            // Issue tokens
+            let make_id_token = auth_code
+                .scope
+                .as_ref()
+                .is_some_and(|s| s.contains("openid"));
+            let res = issue_new_token(&state, auth_code.scope.clone(), Some(auth_code.client_id.clone()), make_id_token, None).await?;
+
+            // Log successful authorization code exchange
+            SecurityLogger::log_token_operation(
+                "exchange",
+                "authorization_code",
+                &auth_code.client_id,
+                &ip_address,
+                "success",
+                Some([
+                    ("grant_type".to_string(), serde_json::Value::String("authorization_code".to_string())),
+                    ("has_scope".to_string(), serde_json::Value::Bool(auth_code.scope.is_some())),
+                    ("had_pkce".to_string(), serde_json::Value::Bool(auth_code.code_challenge.is_some())),
+                    ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                ].into()),
+            );
+
+            audit(
+                "authorization_code_exchanged",
+                serde_json::json!({
+                    "client_id": auth_code.client_id,
+                    "has_scope": auth_code.scope.is_some(),
+                    "had_pkce": auth_code.code_challenge.is_some(),
+                    "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
+                }),
+            );
+
+            TOKENS_ISSUED.inc();
+            Ok(res)
+        }
         _ => Err(AuthError::UnsupportedGrantType(form.grant_type)),
     }
+}
+
+#[utoipa::path(
+    get,
+    path = "/oauth/userinfo",
+    responses((status = 200, description = "User info", body = serde_json::Value), (status = 401))
+)]
+pub async fn userinfo(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    // Extract client information for security logging
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    // Extract bearer token
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let token = auth.strip_prefix("Bearer ").unwrap_or("");
+    if token.is_empty() {
+        SecurityLogger::log_validation_failure(
+            "/oauth/userinfo",
+            "missing_bearer_token",
+            None,
+            &ip_address,
+            None,
+        );
+        return Err(AuthError::InvalidToken("missing bearer".into()));
+    }
+    let rec = state.token_store.get_record(token).await?;
+    if !rec.active {
+        SecurityLogger::log_validation_failure(
+            "/oauth/userinfo",
+            "inactive_token",
+            rec.client_id.as_deref(),
+            &ip_address,
+            None,
+        );
+        return Err(AuthError::InvalidToken("inactive".into()));
+    }
+
+    // Log successful userinfo access
+    let mut event = SecurityEvent::new(
+        SecurityEventType::DataAccess,
+        SecuritySeverity::Low,
+        "auth-service".to_string(),
+        "User info accessed".to_string(),
+    )
+    .with_ip_address(ip_address)
+    .with_outcome("success".to_string())
+    .with_resource("/oauth/userinfo".to_string())
+    .with_action("userinfo".to_string());
+
+    if let Some(client_id) = &rec.client_id {
+        event = event.with_client_id(client_id.clone());
+    }
+
+    if let Some(sub) = &rec.sub {
+        event = event.with_user_id(sub.clone());
+    }
+
+    if let Some(user_agent) = headers.get("user-agent").and_then(|v| v.to_str().ok()) {
+        event = event.with_user_agent(user_agent.to_string());
+    }
+
+    if let Some(request_id) = headers.get("x-request-id").and_then(|v| v.to_str().ok()) {
+        event = event.with_request_id(request_id.to_string());
+    }
+
+    SecurityLogger::log_event(&event);
+
+    Ok(Json(serde_json::json!({
+        "sub": rec.sub,
+        "scope": rec.scope,
+        "client_id": rec.client_id
+    })))
 }
 
 /// Helper function to get current unix timestamp
 fn get_current_timestamp() -> Result<i64, AuthError> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| AuthError::InternalServerError("System time error".to_string()))
+        .map_err(|_| AuthError::InternalError(anyhow::anyhow!("System time error")))
         .map(|duration| duration.as_secs() as i64)
 }
 
@@ -429,6 +1058,7 @@ fn get_token_expiry_seconds() -> u64 {
 }
 
 /// Helper function to store access token metadata
+#[allow(clippy::too_many_arguments)]
 async fn store_access_token_metadata(
     state: &AppState,
     access_token: &str,
@@ -443,30 +1073,53 @@ async fn store_access_token_metadata(
     state.token_store.set_scope(access_token, scope, Some(expiry_secs)).await?;
     state.token_store.set_exp(access_token, exp, Some(expiry_secs)).await?;
     state.token_store.set_iat(access_token, now, Some(expiry_secs)).await?;
-    
+
     if let Some(client_id) = client_id {
         state.token_store.set_client_id(access_token, client_id, Some(expiry_secs)).await?;
     }
     if let Some(subject) = subject {
         state.token_store.set_subject(access_token, subject, Some(expiry_secs)).await?;
     }
-    
+
     Ok(())
 }
 
 /// Helper function to create ID token if requested
-fn create_id_token(
+async fn create_id_token(
     subject: Option<String>,
     now: i64,
     exp: i64,
 ) -> Option<String> {
-    if subject.is_none() {
-        return None;
+    subject.as_ref()?;
+
+    let (kid, encoding_key) = keys::current_signing_key().await;
+    let header = jsonwebtoken::Header {
+        alg: jsonwebtoken::Algorithm::RS256,
+        kid: Some(kid),
+        ..Default::default()
+    };
+
+    #[derive(Serialize)]
+    struct IdClaims<'a> {
+        iss: &'a str,
+        sub: &'a str,
+        aud: Option<&'a str>,
+        exp: i64,
+        iat: i64,
     }
-    
-    // In a real implementation, we'd use proper JWT signing
-    // For now, return a placeholder
-    Some(format!("id_token_placeholder_{}", uuid::Uuid::new_v4()))
+
+    let iss_val = std::env::var("EXTERNAL_BASE_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let sub_val = subject.as_deref().unwrap_or("service");
+    let claims = IdClaims {
+        iss: &iss_val,
+        sub: sub_val,
+        aud: None,
+        exp,
+        iat: now,
+    };
+
+    jsonwebtoken::encode(&header, &claims, &encoding_key).ok()
 }
 
 async fn issue_new_token(
@@ -478,76 +1131,31 @@ async fn issue_new_token(
 ) -> Result<Json<TokenResponse>, AuthError> {
     let access_token = format!("tk_{}", uuid::Uuid::new_v4());
     let refresh_token = format!("rt_{}", uuid::Uuid::new_v4());
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| AuthError::InternalServerError("System time error".to_string()))?
-        .as_secs() as i64;
-    let expiry_secs: u64 = std::env::var("TOKEN_EXPIRY_SECONDS")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECONDS);
+
+    let now = get_current_timestamp()?;
+    let expiry_secs = get_token_expiry_seconds();
     let exp = now + expiry_secs as i64;
-    state
-        .token_store
-        .set_active(&access_token, true, Some(expiry_secs))
-        .await?;
-    state
-        .token_store
-        .set_scope(&access_token, scope.clone(), Some(expiry_secs))
-        .await?;
-    state
-        .token_store
-        .set_exp(&access_token, exp, Some(expiry_secs))
-        .await?;
-    state
-        .token_store
-        .set_iat(&access_token, now, Some(expiry_secs))
-        .await?;
-    if let Some(client_id) = client_id {
-        state
-            .token_store
-            .set_client_id(&access_token, client_id, Some(expiry_secs))
-            .await?;
-    }
-    if let Some(subject) = subject.clone() {
-        state
-            .token_store
-            .set_subject(&access_token, subject, Some(expiry_secs))
-            .await?;
-    }
+
+    // Store access token metadata
+    store_access_token_metadata(
+        state,
+        &access_token,
+        scope.clone(),
+        client_id,
+        subject.clone(),
+        now,
+        exp,
+        expiry_secs,
+    ).await?;
+
+    // Store refresh token
     state
         .token_store
         .set_refresh(&refresh_token, REFRESH_TOKEN_EXPIRY_SECONDS)
         .await?;
 
     let id_token = if make_id_token {
-        let (kid, encoding_key) = keys::current_signing_key().await;
-        let header = jsonwebtoken::Header {
-            alg: jsonwebtoken::Algorithm::RS256,
-            kid: Some(kid),
-            ..Default::default()
-        };
-        #[derive(Serialize)]
-        struct IdClaims<'a> {
-            iss: &'a str,
-            sub: &'a str,
-            aud: Option<&'a str>,
-            exp: i64,
-            iat: i64,
-        }
-        let iss_val = std::env::var("EXTERNAL_BASE_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
-        let sub_val = subject.as_deref().unwrap_or("service");
-        let claims = IdClaims {
-            iss: &iss_val,
-            sub: sub_val,
-            aud: None,
-            exp,
-            iat: now,
-        };
-        jsonwebtoken::encode(&header, &claims, &encoding_key)
-            .map(Some)
-            .unwrap_or(None)
+        create_id_token(subject.clone(), now, exp).await
     } else {
         None
     };
@@ -589,8 +1197,31 @@ pub async fn revoke_token(
     State(state): State<AppState>,
     Form(form): Form<RevokeRequest>,
 ) -> Result<Json<RevokeResponse>, AuthError> {
+    // Extract client information for security logging
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
     state.token_store.revoke(&form.token).await?;
     TOKENS_REVOKED.inc();
+
+    // Log token revocation
+    SecurityLogger::log_token_operation(
+        "revoke",
+        form.token_type_hint.as_deref().unwrap_or("access_token"),
+        "unknown",
+        &ip_address,
+        "success",
+        Some([
+            ("token_type_hint".to_string(), serde_json::Value::String(
+                form.token_type_hint.clone().unwrap_or_else(|| "access_token".to_string())
+            )),
+        ].into()),
+    );
+
     audit(
         "token_revoked",
         serde_json::json!({
@@ -624,13 +1255,26 @@ pub fn app(state: AppState) -> Router {
         .route("/.well-known/openid-configuration", get(oidc_metadata))
         .route("/jwks.json", get(jwks))
         .route("/metrics", get(metrics_handler))
+        .route("/v1/authorize", post(authorize_check))
+        .route("/oauth/authorize", get(oauth_authorize))
         .route("/oauth/introspect", post(introspect))
         .route("/oauth/token", post(issue_token))
         .route("/oauth/revoke", post(revoke_token))
+        .route("/oauth/userinfo", get(userinfo))
         .route("/oauth/google/login", get(crate::oidc_google::google_login))
         .route(
             "/oauth/google/callback",
             get(crate::oidc_google::google_callback),
+        )
+        .route("/oauth/microsoft/login", get(crate::oidc_microsoft::microsoft_login))
+        .route(
+            "/oauth/microsoft/callback",
+            get(crate::oidc_microsoft::microsoft_callback),
+        )
+        .route("/oauth/github/login", get(crate::oidc_github::github_login))
+        .route(
+            "/oauth/github/callback",
+            get(crate::oidc_github::github_callback),
         )
         .route("/mfa/totp/register", post(crate::mfa::totp_register))
         .route("/mfa/totp/verify", post(crate::mfa::totp_verify))
@@ -667,6 +1311,7 @@ pub fn app(state: AppState) -> Router {
         introspect,
         issue_token,
         revoke_token,
+        userinfo,
         oauth_metadata,
         oidc_metadata,
         jwks

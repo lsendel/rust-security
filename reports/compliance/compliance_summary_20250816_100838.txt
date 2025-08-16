@@ -1,0 +1,41 @@
+RUST SECURITY WORKSPACE - COMPLIANCE REPORT SUMMARY
+=======================================================
+
+Generated: 2025-08-16T10:08:38.138618
+Reporting Period: 2025-07-16 to 2025-08-16
+
+EXECUTIVE SUMMARY
+-----------------
+Overall Compliance Score: 95%
+Frameworks Assessed: SOC2, ISO27001, GDPR
+Critical Findings: 0
+High Findings: 1
+Medium Findings: 3
+Low Findings: 5
+
+FRAMEWORK SCORES
+----------------
+SOC2: 96%
+ISO27001: 94%
+GDPR: 95%
+
+KEY METRICS
+-----------
+Authentication Success Rate: 98.76%
+MFA Usage Rate: 95.2%
+System Availability: 99.95%
+Average Response Time: 45ms
+
+Security Alerts (30 days): 15
+Mean Time to Resolution: 1.5 hours
+
+RECOMMENDATIONS
+---------------
+• Privileged Account Review Process (HIGH)
+  Implement quarterly automated privileged account reviews
+  Target: 2025-09-15
+
+• Alert Response Automation (MEDIUM)
+  Implement automated remediation for low-severity alerts
+  Target: 2025-08-30
+

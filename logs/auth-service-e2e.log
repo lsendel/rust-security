@@ -1,0 +1,15 @@
+warning: unused variable: `request_id`
+   --> auth-service/src/lib.rs:683:9
+    |
+683 |     let request_id = headers
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: `auth-service` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.69s
+     Running `/Users/lsendel/IdeaProjects/rust-security/target/release/auth-service`
+[2m2025-08-16T14:26:29.919783Z[0m [33m WARN[0m ThreadId(01) [2mauth_service::config[0m[2m:[0m [2mauth-service/src/config.rs[0m[2m:[0m[2m154:[0m Using default JWT secret. Set JWT_SECRET environment variable in production!
+[2m2025-08-16T14:26:29.919883Z[0m [32m INFO[0m ThreadId(01) [2mauth_service[0m[2m:[0m [2mauth-service/src/main.rs[0m[2m:[0m[2m30:[0m Starting auth-service with configuration loaded
+[2m2025-08-16T14:26:29.919892Z[0m [32m INFO[0m ThreadId(01) [2mauth_service[0m[2m:[0m [2mauth-service/src/main.rs[0m[2m:[0m[2m45:[0m Using in-memory token store
+Error: Address already in use (os error 48)

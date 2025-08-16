@@ -1,0 +1,30 @@
+apiVersion: v2
+name: auth-service
+description: A Helm chart for Rust Security Auth Service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - rust
+  - security
+  - authentication
+  - oauth2
+  - oidc
+home: https://github.com/your-org/rust-security
+sources:
+  - https://github.com/your-org/rust-security
+maintainers:
+  - name: Security Team
+    email: security@yourcompany.com
+dependencies:
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+annotations:
+  category: Security
+  licenses: MIT

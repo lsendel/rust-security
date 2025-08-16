@@ -15,10 +15,26 @@ async fn spawn_app() -> String {
     client_credentials.insert("test_client".to_string(), "test_secret_12345".to_string());
     client_credentials.insert("admin_client".to_string(), "admin_secret_67890".to_string());
 
+    // Set test mode envs
+    std::env::set_var("TEST_MODE", "1");
+    std::env::set_var("DISABLE_RATE_LIMIT", "1");
+    std::env::set_var("EXTERNAL_BASE_URL", "http://localhost:8080");
+    // Set Google envs to satisfy id_token flow where needed
+    std::env::set_var("GOOGLE_CLIENT_ID", "test-client-id");
+    std::env::set_var("GOOGLE_CLIENT_SECRET", "test-client-secret");
+    std::env::set_var("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth/google/callback");
+
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials,
-        allowed_scopes: vec!["read".to_string(), "write".to_string(), "admin".to_string()],
+        allowed_scopes: vec![
+            "read".to_string(),
+            "write".to_string(),
+            "admin".to_string(),
+            "openid".to_string(),
+            "profile".to_string(),
+        ],
+        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -202,22 +218,43 @@ async fn test_rate_limiting() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    // Make many requests quickly to trigger rate limiting
-    let mut handles = vec![];
+    // Generate a valid access token first
+    let token_res = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=read")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(token_res.status(), 200);
+    let token_json: Value = token_res.json().await.unwrap();
+    let access_token = token_json.get("access_token").unwrap().as_str().unwrap().to_string();
 
-    for i in 0..150 {
+    // Enable rate limit for this portion (disable TEST_MODE)
+    std::env::set_var("TEST_MODE", "0");
+    std::env::set_var("DISABLE_RATE_LIMIT", "0");
+    std::env::set_var("RATE_LIMIT_REQUESTS_PER_MINUTE", "5");
+
+    // Send multiple introspection requests with same client IP to trigger rate limiting
+    let mut handles = vec![];
+    for _ in 0..20 {
         let client = client.clone();
         let base = base.clone();
-        let handle = tokio::spawn(async move {
-            let response = client
-                .get(format!("{}/health", base))
-                .header("x-forwarded-for", format!("192.168.1.{}", i % 10))
+        let access_token = access_token.clone();
+        handles.push(tokio::spawn(async move {
+            let res = client
+                .post(format!("{}/oauth/introspect", base))
+                .header(CONTENT_TYPE, "application/json")
+                .header("X-Forwarded-For", "1.2.3.4")
+                .json(&IntrospectRequest {
+                    token: access_token,
+                    token_type_hint: Some("access_token".to_string()),
+                })
                 .send()
                 .await
                 .unwrap();
-            response.status()
-        });
-        handles.push(handle);
+            res.status().as_u16()
+        }));
     }
 
     let mut rate_limited_count = 0;
@@ -228,8 +265,11 @@ async fn test_rate_limiting() {
         }
     }
 
-    // Should have some rate limited responses
     assert!(rate_limited_count > 0, "Expected some requests to be rate limited");
+
+    // Disable again for other tests
+    std::env::set_var("DISABLE_RATE_LIMIT", "1");
+    std::env::set_var("TEST_MODE", "1");
 }
 
 #[tokio::test]
@@ -237,7 +277,7 @@ async fn test_openid_connect_features() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    // Test OpenID Connect token with openid scope
+    // Request OpenID Connect token with openid scope
     let response = client
         .post(format!("{}/oauth/token", base))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
@@ -249,7 +289,7 @@ async fn test_openid_connect_features() {
     assert_eq!(response.status(), 200);
     let token_response: Value = response.json().await.unwrap();
 
-    // Should include an ID token when openid scope is requested
+    // Should include an ID token when openid scope is requested (now RS256 JWT)
     assert!(token_response.get("id_token").is_some());
     let id_token = token_response.get("id_token").unwrap().as_str().unwrap();
 
@@ -285,7 +325,7 @@ async fn test_scim_endpoints() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    // Test SCIM user creation
+    // Test SCIM user creation with valid body
     let response = client
         .post(format!("{}/scim/v2/Users", base))
         .header(CONTENT_TYPE, "application/json")

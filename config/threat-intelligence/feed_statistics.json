@@ -1,0 +1,26 @@
+{
+  "last_updated": "2025-08-16T14:14:57Z",
+  "feeds": {
+    "malware_domains": {
+      "file": "malware_domains.txt",
+      "count":        7,
+      "status": "active"
+    },
+    "urlhaus_urls": {
+      "file": "urlhaus_urls.txt",
+      "count":    62380,
+      "status": "active"
+    },
+    "emerging_threats": {
+      "file": "emerging_threats.rules",
+      "count": 0
+0,
+      "status": "active"
+    },
+    "misp_indicators": {
+      "file": "misp_indicators.json",
+      "count": 0,
+      "status": "inactive"
+    }
+  }
+}

@@ -66,7 +66,7 @@ pub struct User {
     pub id: i32,
     pub name: String,
     pub email: String,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing, default)]
     pub password_hash: String,
     pub role: UserRole,
     #[cfg(any(feature = "sqlite", feature = "postgres"))]
@@ -88,7 +88,7 @@ pub struct UserPublic {
 }
 
 /// Request model for creating a new user
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "docs", derive(ToSchema))]
 pub struct CreateUserRequest {
     pub name: String,
@@ -100,7 +100,7 @@ pub struct CreateUserRequest {
 }
 
 /// Request model for updating a user
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "docs", derive(ToSchema))]
 pub struct UpdateUserRequest {
     pub name: Option<String>,
@@ -108,7 +108,7 @@ pub struct UpdateUserRequest {
 }
 
 /// Login request model
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "docs", derive(ToSchema))]
 pub struct LoginRequest {
     pub email: String,
@@ -116,7 +116,7 @@ pub struct LoginRequest {
 }
 
 /// Registration request model
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "docs", derive(ToSchema))]
 pub struct RegisterRequest {
     pub name: String,
@@ -125,7 +125,7 @@ pub struct RegisterRequest {
 }
 
 /// Authentication response model
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "docs", derive(ToSchema))]
 pub struct AuthResponse {
     pub token: String,
@@ -160,7 +160,6 @@ pub enum AppError {
     Database(#[from] sqlx::Error),
 
     #[error("Authentication error: {0}")]
-    #[cfg(feature = "auth")]
     Auth(String),
 
     #[error("Validation error: {0}")]
@@ -194,7 +193,6 @@ impl IntoResponse for AppError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Database error".to_string(),
             ),
-            #[cfg(feature = "auth")]
             AppError::Auth(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
@@ -227,7 +225,7 @@ impl AppState {
     pub fn new() -> Self {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
         let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
-        
+
         Self {
             user_repository: Arc::new(InMemoryUserRepository::new()),
             jwt_service,
@@ -238,7 +236,7 @@ impl AppState {
     pub fn with_repository(repository: Arc<dyn UserRepository>) -> Self {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
         let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
-        
+
         Self {
             user_repository: repository,
             jwt_service,
@@ -249,7 +247,7 @@ impl AppState {
     pub fn from_database(database: Database) -> Self {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
         let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
-        
+
         Self {
             user_repository: database.user_repository(),
             jwt_service,
@@ -414,7 +412,9 @@ pub async fn create_user(
     let Json(request) = match result {
         Ok(json) => json,
         Err(rej) => {
-            return Err(AppError::Validation(rej.to_string()));
+            let status = StatusCode::UNPROCESSABLE_ENTITY;
+            let body = Json(serde_json::json!({ "error": rej.to_string() }));
+            return Ok((status, body).into_response());
         }
     };
 
@@ -439,16 +439,23 @@ pub async fn create_user(
         })?;
 
     // Return the created user with 201 status
-    Ok((StatusCode::CREATED, Json(user)))
+    Ok((StatusCode::CREATED, Json(user)).into_response())
 }
 
 /// Handler for GET /users/:id - returns a specific user by ID
 pub async fn get_user(
     State(state): State<AppState>,
-    Path(user_id): Path<i32>,
+    Path(user_id): Path<u64>,
 ) -> Result<Json<User>, AppError> {
+    if user_id == 0 || user_id > i32::MAX as u64 {
+        return Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        )));
+    }
+    let id32 = user_id as i32;
     // Use repository to find user by ID
-    match state.user_repository.find_by_id(user_id).await? {
+    match state.user_repository.find_by_id(id32).await? {
         Some(user) => Ok(Json(user)),
         None => Err(AppError::NotFound(format!(
             "User with ID {} not found",
@@ -674,9 +681,9 @@ mod tests {
     #[test]
     fn test_app_state_new() {
         let state = AppState::new();
-        // Just verify the state can be created
-        assert!(state.user_repository.as_ref() as *const _ != std::ptr::null());
-        assert!(state.jwt_service.as_ref() as *const _ != std::ptr::null());
+        // Verify the state holds valid Arc references
+        assert!(std::sync::Arc::strong_count(&state.user_repository) >= 1);
+        assert!(std::sync::Arc::strong_count(&state.jwt_service) >= 1);
     }
 
     #[test]
@@ -696,7 +703,12 @@ mod tests {
         let json = serde_json::to_string(&user).unwrap();
         let deserialized: User = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(user, deserialized);
+        assert_eq!(user.id, deserialized.id);
+        assert_eq!(user.name, deserialized.name);
+        assert_eq!(user.email, deserialized.email);
+        assert_eq!(user.role, deserialized.role);
+        // password_hash is intentionally not serialized
+        assert_eq!(deserialized.password_hash, "");
     }
 
     #[tokio::test]

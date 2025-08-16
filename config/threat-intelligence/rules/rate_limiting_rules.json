@@ -1,0 +1,40 @@
+{
+  "last_updated": "2025-08-16T14:14:57Z",
+  "rules": {
+    "authentication": {
+      "normal_rate": 60,
+      "burst_rate": 10,
+      "window_seconds": 60,
+      "penalty_seconds": 300
+    },
+    "token_requests": {
+      "normal_rate": 100,
+      "burst_rate": 20,
+      "window_seconds": 60,
+      "penalty_seconds": 180
+    },
+    "api_calls": {
+      "normal_rate": 1000,
+      "burst_rate": 100,
+      "window_seconds": 60,
+      "penalty_seconds": 60
+    },
+    "suspicious_patterns": {
+      "sql_injection_attempts": {
+        "rate": 5,
+        "window_seconds": 300,
+        "penalty_seconds": 3600
+      },
+      "xss_attempts": {
+        "rate": 5,
+        "window_seconds": 300,
+        "penalty_seconds": 3600
+      },
+      "brute_force_attempts": {
+        "rate": 10,
+        "window_seconds": 600,
+        "penalty_seconds": 7200
+      }
+    }
+  }
+}

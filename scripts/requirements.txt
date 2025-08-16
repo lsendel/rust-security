@@ -1,0 +1,28 @@
+# Python dependencies for Rust Security Workspace compliance tools
+# Install with: pip3 install -r requirements.txt
+
+# Data manipulation and analysis
+pandas>=2.0.0
+
+# HTTP requests for API interactions
+requests>=2.31.0
+
+# Template rendering for reports
+jinja2>=3.1.0
+
+# YAML configuration parsing
+PyYAML>=6.0
+
+# Date and time handling (built-in)
+# Logging (built-in)
+# JSON (built-in)
+# Pathlib (built-in)
+# Argparse (built-in)
+# Dataclasses (built-in)
+
+# Optional: For enhanced reporting (uncomment if needed)
+# matplotlib>=3.7.0
+# seaborn>=0.12.0
+# plotly>=5.15.0
+# weasyprint>=59.0  # For PDF generation
+# fpdf2>=2.7.0      # Alternative PDF library

@@ -80,20 +80,7 @@ async fn persist_secret(user_id: &str, secret: &[u8]) {
     }
 }
 
-#[allow(dead_code)]
-async fn load_secret(user_id: &str) -> Option<Vec<u8>> {
-    if let Some(mut conn) = redis_conn().await {
-        let key = format!("mfa:totp:{}:secret", user_id);
-        if let Ok(val) = redis::cmd("GET")
-            .arg(&key)
-            .query_async::<String>(&mut conn)
-            .await
-        {
-            return BASE32.decode(val.as_bytes()).ok();
-        }
-    }
-    None
-}
+// Removed unused load_secret function
 
 async fn set_verified(user_id: &str) {
     if let Some(mut conn) = redis_conn().await {
@@ -107,20 +94,7 @@ async fn set_verified(user_id: &str) {
     }
 }
 
-#[allow(dead_code)]
-async fn is_verified(user_id: &str) -> Option<bool> {
-    if let Some(mut conn) = redis_conn().await {
-        let key = format!("mfa:totp:{}:verified", user_id);
-        if let Ok(v) = redis::cmd("GET")
-            .arg(&key)
-            .query_async::<String>(&mut conn)
-            .await
-        {
-            return Some(v == "1");
-        }
-    }
-    None
-}
+// Removed unused is_verified function
 
 fn hash_backup_code(code: &str) -> String {
     // Use Argon2 for secure password hashing with salt

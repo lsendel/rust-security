@@ -1,0 +1,12 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling psm v0.1.26
+   Compiling stacker v0.1.21
+   Compiling bitflags v2.9.2
+   Compiling tower-http v0.6.6
+   Compiling cedar-policy-core v3.4.1
+   Compiling cedar-policy-core v4.5.1
+   Compiling cedar-policy-validator v3.4.1
+   Compiling cedar-policy v3.4.1
+   Compiling policy-service v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/policy-service)

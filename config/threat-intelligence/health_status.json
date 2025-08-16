@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-08-16T14:14:57Z",
+  "status": "healthy",
+  "issues": [],
+  "metrics": {
+    "disk_usage_percent": 46,
+    "feeds_count":        2,
+    "rules_count":        3,
+    "last_update": "1755353697"
+  }
+}

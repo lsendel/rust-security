@@ -1,0 +1,295 @@
+# Compliance Report Generator Configuration
+# Configuration for automated compliance reporting in Rust Security Workspace
+
+# Data source connections
+prometheus:
+  url: "http://localhost:9090"
+  timeout: 30
+  queries:
+    security_alerts: 'ALERTS{alertname=~"SecurityAlert.*"}'
+    auth_success_rate: 'rate(auth_attempts_total{status="success"}[5m])'
+    auth_failure_rate: 'rate(auth_attempts_total{status="failure"}[5m])'
+    token_operations: 'rate(token_operations_total[5m])'
+    request_duration: 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))'
+    error_rate: 'rate(http_requests_total{status=~"5.."}[5m])'
+
+elasticsearch:
+  url: "http://localhost:9200"
+  username: null
+  password: null
+  indices:
+    security_audit: "security-audit-*"
+    application_logs: "application-logs-*"
+    system_logs: "system-logs-*"
+
+# Compliance frameworks and controls
+frameworks:
+  SOC2:
+    name: "SOC 2 Type II"
+    version: "2017"
+    controls:
+      CC6.1:
+        title: "Logical and Physical Access Controls"
+        description: "Restricts logical and physical access to system resources through the use of access control software and rule sets"
+        requirements:
+          - "Multi-factor authentication implemented"
+          - "Role-based access controls"
+          - "Regular access reviews"
+          - "Privileged account monitoring"
+      CC6.2:
+        title: "Authentication and Authorization"
+        description: "Controls user identification and authentication"
+        requirements:
+          - "Strong password policies"
+          - "Session management"
+          - "OAuth2/OIDC implementation"
+          - "Token security"
+      CC6.3:
+        title: "System Security"
+        description: "Protects against unauthorized access to system resources"
+        requirements:
+          - "Network security controls"
+          - "Endpoint protection"
+          - "Vulnerability management"
+          - "Security monitoring"
+      CC7.1:
+        title: "System Monitoring"
+        description: "Monitors system operations and takes corrective actions"
+        requirements:
+          - "Continuous monitoring"
+          - "Log aggregation"
+          - "Alerting mechanisms"
+          - "Incident response"
+
+  ISO27001:
+    name: "ISO/IEC 27001:2013"
+    version: "2013"
+    controls:
+      A.9.1.1:
+        title: "Access Control Policy"
+        description: "Access control policy shall be established and reviewed"
+        requirements:
+          - "Documented access control policy"
+          - "Regular policy reviews"
+          - "Management approval"
+      A.9.2.1:
+        title: "User Registration and De-registration"
+        description: "Formal user registration and de-registration process"
+        requirements:
+          - "User lifecycle management"
+          - "Automated provisioning/deprovisioning"
+          - "Access request workflow"
+      A.9.4.1:
+        title: "Information Access Restriction"
+        description: "Access to information and application system functions shall be restricted"
+        requirements:
+          - "Principle of least privilege"
+          - "Need-to-know access"
+          - "Segregation of duties"
+      A.12.4.1:
+        title: "Event Logging"
+        description: "Event logs recording user activities shall be produced and kept"
+        requirements:
+          - "Comprehensive audit logging"
+          - "Log integrity protection"
+          - "Log retention policies"
+
+  GDPR:
+    name: "General Data Protection Regulation"
+    version: "2018"
+    articles:
+      Article25:
+        title: "Data Protection by Design and by Default"
+        description: "Technical and organizational measures to implement data protection"
+        requirements:
+          - "Privacy by design implementation"
+          - "Data minimization"
+          - "Pseudonymization where applicable"
+      Article32:
+        title: "Security of Processing"
+        description: "Appropriate technical and organizational measures"
+        requirements:
+          - "Encryption in transit and at rest"
+          - "System resilience and availability"
+          - "Regular security testing"
+          - "Incident response procedures"
+
+# Report generation settings
+report:
+  output_formats: ["html", "pdf", "json"]
+  template_dir: "templates/compliance"
+  output_dir: "reports/compliance"
+  retention_days: 2555  # 7 years for compliance records
+  
+  sections:
+    - executive_summary
+    - compliance_status
+    - security_metrics
+    - audit_findings
+    - risk_assessment
+    - remediation_plan
+    - appendices
+
+  # SLA and performance thresholds
+  thresholds:
+    availability: 99.9
+    response_time_p95: 100  # milliseconds
+    auth_success_rate: 98.0  # percentage
+    auth_failure_rate: 2.0   # percentage
+    error_rate: 1.0          # percentage
+    security_alert_resolution: 24  # hours
+
+# Security metrics configuration
+metrics:
+  collection_interval: "5m"
+  retention_period: "2555d"  # 7 years
+  
+  categories:
+    authentication:
+      - total_auth_attempts
+      - successful_authentications
+      - failed_authentications
+      - mfa_usage_rate
+      - suspicious_login_attempts
+    
+    authorization:
+      - policy_evaluations
+      - access_denied_events
+      - privilege_escalations
+      - role_assignments
+    
+    system_security:
+      - security_alerts_generated
+      - vulnerabilities_detected
+      - patches_applied
+      - compliance_violations
+    
+    data_protection:
+      - data_access_events
+      - encryption_coverage
+      - data_retention_compliance
+      - privacy_incidents
+
+# Audit log configuration
+audit_logs:
+  sources:
+    - auth_service_logs
+    - policy_service_logs
+    - security_events
+    - system_logs
+  
+  retention_periods:
+    security_audit: "2555d"  # 7 years
+    application_logs: "90d"
+    system_logs: "30d"
+  
+  analysis_queries:
+    failed_logins: |
+      {
+        "query": {
+          "bool": {
+            "must": [
+              {"term": {"event_type": "authentication_failure"}},
+              {"range": {"timestamp": {"gte": "now-24h"}}}
+            ]
+          }
+        }
+      }
+    
+    privilege_changes: |
+      {
+        "query": {
+          "bool": {
+            "must": [
+              {"term": {"event_type": "privilege_change"}},
+              {"range": {"timestamp": {"gte": "now-7d"}}}
+            ]
+          }
+        }
+      }
+
+# Risk assessment configuration
+risk_assessment:
+  impact_levels:
+    low: 1
+    medium: 2
+    high: 3
+    critical: 4
+  
+  probability_levels:
+    rare: 1
+    unlikely: 2
+    possible: 3
+    likely: 4
+    almost_certain: 5
+  
+  risk_matrix:
+    # Risk Score = Impact × Probability
+    thresholds:
+      low: 4
+      medium: 8
+      high: 12
+      critical: 16
+
+# Notification settings
+notifications:
+  enabled: true
+  channels:
+    email:
+      enabled: true
+      recipients:
+        - "compliance@company.com"
+        - "security@company.com"
+        - "ciso@company.com"
+    slack:
+      enabled: true
+      webhook_url: "${SLACK_COMPLIANCE_WEBHOOK}"
+      channel: "#compliance-reports"
+    
+  triggers:
+    - compliance_violation
+    - high_risk_finding
+    - sla_breach
+    - failed_control
+
+# Schedule configuration
+schedule:
+  daily_metrics: "0 1 * * *"      # 1 AM daily
+  weekly_summary: "0 6 * * 1"     # 6 AM Monday
+  monthly_report: "0 8 1 * *"     # 8 AM 1st of month
+  quarterly_assessment: "0 9 1 1,4,7,10 *"  # Quarterly
+  annual_review: "0 10 1 1 *"     # Annual
+
+# Integration settings
+integrations:
+  jira:
+    enabled: false
+    url: "${JIRA_URL}"
+    username: "${JIRA_USERNAME}"
+    password: "${JIRA_PASSWORD}"
+    project_key: "COMPLIANCE"
+  
+  servicenow:
+    enabled: false
+    url: "${SERVICENOW_URL}"
+    username: "${SERVICENOW_USERNAME}"
+    password: "${SERVICENOW_PASSWORD}"
+  
+  teams:
+    enabled: false
+    webhook_url: "${TEAMS_WEBHOOK_URL}"
+
+# Evidence collection
+evidence:
+  sources:
+    - prometheus_metrics
+    - elasticsearch_logs
+    - configuration_files
+    - test_results
+    - security_assessments
+  
+  storage:
+    type: "filesystem"
+    path: "evidence/compliance"
+    encryption: true
+    retention_years: 7

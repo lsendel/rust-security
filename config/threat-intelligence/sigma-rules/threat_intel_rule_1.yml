@@ -1,0 +1,29 @@
+author: Rust Security Workspace - Threat Intelligence
+date: 2025/08/16
+description: Detects access from IPs listed in threat intelligence feeds
+detection:
+  condition: selection
+  selection:
+    c-ip:
+    - 198.51.100.100
+    - 203.0.113.100
+    - 192.0.2.100
+falsepositives:
+- Legitimate traffic from previously compromised IPs that have been cleaned
+fields:
+- c-ip
+- cs-uri-stem
+- cs-user-agent
+- sc-status
+id: threat-intel-malicious-ip-001
+level: high
+logsource:
+  category: webserver
+  product: auth-service
+references:
+- https://github.com/your-org/rust-security
+status: experimental
+tags:
+- attack.initial_access
+- attack.t1190
+title: Access from Known Malicious IP

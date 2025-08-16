@@ -1,0 +1,319 @@
+global:
+  # Global configuration for all notification channels
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'security-alerts@company.com'
+  smtp_require_tls: true
+  resolve_timeout: 5m
+
+# Routes define how alerts are routed to different notification channels
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  routes:
+  
+  # Critical security alerts - immediate notification via multiple channels
+  - match:
+      severity: critical
+      category: security
+    receiver: 'security-critical'
+    group_wait: 0s
+    group_interval: 5m
+    repeat_interval: 30m
+    
+  # Critical availability alerts - immediate notification
+  - match:
+      severity: critical
+      category: availability
+    receiver: 'ops-critical'
+    group_wait: 0s
+    group_interval: 5m
+    repeat_interval: 30m
+    
+  # Compliance violations - immediate notification to security and compliance teams
+  - match:
+      category: compliance
+    receiver: 'compliance-team'
+    group_wait: 0s
+    group_interval: 1m
+    repeat_interval: 1h
+    
+  # High severity security alerts
+  - match:
+      severity: high
+      category: security
+    receiver: 'security-high'
+    group_wait: 30s
+    group_interval: 10m
+    repeat_interval: 2h
+    
+  # High severity alerts (non-security)
+  - match:
+      severity: high
+    receiver: 'ops-high'
+    group_wait: 1m
+    group_interval: 15m
+    repeat_interval: 4h
+    
+  # SLA breach notifications
+  - match:
+      category: sla
+    receiver: 'sla-notifications'
+    group_wait: 2m
+    group_interval: 30m
+    repeat_interval: 6h
+    
+  # Medium priority alerts during business hours
+  - match:
+      severity: medium
+    receiver: 'business-hours'
+    group_wait: 5m
+    group_interval: 30m
+    repeat_interval: 8h
+    active_time_intervals:
+    - business_hours
+
+# Time intervals for conditional routing
+time_intervals:
+- name: business_hours
+  time_intervals:
+  - times:
+    - start_time: '09:00'
+      end_time: '17:00'
+    weekdays: ['monday:friday']
+    location: 'America/New_York'
+
+# Inhibition rules to suppress redundant alerts
+inhibit_rules:
+- source_matchers:
+  - alertname="AuthServiceDown"
+  target_matchers:
+  - service="auth-service"
+  equal: ['cluster', 'service']
+  
+- source_matchers:
+  - alertname="PolicyServiceDown"
+  target_matchers:
+  - service="policy-service"
+  equal: ['cluster', 'service']
+
+# Notification channel receivers
+receivers:
+
+# Default receiver for uncategorized alerts
+- name: 'default'
+  webhook_configs:
+  - url: 'http://localhost:9093/api/v1/alerts'
+    send_resolved: true
+    http_config:
+      basic_auth:
+        username: 'alert-receiver'
+        password: 'secure-password'
+    title: 'Default Alert: {{ .GroupLabels.alertname }}'
+    text: |
+      {{ range .Alerts }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+      {{ end }}
+
+# Critical security alerts - multiple notification channels
+- name: 'security-critical'
+  # PagerDuty for 24/7 security on-call
+  pagerduty_configs:
+  - routing_key: 'SECURITY_CRITICAL_ROUTING_KEY'
+    description: 'CRITICAL Security Alert: {{ .GroupLabels.alertname }}'
+    details:
+      summary: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+      description: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+      runbook_url: '{{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}'
+      severity: 'critical'
+      service: '{{ .GroupLabels.service }}'
+      category: 'security'
+  
+  # Slack for immediate team visibility
+  slack_configs:
+  - api_url: 'SLACK_WEBHOOK_URL_SECURITY'
+    channel: '#security-alerts'
+    username: 'Security Alertbot'
+    icon_emoji: ':warning:'
+    color: 'danger'
+    title: '🚨 CRITICAL Security Alert'
+    text: |
+      *Alert:* {{ .GroupLabels.alertname }}
+      *Service:* {{ .GroupLabels.service }}
+      {{ range .Alerts }}
+      *Summary:* {{ .Annotations.summary }}
+      *Description:* {{ .Annotations.description }}
+      *Runbook:* {{ .Annotations.runbook_url }}
+      {{ end }}
+    send_resolved: true
+  
+  # Email to security team
+  email_configs:
+  - to: 'security-team@company.com'
+    subject: '[CRITICAL] Security Alert: {{ .GroupLabels.alertname }}'
+    body: |
+      A critical security alert has been triggered.
+      
+      Alert: {{ .GroupLabels.alertname }}
+      Service: {{ .GroupLabels.service }}
+      
+      {{ range .Alerts }}
+      Summary: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      
+      For detailed investigation steps, please refer to:
+      {{ .Annotations.runbook_url }}
+      
+      Alert triggered at: {{ .StartsAt }}
+      {{ if .EndsAt }}Resolved at: {{ .EndsAt }}{{ end }}
+      {{ end }}
+  
+  # Webhook for custom integrations (SIEM, ticketing system)
+  webhook_configs:
+  - url: 'https://siem.company.com/api/security-alerts'
+    send_resolved: true
+    http_config:
+      bearer_token: 'SIEM_API_TOKEN'
+    title: 'Critical Security Alert'
+    text: |
+      {
+        "alert_name": "{{ .GroupLabels.alertname }}",
+        "severity": "critical",
+        "category": "security",
+        "service": "{{ .GroupLabels.service }}",
+        "timestamp": "{{ .Alerts.Firing | len | ne 0 | ternary .Alerts.Firing.StartsAt .Alerts.Resolved.EndsAt }}",
+        "alerts": [
+          {{ range .Alerts }}
+          {
+            "summary": "{{ .Annotations.summary }}",
+            "description": "{{ .Annotations.description }}",
+            "runbook_url": "{{ .Annotations.runbook_url }}",
+            "labels": {{ .Labels | toJSON }},
+            "annotations": {{ .Annotations | toJSON }}
+          }{{ if not (eq . (index $.Alerts (sub (len $.Alerts) 1))) }},{{ end }}
+          {{ end }}
+        ]
+      }
+
+# Critical operational alerts
+- name: 'ops-critical'
+  pagerduty_configs:
+  - routing_key: 'OPS_CRITICAL_ROUTING_KEY'
+    description: 'CRITICAL Ops Alert: {{ .GroupLabels.alertname }}'
+  
+  slack_configs:
+  - api_url: 'SLACK_WEBHOOK_URL_OPS'
+    channel: '#ops-alerts'
+    username: 'Ops Alertbot'
+    icon_emoji: ':rotating_light:'
+    color: 'danger'
+    title: '🚨 CRITICAL Service Alert'
+    text: |
+      *Alert:* {{ .GroupLabels.alertname }}
+      *Service:* {{ .GroupLabels.service }}
+      {{ range .Alerts }}
+      *Summary:* {{ .Annotations.summary }}
+      *Description:* {{ .Annotations.description }}
+      {{ end }}
+
+# Compliance team notifications
+- name: 'compliance-team'
+  email_configs:
+  - to: 'compliance@company.com, security-team@company.com, legal@company.com'
+    subject: '[COMPLIANCE] Alert: {{ .GroupLabels.alertname }}'
+    body: |
+      A compliance-related alert has been triggered that requires immediate attention.
+      
+      {{ range .Alerts }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      
+      This alert indicates a potential compliance violation that must be investigated 
+      and resolved according to company compliance procedures.
+      
+      Investigation Runbook: {{ .Annotations.runbook_url }}
+      {{ end }}
+  
+  webhook_configs:
+  - url: 'https://compliance-system.company.com/api/alerts'
+    send_resolved: true
+    http_config:
+      bearer_token: 'COMPLIANCE_API_TOKEN'
+
+# High priority security alerts
+- name: 'security-high'
+  slack_configs:
+  - api_url: 'SLACK_WEBHOOK_URL_SECURITY'
+    channel: '#security-alerts'
+    username: 'Security Alertbot'
+    icon_emoji: ':warning:'
+    color: 'warning'
+    title: '⚠️ High Priority Security Alert'
+    text: |
+      *Alert:* {{ .GroupLabels.alertname }}
+      *Service:* {{ .GroupLabels.service }}
+      {{ range .Alerts }}
+      *Summary:* {{ .Annotations.summary }}
+      *Description:* {{ .Annotations.description }}
+      {{ end }}
+  
+  email_configs:
+  - to: 'security-team@company.com'
+    subject: '[HIGH] Security Alert: {{ .GroupLabels.alertname }}'
+
+# High priority operational alerts
+- name: 'ops-high'
+  slack_configs:
+  - api_url: 'SLACK_WEBHOOK_URL_OPS'
+    channel: '#ops-alerts'
+    color: 'warning'
+    title: '⚠️ High Priority Alert'
+    text: |
+      *Alert:* {{ .GroupLabels.alertname }}
+      {{ range .Alerts }}*Summary:* {{ .Annotations.summary }}{{ end }}
+
+# SLA breach notifications
+- name: 'sla-notifications'
+  email_configs:
+  - to: 'sla-team@company.com, management@company.com'
+    subject: '[SLA BREACH] {{ .GroupLabels.alertname }}'
+    body: |
+      An SLA breach has been detected.
+      
+      {{ range .Alerts }}
+      Service: {{ .Labels.service }}
+      Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      
+      This breach requires immediate attention to restore service levels
+      within acceptable parameters.
+      {{ end }}
+  
+  slack_configs:
+  - api_url: 'SLACK_WEBHOOK_URL_SLA'
+    channel: '#sla-monitoring'
+    color: 'warning'
+    title: '📊 SLA Breach Alert'
+
+# Business hours notifications for medium priority alerts
+- name: 'business-hours'
+  slack_configs:
+  - api_url: 'SLACK_WEBHOOK_URL_OPS'
+    channel: '#general-alerts'
+    color: 'good'
+    title: '📋 Medium Priority Alert'
+    text: |
+      *Alert:* {{ .GroupLabels.alertname }}
+      {{ range .Alerts }}*Summary:* {{ .Annotations.summary }}{{ end }}
+  
+  email_configs:
+  - to: 'on-call@company.com'
+    subject: '[MEDIUM] Alert: {{ .GroupLabels.alertname }}'
+
+# Templates for message formatting
+templates:
+- '/etc/alertmanager/templates/*.tmpl'

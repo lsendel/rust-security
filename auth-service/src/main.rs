@@ -1,5 +1,4 @@
 use tokio::net::TcpListener;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod config;
 
 use auth_service::{
@@ -14,13 +13,16 @@ use utoipa::OpenApi;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(
+    // Initialize enhanced tracing for security events
+    tracing_subscriber::fmt()
+        .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,auth_service=debug".into()),
+                .unwrap_or_else(|_| "info,auth_service=debug,security_audit=info".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
         .init();
 
     // Load configuration
@@ -49,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         token_store,
         client_credentials: cfg.client_credentials.clone(),
         allowed_scopes: cfg.allowed_scopes.clone(),
+        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
     };
 
     // Build application with OpenAPI documentation

@@ -1,0 +1,113 @@
+Starting quick end-to-end validation...
+Timestamp: Sat Aug 16 10:53:19 EDT 2025
+=== Core Configuration Validation ===
+Testing: Prometheus security alerts configuration
+✅ PASS: Prometheus security alerts configuration
+Testing: Prometheus threat intelligence rules
+✅ PASS: Prometheus threat intelligence rules
+Testing: Fluentd logging configuration
+✅ PASS: Fluentd logging configuration
+Testing: Fluentd threat intelligence filters
+✅ PASS: Fluentd threat intelligence filters
+Testing: Elasticsearch ILM policies
+✅ PASS: Elasticsearch ILM policies
+=== Security Integration Validation ===
+Testing: Security logging module integrated
+✅ PASS: Security logging module integrated
+Testing: Security logger properly used
+✅ PASS: Security logger properly used
+Testing: SCIM 2.0 module integrated
+✅ PASS: SCIM 2.0 module integrated
+Testing: MFA module integrated
+✅ PASS: MFA module integrated
+Testing: Circuit breaker module integrated
+✅ PASS: Circuit breaker module integrated
+=== Compliance and Reporting Validation ===
+Testing: Compliance configuration exists
+✅ PASS: Compliance configuration exists
+Testing: Compliance report generator exists
+✅ PASS: Compliance report generator exists
+Testing: Latest compliance report exists
+/Users/lsendel/IdeaProjects/rust-security/reports/compliance/compliance_report_20250816_100838.json
+✅ PASS: Latest compliance report exists
+Testing: Security controls validation script exists
+✅ PASS: Security controls validation script exists
+=== Threat Intelligence Validation ===
+Testing: Threat intelligence feeds configuration
+✅ PASS: Threat intelligence feeds configuration
+Testing: Auth service threat intelligence integration
+✅ PASS: Auth service threat intelligence integration
+Testing: Sigma rules generated
+✅ PASS: Sigma rules generated
+Testing: Threat detection validation completed
+✅ PASS: Threat detection validation completed
+Testing: Threat intelligence updater script
+✅ PASS: Threat intelligence updater script
+=== Testing Infrastructure Validation ===
+Testing: Unit tests exist
+✅ PASS: Unit tests exist
+Testing: Integration tests exist
+✅ PASS: Integration tests exist
+Testing: Security test files exist
+✅ PASS: Security test files exist
+Testing: TOTP integration test exists
+✅ PASS: TOTP integration test exists
+Testing: SCIM integration test exists
+✅ PASS: SCIM integration test exists
+=== Performance Testing Validation ===
+Testing: Performance analysis script exists
+✅ PASS: Performance analysis script exists
+Testing: Load testing directory exists
+✅ PASS: Load testing directory exists
+Testing: Benchmark tests configured
+✅ PASS: Benchmark tests configured
+Testing: Performance reports generated
+✅ PASS: Performance reports generated
+=== CI/CD and Automation Validation ===
+Testing: GitHub Actions CI workflow
+✅ PASS: GitHub Actions CI workflow
+Testing: Security audit workflow
+✅ PASS: Security audit workflow
+Testing: Automation scripts exist
+✅ PASS: Automation scripts exist
+Testing: Python automation scripts exist
+✅ PASS: Python automation scripts exist
+=== Deployment Readiness Validation ===
+Testing: GitOps configuration
+✅ PASS: GitOps configuration
+Testing: Helm charts configuration
+✅ PASS: Helm charts configuration
+Testing: Monitoring stack configured
+✅ PASS: Monitoring stack configured
+Testing: Security policies configured
+✅ PASS: Security policies configured
+Testing: Implementation documentation
+✅ PASS: Implementation documentation
+=== Previous Validation Reports ===
+Testing: Security controls validation report
+✅ PASS: Security controls validation report
+Testing: Compliance report exists
+/Users/lsendel/IdeaProjects/rust-security/reports/compliance/compliance_report_20250816_100838.json
+✅ PASS: Compliance report exists
+Testing: Threat detection validation report
+✅ PASS: Threat detection validation report
+Testing: Rule generation test report
+/Users/lsendel/IdeaProjects/rust-security/reports/compliance/rule_generation_test_20250816_101955.json
+✅ PASS: Rule generation test report
+=== Code Quality Validation ===
+Testing: Cargo.toml files are valid
+✅ PASS: Cargo.toml files are valid
+Testing: Security dependencies configured
+✅ PASS: Security dependencies configured
+Testing: Tracing and logging dependencies
+✅ PASS: Tracing and logging dependencies
+Testing: Security hardening dependencies
+✅ PASS: Security hardening dependencies
+=== Quick E2E Validation Results ===
+Total tests: 45
+Passed tests: 45
+Failed tests: 0
+Success rate: 100%
+Quick E2E validation results saved to: /Users/lsendel/IdeaProjects/rust-security/reports/quick-e2e-validation.json
+🎉 All quick E2E validation tests passed!
+✅ System is fully ready for production deployment

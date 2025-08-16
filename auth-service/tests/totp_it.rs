@@ -18,6 +18,7 @@ async fn spawn_app() -> String {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
         allowed_scopes: vec![],
+        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)

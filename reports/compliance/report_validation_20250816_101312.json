@@ -1,0 +1,361 @@
+{
+  "metadata": {
+    "validation_timestamp": "2025-08-16T10:13:12.664128",
+    "original_report": "reports/compliance/comprehensive_compliance_report_20250816_101140.json",
+    "validator_version": "1.0.0"
+  },
+  "validation_summary": {
+    "total_categories": 4,
+    "passed_categories": 4,
+    "failed_categories": 0,
+    "overall_accuracy": "EXCELLENT",
+    "accuracy_percentage": 100.0,
+    "tests_passed": 45,
+    "total_tests": 45
+  },
+  "detailed_results": [
+    {
+      "category": "Security Modules",
+      "tests": [
+        {
+          "test": "Module exists: auth-service/src/security_logging.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Module found with 477 LOC"
+        },
+        {
+          "test": "Function count in auth-service/src/security_logging.rs",
+          "expected": 20,
+          "actual": 20,
+          "status": "PASS",
+          "details": "Expected ~20, found 20"
+        },
+        {
+          "test": "Error handling in auth-service/src/security_logging.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Error handling patterns found: True"
+        },
+        {
+          "test": "Module exists: auth-service/src/security.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Module found with 414 LOC"
+        },
+        {
+          "test": "Function count in auth-service/src/security.rs",
+          "expected": 20,
+          "actual": 20,
+          "status": "PASS",
+          "details": "Expected ~20, found 20"
+        },
+        {
+          "test": "Error handling in auth-service/src/security.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Error handling patterns found: True"
+        },
+        {
+          "test": "Module exists: auth-service/src/keys.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Module found with 76 LOC"
+        },
+        {
+          "test": "Function count in auth-service/src/keys.rs",
+          "expected": 8,
+          "actual": 8,
+          "status": "PASS",
+          "details": "Expected ~8, found 8"
+        },
+        {
+          "test": "Error handling in auth-service/src/keys.rs",
+          "expected": false,
+          "actual": false,
+          "status": "PASS",
+          "details": "Error handling patterns found: False"
+        },
+        {
+          "test": "Module exists: auth-service/src/mfa.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Module found with 303 LOC"
+        },
+        {
+          "test": "Function count in auth-service/src/mfa.rs",
+          "expected": 14,
+          "actual": 14,
+          "status": "PASS",
+          "details": "Expected ~14, found 14"
+        },
+        {
+          "test": "Error handling in auth-service/src/mfa.rs",
+          "expected": false,
+          "actual": false,
+          "status": "PASS",
+          "details": "Error handling patterns found: False"
+        },
+        {
+          "test": "Module exists: auth-service/src/circuit_breaker.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Module found with 268 LOC"
+        },
+        {
+          "test": "Function count in auth-service/src/circuit_breaker.rs",
+          "expected": 12,
+          "actual": 12,
+          "status": "PASS",
+          "details": "Expected ~12, found 12"
+        },
+        {
+          "test": "Error handling in auth-service/src/circuit_breaker.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Error handling patterns found: True"
+        },
+        {
+          "test": "Module exists: auth-service/src/scim.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Module found with 983 LOC"
+        },
+        {
+          "test": "Function count in auth-service/src/scim.rs",
+          "expected": 23,
+          "actual": 23,
+          "status": "PASS",
+          "details": "Expected ~23, found 23"
+        },
+        {
+          "test": "Error handling in auth-service/src/scim.rs",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Error handling patterns found: True"
+        }
+      ],
+      "overall_status": "PASS",
+      "summary": "18/18 tests passed"
+    },
+    {
+      "category": "Compliance Scores",
+      "tests": [
+        {
+          "test": "SOC2 CC6.1 score range",
+          "expected": "between 0 and 100",
+          "actual": 95,
+          "status": "PASS",
+          "details": "Score: 95%"
+        },
+        {
+          "test": "SOC2 CC6.1 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "SOC2 CC6.2 score range",
+          "expected": "between 0 and 100",
+          "actual": 98,
+          "status": "PASS",
+          "details": "Score: 98%"
+        },
+        {
+          "test": "SOC2 CC6.2 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "SOC2 CC6.3 score range",
+          "expected": "between 0 and 100",
+          "actual": 92,
+          "status": "PASS",
+          "details": "Score: 92%"
+        },
+        {
+          "test": "SOC2 CC6.3 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "SOC2 CC7.1 score range",
+          "expected": "between 0 and 100",
+          "actual": 94,
+          "status": "PASS",
+          "details": "Score: 94%"
+        },
+        {
+          "test": "SOC2 CC7.1 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "ISO27001 A.9.1.1 score range",
+          "expected": "between 0 and 100",
+          "actual": 90,
+          "status": "PASS",
+          "details": "Score: 90%"
+        },
+        {
+          "test": "ISO27001 A.9.1.1 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "ISO27001 A.9.2.1 score range",
+          "expected": "between 0 and 100",
+          "actual": 88,
+          "status": "PASS",
+          "details": "Score: 88%"
+        },
+        {
+          "test": "ISO27001 A.9.2.1 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "1 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 1 items"
+        },
+        {
+          "test": "ISO27001 A.12.4.1 score range",
+          "expected": "between 0 and 100",
+          "actual": 96,
+          "status": "PASS",
+          "details": "Score: 96%"
+        },
+        {
+          "test": "ISO27001 A.12.4.1 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "GDPR Article25 score range",
+          "expected": "between 0 and 100",
+          "actual": 92,
+          "status": "PASS",
+          "details": "Score: 92%"
+        },
+        {
+          "test": "GDPR Article25 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "GDPR Article32 score range",
+          "expected": "between 0 and 100",
+          "actual": 94,
+          "status": "PASS",
+          "details": "Score: 94%"
+        },
+        {
+          "test": "GDPR Article32 evidence adequacy",
+          "expected": "evidence supports status",
+          "actual": "2 evidence items for COMPLIANT",
+          "status": "PASS",
+          "details": "Status: COMPLIANT, Evidence: 2 items"
+        },
+        {
+          "test": "Overall compliance score calculation",
+          "expected": 93.2,
+          "actual": 93.2,
+          "status": "PASS",
+          "details": "Calculated: 93.2%, Reported: 93.2%"
+        }
+      ],
+      "overall_status": "PASS",
+      "summary": "19/19 validations passed"
+    },
+    {
+      "category": "Monitoring Configuration",
+      "tests": [
+        {
+          "test": "Monitoring file exists: monitoring/prometheus/security-alerts.yml",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Reported: True, Actual: True"
+        },
+        {
+          "test": "Prometheus alert rules count",
+          "expected": 20,
+          "actual": 20,
+          "status": "PASS",
+          "details": "Expected: 20, Found: 20"
+        },
+        {
+          "test": "Monitoring file exists: monitoring/alertmanager/alertmanager.yml",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Reported: True, Actual: True"
+        },
+        {
+          "test": "Monitoring file exists: monitoring/fluentd/fluent.conf",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Reported: True, Actual: True"
+        },
+        {
+          "test": "Monitoring file exists: monitoring/elasticsearch/ilm-policies.json",
+          "expected": true,
+          "actual": true,
+          "status": "PASS",
+          "details": "Reported: True, Actual: True"
+        }
+      ],
+      "overall_status": "PASS",
+      "summary": "5/5 monitoring checks passed"
+    },
+    {
+      "category": "Test Coverage",
+      "tests": [
+        {
+          "test": "Total test files count",
+          "expected": 26,
+          "actual": 26,
+          "status": "PASS",
+          "details": "Expected: 26, Found: 26"
+        },
+        {
+          "test": "Security test files count",
+          "expected": 5,
+          "actual": 5,
+          "status": "PASS",
+          "details": "Expected: 5, Found: 5"
+        },
+        {
+          "test": "Reported test files existence",
+          "expected": "all files exist",
+          "actual": "all files found",
+          "status": "PASS",
+          "details": "All 26 reported test files exist"
+        }
+      ],
+      "overall_status": "PASS",
+      "summary": "3/3 test coverage validations passed"
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+# Security Monitoring and Alerting Configuration
+# For use with Prometheus AlertManager
+
+groups:
+  - name: security_alerts
+    rules:
+      # High rate of failed authentication attempts
+      - alert: HighAuthFailureRate
+        expr: rate(auth_service_token_requests_total{status="failed"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "High authentication failure rate detected"
+          description: "Authentication failure rate is {{ $value }} failures/sec over the last 5 minutes"
+
+      # Potential brute force attack
+      - alert: PotentialBruteForceAttack
+        expr: rate(auth_service_token_requests_total{status="failed"}[1m]) > 50
+        for: 30s
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "Potential brute force attack detected"
+          description: "Very high authentication failure rate: {{ $value }} failures/sec"
+
+      # Rate limiting triggered frequently
+      - alert: HighRateLimitingActivity
+        expr: rate(auth_service_rate_limited_requests_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "High rate limiting activity"
+          description: "Rate limiting is being triggered {{ $value }} times/sec"
+
+      # Service unavailable
+      - alert: ServiceDown
+        expr: up{job=~"auth-service|policy-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # Memory usage high
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}MB"
+
+      # Too many active tokens (potential token leak)
+      - alert: TooManyActiveTokens
+        expr: auth_service_active_tokens_total > 10000
+        for: 10m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "Too many active tokens"
+          description: "Number of active tokens: {{ $value }}"
+
+      # Circuit breaker open
+      - alert: CircuitBreakerOpen
+        expr: auth_service_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "Circuit breaker for external dependencies is open"
+
+      # Policy evaluation failures
+      - alert: PolicyEvaluationFailures
+        expr: rate(policy_service_authorization_requests_total{result="error"}[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: policy-service
+        annotations:
+          summary: "Policy evaluation failures"
+          description: "Policy evaluation failure rate: {{ $value }} failures/sec"
+
+  - name: infrastructure_alerts
+    rules:
+      # Redis connection issues
+      - alert: RedisConnectionFailure
+        expr: redis_connected_clients == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis connection failure"
+          description: "No Redis clients connected"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space low"
+          description: "Disk space is {{ $value }}% full"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
