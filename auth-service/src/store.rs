@@ -36,8 +36,9 @@ impl TokenStore {
                 let key_client_id = format!("token:{}:client_id", token);
                 let key_exp = format!("token:{}:exp", token);
                 let key_iat = format!("token:{}:iat", token);
+                #[allow(clippy::type_complexity)]
                 let (active, scope, client_id, exp, iat): (
-                    i64,
+                    Option<i64>,
                     Option<String>,
                     Option<String>,
                     Option<i64>,
@@ -51,7 +52,7 @@ impl TokenStore {
                     .query_async(&mut conn)
                     .await?;
                 Ok(crate::IntrospectionRecord {
-                    active: active == 1,
+                    active: active.unwrap_or(0) == 1,
                     scope,
                     client_id,
                     exp,

@@ -19,6 +19,9 @@ Both services are built with Axum framework, use tower-http middleware for reque
 - `/oauth/introspect` - Validate and check token status
 - `/oauth/revoke` - Revoke existing tokens
 - `/openapi.json` - OpenAPI specification
+- `/.well-known/openid-configuration` - OIDC discovery document
+- `/.well-known/oauth-authorization-server` - OAuth 2.0 authorization server metadata
+- `/jwks.json` - JWKS (currently empty stub)
 
 Token responses include:
 - `access_token` (opaque)
@@ -89,6 +92,7 @@ Services read configuration from environment variables:
 - `CLIENT_CREDENTIALS` - Semicolon-separated list of `client_id:client_secret` pairs (default: `test_client:test_secret`)
 - `ALLOWED_SCOPES` - Comma-separated list of allowed scopes (default: `read,write`)
 - `ALLOWED_ORIGINS` - Comma-separated list of allowed CORS origins (default: `*`)
+- `EXTERNAL_BASE_URL` - External base URL used in metadata documents (default: `http://localhost:8080`)
 
 ## CI/CD Pipeline
 

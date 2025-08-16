@@ -5,19 +5,81 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use base64::Engine as _;
+use once_cell::sync::Lazy;
+use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
+
+static TOKENS_ISSUED: Lazy<IntCounter> =
+    Lazy::new(|| IntCounter::new("tokens_issued_total", "tokens issued").unwrap());
+static TOKENS_REFRESHED: Lazy<IntCounter> =
+    Lazy::new(|| IntCounter::new("tokens_refreshed_total", "tokens refreshed").unwrap());
+static TOKENS_REVOKED: Lazy<IntCounter> =
+    Lazy::new(|| IntCounter::new("tokens_revoked_total", "tokens revoked").unwrap());
+#[allow(dead_code)]
+static REGISTRY: Lazy<Registry> = Lazy::new(|| {
+    let r = Registry::new();
+    r.register(Box::new(TOKENS_ISSUED.clone())).ok();
+    r.register(Box::new(TOKENS_REFRESHED.clone())).ok();
+    r.register(Box::new(TOKENS_REVOKED.clone())).ok();
+    r
+});
+
+#[allow(dead_code)]
+async fn metrics_handler() -> Response {
+    let encoder = TextEncoder::new();
+    let metric_families = REGISTRY.gather();
+    let mut buffer = Vec::new();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, encoder.format_type())
+        .body(axum::body::Body::from(buffer))
+        .unwrap()
+}
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
+#[cfg(feature = "docs")]
+use utoipa::OpenApi;
 use utoipa::ToSchema;
+#[cfg(feature = "docs")]
+use utoipa_swagger_ui::SwaggerUi;
 
+pub mod keys;
 pub mod security;
 pub mod store;
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
+}
+
+#[utoipa::path(get, path = "/.well-known/oauth-authorization-server", responses((status = 200, body = serde_json::Value)))]
+pub async fn oauth_metadata() -> Json<serde_json::Value> {
+    let base =
+        std::env::var("EXTERNAL_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    Json(serde_json::json!({
+        "issuer": base,
+        "token_endpoint": format!("{}/oauth/token", base),
+        "introspection_endpoint": format!("{}/oauth/introspect", base),
+        "revocation_endpoint": format!("{}/oauth/revoke", base),
+        "jwks_uri": format!("{}/jwks.json", base),
+        "grant_types_supported": ["client_credentials", "refresh_token"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+        "id_token_signing_alg_values_supported": ["HS256"],
+    }))
+}
+
+#[utoipa::path(get, path = "/.well-known/openid-configuration", responses((status = 200, body = serde_json::Value)))]
+pub async fn oidc_metadata() -> Json<serde_json::Value> {
+    oauth_metadata().await
+}
+
+#[utoipa::path(get, path = "/jwks.json", responses((status = 200, body = serde_json::Value)))]
+pub async fn jwks() -> Json<serde_json::Value> {
+    Json(keys::jwks_document().await)
 }
 
 #[derive(Debug)]
@@ -123,6 +185,10 @@ pub struct IntrospectResponse {
     pub client_id: Option<String>,
     pub exp: Option<i64>,
     pub iat: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iss: Option<String>,
 }
 
 pub async fn health() -> Json<HealthResponse> {
@@ -162,6 +228,8 @@ pub async fn introspect(
         client_id: rec.client_id,
         exp: rec.exp,
         iat: rec.iat,
+        token_type: Some("access_token".to_string()),
+        iss: std::env::var("EXTERNAL_BASE_URL").ok(),
     }))
 }
 
@@ -183,6 +251,8 @@ pub struct TokenResponse {
     pub scope: Option<String>,
     pub exp: i64,
     pub iat: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id_token: Option<String>,
 }
 
 #[utoipa::path(
@@ -201,11 +271,34 @@ pub async fn issue_token(
 ) -> Result<Json<TokenResponse>, AuthError> {
     match form.grant_type.as_str() {
         "client_credentials" => {
-            let client_id = form.client_id.as_ref().ok_or(AuthError::MissingClientId)?;
-            let client_secret = form
-                .client_secret
-                .as_ref()
-                .ok_or(AuthError::MissingClientSecret)?;
+            // Allow either form credentials or HTTP Basic Authorization
+            let (cid_opt, csec_opt) = if form.client_id.is_some() || form.client_secret.is_some() {
+                (form.client_id.clone(), form.client_secret.clone())
+            } else if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+                let header_val = auth_header.to_str().unwrap_or("");
+                if let Some(b64) = header_val.strip_prefix("Basic ") {
+                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        if let Ok(pair) = std::str::from_utf8(&decoded) {
+                            let mut parts = pair.splitn(2, ':');
+                            (
+                                parts.next().map(|s| s.to_string()),
+                                parts.next().map(|s| s.to_string()),
+                            )
+                        } else {
+                            (None, None)
+                        }
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            };
+
+            let client_id = cid_opt.as_ref().ok_or(AuthError::MissingClientId)?;
+            let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
 
             if state.client_credentials.get(client_id) == Some(client_secret) {
                 if let Some(scope_str) = form.scope.as_ref() {
@@ -216,8 +309,20 @@ pub async fn issue_token(
                         return Err(AuthError::InvalidScope);
                     }
                 }
-                let res =
-                    issue_new_token(&state, form.scope.clone(), Some(client_id.clone())).await?;
+                let make_id_token = form
+                    .scope
+                    .as_ref()
+                    .map(|s| s.split_whitespace().any(|x| x == "openid"))
+                    .unwrap_or(false);
+                let res = issue_new_token(
+                    &state,
+                    form.scope.clone(),
+                    Some(client_id.clone()),
+                    make_id_token,
+                    Some(client_id.clone()),
+                )
+                .await?;
+                TOKENS_ISSUED.inc();
                 audit(
                     "token_issued",
                     serde_json::json!({
@@ -257,7 +362,14 @@ pub async fn issue_token(
                     return Err(AuthError::InvalidScope);
                 }
             }
-            let res = issue_new_token(&state, form.scope.clone(), None).await?;
+            let make_id_token = form
+                .scope
+                .as_ref()
+                .map(|s| s.split_whitespace().any(|x| x == "openid"))
+                .unwrap_or(false);
+            let res =
+                issue_new_token(&state, form.scope.clone(), None, make_id_token, None).await?;
+            TOKENS_REFRESHED.inc();
             audit(
                 "token_refreshed",
                 serde_json::json!({
@@ -276,6 +388,8 @@ async fn issue_new_token(
     state: &AppState,
     scope: Option<String>,
     client_id: Option<String>,
+    make_id_token: bool,
+    subject: Option<String>,
 ) -> Result<Json<TokenResponse>, AuthError> {
     let access_token = format!("tk_{}", uuid::Uuid::new_v4());
     let refresh_token = format!("rt_{}", uuid::Uuid::new_v4());
@@ -315,6 +429,38 @@ async fn issue_new_token(
         .set_refresh(&refresh_token, 14 * 24 * 3600)
         .await?;
 
+    let id_token = if make_id_token {
+        let (kid, encoding_key) = keys::current_signing_key().await;
+        let header = jsonwebtoken::Header {
+            alg: jsonwebtoken::Algorithm::RS256,
+            kid: Some(kid),
+            ..Default::default()
+        };
+        #[derive(Serialize)]
+        struct IdClaims<'a> {
+            iss: &'a str,
+            sub: &'a str,
+            aud: Option<&'a str>,
+            exp: i64,
+            iat: i64,
+        }
+        let iss_val = std::env::var("EXTERNAL_BASE_URL")
+            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let sub_val = subject.as_deref().unwrap_or("service");
+        let claims = IdClaims {
+            iss: &iss_val,
+            sub: sub_val,
+            aud: None,
+            exp,
+            iat: now,
+        };
+        jsonwebtoken::encode(&header, &claims, &encoding_key)
+            .map(Some)
+            .unwrap_or(None)
+    } else {
+        None
+    };
+
     Ok(Json(TokenResponse {
         access_token,
         token_type: "Bearer",
@@ -323,6 +469,7 @@ async fn issue_new_token(
         scope,
         exp,
         iat: now,
+        id_token,
     }))
 }
 
@@ -352,6 +499,7 @@ pub async fn revoke_token(
     Form(form): Form<RevokeRequest>,
 ) -> Result<Json<RevokeResponse>, AuthError> {
     state.token_store.revoke(&form.token).await?;
+    TOKENS_REVOKED.inc();
     audit(
         "token_revoked",
         serde_json::json!({
@@ -376,8 +524,15 @@ pub fn app(state: AppState) -> Router {
         _ => CorsLayer::new().allow_origin(Any),
     };
 
-    Router::new()
+    let router = Router::new()
         .route("/health", get(health))
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(oauth_metadata),
+        )
+        .route("/.well-known/openid-configuration", get(oidc_metadata))
+        .route("/jwks.json", get(jwks))
+        .route("/metrics", get(metrics_handler))
         .route("/oauth/introspect", post(introspect))
         .route("/oauth/token", post(issue_token))
         .route("/oauth/revoke", post(revoke_token))
@@ -391,12 +546,28 @@ pub fn app(state: AppState) -> Router {
                 .layer(axum::middleware::from_fn(crate::security::security_headers))
                 .layer(crate::security::security_middleware()),
         )
-        .with_state(state)
+        .with_state(state);
+
+    #[cfg(feature = "docs")]
+    {
+        use utoipa::OpenApi;
+        let openapi = ApiDoc::openapi();
+        return router.merge(SwaggerUi::new("/docs").url("/openapi.json", openapi));
+    }
+
+    router
 }
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(introspect, issue_token, revoke_token),
+    paths(
+        introspect,
+        issue_token,
+        revoke_token,
+        oauth_metadata,
+        oidc_metadata,
+        jwks
+    ),
     components(schemas(
         HealthResponse,
         IntrospectRequest,

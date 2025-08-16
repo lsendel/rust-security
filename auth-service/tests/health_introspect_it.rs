@@ -65,6 +65,8 @@ async fn introspect_valid_token() {
             client_id: Some("test_client".to_string()),
             exp: None,
             iat: None,
+            token_type: Some("access_token".to_string()),
+            iss: None,
         }
     );
 }
@@ -91,6 +93,8 @@ async fn introspect_invalid_token() {
             client_id: None,
             exp: None,
             iat: None,
+            token_type: Some("access_token".to_string()),
+            iss: None,
         }
     );
 }
