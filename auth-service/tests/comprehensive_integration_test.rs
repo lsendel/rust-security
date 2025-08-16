@@ -1,0 +1,331 @@
+use auth_service::{app, store::TokenStore, AppState, IntrospectRequest};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio::sync::RwLock;
+use base64::Engine as _;
+
+async fn spawn_app() -> String {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let mut client_credentials = HashMap::new();
+    client_credentials.insert("test_client".to_string(), "test_secret_12345".to_string());
+    client_credentials.insert("admin_client".to_string(), "admin_secret_67890".to_string());
+
+    let app = app(AppState {
+        token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
+        client_credentials,
+        allowed_scopes: vec!["read".to_string(), "write".to_string(), "admin".to_string()],
+    });
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{}", addr)
+}
+
+#[tokio::test]
+async fn test_complete_oauth_flow() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    // Test 1: Health check
+    let response = client
+        .get(format!("{}/health", base))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+
+    // Test 2: OAuth metadata endpoints
+    let response = client
+        .get(format!("{}/.well-known/oauth-authorization-server", base))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let metadata: Value = response.json().await.unwrap();
+    assert!(metadata.get("token_endpoint").is_some());
+
+    // Test 3: JWKS endpoint
+    let response = client
+        .get(format!("{}/jwks.json", base))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let jwks: Value = response.json().await.unwrap();
+    assert!(jwks.get("keys").is_some());
+
+    // Test 4: Token issuance with client credentials
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=read%20write")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let token_response: Value = response.json().await.unwrap();
+    let access_token = token_response.get("access_token").unwrap().as_str().unwrap();
+    let refresh_token = token_response.get("refresh_token").unwrap().as_str().unwrap();
+    assert!(access_token.starts_with("tk_"));
+    assert!(refresh_token.starts_with("rt_"));
+
+    // Test 5: Introspection endpoint
+    let response = client
+        .post(format!("{}/oauth/introspect", base))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&IntrospectRequest {
+            token: access_token.to_string(),
+            token_type_hint: Some("access_token".to_string()),
+        })
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let introspect_response: Value = response.json().await.unwrap();
+    assert!(introspect_response.get("active").unwrap().as_bool().unwrap());
+    assert_eq!(introspect_response.get("scope").unwrap().as_str().unwrap(), "read write");
+
+    // Test 6: Token refresh
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let new_token_response: Value = response.json().await.unwrap();
+    let new_access_token = new_token_response.get("access_token").unwrap().as_str().unwrap();
+    assert!(new_access_token.starts_with("tk_"));
+    assert_ne!(new_access_token, access_token);
+
+    // Test 7: Token revocation
+    let response = client
+        .post(format!("{}/oauth/revoke", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(format!("token={}", access_token))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    // Test 8: Verify token is revoked
+    let response = client
+        .post(format!("{}/oauth/introspect", base))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&IntrospectRequest {
+            token: access_token.to_string(),
+            token_type_hint: Some("access_token".to_string()),
+        })
+        .send()
+        .await
+        .unwrap();
+
+    let introspect_response: Value = response.json().await.unwrap();
+    assert!(!introspect_response.get("active").unwrap().as_bool().unwrap());
+}
+
+#[tokio::test]
+async fn test_security_features() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    // Test 1: Invalid client credentials
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=client_credentials&client_id=invalid&client_secret=invalid")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 401);
+
+    // Test 2: Missing client credentials
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=client_credentials")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+
+    // Test 3: Invalid scope
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=invalid_scope")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+
+    // Test 4: Unsupported grant type
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=authorization_code&client_id=test_client&client_secret=test_secret_12345")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+
+    // Test 5: HTTP Basic Authentication
+    let credentials = base64::engine::general_purpose::STANDARD
+        .encode("test_client:test_secret_12345");
+
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(AUTHORIZATION, format!("Basic {}", credentials))
+        .body("grant_type=client_credentials&scope=read")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn test_rate_limiting() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    // Make many requests quickly to trigger rate limiting
+    let mut handles = vec![];
+
+    for i in 0..150 {
+        let client = client.clone();
+        let base = base.clone();
+        let handle = tokio::spawn(async move {
+            let response = client
+                .get(format!("{}/health", base))
+                .header("x-forwarded-for", format!("192.168.1.{}", i % 10))
+                .send()
+                .await
+                .unwrap();
+            response.status()
+        });
+        handles.push(handle);
+    }
+
+    let mut rate_limited_count = 0;
+    for handle in handles {
+        let status = handle.await.unwrap();
+        if status == 429 {
+            rate_limited_count += 1;
+        }
+    }
+
+    // Should have some rate limited responses
+    assert!(rate_limited_count > 0, "Expected some requests to be rate limited");
+}
+
+#[tokio::test]
+async fn test_openid_connect_features() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    // Test OpenID Connect token with openid scope
+    let response = client
+        .post(format!("{}/oauth/token", base))
+        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=openid profile")
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let token_response: Value = response.json().await.unwrap();
+
+    // Should include an ID token when openid scope is requested
+    assert!(token_response.get("id_token").is_some());
+    let id_token = token_response.get("id_token").unwrap().as_str().unwrap();
+
+    // ID token should be a JWT (3 parts separated by dots)
+    let parts: Vec<&str> = id_token.split('.').collect();
+    assert_eq!(parts.len(), 3);
+}
+
+#[tokio::test]
+async fn test_mfa_endpoints() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    // Test TOTP registration
+    let response = client
+        .post(format!("{}/mfa/totp/register", base))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&serde_json::json!({
+            "user_id": "test_user"
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let totp_response: Value = response.json().await.unwrap();
+    assert!(totp_response.get("secret_base32").is_some());
+    assert!(totp_response.get("otpauth_url").is_some());
+}
+
+#[tokio::test]
+async fn test_scim_endpoints() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    // Test SCIM user creation
+    let response = client
+        .post(format!("{}/scim/v2/Users", base))
+        .header(CONTENT_TYPE, "application/json")
+        .json(&serde_json::json!({
+            "userName": "test.user@example.com",
+            "active": true
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let user_response: Value = response.json().await.unwrap();
+    assert!(user_response.get("id").is_some());
+    assert_eq!(user_response.get("userName").unwrap().as_str().unwrap(), "test.user@example.com");
+}
+
+#[tokio::test]
+async fn test_security_headers() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::new();
+
+    let response = client
+        .get(format!("{}/health", base))
+        .send()
+        .await
+        .unwrap();
+
+    let headers = response.headers();
+
+    // Check security headers are present
+    assert!(headers.contains_key("x-content-type-options"));
+    assert!(headers.contains_key("x-frame-options"));
+    assert!(headers.contains_key("x-xss-protection"));
+    assert!(headers.contains_key("strict-transport-security"));
+    assert!(headers.contains_key("content-security-policy"));
+    assert!(headers.contains_key("referrer-policy"));
+    assert!(headers.contains_key("permissions-policy"));
+
+    // Check header values
+    assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+    assert_eq!(headers.get("x-frame-options").unwrap(), "DENY");
+}

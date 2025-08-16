@@ -26,6 +26,8 @@ impl TokenStore {
                         client_id: None,
                         exp: None,
                         iat: None,
+                        sub: None,
+                        token_binding: None,
                     })
                 }
             }
@@ -36,19 +38,22 @@ impl TokenStore {
                 let key_client_id = format!("token:{}:client_id", token);
                 let key_exp = format!("token:{}:exp", token);
                 let key_iat = format!("token:{}:iat", token);
+                let key_sub = format!("token:{}:sub", token);
                 #[allow(clippy::type_complexity)]
-                let (active, scope, client_id, exp, iat): (
+                let (active, scope, client_id, exp, iat, sub): (
                     Option<i64>,
                     Option<String>,
                     Option<String>,
                     Option<i64>,
                     Option<i64>,
+                    Option<String>,
                 ) = redis::pipe()
                     .get(&key_active)
                     .get(&key_scope)
                     .get(&key_client_id)
                     .get(&key_exp)
                     .get(&key_iat)
+                    .get(&key_sub)
                     .query_async(&mut conn)
                     .await?;
                 Ok(crate::IntrospectionRecord {
@@ -57,6 +62,8 @@ impl TokenStore {
                     client_id,
                     exp,
                     iat,
+                    sub,
+                    token_binding: None, // TODO: Implement Redis token binding storage
                 })
             }
         }
@@ -96,6 +103,8 @@ impl TokenStore {
                     client_id: None,
                     exp: None,
                     iat: None,
+                    sub: None,
+                    token_binding: None,
                 };
                 guard.insert(token.to_string(), Arc::new(RwLock::new(record)));
                 Ok(())
@@ -214,6 +223,37 @@ impl TokenStore {
         }
     }
 
+    pub async fn set_subject(
+        &self,
+        token: &str,
+        subject: String,
+        ttl_secs: Option<u64>,
+    ) -> anyhow::Result<()> {
+        match self {
+            TokenStore::InMemory(map) => {
+                let mut guard = map.write().await;
+                let record = get_or_insert_in_memory(&mut guard, token);
+                let mut record = record.write().await;
+                record.sub = Some(subject);
+                Ok(())
+            }
+            TokenStore::Redis(conn) => {
+                let mut conn = conn.clone();
+                let key = format!("token:{}:sub", token);
+                if let Some(ttl) = ttl_secs {
+                    let _: () = redis::Cmd::set_ex(&key, subject, ttl)
+                        .query_async(&mut conn)
+                        .await?;
+                } else {
+                    let _: () = redis::Cmd::set(&key, subject)
+                        .query_async(&mut conn)
+                        .await?;
+                }
+                Ok(())
+            }
+        }
+    }
+
     pub async fn set_iat(
         &self,
         token: &str,
@@ -253,6 +293,8 @@ impl TokenStore {
                     client_id: None,
                     exp: None,
                     iat: None,
+                    sub: None,
+                    token_binding: None,
                 };
                 guard.insert(format!("rt:{}", refresh), Arc::new(RwLock::new(record)));
                 Ok(())
@@ -263,6 +305,37 @@ impl TokenStore {
                 let _: () = redis::Cmd::set_ex(&key, 1, ttl_secs)
                     .query_async(&mut conn)
                     .await?;
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn set_token_binding(
+        &self,
+        token: &str,
+        token_binding: String,
+        ttl_secs: Option<u64>,
+    ) -> anyhow::Result<()> {
+        match self {
+            TokenStore::InMemory(map) => {
+                let mut guard = map.write().await;
+                let record = get_or_insert_in_memory(&mut guard, token);
+                let mut record = record.write().await;
+                record.token_binding = Some(token_binding);
+                Ok(())
+            }
+            TokenStore::Redis(conn) => {
+                let mut conn = conn.clone();
+                let key = format!("token:{}:token_binding", token);
+                if let Some(ttl) = ttl_secs {
+                    let _: () = redis::Cmd::set_ex(&key, token_binding, ttl)
+                        .query_async(&mut conn)
+                        .await?;
+                } else {
+                    let _: () = redis::Cmd::set(&key, token_binding)
+                        .query_async(&mut conn)
+                        .await?;
+                }
                 Ok(())
             }
         }
@@ -302,6 +375,8 @@ fn get_or_insert_in_memory<'a>(
             client_id: None,
             exp: None,
             iat: None,
+            sub: None,
+            token_binding: None,
         }))
     })
 }

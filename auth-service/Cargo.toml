@@ -33,6 +33,7 @@ envy = "0.4"
 hmac = "0.12"
 sha1 = "0.10"
 data-encoding = "2.6"
+sha2 = "0.10"
 # TLS/HTTPS support
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 rcgen = "0.13"
@@ -45,12 +46,19 @@ base64 = "0.21"
 prometheus = "0.13"
 getrandom = "0.2"
 urlencoding = "2.1"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+# OpenTelemetry for distributed tracing
+opentelemetry = { version = "0.21", optional = true }
+opentelemetry-jaeger = { version = "0.20", optional = true }
+tracing-opentelemetry = { version = "0.22", optional = true }
+opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"], optional = true }
 
 [features]
 default = []
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
+tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
 
 [dependencies.vaultrs]
 version = "0.7"

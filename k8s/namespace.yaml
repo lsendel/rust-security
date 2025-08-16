@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rust-security
+  labels:
+    name: rust-security
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: rust-security
+data:
+  RUST_LOG: "info,auth_service=debug"
+  BIND_ADDR: "0.0.0.0:8080"
+  TOKEN_EXPIRY_SECONDS: "3600"
+  RATE_LIMIT_REQUESTS_PER_MINUTE: "120"
+  ALLOWED_SCOPES: "read,write,admin"
+  ALLOWED_ORIGINS: "*"
+  EXTERNAL_BASE_URL: "https://auth.example.com"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-service-config
+  namespace: rust-security
+data:
+  RUST_LOG: "info,policy_service=debug"
+  BIND_ADDR: "0.0.0.0:8080"
+  ALLOWED_ORIGINS: "*"

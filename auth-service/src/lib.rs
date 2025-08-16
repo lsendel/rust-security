@@ -9,12 +9,25 @@ use base64::Engine as _;
 use once_cell::sync::Lazy;
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 
-static TOKENS_ISSUED: Lazy<IntCounter> =
-    Lazy::new(|| IntCounter::new("tokens_issued_total", "tokens issued").unwrap());
-static TOKENS_REFRESHED: Lazy<IntCounter> =
-    Lazy::new(|| IntCounter::new("tokens_refreshed_total", "tokens refreshed").unwrap());
-static TOKENS_REVOKED: Lazy<IntCounter> =
-    Lazy::new(|| IntCounter::new("tokens_revoked_total", "tokens revoked").unwrap());
+// Constants
+const DEFAULT_TOKEN_EXPIRY_SECONDS: u64 = 3600; // 1 hour
+const REFRESH_TOKEN_EXPIRY_SECONDS: u64 = 14 * 24 * 3600; // 14 days
+const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
+const MAX_FILTER_LENGTH: usize = 500;
+const MAX_REQUEST_BODY_SIZE: usize = 1024 * 1024; // 1MB
+
+static TOKENS_ISSUED: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::new("tokens_issued_total", "tokens issued")
+        .expect("Failed to create tokens_issued metric")
+});
+static TOKENS_REFRESHED: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::new("tokens_refreshed_total", "tokens refreshed")
+        .expect("Failed to create tokens_refreshed metric")
+});
+static TOKENS_REVOKED: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::new("tokens_revoked_total", "tokens revoked")
+        .expect("Failed to create tokens_revoked metric")
+});
 #[allow(dead_code)]
 static REGISTRY: Lazy<Registry> = Lazy::new(|| {
     let r = Registry::new();
@@ -53,6 +66,8 @@ pub mod security;
 pub mod store;
 pub mod mfa;
 pub mod scim;
+pub mod oidc_google;
+pub mod circuit_breaker;
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
@@ -70,7 +85,11 @@ pub async fn oauth_metadata() -> Json<serde_json::Value> {
         "jwks_uri": format!("{}/jwks.json", base),
         "grant_types_supported": ["client_credentials", "refresh_token"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
-        "id_token_signing_alg_values_supported": ["HS256"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+        "authorization_endpoint": format!("{}/oauth/authorize", base),
+        "userinfo_endpoint": format!("{}/oauth/userinfo", base),
+        "response_types_supported": ["code"],
+        "scopes_supported": ["openid", "profile", "email"],
     }))
 }
 
@@ -166,6 +185,10 @@ pub struct IntrospectionRecord {
     pub client_id: Option<String>,
     pub exp: Option<i64>,
     pub iat: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_binding: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
@@ -191,6 +214,8 @@ pub struct IntrospectResponse {
     pub token_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iss: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
 }
 
 pub async fn health() -> Json<HealthResponse> {
@@ -232,6 +257,7 @@ pub async fn introspect(
         iat: rec.iat,
         token_type: Some("access_token".to_string()),
         iss: std::env::var("EXTERNAL_BASE_URL").ok(),
+        sub: rec.sub,
     }))
 }
 
@@ -386,6 +412,63 @@ pub async fn issue_token(
     }
 }
 
+/// Helper function to get current unix timestamp
+fn get_current_timestamp() -> Result<i64, AuthError> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| AuthError::InternalServerError("System time error".to_string()))
+        .map(|duration| duration.as_secs() as i64)
+}
+
+/// Helper function to get token expiry configuration
+fn get_token_expiry_seconds() -> u64 {
+    std::env::var("TOKEN_EXPIRY_SECONDS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECONDS)
+}
+
+/// Helper function to store access token metadata
+async fn store_access_token_metadata(
+    state: &AppState,
+    access_token: &str,
+    scope: Option<String>,
+    client_id: Option<String>,
+    subject: Option<String>,
+    now: i64,
+    exp: i64,
+    expiry_secs: u64,
+) -> Result<(), AuthError> {
+    state.token_store.set_active(access_token, true, Some(expiry_secs)).await?;
+    state.token_store.set_scope(access_token, scope, Some(expiry_secs)).await?;
+    state.token_store.set_exp(access_token, exp, Some(expiry_secs)).await?;
+    state.token_store.set_iat(access_token, now, Some(expiry_secs)).await?;
+    
+    if let Some(client_id) = client_id {
+        state.token_store.set_client_id(access_token, client_id, Some(expiry_secs)).await?;
+    }
+    if let Some(subject) = subject {
+        state.token_store.set_subject(access_token, subject, Some(expiry_secs)).await?;
+    }
+    
+    Ok(())
+}
+
+/// Helper function to create ID token if requested
+fn create_id_token(
+    subject: Option<String>,
+    now: i64,
+    exp: i64,
+) -> Option<String> {
+    if subject.is_none() {
+        return None;
+    }
+    
+    // In a real implementation, we'd use proper JWT signing
+    // For now, return a placeholder
+    Some(format!("id_token_placeholder_{}", uuid::Uuid::new_v4()))
+}
+
 async fn issue_new_token(
     state: &AppState,
     scope: Option<String>,
@@ -397,12 +480,12 @@ async fn issue_new_token(
     let refresh_token = format!("rt_{}", uuid::Uuid::new_v4());
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .map_err(|_| AuthError::InternalServerError("System time error".to_string()))?
         .as_secs() as i64;
     let expiry_secs: u64 = std::env::var("TOKEN_EXPIRY_SECONDS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(3600);
+        .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECONDS);
     let exp = now + expiry_secs as i64;
     state
         .token_store
@@ -426,9 +509,15 @@ async fn issue_new_token(
             .set_client_id(&access_token, client_id, Some(expiry_secs))
             .await?;
     }
+    if let Some(subject) = subject.clone() {
+        state
+            .token_store
+            .set_subject(&access_token, subject, Some(expiry_secs))
+            .await?;
+    }
     state
         .token_store
-        .set_refresh(&refresh_token, 14 * 24 * 3600)
+        .set_refresh(&refresh_token, REFRESH_TOKEN_EXPIRY_SECONDS)
         .await?;
 
     let id_token = if make_id_token {
@@ -538,6 +627,11 @@ pub fn app(state: AppState) -> Router {
         .route("/oauth/introspect", post(introspect))
         .route("/oauth/token", post(issue_token))
         .route("/oauth/revoke", post(revoke_token))
+        .route("/oauth/google/login", get(crate::oidc_google::google_login))
+        .route(
+            "/oauth/google/callback",
+            get(crate::oidc_google::google_callback),
+        )
         .route("/mfa/totp/register", post(crate::mfa::totp_register))
         .route("/mfa/totp/verify", post(crate::mfa::totp_verify))
         .route(
@@ -588,3 +682,13 @@ pub fn app(state: AppState) -> Router {
     ))
 )]
 pub struct ApiDoc;
+
+// Helper to mint local tokens for a subject (e.g., after federated login)
+pub async fn mint_local_tokens_for_subject(
+    state: &AppState,
+    subject: String,
+    scope: Option<String>,
+) -> Result<TokenResponse, AuthError> {
+    let Json(resp) = issue_new_token(state, scope, None, true, Some(subject)).await?;
+    Ok(resp)
+}

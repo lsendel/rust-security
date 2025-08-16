@@ -19,6 +19,8 @@ async fn spawn_app() -> String {
             client_id: Some("test_client".to_string()),
             exp: None,
             iat: None,
+            sub: None,
+            token_binding: None,
         })),
     );
 
@@ -67,6 +69,7 @@ async fn introspect_valid_token() {
             iat: None,
             token_type: Some("access_token".to_string()),
             iss: None,
+            sub: None,
         }
     );
 }
@@ -95,6 +98,7 @@ async fn introspect_invalid_token() {
             iat: None,
             token_type: Some("access_token".to_string()),
             iss: None,
+            sub: None,
         }
     );
 }

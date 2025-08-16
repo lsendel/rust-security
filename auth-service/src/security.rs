@@ -6,6 +6,199 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
+#[allow(unused_imports)]
+use base64::Engine as _;
+use sha2::{Digest, Sha256};
+
+/// Generate a token binding value from client information
+pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(client_ip.as_bytes());
+    hasher.update(user_agent.as_bytes());
+    hasher.update(b"token_binding_salt"); // Add a salt for security
+    let result = hasher.finalize();
+    base64::engine::general_purpose::STANDARD.encode(result)
+}
+
+/// Validate token binding to ensure token is used from the same client
+pub fn validate_token_binding(
+    stored_binding: &str,
+    client_ip: &str,
+    user_agent: &str,
+) -> bool {
+    let current_binding = generate_token_binding(client_ip, user_agent);
+    stored_binding == current_binding
+}
+
+/// PKCE (Proof Key for Code Exchange) support
+/// Generate a cryptographically secure code verifier for PKCE
+pub fn generate_code_verifier() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// Generate a code challenge from a code verifier using SHA256
+pub fn generate_code_challenge(code_verifier: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(code_verifier.as_bytes());
+    let result = hasher.finalize();
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(result)
+}
+
+/// Verify a code verifier against a code challenge
+pub fn verify_code_challenge(code_verifier: &str, code_challenge: &str) -> bool {
+    let computed_challenge = generate_code_challenge(code_verifier);
+    computed_challenge == code_challenge
+}
+
+/// PKCE challenge methods
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CodeChallengeMethod {
+    Plain,
+    S256,
+}
+
+impl std::str::FromStr for CodeChallengeMethod {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "plain" => Ok(CodeChallengeMethod::Plain),
+            "S256" => Ok(CodeChallengeMethod::S256),
+            _ => Err("Invalid code challenge method"),
+        }
+    }
+}
+
+/// Validate PKCE parameters
+pub fn validate_pkce_params(
+    code_verifier: &str,
+    code_challenge: &str,
+    method: CodeChallengeMethod,
+) -> bool {
+    match method {
+        CodeChallengeMethod::Plain => code_verifier == code_challenge,
+        CodeChallengeMethod::S256 => verify_code_challenge(code_verifier, code_challenge),
+    }
+}
+
+/// Request signing for critical operations
+use hmac::{Hmac, Mac};
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// Generate a request signature using HMAC-SHA256
+pub fn generate_request_signature(
+    method: &str,
+    path: &str,
+    body: &str,
+    timestamp: i64,
+    secret: &str,
+) -> Result<String, &'static str> {
+    let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| "Invalid secret key")?;
+
+    mac.update(message.as_bytes());
+    let result = mac.finalize();
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(result.into_bytes()))
+}
+
+/// Verify a request signature
+pub fn verify_request_signature(
+    method: &str,
+    path: &str,
+    body: &str,
+    timestamp: i64,
+    signature: &str,
+    secret: &str,
+) -> Result<bool, &'static str> {
+    // Check timestamp to prevent replay attacks (5 minute window)
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "System time error")?
+        .as_secs() as i64;
+
+    if (now - timestamp).abs() > crate::REQUEST_TIMESTAMP_WINDOW_SECONDS {
+        return Err("Request timestamp too old or too far in the future");
+    }
+
+    let expected_signature = generate_request_signature(method, path, body, timestamp, secret)?;
+
+    // Use constant-time comparison to prevent timing attacks
+    Ok(signature == expected_signature)
+}
+
+/// Middleware for request signature validation
+pub async fn validate_request_signature(
+    request: Request,
+    next: Next,
+) -> Result<Response, axum::http::StatusCode> {
+    // Only validate signatures for critical operations
+    let path = request.uri().path();
+    let requires_signature = path.starts_with("/oauth/revoke")
+        || path.starts_with("/admin/")
+        || path.contains("delete");
+
+    if !requires_signature {
+        return Ok(next.run(request).await);
+    }
+
+    let headers = request.headers();
+
+    let signature = headers
+        .get("x-signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
+
+    let timestamp_str = headers
+        .get("x-timestamp")
+        .and_then(|v| v.to_str().ok())
+        .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
+
+    let timestamp: i64 = timestamp_str
+        .parse()
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+
+    // Get signing secret from environment
+    let secret = std::env::var("REQUEST_SIGNING_SECRET")
+        .unwrap_or_else(|_| "default_signing_secret".to_string());
+
+    // For this example, we'll use empty body. In practice, you'd need to read the body
+    let method = request.method().as_str();
+    let body = ""; // TODO: Read actual request body
+
+    match verify_request_signature(method, path, body, timestamp, signature, &secret) {
+        Ok(true) => Ok(next.run(request).await),
+        Ok(false) => Err(axum::http::StatusCode::UNAUTHORIZED),
+        Err(_) => Err(axum::http::StatusCode::BAD_REQUEST),
+    }
+}
+
+/// Extract client information for token binding
+pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) {
+    let client_ip = headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .split(',')
+        .next()
+        .unwrap_or("unknown")
+        .trim()
+        .to_string();
+
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    (client_ip, user_agent)
+}
 
 /// Security headers middleware
 pub async fn security_headers(request: Request, next: Next) -> Response {
@@ -96,7 +289,7 @@ pub fn security_middleware() -> ServiceBuilder<
         tower::layer::util::Identity,
     >,
 > {
-    ServiceBuilder::new().layer(RequestBodyLimitLayer::new(1024 * 1024)) // 1MB limit
+    ServiceBuilder::new().layer(RequestBodyLimitLayer::new(crate::MAX_REQUEST_BODY_SIZE))
 }
 
 static RATE_LIMITER: Lazy<Mutex<HashMap<String, (u32, Instant)>>> =

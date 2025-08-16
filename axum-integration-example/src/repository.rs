@@ -84,7 +84,7 @@ impl UserRepository for InMemoryUserRepository {
     async fn create(
         &self,
         user: CreateUserRequest,
-        _password_hash: String,
+        password_hash: String,
     ) -> Result<User, DbError> {
         let mut users = self.users.lock().map_err(|_| DbError::Internal)?;
         let mut next_id = self.next_id.lock().map_err(|_| DbError::Internal)?;
@@ -103,6 +103,7 @@ impl UserRepository for InMemoryUserRepository {
             id,
             name: user.name.trim().to_string(),
             email: user.email.trim().to_string(),
+            password_hash,
             role: user.role.unwrap_or_default(),
             #[cfg(any(feature = "sqlite", feature = "postgres"))]
             created_at: chrono::Utc::now(),
@@ -211,7 +212,7 @@ impl UserRepository for PostgresUserRepository {
             r#"
             INSERT INTO users (name, email, password_hash, role)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, name, email, role as "role: UserRole", created_at, updated_at
+            RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
             "#,
             user.name.trim(),
             user.email.trim(),
@@ -225,6 +226,7 @@ impl UserRepository for PostgresUserRepository {
             id: row.id,
             name: row.name,
             email: row.email,
+            password_hash: row.password_hash,
             role: row.role,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -234,7 +236,7 @@ impl UserRepository for PostgresUserRepository {
     async fn find_by_id(&self, id: i32) -> Result<Option<User>, DbError> {
         let row = sqlx::query!(
             r#"
-            SELECT id, name, email, role as "role: UserRole", created_at, updated_at
+            SELECT id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
             FROM users WHERE id = $1
             "#,
             id
@@ -246,6 +248,7 @@ impl UserRepository for PostgresUserRepository {
             id: r.id,
             name: r.name,
             email: r.email,
+            password_hash: r.password_hash,
             role: r.role,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -255,7 +258,7 @@ impl UserRepository for PostgresUserRepository {
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, DbError> {
         let row = sqlx::query!(
             r#"
-            SELECT id, name, email, role as "role: UserRole", created_at, updated_at
+            SELECT id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
             FROM users WHERE email = $1
             "#,
             email
@@ -267,6 +270,7 @@ impl UserRepository for PostgresUserRepository {
             id: r.id,
             name: r.name,
             email: r.email,
+            password_hash: r.password_hash,
             role: r.role,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -276,7 +280,7 @@ impl UserRepository for PostgresUserRepository {
     async fn list(&self, limit: i32, offset: i32) -> Result<Vec<User>, DbError> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, name, email, role as "role: UserRole", created_at, updated_at
+            SELECT id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
             FROM users ORDER BY id LIMIT $1 OFFSET $2
             "#,
             limit as i64,
@@ -291,6 +295,7 @@ impl UserRepository for PostgresUserRepository {
                 id: r.id,
                 name: r.name,
                 email: r.email,
+                password_hash: r.password_hash,
                 role: r.role,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
@@ -327,7 +332,7 @@ impl UserRepository for PostgresUserRepository {
                 r#"
                 UPDATE users SET name = $1, email = $2, updated_at = NOW()
                 WHERE id = $3
-                RETURNING id, name, email, role as "role: UserRole", created_at, updated_at
+                RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
                 "#,
                 name.trim(),
                 email.trim(),
@@ -340,7 +345,7 @@ impl UserRepository for PostgresUserRepository {
                 r#"
                 UPDATE users SET name = $1, updated_at = NOW()
                 WHERE id = $2
-                RETURNING id, name, email, role as "role: UserRole", created_at, updated_at
+                RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
                 "#,
                 name.trim(),
                 id
@@ -352,7 +357,7 @@ impl UserRepository for PostgresUserRepository {
                 r#"
                 UPDATE users SET email = $1, updated_at = NOW()
                 WHERE id = $2
-                RETURNING id, name, email, role as "role: UserRole", created_at, updated_at
+                RETURNING id, name, email, password_hash, role as "role: UserRole", created_at, updated_at
                 "#,
                 email.trim(),
                 id
@@ -367,6 +372,7 @@ impl UserRepository for PostgresUserRepository {
             id: r.id,
             name: r.name,
             email: r.email,
+            password_hash: r.password_hash,
             role: r.role,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -420,7 +426,7 @@ impl UserRepository for SqliteUserRepository {
             r#"
             INSERT INTO users (name, email, password_hash, role)
             VALUES (?, ?, ?, ?)
-            RETURNING id, name, email, role, created_at, updated_at
+            RETURNING id, name, email, password_hash, role, created_at, updated_at
             "#,
             user.name.trim(),
             user.email.trim(),
@@ -439,6 +445,7 @@ impl UserRepository for SqliteUserRepository {
             id: row.id,
             name: row.name,
             email: row.email,
+            password_hash: row.password_hash,
             role,
             created_at: chrono::DateTime::parse_from_rfc3339(&row.created_at)
                 .map_err(|_| DbError::Internal)?
@@ -451,7 +458,7 @@ impl UserRepository for SqliteUserRepository {
 
     async fn find_by_id(&self, id: i32) -> Result<Option<User>, DbError> {
         let row = sqlx::query!(
-            "SELECT id, name, email, role, created_at, updated_at FROM users WHERE id = ?",
+            "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users WHERE id = ?",
             id
         )
         .fetch_optional(&self.pool)
@@ -467,6 +474,7 @@ impl UserRepository for SqliteUserRepository {
                 id: r.id,
                 name: r.name,
                 email: r.email,
+                password_hash: r.password_hash,
                 role,
                 created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
                     .unwrap_or_else(|_| chrono::Utc::now().into())
@@ -480,7 +488,7 @@ impl UserRepository for SqliteUserRepository {
 
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, DbError> {
         let row = sqlx::query!(
-            "SELECT id, name, email, role, created_at, updated_at FROM users WHERE email = ?",
+            "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users WHERE email = ?",
             email
         )
         .fetch_optional(&self.pool)
@@ -496,6 +504,7 @@ impl UserRepository for SqliteUserRepository {
                 id: r.id,
                 name: r.name,
                 email: r.email,
+                password_hash: r.password_hash,
                 role,
                 created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
                     .unwrap_or_else(|_| chrono::Utc::now().into())
@@ -509,7 +518,7 @@ impl UserRepository for SqliteUserRepository {
 
     async fn list(&self, limit: i32, offset: i32) -> Result<Vec<User>, DbError> {
         let rows = sqlx::query!(
-            "SELECT id, name, email, role, created_at, updated_at FROM users ORDER BY id LIMIT ? OFFSET ?",
+            "SELECT id, name, email, password_hash, role, created_at, updated_at FROM users ORDER BY id LIMIT ? OFFSET ?",
             limit,
             offset
         )
@@ -528,6 +537,7 @@ impl UserRepository for SqliteUserRepository {
                     id: r.id,
                     name: r.name,
                     email: r.email,
+                    password_hash: r.password_hash,
                     role,
                     created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
                         .unwrap_or_else(|_| chrono::Utc::now().into())
@@ -551,7 +561,7 @@ impl UserRepository for SqliteUserRepository {
                 r#"
                 UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-                RETURNING id, name, email, role, created_at, updated_at
+                RETURNING id, name, email, password_hash, role, created_at, updated_at
                 "#,
                 name.trim(),
                 email.trim(),
@@ -564,7 +574,7 @@ impl UserRepository for SqliteUserRepository {
                 r#"
                 UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-                RETURNING id, name, email, role, created_at, updated_at
+                RETURNING id, name, email, password_hash, role, created_at, updated_at
                 "#,
                 name.trim(),
                 id
@@ -576,7 +586,7 @@ impl UserRepository for SqliteUserRepository {
                 r#"
                 UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-                RETURNING id, name, email, role, created_at, updated_at
+                RETURNING id, name, email, password_hash, role, created_at, updated_at
                 "#,
                 email.trim(),
                 id
@@ -597,6 +607,7 @@ impl UserRepository for SqliteUserRepository {
                 id: r.id,
                 name: r.name,
                 email: r.email,
+                password_hash: r.password_hash,
                 role,
                 created_at: chrono::DateTime::parse_from_rfc3339(&r.created_at)
                     .unwrap_or_else(|_| chrono::Utc::now().into())

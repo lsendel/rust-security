@@ -105,29 +105,47 @@ pub async fn authorize(
         "type": "Action",
         "id": body.action
     }))
-    .map_err(|e| PolicyError::Parse(e.to_string()))?;
-    let principal = parse_entity(&body.principal)?;
-    let resource = parse_entity(&body.resource)?;
+    .map_err(|e| PolicyError::Parse(format!("Failed to parse action '{}': {}", body.action, e)))?;
+    
+    let principal = parse_entity(&body.principal)
+        .map_err(|e| PolicyError::Parse(format!("Failed to parse principal: {}", e)))?;
+    
+    let resource = parse_entity(&body.resource)
+        .map_err(|e| PolicyError::Parse(format!("Failed to parse resource: {}", e)))?;
+    
     let context = Context::from_json_value(body.context, None)
-        .map_err(|e| PolicyError::Parse(e.to_string()))?;
+        .map_err(|e| PolicyError::Parse(format!("Failed to parse context: {}", e)))?;
+    
     let request = Request::new(Some(principal), Some(action), Some(resource), context, None)
-        .map_err(|e| PolicyError::Parse(e.to_string()))?;
+        .map_err(|e| PolicyError::Parse(format!("Failed to create authorization request: {}", e)))?;
+    
     let decision = state
         .authorizer
         .is_authorized(&request, &state.policies, &state.entities)
         .decision();
+    
     let decision_str = if decision == cedar_policy::Decision::Allow {
         "Allow"
     } else {
         "Deny"
     };
+    
+    // Log authorization decision for audit
+    tracing::info!(
+        request_id = %body.request_id,
+        decision = %decision_str,
+        action = %body.action,
+        "Authorization decision made"
+    );
+    
     Ok(Json(AuthorizeResponse {
         decision: decision_str.to_string(),
     }))
 }
 
 fn parse_entity(v: &serde_json::Value) -> Result<cedar_policy::EntityUid, PolicyError> {
-    cedar_policy::EntityUid::from_json(v.clone()).map_err(|e| PolicyError::Parse(e.to_string()))
+    cedar_policy::EntityUid::from_json(v.clone())
+        .map_err(|e| PolicyError::Parse(format!("Invalid entity format: {}", e)))
 }
 
 pub fn app(state: Arc<AppState>) -> Router {

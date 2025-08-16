@@ -1,0 +1,106 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: auth-service-metrics
+  namespace: rust-security
+  labels:
+    app: auth-service
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: policy-service-metrics
+  namespace: rust-security
+  labels:
+    app: policy-service
+spec:
+  selector:
+    matchLabels:
+      app: policy-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service-metrics
+  namespace: rust-security
+  labels:
+    app: auth-service
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: auth-service
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rust-security-alerts
+  namespace: rust-security
+  labels:
+    app: rust-security
+spec:
+  groups:
+  - name: rust-security.rules
+    rules:
+    - alert: AuthServiceDown
+      expr: up{job="auth-service-metrics"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Auth service is down"
+        description: "Auth service has been down for more than 1 minute"
+    
+    - alert: PolicyServiceDown
+      expr: up{job="policy-service-metrics"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Policy service is down"
+        description: "Policy service has been down for more than 1 minute"
+    
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is above 10% for the last 5 minutes"
+    
+    - alert: HighLatency
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High latency detected"
+        description: "95th percentile latency is above 1 second"
+    
+    - alert: TooManyTokensIssued
+      expr: rate(tokens_issued_total[5m]) > 100
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High token issuance rate"
+        description: "Token issuance rate is above 100 tokens per second"
