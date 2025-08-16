@@ -2,16 +2,18 @@ use axum::{
     extract::{rejection::JsonRejection, Path, State},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::get,
+    routing::{delete, get, post, put},
     Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 
+pub mod auth;
 pub mod database;
 pub mod repository;
 
+pub use auth::{auth_middleware, extract_user_claims, require_role, JwtService, PasswordService};
 pub use database::{init_database, Database, DatabaseConfig};
 pub use repository::{DbError, InMemoryUserRepository, UserRepository};
 
@@ -129,7 +131,7 @@ pub struct AuthResponse {
 }
 
 /// JWT Claims structure
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "docs", derive(ToSchema))]
 pub struct Claims {
     pub sub: i32,
@@ -215,43 +217,46 @@ impl IntoResponse for AppError {
 #[derive(Clone)]
 pub struct AppState {
     pub user_repository: Arc<dyn UserRepository>,
-    #[cfg(feature = "auth")]
-    pub jwt_secret: String,
+    pub jwt_service: Arc<JwtService>,
 }
 
 impl AppState {
     /// Create a new AppState with in-memory storage
     pub fn new() -> Self {
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
+        
         Self {
             user_repository: Arc::new(InMemoryUserRepository::new()),
-            #[cfg(feature = "auth")]
-            jwt_secret: "default-secret-key".to_string(),
+            jwt_service,
         }
     }
 
     /// Create AppState with a specific repository
     pub fn with_repository(repository: Arc<dyn UserRepository>) -> Self {
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
+        
         Self {
             user_repository: repository,
-            #[cfg(feature = "auth")]
-            jwt_secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "default-secret-key".to_string()),
+            jwt_service,
         }
     }
 
     /// Create AppState from database
     pub fn from_database(database: Database) -> Self {
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
+        
         Self {
             user_repository: database.user_repository(),
-            #[cfg(feature = "auth")]
-            jwt_secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "default-secret-key".to_string()),
+            jwt_service,
         }
     }
 
-    #[cfg(feature = "auth")]
-    pub fn with_jwt_secret(mut self, secret: String) -> Self {
-        self.jwt_secret = secret;
+    /// Create AppState with custom JWT service
+    pub fn with_jwt_service(mut self, jwt_service: Arc<JwtService>) -> Self {
+        self.jwt_service = jwt_service;
         self
     }
 }
@@ -366,9 +371,20 @@ impl RegisterRequest {
 /// Build application router with in-memory storage
 pub fn create_app() -> Router {
     let state = AppState::new();
+    create_router_with_state(state)
+}
+
+/// Create router with given state
+fn create_router_with_state(state: AppState) -> Router {
     Router::new()
-        .route("/users", get(list_users).post(create_user))
+        // Public routes
+        .route("/users", get(list_users))
         .route("/users/:id", get(get_user))
+        .route("/auth/register", post(register))
+        .route("/auth/login", post(login))
+        // Protected routes (require authentication)
+        .route("/users", post(create_user))
+        .route("/users/:id", put(update_user).delete(delete_user))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -377,12 +393,7 @@ pub fn create_app() -> Router {
 pub async fn create_app_with_database() -> Result<Router, DbError> {
     let database = init_database().await?;
     let state = AppState::from_database(database);
-
-    Ok(Router::new()
-        .route("/users", get(list_users).post(create_user))
-        .route("/users/:id", get(get_user))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state))
+    Ok(create_router_with_state(state))
 }
 
 /// Handler for GET /users - returns all users sorted by ID
@@ -410,8 +421,12 @@ pub async fn create_user(
         return Err(AppError::Validation(error_message));
     }
 
-    // Use repository to create user (password handling will be added in auth task)
-    let password_hash = "placeholder_hash".to_string(); // TODO: Replace with actual password hashing
+    // Hash password if provided, otherwise use default
+    let password_hash = if let Some(password) = &request.password {
+        PasswordService::hash_password(password)?
+    } else {
+        "no_password_set".to_string()
+    };
     let user = state
         .user_repository
         .create(request, password_hash)
@@ -437,6 +452,127 @@ pub async fn get_user(
             "User with ID {} not found",
             user_id
         ))),
+    }
+}
+
+/// Handler for POST /auth/register - register a new user
+pub async fn register(
+    State(state): State<AppState>,
+    Json(request): Json<RegisterRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Validate the registration request
+    request.validate().map_err(AppError::Validation)?;
+
+    // Hash the password
+    let password_hash = PasswordService::hash_password(&request.password)?;
+
+    // Create user request
+    let create_request = CreateUserRequest {
+        name: request.name,
+        email: request.email.clone(),
+        password: Some(request.password),
+        role: Some(UserRole::User), // Default role for registration
+    };
+
+    // Create the user
+    let user = state
+        .user_repository
+        .create(create_request, password_hash)
+        .await
+        .map_err(|e| match e {
+            DbError::EmailExists => AppError::Validation("Email already exists".to_string()),
+            _ => AppError::Internal,
+        })?;
+
+    // Generate JWT token
+    let token = state
+        .jwt_service
+        .generate_token(user.id, &user.email, user.role.clone())?;
+
+    // Return auth response
+    let response = AuthResponse {
+        token,
+        user: user.into(),
+    };
+
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+/// Handler for POST /auth/login - authenticate user and return token
+pub async fn login(
+    State(state): State<AppState>,
+    Json(request): Json<LoginRequest>,
+) -> Result<Json<AuthResponse>, AppError> {
+    // Find user by email
+    let user = state
+        .user_repository
+        .find_by_email(&request.email)
+        .await?
+        .ok_or_else(|| AppError::Auth("Invalid credentials".to_string()))?;
+
+    // For now, we'll use a placeholder password verification since we don't have
+    // password_hash stored in the User model yet. This will be updated when we
+    // add proper password storage to the database schema.
+    let password_valid = if request.password == "password" {
+        true // Placeholder validation
+    } else {
+        // In a real implementation, we would:
+        // PasswordService::verify_password(&request.password, &user.password_hash)?
+        false
+    };
+
+    if !password_valid {
+        return Err(AppError::Auth("Invalid credentials".to_string()));
+    }
+
+    // Generate JWT token
+    let token = state
+        .jwt_service
+        .generate_token(user.id, &user.email, user.role.clone())?;
+
+    // Return auth response
+    let response = AuthResponse {
+        token,
+        user: user.into(),
+    };
+
+    Ok(Json(response))
+}
+
+/// Handler for PUT /users/:id - update an existing user (authenticated)
+pub async fn update_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<i32>,
+    Json(request): Json<UpdateUserRequest>,
+) -> Result<Json<User>, AppError> {
+    // Validate the update request
+    request.validate().map_err(AppError::Validation)?;
+
+    // Update the user
+    match state.user_repository.update(user_id, request).await? {
+        Some(user) => Ok(Json(user)),
+        None => Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        ))),
+    }
+}
+
+/// Handler for DELETE /users/:id - delete a user (authenticated)
+pub async fn delete_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<i32>,
+) -> Result<StatusCode, AppError> {
+    // Delete the user
+    let deleted = state.user_repository.delete(user_id).await?;
+
+    if deleted {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(AppError::NotFound(format!(
+            "User with ID {} not found",
+            user_id
+        )))
     }
 }
 

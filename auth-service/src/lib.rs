@@ -52,6 +52,7 @@ pub mod keys;
 pub mod security;
 pub mod store;
 pub mod mfa;
+pub mod scim;
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
@@ -543,6 +544,7 @@ pub fn app(state: AppState) -> Router {
             "/mfa/totp/backup-codes/generate",
             post(crate::mfa::totp_generate_backup_codes),
         )
+        .merge(crate::scim::router().with_state(()))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

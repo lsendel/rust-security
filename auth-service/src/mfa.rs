@@ -7,6 +7,7 @@ use sha1::Sha1;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
+use redis;
 
 use crate::AppState;
 
@@ -47,6 +48,98 @@ struct TotpRecord {
 }
 
 static MFA_STORE: Lazy<RwLock<HashMap<String, TotpRecord>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+
+async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
+    let url = std::env::var("REDIS_URL").ok()?;
+    let client = redis::Client::open(url).ok()?;
+    (client.get_connection_manager().await).ok()
+}
+
+async fn persist_secret(user_id: &str, secret: &[u8]) {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("mfa:totp:{}:secret", user_id);
+        let _ = redis::cmd("SET")
+            .arg(&key)
+            .arg(BASE32.encode(secret))
+            .query_async::<String>(&mut conn)
+            .await
+            .ok();
+    }
+}
+
+#[allow(dead_code)]
+async fn load_secret(user_id: &str) -> Option<Vec<u8>> {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("mfa:totp:{}:secret", user_id);
+        if let Ok(val) = redis::cmd("GET")
+            .arg(&key)
+            .query_async::<String>(&mut conn)
+            .await
+        {
+            return BASE32.decode(val.as_bytes()).ok();
+        }
+    }
+    None
+}
+
+async fn set_verified(user_id: &str) {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("mfa:totp:{}:verified", user_id);
+        let _ = redis::cmd("SET")
+            .arg(&key)
+            .arg("1")
+            .query_async::<String>(&mut conn)
+            .await
+            .ok();
+    }
+}
+
+#[allow(dead_code)]
+async fn is_verified(user_id: &str) -> Option<bool> {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("mfa:totp:{}:verified", user_id);
+        if let Ok(v) = redis::cmd("GET")
+            .arg(&key)
+            .query_async::<String>(&mut conn)
+            .await
+        {
+            return Some(v == "1");
+        }
+    }
+    None
+}
+
+async fn persist_backup_codes(user_id: &str, codes: &[String]) {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("mfa:totp:{}:backup", user_id);
+        let _ = redis::cmd("DEL")
+            .arg(&key)
+            .query_async::<i64>(&mut conn)
+            .await
+            .ok();
+        let _ = redis::cmd("SADD")
+            .arg(&key)
+            .arg(codes)
+            .query_async::<i64>(&mut conn)
+            .await
+            .ok();
+    }
+}
+
+async fn consume_backup_code(user_id: &str, code: &str) -> bool {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("mfa:totp:{}:backup", user_id);
+        if let Ok(removed) = redis::cmd("SREM")
+            .arg(&key)
+            .arg(code)
+            .query_async::<i64>(&mut conn)
+            .await
+        {
+            return removed > 0;
+        }
+    }
+    false
+}
 
 fn now_unix() -> u64 {
     SystemTime::now()
@@ -101,16 +194,9 @@ pub async fn totp_register(State(_state): State<AppState>, Json(req): Json<TotpR
         urlencoding::encode(&issuer)
     );
 
+    persist_secret(&req.user_id, &secret).await;
     let mut store = MFA_STORE.write().await;
-    store.insert(
-        req.user_id,
-        TotpRecord {
-            secret,
-            verified: false,
-            backup_codes: HashSet::new(),
-        },
-    );
-    drop(store);
+    store.insert(req.user_id.clone(), TotpRecord { secret, verified: false, backup_codes: HashSet::new() });
 
     Json(TotpRegisterResponse {
         secret_base32: secret_b32,
@@ -119,6 +205,13 @@ pub async fn totp_register(State(_state): State<AppState>, Json(req): Json<TotpR
 }
 
 pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVerifyRequest>) -> Json<TotpVerifyResponse> {
+    // Check backup code in Redis first
+    if consume_backup_code(&req.user_id, &req.code).await {
+        set_verified(&req.user_id).await;
+        let mut w = MFA_STORE.write().await;
+        if let Some(rec_w) = w.get_mut(&req.user_id) { rec_w.backup_codes.remove(&req.code); rec_w.verified = true; }
+        return Json(TotpVerifyResponse { verified: true });
+    }
     let store = MFA_STORE.read().await;
     if let Some(rec) = store.get(&req.user_id) {
         // check backup code first
@@ -145,9 +238,8 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
             if expected == req.code {
                 drop(store);
                 let mut w = MFA_STORE.write().await;
-                if let Some(rec_w) = w.get_mut(&req.user_id) {
-                    rec_w.verified = true;
-                }
+                if let Some(rec_w) = w.get_mut(&req.user_id) { rec_w.verified = true; }
+                set_verified(&req.user_id).await;
                 return Json(TotpVerifyResponse { verified: true });
             }
         }
@@ -165,6 +257,7 @@ pub async fn totp_generate_backup_codes(State(_state): State<AppState>, Json(req
         let code: String = b.iter().map(|x| alphabet[(*x as usize) % alphabet.len()] as char).collect();
         codes.push(code);
     }
+    persist_backup_codes(&req.user_id, &codes).await;
     let mut w = MFA_STORE.write().await;
     let entry = w.entry(req.user_id).or_insert(TotpRecord { secret: vec![], verified: false, backup_codes: HashSet::new() });
     entry.backup_codes = codes.iter().cloned().collect();
