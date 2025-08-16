@@ -51,6 +51,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod keys;
 pub mod security;
 pub mod store;
+pub mod mfa;
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
@@ -536,6 +537,12 @@ pub fn app(state: AppState) -> Router {
         .route("/oauth/introspect", post(introspect))
         .route("/oauth/token", post(issue_token))
         .route("/oauth/revoke", post(revoke_token))
+        .route("/mfa/totp/register", post(crate::mfa::totp_register))
+        .route("/mfa/totp/verify", post(crate::mfa::totp_verify))
+        .route(
+            "/mfa/totp/backup-codes/generate",
+            post(crate::mfa::totp_generate_backup_codes),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

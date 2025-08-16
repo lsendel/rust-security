@@ -30,6 +30,9 @@ jsonwebtoken = "9"
 rsa = "0.9"
 chrono = { version = "0.4", features = ["serde"] }
 envy = "0.4"
+hmac = "0.12"
+sha1 = "0.10"
+data-encoding = "2.6"
 # TLS/HTTPS support
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 rcgen = "0.13"
@@ -40,6 +43,8 @@ rand = "0.8"
 once_cell = "1"
 base64 = "0.21"
 prometheus = "0.13"
+getrandom = "0.2"
+urlencoding = "2.1"
 
 [features]
 default = []
