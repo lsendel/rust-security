@@ -53,10 +53,10 @@ pub fn verify_code_challenge(code_verifier: &str, code_challenge: &str) -> bool 
     computed_challenge == code_challenge
 }
 
-/// PKCE challenge methods
+/// PKCE challenge methods - Only S256 is supported for security
+/// The "plain" method has been removed as it's vulnerable to downgrade attacks
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CodeChallengeMethod {
-    Plain,
     S256,
 }
 
@@ -65,21 +65,20 @@ impl std::str::FromStr for CodeChallengeMethod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "plain" => Ok(CodeChallengeMethod::Plain),
             "S256" => Ok(CodeChallengeMethod::S256),
-            _ => Err("Invalid code challenge method"),
+            "plain" => Err("Plain PKCE method is not supported for security reasons"),
+            _ => Err("Invalid code challenge method. Only S256 is supported"),
         }
     }
 }
 
-/// Validate PKCE parameters
+/// Validate PKCE parameters - Only S256 method is supported
 pub fn validate_pkce_params(
     code_verifier: &str,
     code_challenge: &str,
     method: CodeChallengeMethod,
 ) -> bool {
     match method {
-        CodeChallengeMethod::Plain => code_verifier == code_challenge,
         CodeChallengeMethod::S256 => verify_code_challenge(code_verifier, code_challenge),
     }
 }
@@ -129,8 +128,24 @@ pub fn verify_request_signature(
 
     let expected_signature = generate_request_signature(method, path, body, timestamp, secret)?;
 
-    // Use constant-time comparison to prevent timing attacks
-    Ok(signature == expected_signature)
+    // Constant-time comparison between provided and expected signatures
+    fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+        if a.len() != b.len() { return false; }
+        let mut diff: u8 = 0;
+        for i in 0..a.len() {
+            diff |= a[i] ^ b[i];
+        }
+        diff == 0
+    }
+
+    let provided_bytes = base64::engine::general_purpose::STANDARD
+        .decode(signature.as_bytes())
+        .map_err(|_| "Invalid signature encoding")?;
+    let expected_bytes = base64::engine::general_purpose::STANDARD
+        .decode(expected_signature.as_bytes())
+        .map_err(|_| "Internal signature encoding error")?;
+
+    Ok(constant_time_eq(&provided_bytes, &expected_bytes))
 }
 
 /// Middleware for request signature validation
@@ -167,8 +182,17 @@ pub async fn validate_request_signature(
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
 
     // Get signing secret from environment
-    let secret = std::env::var("REQUEST_SIGNING_SECRET")
-        .unwrap_or_else(|_| "default_signing_secret".to_string());
+    let secret = match std::env::var("REQUEST_SIGNING_SECRET") {
+        Ok(s) if !s.is_empty() => s,
+        _ => {
+            // Allow missing secret only in test mode
+            if std::env::var("TEST_MODE").ok().as_deref() == Some("1") {
+                String::from("test_secret")
+            } else {
+                return Err(axum::http::StatusCode::UNAUTHORIZED);
+            }
+        }
+    };
 
     // Read the actual request body
     let body_bytes = axum::body::to_bytes(body, usize::MAX)

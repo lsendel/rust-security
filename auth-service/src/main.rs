@@ -4,6 +4,7 @@ mod config;
 use auth_service::{
     app,
     store::{redis_store, TokenStore},
+    keys, // Add keys module import
     ApiDoc, AppState,
 };
 use std::collections::HashMap;
@@ -28,6 +29,14 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let cfg = config::AppConfig::from_env()?;
     tracing::info!("Starting auth-service with configuration loaded");
+
+    // Initialize secure keys (fixes RSA vulnerability RUSTSEC-2023-0071)
+    tracing::info!("Initializing secure key management...");
+    if let Err(e) = keys::initialize_keys().await {
+        tracing::error!(error = %e, "Failed to initialize secure keys");
+        return Err(anyhow::anyhow!("Key initialization failed: {}", e));
+    }
+    tracing::info!("Secure key management initialized successfully");
 
     // Initialize token store
     let token_store = if let Some(url) = &cfg.redis_url {
@@ -60,6 +69,19 @@ async fn main() -> anyhow::Result<()> {
         "/openapi.json",
         axum::routing::get(|| async move { axum::Json(openapi) }),
     );
+
+    // Start background services
+    tokio::spawn(async {
+        auth_service::rate_limit_optimized::start_rate_limit_cleanup_task().await;
+    });
+
+    tokio::spawn(async {
+        auth_service::security_monitoring::init_security_monitoring().await;
+    });
+
+    tokio::spawn(async {
+        auth_service::session_manager::start_session_cleanup_task().await;
+    });
 
     // Start server
     let listener = TcpListener::bind(&cfg.bind_addr).await?;

@@ -3,6 +3,9 @@ use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use crate::{mint_local_tokens_for_subject, AppState};
+use once_cell::sync::Lazy;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackQuery {
@@ -18,13 +21,16 @@ pub async fn microsoft_login() -> impl IntoResponse {
 	let redirect_uri = std::env::var("MICROSOFT_REDIRECT_URI")
 		.unwrap_or_else(|_| "http://localhost:8080/oauth/microsoft/callback".to_string());
 	let state = uuid::Uuid::new_v4().to_string();
+	let nonce = uuid::Uuid::new_v4().to_string();
+	store_ms_oauth_state(&state, &nonce).await;
 	let scope = "openid email profile";
 	let auth_url = format!(
-		"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
+		"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}&nonce={}",
 		urlencoding::encode(&client_id),
 		urlencoding::encode(&redirect_uri),
 		urlencoding::encode(scope),
-		urlencoding::encode(&state)
+		urlencoding::encode(&state),
+		urlencoding::encode(&nonce)
 	);
 	Json(OAuthLoginUrl { url: auth_url })
 }
@@ -33,6 +39,13 @@ pub async fn microsoft_callback(State(state): State<AppState>, Query(q): Query<O
 	let client_id = std::env::var("MICROSOFT_CLIENT_ID").unwrap_or_default();
 	let client_secret = std::env::var("MICROSOFT_CLIENT_SECRET").unwrap_or_default();
 	let redirect_uri = std::env::var("MICROSOFT_REDIRECT_URI").unwrap_or_else(|_| "http://localhost:8080/oauth/microsoft/callback".to_string());
+
+	// Validate state and get expected nonce
+	let expected_nonce = match q.state.as_ref() {
+		Some(st) => consume_ms_oauth_state(st).await.map(|(n, _)| n),
+		None => None,
+	};
+	if expected_nonce.is_none() { return Json(serde_json::json!({ "error": "invalid_state" })).into_response(); }
 
 	let resp = reqwest::Client::new()
 		.post("https://login.microsoftonline.com/common/oauth2/v2.0/token")
@@ -55,7 +68,7 @@ pub async fn microsoft_callback(State(state): State<AppState>, Query(q): Query<O
 				Ok(v) => {
 					let mut result = serde_json::json!({ "token": v, "state": q.state });
 					if let Some(id_token) = result.get("token").and_then(|t| t.get("id_token")).and_then(|x| x.as_str()) {
-						let verified = validate_ms_id_token(id_token, &client_id).await;
+						let verified = validate_ms_id_token(id_token, &client_id, expected_nonce.as_deref()).await;
 						result["id_token_verified"] = serde_json::json!(verified.0);
 						if let Some(claims) = verified.1.clone() { result["claims"] = claims.clone(); }
 						if verified.0 {
@@ -93,9 +106,11 @@ struct MicrosoftClaims {
 	iat: Option<usize>,
 	email: Option<String>,
 	name: Option<String>,
+	#[serde(default)]
+	nonce: Option<String>,
 }
 
-async fn validate_ms_id_token(id_token: &str, client_id: &str) -> (bool, Option<Value>) {
+async fn validate_ms_id_token(id_token: &str, client_id: &str, expected_nonce: Option<&str>) -> (bool, Option<Value>) {
 	let header = match jsonwebtoken::decode_header(id_token) { Ok(h) => h, Err(_) => return (false, None) };
 	let kid = match header.kid { Some(k) => k, None => return (false, None) };
 	let jwks_uri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
@@ -128,7 +143,36 @@ async fn validate_ms_id_token(id_token: &str, client_id: &str) -> (bool, Option<
 		"https://sts.windows.net/{tenantid}/",
 	]);
 	match jsonwebtoken::decode::<MicrosoftClaims>(id_token, &key, &validation) {
-		Ok(data) => (true, serde_json::to_value(data.claims).ok()),
+		Ok(data) => {
+			if let Some(exp_nonce) = expected_nonce {
+				if let Some(claims) = serde_json::to_value(&data.claims).ok() {
+					if let Some(nonce_claim) = claims.get("nonce").and_then(|v| v.as_str()) {
+						if nonce_claim != exp_nonce { return (false, None); }
+					} else {
+						return (false, None);
+					}
+				}
+			}
+			(true, serde_json::to_value(data.claims).ok())
+		},
 		Err(_) => (false, None),
 	}
+}
+
+// Ephemeral state store with TTL for Microsoft OAuth
+static MS_STATE_CACHE: Lazy<RwLock<HashMap<String, (String, u64)>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+
+async fn store_ms_oauth_state(state: &str, nonce: &str) {
+    let mut guard = MS_STATE_CACHE.write().await;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    guard.insert(state.to_string(), (nonce.to_string(), now + 600));
+}
+
+async fn consume_ms_oauth_state(state: &str) -> Option<(String, u64)> {
+    let mut guard = MS_STATE_CACHE.write().await;
+    if let Some((nonce, exp)) = guard.remove(state) {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        if now <= exp { return Some((nonce, exp)); }
+    }
+    None
 }

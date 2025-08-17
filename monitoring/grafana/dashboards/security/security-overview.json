@@ -1,0 +1,117 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Security Overview Dashboard",
+    "tags": ["security", "monitoring"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Security Alert Summary",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(ALERTS{severity=\"critical\",category=\"security\"})",
+            "legendFormat": "Critical",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(ALERTS{severity=\"high\",category=\"security\"})",
+            "legendFormat": "High",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Authentication Failures",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(auth_failures_total[5m])",
+            "legendFormat": "{{client_id}} - {{reason}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Rate Limit Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rate_limit_hits_total[5m])",
+            "legendFormat": "{{client_id}} - {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Token Operations",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(tokens_issued_total[5m])",
+            "legendFormat": "Issued - {{token_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(tokens_revoked_total[5m])",
+            "legendFormat": "Revoked - {{token_type}}",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Security Events by Type",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (event_type) (rate(security_events_total[1h]))",
+            "legendFormat": "{{event_type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Top Failed IPs",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (ip_address) (rate(auth_failures_total[1h])))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      }
+    ]
+  }
+}

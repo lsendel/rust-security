@@ -61,24 +61,21 @@ impl Database {
             }
         }
 
-        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+        let sqlite_pool = sqlx::sqlite::SqlitePoolOptions::new()
             .max_connections(config.max_connections)
             .connect(&normalized_url)
             .await
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
         // Run migrations (SQLite-compatible migrations only)
-        sqlx::migrate!("./migrations")
-            .run(&pool)
+        sqlx::migrate!("./migrations_sqlite")
+            .run(&sqlite_pool)
             .await
             .map_err(|e| DbError::Connection(format!("Migration failed: {}", e)))?;
 
-        let any_pool = AnyPool::connect(&normalized_url).await
-            .map_err(|e| DbError::Connection(e.to_string()))?;
-
         Ok(Self {
-            pool: Some(any_pool.clone()),
-            repository: Arc::new(SqliteUserRepository::new(any_pool)),
+            pool: None,
+            repository: Arc::new(SqliteUserRepository::new(sqlite_pool)),
         })
     }
 
@@ -95,7 +92,7 @@ impl Database {
                 .map_err(|e| DbError::Connection(e.to_string()))?;
         }
 
-        let pool = sqlx::postgres::PgPoolOptions::new()
+        let pg_pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(config.max_connections)
             .connect(&config.url)
             .await
@@ -103,16 +100,13 @@ impl Database {
 
         // Run migrations (PostgreSQL-specific migrations)
         sqlx::migrate!("./migrations_postgres")
-            .run(&pool)
+            .run(&pg_pool)
             .await
             .map_err(|e| DbError::Connection(format!("Migration failed: {}", e)))?;
 
-        let any_pool = AnyPool::connect(&config.url).await
-            .map_err(|e| DbError::Connection(e.to_string()))?;
-
         Ok(Self {
-            pool: Some(any_pool.clone()),
-            repository: Arc::new(PostgresUserRepository::new(any_pool)),
+            pool: None,
+            repository: Arc::new(PostgresUserRepository::new(pg_pool)),
         })
     }
 

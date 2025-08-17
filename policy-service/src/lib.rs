@@ -10,7 +10,7 @@ use cedar_policy::{Authorizer, Context, Entities, PolicySet, Request};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use utoipa::{OpenApi, ToSchema};
@@ -163,7 +163,11 @@ pub fn app(state: Arc<AppState>) -> Router {
             }
             layer
         }
-        _ => CorsLayer::new().allow_origin(Any),
+        _ => {
+            // Default to no origins unless explicitly configured
+            let layer = CorsLayer::new();
+            layer
+        },
     };
 
     let router = Router::new()

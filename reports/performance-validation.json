@@ -1,11 +1,11 @@
 {
-  "timestamp": "2025-08-16T14:58:28.6NZ",
+  "timestamp": "2025-08-17T10:07:05.6NZ",
   "test_type": "performance_validation",
   "test_summary": {
     "total_tests": 21,
-    "passed_tests": 8,
-    "failed_tests": 13,
-    "success_rate": 38
+    "passed_tests": 6,
+    "failed_tests": 15,
+    "success_rate": 28
   },
   "performance_categories": {
     "compilation": "tested",
@@ -36,7 +36,7 @@
 ,
     "Binary has debug symbols stripped (smaller size)": "PASS"
 ,
-    "Dependencies compile without warnings": "PASS"
+    "Dependencies compile without warnings": "FAIL"
 ,
     "Auth service load test startup failed": "FAIL"
 ,
@@ -56,7 +56,7 @@
 ,
     "Build process doesn't consume excessive disk space": "PASS"
 ,
-    "Source code size is reasonable": "PASS"
+    "Source code size is reasonable": "FAIL"
 ,
     "Test coverage doesn't impact performance severely": "PASS"
   },

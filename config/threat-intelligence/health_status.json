@@ -1,9 +1,9 @@
 {
-  "timestamp": "2025-08-16T14:14:57Z",
+  "timestamp": "2025-08-17T10:04:24Z",
   "status": "healthy",
   "issues": [],
   "metrics": {
-    "disk_usage_percent": 46,
+    "disk_usage_percent": 37,
     "feeds_count":        2,
     "rules_count":        3,
     "last_update": "1755353697"

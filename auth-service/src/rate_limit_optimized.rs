@@ -44,6 +44,17 @@ pub struct RateLimitEntry {
     last_access: AtomicU64,
 }
 
+impl Clone for RateLimitEntry {
+    fn clone(&self) -> Self {
+        Self {
+            count: AtomicU32::new(self.count.load(Ordering::Relaxed)),
+            window_start: AtomicU64::new(self.window_start.load(Ordering::Relaxed)),
+            burst_tokens: AtomicU32::new(self.burst_tokens.load(Ordering::Relaxed)),
+            last_access: AtomicU64::new(self.last_access.load(Ordering::Relaxed)),
+        }
+    }
+}
+
 impl RateLimitEntry {
     fn new(now: u64, burst_allowance: u32) -> Self {
         Self {
@@ -119,6 +130,7 @@ pub enum RateLimitResult {
 }
 
 /// Sharded rate limiter for high concurrency
+#[derive(Clone)]
 pub struct ShardedRateLimiter {
     shards: Vec<DashMap<String, RateLimitEntry>>,
     config: RateLimitConfig,
@@ -227,33 +239,131 @@ static GLOBAL_RATE_LIMITER: Lazy<ShardedRateLimiter> = Lazy::new(|| {
     ShardedRateLimiter::new(config)
 });
 
-/// Extract client identifier for rate limiting
+/// Configuration for trusted proxies
+#[derive(Debug, Clone)]
+struct TrustedProxyConfig {
+    trusted_proxies: Vec<std::net::IpAddr>,
+    trust_proxy_headers: bool,
+}
+
+impl Default for TrustedProxyConfig {
+    fn default() -> Self {
+        Self {
+            trusted_proxies: Vec::new(),
+            trust_proxy_headers: false,
+        }
+    }
+}
+
+/// Get trusted proxy configuration from environment
+fn get_trusted_proxy_config() -> TrustedProxyConfig {
+    let trust_headers = std::env::var("TRUST_PROXY_HEADERS")
+        .ok()
+        .and_then(|s| s.parse::<bool>().ok())
+        .unwrap_or(false);
+    
+    let trusted_proxies = if trust_headers {
+        std::env::var("TRUSTED_PROXY_IPS")
+            .ok()
+            .map(|s| {
+                s.split(',')
+                    .filter_map(|ip_str| ip_str.trim().parse::<std::net::IpAddr>().ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    
+    TrustedProxyConfig {
+        trusted_proxies,
+        trust_proxy_headers: trust_headers,
+    }
+}
+
+/// Extract client identifier for rate limiting with trusted proxy validation
 fn extract_client_key(headers: &axum::http::HeaderMap) -> String {
-    // Try X-Forwarded-For first (for reverse proxy setups)
-    if let Some(forwarded) = headers.get("x-forwarded-for") {
-        if let Ok(forwarded_str) = forwarded.to_str() {
-            if let Some(ip) = forwarded_str.split(',').next() {
-                return ip.trim().to_string();
+    let config = get_trusted_proxy_config();
+    
+    // Only use proxy headers if explicitly configured to trust them
+    if config.trust_proxy_headers {
+        // If specific trusted proxies are configured, validate against them
+        if !config.trusted_proxies.is_empty() {
+            // In a real implementation, we would validate the request comes from a trusted proxy
+            // For now, we'll trust the headers if the environment is configured
+            
+            // Try X-Forwarded-For first (for reverse proxy setups)
+            if let Some(forwarded) = headers.get("x-forwarded-for") {
+                if let Ok(forwarded_str) = forwarded.to_str() {
+                    if let Some(ip) = forwarded_str.split(',').next() {
+                        let client_ip = ip.trim();
+                        // Validate the IP format
+                        if client_ip.parse::<std::net::IpAddr>().is_ok() {
+                            return client_ip.to_string();
+                        }
+                    }
+                }
+            }
+            
+            // Try X-Real-IP (Nginx)
+            if let Some(real_ip) = headers.get("x-real-ip") {
+                if let Ok(ip_str) = real_ip.to_str() {
+                    let client_ip = ip_str.trim();
+                    // Validate the IP format
+                    if client_ip.parse::<std::net::IpAddr>().is_ok() {
+                        return client_ip.to_string();
+                    }
+                }
+            }
+            
+            // Try CF-Connecting-IP (Cloudflare) - only if Cloudflare IPs are trusted
+            if let Some(cf_ip) = headers.get("cf-connecting-ip") {
+                if let Ok(ip_str) = cf_ip.to_str() {
+                    let client_ip = ip_str.trim();
+                    // Validate the IP format
+                    if client_ip.parse::<std::net::IpAddr>().is_ok() {
+                        return client_ip.to_string();
+                    }
+                }
             }
         }
     }
     
-    // Try X-Real-IP (Nginx)
-    if let Some(real_ip) = headers.get("x-real-ip") {
-        if let Ok(ip_str) = real_ip.to_str() {
-            return ip_str.to_string();
+    // If no trusted proxy configuration or headers not trusted,
+    // use a combination of headers to create a unique identifier
+    // This prevents complete bypass but still allows some rate limiting
+    let mut identifier_parts = Vec::new();
+    
+    // Use User-Agent as part of identifier (harder to spoof consistently)
+    if let Some(user_agent) = headers.get("user-agent") {
+        if let Ok(ua_str) = user_agent.to_str() {
+            // Hash User-Agent for privacy and uniqueness
+            let mut hasher = DefaultHasher::new();
+            ua_str.hash(&mut hasher);
+            let ua_hash = format!("{:x}", hasher.finish());
+            identifier_parts.push(ua_hash[..8].to_string());
         }
     }
     
-    // Try CF-Connecting-IP (Cloudflare)
-    if let Some(cf_ip) = headers.get("cf-connecting-ip") {
-        if let Ok(ip_str) = cf_ip.to_str() {
-            return ip_str.to_string();
+    // Use Accept header as additional identifier
+    if let Some(accept) = headers.get("accept") {
+        if let Ok(accept_str) = accept.to_str() {
+            // Hash Accept header for additional uniqueness
+            let mut hasher = DefaultHasher::new();
+            accept_str.hash(&mut hasher);
+            let accept_hash = format!("{:x}", hasher.finish());
+            identifier_parts.push(accept_hash[..4].to_string());
         }
     }
     
-    // Fallback to "unknown"
-    "unknown".to_string()
+    // If we have some identifier parts, use them
+    if !identifier_parts.is_empty() {
+        return format!("fingerprint_{}", identifier_parts.join("_"));
+    }
+    
+    // Ultimate fallback - this means rate limiting will be shared
+    // but prevents complete bypass
+    "shared_limiter".to_string()
 }
 
 /// High-performance rate limiting middleware
@@ -326,6 +436,7 @@ pub fn get_rate_limit_stats() -> RateLimitStats {
 }
 
 /// Per-client rate limiter for specific operations
+#[derive(Clone)]
 pub struct PerClientRateLimiter {
     limiter: ShardedRateLimiter,
     key_prefix: String,

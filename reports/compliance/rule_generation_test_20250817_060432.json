@@ -1,0 +1,46 @@
+{
+  "total_rules": 8,
+  "prometheus_rules": 3,
+  "fluentd_filters": 3,
+  "sigma_rules": 2,
+  "coverage_analysis": {
+    "malicious_ips_covered": 3,
+    "malicious_domains_covered": 5,
+    "total_indicators": 62280,
+    "coverage_percentage": 0.012845215157353885
+  },
+  "test_scenarios": [
+    {
+      "name": "Malicious IP Request",
+      "scenario": "Request from known malicious IP",
+      "covered": true,
+      "rules_triggered": [
+        "MaliciousIPDetected"
+      ]
+    },
+    {
+      "name": "High Frequency Attack",
+      "scenario": "Rapid requests indicating bot activity",
+      "covered": true,
+      "rules_triggered": [
+        "HighFrequencyRequests"
+      ]
+    },
+    {
+      "name": "Brute Force Detection",
+      "scenario": "Repeated authentication failures",
+      "covered": true,
+      "rules_triggered": [
+        "RepeatedAuthenticationFailures"
+      ]
+    },
+    {
+      "name": "Malicious Domain Access",
+      "scenario": "Request to known malicious domain",
+      "covered": true,
+      "rules_triggered": [
+        "FluentdDomainFilter"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 use axum::{extract::Query, response::IntoResponse, Json};
 use crate::{mint_local_tokens_for_subject, AppState};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,11 +21,27 @@ pub async fn google_login() -> impl IntoResponse {
     let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
     let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").unwrap_or_else(|_| "http://localhost:8080/oauth/google/callback".to_string());
     let state = uuid::Uuid::new_v4().to_string();
+    let nonce = uuid::Uuid::new_v4().to_string();
+    // Store state->(nonce, timestamp) for CSRF and replay protection
+    store_oauth_state(&state, &nonce).await;
     let scope = "openid email profile";
     let auth_url = format!(
-        "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
-        urlencoding::encode(&client_id), urlencoding::encode(&redirect_uri), urlencoding::encode(scope), urlencoding::encode(&state)
+        "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}&nonce={}",
+        urlencoding::encode(&client_id), urlencoding::encode(&redirect_uri), urlencoding::encode(scope), urlencoding::encode(&state), urlencoding::encode(&nonce)
     );
+
+    // Log OAuth initiation
+    SecurityLogger::log_event(&SecurityEvent::new(
+        SecurityEventType::AuthenticationAttempt,
+        SecuritySeverity::Low,
+        "auth-service".to_string(),
+        "Google OAuth login initiated".to_string(),
+    )
+    .with_action("oauth_login_initiate".to_string())
+    .with_detail("provider".to_string(), "google")
+    .with_detail("client_id".to_string(), client_id.clone())
+    .with_detail("scope".to_string(), scope));
+
     Json(OAuthLoginUrl { url: auth_url })
 }
 
@@ -32,6 +49,33 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
     let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
     let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
     let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").unwrap_or_else(|_| "http://localhost:8080/oauth/google/callback".to_string());
+
+    // Validate state parameter
+    let (valid_state, expected_nonce) = match q.state.as_ref() {
+        Some(st) => match consume_oauth_state(st).await {
+            Some((nonce, _ts)) => (true, Some(nonce)),
+            None => (false, None),
+        },
+        None => (false, None),
+    };
+    if !valid_state {
+        return Json(serde_json::json!({
+            "error": "invalid_state",
+            "error_description": "Missing or unknown state",
+        })).into_response();
+    }
+
+    // Log OAuth callback attempt
+    SecurityLogger::log_event(&SecurityEvent::new(
+        SecurityEventType::AuthenticationAttempt,
+        SecuritySeverity::Low,
+        "auth-service".to_string(),
+        "Google OAuth callback received".to_string(),
+    )
+    .with_action("oauth_callback".to_string())
+    .with_detail("provider".to_string(), "google")
+    .with_detail("has_code".to_string(), !q.code.is_empty())
+    .with_detail("has_state".to_string(), q.state.is_some()));
 
     let resp = reqwest::Client::new()
         .post("https://oauth2.googleapis.com/token")
@@ -48,6 +92,18 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
     match resp {
         Ok(rsp) => {
             if let Err(e) = rsp.error_for_status_ref() {
+                // Log token exchange failure
+                SecurityLogger::log_event(&SecurityEvent::new(
+                    SecurityEventType::AuthenticationFailure,
+                    SecuritySeverity::Medium,
+                    "auth-service".to_string(),
+                    "Google OAuth token exchange failed".to_string(),
+                )
+                .with_action("oauth_token_exchange".to_string())
+                .with_detail("provider".to_string(), "google")
+                .with_detail("error".to_string(), e.to_string())
+                .with_outcome("failure".to_string()));
+
                 return Json(serde_json::json!({ "error": e.to_string() })).into_response();
             }
             match rsp.json::<Value>().await {
@@ -55,7 +111,7 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                     // Validate id_token if present
                     let mut result = serde_json::json!({ "token": v, "state": q.state });
                     if let Some(id_token) = result.get("token").and_then(|t| t.get("id_token")).and_then(|x| x.as_str()) {
-                        let verified = validate_google_id_token(id_token, &client_id).await;
+                        let verified = validate_google_id_token(id_token, &client_id, expected_nonce.as_deref()).await;
                         result["id_token_verified"] = serde_json::json!(verified.0);
                         if let Some(claims) = verified.1.clone() { result["claims"] = claims.clone(); }
                         if verified.0 {
@@ -64,11 +120,36 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                                 .get("claims")
                                 .and_then(|c| c.get("sub"))
                                 .and_then(|s| s.as_str())
-                                .unwrap_or("unknown");
+                                .unwrap_or("unknown")
+                                .to_string();
                             let scope = Some("openid profile email".to_string());
-                            if let Ok(local) = mint_local_tokens_for_subject(&state, sub.to_string(), scope).await {
+                            if let Ok(local) = mint_local_tokens_for_subject(&state, sub.clone(), scope).await {
                                 result["local_tokens"] = serde_json::to_value(local).unwrap_or_else(|_| serde_json::json!({}));
+
+                                // Log successful authentication
+                                SecurityLogger::log_event(&SecurityEvent::new(
+                                    SecurityEventType::AuthenticationSuccess,
+                                    SecuritySeverity::Low,
+                                    "auth-service".to_string(),
+                                    "Google OAuth authentication successful".to_string(),
+                                )
+                                .with_action("oauth_authentication".to_string())
+                                .with_detail("provider".to_string(), "google")
+                                .with_user_id(sub)
+                                .with_detail("id_token_verified".to_string(), verified.0)
+                                .with_outcome("success".to_string()));
                             }
+                        } else {
+                            // Log ID token verification failure
+                            SecurityLogger::log_event(&SecurityEvent::new(
+                                SecurityEventType::AuthenticationFailure,
+                                SecuritySeverity::High,
+                                "auth-service".to_string(),
+                                "Google OAuth ID token verification failed".to_string(),
+                            )
+                            .with_action("oauth_id_token_verification".to_string())
+                            .with_detail("provider".to_string(), "google")
+                            .with_outcome("failure".to_string()));
                         }
                     }
                     Json(result).into_response()
@@ -87,6 +168,25 @@ struct Jwk { kid: String, n: String, e: String, kty: String, alg: Option<String>
 type JwksMap = HashMap<String, (String, String)>;
 #[allow(clippy::type_complexity)]
 static GOOGLE_JWKS_CACHE: Lazy<RwLock<(u64, JwksMap)>> = Lazy::new(|| RwLock::new((0, HashMap::new())));
+
+// Ephemeral state store with TTL for Google OAuth
+static GOOGLE_STATE_CACHE: Lazy<RwLock<HashMap<String, (String, u64)>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+
+async fn store_oauth_state(state: &str, nonce: &str) {
+    let mut guard = GOOGLE_STATE_CACHE.write().await;
+    let now = current_unix();
+    guard.insert(state.to_string(), (nonce.to_string(), now + 600)); // 10 minutes TTL
+}
+
+async fn consume_oauth_state(state: &str) -> Option<(String, u64)> {
+    let mut guard = GOOGLE_STATE_CACHE.write().await;
+    if let Some((nonce, exp)) = guard.remove(state) {
+        if current_unix() <= exp {
+            return Some((nonce, exp));
+        }
+    }
+    None
+}
 
 async fn fetch_google_jwks() -> HashMap<String, (String, String)> {
     let now = current_unix();
@@ -143,9 +243,11 @@ struct GoogleClaims {
     email_verified: Option<bool>,
     name: Option<String>,
     picture: Option<String>,
+    #[serde(default)]
+    nonce: Option<String>,
 }
 
-async fn validate_google_id_token(id_token: &str, client_id: &str) -> (bool, Option<Value>) {
+async fn validate_google_id_token(id_token: &str, client_id: &str, expected_nonce: Option<&str>) -> (bool, Option<Value>) {
     let header = match jsonwebtoken::decode_header(id_token) { Ok(h) => h, Err(_) => return (false, None) };
     let kid = match header.kid { Some(k) => k, None => return (false, None) };
     let jwks = fetch_google_jwks().await;
@@ -155,7 +257,19 @@ async fn validate_google_id_token(id_token: &str, client_id: &str) -> (bool, Opt
     validation.set_audience(&[client_id]);
     validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
     match jsonwebtoken::decode::<GoogleClaims>(id_token, &key, &validation) {
-        Ok(data) => (true, serde_json::to_value(data.claims).ok()),
+        Ok(data) => {
+            // If a nonce was provided, verify claim matches
+            if let Some(exp_nonce) = expected_nonce {
+                if let Some(claims) = serde_json::to_value(&data.claims).ok() {
+                    if let Some(nonce_claim) = claims.get("nonce").and_then(|v| v.as_str()) {
+                        if nonce_claim != exp_nonce { return (false, None); }
+                    } else {
+                        return (false, None);
+                    }
+                }
+            }
+            (true, serde_json::to_value(data.claims).ok())
+        },
         Err(_) => (false, None),
     }
 }

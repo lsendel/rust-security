@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Form, Query, State},
+    extract::{Form, Query, State, Path},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use base64::Engine as _;
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use url::Url;
@@ -65,18 +65,35 @@ async fn metrics_handler() -> Response {
 }
 
 pub mod keys;
+pub mod key_rotation;
+pub mod rate_limit_optimized;
 pub mod security;
+pub mod security_headers;
 pub mod security_metrics;
+pub mod security_monitoring;
 pub mod security_logging;
+pub mod session_manager;
 pub mod store;
 pub mod mfa;
+pub mod webauthn;
+pub mod otp_provider;
 pub mod scim;
 pub mod oidc_google;
 pub mod oidc_microsoft;
 pub mod oidc_github;
 pub mod circuit_breaker;
+pub mod redirect_validation;
+pub mod secure_random;
+pub mod client_auth;
+pub mod per_ip_rate_limit;
+pub mod scim_rbac;
+pub mod auth_failure_logging;
+
+// Import the new comprehensive MFA system
+// Deprecated re-exports removed (modules not present)
 
 use security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use security_monitoring::{SECURITY_MONITOR, MonitoringConfig};
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
@@ -99,7 +116,7 @@ pub async fn oauth_metadata() -> Json<serde_json::Value> {
         "userinfo_endpoint": format!("{}/oauth/userinfo", base),
         "response_types_supported": ["code"],
         "scopes_supported": ["openid", "profile", "email"],
-        "code_challenge_methods_supported": ["S256", "plain"],
+        "code_challenge_methods_supported": ["S256"],
     }))
 }
 
@@ -113,20 +130,34 @@ pub async fn jwks() -> Json<serde_json::Value> {
     Json(keys::jwks_document().await)
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AuthError {
+    #[error("Missing client ID")]
     MissingClientId,
+    #[error("Missing client secret")]
     MissingClientSecret,
+    #[error("Invalid client credentials")]
     InvalidClientCredentials,
+    #[error("Missing refresh token")]
     MissingRefreshToken,
+    #[error("Invalid refresh token")]
     InvalidRefreshToken,
+    #[error("Invalid scope: {0}")]
     InvalidScope(String),
+    #[error("Invalid token: {0}")]
     InvalidToken(String),
+    #[error("Unsupported grant type: {0}")]
     UnsupportedGrantType(String),
+    #[error("Unsupported response type: {0}")]
     UnsupportedResponseType(String),
+    #[error("Unauthorized client: {0}")]
     UnauthorizedClient(String),
+    #[error("Invalid request: {0}")]
     InvalidRequest(String),
+    #[error("Internal error: {0}")]
     InternalError(anyhow::Error),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
 }
 
 impl IntoResponse for AuthError {
@@ -176,6 +207,10 @@ impl IntoResponse for AuthError {
                     "Internal server error".to_string(),
                 )
             }
+            AuthError::Forbidden(msg) => (
+                StatusCode::FORBIDDEN,
+                format!("forbidden: {}", msg),
+            ),
         };
 
         (status, message).into_response()
@@ -198,6 +233,424 @@ impl From<serde_json::Error> for AuthError {
     fn from(err: serde_json::Error) -> Self {
         AuthError::InternalError(err.into())
     }
+}
+
+// Enhanced MFA v2 endpoints using the comprehensive system
+// Legacy MFA v2 scaffolding endpoints disabled (implementation not present in this repo)
+
+// Security monitoring endpoints implementation
+#[utoipa::path(
+    get,
+    path = "/admin/security/alerts",
+    responses((status = 200, description = "List of security alerts"))
+)]
+pub async fn get_security_alerts(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    let limit = params.get("limit")
+        .and_then(|l| l.parse::<usize>().ok());
+
+    let active_only = params.get("active_only")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    let alerts = if active_only {
+        SECURITY_MONITOR.get_active_alerts().await
+    } else {
+        SECURITY_MONITOR.get_alert_history(limit).await
+    };
+
+    Ok(Json(serde_json::json!({
+        "alerts": alerts,
+        "total": alerts.len()
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/admin/security/alerts/{id}/resolve",
+    responses((status = 200, description = "Alert resolved successfully"))
+)]
+pub async fn resolve_security_alert(
+    Path(alert_id): axum::extract::Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    let resolution_notes = body.get("resolution_notes")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let resolved = SECURITY_MONITOR.resolve_alert(&alert_id, resolution_notes).await;
+
+    if resolved {
+        Ok(Json(serde_json::json!({
+            "success": true,
+            "message": "Alert resolved successfully"
+        })))
+    } else {
+        Err(AuthError::InvalidRequest("Alert not found".to_string()))
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/admin/security/config",
+    responses((status = 200, description = "Security monitoring configuration"))
+)]
+pub async fn get_security_config() -> Result<Json<MonitoringConfig>, AuthError> {
+    let config = SECURITY_MONITOR.get_config().await;
+    Ok(Json(config))
+}
+
+#[utoipa::path(
+    post,
+    path = "/admin/security/config",
+    request_body = MonitoringConfig,
+    responses((status = 200, description = "Configuration updated successfully"))
+)]
+pub async fn update_security_config(
+    Json(config): Json<MonitoringConfig>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    SECURITY_MONITOR.update_config(config).await;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": "Security monitoring configuration updated"
+    })))
+}
+
+/// Admin endpoint to get rate limiting statistics
+#[utoipa::path(
+    get,
+    path = "/admin/rate-limit/stats",
+    responses((status = 200, description = "Rate limiting statistics"))
+)]
+pub async fn get_rate_limit_stats_endpoint() -> Json<serde_json::Value> {
+    let stats = crate::rate_limit_optimized::get_rate_limit_stats();
+    Json(serde_json::json!({
+        "total_entries": stats.total_entries,
+        "shard_count": stats.shard_count,
+        "shard_sizes": stats.shard_sizes,
+        "config": {
+            "requests_per_window": stats.config.requests_per_window,
+            "window_duration_secs": stats.config.window_duration_secs,
+            "burst_allowance": stats.config.burst_allowance,
+            "cleanup_interval_secs": stats.config.cleanup_interval_secs
+        }
+    }))
+}
+
+// Session management endpoint handlers
+use crate::session_manager::{SESSION_MANAGER, Session};
+use crate::redirect_validation::RedirectUriValidator;
+
+// Initialize redirect URI validator
+static REDIRECT_VALIDATOR: once_cell::sync::Lazy<std::sync::Mutex<RedirectUriValidator>> =
+    once_cell::sync::Lazy::new(|| {
+        let mut validator = RedirectUriValidator::default();
+
+        // Register additional clients from environment or config
+        if let Ok(client_uris) = std::env::var("CLIENT_REDIRECT_URIS") {
+            for entry in client_uris.split(';') {
+                if let Some((client_id, uris)) = entry.split_once(':') {
+                    let uri_list: Vec<String> = uris.split(',').map(|s| s.to_string()).collect();
+                    let _ = validator.register_client_uris(client_id, uri_list);
+                }
+            }
+        }
+
+        std::sync::Mutex::new(validator)
+    });
+
+/// Helper function to extract user ID from bearer token
+async fn extract_user_from_token(
+    headers: &axum::http::HeaderMap,
+    state: &AppState,
+) -> Result<String, AuthError> {
+    // Extract bearer token
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = auth.strip_prefix("Bearer ")
+        .ok_or_else(|| AuthError::InvalidToken("Missing bearer token".to_string()))?;
+
+    if token.is_empty() {
+        return Err(AuthError::InvalidToken("Empty bearer token".to_string()));
+    }
+
+    // Get token record and validate
+    let record = state.token_store.get_record(token).await?;
+
+    if !record.active {
+        return Err(AuthError::InvalidToken("Token is not active".to_string()));
+    }
+
+    // Check token expiration
+    if let Some(exp) = record.exp {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| AuthError::InternalError(anyhow::anyhow!("System time error")))?
+            .as_secs() as i64;
+
+        if now > exp {
+            return Err(AuthError::InvalidToken("Token has expired".to_string()));
+        }
+    }
+
+    // Enforce token binding if present
+    if let Some(binding) = &record.token_binding {
+        let (client_ip, user_agent) = crate::security::extract_client_info(headers);
+        if !crate::security::validate_token_binding(binding, &client_ip, &user_agent) {
+            return Err(AuthError::InvalidToken("Token binding mismatch".to_string()));
+        }
+    }
+
+    // Extract user ID from token subject
+    record.sub.ok_or_else(|| AuthError::InvalidToken("Token has no subject".to_string()))
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct CreateSessionRequest {
+    pub user_id: String,
+    pub client_id: Option<String>,
+    pub duration: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct CreateSessionResponse {
+    pub session_id: String,
+    pub expires_at: u64,
+    pub csrf_token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RefreshSessionRequest {
+    pub duration: Option<u64>,
+}
+
+/// Create a new session
+#[utoipa::path(
+    post,
+    path = "/session/create",
+    request_body = CreateSessionRequest,
+    responses((status = 200, description = "Session created", body = CreateSessionResponse))
+)]
+pub async fn create_session_endpoint(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Json(req): Json<CreateSessionRequest>,
+) -> Result<Json<CreateSessionResponse>, AuthError> {
+    // Derive user_id from bearer token and ignore provided user_id for security
+    let derived_user_id = extract_user_from_token(&headers, &state).await?;
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let session = SESSION_MANAGER.create_session(
+        derived_user_id,
+        req.client_id,
+        ip_address,
+        user_agent,
+        req.duration,
+    ).await.map_err(|e| AuthError::InternalError(anyhow::anyhow!(e)))?;
+
+    Ok(Json(CreateSessionResponse {
+        session_id: session.id,
+        expires_at: session.expires_at,
+        csrf_token: session.csrf_token,
+    }))
+}
+
+/// Get session information
+#[utoipa::path(
+    get,
+    path = "/session/{id}",
+    responses((status = 200, description = "Session information", body = Session), (status = 404))
+)]
+pub async fn get_session_endpoint(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<Session>, AuthError> {
+    // Extract and validate the requesting user
+    let requesting_user_id = extract_user_from_token(&headers, &state).await?;
+
+    match SESSION_MANAGER.get_session(&session_id).await {
+        Ok(Some(session)) => {
+            // Check session ownership
+            if session.user_id != requesting_user_id {
+                // Log unauthorized access attempt
+                SecurityLogger::log_event(&SecurityEvent::new(
+                    SecurityEventType::UnauthorizedAccess,
+                    SecuritySeverity::High,
+                    "auth-service".to_string(),
+                    "Unauthorized session access attempt".to_string(),
+                )
+                .with_user_id(requesting_user_id)
+                .with_session_id(session_id)
+                .with_detail("target_user".to_string(), session.user_id.clone())
+                .with_outcome("blocked".to_string()));
+
+                return Err(AuthError::UnauthorizedClient("Access denied".to_string()));
+            }
+
+            if session.is_expired(None) {
+                Err(AuthError::InvalidToken("Session expired".to_string()))
+            } else {
+                Ok(Json(session))
+            }
+        }
+        Ok(None) => Err(AuthError::InvalidToken("Session not found".to_string())),
+        Err(e) => Err(AuthError::InternalError(anyhow::anyhow!(e))),
+    }
+}
+
+/// Delete a session
+#[utoipa::path(
+    delete,
+    path = "/session/{id}",
+    responses((status = 200, description = "Session deleted"))
+)]
+pub async fn delete_session_endpoint(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    // Extract and validate the requesting user
+    let requesting_user_id = extract_user_from_token(&headers, &state).await?;
+
+    // First, get the session to check ownership
+    match SESSION_MANAGER.get_session(&session_id).await {
+        Ok(Some(session)) => {
+            // Check session ownership
+            if session.user_id != requesting_user_id {
+                // Log unauthorized access attempt
+                SecurityLogger::log_event(&SecurityEvent::new(
+                    SecurityEventType::UnauthorizedAccess,
+                    SecuritySeverity::High,
+                    "auth-service".to_string(),
+                    "Unauthorized session deletion attempt".to_string(),
+                )
+                .with_user_id(requesting_user_id)
+                .with_session_id(session_id.clone())
+                .with_detail("target_user".to_string(), session.user_id.clone())
+                .with_outcome("blocked".to_string()));
+
+                return Err(AuthError::UnauthorizedClient("Access denied".to_string()));
+            }
+
+            // User owns the session, proceed with deletion
+            SESSION_MANAGER.delete_session(&session_id).await
+                .map_err(|e| AuthError::InternalError(anyhow::anyhow!(e)))?;
+
+            // Log successful session deletion
+            SecurityLogger::log_event(&SecurityEvent::new(
+                SecurityEventType::SessionEvent,
+                SecuritySeverity::Low,
+                "auth-service".to_string(),
+                "Session deleted successfully".to_string(),
+            )
+            .with_user_id(requesting_user_id)
+            .with_session_id(session_id)
+            .with_outcome("success".to_string()));
+
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "message": "Session deleted"
+            })))
+        }
+        Ok(None) => Err(AuthError::InvalidToken("Session not found".to_string())),
+        Err(e) => Err(AuthError::InternalError(anyhow::anyhow!(e))),
+    }
+}
+
+/// Refresh a session
+#[utoipa::path(
+    post,
+    path = "/session/{id}/refresh",
+    request_body = RefreshSessionRequest,
+    responses((status = 200, description = "Session refreshed", body = Session), (status = 404))
+)]
+pub async fn refresh_session_endpoint(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(req): Json<RefreshSessionRequest>,
+) -> Result<Json<Session>, AuthError> {
+    // Extract and validate the requesting user
+    let requesting_user_id = extract_user_from_token(&headers, &state).await?;
+
+    // First, get the session to check ownership
+    match SESSION_MANAGER.get_session(&session_id).await {
+        Ok(Some(session)) => {
+            // Check session ownership
+            if session.user_id != requesting_user_id {
+                // Log unauthorized access attempt
+                SecurityLogger::log_event(&SecurityEvent::new(
+                    SecurityEventType::UnauthorizedAccess,
+                    SecuritySeverity::High,
+                    "auth-service".to_string(),
+                    "Unauthorized session refresh attempt".to_string(),
+                )
+                .with_user_id(requesting_user_id)
+                .with_session_id(session_id.clone())
+                .with_detail("target_user".to_string(), session.user_id.clone())
+                .with_outcome("blocked".to_string()));
+
+                return Err(AuthError::UnauthorizedClient("Access denied".to_string()));
+            }
+
+            // User owns the session, proceed with refresh
+            match SESSION_MANAGER.refresh_session(&session_id, req.duration).await {
+                Ok(Some(refreshed_session)) => {
+                    // Log successful session refresh
+                    SecurityLogger::log_event(&SecurityEvent::new(
+                        SecurityEventType::SessionEvent,
+                        SecuritySeverity::Low,
+                        "auth-service".to_string(),
+                        "Session refreshed successfully".to_string(),
+                    )
+                    .with_user_id(requesting_user_id)
+                    .with_session_id(session_id)
+                    .with_outcome("success".to_string()));
+
+                    Ok(Json(refreshed_session))
+                }
+                Ok(None) => Err(AuthError::InvalidToken("Session not found after refresh".to_string())),
+                Err(e) => Err(AuthError::InternalError(anyhow::anyhow!(e))),
+            }
+        }
+        Ok(None) => Err(AuthError::InvalidToken("Session not found".to_string())),
+        Err(e) => Err(AuthError::InternalError(anyhow::anyhow!(e))),
+    }
+}
+
+/// Invalidate all sessions for a user
+#[utoipa::path(
+    post,
+    path = "/session/invalidate-user/{user_id}",
+    responses((status = 200, description = "User sessions invalidated"))
+)]
+pub async fn invalidate_user_sessions_endpoint(
+    Path(user_id): Path<String>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    let count = SESSION_MANAGER.invalidate_user_sessions(&user_id).await
+        .map_err(|e| AuthError::InternalError(anyhow::anyhow!(e)))?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Invalidated {} sessions", count),
+        "invalidated_count": count
+    })))
 }
 
 #[derive(Clone)]
@@ -257,6 +710,10 @@ pub struct AuthorizationCheckRequest {
     pub resource: serde_json::Value,
     #[serde(default)]
     pub context: Option<serde_json::Value>,
+    #[serde(default)]
+    pub mfa_required: Option<bool>,
+    #[serde(default)]
+    pub mfa_verified: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -318,17 +775,34 @@ pub async fn authorize_check(
     });
 
     // Context: merge provided context or default empty object
-    let context = req.context.unwrap_or_else(|| serde_json::json!({}));
+    let mut context = req.context.unwrap_or_else(|| serde_json::json!({}));
+    // Surface mfa flags for policy step-up decisions
+    if let Some(required) = req.mfa_required { context["mfa_required"] = serde_json::json!(required); }
+    if let Some(verified) = req.mfa_verified {
+        context["mfa_verified"] = serde_json::json!(verified);
+    } else {
+        // If not provided, attempt to resolve from token store (ephemeral session flag)
+        let auth = headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        let token = auth.strip_prefix("Bearer ").unwrap_or("");
+        if !token.is_empty() {
+            if let Ok(flag) = state.token_store.get_mfa_verified(token).await {
+                context["mfa_verified"] = serde_json::json!(flag);
+            }
+        }
+    }
 
     // Build request to policy-service
-    let _request_id = headers
+    let request_id = headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     let payload = PolicyAuthorizeRequest {
-        request_id: _request_id,
+        request_id: request_id,
         principal,
         action: req.action,
         resource: req.resource,
@@ -395,6 +869,23 @@ pub async fn introspect(
     State(state): State<AppState>,
     Json(body): Json<IntrospectRequest>,
 ) -> Result<Json<IntrospectResponse>, AuthError> {
+    // Require client authentication via HTTP Basic
+    let (cid_opt, csec_opt) = if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+        let header_val = auth_header.to_str().unwrap_or("");
+        if let Some(b64) = header_val.strip_prefix("Basic ") {
+            if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                if let Ok(pair) = std::str::from_utf8(&decoded) {
+                    let mut parts = pair.splitn(2, ':');
+                    (parts.next().map(|s| s.to_string()), parts.next().map(|s| s.to_string()))
+                } else { (None, None) }
+            } else { (None, None) }
+        } else { (None, None) }
+    } else { (None, None) };
+    let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
+    let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
+    if state.client_credentials.get(&client_id) != Some(&client_secret) {
+        return Err(AuthError::InvalidClientCredentials);
+    }
     // Extract client information for logging
     let ip_address = headers
         .get("x-forwarded-for")
@@ -496,16 +987,53 @@ pub async fn oauth_authorize(
         return Err(AuthError::UnsupportedResponseType(req.response_type));
     }
 
-    // Validate client_id
-    if !state.client_credentials.contains_key(&req.client_id) {
+    // Validate client_id and check if active
+    if !crate::client_auth::is_client_active(&req.client_id) {
         return Err(AuthError::UnauthorizedClient(req.client_id));
+    }
+
+    // CRITICAL SECURITY FIX: Validate redirect URI
+    if let Err(validation_error) = REDIRECT_VALIDATOR.lock().unwrap()
+        .validate_redirect_uri(&req.client_id, &req.redirect_uri) {
+
+        // Log security violation
+        SecurityLogger::log_event(&SecurityEvent::new(
+            SecurityEventType::SecurityViolation,
+            SecuritySeverity::Critical,
+            "auth-service".to_string(),
+            "Invalid redirect URI attempted".to_string(),
+        )
+        .with_action("oauth_authorize".to_string())
+        .with_detail("client_id".to_string(), req.client_id.clone())
+        .with_detail("attempted_redirect_uri".to_string(), req.redirect_uri.clone())
+        .with_detail("ip_address".to_string(), ip_address.clone())
+        .with_outcome("blocked".to_string()));
+
+        return Err(validation_error);
     }
 
     // Validate PKCE parameters if present
     if let Some(challenge) = &req.code_challenge {
         let method = req.code_challenge_method.as_deref().unwrap_or("S256");
-        if method != "S256" && method != "plain" {
-            return Err(AuthError::InvalidRequest("Invalid code_challenge_method".to_string()));
+        if method != "S256" {
+            if method == "plain" {
+                // Log potential downgrade attack attempt
+                SecurityLogger::log_event(&SecurityEvent::new(
+                    SecurityEventType::SecurityViolation,
+                    SecuritySeverity::High,
+                    "auth-service".to_string(),
+                    "PKCE downgrade attack attempt detected".to_string(),
+                )
+                .with_action("oauth_authorize".to_string())
+                .with_detail("client_id".to_string(), req.client_id.clone())
+                .with_detail("attack_type".to_string(), "pkce_downgrade")
+                .with_detail("requested_method".to_string(), method)
+                .with_outcome("blocked".to_string()));
+
+                return Err(AuthError::InvalidRequest("Plain PKCE method is not supported for security reasons".to_string()));
+            } else {
+                return Err(AuthError::InvalidRequest("Invalid code_challenge_method. Only S256 is supported".to_string()));
+            }
         }
 
         // Validate challenge format
@@ -594,7 +1122,8 @@ pub async fn oauth_authorize(
 
 /// Generate a secure authorization code
 fn generate_secure_code() -> String {
-    format!("ac_{}", uuid::Uuid::new_v4())
+    crate::secure_random::generate_secure_authorization_code()
+        .unwrap_or_else(|_| format!("ac_{}", uuid::Uuid::new_v4())) // Fallback
 }
 
 /// Validate scope against allowed scopes
@@ -680,10 +1209,11 @@ pub async fn issue_token(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    let request_id = headers
+    let _request_id = headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     match form.grant_type.as_str() {
         "client_credentials" => {
@@ -716,7 +1246,7 @@ pub async fn issue_token(
             let client_id = cid_opt.as_ref().ok_or(AuthError::MissingClientId)?;
             let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
 
-            if state.client_credentials.get(client_id) == Some(client_secret) {
+            if crate::client_auth::authenticate_client(client_id, client_secret, Some(&ip_address))? {
                 // Log successful authentication attempt
                 SecurityLogger::log_auth_attempt(
                     client_id,
@@ -1004,6 +1534,15 @@ pub async fn userinfo(
         return Err(AuthError::InvalidToken("inactive".into()));
     }
 
+    // Enforce required scopes (at least "openid")
+    if let Some(scope) = &rec.scope {
+        if !scope.split_whitespace().any(|s| s == "openid") {
+            return Err(AuthError::UnauthorizedClient("insufficient_scope".to_string()));
+        }
+    } else {
+        return Err(AuthError::UnauthorizedClient("insufficient_scope".to_string()));
+    }
+
     // Log successful userinfo access
     let mut event = SecurityEvent::new(
         SecurityEventType::DataAccess,
@@ -1034,10 +1573,14 @@ pub async fn userinfo(
 
     SecurityLogger::log_event(&event);
 
+    // pull ephemeral mfa_verified flag if Redis-backed store is used (optional)
+    let mfa_verified = false; // kept simple; policy step-up can rely on /mfa/session/verify
+
     Ok(Json(serde_json::json!({
         "sub": rec.sub,
         "scope": rec.scope,
-        "client_id": rec.client_id
+        "client_id": rec.client_id,
+        "mfa_verified": mfa_verified
     })))
 }
 
@@ -1080,6 +1623,10 @@ async fn store_access_token_metadata(
     if let Some(subject) = subject {
         state.token_store.set_subject(access_token, subject, Some(expiry_secs)).await?;
     }
+
+    // Persist token binding placeholder to enable validation hooks later
+    let binding = crate::security::generate_token_binding("unknown", "unknown");
+    let _ = state.token_store.set_token_binding(access_token, binding, Some(expiry_secs)).await;
 
     Ok(())
 }
@@ -1197,6 +1744,23 @@ pub async fn revoke_token(
     State(state): State<AppState>,
     Form(form): Form<RevokeRequest>,
 ) -> Result<Json<RevokeResponse>, AuthError> {
+    // Require client authentication via HTTP Basic
+    let (cid_opt, csec_opt) = if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+        let header_val = auth_header.to_str().unwrap_or("");
+        if let Some(b64) = header_val.strip_prefix("Basic ") {
+            if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                if let Ok(pair) = std::str::from_utf8(&decoded) {
+                    let mut parts = pair.splitn(2, ':');
+                    (parts.next().map(|s| s.to_string()), parts.next().map(|s| s.to_string()))
+                } else { (None, None) }
+            } else { (None, None) }
+        } else { (None, None) }
+    } else { (None, None) };
+    let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
+    let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
+    if state.client_credentials.get(&client_id) != Some(&client_secret) {
+        return Err(AuthError::InvalidClientCredentials);
+    }
     // Extract client information for security logging
     let ip_address = headers
         .get("x-forwarded-for")
@@ -1243,7 +1807,11 @@ pub fn app(state: AppState) -> Router {
             }
             layer
         }
-        _ => CorsLayer::new().allow_origin(Any),
+        _ => {
+            // Default to no origins unless explicitly configured
+            let layer = CorsLayer::new();
+            layer
+        },
     };
 
     let router = Router::new()
@@ -1282,6 +1850,26 @@ pub fn app(state: AppState) -> Router {
             "/mfa/totp/backup-codes/generate",
             post(crate::mfa::totp_generate_backup_codes),
         )
+        .route("/mfa/otp/send", post(crate::mfa::otp_send))
+        .route("/mfa/otp/verify", post(crate::mfa::otp_verify))
+        .route("/mfa/session/verify", post(crate::mfa::mfa_session_verify))
+        // Key rotation admin endpoints
+        .route("/admin/keys/rotation/status", get(crate::key_rotation::get_rotation_status))
+        .route("/admin/keys/rotation/force", post(crate::key_rotation::force_rotation))
+        // Rate limiting admin endpoints
+        .route("/admin/rate-limit/stats", get(get_rate_limit_stats_endpoint))
+        // Session management endpoints
+        .route("/session/create", post(create_session_endpoint))
+        .route("/session/:id", get(get_session_endpoint))
+        .route("/session/:id", delete(delete_session_endpoint))
+        .route("/session/:id/refresh", post(refresh_session_endpoint))
+        .route("/session/invalidate-user/:user_id", post(invalidate_user_sessions_endpoint))
+        // Enhanced MFA v2 endpoints disabled
+        .route("/mfa/webauthn/register/challenge", post(crate::webauthn::begin_register))
+        .route("/mfa/webauthn/register/finish", post(crate::webauthn::finish_register))
+        .route("/mfa/webauthn/assert/challenge", post(crate::webauthn::begin_assert))
+        .route("/mfa/webauthn/assert/finish", post(crate::webauthn::finish_assert))
+        // Security monitoring admin endpoints disabled by default
         .merge(crate::scim::router().with_state(()))
         .layer(
             ServiceBuilder::new()
@@ -1289,8 +1877,10 @@ pub fn app(state: AppState) -> Router {
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
                 .layer(PropagateRequestIdLayer::x_request_id())
                 .layer(cors)
-                .layer(axum::middleware::from_fn(crate::security::rate_limit))
-                .layer(axum::middleware::from_fn(crate::security::security_headers))
+                .layer(axum::middleware::from_fn(crate::security::validate_request_signature))
+                .layer(axum::middleware::from_fn(crate::per_ip_rate_limit::per_ip_rate_limit_middleware))
+                .layer(axum::middleware::from_fn(crate::rate_limit_optimized::optimized_rate_limit))
+                .layer(axum::middleware::from_fn(crate::security_headers::add_security_headers))
                 .layer(crate::security::security_middleware()),
         )
         .with_state(state);
@@ -1302,6 +1892,7 @@ pub fn app(state: AppState) -> Router {
         return router.merge(SwaggerUi::new("/docs").url("/openapi.json", openapi));
     }
 
+    #[cfg(not(feature = "docs"))]
     router
 }
 

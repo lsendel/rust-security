@@ -8,7 +8,7 @@ groups:
         in threat intelligence feeds
       runbook_url: https://security-wiki.company.com/threats/malicious-ip
       summary: Request from known malicious IP detected
-    expr: rate(http_requests_total{remote_addr=~"(198.51.100.100|203.0.113.100|192.0.2.100)"}[5m])
+    expr: rate(http_requests_total{remote_addr=~"(203.0.113.100|192.0.2.100|198.51.100.100)"}[5m])
       > 0
     for: 0s
     labels:

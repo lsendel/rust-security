@@ -1,0 +1,174 @@
+filebeat.inputs:
+  # Docker container logs
+  - type: container
+    paths:
+      - '/var/lib/docker/containers/*/*.log'
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+      - decode_json_fields:
+          fields: ["message"]
+          target: ""
+          overwrite_keys: true
+      - timestamp:
+          field: timestamp
+          layouts:
+            - '2006-01-02T15:04:05.000Z'
+            - '2006-01-02T15:04:05Z'
+          test:
+            - '2023-01-02T15:04:05.000Z'
+
+  # Security audit logs
+  - type: log
+    paths:
+      - '/var/log/security-audit/*.log'
+      - '/var/log/auth-service/*.log'
+      - '/var/log/policy-service/*.log'
+    fields:
+      log_type: security_audit
+    fields_under_root: true
+    multiline.pattern: '^\{'
+    multiline.negate: true
+    multiline.match: after
+    json.keys_under_root: true
+    json.add_error_key: true
+
+  # Application logs with structured logging
+  - type: log
+    paths:
+      - '/var/log/applications/*.log'
+    fields:
+      log_type: application
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+
+processors:
+  # Add hostname and IP
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  
+  # Add cloud metadata (if running in cloud)
+  - add_cloud_metadata: ~
+  
+  # Add Kubernetes metadata (if running in K8s)
+  - add_kubernetes_metadata:
+      host: ${NODE_NAME}
+      matchers:
+        - logs_path:
+            logs_path: "/var/log/containers/"
+
+  # Security event processing
+  - script:
+      lang: javascript
+      id: security_processor
+      source: >
+        function process(event) {
+          var message = event.Get("message");
+          if (message && message.includes("SECURITY_EVENT")) {
+            event.Put("event.type", "security");
+            event.Put("event.category", "authentication");
+            
+            // Extract security event details
+            try {
+              var securityData = JSON.parse(message);
+              if (securityData.event_type) {
+                event.Put("security.event_type", securityData.event_type);
+                event.Put("security.severity", securityData.severity);
+                event.Put("security.source", securityData.source);
+                if (securityData.client_id) {
+                  event.Put("security.client_id", securityData.client_id);
+                }
+                if (securityData.ip_address) {
+                  event.Put("source.ip", securityData.ip_address);
+                }
+                if (securityData.risk_score) {
+                  event.Put("security.risk_score", securityData.risk_score);
+                }
+              }
+            } catch (e) {
+              // Not a JSON security event, continue
+            }
+          }
+        }
+
+  # Threat intelligence enrichment
+  - script:
+      lang: javascript
+      id: threat_intel_enrichment
+      source: >
+        function process(event) {
+          var sourceIP = event.Get("source.ip");
+          if (sourceIP) {
+            // Mark known bad IPs (in production, this would query threat intel feeds)
+            var badIPs = ["198.51.100.100", "203.0.113.100", "192.0.2.100"];
+            if (badIPs.includes(sourceIP)) {
+              event.Put("threat.indicator.type", "ipv4-addr");
+              event.Put("threat.indicator.ip", sourceIP);
+              event.Put("threat.indicator.marking.color", "red");
+              event.Put("event.severity", 7); // High severity
+            }
+          }
+        }
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  index: "security-logs-%{+yyyy.MM.dd}"
+  template.name: "security-logs"
+  template.pattern: "security-logs-*"
+  template.settings:
+    index.number_of_shards: 1
+    index.number_of_replicas: 0
+    index.mapping.total_fields.limit: 2000
+
+# Index lifecycle management
+setup.ilm.enabled: true
+setup.ilm.rollover_alias: "security-logs"
+setup.ilm.pattern: "security-logs-%{+yyyy.MM.dd}"
+setup.ilm.policy: |
+  {
+    "policy": {
+      "phases": {
+        "hot": {
+          "actions": {
+            "rollover": {
+              "max_size": "5GB",
+              "max_age": "7d"
+            }
+          }
+        },
+        "warm": {
+          "min_age": "7d",
+          "actions": {
+            "allocate": {
+              "number_of_replicas": 0
+            }
+          }
+        },
+        "cold": {
+          "min_age": "30d",
+          "actions": {
+            "allocate": {
+              "number_of_replicas": 0
+            }
+          }
+        },
+        "delete": {
+          "min_age": "90d"
+        }
+      }
+    }
+  }
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+monitoring:
+  enabled: true
+  elasticsearch:
+    hosts: ["elasticsearch:9200"]

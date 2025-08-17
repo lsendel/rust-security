@@ -1,477 +1,653 @@
 Starting end-to-end integration testing...
-Timestamp: Sat Aug 16 10:28:07 EDT 2025
+Timestamp: Sun Aug 17 06:04:44 EDT 2025
 Starting comprehensive end-to-end integration testing
 === Testing Code Compilation and Build ===
 Testing: Auth service compiles successfully
     Checking cfg-if v1.0.1
-    Checking itoa v1.0.15
     Checking once_cell v1.21.3
+    Checking itoa v1.0.15
     Checking pin-project-lite v0.2.16
     Checking libc v0.2.175
     Checking bytes v1.10.1
     Checking smallvec v1.15.1
-    Checking typenum v1.18.0
-    Checking zeroize v1.8.1
-    Checking subtle v2.6.1
     Checking futures-core v0.3.31
+    Checking typenum v1.18.0
+    Checking subtle v2.6.1
+    Checking zeroize v1.8.1
+    Checking stable_deref_trait v1.2.0
+    Checking tracing-core v0.1.34
+    Checking futures-sink v0.3.31
+    Checking core-foundation-sys v0.8.7
     Checking serde v1.0.219
     Checking zerofrom v0.1.6
-    Checking stable_deref_trait v1.2.0
-    Checking core-foundation-sys v0.8.7
-    Checking futures-sink v0.3.31
     Checking fnv v1.0.7
     Checking log v0.4.27
-    Checking memchr v2.7.5
     Checking slab v0.4.11
-    Checking tracing-core v0.1.34
-    Checking yoke v0.8.0
     Checking bitflags v2.9.2
+    Checking memchr v2.7.5
+    Checking yoke v0.8.0
+    Checking pin-utils v0.1.0
+    Checking const-oid v0.9.6
+    Checking futures-task v0.3.31
+    Checking generic-array v0.14.7
+    Checking zerovec v0.11.4
+    Checking tracing v0.1.41
+    Checking http v1.3.1
     Checking getrandom v0.2.16
     Checking socket2 v0.6.0
-    Checking mio v1.0.4
     Checking signal-hook-registry v1.4.6
-    Checking zerovec v0.11.4
-    Checking http v1.3.1
-    Checking generic-array v0.14.7
-    Checking rand_core v0.6.4
-    Checking futures-task v0.3.31
-    Checking pin-utils v0.1.0
-    Checking tracing v0.1.41
-    Checking const-oid v0.9.6
+    Checking mio v1.0.4
     Checking futures-util v0.3.31
     Checking percent-encoding v2.3.1
-    Checking libm v0.2.15
     Checking core-foundation v0.9.4
+    Checking libm v0.2.15
+    Checking writeable v0.6.1
     Checking hashbrown v0.15.5
     Checking litemap v0.8.0
-    Checking equivalent v1.0.2
-    Checking tokio v1.47.1
-    Checking writeable v0.6.1
-    Checking zerotrie v0.2.2
-    Checking crypto-common v0.1.6
-    Checking rustls-pki-types v1.12.0
-    Checking untrusted v0.9.0
-    Checking base64 v0.22.1
-    Checking http-body v1.0.1
-    Checking tower-service v0.3.3
-    Checking ryu v1.0.20
     Checking tinystr v0.8.1
-    Checking potential_utf v0.1.2
-    Checking ring v0.17.14
-    Checking block-buffer v0.10.4
-    Checking futures-channel v0.3.31
-    Checking atomic-waker v1.1.2
+    Checking equivalent v1.0.2
     Checking icu_locale_core v2.0.0
-    Checking icu_collections v2.0.0
-    Checking try-lock v0.2.5
-    Checking base64ct v1.8.0
+    Checking potential_utf v0.1.2
+    Checking zerotrie v0.2.2
+    Checking rustls-pki-types v1.12.0
+    Checking rand_core v0.6.4
+    Checking base64 v0.22.1
+    Checking tower-service v0.3.3
+    Checking crypto-common v0.1.6
+    Checking untrusted v0.9.0
+    Checking ryu v1.0.20
     Checking indexmap v2.10.0
-    Checking num-traits v0.2.19
-    Checking system-configuration-sys v0.6.0
-    Checking digest v0.10.7
-    Checking getrandom v0.3.3
+    Checking icu_collections v2.0.0
+    Checking block-buffer v0.10.4
+    Checking tokio v1.47.1
+    Checking futures-channel v0.3.31
+    Checking icu_provider v2.0.0
+    Checking base64ct v1.8.0
+    Checking ring v0.17.14
+    Checking atomic-waker v1.1.2
+    Checking try-lock v0.2.5
     Checking want v0.3.1
+    Checking digest v0.10.7
     Checking icu_normalizer_data v2.0.0
-    Checking icu_properties_data v2.0.1
+    Checking system-configuration-sys v0.6.0
+    Checking getrandom v0.3.3
     Checking httparse v1.10.1
+    Checking icu_properties_data v2.0.1
     Checking aws-lc-sys v0.30.0
-    Checking fastrand v2.3.0
+    Checking http-body v1.0.1
     Checking httpdate v1.0.3
+    Checking fastrand v2.3.0
+    Checking icu_properties v2.0.1
     Checking system-configuration v0.6.1
+    Checking icu_normalizer v2.0.0
     Checking serde_json v1.0.142
     Checking form_urlencoded v1.2.1
-    Checking cpufeatures v0.2.17
-    Checking num-integer v0.1.46
-    Checking icu_provider v2.0.0
     Checking errno v0.3.13
+    Checking cpufeatures v0.2.17
     Checking spin v0.9.8
-    Checking powerfmt v0.2.0
     Checking ipnet v2.11.0
-    Checking aws-lc-rs v1.13.3
-    Checking zerocopy v0.8.26
-    Checking pem-rfc7468 v0.7.0
+    Checking powerfmt v0.2.0
     Checking http-body-util v0.1.3
-    Checking rustix v1.0.8
     Checking lazy_static v1.5.0
-    Checking icu_normalizer v2.0.0
-    Checking icu_properties v2.0.1
-    Checking deranged v0.4.0
+    Checking rustix v1.0.8
+    Checking pem-rfc7468 v0.7.0
+    Checking zerocopy v0.8.26
+    Checking aws-lc-rs v1.13.3
     Checking security-framework-sys v2.14.0
     Checking sync_wrapper v1.0.2
+    Checking deranged v0.4.0
     Checking num-conv v0.1.0
-    Checking time-core v0.1.4
     Checking tower-layer v0.3.3
+    Checking time-core v0.1.4
+    Checking idna_adapter v1.2.1
     Checking utf8_iter v1.0.4
-    Checking time v0.3.41
-    Checking security-framework v2.11.1
     Checking der v0.7.10
     Checking inout v0.1.4
-    Checking aho-corasick v1.1.3
-    Checking regex-syntax v0.8.5
-    Checking cipher v0.4.4
-    Checking thiserror v1.0.69
-    Checking idna_adapter v1.2.1
-    Checking ppv-lite86 v0.2.21
-    Checking tempfile v3.20.0
-    Checking thiserror v2.0.14
-    Checking rustls-webpki v0.103.4
-    Checking num-bigint v0.4.6
     Checking idna v1.0.3
+    Checking aho-corasick v1.1.3
+    Checking security-framework v2.11.1
+    Checking regex-syntax v0.8.5
+    Checking time v0.3.41
+    Checking scopeguard v1.2.0
+    Checking url v2.5.4
+    Checking lock_api v0.4.13
+    Checking cipher v0.4.4
+    Checking ppv-lite86 v0.2.21
+    Checking num-traits v0.2.19
+    Checking thiserror v2.0.14
+    Checking thiserror v1.0.69
+    Checking parking_lot_core v0.9.11
     Checking universal-hash v0.5.1
     Checking rand_chacha v0.3.1
-    Checking url v2.5.4
-    Checking native-tls v0.2.14
-    Checking scopeguard v1.2.0
-    Checking spki v0.7.3
     Checking opaque-debug v0.3.1
-    Checking regex-syntax v0.6.29
     Checking mime v0.3.17
-    Checking rand v0.8.5
-    Checking rustls v0.23.31
-    Checking lock_api v0.4.13
+    Checking regex-syntax v0.6.29
     Checking polyval v0.6.2
-    Checking pkcs8 v0.10.2
+    Checking rand v0.8.5
+    Checking tempfile v3.20.0
+    Checking num-integer v0.1.46
     Checking protobuf-support v3.7.2
-    Checking tokio-util v0.7.16
-    Checking tokio-native-tls v0.3.1
-    Checking parking_lot_core v0.9.11
-    Checking num-iter v0.1.45
     Checking serde_urlencoded v0.7.1
     Checking uuid v1.18.0
+    Checking num-bigint v0.4.6
+    Checking num-iter v0.1.45
+    Checking tokio-util v0.7.16
     Checking pem v3.0.5
+    Checking rustls-webpki v0.103.4
     Checking webpki-roots v1.0.2
-    Checking regex-automata v0.4.9
-    Checking byteorder v1.5.0
     Checking overload v0.1.1
+    Checking spki v0.7.3
     Checking arc-swap v1.7.1
+    Checking native-tls v0.2.14
     Checking iri-string v0.7.8
-    Checking ghash v0.5.1
-    Checking axum-core v0.4.5
-    Checking parking_lot v0.12.4
+    Checking byteorder v1.5.0
     Checking nu-ansi-term v0.46.0
     Checking h2 v0.4.12
     Checking tower v0.5.2
+    Checking pkcs8 v0.10.2
+    Checking protobuf v3.7.2
+    Checking tokio-native-tls v0.3.1
+    Checking rustls v0.23.31
     Checking num-bigint-dig v0.8.4
     Checking combine v4.6.7
-    Checking protobuf v3.7.2
-    Checking simple_asn1 v0.6.3
-    Checking yasna v0.5.2
-    Checking regex-automata v0.1.10
     Checking pkcs1 v0.7.5
+    Checking axum-core v0.4.5
+    Checking simple_asn1 v0.6.3
     Checking fs-err v3.1.1
+    Checking regex-automata v0.4.9
+    Checking yasna v0.5.2
+    Checking ghash v0.5.1
+    Checking crossbeam-utils v0.8.21
+    Checking parking_lot v0.12.4
     Checking aes v0.8.4
     Checking ctr v0.9.2
-    Checking tower-http v0.6.6
     Checking sharded-slab v0.1.7
     Checking backon v1.5.2
-    Checking matchers v0.1.0
-    Checking signature v2.2.0
-    Checking regex v1.11.1
-    Checking blake2 v0.10.6
     Checking password-hash v0.5.0
-    Checking serde_path_to_error v0.1.17
-    Checking tracing-serde v0.2.0
-    Checking rustls-pemfile v2.2.0
+    Checking blake2 v0.10.6
+    Checking signature v2.2.0
     Checking aead v0.5.2
+    Checking regex-automata v0.1.10
+    Checking rustls-pemfile v2.2.0
+    Checking tracing-serde v0.2.0
+    Checking serde_path_to_error v0.1.17
     Checking tracing-log v0.2.0
     Checking iana-time-zone v0.1.63
-    Checking thread_local v1.1.9
+    Checking tower-http v0.6.6
     Checking encoding_rs v0.8.35
-    Checking matchit v0.7.3
+    Checking thread_local v1.1.9
     Checking sha1_smol v1.0.1
-    Checking aes-gcm v0.10.3
-    Checking validator v0.20.0
-    Checking argon2 v0.5.3
-    Checking rsa v0.9.8
-    Checking tokio-rustls v0.26.2
-    Checking tracing-subscriber v0.3.19
+    Checking matchit v0.7.3
+    Checking hashbrown v0.14.5
+    Checking regex v1.11.1
     Checking chrono v0.4.41
+    Checking validator v0.20.0
+    Checking dashmap v6.1.0
+    Checking argon2 v0.5.3
+    Checking aes-gcm v0.10.3
+    Checking hyper v1.6.0
+    Checking rsa v0.9.8
     Checking rcgen v0.13.2
     Checking utoipa v4.2.3
     Checking jsonwebtoken v9.3.1
+    Checking matchers v0.1.0
     Checking anyhow v1.0.99
-    Checking sha1 v0.10.6
     Checking redis v0.32.5
     Checking sha2 v0.10.9
-    Checking hyper v1.6.0
+    Checking sha1 v0.10.6
+    Checking tracing-subscriber v0.3.19
     Checking hmac v0.12.1
     Checking envy v0.4.2
+    Checking num_cpus v1.17.0
+    Checking tokio-rustls v0.26.2
     Checking secrecy v0.10.3
-    Checking data-encoding v2.9.0
-    Checking urlencoding v2.1.3
     Checking dotenvy v0.15.7
     Checking base64 v0.21.7
-    Checking prometheus v0.14.0
+    Checking data-encoding v2.9.0
+    Checking urlencoding v2.1.3
     Checking hyper-util v0.1.16
     Checking hyper-rustls v0.27.7
     Checking hyper-tls v0.6.0
     Checking axum v0.7.9
     Checking axum-server v0.7.2
     Checking reqwest v0.12.23
+    Checking prometheus v0.14.0
     Checking auth-service v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/auth-service)
-warning: unused variable: `request_id`
-   --> auth-service/src/lib.rs:683:9
-    |
-683 |     let request_id = headers
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
-    |
-    = note: `#[warn(unused_variables)]` on by default
+warning: unused import: `crate::keys`
+ --> auth-service/src/key_rotation.rs:1:5
+  |
+1 | use crate::keys;
+  |     ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
 
-warning: `auth-service` (lib) generated 1 warning
-    Finished `release` profile [optimized] target(s) in 18.54s
+warning: unused import: `base64::engine::general_purpose::URL_SAFE_NO_PAD`
+ --> auth-service/src/webauthn.rs:2:5
+  |
+2 | use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SessionError`
+   --> auth-service/src/lib.rs:319:56
+    |
+319 | use crate::session_manager::{SESSION_MANAGER, Session, SessionError};
+    |                                                        ^^^^^^^^^^^^
+
+warning: this function depends on never type fallback being `()`
+   --> auth-service/src/session_manager.rs:399:5
+    |
+399 |     async fn store_session_to_redis(&self, client: &redis::Client, session: &Session) -> Result<(), redis::RedisError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in Rust 2024 and in a future release in all editions!
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/never-type-fallback.html>
+    = help: specify the types explicitly
+note: in edition 2024, the requirement `!: FromRedisValue` will fail
+   --> auth-service/src/session_manager.rs:414:14
+    |
+414 |             .query_async(&mut conn)
+    |              ^^^^^^^^^^^
+    = note: `#[warn(dependency_on_unit_never_type_fallback)]` on by default
+help: use `()` annotations to avoid fallback changes
+    |
+414 ~             .query_async::<()>(&mut conn)
+415 |             .await?;
+...
+420 |             .arg(&session.id)
+421 ~             .query_async::<()>(&mut conn)
+422 |             .await?;
+...
+427 |             .arg(ttl)
+428 ~             .query_async::<()>(&mut conn)
+    |
+
+warning: this function depends on never type fallback being `()`
+   --> auth-service/src/session_manager.rs:434:5
+    |
+434 |     async fn delete_session_from_redis(&self, client: &redis::Client, session_id: &str) -> Result<(), redis::RedisError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in Rust 2024 and in a future release in all editions!
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/never-type-fallback.html>
+    = help: specify the types explicitly
+note: in edition 2024, the requirement `!: FromRedisValue` will fail
+   --> auth-service/src/session_manager.rs:443:18
+    |
+443 |                 .query_async(&mut conn)
+    |                  ^^^^^^^^^^^
+help: use `()` annotations to avoid fallback changes
+    |
+443 ~                 .query_async::<()>(&mut conn)
+444 |                 .await?;
+...
+449 |             .arg(&key)
+450 ~             .query_async::<()>(&mut conn)
+    |
+
+warning: unused variable: `mfa_verified`
+  --> auth-service/src/store.rs:90:78
+   |
+90 |                 let (active, scope, client_id, exp, iat, sub, token_binding, mfa_verified): (
+   |                                                                              ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_mfa_verified`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `time_window`
+   --> auth-service/src/mfa.rs:116:54
+    |
+116 | async fn track_totp_nonce(user_id: &str, code: &str, time_window: u64) -> bool {
+    |                                                      ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_time_window`
+
+warning: unused variable: `state`
+  --> auth-service/src/webauthn.rs:75:34
+   |
+75 | pub async fn finish_assert(State(state): State<AppState>, Json(body): Json<FinishAssertRequest>) -> Json<FinishAssertResponse> {
+   |                                  ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `body`
+  --> auth-service/src/webauthn.rs:75:64
+   |
+75 | pub async fn finish_assert(State(state): State<AppState>, Json(body): Json<FinishAssertRequest>) -> Json<FinishAssertResponse> {
+   |                                                                ^^^^ help: if this is intentional, prefix it with an underscore: `_body`
+
+warning: unused variable: `request_id`
+    --> auth-service/src/lib.rs:1120:9
+     |
+1120 |     let request_id = headers
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
+
+warning: `auth-service` (lib) generated 10 warnings (run `cargo fix --lib -p auth-service` to apply 5 suggestions)
+    Finished `release` profile [optimized] target(s) in 10.17s
+warning: the following packages contain code that will be rejected by a future version of Rust: auth-service v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/auth-service)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
 ✅ PASS: Auth service compiles successfully
 Testing: No compilation warnings or errors
 ❌ FAIL: No compilation warnings or errors (expected success but failed)
 Testing: Tests compile successfully
-   Compiling cfg-if v1.0.1
-   Compiling itoa v1.0.15
-   Compiling serde v1.0.219
-   Compiling once_cell v1.21.3
-   Compiling pin-project-lite v0.2.16
-   Compiling bytes v1.10.1
-   Compiling fnv v1.0.7
-   Compiling libc v0.2.175
-   Compiling typenum v1.18.0
-   Compiling smallvec v1.15.1
-   Compiling futures-core v0.3.31
-   Compiling subtle v2.6.1
-   Compiling zeroize v1.8.1
-   Compiling zerofrom v0.1.6
-   Compiling stable_deref_trait v1.2.0
-   Compiling tracing-core v0.1.34
-   Compiling memchr v2.7.5
-   Compiling getrandom v0.2.16
-   Compiling jobserver v0.1.33
-   Compiling mio v1.0.4
-   Compiling socket2 v0.6.0
-   Compiling generic-array v0.14.7
-   Compiling signal-hook-registry v1.4.6
-   Compiling yoke v0.8.0
-   Compiling rand_core v0.6.4
-   Compiling core-foundation-sys v0.8.7
-   Compiling cc v1.2.33
-   Compiling tokio v1.47.1
-   Compiling futures-sink v0.3.31
-   Compiling log v0.4.27
-   Compiling num-traits v0.2.19
-   Compiling slab v0.4.11
-   Compiling bitflags v2.9.2
-   Compiling libm v0.2.15
-   Compiling http v1.3.1
-   Compiling crypto-common v0.1.6
-   Compiling zerovec v0.11.4
-   Compiling const-oid v0.9.6
-   Compiling pin-utils v0.1.0
-   Compiling tracing v0.1.41
-   Compiling futures-task v0.3.31
-   Compiling ryu v1.0.20
-   Compiling cmake v0.1.54
-   Compiling ring v0.17.14
-   Compiling percent-encoding v2.3.1
-   Compiling http-body v1.0.1
-   Compiling core-foundation v0.9.4
-   Compiling litemap v0.8.0
-   Compiling futures-util v0.3.31
-   Compiling tokio-util v0.7.16
-   Compiling tinystr v0.8.1
-   Compiling hashbrown v0.15.5
-   Compiling aws-lc-sys v0.30.0
-   Compiling equivalent v1.0.2
-   Compiling writeable v0.6.1
-   Compiling potential_utf v0.1.2
-   Compiling zerotrie v0.2.2
-   Compiling rustls-pki-types v1.12.0
-   Compiling regex-syntax v0.8.5
-   Compiling base64 v0.22.1
-   Compiling untrusted v0.9.0
-   Compiling tower-service v0.3.3
-   Compiling serde_json v1.0.142
-   Compiling block-buffer v0.10.4
-   Compiling indexmap v2.10.0
-   Compiling icu_locale_core v2.0.0
-   Compiling icu_collections v2.0.0
-   Compiling futures-channel v0.3.31
-   Compiling base64ct v1.8.0
-   Compiling try-lock v0.2.5
-   Compiling atomic-waker v1.1.2
-   Compiling digest v0.10.7
-   Compiling icu_provider v2.0.0
-   Compiling system-configuration-sys v0.6.0
-   Compiling want v0.3.1
-   Compiling h2 v0.4.12
-   Compiling getrandom v0.3.3
-   Compiling httparse v1.10.1
-   Compiling icu_normalizer_data v2.0.0
-   Compiling icu_properties_data v2.0.1
-   Compiling num-integer v0.1.46
-   Compiling httpdate v1.0.3
-   Compiling fastrand v2.3.0
-   Compiling system-configuration v0.6.1
-   Compiling form_urlencoded v1.2.1
-   Compiling cpufeatures v0.2.17
-   Compiling icu_normalizer v2.0.0
-   Compiling errno v0.3.13
-   Compiling icu_properties v2.0.1
-   Compiling powerfmt v0.2.0
-   Compiling num-conv v0.1.0
-   Compiling spin v0.9.8
-   Compiling ipnet v2.11.0
-   Compiling time-core v0.1.4
-   Compiling zerocopy v0.8.26
-   Compiling pem-rfc7468 v0.7.0
-   Compiling rustix v1.0.8
-   Compiling deranged v0.4.0
-   Compiling lazy_static v1.5.0
-   Compiling http-body-util v0.1.3
-   Compiling security-framework-sys v2.14.0
-   Compiling time-macros v0.2.22
-   Compiling hyper v1.6.0
-   Compiling idna_adapter v1.2.1
-   Compiling aho-corasick v1.1.3
-   Compiling sync_wrapper v1.0.2
-   Compiling utf8_iter v1.0.4
-   Compiling crossbeam-utils v0.8.21
-   Compiling tower-layer v0.3.3
-   Compiling security-framework v2.11.1
-   Compiling darling_core v0.20.11
-   Compiling tempfile v3.20.0
-   Compiling time v0.3.41
-   Compiling ppv-lite86 v0.2.21
-   Compiling hyper-util v0.1.16
-   Compiling idna v1.0.3
-   Compiling regex-automata v0.4.9
-   Compiling der v0.7.10
-   Compiling inout v0.1.4
-   Compiling thiserror v2.0.14
-   Compiling thiserror v1.0.69
-   Compiling url v2.5.4
-   Compiling cipher v0.4.4
-   Compiling native-tls v0.2.14
-   Compiling rand_chacha v0.3.1
-   Compiling darling_macro v0.20.11
-   Compiling spki v0.7.3
-   Compiling regex v1.11.1
-   Compiling tower v0.5.2
-   Compiling num-bigint v0.4.6
-   Compiling universal-hash v0.5.1
-   Compiling mime v0.3.17
-   Compiling scopeguard v1.2.0
-   Compiling regex-syntax v0.6.29
-   Compiling opaque-debug v0.3.1
-   Compiling crossbeam-epoch v0.9.18
-   Compiling pkcs8 v0.10.2
-   Compiling lock_api v0.4.13
-   Compiling darling v0.20.11
-   Compiling rand v0.8.5
-   Compiling tokio-native-tls v0.3.1
-   Compiling protobuf-support v3.7.2
-   Compiling polyval v0.6.2
-   Compiling regex-automata v0.1.10
-   Compiling parking_lot_core v0.9.11
-   Compiling serde_urlencoded v0.7.1
-   Compiling num-iter v0.1.45
-   Compiling uuid v1.18.0
-   Compiling pem v3.0.5
-   Compiling webpki-roots v1.0.2
-   Compiling either v1.15.0
-   Compiling iri-string v0.7.8
-   Compiling overload v0.1.1
-   Compiling arc-swap v1.7.1
-   Compiling byteorder v1.5.0
-   Compiling rayon-core v1.13.0
-   Compiling matchers v0.1.0
-   Compiling parking_lot v0.12.4
-   Compiling axum-core v0.4.5
-   Compiling ghash v0.5.1
-   Compiling nu-ansi-term v0.46.0
-   Compiling protobuf v3.7.2
-   Compiling validator_derive v0.20.0
-   Compiling hyper-tls v0.6.0
-   Compiling num-bigint-dig v0.8.4
-   Compiling tower-http v0.6.6
-   Compiling utoipa-gen v4.3.1
-   Compiling pkcs1 v0.7.5
-   Compiling crossbeam-deque v0.8.6
-   Compiling simple_asn1 v0.6.3
-   Compiling fs-err v3.1.1
-   Compiling yasna v0.5.2
-   Compiling ctr v0.9.2
-   Compiling aes v0.8.4
-   Compiling sharded-slab v0.1.7
-   Compiling backon v1.5.2
-   Compiling blake2 v0.10.6
-   Compiling signature v2.2.0
-   Compiling password-hash v0.5.0
-   Compiling rustls-pemfile v2.2.0
-   Compiling combine v4.6.7
-   Compiling aead v0.5.2
-   Compiling tracing-log v0.2.0
-   Compiling iana-time-zone v0.1.63
-   Compiling tracing-serde v0.2.0
-   Compiling serde_path_to_error v0.1.17
-   Compiling thread_local v1.1.9
-   Compiling half v2.6.0
-   Compiling encoding_rs v0.8.35
-   Compiling ciborium-io v0.2.2
-   Compiling sha1_smol v1.0.1
-   Compiling clap_lex v0.7.5
-   Compiling plotters-backend v0.3.7
-   Compiling matchit v0.7.3
-   Compiling anstyle v1.0.11
-   Compiling tracing-subscriber v0.3.19
-   Compiling chrono v0.4.41
-   Compiling ciborium-ll v0.2.2
-   Compiling aes-gcm v0.10.3
-   Compiling utoipa v4.2.3
-   Compiling axum v0.7.9
-   Compiling plotters-svg v0.3.7
-   Compiling argon2 v0.5.3
-   Compiling redis v0.32.5
-   Compiling clap_builder v4.5.44
-   Compiling rsa v0.9.8
-   Compiling rcgen v0.13.2
-   Compiling prometheus v0.14.0
-   Compiling jsonwebtoken v9.3.1
-   Compiling validator v0.20.0
-   Compiling itertools v0.10.5
-   Compiling anyhow v1.0.99
-   Compiling sha1 v0.10.6
-   Compiling sha2 v0.10.9
-   Compiling hmac v0.12.1
-   Compiling envy v0.4.2
-   Compiling secrecy v0.10.3
-   Compiling urlencoding v2.1.3
-   Compiling data-encoding v2.9.0
-   Compiling same-file v1.0.6
-   Compiling base64 v0.21.7
-   Compiling cast v0.3.0
-   Compiling dotenvy v0.15.7
-   Compiling rayon v1.11.0
-   Compiling clap v4.5.45
-   Compiling plotters v0.3.7
-   Compiling ciborium v0.2.2
-   Compiling tinytemplate v1.2.1
-   Compiling walkdir v2.5.0
-   Compiling criterion-plot v0.5.0
-   Compiling is-terminal v0.4.16
-   Compiling anes v0.1.6
-   Compiling oorandom v11.1.5
-   Compiling criterion v0.5.1
-   Compiling aws-lc-rs v1.13.3
-   Compiling rustls v0.23.31
-   Compiling rustls-webpki v0.103.4
-   Compiling tokio-rustls v0.26.2
-   Compiling hyper-rustls v0.27.7
-   Compiling axum-server v0.7.2
-   Compiling reqwest v0.12.23
-   Compiling auth-service v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/auth-service)
-warning: unused variable: `request_id`
-   --> auth-service/src/lib.rs:683:9
+warning: unused import: `crate::keys`
+ --> auth-service/src/key_rotation.rs:1:5
+  |
+1 | use crate::keys;
+  |     ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `base64::engine::general_purpose::URL_SAFE_NO_PAD`
+ --> auth-service/src/webauthn.rs:2:5
+  |
+2 | use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SessionError`
+   --> auth-service/src/lib.rs:319:56
     |
-683 |     let request_id = headers
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
+319 | use crate::session_manager::{SESSION_MANAGER, Session, SessionError};
+    |                                                        ^^^^^^^^^^^^
+
+warning: this function depends on never type fallback being `()`
+   --> auth-service/src/session_manager.rs:399:5
+    |
+399 |     async fn store_session_to_redis(&self, client: &redis::Client, session: &Session) -> Result<(), redis::RedisError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in Rust 2024 and in a future release in all editions!
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/never-type-fallback.html>
+    = help: specify the types explicitly
+note: in edition 2024, the requirement `!: FromRedisValue` will fail
+   --> auth-service/src/session_manager.rs:414:14
+    |
+414 |             .query_async(&mut conn)
+    |              ^^^^^^^^^^^
+    = note: `#[warn(dependency_on_unit_never_type_fallback)]` on by default
+help: use `()` annotations to avoid fallback changes
+    |
+414 ~             .query_async::<()>(&mut conn)
+415 |             .await?;
+...
+420 |             .arg(&session.id)
+421 ~             .query_async::<()>(&mut conn)
+422 |             .await?;
+...
+427 |             .arg(ttl)
+428 ~             .query_async::<()>(&mut conn)
+    |
+
+warning: this function depends on never type fallback being `()`
+   --> auth-service/src/session_manager.rs:434:5
+    |
+434 |     async fn delete_session_from_redis(&self, client: &redis::Client, session_id: &str) -> Result<(), redis::RedisError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in Rust 2024 and in a future release in all editions!
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/never-type-fallback.html>
+    = help: specify the types explicitly
+note: in edition 2024, the requirement `!: FromRedisValue` will fail
+   --> auth-service/src/session_manager.rs:443:18
+    |
+443 |                 .query_async(&mut conn)
+    |                  ^^^^^^^^^^^
+help: use `()` annotations to avoid fallback changes
+    |
+443 ~                 .query_async::<()>(&mut conn)
+444 |                 .await?;
+...
+449 |             .arg(&key)
+450 ~             .query_async::<()>(&mut conn)
+    |
+
+warning: unused variable: `mfa_verified`
+  --> auth-service/src/store.rs:90:78
+   |
+90 |                 let (active, scope, client_id, exp, iat, sub, token_binding, mfa_verified): (
+   |                                                                              ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_mfa_verified`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `time_window`
+   --> auth-service/src/mfa.rs:116:54
+    |
+116 | async fn track_totp_nonce(user_id: &str, code: &str, time_window: u64) -> bool {
+    |                                                      ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_time_window`
+
+warning: unused variable: `state`
+  --> auth-service/src/webauthn.rs:75:34
+   |
+75 | pub async fn finish_assert(State(state): State<AppState>, Json(body): Json<FinishAssertRequest>) -> Json<FinishAssertResponse> {
+   |                                  ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `body`
+  --> auth-service/src/webauthn.rs:75:64
+   |
+75 | pub async fn finish_assert(State(state): State<AppState>, Json(body): Json<FinishAssertRequest>) -> Json<FinishAssertResponse> {
+   |                                                                ^^^^ help: if this is intentional, prefix it with an underscore: `_body`
+
+warning: unused variable: `request_id`
+    --> auth-service/src/lib.rs:1120:9
+     |
+1120 |     let request_id = headers
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
+
+warning: `auth-service` (lib) generated 10 warnings (run `cargo fix --lib -p auth-service` to apply 5 suggestions)
+warning: unused import: `response::Response`
+   --> auth-service/src/security_headers.rs:207:9
+    |
+207 |         response::Response,
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: `auth-service` (lib test) generated 11 warnings (10 duplicates) (run `cargo fix --lib -p auth-service --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+warning: the following packages contain code that will be rejected by a future version of Rust: auth-service v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/auth-service)
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`
+  Executable unittests src/lib.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/auth_service-e7b580436422da44)
+  Executable unittests src/main.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/auth_service-d7f310a2d1f715ce)
+  Executable tests/authorization_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/authorization_it-78c9103ee23e02a9)
+  Executable tests/comprehensive_integration_test.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/comprehensive_integration_test-4b41f5a2dc98e8f0)
+  Executable tests/health_introspect_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/health_introspect_it-df20e7a4a1157b7f)
+  Executable tests/openid_metadata_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/openid_metadata_it-c6d3d9cec71e310b)
+  Executable tests/pkce_oauth_test.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/pkce_oauth_test-af062d13dd9ed40b)
+  Executable tests/request_id_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/request_id_it-2e954c5c7de3b728)
+  Executable tests/scim_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/scim_it-c503ef026ac7cc34)
+  Executable tests/scope_validation_test.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/scope_validation_test-8e0530e71e0811c1)
+  Executable tests/security_features_test.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/security_features_test-627d90aff5611a2c)
+  Executable tests/security_logging_test.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/security_logging_test-19dd182c5dc647d8)
+  Executable tests/security_test.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/security_test-de287f88a31f81bc)
+  Executable tests/step_up_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/step_up_it-d851f6f8ba19cb48)
+  Executable tests/token_basic_auth_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/token_basic_auth_it-5d8a51cfe9d24489)
+  Executable tests/token_flow_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/token_flow_it-f50fe90cda8953a0)
+  Executable tests/token_refresh_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/token_refresh_it-c69eecaef1393c8b)
+  Executable tests/token_store_unit.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/token_store_unit-7f220725184f0e06)
+  Executable tests/totp_it.rs (/Users/lsendel/IdeaProjects/rust-security/target/debug/deps/totp_it-cde01eeeeff73840)
+✅ PASS: Tests compile successfully
+Testing: Axum integration example compiles
+    Checking futures-task v0.3.31
+   Compiling syn v2.0.106
+    Checking num-traits v0.2.19
+    Checking crypto-common v0.1.6
+    Checking sync_wrapper v1.0.2
+    Checking regex-syntax v0.8.5
+    Checking lazy_static v1.5.0
+    Checking ring v0.17.14
+    Checking bitflags v2.9.2
+    Checking futures-util v0.3.31
+    Checking cipher v0.4.4
+    Checking sharded-slab v0.1.7
+    Checking num-integer v0.1.46
+    Checking blowfish v0.9.1
+    Checking num-bigint v0.4.6
+    Checking bcrypt v0.15.1
+    Checking regex-automata v0.4.9
+    Checking regex v1.11.1
+   Compiling serde_derive v1.0.219
+   Compiling tracing-attributes v0.1.30
+   Compiling tokio-macros v2.5.0
+   Compiling thiserror-impl v2.0.14
+   Compiling async-trait v0.1.89
+   Compiling pin-project-internal v1.1.10
+   Compiling axum-macros v0.4.2
+   Compiling thiserror-impl v1.0.69
+    Checking tokio v1.47.1
+    Checking pin-project v1.1.10
+    Checking tracing v0.1.41
+    Checking thiserror v1.0.69
+    Checking thiserror v2.0.14
+    Checking serde v1.0.219
+    Checking axum-core v0.4.5
+    Checking tracing-subscriber v0.3.19
+    Checking tower v0.4.13
+    Checking tower-http v0.6.6
+    Checking simple_asn1 v0.6.3
+    Checking hyper v1.6.0
+    Checking tower v0.5.2
+    Checking hyper-util v0.1.16
+    Checking serde_json v1.0.142
+    Checking serde_urlencoded v0.7.1
+    Checking serde_path_to_error v0.1.17
+    Checking uuid v1.18.0
+    Checking chrono v0.4.41
+    Checking axum v0.7.9
+    Checking jsonwebtoken v9.3.1
+    Checking axum-integration-example v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/axum-integration-example)
+warning: unused import: `delete`
+ --> axum-integration-example/src/lib.rs:5:15
+  |
+5 |     routing::{delete, get, post, put},
+  |               ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `UserRole`
+ --> axum-integration-example/src/repository.rs:1:57
+  |
+1 | use crate::{CreateUserRequest, UpdateUserRequest, User, UserRole};
+  |                                                         ^^^^^^^^
+
+warning: unused variable: `database_url`
+   --> axum-integration-example/src/database.rs:165:15
+    |
+165 |     if let Ok(database_url) = std::env::var("DATABASE_URL") {
+    |               ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_database_url`
     |
     = note: `#[warn(unused_variables)]` on by default
 
-warning: `auth-service` (lib test) generated 1 warning (1 duplicate)
-warning: `auth-service` (lib) generated 1 warning
+warning: `axum-integration-example` (lib) generated 3 warnings (run `cargo fix --lib -p axum-integration-example` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.11s
+✅ PASS: Axum integration example compiles
+=== Testing Unit and Integration Tests ===
+Testing: Security unit tests pass
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Security unit tests pass (expected success but failed)
+Testing: Circuit breaker tests pass
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Circuit breaker tests pass (expected success but failed)
+Testing: Key management tests pass
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Key management tests pass (expected success but failed)
+Testing: Store tests pass
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Store tests pass (expected success but failed)
+Testing: SCIM tests pass
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: SCIM tests pass (expected success but failed)
+Testing: MFA tests pass
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: MFA tests pass (expected success but failed)
+=== Testing Integration Test Suites ===
+Testing: Health and introspection integration tests
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Health and introspection integration tests (expected success but failed)
+Testing: OpenID metadata integration tests
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: OpenID metadata integration tests (expected success but failed)
+Testing: Request ID integration tests
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Request ID integration tests (expected success but failed)
+Testing: Scope validation tests
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Scope validation tests (expected success but failed)
+Testing: Token basic auth integration tests
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Token basic auth integration tests (expected success but failed)
+Testing: Token refresh integration tests
+./scripts/end_to_end_integration_test.sh: line 34: timeout: command not found
+❌ FAIL: Token refresh integration tests (expected success but failed)
+=== Testing Security Configuration Validation ===
+Testing: Security monitoring configuration exists
+✅ PASS: Security monitoring configuration exists
+Testing: Prometheus security alerts are valid YAML
+✅ PASS: Prometheus security alerts are valid YAML
+Testing: Fluentd configuration is valid
+✅ PASS: Fluentd configuration is valid
+Testing: Elasticsearch ILM policies are configured
+✅ PASS: Elasticsearch ILM policies are configured
+Testing: Grafana security dashboard is configured
+✅ PASS: Grafana security dashboard is configured
+=== Testing Compliance and Reporting ===
+Testing: Compliance configuration is valid
+✅ PASS: Compliance configuration is valid
+Testing: Compliance report generator exists and is executable
+❌ FAIL: Compliance report generator exists and is executable (expected success but failed)
+Testing: Previous compliance report exists and is valid
+✅ PASS: Previous compliance report exists and is valid
+Testing: Security controls validation script exists
+✅ PASS: Security controls validation script exists
+=== Testing Threat Intelligence Integration ===
+Testing: Threat intelligence feeds configuration is valid
+✅ PASS: Threat intelligence feeds configuration is valid
+Testing: Threat intelligence updater script exists
+✅ PASS: Threat intelligence updater script exists
+Testing: Threat detection validation completed successfully
+✅ PASS: Threat detection validation completed successfully
+Testing: Sigma rules are generated and valid
+✅ PASS: Sigma rules are generated and valid
+Testing: Prometheus threat intel rules are valid
+✅ PASS: Prometheus threat intel rules are valid
+=== Testing Security Logging Integration ===
+Testing: Security logging module compiles
+✅ PASS: Security logging module compiles
+Testing: Security logger is properly integrated
+✅ PASS: Security logger is properly integrated
+Testing: All endpoints have security logging
+❌ FAIL: All endpoints have security logging (expected success but failed)
+Testing: Tracing configuration exists
+✅ PASS: Tracing configuration exists
+=== Testing Performance and Load Testing Scripts ===
+Testing: Performance analysis script exists
+✅ PASS: Performance analysis script exists
+Testing: Load test scripts exist
+✅ PASS: Load test scripts exist
+Testing: Benchmark tests are configured
+✅ PASS: Benchmark tests are configured
+Testing: Regression test scripts exist
+✅ PASS: Regression test scripts exist
+=== Testing Documentation and Deployment Readiness ===
+Testing: GitOps configuration exists
+✅ PASS: GitOps configuration exists
+Testing: Helm charts are configured
+✅ PASS: Helm charts are configured
+Testing: Monitoring configuration is complete
+✅ PASS: Monitoring configuration is complete
+Testing: Security policies are configured
+✅ PASS: Security policies are configured
+Testing: Implementation documentation exists
+✅ PASS: Implementation documentation exists
+=== Testing CI/CD and Automation ===
+Testing: GitHub Actions CI configuration exists
+✅ PASS: GitHub Actions CI configuration exists
+Testing: Security audit workflow exists
+✅ PASS: Security audit workflow exists
+Testing: CI configuration is valid YAML
+✅ PASS: CI configuration is valid YAML
+Testing: Security audit configuration is valid YAML
+✅ PASS: Security audit configuration is valid YAML
+Testing: Automation scripts exist
+find: -executable: unknown primary or operator
+❌ FAIL: Automation scripts exist (expected success but failed)
+=== End-to-End Integration Test Results ===
+Total tests: 48
+Passed tests: 32
+Failed tests: 16
+Success rate: 66%
+End-to-end integration test results saved to: /Users/lsendel/IdeaProjects/rust-security/reports/end-to-end-integration-test.json
+⚠️  Some integration tests failed. Check logs for details.
+❌ System integration has significant issues (66% success rate)
+Cleaning up...

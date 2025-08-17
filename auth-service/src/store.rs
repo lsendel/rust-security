@@ -6,6 +6,8 @@ use once_cell::sync::Lazy;
 
 // Simple in-memory auth code store (JSON-encoded records), with optional Redis fallback
 static AUTH_CODES_MEM: Lazy<RwLock<HashMap<String, String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+// Ephemeral in-memory MFA flags per access token
+static MFA_FLAGS_MEM: Lazy<RwLock<HashMap<String, bool>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
     let url = std::env::var("REDIS_URL").ok()?;
@@ -83,8 +85,9 @@ impl TokenStore {
                 let key_iat = format!("token:{}:iat", token);
                 let key_sub = format!("token:{}:sub", token);
                 let key_token_binding = format!("token:{}:token_binding", token);
+                let key_mfa_verified = format!("token:{}:mfa_verified", token);
                 #[allow(clippy::type_complexity)]
-                let (active, scope, client_id, exp, iat, sub, token_binding): (
+                let (active, scope, client_id, exp, iat, sub, token_binding, _mfa_verified): (
                     Option<i64>,
                     Option<String>,
                     Option<String>,
@@ -92,6 +95,7 @@ impl TokenStore {
                     Option<i64>,
                     Option<String>,
                     Option<String>,
+                    Option<i64>,
                 ) = redis::pipe()
                     .get(&key_active)
                     .get(&key_scope)
@@ -100,6 +104,7 @@ impl TokenStore {
                     .get(&key_iat)
                     .get(&key_sub)
                     .get(&key_token_binding)
+                    .get(&key_mfa_verified)
                     .query_async(&mut conn)
                     .await?;
                 Ok(crate::IntrospectionRecord {
@@ -110,6 +115,8 @@ impl TokenStore {
                     iat,
                     sub,
                     token_binding,
+                    // Attach mfa flag in responses where relevant
+
                 })
             }
         }
@@ -151,6 +158,7 @@ impl TokenStore {
                     iat: None,
                     sub: None,
                     token_binding: None,
+
                 };
                 guard.insert(token.to_string(), Arc::new(RwLock::new(record)));
                 Ok(())
@@ -341,6 +349,7 @@ impl TokenStore {
                     iat: None,
                     sub: None,
                     token_binding: None,
+
                 };
                 guard.insert(format!("rt:{}", refresh), Arc::new(RwLock::new(record)));
                 Ok(())
@@ -352,6 +361,51 @@ impl TokenStore {
                     .query_async(&mut conn)
                     .await?;
                 Ok(())
+            }
+        }
+    }
+
+    pub async fn set_mfa_verified(
+        &self,
+        token: &str,
+        verified: bool,
+        ttl_secs: Option<u64>,
+    ) -> anyhow::Result<()> {
+        match self {
+            TokenStore::InMemory(map) => {
+                let _ = map; // keep type used
+                let mut flags = MFA_FLAGS_MEM.write().await;
+                flags.insert(token.to_string(), verified);
+                Ok(())
+            }
+            TokenStore::Redis(conn) => {
+                let mut conn = conn.clone();
+                let key = format!("token:{}:mfa_verified", token);
+                if let Some(ttl) = ttl_secs {
+                    let _: () = redis::Cmd::set_ex(&key, if verified { 1 } else { 0 }, ttl)
+                        .query_async(&mut conn)
+                        .await?;
+                } else {
+                    let _: () = redis::Cmd::set(&key, if verified { 1 } else { 0 })
+                        .query_async(&mut conn)
+                        .await?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn get_mfa_verified(&self, token: &str) -> anyhow::Result<bool> {
+        match self {
+            TokenStore::InMemory(_) => {
+                let flags = MFA_FLAGS_MEM.read().await;
+                Ok(*flags.get(token).unwrap_or(&false))
+            }
+            TokenStore::Redis(conn) => {
+                let mut conn = conn.clone();
+                let key = format!("token:{}:mfa_verified", token);
+                let val: Option<i64> = redis::Cmd::get(&key).query_async(&mut conn).await.unwrap_or(None);
+                Ok(val.unwrap_or(0) == 1)
             }
         }
     }

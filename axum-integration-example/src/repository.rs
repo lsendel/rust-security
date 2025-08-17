@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
-use sqlx::{AnyPool, Row};
+use sqlx::Row;
+#[cfg(feature = "postgres")]
+use sqlx::PgPool;
+#[cfg(feature = "sqlite")]
+use sqlx::SqlitePool;
 
 /// Database error types
 #[derive(Debug, Error)]
@@ -187,20 +191,20 @@ impl UserRepository for InMemoryUserRepository {
     }
 }
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[cfg(feature = "postgres")]
 /// PostgreSQL repository implementation
 pub struct PostgresUserRepository {
-    pool: AnyPool,
+    pool: PgPool,
 }
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[cfg(feature = "postgres")]
 impl PostgresUserRepository {
-    pub fn new(pool: AnyPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[cfg(feature = "postgres")]
 #[async_trait]
 impl UserRepository for PostgresUserRepository {
     async fn create(
@@ -428,20 +432,20 @@ impl UserRepository for PostgresUserRepository {
     }
 }
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[cfg(feature = "sqlite")]
 /// SQLite repository implementation
 pub struct SqliteUserRepository {
-    pool: AnyPool,
+    pool: SqlitePool,
 }
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[cfg(feature = "sqlite")]
 impl SqliteUserRepository {
-    pub fn new(pool: AnyPool) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 }
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[cfg(feature = "sqlite")]
 #[async_trait]
 impl UserRepository for SqliteUserRepository {
     async fn create(

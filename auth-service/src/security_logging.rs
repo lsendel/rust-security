@@ -9,10 +9,12 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SecuritySeverity {
+    Info,
     Low,
     Medium,
     High,
     Critical,
+    Warning,
 }
 
 /// Security event types for categorization
@@ -28,15 +30,21 @@ pub enum SecurityEventType {
     InputValidationFailure,
     RateLimitExceeded,
     RequestSignatureFailure,
+    Authentication,
+    Authorization,
+    RateLimitViolation,
+    SuspiciousActivity,
     MfaAttempt,
     MfaFailure,
-    SuspiciousActivity,
     ConfigurationChange,
     SystemError,
     AccessDenied,
     PrivilegeEscalation,
     DataAccess,
     AdminAction,
+    UnauthorizedAccess,
+    SessionEvent,
+    SecurityViolation,
 }
 
 /// Structured security event for audit logging
@@ -253,6 +261,30 @@ impl SecurityLogger {
             }
             SecuritySeverity::Low => {
                 info!(
+                    target: "security_audit",
+                    event_id = %event.event_id,
+                    event_type = ?event.event_type,
+                    severity = ?event.severity,
+                    client_id = ?event.client_id,
+                    ip_address = ?event.ip_address,
+                    "SECURITY_EVENT: {}",
+                    event_json
+                );
+            }
+            SecuritySeverity::Info => {
+                info!(
+                    target: "security_audit",
+                    event_id = %event.event_id,
+                    event_type = ?event.event_type,
+                    severity = ?event.severity,
+                    client_id = ?event.client_id,
+                    ip_address = ?event.ip_address,
+                    "SECURITY_EVENT: {}",
+                    event_json
+                );
+            }
+            SecuritySeverity::Warning => {
+                warn!(
                     target: "security_audit",
                     event_id = %event.event_id,
                     event_type = ?event.event_type,

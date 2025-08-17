@@ -1,0 +1,71 @@
+{
+  "metadata": {
+    "validation_timestamp": "2025-08-17T06:04:09.078888",
+    "validator_version": "1.0.0"
+  },
+  "summary": {
+    "total_sources": 4,
+    "connected_sources": 2,
+    "failed_sources": 2,
+    "overall_status": "partially_connected"
+  },
+  "detailed_results": [
+    {
+      "service": "Prometheus",
+      "url": "http://localhost:9090",
+      "status": "disconnected",
+      "details": [
+        "\u274c Connection refused - Prometheus not running or not accessible"
+      ],
+      "metrics_available": 0
+    },
+    {
+      "service": "Elasticsearch",
+      "url": "http://localhost:9200",
+      "status": "disconnected",
+      "details": [
+        "\u274c Connection refused - Elasticsearch not running or not accessible"
+      ],
+      "indices_available": 0
+    },
+    {
+      "service": "File System",
+      "status": "available",
+      "details": [
+        "\u2705 config: 20 files",
+        "\u2705 reports/compliance: 11 files",
+        "\u2705 evidence/compliance: 0 files",
+        "\u2705 monitoring/prometheus: 3 files",
+        "\u2705 monitoring/alertmanager: 4 files",
+        "\u2705 monitoring/fluentd: 4 files",
+        "\u2705 monitoring/elasticsearch: 1 files",
+        "\u2705 auth-service/src: 40 files",
+        "\u2705 scripts: 31 files",
+        "\u2705 config/compliance_config.yaml: 8139 bytes",
+        "\u2705 monitoring/prometheus/security-alerts.yml: 9928 bytes",
+        "\u2705 monitoring/alertmanager/alertmanager.yml: 9527 bytes",
+        "\u2705 monitoring/fluentd/fluent.conf: 9803 bytes",
+        "\u2705 monitoring/elasticsearch/ilm-policies.json: 3029 bytes",
+        "\ud83d\udcc1 14/14 expected files/directories available"
+      ],
+      "sources_available": 9
+    },
+    {
+      "service": "Security Data",
+      "status": "comprehensive",
+      "details": [
+        "\u2705 auth-service/src/security_logging.rs",
+        "\u2705 auth-service/src/security.rs",
+        "\u2705 auth-service/src/keys.rs",
+        "\u2705 auth-service/src/mfa.rs",
+        "\u2705 auth-service/src/circuit_breaker.rs",
+        "\u2705 auth-service/src/scim.rs",
+        "\ud83e\uddea 5 security test files found",
+        "\u2705 monitoring/prometheus/security-alerts.yml: 9928 bytes",
+        "\u2705 monitoring/alertmanager/alertmanager.yml: 9527 bytes",
+        "\ud83d\udd12 8/8 security data sources available"
+      ],
+      "sources_available": 8
+    }
+  ]
+}

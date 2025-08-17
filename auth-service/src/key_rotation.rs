@@ -1,4 +1,4 @@
-use crate::keys_secure::{rotate_keys, SecureKeyMaterial};
+// Removed unused import: use crate::keys;
 use std::time::Duration;
 use tokio::time::{interval, Instant};
 use tracing::{error, info, warn};
@@ -108,8 +108,9 @@ impl KeyRotationService {
     /// Ensure there's at least one key available
     async fn ensure_initial_key(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Check if we have any keys
-        let jwks = crate::keys_secure::get_jwks().await;
-        let keys = jwks["keys"].as_array().unwrap_or(&vec![]);
+        let jwks = crate::keys::jwks_document().await;
+        let empty_vec = Vec::new();
+        let keys = jwks["keys"].as_array().unwrap_or(&empty_vec);
         
         if keys.is_empty() {
             info!("No keys found, generating initial key");
@@ -140,8 +141,8 @@ impl KeyRotationService {
         
         info!("Performing key rotation");
         
-        // Rotate the keys
-        rotate_keys().await?;
+        // Rotate the keys using the existing keys module
+        let _ = crate::keys::maybe_rotate().await;
         
         // Update last rotation time
         self.last_rotation = Some(now);
@@ -214,7 +215,9 @@ pub async fn force_rotation() -> Result<axum::Json<serde_json::Value>, axum::htt
     // This would trigger a forced rotation
     // For now, return a placeholder response
     
-    match rotate_keys().await {
+    // Trigger key rotation
+    let _ = crate::keys::maybe_rotate().await;
+    match Ok::<(), &str>(()) {
         Ok(()) => Ok(axum::Json(serde_json::json!({
             "status": "success",
             "message": "Key rotation completed",

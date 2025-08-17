@@ -1,5 +1,5 @@
 Starting comprehensive security posture verification...
-Timestamp: Sat Aug 16 11:00:38 EDT 2025
+Timestamp: Sun Aug 17 06:20:04 EDT 2025
 Starting comprehensive security posture verification
 === Authentication Security Assessment ===
 Assessing: OAuth2 authorization code flow implemented
@@ -13,14 +13,14 @@ Assessing: Secure random token generation
 Assessing: Token expiration and TTL enforcement
 ✅ SECURE: Token expiration and TTL enforcement
 Assessing: Client authentication validation
-🔴 VULNERABLE: Client authentication validation (control failed)
+✅ SECURE: Client authentication validation
 === Multi-Factor Authentication Security ===
 Assessing: TOTP (Time-based OTP) implementation
 ✅ SECURE: TOTP (Time-based OTP) implementation
 Assessing: Secure secret generation for TOTP
 ✅ SECURE: Secure secret generation for TOTP
 Assessing: TOTP verification with time window
-🔴 VULNERABLE: TOTP verification with time window (control failed)
+✅ SECURE: TOTP verification with time window
 Assessing: Rate limiting for MFA attempts
 ✅ SECURE: Rate limiting for MFA attempts
 === Input Validation Security ===
@@ -29,7 +29,7 @@ Assessing: SCIM input validation and sanitization
 Assessing: OAuth parameter validation
 ✅ SECURE: OAuth parameter validation
 Assessing: URL and redirect URI validation
-🔴 VULNERABLE: URL and redirect URI validation (control failed)
+✅ SECURE: URL and redirect URI validation
 Assessing: SQL injection prevention (no raw SQL)
 ✅ SECURE: SQL injection prevention (no raw SQL)
 Assessing: Request size limits implemented
@@ -49,7 +49,7 @@ Assessing: CORS policy configuration
 Assessing: Global rate limiting implementation
 ✅ SECURE: Global rate limiting implementation
 Assessing: Per-IP rate limiting
-🔴 VULNERABLE: Per-IP rate limiting (control failed)
+✅ SECURE: Per-IP rate limiting
 Assessing: Circuit breaker pattern implementation
 ✅ SECURE: Circuit breaker pattern implementation
 Assessing: Request timeout configuration
@@ -58,7 +58,7 @@ Assessing: Request timeout configuration
 Assessing: Security event logging implemented
 ✅ SECURE: Security event logging implemented
 Assessing: Authentication failure logging
-🔴 VULNERABLE: Authentication failure logging (control failed)
+✅ SECURE: Authentication failure logging
 Assessing: Sensitive data not logged
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/lib.rs:// Helper to mint local tokens for a subject (e.g., after federated login)
 No sensitive data in logs
@@ -89,8 +89,9 @@ Assessing: Suspicious user agent detection
 🔴 VULNERABLE: Suspicious user agent detection (control failed)
 === Configuration Security ===
 Assessing: No hardcoded secrets in source code
-/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:    ensure_initialized().await; maybe_rotate().await; let guard = ACTIVE_KEYS.read().await; let key = guard.first().expect("signing key present").clone();
-/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:pub async fn jwks_document() -> serde_json::Value { ensure_initialized().await; maybe_rotate().await; let guard = ACTIVE_KEYS.read().await; let keys: Vec<serde_json::Value> = guard.iter().map(|k| k.public_jwk.clone()).collect(); serde_json::json!({ "keys": keys }) }
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:        assert!(key.public_jwk.get("kty").unwrap() == "RSA");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:        assert!(key.public_jwk.get("alg").unwrap() == "RS256");
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys.rs:        let keys = jwks.get("keys").unwrap().as_array().unwrap();
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                let key = format!("token:{}", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                let key = format!("token:{}", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store_optimized.rs:                    let key = format!("token:{}", token);
@@ -111,8 +112,14 @@ Assessing: No hardcoded secrets in source code
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:                warn!(key = %key, error = %e, "Failed to delete from Redis cache");
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:        debug!(key = %key, "Deleted from cache");
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/cache.rs:    let cache_key = format!("token_introspect:{}", token);
-/Users/lsendel/IdeaProjects/rust-security/auth-service/src/key_rotation.rs:        let keys = jwks["keys"].as_array().unwrap_or(&vec![]);
-/Users/lsendel/IdeaProjects/rust-security/auth-service/src/security.rs:    let secret = std::env::var("REQUEST_SIGNING_SECRET")
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/session_manager.rs:        let key = format!("session:{}", session_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/session_manager.rs:        let key = format!("session:{}", session.id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/session_manager.rs:        let user_key = format!("user_sessions:{}", session.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/session_manager.rs:            let user_key = format!("user_sessions:{}", session.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/session_manager.rs:        let key = format!("session:{}", session_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/session_manager.rs:        let user_key = format!("user_sessions:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/key_rotation.rs:        let keys = jwks["keys"].as_array().unwrap_or(&empty_vec);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/security.rs:    let secret = match std::env::var("REQUEST_SIGNING_SECRET") {
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/config.rs:                if secret == "default_jwt_secret_change_in_production"
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/rate_limit_optimized.rs:        let key = format!("{}:{}", self.key_prefix, client_id);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/rate_limit_optimized.rs:        let client_key = "test_client";
@@ -126,6 +133,7 @@ Assessing: No hardcoded secrets in source code
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_iat = format!("token:{}:iat", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_sub = format!("token:{}:sub", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_token_binding = format!("token:{}:token_binding", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key_mfa_verified = format!("token:{}:mfa_verified", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:active", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:active", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:scope", token);
@@ -134,17 +142,60 @@ Assessing: No hardcoded secrets in source code
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:sub", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:iat", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:refresh", refresh);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:mfa_verified", token);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:mfa_verified", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:token_binding", token);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/store.rs:                let key = format!("token:{}:refresh", refresh);
-/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:secret", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:            let key = format!("mfa:totp:{}:secret", user_id);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:verified", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:last_verified:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let nonce_key = format!("mfa:totp:nonce:{}:{}", user_id, code);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let nonce_key = format!("mfa:totp:nonce:{}:{}", user_id, code);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:last_verified:{}", user_id);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:backup", user_id);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:totp:{}:backup", user_id);
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        "otpauth://totp/{}?secret={}&issuer={}",
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let rl_key = format!("mfa:otp:rate:{}", req.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:otp:{}", req.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa.rs:        let key = format!("mfa:otp:{}", req.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/risk_engine.rs:        let key = format!("risk:patterns:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/cache.rs:            let key = format!("mfa:totp:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/cache.rs:            let key = format!("mfa:session:{}", session_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/totp_enhanced.rs:            "otpauth://totp/{}?secret={}&issuer={}&algorithm={}&digits={}&period={}",
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/rate_limiting.rs:        let key = format!("mfa:rate:{}:{}:{}", limit_type, user_id, Self::current_time().await / window_secs);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/replay_protection.rs:        let key = format!("mfa:totp:used:{}:{}:{}", user_id, code, window_start);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/replay_protection.rs:        let key = format!("mfa:totp:used:{}:{}:{}", user_id, code, window_start);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/replay_protection.rs:        let key = format!("mfa:totp:used:{}:{}:{}", user_id, code, window_start);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let key = format!("mfa:user:{}", record.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let key = format!("mfa:user:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let key = format!("mfa:user:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let secret = b"test_secret_data";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let secret = b"test_secret";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let secret = b"test_secret";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let original_secret = b"original_secret";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/storage.rs:        let new_secret = b"new_secret";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:credential:{}", credential_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let user_key = format!("webauthn:user:{}:credentials", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:reg_challenge:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:auth_challenge:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:reg_challenge:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:auth_challenge:{}", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:credential:{}", credential.credential_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let user_key = format!("webauthn:user:{}:credentials", credential.user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let key = format!("webauthn:credential:{}", credential_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/webauthn.rs:        let user_key = format!("webauthn:user:{}:credentials", user_id);
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/crypto.rs:        if let Ok(key_hex) = std::env::var("MFA_ENCRYPTION_KEY") {
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/crypto.rs:        let secret = b"test_secret_data_123";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/crypto.rs:        let secret = b"test_secret";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/crypto.rs:        let secret1 = b"secret1";
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/mfa/crypto.rs:        let secret2 = b"secret2";
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_google.rs:    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys_ring.rs:        let key_id = format!("key-{}", chrono::Utc::now().timestamp());
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/keys_optimized.rs:        let keys = jwks.get("keys").unwrap().as_array().unwrap();
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_microsoft.rs:	let client_secret = std::env::var("MICROSOFT_CLIENT_SECRET").unwrap_or_default();
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_microsoft.rs:	let Some(keys) = jwks.and_then(|v| v.get("keys").cloned()) else { return (false, None) };
 /Users/lsendel/IdeaProjects/rust-security/auth-service/src/oidc_github.rs:    let client_secret = std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_default();
+/Users/lsendel/IdeaProjects/rust-security/auth-service/src/client_auth.rs:        let secret = "very_strong_secret_with_mixed_chars_123!@#";
 No hardcoded secrets found
 ✅ SECURE: No hardcoded secrets in source code
 Assessing: Environment variable usage for secrets
@@ -185,18 +236,18 @@ Assessing: Security documentation exists
 ✅ SECURE: Security documentation exists
 === Security Posture Verification Results ===
 Total security checks: 54
-Passed checks: 44
-Failed checks: 10
-Security score: 91%
+Passed checks: 49
+Failed checks: 5
+Security score: 96%
 
 Issues by severity:
-  Critical: 2
-  High: 4
-  Medium: 2
+  Critical: 1
+  High: 1
+  Medium: 1
   Low: 2
 Security posture verification results saved to: /Users/lsendel/IdeaProjects/rust-security/reports/security-posture-verification.json
 Security recommendations saved to: /Users/lsendel/IdeaProjects/rust-security/reports/security-recommendations.md
 ❌ Security posture verification FAILED
 🚨 System has critical security issues that must be addressed before production
-🔒 Security score: 91% - Needs Improvement
+🔒 Security score: 96% - Needs Improvement
 Cleaning up...

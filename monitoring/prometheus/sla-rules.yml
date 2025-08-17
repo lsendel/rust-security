@@ -1,0 +1,88 @@
+groups:
+  - name: sla_monitoring
+    interval: 30s
+    rules:
+      # Authentication SLA - 99.9% availability
+      - alert: AuthServiceSLABreach
+        expr: |
+          (
+            sum(rate(http_requests_total{job="auth-service",code!~"5.."}[5m])) / 
+            sum(rate(http_requests_total{job="auth-service"}[5m]))
+          ) * 100 < 99.9
+        for: 2m
+        labels:
+          severity: critical
+          category: sla
+          service: auth-service
+          sla_type: availability
+        annotations:
+          summary: "Auth Service SLA breach - availability below 99.9%"
+          description: "Auth service availability is {{ $value }}% for the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/auth-sla-breach"
+
+      # Authentication Response Time SLA - p95 < 200ms
+      - alert: AuthServiceLatencySLABreach
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(auth_duration_seconds_bucket{method="token_request"}[5m])) by (le)
+          ) > 0.2
+        for: 3m
+        labels:
+          severity: high
+          category: sla
+          service: auth-service
+          sla_type: latency
+        annotations:
+          summary: "Auth Service latency SLA breach - p95 > 200ms"
+          description: "Auth service p95 latency is {{ $value }}s for token requests"
+          runbook_url: "https://docs.company.com/runbooks/auth-latency-sla"
+
+      # Policy Service SLA - 99.95% availability
+      - alert: PolicyServiceSLABreach
+        expr: |
+          (
+            sum(rate(http_requests_total{job="policy-service",code!~"5.."}[5m])) / 
+            sum(rate(http_requests_total{job="policy-service"}[5m]))
+          ) * 100 < 99.95
+        for: 1m
+        labels:
+          severity: critical
+          category: sla
+          service: policy-service
+          sla_type: availability
+        annotations:
+          summary: "Policy Service SLA breach - availability below 99.95%"
+          description: "Policy service availability is {{ $value }}% for the last 5 minutes"
+
+      # Overall System Error Rate SLA - < 0.1%
+      - alert: SystemErrorRateSLABreach
+        expr: |
+          (
+            sum(rate(http_requests_total{code=~"5.."}[10m])) / 
+            sum(rate(http_requests_total[10m]))
+          ) * 100 > 0.1
+        for: 5m
+        labels:
+          severity: high
+          category: sla
+          sla_type: error_rate
+        annotations:
+          summary: "System error rate SLA breach - > 0.1%"
+          description: "System error rate is {{ $value }}% over the last 10 minutes"
+
+      # Security Response Time SLA - Critical alerts < 5 minutes
+      - record: security_alert_response_time
+        expr: |
+          time() - on(alertname) group_left() 
+          (ALERTS{severity="critical",category="security"} == 1)
+
+      - alert: SecurityResponseTimeSLABreach
+        expr: security_alert_response_time > 300  # 5 minutes
+        for: 0s
+        labels:
+          severity: critical
+          category: compliance
+          sla_type: security_response
+        annotations:
+          summary: "Security response time SLA breach"
+          description: "Critical security alert {{ $labels.alertname }} has been open for {{ $value }} seconds"

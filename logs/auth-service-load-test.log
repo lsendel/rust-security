@@ -1,15 +1,81 @@
-warning: unused variable: `request_id`
-   --> auth-service/src/lib.rs:683:9
+   Compiling auth-service v0.1.0 (/Users/lsendel/IdeaProjects/rust-security/auth-service)
+warning: this function depends on never type fallback being `()`
+   --> auth-service/src/session_manager.rs:399:5
     |
-683 |     let request_id = headers
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
+399 |     async fn store_session_to_redis(&self, client: &redis::Client, session: &Session) -> Result<(), redis::RedisError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = note: `#[warn(unused_variables)]` on by default
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in Rust 2024 and in a future release in all editions!
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/never-type-fallback.html>
+    = help: specify the types explicitly
+note: in edition 2024, the requirement `!: FromRedisValue` will fail
+   --> auth-service/src/session_manager.rs:414:14
+    |
+414 |             .query_async(&mut conn)
+    |              ^^^^^^^^^^^
+    = note: `#[warn(dependency_on_unit_never_type_fallback)]` on by default
+help: use `()` annotations to avoid fallback changes
+    |
+414 ~             .query_async::<()>(&mut conn)
+415 |             .await?;
+...
+420 |             .arg(&session.id)
+421 ~             .query_async::<()>(&mut conn)
+422 |             .await?;
+...
+427 |             .arg(ttl)
+428 ~             .query_async::<()>(&mut conn)
+    |
 
-warning: `auth-service` (lib) generated 1 warning
-    Finished `release` profile [optimized] target(s) in 0.29s
-     Running `/Users/lsendel/IdeaProjects/rust-security/target/release/auth-service`
-[2m2025-08-16T14:58:21.256556Z[0m [33m WARN[0m ThreadId(01) [2mauth_service::config[0m[2m:[0m [2mauth-service/src/config.rs[0m[2m:[0m[2m154:[0m Using default JWT secret. Set JWT_SECRET environment variable in production!
-[2m2025-08-16T14:58:21.256649Z[0m [32m INFO[0m ThreadId(01) [2mauth_service[0m[2m:[0m [2mauth-service/src/main.rs[0m[2m:[0m[2m30:[0m Starting auth-service with configuration loaded
-[2m2025-08-16T14:58:21.256654Z[0m [32m INFO[0m ThreadId(01) [2mauth_service[0m[2m:[0m [2mauth-service/src/main.rs[0m[2m:[0m[2m45:[0m Using in-memory token store
-Error: Address already in use (os error 48)
+warning: this function depends on never type fallback being `()`
+   --> auth-service/src/session_manager.rs:434:5
+    |
+434 |     async fn delete_session_from_redis(&self, client: &redis::Client, session_id: &str) -> Result<(), redis::RedisError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in Rust 2024 and in a future release in all editions!
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/never-type-fallback.html>
+    = help: specify the types explicitly
+note: in edition 2024, the requirement `!: FromRedisValue` will fail
+   --> auth-service/src/session_manager.rs:443:18
+    |
+443 |                 .query_async(&mut conn)
+    |                  ^^^^^^^^^^^
+help: use `()` annotations to avoid fallback changes
+    |
+443 ~                 .query_async::<()>(&mut conn)
+444 |                 .await?;
+...
+449 |             .arg(&key)
+450 ~             .query_async::<()>(&mut conn)
+    |
+
+warning: unused variable: `state`
+  --> auth-service/src/webauthn.rs:75:34
+   |
+75 | pub async fn finish_assert(State(state): State<AppState>, Json(body): Json<FinishAssertRequest>) -> Json<FinishAssertResponse> {
+   |                                  ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `body`
+  --> auth-service/src/webauthn.rs:75:64
+   |
+75 | pub async fn finish_assert(State(state): State<AppState>, Json(body): Json<FinishAssertRequest>) -> Json<FinishAssertResponse> {
+   |                                                                ^^^^ help: if this is intentional, prefix it with an underscore: `_body`
+
+error[E0425]: cannot find function `state_unavailable_placeholder` in this scope
+   --> auth-service/src/lib.rs:394:22
+    |
+394 |         token_store: state_unavailable_placeholder(),
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+warning: unused variable: `request_id`
+    --> auth-service/src/lib.rs:1146:9
+     |
+1146 |     let request_id = headers
+     |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request_id`
+
+For more information about this error, try `rustc --explain E0425`.
+warning: `auth-service` (lib) generated 5 warnings
+error: could not compile `auth-service` (lib) due to 1 previous error; 7 warnings emitted

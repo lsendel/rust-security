@@ -1,0 +1,131 @@
+groups:
+  - name: infrastructure_monitoring
+    interval: 30s
+    rules:
+      # System Resource Monitoring
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% for the last 5 minutes"
+
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}%"
+
+      - alert: DiskSpaceRunningLow
+        expr: |
+          (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Disk space running low"
+          description: "Disk usage is {{ $value }}% on {{ $labels.mountpoint }}"
+
+      - alert: DiskSpaceCritical
+        expr: |
+          (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Disk space critically low"
+          description: "Disk usage is {{ $value }}% on {{ $labels.mountpoint }}"
+
+      # Redis Monitoring
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance is not responding"
+
+      - alert: RedisHighMemoryUsage
+        expr: |
+          (redis_memory_used_bytes / redis_memory_max_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+          service: redis
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is {{ $value }}%"
+
+      - alert: RedisSlowQueries
+        expr: |
+          increase(redis_slowlog_length[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: infrastructure
+          service: redis
+        annotations:
+          summary: "Redis slow queries detected"
+          description: "{{ $value }} slow queries detected in the last 5 minutes"
+
+      # Container Monitoring
+      - alert: ContainerCPUThrottling
+        expr: |
+          rate(container_cpu_cfs_throttled_seconds_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Container CPU throttling detected"
+          description: "Container {{ $labels.name }} is experiencing CPU throttling"
+
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Container memory near limit"
+          description: "Container {{ $labels.name }} memory usage is {{ $value }}% of limit"
+
+      # Network Monitoring
+      - alert: HighNetworkTraffic
+        expr: |
+          rate(node_network_receive_bytes_total[5m]) > 100 * 1024 * 1024  # 100MB/s
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High network traffic detected"
+          description: "Network receive rate is {{ $value | humanize }}B/s"
+
+      # Load Balancer / Proxy Monitoring (if applicable)
+      - alert: HighConnectionCount
+        expr: |
+          node_netstat_Tcp_CurrEstab > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High TCP connection count"
+          description: "Current established TCP connections: {{ $value }}"

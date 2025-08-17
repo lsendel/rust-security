@@ -28,3 +28,11 @@ permit(
     action == Action::"orders:read",
     resource == Order::"o3"
 );
+
+// Example step-up policy: require MFA verification for refunds
+forbid(
+    principal,
+    action == Action::"orders:refund",
+    resource
+)
+unless { context.mfa_verified == true };

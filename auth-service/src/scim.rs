@@ -1,6 +1,8 @@
 use axum::{extract::{Path, Query}, routing::{get, post}, Router};
+use axum::{extract::Request, middleware::Next, response::Response};
 use axum::extract::Extension;
 use axum::{Json, http::StatusCode};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::RwLock;
@@ -155,6 +157,42 @@ pub fn router() -> Router {
         .route("/scim/v2/Groups/:id", get(get_group))
         .route("/scim/v2/Bulk", post(bulk_operations))
         .layer(Extension(store))
+        .layer(axum::middleware::from_fn(scim_basic_auth))
+}
+
+/// Basic auth guard for SCIM endpoints (configurable via env)
+async fn scim_basic_auth(request: Request, next: Next) -> Result<Response, axum::http::StatusCode> {
+    let (parts, body) = request.into_parts();
+    let auth = parts.headers.get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    // Expected credentials from env: either SCIM_BASIC_CREDENTIALS="user:pass" or SCIM_BASIC_USER/PASS
+    let expected = std::env::var("SCIM_BASIC_CREDENTIALS").ok().or_else(|| {
+        let user = std::env::var("SCIM_BASIC_USER").ok();
+        let pass = std::env::var("SCIM_BASIC_PASS").ok();
+        match (user, pass) {
+            (Some(u), Some(p)) => Some(format!("{}:{}", u, p)),
+            _ => None,
+        }
+    });
+
+    if let Some(expected_creds) = expected {
+        if let Some(b64) = auth.strip_prefix("Basic ") {
+            if let Ok(decoded) = STANDARD.decode(b64) {
+                if let Ok(pair) = std::str::from_utf8(&decoded) {
+                    if pair == expected_creds {
+                        let req = Request::from_parts(parts, body);
+                        return Ok(next.run(req).await);
+                    }
+                }
+            }
+        }
+        return Err(axum::http::StatusCode::UNAUTHORIZED);
+    }
+
+    // If no SCIM basic credentials configured, deny by default
+    Err(axum::http::StatusCode::UNAUTHORIZED)
 }
 
 async fn create_user(Extension(store): Extension<std::sync::Arc<ScimStore>>, Json(mut u): Json<ScimUser>) -> Json<ScimUser> {

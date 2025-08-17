@@ -1,5 +1,5 @@
 author: Rust Security Workspace - Threat Intelligence
-date: 2025/08/16
+date: 2025/08/17
 description: Detects suspicious user agent strings commonly used by malware
 detection:
   condition: selection and not filter
