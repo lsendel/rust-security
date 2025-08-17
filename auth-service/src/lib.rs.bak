@@ -89,22 +89,6 @@ pub mod per_ip_rate_limit;
 pub mod scim_rbac;
 pub mod auth_failure_logging;
 
-// Threat Hunting Modules
-#[cfg(feature = "threat-hunting")]
-pub mod threat_types;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_behavioral_analyzer;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_intelligence;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_attack_patterns;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_user_profiler;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_response_orchestrator;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_hunting_orchestrator;
-
 // Import the new comprehensive MFA system
 // Deprecated re-exports removed (modules not present)
 
@@ -340,13 +324,9 @@ pub async fn update_security_config(
     path = "/admin/rate-limit/stats",
     responses((status = 200, description = "Rate limiting statistics"))
 )]
-pub async fn get_rate_limit_stats_endpoint(
-    headers: axum::http::HeaderMap,
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, AuthError> {
-    require_admin_scope(&headers, &state).await?;
+pub async fn get_rate_limit_stats_endpoint() -> Json<serde_json::Value> {
     let stats = crate::rate_limit_optimized::get_rate_limit_stats();
-    Ok(Json(serde_json::json!({
+    Json(serde_json::json!({
         "total_entries": stats.total_entries,
         "shard_count": stats.shard_count,
         "shard_sizes": stats.shard_sizes,
@@ -356,27 +336,7 @@ pub async fn get_rate_limit_stats_endpoint(
             "burst_allowance": stats.config.burst_allowance,
             "cleanup_interval_secs": stats.config.cleanup_interval_secs
         }
-    })))
-}
-
-/// Admin-protected wrapper around key rotation status
-pub async fn admin_get_rotation_status(
-    headers: axum::http::HeaderMap,
-    State(state): State<AppState>,
-) -> Result<axum::Json<serde_json::Value>, AuthError> {
-    require_admin_scope(&headers, &state).await?;
-    Ok(crate::key_rotation::get_rotation_status().await)
-}
-
-/// Admin-protected wrapper around forcing key rotation
-pub async fn admin_force_rotation(
-    headers: axum::http::HeaderMap,
-    State(state): State<AppState>,
-) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
-    match require_admin_scope(&headers, &state).await {
-        Ok(_) => crate::key_rotation::force_rotation().await,
-        Err(_) => Err(axum::http::StatusCode::UNAUTHORIZED),
-    }
+    }))
 }
 
 // Session management endpoint handlers
@@ -448,33 +408,6 @@ async fn extract_user_from_token(
 
     // Extract user ID from token subject
     record.sub.ok_or_else(|| AuthError::InvalidToken("Token has no subject".to_string()))
-}
-
-/// Require that the caller has an access token with the "admin" scope
-async fn require_admin_scope(
-    headers: &axum::http::HeaderMap,
-    state: &AppState,
-) -> Result<(), AuthError> {
-    // Extract bearer token
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let token = auth
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken("Missing bearer token".to_string()))?;
-    if token.is_empty() {
-        return Err(AuthError::InvalidToken("Empty bearer token".to_string()));
-    }
-
-    let record = state.token_store.get_record(token).await?;
-    if !record.active {
-        return Err(AuthError::InvalidToken("Inactive token".to_string()));
-    }
-    match record.scope {
-        Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => Ok(()),
-        _ => Err(AuthError::UnauthorizedClient("insufficient_scope".to_string())),
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -1409,20 +1342,6 @@ pub async fn issue_token(
                 .refresh_token
                 .as_ref()
                 .ok_or(AuthError::MissingRefreshToken)?;
-            // Detect refresh token reuse
-            if state.token_store.is_refresh_reused(rt).await.unwrap_or(false) {
-                SecurityLogger::log_token_operation(
-                    "refresh",
-                    "refresh_token",
-                    "unknown",
-                    &ip_address,
-                    "failure",
-                    Some([
-                        ("reason".to_string(), serde_json::Value::String("refresh_token_reuse".to_string())),
-                    ].into()),
-                );
-                return Err(AuthError::InvalidRefreshToken);
-            }
             let consumed = state.token_store.consume_refresh(rt).await?;
             if !consumed {
                 // Log failed refresh token attempt
@@ -1934,10 +1853,10 @@ pub fn app(state: AppState) -> Router {
         .route("/mfa/otp/send", post(crate::mfa::otp_send))
         .route("/mfa/otp/verify", post(crate::mfa::otp_verify))
         .route("/mfa/session/verify", post(crate::mfa::mfa_session_verify))
-        // Key rotation admin endpoints (protected)
-        .route("/admin/keys/rotation/status", get(admin_get_rotation_status))
-        .route("/admin/keys/rotation/force", post(admin_force_rotation))
-        // Rate limiting admin endpoints (protected)
+        // Key rotation admin endpoints
+        .route("/admin/keys/rotation/status", get(crate::key_rotation::get_rotation_status))
+        .route("/admin/keys/rotation/force", post(crate::key_rotation::force_rotation))
+        // Rate limiting admin endpoints
         .route("/admin/rate-limit/stats", get(get_rate_limit_stats_endpoint))
         // Session management endpoints
         .route("/session/create", post(create_session_endpoint))

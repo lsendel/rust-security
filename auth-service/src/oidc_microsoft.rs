@@ -159,16 +159,36 @@ async fn validate_ms_id_token(id_token: &str, client_id: &str, expected_nonce: O
 	}
 }
 
-// Ephemeral state store with TTL for Microsoft OAuth
+// OAuth state storage with Redis fallback for multi-instance safety
 static MS_STATE_CACHE: Lazy<RwLock<HashMap<String, (String, u64)>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
+async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
+    let url = std::env::var("REDIS_URL").ok()?;
+    let client = redis::Client::open(url).ok()?;
+    client.get_connection_manager().await.ok()
+}
+
 async fn store_ms_oauth_state(state: &str, nonce: &str) {
-    let mut guard = MS_STATE_CACHE.write().await;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("oidc:microsoft:state:{}", state);
+        let _: () = redis::Cmd::set_ex(&key, nonce, 600)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
+        return;
+    }
+    let mut guard = MS_STATE_CACHE.write().await;
     guard.insert(state.to_string(), (nonce.to_string(), now + 600));
 }
 
 async fn consume_ms_oauth_state(state: &str) -> Option<(String, u64)> {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("oidc:microsoft:state:{}", state);
+        let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
+        let _: () = redis::Cmd::del(&key).query_async(&mut conn).await.unwrap_or(());
+        if let Some(nonce) = val { return Some((nonce, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 1)); }
+    }
     let mut guard = MS_STATE_CACHE.write().await;
     if let Some((nonce, exp)) = guard.remove(state) {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();

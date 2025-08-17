@@ -4,6 +4,16 @@ use std::collections::HashMap;
 use std::time::Instant;
 use crate::AuthError;
 use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use once_cell::sync::Lazy;
+
+// Precomputed dummy hash used to equalize timing for unknown clients
+static DUMMY_HASH: Lazy<String> = Lazy::new(|| {
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(b"timing_balance_dummy_secret", &salt)
+        .map(|ph| ph.to_string())
+        .unwrap_or_else(|_| "".to_string())
+});
 
 /// Secure client authentication with timing attack protection
 pub struct ClientAuthenticator {
@@ -28,6 +38,8 @@ pub struct ClientMetadata {
 
 impl ClientAuthenticator {
     pub fn new() -> Self {
+        // Force initialization of dummy hash to avoid first-call penalty in timing tests
+        let _ = DUMMY_HASH.len();
         Self {
             client_secrets: HashMap::new(),
             client_metadata: HashMap::new(),
@@ -37,8 +49,8 @@ impl ClientAuthenticator {
 
     /// Register a new client with secure secret hashing
     pub fn register_client(
-        &mut self, 
-        client_id: String, 
+        &mut self,
+        client_id: String,
         client_secret: String,
         metadata: ClientMetadata
     ) -> Result<(), AuthError> {
@@ -60,17 +72,17 @@ impl ClientAuthenticator {
 
     /// Authenticate client with timing attack protection
     pub fn authenticate_client(
-        &self, 
-        client_id: &str, 
+        &self,
+        client_id: &str,
         client_secret: &str,
         ip_address: Option<&str>
     ) -> Result<bool, AuthError> {
         let start_time = Instant::now();
-        
+
         // Always perform the same operations regardless of client existence
         let stored_hash = self.client_secrets.get(client_id);
         let client_metadata = self.client_metadata.get(client_id);
-        
+
         let is_valid = match (stored_hash, client_metadata) {
             (Some(hash), Some(metadata)) => {
                 // Check if client is active
@@ -81,35 +93,39 @@ impl ClientAuthenticator {
                     // Verify password hash
                     let parsed_hash = PasswordHash::new(hash)
                         .map_err(|e| AuthError::InternalError(anyhow::anyhow!("Invalid stored hash: {}", e)))?;
-                    
+
                     let verification_result = self.argon2
                         .verify_password(client_secret.as_bytes(), &parsed_hash)
                         .is_ok();
-                    
+
                     self.log_auth_attempt(
-                        client_id, 
-                        verification_result, 
+                        client_id,
+                        verification_result,
                         if verification_result { "success" } else { "invalid_credentials" },
                         ip_address
                     );
-                    
+
                     verification_result
                 }
             }
             _ => {
-                // Client doesn't exist - still perform hash operation for timing consistency
-                let dummy_salt = SaltString::generate(&mut OsRng);
-                let _ = self.argon2.hash_password(client_secret.as_bytes(), &dummy_salt);
-                
+                // Client doesn't exist - still perform a password verification against a dummy hash
+                // to align timing and code path with existing clients
+                if !DUMMY_HASH.is_empty() {
+                    if let Ok(parsed) = PasswordHash::new(&DUMMY_HASH) {
+                        let _ = self.argon2.verify_password(client_secret.as_bytes(), &parsed);
+                    }
+                }
+
                 self.log_auth_attempt(client_id, false, "unknown_client", ip_address);
                 false
             }
         };
 
-        // Ensure consistent timing (minimum 100ms to prevent timing attacks)
+        // Ensure consistent timing (minimum 120ms to prevent timing attacks)
         let elapsed = start_time.elapsed();
-        if elapsed.as_millis() < 100 {
-            std::thread::sleep(std::time::Duration::from_millis(100 - elapsed.as_millis() as u64));
+        if elapsed.as_millis() < 120 {
+            std::thread::sleep(std::time::Duration::from_millis(120 - elapsed.as_millis() as u64));
         }
 
         Ok(is_valid)
@@ -155,7 +171,7 @@ impl ClientAuthenticator {
         for c in secret.chars() {
             *char_counts.entry(c).or_insert(0) += 1;
         }
-        
+
         let max_repeated = char_counts.values().max().unwrap_or(&0);
         if *max_repeated > secret.len() / 4 {
             return Err(AuthError::InvalidRequest(
@@ -168,10 +184,10 @@ impl ClientAuthenticator {
 
     /// Log authentication attempts for security monitoring
     fn log_auth_attempt(&self, client_id: &str, success: bool, reason: &str, ip_address: Option<&str>) {
-        let severity = if success { 
-            SecuritySeverity::Info 
-        } else { 
-            SecuritySeverity::Warning 
+        let severity = if success {
+            SecuritySeverity::Info
+        } else {
+            SecuritySeverity::Warning
         };
 
         let mut event = SecurityEvent::new(
@@ -235,10 +251,10 @@ impl Default for ClientMetadata {
 }
 
 /// Global client authenticator instance
-static CLIENT_AUTHENTICATOR: once_cell::sync::Lazy<std::sync::Mutex<ClientAuthenticator>> = 
+static CLIENT_AUTHENTICATOR: once_cell::sync::Lazy<std::sync::Mutex<ClientAuthenticator>> =
     once_cell::sync::Lazy::new(|| {
         let mut auth = ClientAuthenticator::new();
-        
+
         // Load clients from environment
         if let Err(e) = auth.load_from_env() {
             eprintln!("Warning: Failed to load clients from environment: {}", e);
@@ -280,7 +296,7 @@ mod tests {
     fn test_client_registration() {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
-        
+
         // Strong secret should work
         let result = auth.register_client(
             "test_client".to_string(),
@@ -294,21 +310,21 @@ mod tests {
     fn test_weak_secret_rejection() {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
-        
+
         // Too short
         assert!(auth.register_client(
             "test_client".to_string(),
             "short".to_string(),
             metadata.clone()
         ).is_err());
-        
+
         // All digits
         assert!(auth.register_client(
             "test_client".to_string(),
             "12345678901234567890123456789012".to_string(),
             metadata.clone()
         ).is_err());
-        
+
         // All letters
         assert!(auth.register_client(
             "test_client".to_string(),
@@ -322,19 +338,19 @@ mod tests {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
         let secret = "very_strong_secret_with_mixed_chars_123!@#";
-        
+
         auth.register_client(
             "test_client".to_string(),
             secret.to_string(),
             metadata
         ).unwrap();
-        
+
         // Correct credentials
         assert!(auth.authenticate_client("test_client", secret, None).unwrap());
-        
+
         // Wrong credentials
         assert!(!auth.authenticate_client("test_client", "wrong_secret", None).unwrap());
-        
+
         // Non-existent client
         assert!(!auth.authenticate_client("unknown_client", secret, None).unwrap());
     }
@@ -343,30 +359,30 @@ mod tests {
     fn test_timing_consistency() {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
-        
+
         auth.register_client(
             "test_client".to_string(),
             "very_strong_secret_with_mixed_chars_123!@#".to_string(),
             metadata
         ).unwrap();
-        
+
         // Measure timing for valid client
         let start = Instant::now();
         let _ = auth.authenticate_client("test_client", "wrong_secret", None);
         let valid_client_time = start.elapsed();
-        
+
         // Measure timing for invalid client
         let start = Instant::now();
         let _ = auth.authenticate_client("unknown_client", "any_secret", None);
         let invalid_client_time = start.elapsed();
-        
+
         // Times should be similar (within 50ms due to minimum timing requirement)
         let time_diff = if valid_client_time > invalid_client_time {
             valid_client_time - invalid_client_time
         } else {
             invalid_client_time - valid_client_time
         };
-        
+
         assert!(time_diff.as_millis() < 50, "Timing difference too large: {}ms", time_diff.as_millis());
     }
 }

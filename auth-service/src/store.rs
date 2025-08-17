@@ -445,10 +445,26 @@ impl TokenStore {
         match self {
             TokenStore::InMemory(map) => {
                 let mut guard = map.write().await;
-                if let Some(rec) = guard.get_mut(&format!("rt:{}", refresh)) {
+                let key = format!("rt:{}", refresh);
+                if let Some(rec) = guard.get(&key) {
                     let mut rec = rec.write().await;
                     if rec.active {
                         rec.active = false;
+                        // Drop first mutable borrow before inserting marker
+                        drop(rec);
+                        // Mark a short-lived reuse marker for detection
+                        guard.insert(
+                            format!("rt_used:{}", refresh),
+                            Arc::new(RwLock::new(IntrospectionRecord {
+                                active: false,
+                                scope: None,
+                                client_id: None,
+                                exp: None,
+                                iat: None,
+                                sub: None,
+                                token_binding: None,
+                            })),
+                        );
                         return Ok(true);
                     }
                 }
@@ -457,8 +473,38 @@ impl TokenStore {
             TokenStore::Redis(conn) => {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:refresh", refresh);
-                let deleted: i64 = redis::Cmd::del(&key).query_async(&mut conn).await?;
+                // Use Lua script to atomically delete and set reuse marker if existed
+                let script = r#"
+                    local existed = redis.call('DEL', KEYS[1])
+                    if existed == 1 then
+                        redis.call('SETEX', KEYS[2], ARGV[1], 1)
+                    end
+                    return existed
+                "#;
+                let reuse_key = format!("token:{}:refresh:used", refresh);
+                let deleted: i64 = redis::Script::new(script)
+                    .key(&key)
+                    .key(&reuse_key)
+                    .arg(600) // reuse detection window 10 minutes
+                    .invoke_async(&mut conn)
+                    .await?;
                 Ok(deleted > 0)
+            }
+        }
+    }
+
+    /// Detect whether a refresh token was already used (reuse attempt)
+    pub async fn is_refresh_reused(&self, refresh: &str) -> anyhow::Result<bool> {
+        match self {
+            TokenStore::InMemory(map) => {
+                let guard = map.read().await;
+                Ok(guard.contains_key(&format!("rt_used:{}", refresh)))
+            }
+            TokenStore::Redis(conn) => {
+                let mut conn = conn.clone();
+                let key = format!("token:{}:refresh:used", refresh);
+                let exists: i64 = redis::Cmd::exists(&key).query_async(&mut conn).await?;
+                Ok(exists == 1)
             }
         }
     }

@@ -169,21 +169,39 @@ type JwksMap = HashMap<String, (String, String)>;
 #[allow(clippy::type_complexity)]
 static GOOGLE_JWKS_CACHE: Lazy<RwLock<(u64, JwksMap)>> = Lazy::new(|| RwLock::new((0, HashMap::new())));
 
-// Ephemeral state store with TTL for Google OAuth
+// OAuth state storage with Redis fallback for multi-instance safety
 static GOOGLE_STATE_CACHE: Lazy<RwLock<HashMap<String, (String, u64)>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
+async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
+    let url = std::env::var("REDIS_URL").ok()?;
+    let client = redis::Client::open(url).ok()?;
+    client.get_connection_manager().await.ok()
+}
+
 async fn store_oauth_state(state: &str, nonce: &str) {
-    let mut guard = GOOGLE_STATE_CACHE.write().await;
     let now = current_unix();
-    guard.insert(state.to_string(), (nonce.to_string(), now + 600)); // 10 minutes TTL
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("oidc:google:state:{}", state);
+        let _: () = redis::Cmd::set_ex(&key, nonce, 600)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
+        return;
+    }
+    let mut guard = GOOGLE_STATE_CACHE.write().await;
+    guard.insert(state.to_string(), (nonce.to_string(), now + 600));
 }
 
 async fn consume_oauth_state(state: &str) -> Option<(String, u64)> {
+    if let Some(mut conn) = redis_conn().await {
+        let key = format!("oidc:google:state:{}", state);
+        let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
+        let _: () = redis::Cmd::del(&key).query_async(&mut conn).await.unwrap_or(());
+        if let Some(nonce) = val { return Some((nonce, current_unix() + 1)); }
+    }
     let mut guard = GOOGLE_STATE_CACHE.write().await;
     if let Some((nonce, exp)) = guard.remove(state) {
-        if current_unix() <= exp {
-            return Some((nonce, exp));
-        }
+        if current_unix() <= exp { return Some((nonce, exp)); }
     }
     None
 }
