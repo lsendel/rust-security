@@ -18,7 +18,7 @@ impl RedirectUriValidator {
     pub fn new(enforce_https: bool) -> Self {
         let mut allowed_schemes = HashSet::new();
         allowed_schemes.insert("https".to_string());
-        
+
         // Allow http only for localhost in development
         if !enforce_https {
             allowed_schemes.insert("http".to_string());
@@ -35,12 +35,15 @@ impl RedirectUriValidator {
     /// Register allowed redirect URIs for a client
     pub fn register_client_uris(&mut self, client_id: &str, uris: Vec<String>) -> Result<(), AuthError> {
         let mut validated_uris = HashSet::new();
-        
+
         for uri in uris {
+            // Validate and also enforce security policies at registration time to align with tests
             self.validate_uri_format(&uri)?;
+            // Reject path traversal early to prevent registration of suspicious URIs
+            self.validate_security_policies(&uri)?;
             validated_uris.insert(uri);
         }
-        
+
         self.client_redirect_uris.insert(client_id.to_string(), validated_uris);
         Ok(())
     }
@@ -68,12 +71,18 @@ impl RedirectUriValidator {
 
     /// Validate URI format and structure
     fn validate_uri_format(&self, uri: &str) -> Result<(), AuthError> {
+        // Basic string-level path traversal guard prior to parsing (URL parsing may normalize dot segments)
+        if uri.contains("/../") || uri.ends_with("/..") {
+            return Err(AuthError::InvalidRequest(
+                "Path traversal detected in redirect URI".to_string()
+            ));
+        }
         // Parse URL
         let parsed_url = Url::parse(uri)
             .map_err(|_| AuthError::InvalidRequest("Invalid redirect URI format".to_string()))?;
 
-        // Validate scheme
-        if !self.allowed_schemes.contains(parsed_url.scheme()) {
+        // Basic scheme presence; detailed scheme enforcement happens in security policies
+        if parsed_url.scheme() != "https" && parsed_url.scheme() != "http" {
             return Err(AuthError::InvalidRequest(
                 format!("Unsupported scheme: {}", parsed_url.scheme())
             ));
@@ -137,14 +146,11 @@ impl RedirectUriValidator {
         }
 
         // Prevent suspicious paths
-        if let Some(path) = parsed_url.path_segments() {
-            for segment in path {
-                if segment.contains("..") || segment.contains("//") {
-                    return Err(AuthError::InvalidRequest(
-                        "Path traversal detected in redirect URI".to_string()
-                    ));
-                }
-            }
+        let raw_path = parsed_url.path();
+        if raw_path.contains("..") || raw_path.contains("//") {
+            return Err(AuthError::InvalidRequest(
+                "Path traversal detected in redirect URI".to_string()
+            ));
         }
 
         Ok(())
@@ -165,7 +171,7 @@ impl RedirectUriValidator {
 impl Default for RedirectUriValidator {
     fn default() -> Self {
         let mut validator = Self::new(std::env::var("ENVIRONMENT").unwrap_or_default() == "production");
-        
+
         // Register default test client
         let _ = validator.register_client_uris(
             "test_client",
@@ -187,7 +193,7 @@ mod tests {
     fn test_valid_redirect_uri() {
         let mut validator = RedirectUriValidator::new(false);
         validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["https://example.com/callback".to_string()]
         ).unwrap();
 
@@ -198,7 +204,7 @@ mod tests {
     fn test_unregistered_redirect_uri() {
         let mut validator = RedirectUriValidator::new(false);
         validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["https://example.com/callback".to_string()]
         ).unwrap();
 
@@ -209,7 +215,7 @@ mod tests {
     fn test_fragment_rejection() {
         let mut validator = RedirectUriValidator::new(false);
         validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["https://example.com/callback#fragment".to_string()]
         ).unwrap_err(); // Should fail during registration
     }
@@ -218,10 +224,10 @@ mod tests {
     fn test_https_enforcement() {
         let mut validator = RedirectUriValidator::new(true); // Production mode
         let result = validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["http://example.com/callback".to_string()]
         );
-        
+
         // Should allow registration but fail validation
         if result.is_ok() {
             assert!(validator.validate_redirect_uri("test_client", "http://example.com/callback").is_err());
@@ -232,7 +238,7 @@ mod tests {
     fn test_localhost_exception() {
         let mut validator = RedirectUriValidator::new(true); // Production mode
         validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["http://localhost:3000/callback".to_string()]
         ).unwrap();
 
@@ -243,10 +249,10 @@ mod tests {
     fn test_path_traversal_prevention() {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["https://example.com/../callback".to_string()]
         );
-        
+
         assert!(result.is_err());
     }
 
@@ -254,10 +260,10 @@ mod tests {
     fn test_ip_address_rejection() {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator.register_client_uris(
-            "test_client", 
+            "test_client",
             vec!["https://192.168.1.1/callback".to_string()]
         );
-        
+
         assert!(result.is_err());
     }
 
@@ -265,7 +271,7 @@ mod tests {
     fn test_uri_length_limit() {
         let validator = RedirectUriValidator::new(false);
         let long_uri = format!("https://example.com/{}", "a".repeat(3000));
-        
+
         assert!(validator.validate_redirect_uri("test_client", &long_uri).is_err());
     }
 }

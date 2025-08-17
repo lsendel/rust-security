@@ -44,7 +44,11 @@ pub async fn add_security_headers(request: Request, next: Next) -> Response {
     );
 
     // XSS Protection (legacy but still useful)
-    // Drop legacy X-XSS-Protection header
+    // Keep legacy X-XSS-Protection header for backward compatibility with existing clients/tests
+    headers.insert(
+        "X-XSS-Protection",
+        "1; mode=block".parse().unwrap(),
+    );
 
     // Referrer Policy - Limit referrer information
     headers.insert(

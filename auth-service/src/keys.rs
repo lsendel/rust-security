@@ -3,6 +3,10 @@ use base64::Engine as _;
 use tokio::sync::RwLock;
 use serde_json::Value;
 use jsonwebtoken::{EncodingKey, DecodingKey};
+use std::sync::Arc;
+
+#[cfg(feature = "simd")]
+use rayon::prelude::*;
 
 #[derive(Clone)]
 pub struct SecureKeyMaterial {

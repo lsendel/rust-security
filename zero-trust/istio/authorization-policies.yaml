@@ -1,0 +1,148 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: rust-security-zt
+spec:
+  action: DENY
+  rules:
+  - {}
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: auth-service-access
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+        - "cluster.local/ns/rust-security-zt/sa/auth-service"
+        - "cluster.local/ns/rust-security-zt/sa/policy-service"
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/health", "/token", "/introspect", "/oauth/*", "/scim/*", "/.well-known/*"]
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/rust-security-zt/sa/monitoring"
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/health", "/metrics"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: policy-service-access
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: policy-service
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/rust-security-zt/sa/auth-service"
+        - "cluster.local/ns/rust-security-zt/sa/policy-service"
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/policy/*", "/health"]
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redis-access
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/rust-security-zt/sa/auth-service"
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: external-api-access
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/token", "/introspect"]
+    when:
+    - key: request.headers[user-agent]
+      notValues: ["*bot*", "*crawler*", "*scanner*"]
+    - key: request.headers[content-type]
+      values: ["application/x-www-form-urlencoded", "application/json"]
+    - key: source.ip
+      notValues: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: rate-limiting-policy
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: DENY
+  rules:
+  - when:
+    - key: source.ip
+      values: ["*"]
+    - key: request.headers[x-forwarded-for]
+      values: ["*"]
+  # This will be enhanced with Envoy rate limiting filter
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: device-trust-policy
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: DENY
+  rules:
+  - when:
+    - key: request.headers[x-device-fingerprint]
+      notValues: ["*"]
+    - key: custom.device_trust_score
+      values: ["0", "1", "2"]  # Deny low trust scores
+  # Custom device trust scoring will be implemented

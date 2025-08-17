@@ -1,0 +1,302 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: zero-trust-gateway
+  namespace: rust-security-zt
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: zero-trust-tls
+      minProtocolVersion: TLSV1_3
+      maxProtocolVersion: TLSV1_3
+      cipherSuites:
+      - ECDHE-ECDSA-AES256-GCM-SHA384
+      - ECDHE-RSA-AES256-GCM-SHA384
+      - ECDHE-ECDSA-CHACHA20-POLY1305
+      - ECDHE-RSA-CHACHA20-POLY1305
+    hosts:
+    - "auth.zero-trust.local"
+    - "api.zero-trust.local"
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "auth.zero-trust.local"
+    - "api.zero-trust.local"
+    tls:
+      httpsRedirect: true
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: auth-service-vs
+  namespace: rust-security-zt
+spec:
+  hosts:
+  - "auth.zero-trust.local"
+  gateways:
+  - zero-trust-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/health"
+    route:
+    - destination:
+        host: auth-service.rust-security-zt.svc.cluster.local
+        port:
+          number: 8080
+    headers:
+      request:
+        add:
+          x-request-id: "%REQ(x-request-id)%"
+          x-forwarded-proto: "https"
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 100ms
+  - match:
+    - uri:
+        prefix: "/token"
+    - uri:
+        prefix: "/introspect"
+    - uri:
+        prefix: "/oauth"
+    - uri:
+        prefix: "/.well-known"
+    route:
+    - destination:
+        host: auth-service.rust-security-zt.svc.cluster.local
+        port:
+          number: 8080
+    headers:
+      request:
+        add:
+          x-request-id: "%REQ(x-request-id)%"
+          x-forwarded-proto: "https"
+          x-device-fingerprint: "%REQ(x-device-fingerprint)%"
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: gateway-error,connect-failure,refused-stream
+  - match:
+    - uri:
+        prefix: "/scim"
+    route:
+    - destination:
+        host: auth-service.rust-security-zt.svc.cluster.local
+        port:
+          number: 8080
+    headers:
+      request:
+        add:
+          x-request-id: "%REQ(x-request-id)%"
+          x-forwarded-proto: "https"
+    timeout: 60s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: ext-authz-filter
+  namespace: rust-security-zt
+spec:
+  workloadSelector:
+    labels:
+      app: istio-proxy
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.ext_authz
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.HttpService
+          transport_api_version: V3
+          http_service:
+            server_uri:
+              uri: opa.policy-system.svc.cluster.local:8181
+              cluster: outbound|8181||opa.policy-system.svc.cluster.local
+              timeout: 5s
+            authorization_request:
+              allowed_headers:
+                patterns:
+                - exact: "authorization"
+                - exact: "x-device-fingerprint"
+                - exact: "user-agent"
+                - exact: "x-forwarded-for"
+                - exact: "x-real-ip"
+            authorization_response:
+              allowed_upstream_headers:
+                patterns:
+                - exact: "x-auth-user"
+                - exact: "x-auth-scope"
+          failure_mode_allow: false
+          with_request_body:
+            max_request_bytes: 8192
+            allow_partial_message: true
+---
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: rate-limit-filter
+  namespace: rust-security-zt
+spec:
+  workloadSelector:
+    labels:
+      app: istio-proxy
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: rate_limiter
+            token_bucket:
+              max_tokens: 100
+              tokens_per_fill: 100
+              fill_interval: 60s
+            filter_enabled:
+              runtime_key: rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            response_headers_to_add:
+            - append: false
+              header:
+                key: x-rate-limited
+                value: "true"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: waf-filter
+  namespace: rust-security-zt
+spec:
+  workloadSelector:
+    labels:
+      app: istio-proxy
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.wasm
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+          config:
+            name: "waf"
+            root_id: "waf"
+            vm_config:
+              vm_id: "waf"
+              runtime: "envoy.wasm.runtime.v8"
+              code:
+                local:
+                  inline_string: |
+                    class WafFilter {
+                      constructor(rootContext) {
+                        this.rootContext = rootContext;
+                      }
+                      
+                      onRequestHeaders() {
+                        const userAgent = this.getRequestHeader("user-agent");
+                        const path = this.getRequestHeader(":path");
+                        
+                        // Block known attack patterns
+                        if (userAgent && (
+                          userAgent.includes("sqlmap") ||
+                          userAgent.includes("nikto") ||
+                          userAgent.includes("nmap")
+                        )) {
+                          this.sendLocalResponse(403, "Forbidden", "Attack pattern detected", []);
+                          return FilterHeadersStatus.StopIteration;
+                        }
+                        
+                        // Block path traversal attempts
+                        if (path && (
+                          path.includes("../") ||
+                          path.includes("etc/passwd") ||
+                          path.includes("/proc/")
+                        )) {
+                          this.sendLocalResponse(403, "Forbidden", "Path traversal detected", []);
+                          return FilterHeadersStatus.StopIteration;
+                        }
+                        
+                        return FilterHeadersStatus.Continue;
+                      }
+                    }
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: auth-service-dr
+  namespace: rust-security-zt
+spec:
+  host: auth-service.rust-security-zt.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+          probes: 9
+      http:
+        http1MaxPendingRequests: 64
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+        minHealthPercent: 50
+    outlierDetection:
+      consecutiveGatewayErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  portLevelSettings:
+  - port:
+      number: 8080
+    tls:
+      mode: ISTIO_MUTUAL

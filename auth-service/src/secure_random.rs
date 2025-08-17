@@ -1,25 +1,22 @@
-use ring::rand::{SecureRandom, SystemRandom};
+use getrandom::getrandom;
 use data_encoding::BASE64URL_NOPAD;
 use anyhow;
 use crate::AuthError;
 
 /// Cryptographically secure random number generator
-pub struct SecureRandomGenerator {
-    rng: SystemRandom,
-}
+pub struct SecureRandomGenerator;
 
 impl SecureRandomGenerator {
     pub fn new() -> Self {
-        Self {
-            rng: SystemRandom::new(),
-        }
+        Self
     }
 
     /// Generate cryptographically secure random bytes
     pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, AuthError> {
         let mut bytes = vec![0u8; length];
-        self.rng.fill(&mut bytes)
-            .map_err(|_| AuthError::InternalError(anyhow::anyhow!("Failed to generate secure random bytes")))?;
+        getrandom(&mut bytes).map_err(|_| AuthError::InternalError(anyhow::anyhow!(
+            "Failed to generate secure random bytes"
+        )))?;
         Ok(bytes)
     }
 
@@ -114,7 +111,7 @@ impl Default for SecureRandomGenerator {
 }
 
 /// Global secure random generator instance
-static SECURE_RNG: once_cell::sync::Lazy<SecureRandomGenerator> = 
+static SECURE_RNG: once_cell::sync::Lazy<SecureRandomGenerator> =
     once_cell::sync::Lazy::new(SecureRandomGenerator::new);
 
 /// Convenience functions using the global secure RNG
@@ -179,7 +176,7 @@ mod tests {
     #[test]
     fn test_secure_random_generation() {
         let rng = SecureRandomGenerator::new();
-        
+
         // Test different token types
         let auth_code = rng.generate_authorization_code().unwrap();
         assert!(auth_code.starts_with("ac_"));
@@ -197,7 +194,7 @@ mod tests {
     #[test]
     fn test_entropy_uniqueness() {
         let rng = SecureRandomGenerator::new();
-        
+
         // Generate multiple tokens and ensure they're unique
         let mut tokens = std::collections::HashSet::new();
         for _ in 0..1000 {
@@ -210,13 +207,13 @@ mod tests {
     fn test_backup_codes() {
         let rng = SecureRandomGenerator::new();
         let codes = rng.generate_backup_codes(10).unwrap();
-        
+
         assert_eq!(codes.len(), 10);
         for code in &codes {
             assert_eq!(code.len(), 8);
             assert!(code.chars().all(|c| c.is_ascii_digit()));
         }
-        
+
         // Ensure uniqueness
         let unique_codes: std::collections::HashSet<_> = codes.into_iter().collect();
         assert_eq!(unique_codes.len(), 10);
@@ -226,7 +223,7 @@ mod tests {
     fn test_pkce_verifier() {
         let rng = SecureRandomGenerator::new();
         let verifier = rng.generate_pkce_verifier().unwrap();
-        
+
         // PKCE verifier should be 128 characters (96 bytes base64url encoded)
         assert_eq!(verifier.len(), 128);
         assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
@@ -236,7 +233,7 @@ mod tests {
     fn test_totp_secret() {
         let rng = SecureRandomGenerator::new();
         let secret = rng.generate_totp_secret().unwrap();
-        
+
         // TOTP secret should be 160 bits (20 bytes)
         assert_eq!(secret.len(), 20);
     }
@@ -246,7 +243,7 @@ mod tests {
         let rng = SecureRandomGenerator::new();
         let salt1 = rng.generate_salt().unwrap();
         let salt2 = rng.generate_salt().unwrap();
-        
+
         assert_eq!(salt1.len(), 32);
         assert_eq!(salt2.len(), 32);
         assert_ne!(salt1, salt2); // Should be unique

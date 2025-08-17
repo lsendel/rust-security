@@ -233,8 +233,6 @@ dependencies = [
  "redis",
  "regex",
  "reqwest",
- "ring",
- "rsa",
  "secrecy",
  "serde",
  "serde_json",

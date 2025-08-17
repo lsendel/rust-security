@@ -1,0 +1,348 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: device-trust-service
+  namespace: zero-trust-system
+  labels:
+    app: device-trust-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: device-trust-service
+  template:
+    metadata:
+      labels:
+        app: device-trust-service
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyCPU: "10m"
+        sidecar.istio.io/proxyMemory: "32Mi"
+    spec:
+      serviceAccountName: device-trust-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: device-trust-service
+        image: device-trust-service:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: REDIS_URL
+          value: "redis://redis.zero-trust-system:6379"
+        - name: SPIFFE_ENDPOINT_SOCKET
+          value: "unix:///run/spire/sockets/spire-agent.sock"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: DEVICE_TRUST_THRESHOLD
+          value: "7"
+        - name: FINGERPRINT_ALGORITHM
+          value: "sha256"
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /run/spire/sockets
+          readOnly: true
+        - name: device-trust-config
+          mountPath: /etc/device-trust
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: spire-agent-socket
+        hostPath:
+          path: /run/spire/sockets
+          type: Directory
+      - name: device-trust-config
+        configMap:
+          name: device-trust-config
+      - name: tmp
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - device-trust-service
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: device-trust-service
+  namespace: zero-trust-system
+  labels:
+    app: device-trust-service
+spec:
+  selector:
+    app: device-trust-service
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: device-trust-service
+  namespace: zero-trust-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: device-trust-config
+  namespace: zero-trust-system
+data:
+  config.yaml: |
+    server:
+      bind_address: "0.0.0.0:8080"
+      metrics_address: "0.0.0.0:9090"
+      read_timeout: "30s"
+      write_timeout: "30s"
+      idle_timeout: "60s"
+    
+    redis:
+      url: "redis://redis.zero-trust-system:6379"
+      pool_size: 10
+      max_retries: 3
+      retry_delay: "100ms"
+    
+    device_trust:
+      threshold: 7
+      fingerprint_algorithm: "sha256"
+      cache_ttl: "1h"
+      assessment_interval: "5m"
+    
+    scoring:
+      base_score: 5
+      factors:
+        os_compliance: 2
+        patch_level: 2
+        security_software: 1
+        network_reputation: 1
+        behavioral_analysis: 2
+        certificate_validation: 3
+    
+    threat_intelligence:
+      enabled: true
+      feeds:
+        - name: "internal_blocklist"
+          url: "http://threat-intel.zero-trust-system:8080/blocklist"
+          interval: "1h"
+        - name: "malware_signatures"
+          url: "http://threat-intel.zero-trust-system:8080/signatures"
+          interval: "30m"
+    
+    attestation:
+      enabled: true
+      tpm_required: false
+      secure_boot_required: true
+      measured_boot_required: false
+    
+    logging:
+      level: "info"
+      format: "json"
+      audit_enabled: true
+
+  trust_rules.yaml: |
+    trust_rules:
+      - name: "corporate_device"
+        conditions:
+          - field: "device.domain"
+            operator: "equals"
+            value: "corp.zero-trust.local"
+          - field: "device.managed"
+            operator: "equals"
+            value: true
+        score_modifier: 3
+        
+      - name: "updated_os"
+        conditions:
+          - field: "device.os_patch_level"
+            operator: "less_than_days_old"
+            value: 30
+        score_modifier: 2
+        
+      - name: "security_software_present"
+        conditions:
+          - field: "device.antivirus_enabled"
+            operator: "equals"
+            value: true
+          - field: "device.firewall_enabled"
+            operator: "equals"
+            value: true
+        score_modifier: 1
+        
+      - name: "suspicious_network"
+        conditions:
+          - field: "device.network.reputation"
+            operator: "less_than"
+            value: 5
+        score_modifier: -3
+        
+      - name: "known_malware"
+        conditions:
+          - field: "device.malware_detected"
+            operator: "equals"
+            value: true
+        score_modifier: -10
+        
+      - name: "jailbroken_device"
+        conditions:
+          - field: "device.jailbroken"
+            operator: "equals"
+            value: true
+        score_modifier: -5
+        
+      - name: "certificate_validation"
+        conditions:
+          - field: "device.certificate_valid"
+            operator: "equals"
+            value: true
+          - field: "device.certificate_chain_valid"
+            operator: "equals"
+            value: true
+        score_modifier: 2
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: device-trust-assessment
+  namespace: zero-trust-system
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: device-trust-assessment
+        spec:
+          serviceAccountName: device-trust-service
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+          containers:
+          - name: assessment
+            image: device-trust-service:latest
+            command: ["/usr/bin/device-trust-assessment"]
+            env:
+            - name: REDIS_URL
+              value: "redis://redis.zero-trust-system:6379"
+            - name: ASSESSMENT_MODE
+              value: "batch"
+            - name: BATCH_SIZE
+              value: "100"
+            volumeMounts:
+            - name: device-trust-config
+              mountPath: /etc/device-trust
+              readOnly: true
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+          volumes:
+          - name: device-trust-config
+            configMap:
+              name: device-trust-config
+          restartPolicy: OnFailure
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: device-trust-vs
+  namespace: zero-trust-system
+spec:
+  hosts:
+  - device-trust-service.zero-trust-system.svc.cluster.local
+  http:
+  - match:
+    - uri:
+        prefix: "/assess"
+    route:
+    - destination:
+        host: device-trust-service.zero-trust-system.svc.cluster.local
+        port:
+          number: 8080
+    timeout: 10s
+    retries:
+      attempts: 3
+      perTryTimeout: 3s
+  - match:
+    - uri:
+        prefix: "/fingerprint"
+    route:
+    - destination:
+        host: device-trust-service.zero-trust-system.svc.cluster.local
+        port:
+          number: 8080
+    timeout: 5s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: device-trust-dr
+  namespace: zero-trust-system
+spec:
+  host: device-trust-service.zero-trust-system.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 50
+      http:
+        http1MaxPendingRequests: 32
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutiveGatewayErrors: 3
+      interval: 30s
+      baseEjectionTime: 30s

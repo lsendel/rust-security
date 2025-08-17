@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spire-server
+  namespace: spire-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: spire-server-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "update", "patch"]
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["tokenreviews"]
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["create"]
+- apiGroups: ["spire.spiffe.io"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: spire-server-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: spire-server-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: spire-server
+  namespace: spire-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spire-server-role
+  namespace: spire-system
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "get", "list", "patch", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "get", "list", "patch", "watch", "update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spire-server-role-binding
+  namespace: spire-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: spire-server-role
+subjects:
+- kind: ServiceAccount
+  name: spire-server
+  namespace: spire-system
+---
+# SPIFFE ID configurations
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: auth-service-spiffeid
+spec:
+  className: "zero-trust-spire"
+  spiffeIDTemplate: "spiffe://zero-trust.local/auth-service/{{ .PodMeta.Name }}"
+  podSelector:
+    matchLabels:
+      app: auth-service
+  workloadSelectorTemplates:
+  - "k8s:ns:rust-security-zt"
+  - "k8s:sa:auth-service"
+  - "k8s:pod-label:app:auth-service"
+  federatesWith: ["other-trust-domain.local"]
+  autoPopulateDNSNames: true
+  dnsNameTemplates:
+  - "auth-service.rust-security-zt.svc.cluster.local"
+  - "auth-service.rust-security-zt"
+  ttl: "1h"
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: policy-service-spiffeid
+spec:
+  className: "zero-trust-spire"
+  spiffeIDTemplate: "spiffe://zero-trust.local/policy-service/{{ .PodMeta.Name }}"
+  podSelector:
+    matchLabels:
+      app: policy-service
+  workloadSelectorTemplates:
+  - "k8s:ns:rust-security-zt"
+  - "k8s:sa:policy-service"
+  - "k8s:pod-label:app:policy-service"
+  autoPopulateDNSNames: true
+  dnsNameTemplates:
+  - "policy-service.rust-security-zt.svc.cluster.local"
+  - "policy-service.rust-security-zt"
+  ttl: "1h"
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: redis-spiffeid
+spec:
+  className: "zero-trust-spire"
+  spiffeIDTemplate: "spiffe://zero-trust.local/redis/{{ .PodMeta.Name }}"
+  podSelector:
+    matchLabels:
+      app: redis
+  workloadSelectorTemplates:
+  - "k8s:ns:rust-security-zt"
+  - "k8s:sa:redis"
+  - "k8s:pod-label:app:redis"
+  autoPopulateDNSNames: true
+  dnsNameTemplates:
+  - "redis.rust-security-zt.svc.cluster.local"
+  - "redis.rust-security-zt"
+  ttl: "1h"

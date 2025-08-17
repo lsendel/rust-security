@@ -1,0 +1,398 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-service
+  namespace: rust-security-zt
+  labels:
+    app: policy-service
+    version: v1
+    security.istio.io/tlsMode: istio
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: policy-service
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: policy-service
+        version: v1
+        security.istio.io/tlsMode: istio
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyCPU: "50m"
+        sidecar.istio.io/proxyMemory: "128Mi"
+        sidecar.istio.io/userVolumeMount: '[{"name":"spire-agent-socket", "mountPath":"/run/spire/sockets", "readonly":true}]'
+        sidecar.istio.io/userVolume: '[{"name":"spire-agent-socket", "hostPath":{"path":"/run/spire/sockets", "type":"Directory"}}]'
+        spiffe.io/spiffe-id: spiffe://zero-trust.local/policy-service
+    spec:
+      serviceAccountName: policy-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      - name: wait-for-spire
+        image: busybox:1.36
+        command: ['sh', '-c', 'until [ -S /run/spire/sockets/spire-agent.sock ]; do echo "Waiting for SPIRE agent socket..."; sleep 2; done']
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /run/spire/sockets
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      containers:
+      - name: policy-service
+        image: policy-service:zero-trust-latest
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: SPIFFE_ENDPOINT_SOCKET
+          value: "unix:///run/spire/sockets/spire-agent.sock"
+        - name: ZERO_TRUST_MODE
+          value: "true"
+        - name: OPA_SERVICE_URL
+          value: "http://opa.policy-system:8181"
+        - name: AUTH_SERVICE_URL
+          value: "http://auth-service.rust-security-zt:8080"
+        - name: MTLS_ENABLED
+          value: "true"
+        - name: TRUST_DOMAIN
+          value: "zero-trust.local"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: AUDIT_ENABLED
+          value: "true"
+        - name: POLICY_CACHE_TTL
+          value: "300"
+        - name: POLICY_EVALUATION_TIMEOUT
+          value: "5"
+        envFrom:
+        - configMapRef:
+            name: policy-service-config
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /run/spire/sockets
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: var-run
+          mountPath: /var/run
+        - name: policy-config
+          mountPath: /etc/policy
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+      - name: spire-agent-socket
+        hostPath:
+          path: /run/spire/sockets
+          type: Directory
+      - name: tmp
+        emptyDir:
+          sizeLimit: 50Mi
+      - name: var-run
+        emptyDir:
+          sizeLimit: 50Mi
+      - name: policy-config
+        configMap:
+          name: policy-service-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - policy-service
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-service
+  namespace: rust-security-zt
+  labels:
+    app: policy-service
+    service: policy-service
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    app: policy-service
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: policy-service
+  namespace: rust-security-zt
+  labels:
+    app: policy-service
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: policy-service-config
+  namespace: rust-security-zt
+data:
+  RUST_LOG: "info,policy_service=debug"
+  SERVER_PORT: "8080"
+  METRICS_PORT: "9090"
+  WORKER_THREADS: "2"
+  MAX_CONNECTIONS: "500"
+  REQUEST_TIMEOUT: "30"
+  HEALTH_CHECK_INTERVAL: "30"
+  POLICY_REFRESH_INTERVAL: "60"
+  CACHE_SIZE: "1000"
+  CACHE_TTL: "300"
+
+  policy_config.yaml: |
+    policies:
+      default_deny: true
+      enforcement_mode: "strict"
+      
+      rules:
+        - name: "allow_health_checks"
+          priority: 1000
+          conditions:
+            - field: "request.path"
+              operator: "equals"
+              value: "/health"
+            - field: "request.method"
+              operator: "equals"
+              value: "GET"
+          action: "allow"
+          
+        - name: "allow_authenticated_api"
+          priority: 900
+          conditions:
+            - field: "request.headers.authorization"
+              operator: "matches"
+              value: "Bearer .*"
+            - field: "token.valid"
+              operator: "equals"
+              value: true
+            - field: "device.trust_score"
+              operator: "greater_than"
+              value: 7
+          action: "allow"
+          
+        - name: "deny_suspicious_requests"
+          priority: 800
+          conditions:
+            - field: "request.user_agent"
+              operator: "contains"
+              value: "bot"
+          action: "deny"
+          reason: "Suspicious user agent detected"
+          
+        - name: "rate_limit_by_ip"
+          priority: 700
+          conditions:
+            - field: "source.ip"
+              operator: "rate_limit"
+              value: "100/minute"
+          action: "deny"
+          reason: "Rate limit exceeded"
+          
+        - name: "geo_blocking"
+          priority: 600
+          conditions:
+            - field: "source.country"
+              operator: "in"
+              value: ["CN", "RU", "KP"]
+          action: "deny"
+          reason: "Geographic restriction"
+          
+      risk_assessment:
+        enabled: true
+        factors:
+          - name: "device_trust"
+            weight: 0.3
+            threshold: 7
+          - name: "behavioral_analysis"
+            weight: 0.2
+            threshold: 6
+          - name: "network_reputation"
+            weight: 0.2
+            threshold: 5
+          - name: "time_of_access"
+            weight: 0.1
+            threshold: 5
+          - name: "location_analysis"
+            weight: 0.2
+            threshold: 6
+        
+        risk_threshold: 0.7
+        actions:
+          low_risk: "allow"
+          medium_risk: "challenge"
+          high_risk: "deny"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: policy-service-zero-trust-netpol
+  namespace: rust-security-zt
+spec:
+  podSelector:
+    matchLabels:
+      app: policy-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from auth-service
+  - from:
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow OPA access
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: policy-system
+      podSelector:
+        matchLabels:
+          app: opa
+    ports:
+    - protocol: TCP
+      port: 8181
+  # Allow SPIRE agent communication
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: spire-system
+      podSelector:
+        matchLabels:
+          app: spire-agent
+    ports:
+    - protocol: TCP
+      port: 8081
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: policy-service-zero-trust-authz
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: policy-service
+  action: ALLOW
+  rules:
+  # Allow health checks
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/rust-security-zt/sa/policy-service"
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/health", "/ready"]
+  # Allow auth-service to access policy evaluation
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/rust-security-zt/sa/auth-service"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/policy/evaluate", "/policy/check"]
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+  # Allow metrics collection
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/monitoring/sa/prometheus"
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: policy-service-pdb
+  namespace: rust-security-zt
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: policy-service

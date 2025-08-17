@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-policies
+  namespace: policy-system
+data:
+  zero_trust_authz.rego: |
+    package envoy.authz
+    
+    import rego.v1
+    
+    default allow := false
+    
+    # Allow health checks from monitoring
+    allow if {
+        input.attributes.request.http.method == "GET"
+        input.attributes.request.http.path == "/health"
+        is_internal_request
+    }
+    
+    # Allow metrics collection
+    allow if {
+        input.attributes.request.http.method == "GET"
+        input.attributes.request.http.path == "/metrics"
+        is_monitoring_service
+    }
+    
+    # Allow authenticated API requests
+    allow if {
+        input.attributes.request.http.method in ["GET", "POST", "PUT", "DELETE"]
+        has_valid_spiffe_id
+        has_valid_device_trust
+        request_rate_limited
+        not_from_blocked_ip
+    }
+    
+    # SPIFFE ID validation
+    has_valid_spiffe_id if {
+        spiffe_id := input.attributes.source.certificate_uri_san
+        startswith(spiffe_id, "spiffe://zero-trust.local/")
+        valid_spiffe_workload(spiffe_id)
+    }
+    
+    valid_spiffe_workload(spiffe_id) if {
+        contains(spiffe_id, "/auth-service/")
+    }
+    
+    valid_spiffe_workload(spiffe_id) if {
+        contains(spiffe_id, "/policy-service/")
+    }
+    
+    valid_spiffe_workload(spiffe_id) if {
+        contains(spiffe_id, "/istio-ingressgateway/")
+    }
+    
+    # Device trust validation
+    has_valid_device_trust if {
+        device_fingerprint := input.attributes.request.http.headers["x-device-fingerprint"]
+        device_fingerprint != ""
+        device_trust_score := get_device_trust_score(device_fingerprint)
+        device_trust_score >= 7  # Minimum trust score
+    }
+    
+    get_device_trust_score(fingerprint) := score if {
+        # This would integrate with external device trust service
+        # For now, using a simple scoring mechanism
+        known_devices := {
+            "trusted-device-1": 10,
+            "trusted-device-2": 9,
+            "partially-trusted-device": 7
+        }
+        score := known_devices[fingerprint]
+    } else := 0  # Unknown devices get zero score
+    
+    # Rate limiting check
+    request_rate_limited if {
+        source_ip := input.attributes.source.address.Address.SocketAddress.address
+        current_time := time.now_ns()
+        rate_limit_bucket := sprintf("rate_limit_%s", [source_ip])
+        
+        # Check if rate limit exceeded (this would integrate with Redis/external store)
+        # For now, allowing all requests that pass other checks
+        true
+    }
+    
+    # IP blocking check
+    not_from_blocked_ip if {
+        source_ip := input.attributes.source.address.Address.SocketAddress.address
+        not ip_in_blocklist(source_ip)
+    }
+    
+    ip_in_blocklist(ip) if {
+        blocked_ips := {
+            "192.168.1.100",  # Example blocked IP
+            "10.0.0.50"       # Another blocked IP
+        }
+        ip in blocked_ips
+    }
+    
+    # Internal request check
+    is_internal_request if {
+        source_ip := input.attributes.source.address.Address.SocketAddress.address
+        net.cidr_contains("10.0.0.0/8", source_ip)
+    }
+    
+    is_internal_request if {
+        source_ip := input.attributes.source.address.Address.SocketAddress.address
+        net.cidr_contains("172.16.0.0/12", source_ip)
+    }
+    
+    is_internal_request if {
+        source_ip := input.attributes.source.address.Address.SocketAddress.address
+        net.cidr_contains("192.168.0.0/16", source_ip)
+    }
+    
+    # Monitoring service check
+    is_monitoring_service if {
+        user_agent := input.attributes.request.http.headers["user-agent"]
+        contains(user_agent, "Prometheus")
+    }
+    
+    is_monitoring_service if {
+        user_agent := input.attributes.request.http.headers["user-agent"]
+        contains(user_agent, "Grafana")
+    }
+    
+    # Detailed reason for denial
+    reason := "spiffe_id_missing" if {
+        not has_valid_spiffe_id
+        not input.attributes.source.certificate_uri_san
+    }
+    
+    reason := "invalid_spiffe_id" if {
+        not has_valid_spiffe_id
+        input.attributes.source.certificate_uri_san
+    }
+    
+    reason := "device_trust_insufficient" if {
+        has_valid_spiffe_id
+        not has_valid_device_trust
+    }
+    
+    reason := "ip_blocked" if {
+        has_valid_spiffe_id
+        has_valid_device_trust
+        not not_from_blocked_ip
+    }
+    
+    reason := "rate_limited" if {
+        has_valid_spiffe_id
+        has_valid_device_trust
+        not_from_blocked_ip
+        not request_rate_limited
+    }
+
+  workload_identity.rego: |
+    package envoy.authz.workload
+    
+    import rego.v1
+    
+    # Workload identity validation
+    valid_workload_identity(spiffe_id, namespace, service_account) if {
+        expected_spiffe := sprintf("spiffe://zero-trust.local/%s/%s", [namespace, service_account])
+        spiffe_id == expected_spiffe
+    }
+    
+    # Cross-service communication rules
+    allow_service_communication(source_spiffe, target_spiffe) if {
+        source_service := extract_service_from_spiffe(source_spiffe)
+        target_service := extract_service_from_spiffe(target_spiffe)
+        
+        allowed_communications[source_service][target_service]
+    }
+    
+    allowed_communications := {
+        "auth-service": {
+            "redis": true,
+            "policy-service": true
+        },
+        "policy-service": {
+            "auth-service": true
+        },
+        "istio-ingressgateway": {
+            "auth-service": true,
+            "policy-service": true
+        }
+    }
+    
+    extract_service_from_spiffe(spiffe_id) := service if {
+        parts := split(spiffe_id, "/")
+        count(parts) >= 4
+        service := parts[3]
+    }
+
+  threat_detection.rego: |
+    package envoy.authz.threats
+    
+    import rego.v1
+    
+    # Threat detection rules
+    suspicious_request if {
+        input.attributes.request.http.headers["user-agent"] == ""
+    }
+    
+    suspicious_request if {
+        user_agent := input.attributes.request.http.headers["user-agent"]
+        contains(user_agent, "sqlmap")
+    }
+    
+    suspicious_request if {
+        user_agent := input.attributes.request.http.headers["user-agent"]
+        contains(user_agent, "nikto")
+    }
+    
+    suspicious_request if {
+        path := input.attributes.request.http.path
+        contains(path, "../")
+    }
+    
+    suspicious_request if {
+        path := input.attributes.request.http.path
+        contains(path, "etc/passwd")
+    }
+    
+    # Anomaly detection
+    anomalous_request if {
+        method := input.attributes.request.http.method
+        path := input.attributes.request.http.path
+        
+        # Unusual method for path
+        method == "DELETE"
+        startswith(path, "/health")
+    }
+    
+    anomalous_request if {
+        content_length := input.attributes.request.http.headers["content-length"]
+        to_number(content_length) > 10485760  # 10MB limit
+    }
+    
+    # Geo-location based threats
+    suspicious_geo_location if {
+        source_ip := input.attributes.source.address.Address.SocketAddress.address
+        country := get_country_for_ip(source_ip)
+        country in blocked_countries
+    }
+    
+    blocked_countries := {
+        "CN",  # China
+        "RU",  # Russia
+        "KP"   # North Korea
+    }
+    
+    get_country_for_ip(ip) := "US" if {
+        # This would integrate with IP geolocation service
+        # For demo purposes, defaulting to US
+        true
+    }

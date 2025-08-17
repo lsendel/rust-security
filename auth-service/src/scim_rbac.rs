@@ -12,7 +12,7 @@ pub enum ScimPermission {
     UserUpdate,
     UserDelete,
     UserList,
-    
+
     // Group permissions
     GroupRead,
     GroupCreate,
@@ -21,15 +21,15 @@ pub enum ScimPermission {
     GroupList,
     GroupMemberAdd,
     GroupMemberRemove,
-    
+
     // Administrative permissions
     SchemaRead,
     ResourceTypeRead,
     ServiceProviderConfigRead,
-    
+
     // Bulk operations
     BulkOperations,
-    
+
     // Advanced permissions
     UserPasswordReset,
     UserActivate,
@@ -224,7 +224,7 @@ impl ScimAuthorizationManager {
         ip_address: Option<&str>,
     ) -> ScimUserContext {
         let mut roles = self.user_roles.get(user_id).cloned().unwrap_or_default();
-        
+
         // Add client roles if applicable
         if let Some(cid) = client_id {
             if let Some(client_roles) = self.client_roles.get(cid) {
@@ -249,7 +249,7 @@ impl ScimAuthorizationManager {
         operation: &ScimOperation,
     ) -> Result<(), AuthError> {
         let required_permission = operation.required_permission();
-        
+
         // Check basic permission
         if !context.has_permission(&required_permission) {
             self.log_authorization_failure(context, operation, "insufficient_permissions");
@@ -278,7 +278,7 @@ impl ScimAuthorizationManager {
                         "Password reset permission required".to_string()
                     ));
                 }
-                
+
                 // Self-service users cannot reset their own password via SCIM
                 if context.roles.contains(&ScimRole::SelfService) {
                     self.log_authorization_failure(context, operation, "self_service_password_reset_denied");
@@ -343,7 +343,7 @@ pub enum ScimOperation {
     UserPasswordReset { user_id: String },
     UserActivate { user_id: String },
     UserDeactivate { user_id: String },
-    
+
     GroupList,
     GroupRead { group_id: String },
     GroupCreate,
@@ -351,7 +351,7 @@ pub enum ScimOperation {
     GroupDelete { group_id: String },
     GroupMemberAdd { group_id: String, user_id: String },
     GroupMemberRemove { group_id: String, user_id: String },
-    
+
     SchemaRead,
     ResourceTypeRead,
     ServiceProviderConfigRead,
@@ -370,7 +370,7 @@ impl ScimOperation {
             ScimOperation::UserPasswordReset { .. } => ScimPermission::UserPasswordReset,
             ScimOperation::UserActivate { .. } => ScimPermission::UserActivate,
             ScimOperation::UserDeactivate { .. } => ScimPermission::UserDeactivate,
-            
+
             ScimOperation::GroupList => ScimPermission::GroupList,
             ScimOperation::GroupRead { .. } => ScimPermission::GroupRead,
             ScimOperation::GroupCreate => ScimPermission::GroupCreate,
@@ -378,7 +378,7 @@ impl ScimOperation {
             ScimOperation::GroupDelete { .. } => ScimPermission::GroupDelete,
             ScimOperation::GroupMemberAdd { .. } => ScimPermission::GroupMemberAdd,
             ScimOperation::GroupMemberRemove { .. } => ScimPermission::GroupMemberRemove,
-            
+
             ScimOperation::SchemaRead => ScimPermission::SchemaRead,
             ScimOperation::ResourceTypeRead => ScimPermission::ResourceTypeRead,
             ScimOperation::ServiceProviderConfigRead => ScimPermission::ServiceProviderConfigRead,
@@ -388,17 +388,17 @@ impl ScimOperation {
 }
 
 /// Global SCIM authorization manager
-static SCIM_AUTHZ_MANAGER: once_cell::sync::Lazy<std::sync::Mutex<ScimAuthorizationManager>> = 
+static SCIM_AUTHZ_MANAGER: once_cell::sync::Lazy<std::sync::Mutex<ScimAuthorizationManager>> =
     once_cell::sync::Lazy::new(|| {
         let mut manager = ScimAuthorizationManager::new();
-        
+
         // Set up default roles from environment or configuration
         // For now, we'll set up some basic roles
         manager.assign_user_roles(
             "admin".to_string(),
             vec![ScimRole::Administrator]
         );
-        
+
         manager.assign_client_roles(
             "scim_client".to_string(),
             vec![ScimRole::UserManager, ScimRole::GroupManager]
@@ -445,7 +445,7 @@ mod tests {
         let admin_role = ScimRole::Administrator;
         assert!(admin_role.has_permission(&ScimPermission::UserCreate));
         assert!(admin_role.has_permission(&ScimPermission::GroupDelete));
-        
+
         let readonly_role = ScimRole::ReadOnly;
         assert!(readonly_role.has_permission(&ScimPermission::UserRead));
         assert!(!readonly_role.has_permission(&ScimPermission::UserCreate));
@@ -464,7 +464,7 @@ mod tests {
 
         // Can access own profile
         assert!(context.can_access_user("user123", &ScimPermission::UserRead));
-        
+
         // Cannot access other user's profile
         assert!(!context.can_access_user("user456", &ScimPermission::UserRead));
     }
@@ -473,24 +473,21 @@ mod tests {
     fn test_authorization_manager() {
         let mut manager = ScimAuthorizationManager::new();
         manager.assign_user_roles("user1".to_string(), vec![ScimRole::UserManager]);
-        
+
         let context = manager.get_user_context("user1", "testuser", None, None);
-        
+
         let operation = ScimOperation::UserCreate;
         assert!(manager.authorize_operation(&context, &operation).is_ok());
-        
+
         let forbidden_operation = ScimOperation::GroupDelete { group_id: "group1".to_string() };
         assert!(manager.authorize_operation(&context, &forbidden_operation).is_err());
     }
 
     #[test]
     fn test_custom_role() {
-        let mut permissions = HashSet::new();
-        permissions.insert(ScimPermission::UserRead);
-        permissions.insert(ScimPermission::GroupRead);
-        
-        let custom_role = ScimRole::Custom(permissions);
-        
+        let permissions_vec = vec![ScimPermission::UserRead, ScimPermission::GroupRead];
+        let custom_role = ScimRole::Custom(permissions_vec);
+
         assert!(custom_role.has_permission(&ScimPermission::UserRead));
         assert!(custom_role.has_permission(&ScimPermission::GroupRead));
         assert!(!custom_role.has_permission(&ScimPermission::UserCreate));

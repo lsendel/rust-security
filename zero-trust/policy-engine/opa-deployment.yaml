@@ -1,0 +1,157 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opa
+  namespace: policy-system
+  labels:
+    app: opa
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: opa
+  template:
+    metadata:
+      labels:
+        app: opa
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyCPU: "10m"
+        sidecar.istio.io/proxyMemory: "32Mi"
+    spec:
+      serviceAccountName: opa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: opa
+        image: openpolicyagent/opa:0.57.0-envoy
+        ports:
+        - containerPort: 8181
+        - containerPort: 9191
+        args:
+        - "run"
+        - "--server"
+        - "--config-file=/config/config.yaml"
+        - "--addr=0.0.0.0:8181"
+        - "--diagnostic-addr=0.0.0.0:8282"
+        - "--set=plugins.envoy_ext_authz_grpc.addr=:9191"
+        - "--set=plugins.envoy_ext_authz_grpc.enable_reflection=true"
+        - "--set=decision_logs.console=true"
+        - "--log-level=info"
+        - "/policies"
+        volumeMounts:
+        - name: opa-policies
+          mountPath: /policies
+        - name: opa-config
+          mountPath: /config
+        - name: tmp
+          mountPath: /tmp
+        env:
+        - name: SPIFFE_ENDPOINT_SOCKET
+          value: "unix:///run/spire/sockets/spire-agent.sock"
+        livenessProbe:
+          httpGet:
+            path: /health?plugins
+            port: 8282
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health?plugins&bundle
+            port: 8282
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: opa-policies
+        configMap:
+          name: opa-policies
+      - name: opa-config
+        configMap:
+          name: opa-config
+      - name: tmp
+        emptyDir: {}
+      - name: spire-agent-socket
+        hostPath:
+          path: /run/spire/sockets
+          type: Directory
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - opa
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opa
+  namespace: policy-system
+  labels:
+    app: opa
+spec:
+  selector:
+    app: opa
+  ports:
+  - name: http
+    port: 8181
+    targetPort: 8181
+  - name: grpc
+    port: 9191
+    targetPort: 9191
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opa
+  namespace: policy-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-config
+  namespace: policy-system
+data:
+  config.yaml: |
+    plugins:
+      envoy_ext_authz_grpc:
+        addr: :9191
+        enable_reflection: true
+    
+    decision_logs:
+      console: true
+      reporting:
+        min_delay_seconds: 5
+        max_delay_seconds: 10
+    
+    status:
+      console: true
+    
+    bundles:
+      zero_trust_policies:
+        resource: "/policies"
+        persist: true
+        polling:
+          min_delay_seconds: 10
+          max_delay_seconds: 20

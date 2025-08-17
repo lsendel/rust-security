@@ -1,0 +1,315 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-monitor
+  namespace: zero-trust-system
+  labels:
+    app: security-monitor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: security-monitor
+  template:
+    metadata:
+      labels:
+        app: security-monitor
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      serviceAccountName: security-monitor
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: security-monitor
+        image: falcosecurity/falco:0.36.0
+        args:
+        - /usr/bin/falco
+        - --cri
+        - /run/containerd/containerd.sock
+        - -K
+        - /var/run/secrets/kubernetes.io/serviceaccount/token
+        - -k
+        - https://kubernetes.default
+        - --k8s-node-name=$(NODE_NAME)
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: FALCO_GRPC_ENABLED
+          value: "true"
+        - name: FALCO_GRPC_BIND_ADDRESS
+          value: "0.0.0.0:5060"
+        volumeMounts:
+        - name: containerd-socket
+          mountPath: /run/containerd
+        - name: falco-config
+          mountPath: /etc/falco
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: boot
+          mountPath: /host/boot
+          readOnly: true
+        - name: lib-modules
+          mountPath: /host/lib/modules
+          readOnly: true
+        - name: usr
+          mountPath: /host/usr
+          readOnly: true
+        - name: etc
+          mountPath: /host/etc
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        securityContext:
+          privileged: true
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+            - SYS_RESOURCE
+            - SYS_PTRACE
+      - name: falco-exporter
+        image: falcosecurity/falco-exporter:0.8.3
+        args:
+        - --client-socket=unix:///var/run/falco/falco.sock
+        - --listen-address=0.0.0.0:9376
+        - --metrics-interval=30s
+        ports:
+        - containerPort: 9376
+          name: metrics
+        volumeMounts:
+        - name: falco-socket
+          mountPath: /var/run/falco
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: containerd-socket
+        hostPath:
+          path: /run/containerd
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: boot
+        hostPath:
+          path: /boot
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: usr
+        hostPath:
+          path: /usr
+      - name: etc
+        hostPath:
+          path: /etc
+      - name: falco-config
+        configMap:
+          name: falco-config
+      - name: falco-socket
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-monitor
+  namespace: zero-trust-system
+  labels:
+    app: security-monitor
+spec:
+  selector:
+    app: security-monitor
+  ports:
+  - name: grpc
+    port: 5060
+    targetPort: 5060
+  - name: metrics
+    port: 9376
+    targetPort: 9376
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: security-monitor
+  namespace: zero-trust-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: security-monitor
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "pods", "namespaces", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: security-monitor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: security-monitor
+subjects:
+- kind: ServiceAccount
+  name: security-monitor
+  namespace: zero-trust-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: zero-trust-system
+data:
+  falco.yaml: |
+    rules_file:
+      - /etc/falco/falco_rules.yaml
+      - /etc/falco/zero_trust_rules.yaml
+    
+    time_format_iso_8601: true
+    json_output: true
+    json_include_output_property: true
+    json_include_tags_property: true
+    
+    log_stderr: true
+    log_syslog: false
+    log_level: info
+    
+    priority: debug
+    
+    buffered_outputs: false
+    
+    outputs:
+      rate: 1
+      max_burst: 1000
+    
+    grpc:
+      enabled: true
+      bind_address: "0.0.0.0:5060"
+      threadiness: 8
+    
+    grpc_output:
+      enabled: true
+    
+    syscall_event_drops:
+      actions:
+        - log
+        - alert
+      rate: 0.03333
+      max_burst: 10
+    
+    syscall_event_timeouts:
+      max_consecutives: 1000
+    
+    metadata_download:
+      max_mb: 100
+      chunk_wait_us: 1000
+      watch_freq_sec: 1
+
+  zero_trust_rules.yaml: |
+    - list: zero_trust_namespaces
+      items: ["rust-security-zt", "zero-trust-system", "spire-system", "policy-system"]
+    
+    - list: zero_trust_binaries
+      items: ["/usr/bin/auth-service", "/usr/bin/policy-service"]
+    
+    - rule: Unauthorized Process in Zero Trust Namespace
+      desc: Detect unauthorized processes in zero trust namespaces
+      condition: >
+        spawned_process and
+        k8s_ns in (zero_trust_namespaces) and
+        not proc.name in (zero_trust_binaries) and
+        not proc.name in (shell_binaries)
+      output: >
+        Unauthorized process in zero trust namespace
+        (command=%proc.cmdline pid=%proc.pid namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [zero_trust, process, k8s]
+    
+    - rule: Sensitive File Access in Zero Trust
+      desc: Detect access to sensitive files in zero trust workloads
+      condition: >
+        open_read and
+        k8s_ns in (zero_trust_namespaces) and
+        (fd.name contains "/etc/passwd" or
+         fd.name contains "/etc/shadow" or
+         fd.name contains "/proc/")
+      output: >
+        Sensitive file access detected
+        (file=%fd.name command=%proc.cmdline pid=%proc.pid namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: HIGH
+      tags: [zero_trust, file_access, k8s]
+    
+    - rule: Network Connection from Zero Trust Workload
+      desc: Monitor network connections from zero trust workloads
+      condition: >
+        outbound and
+        k8s_ns in (zero_trust_namespaces) and
+        not fd.sip in (private_ip_addresses)
+      output: >
+        External network connection from zero trust workload
+        (connection=%fd.sip:%fd.sport->%fd.dip:%fd.dport command=%proc.cmdline namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: INFO
+      tags: [zero_trust, network, k8s]
+    
+    - rule: Privilege Escalation in Zero Trust
+      desc: Detect privilege escalation attempts
+      condition: >
+        spawned_process and
+        k8s_ns in (zero_trust_namespaces) and
+        (proc.name in (setuid_binaries) or
+         proc.name = "sudo" or
+         proc.name = "su")
+      output: >
+        Privilege escalation attempt detected
+        (command=%proc.cmdline pid=%proc.pid namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [zero_trust, privilege_escalation, k8s]
+    
+    - rule: Crypto Mining Activity
+      desc: Detect potential crypto mining activity
+      condition: >
+        spawned_process and
+        k8s_ns in (zero_trust_namespaces) and
+        (proc.name in (crypto_miners) or
+         proc.cmdline contains "stratum" or
+         proc.cmdline contains "mining")
+      output: >
+        Potential crypto mining activity
+        (command=%proc.cmdline pid=%proc.pid namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [zero_trust, crypto_mining, k8s]

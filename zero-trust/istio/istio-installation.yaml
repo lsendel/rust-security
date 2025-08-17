@@ -1,0 +1,141 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: zero-trust-control-plane
+  namespace: istio-system
+spec:
+  values:
+    global:
+      meshID: zero-trust-mesh
+      network: zero-trust-network
+      proxy:
+        privileged: false
+        readinessInitialDelaySeconds: 5
+        readinessPeriodSeconds: 5
+        readinessFailureThreshold: 30
+      defaultPodDisruptionBudget:
+        enabled: true
+        minAvailable: 1
+    pilot:
+      env:
+        EXTERNAL_ISTIOD: false
+        PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION: true
+        PILOT_ENABLE_WORKLOAD_ENTRY_CROSS_CLUSTER: true
+        PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY: true
+        PILOT_SCOPE_GATEWAY_TO_NAMESPACE: true
+        PILOT_JWT_PUB_KEY_REFRESH_INTERVAL: 15m
+        PILOT_CERT_PROVIDER: istiod
+  components:
+    pilot:
+      k8s:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        overlays:
+        - apiVersion: apps/v1
+          kind: Deployment
+          name: istiod
+          patches:
+          - path: spec.template.spec.containers.[name:discovery].env.[name:PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION].value
+            value: "true"
+          - path: spec.template.spec.containers.[name:discovery].env.[name:PILOT_CERT_PROVIDER].value
+            value: "istiod"
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+      k8s:
+        service:
+          type: LoadBalancer
+          annotations:
+            service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+            service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+    - name: istio-egressgateway
+      enabled: true
+      k8s:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          runAsGroup: 65534
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+  meshConfig:
+    defaultConfig:
+      proxyStatsMatcher:
+        inclusionRegexps:
+        - ".*circuit_breakers.*"
+        - ".*upstream_rq_retry.*"
+        - ".*upstream_rq_pending.*"
+        - ".*_cx_.*"
+        exclusionRegexps:
+        - ".*osconfig.*"
+      gatewayTopology:
+        numTrustedProxies: 2
+      holdApplicationUntilProxyStarts: true
+      discoveryRefreshDelay: 10s
+      terminalSessionConfig:
+        enabled: true
+    accessLogFile: /dev/stdout
+    defaultProviders:
+      accessLogging:
+      - envoy
+      metrics:
+      - prometheus
+      tracing:
+      - jaeger
+    extensionProviders:
+    - name: jaeger
+      envoyOtelAls:
+        service: jaeger.istio-system.svc.cluster.local
+        port: 14250
+    - name: prometheus
+      prometheus: {}
+    trustDomain: cluster.local
+    trustDomainAliases:
+    - zero-trust.local
+    caCertificates:
+    - pem: |
+        # Custom CA certificate for mTLS
+    outboundTrafficPolicy:
+      mode: REGISTRY_ONLY
+    defaultServiceExportTo:
+    - "."
+    defaultVirtualServiceExportTo:
+    - "."
+    defaultDestinationRuleExportTo:
+    - "."

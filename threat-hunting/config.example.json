@@ -1,0 +1,458 @@
+{
+  "comment": "Example configuration for Threat Hunting Toolkit",
+  "environment": "production",
+  
+  "rust_service": {
+    "url": "http://localhost:8080",
+    "api_key": "your_rust_service_api_key_here",
+    "timeout_seconds": 30,
+    "health_check_interval": 60,
+    "retry_attempts": 3
+  },
+  
+  "database": {
+    "redis_url": "redis://localhost:6379/0",
+    "redis_password": null,
+    "redis_ssl": false,
+    "postgres_url": "postgresql://threat_hunting:secure_password@localhost:5432/security_db",
+    "postgres_pool_size": 20,
+    "postgres_timeout": 30
+  },
+  
+  "processing": {
+    "workers": 4,
+    "queue_size": 10000,
+    "batch_size": 100,
+    "processing_timeout": 300,
+    "enable_parallel_processing": true
+  },
+  
+  "behavioral_analyzer": {
+    "thresholds": {
+      "credential_stuffing": {
+        "failed_logins_per_minute": 10,
+        "unique_usernames_per_ip": 20,
+        "time_window_minutes": 5
+      },
+      "account_takeover": {
+        "location_anomaly_threshold": 1000,
+        "device_change_threshold": 3,
+        "behavior_deviation_threshold": 2.5
+      },
+      "brute_force": {
+        "failed_attempts_threshold": 15,
+        "time_window_minutes": 10,
+        "lockout_threshold": 5
+      },
+      "session_hijacking": {
+        "concurrent_sessions_threshold": 3,
+        "location_jump_threshold": 500,
+        "time_threshold_minutes": 5
+      }
+    },
+    "event_buffer_size": 50000,
+    "cleanup_interval_hours": 24
+  },
+  
+  "ml_user_profiler": {
+    "models": {
+      "isolation_forest": {
+        "contamination": 0.1,
+        "n_estimators": 100,
+        "random_state": 42,
+        "enabled": true
+      },
+      "lstm_behavioral": {
+        "sequence_length": 30,
+        "features": 20,
+        "epochs": 50,
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "enabled": true
+      },
+      "risk_classifier": {
+        "n_estimators": 200,
+        "max_depth": 10,
+        "random_state": 42,
+        "enabled": true
+      }
+    },
+    "training": {
+      "auto_retrain": true,
+      "retrain_interval_days": 7,
+      "minimum_samples": 1000,
+      "validation_split": 0.2
+    },
+    "baseline_update_interval_hours": 24,
+    "risk_thresholds": {
+      "minimal": 0.2,
+      "low": 0.4,
+      "medium": 0.6,
+      "high": 0.8,
+      "critical": 1.0
+    }
+  },
+  
+  "threat_intelligence": {
+    "feeds": {
+      "misp": {
+        "url": "https://your-misp-instance.com/events/restSearch",
+        "api_key": "your_misp_api_key",
+        "enabled": true,
+        "refresh_interval": 3600,
+        "timeout": 60,
+        "max_events": 1000
+      },
+      "virustotal": {
+        "url": "https://www.virustotal.com/vtapi/v2",
+        "api_key": "your_virustotal_api_key",
+        "enabled": false,
+        "refresh_interval": 7200,
+        "rate_limit": 4
+      },
+      "abuse_ch": {
+        "url": "https://urlhaus-api.abuse.ch/v1/download/text",
+        "enabled": true,
+        "refresh_interval": 1800,
+        "timeout": 30
+      },
+      "alienvault": {
+        "url": "https://otx.alienvault.com/api/v1/indicators",
+        "api_key": "your_alienvault_api_key",
+        "enabled": false,
+        "refresh_interval": 3600,
+        "max_pulses": 100
+      },
+      "custom_feeds": []
+    },
+    "matching": {
+      "confidence_threshold": 0.5,
+      "false_positive_threshold": 0.8,
+      "cache_ttl_hours": 24,
+      "max_indicators": 1000000
+    },
+    "whitelist": {
+      "internal_ips": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+      "trusted_domains": ["company.com", "partner.org"],
+      "auto_whitelist_successful_logins": true
+    }
+  },
+  
+  "attack_pattern_detector": {
+    "time_windows": {
+      "credential_stuffing": 300,
+      "brute_force": 900,
+      "account_takeover": 3600,
+      "lateral_movement": 7200,
+      "apt_campaign": 86400,
+      "privilege_escalation": 1800,
+      "data_exfiltration": 3600,
+      "reconnaissance": 1800
+    },
+    "complexity_weights": {
+      "unique_ips": 1.0,
+      "unique_users": 1.5,
+      "time_span": 0.5,
+      "step_count": 2.0,
+      "resource_diversity": 1.0,
+      "technique_variety": 2.5
+    },
+    "graph_analysis": {
+      "max_nodes": 10000,
+      "prune_interval_hours": 24,
+      "centrality_threshold": 0.1
+    },
+    "clustering": {
+      "eps": 50,
+      "min_samples": 3,
+      "algorithm": "DBSCAN"
+    }
+  },
+  
+  "automated_response": {
+    "global_settings": {
+      "enable_auto_response": true,
+      "require_approval_for_critical": true,
+      "max_concurrent_actions": 10,
+      "action_timeout_seconds": 300,
+      "retry_failed_actions": true,
+      "max_retries": 3
+    },
+    
+    "response_rules": {
+      "credential_stuffing": {
+        "severity_thresholds": {
+          "high": 0.8,
+          "critical": 0.9
+        },
+        "actions": [
+          {
+            "type": "ip_block",
+            "priority": 1,
+            "auto_approve": true,
+            "parameters": {
+              "duration_minutes": 240,
+              "block_type": "temporary"
+            }
+          },
+          {
+            "type": "notification",
+            "priority": 2,
+            "auto_approve": true,
+            "parameters": {
+              "channels": ["slack", "email"],
+              "urgency": "high"
+            }
+          }
+        ]
+      },
+      "account_takeover": {
+        "severity_thresholds": {
+          "medium": 0.6,
+          "high": 0.8
+        },
+        "actions": [
+          {
+            "type": "account_lock",
+            "priority": 1,
+            "auto_approve": false,
+            "parameters": {
+              "duration_minutes": 60,
+              "lock_type": "security_incident"
+            }
+          },
+          {
+            "type": "token_revoke",
+            "priority": 2,
+            "auto_approve": true,
+            "parameters": {
+              "token_types": ["access", "refresh"]
+            }
+          },
+          {
+            "type": "notification",
+            "priority": 3,
+            "auto_approve": true,
+            "parameters": {
+              "channels": ["slack", "email"],
+              "urgency": "high"
+            }
+          }
+        ]
+      },
+      "brute_force": {
+        "severity_thresholds": {
+          "medium": 0.7,
+          "high": 0.85
+        },
+        "actions": [
+          {
+            "type": "ip_block",
+            "priority": 1,
+            "auto_approve": true,
+            "parameters": {
+              "duration_minutes": 120
+            }
+          },
+          {
+            "type": "account_lock",
+            "priority": 2,
+            "auto_approve": false,
+            "parameters": {
+              "duration_minutes": 30
+            }
+          }
+        ]
+      }
+    },
+    
+    "approval_policies": {
+      "account_lock": {
+        "requires_approval": true,
+        "auto_approve_conditions": {
+          "severity": ["critical"],
+          "confidence": 0.9,
+          "risk_score": 90
+        },
+        "approvers": ["security_team", "incident_commander"],
+        "approval_timeout_minutes": 60
+      },
+      "ip_block": {
+        "requires_approval": false,
+        "auto_approve_conditions": {},
+        "approvers": []
+      },
+      "token_revoke": {
+        "requires_approval": false,
+        "auto_approve_conditions": {},
+        "approvers": []
+      }
+    },
+    
+    "integrations": {
+      "firewall": {
+        "api_url": "https://firewall.company.com/api/v1",
+        "api_key": "your_firewall_api_key",
+        "timeout": 30,
+        "verify_ssl": true
+      },
+      "auth_service": {
+        "api_url": "http://localhost:8080",
+        "api_key": "your_auth_service_api_key",
+        "timeout": 30
+      }
+    },
+    
+    "escalation": {
+      "escalation_levels": {
+        "low": {
+          "notify": ["security_team@company.com"],
+          "auto_escalate_after_minutes": 60
+        },
+        "medium": {
+          "notify": ["security_team@company.com", "soc@company.com"],
+          "auto_escalate_after_minutes": 30
+        },
+        "high": {
+          "notify": ["security_team@company.com", "soc@company.com", "incident_response@company.com"],
+          "auto_escalate_after_minutes": 15
+        },
+        "critical": {
+          "notify": ["security_team@company.com", "soc@company.com", "incident_response@company.com", "ciso@company.com"],
+          "auto_escalate_after_minutes": 5
+        }
+      }
+    }
+  },
+  
+  "notifications": {
+    "slack": {
+      "webhook_url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+      "channel": "#security-alerts",
+      "username": "ThreatHunter",
+      "icon_emoji": ":shield:",
+      "enabled": true
+    },
+    "email": {
+      "smtp_server": "smtp.company.com",
+      "smtp_port": 587,
+      "username": "threat-hunting@company.com",
+      "password": "your_email_password",
+      "use_tls": true,
+      "from_address": "threat-hunting@company.com",
+      "enabled": true,
+      "templates": {
+        "threat_detected": "templates/threat_detected.html",
+        "response_executed": "templates/response_executed.html",
+        "escalation": "templates/escalation.html"
+      }
+    },
+    "webhook": {
+      "url": "https://your-notification-endpoint.com/webhook",
+      "headers": {
+        "Authorization": "Bearer your_webhook_token",
+        "Content-Type": "application/json"
+      },
+      "timeout": 10,
+      "enabled": false
+    },
+    "syslog": {
+      "server": "syslog.company.com",
+      "port": 514,
+      "facility": "local0",
+      "enabled": false
+    }
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "handlers": {
+      "console": {
+        "enabled": true,
+        "level": "INFO"
+      },
+      "file": {
+        "enabled": true,
+        "level": "DEBUG",
+        "filename": "/var/log/threat-hunting/threat-hunting.log",
+        "max_bytes": 104857600,
+        "backup_count": 5
+      },
+      "syslog": {
+        "enabled": false,
+        "level": "WARNING",
+        "facility": "local1"
+      }
+    },
+    "loggers": {
+      "behavioral_analyzer": "DEBUG",
+      "ml_user_profiler": "INFO",
+      "threat_intelligence": "INFO",
+      "attack_pattern_detector": "INFO",
+      "automated_response": "INFO",
+      "integration_bridge": "INFO"
+    }
+  },
+  
+  "monitoring": {
+    "prometheus": {
+      "enabled": true,
+      "port": 9090,
+      "metrics_path": "/metrics"
+    },
+    "health_checks": {
+      "enabled": true,
+      "port": 8081,
+      "endpoint": "/health"
+    },
+    "performance": {
+      "enable_profiling": false,
+      "profile_output_dir": "/tmp/threat-hunting-profiles",
+      "memory_monitoring": true
+    }
+  },
+  
+  "security": {
+    "api_keys": {
+      "rotation_interval_days": 90,
+      "require_https": true,
+      "rate_limiting": {
+        "requests_per_minute": 1000,
+        "burst_size": 100
+      }
+    },
+    "data_retention": {
+      "security_events_days": 90,
+      "threat_indicators_days": 30,
+      "attack_sequences_days": 60,
+      "response_plans_days": 180,
+      "audit_logs_days": 365
+    },
+    "encryption": {
+      "encrypt_sensitive_data": true,
+      "encryption_key_rotation_days": 30
+    }
+  },
+  
+  "development": {
+    "debug_mode": false,
+    "test_mode": false,
+    "disable_external_calls": false,
+    "mock_responses": false,
+    "performance_testing": false
+  },
+  
+  "features": {
+    "experimental_features": {
+      "advanced_ml_models": false,
+      "graph_neural_networks": false,
+      "federated_learning": false
+    },
+    "beta_features": {
+      "enhanced_user_profiling": true,
+      "advanced_pattern_detection": true,
+      "predictive_analytics": false
+    }
+  }
+}

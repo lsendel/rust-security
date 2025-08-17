@@ -1,0 +1,439 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: rust-security-zt
+  labels:
+    app: auth-service
+    version: v1
+    security.istio.io/tlsMode: istio
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: auth-service
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: auth-service
+        version: v1
+        security.istio.io/tlsMode: istio
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyCPU: "50m"
+        sidecar.istio.io/proxyMemory: "128Mi"
+        sidecar.istio.io/userVolumeMount: '[{"name":"spire-agent-socket", "mountPath":"/run/spire/sockets", "readonly":true}]'
+        sidecar.istio.io/userVolume: '[{"name":"spire-agent-socket", "hostPath":{"path":"/run/spire/sockets", "type":"Directory"}}]'
+        spiffe.io/spiffe-id: spiffe://zero-trust.local/auth-service
+    spec:
+      serviceAccountName: auth-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      - name: wait-for-spire
+        image: busybox:1.36
+        command: ['sh', '-c', 'until [ -S /run/spire/sockets/spire-agent.sock ]; do echo "Waiting for SPIRE agent socket..."; sleep 2; done']
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /run/spire/sockets
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      containers:
+      - name: auth-service
+        image: auth-service:zero-trust-latest
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: REDIS_URL
+          value: "redis://redis.rust-security-zt:6379"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: jwt-secret
+        - name: CLIENT_CREDENTIALS
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: client-credentials
+        - name: REQUEST_SIGNING_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: request-signing-secret
+        - name: ENVIRONMENT
+          value: "zero-trust-production"
+        - name: SPIFFE_ENDPOINT_SOCKET
+          value: "unix:///run/spire/sockets/spire-agent.sock"
+        - name: ZERO_TRUST_MODE
+          value: "true"
+        - name: DEVICE_TRUST_SERVICE_URL
+          value: "http://device-trust-service.zero-trust-system:8080"
+        - name: POLICY_SERVICE_URL
+          value: "http://policy-service.rust-security-zt:8080"
+        - name: MTLS_ENABLED
+          value: "true"
+        - name: TRUST_DOMAIN
+          value: "zero-trust.local"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: AUDIT_ENABLED
+          value: "true"
+        - name: SECURITY_HEADERS_ENABLED
+          value: "true"
+        - name: RATE_LIMITING_ENABLED
+          value: "true"
+        envFrom:
+        - configMapRef:
+            name: auth-service-config
+        volumeMounts:
+        - name: spire-agent-socket
+          mountPath: /run/spire/sockets
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: var-run
+          mountPath: /var/run
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            httpHeaders:
+            - name: User-Agent
+              value: "k8s-liveness-probe"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+            httpHeaders:
+            - name: User-Agent
+              value: "k8s-readiness-probe"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+      - name: spire-agent-socket
+        hostPath:
+          path: /run/spire/sockets
+          type: Directory
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: var-run
+        emptyDir:
+          sizeLimit: 100Mi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - auth-service
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: auth-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: rust-security-zt
+  labels:
+    app: auth-service
+    service: auth-service
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    app: auth-service
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: auth-service
+  namespace: rust-security-zt
+  labels:
+    app: auth-service
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: rust-security-zt
+data:
+  RUST_LOG: "info,auth_service=debug"
+  SERVER_PORT: "8080"
+  METRICS_PORT: "9090"
+  WORKER_THREADS: "4"
+  MAX_CONNECTIONS: "1000"
+  REQUEST_TIMEOUT: "30"
+  KEEP_ALIVE_TIMEOUT: "60"
+  GRACEFUL_SHUTDOWN_TIMEOUT: "30"
+  HEALTH_CHECK_INTERVAL: "30"
+  METRICS_COLLECTION_INTERVAL: "15"
+  AUDIT_LOG_RETENTION_DAYS: "90"
+  SESSION_TIMEOUT: "3600"
+  TOKEN_EXPIRY: "1800"
+  REFRESH_TOKEN_EXPIRY: "86400"
+  MAX_LOGIN_ATTEMPTS: "5"
+  LOCKOUT_DURATION: "300"
+  PASSWORD_MIN_LENGTH: "12"
+  PASSWORD_REQUIRE_SPECIAL: "true"
+  MFA_ENABLED: "true"
+  DEVICE_TRUST_REQUIRED: "true"
+  CONTINUOUS_VERIFICATION: "true"
+  THREAT_DETECTION_ENABLED: "true"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-zero-trust-netpol
+  namespace: rust-security-zt
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from istio-proxy (sidecar)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: istio-proxy
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow traffic from ingress gateway
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+      podSelector:
+        matchLabels:
+          app: istio-ingressgateway
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow Redis access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow policy service access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: policy-service
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow device trust service access
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: zero-trust-system
+      podSelector:
+        matchLabels:
+          app: device-trust-service
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow SPIRE agent communication
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: spire-system
+      podSelector:
+        matchLabels:
+          app: spire-agent
+    ports:
+    - protocol: TCP
+      port: 8081
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: auth-service-zero-trust-authz
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+  # Allow health checks
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/rust-security-zt/sa/auth-service"
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/health", "/ready"]
+  # Allow authenticated API access
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/token", "/introspect"]
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+    - key: request.headers[x-device-fingerprint]
+      values: ["*"]
+  # Allow SCIM operations with additional validation
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        paths: ["/scim/*"]
+    when:
+    - key: source.certificate_fingerprint
+      values: ["*"]
+    - key: request.headers[authorization]
+      values: ["Bearer *"]
+    - key: request.headers[x-device-fingerprint]
+      values: ["*"]
+  # Allow metrics collection
+  - from:
+    - source:
+        principals:
+        - "cluster.local/ns/monitoring/sa/prometheus"
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: auth-service-jwt
+  namespace: rust-security-zt
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  jwtRules:
+  - issuer: "https://auth.zero-trust.local"
+    jwksUri: "https://auth.zero-trust.local/.well-known/jwks.json"
+    audiences:
+    - "zero-trust-api"
+    forwardOriginalToken: true
+    fromHeaders:
+    - name: Authorization
+      prefix: "Bearer "
+    fromParams:
+    - "access_token"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-secrets
+  namespace: rust-security-zt
+type: Opaque
+data:
+  jwt-secret: <base64-encoded-jwt-secret>
+  client-credentials: <base64-encoded-client-credentials>
+  request-signing-secret: <base64-encoded-request-signing-secret>
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: rust-security-zt
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: auth-service

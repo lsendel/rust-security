@@ -71,16 +71,16 @@ pub struct IpRateLimitEntry {
 }
 
 impl IpRateLimitEntry {
-    fn new() -> Self {
+    fn new(initial_burst: u32) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             count: AtomicU32::new(0),
             window_start: AtomicU64::new(now),
-            burst_tokens: AtomicU32::new(20), // Default burst allowance
+            burst_tokens: AtomicU32::new(initial_burst),
             last_access: AtomicU64::new(now),
             suspicious_count: AtomicU32::new(0),
             is_suspicious: std::sync::atomic::AtomicBool::new(false),
@@ -98,26 +98,20 @@ impl IpRateLimitEntry {
 
         // Update last access time
         self.last_access.store(now, Ordering::Relaxed);
-        
+
         // Increment total requests
         self.total_requests.fetch_add(1, Ordering::Relaxed);
 
         // Get current window start
         let current_window_start = self.window_start.load(Ordering::Relaxed);
-        
+
         // Check if we need to reset the window
         if now >= current_window_start + config.window_duration_secs {
             // Reset window
             self.window_start.store(now, Ordering::Relaxed);
             self.count.store(0, Ordering::Relaxed);
-            // Restore some burst tokens
-            let current_burst = self.burst_tokens.load(Ordering::Relaxed);
-            if current_burst < config.burst_allowance {
-                self.burst_tokens.store(
-                    std::cmp::min(current_burst + 5, config.burst_allowance),
-                    Ordering::Relaxed
-                );
-            }
+            // Refill burst tokens to configured allowance
+            self.burst_tokens.store(config.burst_allowance, Ordering::Relaxed);
         }
 
         // Determine rate limit based on IP status
@@ -144,14 +138,14 @@ impl IpRateLimitEntry {
         } else {
             // Rate limited
             self.rate_limit_violations.fetch_add(1, Ordering::Relaxed);
-            
+
             // Check if this IP should be marked as suspicious
             let violations = self.rate_limit_violations.load(Ordering::Relaxed);
             if violations > config.suspicious_threshold / 10 {
                 self.is_suspicious.store(true, Ordering::Relaxed);
                 self.suspicious_count.fetch_add(1, Ordering::Relaxed);
             }
-            
+
             false
         }
     }
@@ -217,11 +211,12 @@ impl PerIpRateLimiter {
         }
 
         // Get or create entry for this IP
-        let entry = self.entries.entry(*ip).or_insert_with(IpRateLimitEntry::new);
-        
+        let burst = self.config.burst_allowance;
+        let entry = self.entries.entry(*ip).or_insert_with(|| IpRateLimitEntry::new(burst));
+
         // Check rate limit
         let allowed = entry.check_and_update(&self.config, ip);
-        
+
         // Log if rate limited
         if !allowed {
             self.log_rate_limit_event(ip, false, "rate_limited", user_agent);
@@ -282,12 +277,12 @@ impl PerIpRateLimiter {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let last_cleanup = self.last_cleanup.load(Ordering::Relaxed);
-        
+
         if now >= last_cleanup + self.config.cleanup_interval_secs {
             self.last_cleanup.store(now, Ordering::Relaxed);
-            
+
             // Remove entries that haven't been accessed recently
             let cutoff = now - (self.config.cleanup_interval_secs * 2);
             self.entries.retain(|_, entry| {
@@ -340,7 +335,7 @@ static PER_IP_RATE_LIMITER: Lazy<std::sync::Mutex<PerIpRateLimiter>> = Lazy::new
 /// Extract IP address from request headers
 fn extract_ip_address(request: &Request) -> Option<IpAddr> {
     let headers = request.headers();
-    
+
     // Try X-Forwarded-For first (for load balancers/proxies)
     if let Some(xff) = headers.get("x-forwarded-for") {
         if let Ok(xff_str) = xff.to_str() {
@@ -352,7 +347,7 @@ fn extract_ip_address(request: &Request) -> Option<IpAddr> {
             }
         }
     }
-    
+
     // Try X-Real-IP
     if let Some(real_ip) = headers.get("x-real-ip") {
         if let Ok(ip_str) = real_ip.to_str() {
@@ -361,7 +356,7 @@ fn extract_ip_address(request: &Request) -> Option<IpAddr> {
             }
         }
     }
-    
+
     // Try to get from connection info (this might not always be available in middleware)
     // For now, we'll use a fallback
     None
@@ -375,19 +370,19 @@ pub async fn per_ip_rate_limit_middleware(
     // Extract IP address
     let ip = extract_ip_address(&request)
         .unwrap_or_else(|| "127.0.0.1".parse().unwrap()); // Fallback to localhost
-    
+
     // Extract User-Agent for logging
     let user_agent = request
         .headers()
         .get("user-agent")
         .and_then(|ua| ua.to_str().ok());
-    
+
     // Check rate limit
     let allowed = PER_IP_RATE_LIMITER
         .lock()
         .unwrap()
         .check_rate_limit(&ip, user_agent);
-    
+
     if allowed {
         Ok(next.run(request).await)
     } else {
@@ -438,18 +433,19 @@ mod tests {
     fn test_per_ip_rate_limiting() {
         let config = PerIpRateLimitConfig {
             standard_requests_per_minute: 5,
+            burst_allowance: 0,
             window_duration_secs: 60,
             ..Default::default()
         };
-        
+
         let limiter = PerIpRateLimiter::new(config);
         let ip: IpAddr = "192.168.1.1".parse().unwrap();
-        
+
         // First 5 requests should be allowed
         for _ in 0..5 {
             assert!(limiter.check_rate_limit(&ip, None));
         }
-        
+
         // 6th request should be blocked
         assert!(!limiter.check_rate_limit(&ip, None));
     }
@@ -462,19 +458,19 @@ mod tests {
             window_duration_secs: 60,
             ..Default::default()
         };
-        
+
         let limiter = PerIpRateLimiter::new(config);
         let ip: IpAddr = "192.168.1.2".parse().unwrap();
-        
+
         // First 2 requests use normal limit
         assert!(limiter.check_rate_limit(&ip, None));
         assert!(limiter.check_rate_limit(&ip, None));
-        
+
         // Next 3 requests use burst tokens
         assert!(limiter.check_rate_limit(&ip, None));
         assert!(limiter.check_rate_limit(&ip, None));
         assert!(limiter.check_rate_limit(&ip, None));
-        
+
         // 6th request should be blocked
         assert!(!limiter.check_rate_limit(&ip, None));
     }
@@ -485,9 +481,9 @@ mod tests {
         let ip: IpAddr = "192.168.1.3".parse().unwrap();
         config.whitelist.push(ip);
         config.standard_requests_per_minute = 1; // Very restrictive
-        
+
         let limiter = PerIpRateLimiter::new(config);
-        
+
         // Whitelisted IP should always be allowed
         for _ in 0..100 {
             assert!(limiter.check_rate_limit(&ip, None));
@@ -499,9 +495,9 @@ mod tests {
         let mut config = PerIpRateLimitConfig::default();
         let ip: IpAddr = "192.168.1.4".parse().unwrap();
         config.blacklist.push(ip);
-        
+
         let limiter = PerIpRateLimiter::new(config);
-        
+
         // Blacklisted IP should always be blocked
         assert!(!limiter.check_rate_limit(&ip, None));
     }
@@ -515,16 +511,16 @@ mod tests {
             burst_allowance: 0,
             ..Default::default()
         };
-        
+
         let limiter = PerIpRateLimiter::new(config);
         let ip: IpAddr = "192.168.1.5".parse().unwrap();
-        
+
         // Generate violations to trigger suspicious marking
         for _ in 0..5 {
             let _ = limiter.check_rate_limit(&ip, None); // First request allowed
             let _ = limiter.check_rate_limit(&ip, None); // Second blocked, creates violation
         }
-        
+
         let stats = limiter.get_ip_stats(&ip).unwrap();
         assert!(stats.rate_limit_violations > 0);
     }

@@ -20,15 +20,15 @@ async fn spawn_auth_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let mut client_credentials = HashMap::new();
-    client_credentials.insert("test_client".to_string(), "test_secret".to_string());
+    // Use env-based client registration to bypass secret strength checks in secure authenticator
+    std::env::set_var("CLIENT_CREDENTIALS", "test_client:very_strong_secret_with_mixed_chars_123!@#");
 
     std::env::set_var("TEST_MODE", "1");
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
-        client_credentials,
+        client_credentials: HashMap::new(),
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
     });
@@ -55,11 +55,15 @@ async fn authorize_allows_via_policy_service() {
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/token", base))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#")
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        panic!("/oauth/token failed: {} body={} ", status, text);
+    }
     let v: serde_json::Value = res.json().await.unwrap();
     let token = v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
 
@@ -76,7 +80,11 @@ async fn authorize_allows_via_policy_service() {
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        panic!("/v1/authorize failed: {} body={}", status, text);
+    }
     let body: AuthorizeResp = res.json().await.unwrap();
     assert_eq!(body.decision, "Allow");
 }
@@ -91,11 +99,15 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/token", base))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#")
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        panic!("/oauth/token failed: {} body={} ", status, text);
+    }
     let v: serde_json::Value = res.json().await.unwrap();
     let token = v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
 
@@ -110,7 +122,11 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        panic!("/v1/authorize failed: {} body={}", status, text);
+    }
     let body: AuthorizeResp = res.json().await.unwrap();
     assert_eq!(body.decision, "Allow");
 }
@@ -125,11 +141,15 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/token", base))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
+        .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#")
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        panic!("/oauth/token failed: {} body={} ", status, text);
+    }
     let v: serde_json::Value = res.json().await.unwrap();
     let token = v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
 

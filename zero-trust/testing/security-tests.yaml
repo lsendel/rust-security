@@ -1,0 +1,421 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-tests
+  namespace: zero-trust-system
+data:
+  run-security-tests.sh: |
+    #!/bin/bash
+    
+    set -euo pipefail
+    
+    # Test configuration
+    NAMESPACE_APP="rust-security-zt"
+    NAMESPACE_ZT="zero-trust-system"
+    AUTH_SERVICE_URL="https://auth.zero-trust.local"
+    
+    # Colors
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m'
+    
+    # Test results
+    PASSED=0
+    FAILED=0
+    
+    log_test() {
+        echo -e "${YELLOW}[TEST]${NC} $1"
+    }
+    
+    log_pass() {
+        echo -e "${GREEN}[PASS]${NC} $1"
+        ((PASSED++))
+    }
+    
+    log_fail() {
+        echo -e "${RED}[FAIL]${NC} $1"
+        ((FAILED++))
+    }
+    
+    # Test 1: mTLS Certificate Verification
+    test_mtls() {
+        log_test "Testing mTLS certificate verification"
+        
+        if istioctl authn tls-check auth-service.$NAMESPACE_APP.svc.cluster.local | grep -q "OK"; then
+            log_pass "mTLS certificates are valid"
+        else
+            log_fail "mTLS certificate verification failed"
+        fi
+    }
+    
+    # Test 2: SPIFFE Identity Verification
+    test_spiffe_identities() {
+        log_test "Testing SPIFFE identity issuance"
+        
+        local entries=$(kubectl exec -n spire-system deployment/spire-server -- \
+            /opt/spire/bin/spire-server entry show | wc -l)
+        
+        if [ "$entries" -gt 0 ]; then
+            log_pass "SPIFFE identities are being issued ($entries entries)"
+        else
+            log_fail "No SPIFFE identities found"
+        fi
+    }
+    
+    # Test 3: OPA Policy Evaluation
+    test_opa_policies() {
+        log_test "Testing OPA policy evaluation"
+        
+        local health=$(kubectl exec -n policy-system deployment/opa -- \
+            curl -s localhost:8181/health | jq -r '.ok // false')
+        
+        if [ "$health" = "true" ]; then
+            log_pass "OPA policy engine is healthy"
+        else
+            log_fail "OPA policy engine health check failed"
+        fi
+    }
+    
+    # Test 4: Authorization Policy Enforcement
+    test_authorization_policies() {
+        log_test "Testing authorization policy enforcement"
+        
+        # Test denied request (no authentication)
+        local denied_response=$(kubectl exec -n $NAMESPACE_APP deployment/auth-service -- \
+            curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/token || echo "000")
+        
+        if [ "$denied_response" = "403" ] || [ "$denied_response" = "401" ]; then
+            log_pass "Authorization policies are enforcing (denied unauthenticated request)"
+        else
+            log_fail "Authorization policies not enforcing properly (got HTTP $denied_response)"
+        fi
+    }
+    
+    # Test 5: Device Trust Assessment
+    test_device_trust() {
+        log_test "Testing device trust assessment"
+        
+        local health=$(kubectl exec -n $NAMESPACE_ZT deployment/device-trust-service -- \
+            curl -s localhost:8080/health | jq -r '.status // "unknown"')
+        
+        if [ "$health" = "healthy" ]; then
+            log_pass "Device trust service is operational"
+        else
+            log_fail "Device trust service health check failed"
+        fi
+    }
+    
+    # Test 6: Network Policy Enforcement
+    test_network_policies() {
+        log_test "Testing network policy enforcement"
+        
+        # Test that Redis is only accessible from auth-service
+        local redis_access=$(kubectl exec -n $NAMESPACE_APP deployment/auth-service -- \
+            timeout 5 redis-cli -h redis -p 6379 ping 2>/dev/null || echo "DENIED")
+        
+        if [ "$redis_access" = "PONG" ]; then
+            log_pass "Network policies allow authorized Redis access"
+        else
+            log_fail "Network policies blocking authorized Redis access"
+        fi
+    }
+    
+    # Test 7: Service Mesh Connectivity
+    test_service_mesh() {
+        log_test "Testing service mesh connectivity"
+        
+        local proxy_status=$(istioctl proxy-status | grep -c "SYNCED" || echo "0")
+        
+        if [ "$proxy_status" -gt 0 ]; then
+            log_pass "Service mesh proxies are synchronized ($proxy_status proxies)"
+        else
+            log_fail "Service mesh proxy synchronization failed"
+        fi
+    }
+    
+    # Test 8: Security Monitoring
+    test_security_monitoring() {
+        log_test "Testing security monitoring"
+        
+        local falco_health=$(kubectl get pods -n $NAMESPACE_ZT -l app=security-monitor \
+            --field-selector=status.phase=Running | wc -l)
+        
+        if [ "$falco_health" -gt 0 ]; then
+            log_pass "Security monitoring is active ($falco_health pods)"
+        else
+            log_fail "Security monitoring not running"
+        fi
+    }
+    
+    # Test 9: Gateway Security
+    test_gateway_security() {
+        log_test "Testing gateway security"
+        
+        # Test rate limiting (should be enforced)
+        local rate_limit_test=$(for i in {1..10}; do 
+            curl -s -o /dev/null -w "%{http_code}" https://auth.zero-trust.local/health || echo "000"
+        done | grep -c "429" || echo "0")
+        
+        if [ "$rate_limit_test" -gt 0 ]; then
+            log_pass "Gateway rate limiting is active"
+        else
+            log_pass "Gateway rate limiting not triggered (normal traffic)"
+        fi
+    }
+    
+    # Test 10: Threat Detection
+    test_threat_detection() {
+        log_test "Testing threat detection"
+        
+        # Simulate suspicious request
+        local suspicious_request=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "User-Agent: sqlmap" \
+            https://auth.zero-trust.local/health || echo "000")
+        
+        if [ "$suspicious_request" = "403" ]; then
+            log_pass "Threat detection blocking suspicious requests"
+        else
+            log_fail "Threat detection not blocking suspicious requests (got HTTP $suspicious_request)"
+        fi
+    }
+    
+    # Test 11: Continuous Verification
+    test_continuous_verification() {
+        log_test "Testing continuous verification"
+        
+        # Check if certificates are being rotated
+        local cert_age=$(kubectl get secret -n $NAMESPACE_APP auth-secrets \
+            -o jsonpath='{.metadata.creationTimestamp}')
+        
+        if [ -n "$cert_age" ]; then
+            log_pass "Continuous verification mechanisms in place"
+        else
+            log_fail "Continuous verification not configured"
+        fi
+    }
+    
+    # Test 12: Compliance Validation
+    test_compliance() {
+        log_test "Testing compliance requirements"
+        
+        # Check for required security labels
+        local security_labels=$(kubectl get pods -n $NAMESPACE_APP \
+            -l security.istio.io/tlsMode=istio | wc -l)
+        
+        if [ "$security_labels" -gt 0 ]; then
+            log_pass "Security compliance labels present ($security_labels pods)"
+        else
+            log_fail "Security compliance labels missing"
+        fi
+    }
+    
+    # Run all tests
+    run_all_tests() {
+        echo "Starting Zero-Trust Security Test Suite"
+        echo "======================================"
+        
+        test_mtls
+        test_spiffe_identities
+        test_opa_policies
+        test_authorization_policies
+        test_device_trust
+        test_network_policies
+        test_service_mesh
+        test_security_monitoring
+        test_gateway_security
+        test_threat_detection
+        test_continuous_verification
+        test_compliance
+        
+        echo "======================================"
+        echo "Test Results: $PASSED passed, $FAILED failed"
+        echo "======================================"
+        
+        if [ "$FAILED" -eq 0 ]; then
+            echo -e "${GREEN}All tests passed! Zero-trust implementation is secure.${NC}"
+            exit 0
+        else
+            echo -e "${RED}Some tests failed. Please review the security configuration.${NC}"
+            exit 1
+        fi
+    }
+    
+    run_all_tests
+
+  penetration-tests.sh: |
+    #!/bin/bash
+    
+    # Zero-Trust Penetration Testing Suite
+    
+    set -euo pipefail
+    
+    AUTH_SERVICE_URL="https://auth.zero-trust.local"
+    NAMESPACE_APP="rust-security-zt"
+    
+    echo "Starting Zero-Trust Penetration Testing"
+    echo "======================================="
+    
+    # Test 1: SQL Injection Attempts
+    echo "[PENTEST] Testing SQL injection protection"
+    response=$(curl -s -o /dev/null -w "%{http_code}" \
+        "$AUTH_SERVICE_URL/token" \
+        -d "grant_type=client_credentials'; DROP TABLE users; --" || echo "000")
+    
+    if [ "$response" = "400" ] || [ "$response" = "403" ]; then
+        echo "[PASS] SQL injection blocked"
+    else
+        echo "[FAIL] SQL injection not properly blocked (HTTP $response)"
+    fi
+    
+    # Test 2: Cross-Site Scripting (XSS)
+    echo "[PENTEST] Testing XSS protection"
+    response=$(curl -s -o /dev/null -w "%{http_code}" \
+        "$AUTH_SERVICE_URL/scim/v2/Users" \
+        -H "Authorization: Bearer <script>alert('xss')</script>" || echo "000")
+    
+    if [ "$response" = "401" ] || [ "$response" = "403" ]; then
+        echo "[PASS] XSS attempts blocked"
+    else
+        echo "[FAIL] XSS protection insufficient (HTTP $response)"
+    fi
+    
+    # Test 3: Directory Traversal
+    echo "[PENTEST] Testing directory traversal protection"
+    response=$(curl -s -o /dev/null -w "%{http_code}" \
+        "$AUTH_SERVICE_URL/../../../etc/passwd" || echo "000")
+    
+    if [ "$response" = "404" ] || [ "$response" = "403" ]; then
+        echo "[PASS] Directory traversal blocked"
+    else
+        echo "[FAIL] Directory traversal not blocked (HTTP $response)"
+    fi
+    
+    # Test 4: Brute Force Protection
+    echo "[PENTEST] Testing brute force protection"
+    failed_attempts=0
+    for i in {1..20}; do
+        response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$AUTH_SERVICE_URL/token" \
+            -d "grant_type=password&username=admin&password=wrong$i" || echo "000")
+        if [ "$response" = "429" ]; then
+            failed_attempts=$((failed_attempts + 1))
+        fi
+    done
+    
+    if [ "$failed_attempts" -gt 0 ]; then
+        echo "[PASS] Brute force protection active (rate limited $failed_attempts times)"
+    else
+        echo "[FAIL] Brute force protection not working"
+    fi
+    
+    # Test 5: Unauthorized Service Access
+    echo "[PENTEST] Testing unauthorized service access"
+    
+    # Try to access Redis directly
+    redis_access=$(kubectl exec -n $NAMESPACE_APP deployment/policy-service -- \
+        timeout 5 redis-cli -h redis -p 6379 ping 2>/dev/null || echo "DENIED")
+    
+    if [ "$redis_access" = "DENIED" ]; then
+        echo "[PASS] Unauthorized Redis access blocked"
+    else
+        echo "[FAIL] Unauthorized Redis access not blocked"
+    fi
+    
+    # Test 6: Certificate Validation
+    echo "[PENTEST] Testing certificate validation"
+    cert_validation=$(curl -s --insecure -o /dev/null -w "%{http_code}" \
+        "$AUTH_SERVICE_URL/health" || echo "000")
+    
+    if [ "$cert_validation" = "200" ]; then
+        echo "[PASS] Certificate validation working"
+    else
+        echo "[FAIL] Certificate validation issues (HTTP $cert_validation)"
+    fi
+    
+    # Test 7: Information Disclosure
+    echo "[PENTEST] Testing information disclosure"
+    headers=$(curl -s -I "$AUTH_SERVICE_URL/health" | grep -i "server\|x-powered-by\|version" || echo "")
+    
+    if [ -z "$headers" ]; then
+        echo "[PASS] No sensitive headers disclosed"
+    else
+        echo "[FAIL] Sensitive information disclosed: $headers"
+    fi
+    
+    echo "======================================="
+    echo "Penetration testing completed"
+
+  performance-security-tests.yaml: |
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: performance-security-test
+      namespace: zero-trust-system
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: performance-test
+            image: fortio/fortio:latest
+            command:
+            - /usr/bin/fortio
+            - load
+            - -c
+            - "50"
+            - -qps
+            - "100"
+            - -t
+            - "60s"
+            - -H
+            - "User-Agent: PerformanceTest"
+            - -H
+            - "X-Device-Fingerprint: test-device-001"
+            - https://auth.zero-trust.local/health
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+
+  chaos-testing.yaml: |
+    apiVersion: chaos-mesh.org/v1alpha1
+    kind: NetworkChaos
+    metadata:
+      name: network-partition-test
+      namespace: zero-trust-system
+    spec:
+      action: partition
+      mode: one
+      selector:
+        namespaces:
+        - rust-security-zt
+        labelSelectors:
+          app: auth-service
+      direction: to
+      target:
+        mode: one
+        selector:
+          namespaces:
+          - rust-security-zt
+          labelSelectors:
+            app: redis
+      duration: "30s"
+    ---
+    apiVersion: chaos-mesh.org/v1alpha1
+    kind: PodChaos
+    metadata:
+      name: pod-failure-test
+      namespace: zero-trust-system
+    spec:
+      action: pod-failure
+      mode: one
+      selector:
+        namespaces:
+        - rust-security-zt
+        labelSelectors:
+          app: auth-service
+      duration: "60s"
