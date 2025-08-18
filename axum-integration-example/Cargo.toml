@@ -54,4 +54,4 @@ full = ["postgres", "sqlite", "auth", "docs", "monitoring"]
 http-body-util = "0.1"
 http = "1.0"
 tokio-test = "0.4"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
