@@ -52,9 +52,9 @@ impl RedirectUriValidator {
     pub fn validate_redirect_uri(&self, client_id: &str, redirect_uri: &str) -> Result<(), AuthError> {
         // 1. Length validation
         if redirect_uri.len() > self.max_uri_length {
-            return Err(AuthError::InvalidRequest(
-                "Redirect URI exceeds maximum length".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Redirect URI exceeds maximum length".to_string()
+            });
         }
 
         // 2. Basic format validation
@@ -73,33 +73,33 @@ impl RedirectUriValidator {
     fn validate_uri_format(&self, uri: &str) -> Result<(), AuthError> {
         // Basic string-level path traversal guard prior to parsing (URL parsing may normalize dot segments)
         if uri.contains("/../") || uri.ends_with("/..") {
-            return Err(AuthError::InvalidRequest(
-                "Path traversal detected in redirect URI".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Path traversal detected in redirect URI".to_string()
+            });
         }
         // Parse URL
         let parsed_url = Url::parse(uri)
-            .map_err(|_| AuthError::InvalidRequest("Invalid redirect URI format".to_string()))?;
+            .map_err(|_| AuthError::InvalidRequest { reason: "Invalid redirect URI format".to_string() })?;
 
         // Basic scheme presence; detailed scheme enforcement happens in security policies
         if parsed_url.scheme() != "https" && parsed_url.scheme() != "http" {
-            return Err(AuthError::InvalidRequest(
-                format!("Unsupported scheme: {}", parsed_url.scheme())
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: format!("Unsupported scheme: {}", parsed_url.scheme())
+            });
         }
 
         // Validate host exists
         if parsed_url.host().is_none() {
-            return Err(AuthError::InvalidRequest(
-                "Redirect URI must have a valid host".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Redirect URI must have a valid host".to_string()
+            });
         }
 
         // Prevent fragment in redirect URI (OAuth2 security best practice)
         if parsed_url.fragment().is_some() {
-            return Err(AuthError::InvalidRequest(
-                "Redirect URI must not contain fragments".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Redirect URI must not contain fragments".to_string()
+            });
         }
 
         Ok(())
@@ -108,13 +108,13 @@ impl RedirectUriValidator {
     /// Validate against client's registered redirect URIs
     fn validate_client_whitelist(&self, client_id: &str, redirect_uri: &str) -> Result<(), AuthError> {
         let client_uris = self.client_redirect_uris.get(client_id)
-            .ok_or_else(|| AuthError::UnauthorizedClient("Client not registered".to_string()))?;
+            .ok_or_else(|| AuthError::UnauthorizedClient { client_id: "Client not registered".to_string() })?;
 
         // Exact match required for security
         if !client_uris.contains(redirect_uri) {
-            return Err(AuthError::InvalidRequest(
-                "Redirect URI not registered for this client".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Redirect URI not registered for this client".to_string()
+            });
         }
 
         Ok(())
@@ -129,9 +129,9 @@ impl RedirectUriValidator {
             // Allow localhost for development
             if let Some(host) = parsed_url.host_str() {
                 if !self.is_localhost(host) {
-                    return Err(AuthError::InvalidRequest(
-                        "HTTPS required for redirect URIs in production".to_string()
-                    ));
+                    return Err(AuthError::InvalidRequest {
+                        reason: "HTTPS required for redirect URIs in production".to_string()
+                    });
                 }
             }
         }
@@ -139,18 +139,18 @@ impl RedirectUriValidator {
         // Prevent IP addresses (except localhost)
         if let Some(host) = parsed_url.host_str() {
             if self.is_ip_address(host) && !self.is_localhost(host) {
-                return Err(AuthError::InvalidRequest(
-                    "IP addresses not allowed in redirect URIs".to_string()
-                ));
+                return Err(AuthError::InvalidRequest {
+                    reason: "IP addresses not allowed in redirect URIs".to_string()
+                });
             }
         }
 
         // Prevent suspicious paths
         let raw_path = parsed_url.path();
         if raw_path.contains("..") || raw_path.contains("//") {
-            return Err(AuthError::InvalidRequest(
-                "Path traversal detected in redirect URI".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Path traversal detected in redirect URI".to_string()
+            });
         }
 
         Ok(())

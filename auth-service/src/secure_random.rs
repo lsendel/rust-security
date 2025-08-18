@@ -1,7 +1,7 @@
 use getrandom::getrandom;
 use data_encoding::BASE64URL_NOPAD;
 use anyhow;
-use crate::AuthError;
+use crate::{AuthError, internal_error};
 
 /// Cryptographically secure random number generator
 pub struct SecureRandomGenerator;
@@ -14,9 +14,9 @@ impl SecureRandomGenerator {
     /// Generate cryptographically secure random bytes
     pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, AuthError> {
         let mut bytes = vec![0u8; length];
-        getrandom(&mut bytes).map_err(|_| AuthError::InternalError(anyhow::anyhow!(
+        getrandom(&mut bytes).map_err(|_| internal_error(
             "Failed to generate secure random bytes"
-        )))?;
+        ))?;
         Ok(bytes)
     }
 

@@ -45,6 +45,7 @@ pub enum SecurityEventType {
     UnauthorizedAccess,
     SessionEvent,
     SecurityViolation,
+    KeyManagement,
 }
 
 /// Structured security event for audit logging

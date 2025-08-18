@@ -253,9 +253,9 @@ impl ScimAuthorizationManager {
         // Check basic permission
         if !context.has_permission(&required_permission) {
             self.log_authorization_failure(context, operation, "insufficient_permissions");
-            return Err(AuthError::Forbidden(
-                format!("Insufficient permissions for operation: {:?}", operation)
-            ));
+            return Err(AuthError::Forbidden {
+                reason: format!("Insufficient permissions for operation: {:?}", operation)
+            });
         }
 
         // Additional checks for specific operations
@@ -265,26 +265,26 @@ impl ScimAuthorizationManager {
             ScimOperation::UserDelete { user_id } => {
                 if !context.can_access_user(user_id, &required_permission) {
                     self.log_authorization_failure(context, operation, "user_access_denied");
-                    return Err(AuthError::Forbidden(
-                        "Cannot access the specified user".to_string()
-                    ));
+                    return Err(AuthError::Forbidden {
+                        reason: "Cannot access the specified user".to_string()
+                    });
                 }
             },
             ScimOperation::UserPasswordReset { user_id } => {
                 // Password reset requires special handling
                 if !context.has_permission(&ScimPermission::UserPasswordReset) {
                     self.log_authorization_failure(context, operation, "password_reset_denied");
-                    return Err(AuthError::Forbidden(
-                        "Password reset permission required".to_string()
-                    ));
+                    return Err(AuthError::Forbidden {
+                        reason: "Password reset permission required".to_string()
+                    });
                 }
 
                 // Self-service users cannot reset their own password via SCIM
                 if context.roles.contains(&ScimRole::SelfService) {
                     self.log_authorization_failure(context, operation, "self_service_password_reset_denied");
-                    return Err(AuthError::Forbidden(
-                        "Self-service users cannot reset passwords via SCIM".to_string()
-                    ));
+                    return Err(AuthError::Forbidden {
+                        reason: "Self-service users cannot reset passwords via SCIM".to_string()
+                    });
                 }
             },
             _ => {

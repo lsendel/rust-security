@@ -2,7 +2,7 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use std::collections::HashMap;
 use std::time::Instant;
-use crate::AuthError;
+use crate::{AuthError, internal_error};
 use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 use once_cell::sync::Lazy;
 
@@ -68,7 +68,7 @@ impl ClientAuthenticator {
         let salt = SaltString::generate(&mut OsRng);
         let password_hash = self.argon2
             .hash_password(client_secret.as_bytes(), &salt)
-            .map_err(|e| AuthError::InternalError(anyhow::anyhow!("Failed to hash client secret: {}", e)))?;
+            .map_err(|e| internal_error(&format!("Failed to hash client secret: {}", e)))?;
 
         // Store hashed secret and metadata
         self.client_secrets.insert(client_id.clone(), password_hash.to_string());
@@ -99,7 +99,7 @@ impl ClientAuthenticator {
                 } else {
                     // Verify password hash
                     let parsed_hash = PasswordHash::new(hash)
-                        .map_err(|e| AuthError::InternalError(anyhow::anyhow!("Invalid stored hash: {}", e)))?;
+                        .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
 
                     let verification_result = self.argon2
                         .verify_password(client_secret.as_bytes(), &parsed_hash)
@@ -155,22 +155,22 @@ impl ClientAuthenticator {
     fn validate_client_secret_strength(&self, secret: &str) -> Result<(), AuthError> {
         // Minimum length requirement
         if secret.len() < 32 {
-            return Err(AuthError::InvalidRequest(
-                "Client secret must be at least 32 characters long".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Client secret must be at least 32 characters long".to_string()
+            });
         }
 
         // Check for common weak patterns
         if secret.chars().all(|c| c.is_ascii_digit()) {
-            return Err(AuthError::InvalidRequest(
-                "Client secret cannot be all digits".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Client secret cannot be all digits".to_string()
+            });
         }
 
         if secret.chars().all(|c| c.is_ascii_alphabetic()) {
-            return Err(AuthError::InvalidRequest(
-                "Client secret must contain mixed character types".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Client secret must contain mixed character types".to_string()
+            });
         }
 
         // Check for repeated characters
@@ -181,9 +181,9 @@ impl ClientAuthenticator {
 
         let max_repeated = char_counts.values().max().unwrap_or(&0);
         if *max_repeated > secret.len() / 4 {
-            return Err(AuthError::InvalidRequest(
-                "Client secret has too many repeated characters".to_string()
-            ));
+            return Err(AuthError::InvalidRequest {
+                reason: "Client secret has too many repeated characters".to_string()
+            });
         }
 
         Ok(())
@@ -235,7 +235,7 @@ impl ClientAuthenticator {
                         let salt = SaltString::generate(&mut OsRng);
                         let password_hash = self.argon2
                             .hash_password(client_secret.as_bytes(), &salt)
-                            .map_err(|e| AuthError::InternalError(anyhow::anyhow!("Failed to hash client secret: {}", e)))?;
+                            .map_err(|e| internal_error(&format!("Failed to hash client secret: {}", e)))?;
                         self.client_secrets.insert(client_id.to_string(), password_hash.to_string());
                         self.client_metadata.insert(client_id.to_string(), metadata);
                     } else {
