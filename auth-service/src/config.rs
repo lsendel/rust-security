@@ -5,7 +5,6 @@ use std::time::Duration;
 use url::Url;
 use validator::Validate;
 use anyhow::{Context, Result};
-use deadpool_redis::ConfigError;
 use base64::Engine;
 
 // Raw configuration structure for legacy env loading

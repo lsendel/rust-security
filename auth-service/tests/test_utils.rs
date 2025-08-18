@@ -53,6 +53,7 @@ impl TestFixture {
             ],
             authorization_codes: Arc::new(RwLock::new(HashMap::new())),
             policy_cache,
+            backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
         };
         
         let app = app(app_state);

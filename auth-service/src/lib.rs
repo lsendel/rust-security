@@ -77,6 +77,8 @@ pub mod client_auth;
 pub mod mfa;
 pub mod otp_provider;
 pub mod session_manager;
+pub mod session_cleanup;
+pub mod token_store;
 pub mod webauthn;
 
 // OIDC providers

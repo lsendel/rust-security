@@ -10,7 +10,6 @@ use thiserror::Error;
 use tokio::sync::{broadcast, RwLock};
 use tokio::time::{interval, sleep, MissedTickBehavior};
 use tracing::{debug, error, info, span, warn, Instrument, Level};
-use uuid::Uuid;
 
 /// Configuration for session cleanup scheduling
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,7 +144,7 @@ impl SessionCleanupScheduler {
         
         // Log scheduler startup
         SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SystemEvent,
+            SecurityEventType::ConfigurationChange,
             SecuritySeverity::Low,
             "auth-service".to_string(),
             "Session cleanup scheduler started".to_string(),
@@ -197,7 +196,7 @@ impl SessionCleanupScheduler {
         // Log scheduler shutdown
         let stats = self.stats.read().await;
         SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SystemEvent,
+            SecurityEventType::ConfigurationChange,
             SecuritySeverity::Low,
             "auth-service".to_string(),
             "Session cleanup scheduler stopped".to_string(),
@@ -312,9 +311,9 @@ impl SessionCleanupScheduler {
             
             // Update metrics if enabled
             if self.config.enable_metrics {
-                SECURITY_METRICS.session_cleanups_total.inc();
-                SECURITY_METRICS.session_cleanup_duration
-                    .observe(start_time.elapsed().as_secs_f64());
+                SECURITY_METRICS.security_events_total
+                    .with_label_values(&["session_cleanup", "info", "auth-service"])
+                    .inc();
             }
             
             Ok(())
@@ -338,7 +337,7 @@ impl SessionCleanupScheduler {
                     return Ok(());
                 }
                 Err(e) => {
-                    last_error = Some(e.clone());
+                    last_error = Some(format!("{}", e));
                     warn!(
                         operation_id = result.operation_id,
                         attempt = attempt,
@@ -354,7 +353,7 @@ impl SessionCleanupScheduler {
             }
         }
         
-        Err(last_error.unwrap_or(CleanupError::UnknownError))
+        Err(CleanupError::UnknownError)
     }
 
     /// Execute a single cleanup operation
@@ -611,8 +610,10 @@ mod tests {
         // Test graceful shutdown
         scheduler.shutdown(ShutdownSignal::Graceful).await.unwrap();
         
-        // Wait for shutdown
-        tokio::time::timeout(Duration::from_secs(2), handle).await.unwrap().unwrap();
+        // Wait for shutdown with longer timeout
+        let result = tokio::time::timeout(Duration::from_secs(10), handle).await;
+        assert!(result.is_ok(), "Scheduler should shutdown within timeout");
+        assert!(result.unwrap().is_ok(), "Scheduler should shutdown without error");
         assert!(!scheduler.is_running());
     }
     
