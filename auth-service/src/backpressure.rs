@@ -372,7 +372,7 @@ pub fn create_backpressure_middleware(
 
 // Adaptive request body limit middleware
 pub async fn adaptive_body_limit_middleware(
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Result<Response, AuthError> {
     let config = BackpressureConfig::from_env();

@@ -134,10 +134,10 @@ impl ResilientRequestBuilder {
 
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
-        K: IntoHeaderName,
+        K: AsRef<str>,
         V: AsRef<str>,
     {
-        self.request_builder = self.request_builder.header(key, value);
+        self.request_builder = self.request_builder.header(key.as_ref(), value.as_ref());
         self
     }
 

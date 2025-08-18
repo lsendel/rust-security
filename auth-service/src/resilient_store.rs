@@ -43,7 +43,6 @@ impl Default for ResilientRedisConfig {
     }
 }
 
-#[derive(Debug)]
 pub struct ResilientRedisClient {
     connection_manager: ConnectionManager,
     circuit_breaker: CircuitBreaker,
@@ -139,21 +138,27 @@ impl ResilientRedisClient {
 
     pub async fn exists<K>(&self, key: K) -> Result<bool, AuthError>
     where
-        K: redis::ToRedisArgs + Send + Sync,
+        K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
     {
-        self.execute_with_retry(|mut conn| async move {
-            let count: u64 = conn.exists(&key).await?;
-            Ok(count > 0)
+        self.execute_with_retry(move |mut conn| {
+            let key_clone = key.clone();
+            async move {
+                let count: u64 = conn.exists(&key_clone).await?;
+                Ok(count > 0)
+            }
         })
         .await
     }
 
     pub async fn expire<K>(&self, key: K, seconds: u64) -> Result<bool, AuthError>
     where
-        K: redis::ToRedisArgs + Send + Sync,
+        K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
     {
-        self.execute_with_retry(|mut conn| async move {
-            conn.expire(&key, seconds as i64).await
+        self.execute_with_retry(move |mut conn| {
+            let key_clone = key.clone();
+            async move {
+                conn.expire(&key_clone, seconds as i64).await
+            }
         })
         .await
     }
