@@ -1,9 +1,11 @@
 [workspace]
 members = [
     "auth-service",
-    "policy-service", 
-    "axum-integration-example",
+    "policy-service",
+    "examples/axum-integration-example",
     "compliance-tools",
+    "red-team-exercises",
+    "tests",
 ]
 resolver = "2"
 
