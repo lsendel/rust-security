@@ -259,9 +259,12 @@ impl SecureKeyStorage {
                 "pq-key-management".to_string(),
                 "Post-quantum key marked for rotation".to_string(),
             )
-            .with_detail("kid".to_string(), kid.to_string())
-            .with_detail("reason".to_string(), format!("{:?}", reason))
-            .with_outcome("initiated".to_string()));
+            .with_actor("pq_system".to_string())
+            .with_action("pq_mark_rotation".to_string())
+            .with_target("pq_keys".to_string())
+            .with_outcome("initiated".to_string())
+            .with_reason(format!("Key marked for rotation due to: {:?}", reason))
+            .with_detail("kid".to_string(), kid.to_string()));
         }
         Ok(())
     }
@@ -281,9 +284,12 @@ impl SecureKeyStorage {
                 "pq-key-management".to_string(),
                 "Post-quantum key revoked".to_string(),
             )
-            .with_detail("kid".to_string(), kid.to_string())
-            .with_detail("reason".to_string(), reason.to_string())
-            .with_outcome("revoked".to_string()));
+            .with_actor("pq_system".to_string())
+            .with_action("pq_revoke_key".to_string())
+            .with_target("pq_keys".to_string())
+            .with_outcome("revoked".to_string())
+            .with_reason(format!("Key revoked: {}", reason))
+            .with_detail("kid".to_string(), kid.to_string()));
         }
         Ok(())
     }
@@ -335,8 +341,12 @@ impl SecureKeyStorage {
             "pq-key-management".to_string(),
             "Post-quantum key destroyed".to_string(),
         )
-        .with_detail("kid".to_string(), kid.to_string())
-        .with_outcome("destroyed".to_string()));
+        .with_actor("pq_system".to_string())
+        .with_action("pq_destroy_key".to_string())
+        .with_target("pq_keys".to_string())
+        .with_outcome("destroyed".to_string())
+        .with_reason("Key securely destroyed and zeroized from memory".to_string())
+        .with_detail("kid".to_string(), kid.to_string()));
 
         Ok(())
     }
@@ -443,9 +453,13 @@ impl PQKeyManager {
             "pq-key-management".to_string(),
             "Post-quantum key manager initialized".to_string(),
         )
+        .with_actor("system".to_string())
+        .with_action("pq_keymanager_init".to_string())
+        .with_target("key_manager".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("Post-quantum key management system started".to_string())
         .with_detail("active_keys".to_string(), active_keys.len())
-        .with_detail("proactive_rotation".to_string(), self.policy.proactive_rotation)
-        .with_outcome("success".to_string()));
+        .with_detail("proactive_rotation".to_string(), self.policy.proactive_rotation));
 
         Ok(())
     }
@@ -490,9 +504,12 @@ impl PQKeyManager {
             "pq-key-management".to_string(),
             "Key rotation completed".to_string(),
         )
-        .with_detail("rotated_count".to_string(), rotated_keys.len())
-        .with_detail("reason".to_string(), format!("{:?}", reason))
-        .with_outcome("success".to_string()));
+        .with_actor("pq_system".to_string())
+        .with_action("pq_rotate_keys".to_string())
+        .with_target("pq_keys".to_string())
+        .with_outcome("success".to_string())
+        .with_reason(format!("Key rotation batch completed: {:?}", reason))
+        .with_detail("rotated_count".to_string(), rotated_keys.len()));
 
         Ok(rotated_keys)
     }
@@ -540,8 +557,12 @@ impl PQKeyManager {
             "pq-key-management".to_string(),
             "Emergency key rotation initiated".to_string(),
         )
-        .with_detail("trigger".to_string(), format!("{:?}", trigger))
-        .with_outcome("initiated".to_string()));
+        .with_actor("pq_system".to_string())
+        .with_action("pq_emergency_rotate".to_string())
+        .with_target("pq_keys".to_string())
+        .with_outcome("initiated".to_string())
+        .with_reason(format!("Emergency key rotation triggered by: {:?}", trigger))
+        .with_detail("trigger".to_string(), format!("{:?}", trigger)));
 
         self.rotate_keys(RotationReason::Emergency(trigger)).await
     }

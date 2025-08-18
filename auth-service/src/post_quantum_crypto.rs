@@ -238,10 +238,14 @@ impl PQCryptoManager {
             "post-quantum-crypto".to_string(),
             "Post-quantum cryptography system initialized".to_string(),
         )
+        .with_actor("system".to_string())
+        .with_action("pq_initialize".to_string())
+        .with_target("crypto_system".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("PQ cryptography system startup initialization".to_string())
         .with_detail("security_level".to_string(), self.config.default_security_level.as_str())
         .with_detail("hybrid_enabled".to_string(), self.config.enable_hybrid)
-        .with_detail("migration_mode".to_string(), format!("{:?}", self.config.migration_mode))
-        .with_outcome("success".to_string()));
+        .with_detail("migration_mode".to_string(), format!("{:?}", self.config.migration_mode)));
 
         // Generate initial key pair
         self.generate_signing_key_pair(None).await?;
@@ -295,9 +299,13 @@ impl PQCryptoManager {
             "post-quantum-crypto".to_string(),
             "Post-quantum key pair generated".to_string(),
         )
+        .with_actor("pq_system".to_string())
+        .with_action("pq_generate_keys".to_string())
+        .with_target("pq_keys".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("New post-quantum key pair created for signing operations".to_string())
         .with_detail("kid".to_string(), kid.clone())
-        .with_detail("algorithm".to_string(), format!("{:?}", self.config.default_security_level))
-        .with_outcome("success".to_string()));
+        .with_detail("algorithm".to_string(), format!("{:?}", self.config.default_security_level)));
 
         Ok(kid)
     }
@@ -750,9 +758,13 @@ impl PQCryptoManager {
                 "post-quantum-crypto".to_string(),
                 "Post-quantum key rotated".to_string(),
             )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_rotate_key".to_string())
+            .with_target("pq_keys".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Key rotation due to expiration policy".to_string())
             .with_detail("old_kid".to_string(), kid)
-            .with_detail("rotation_reason".to_string(), "expired")
-            .with_outcome("success".to_string()));
+            .with_detail("rotation_reason".to_string(), "expired"));
         }
 
         Ok(rotated_keys)

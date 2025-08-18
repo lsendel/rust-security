@@ -511,10 +511,14 @@ pub async fn get_session_endpoint(
                     "auth-service".to_string(),
                     "Unauthorized session access attempt".to_string(),
                 )
-                .with_user_id(requesting_user_id)
-                .with_session_id(session_id)
-                .with_detail("target_user".to_string(), session.user_id.clone())
-                .with_outcome("blocked".to_string()));
+                .with_actor(requesting_user_id.to_string())
+                .with_action("read".to_string())
+                .with_target(format!("session:{}", session_id))
+                .with_outcome("blocked".to_string())
+                .with_reason("User attempted to access another user's session".to_string())
+                .with_session_id(session_id.to_string())
+                .with_correlation_id(format!("session-access-{}", session_id))
+                .with_detail("target_user".to_string(), session.user_id.clone()));
 
                 return Err(AuthError::UnauthorizedClient { client_id: "Access denied".to_string() });
             }
@@ -556,10 +560,14 @@ pub async fn delete_session_endpoint(
                     "auth-service".to_string(),
                     "Unauthorized session deletion attempt".to_string(),
                 )
-                .with_user_id(requesting_user_id)
-                .with_session_id(session_id.clone())
-                .with_detail("target_user".to_string(), session.user_id.clone())
-                .with_outcome("blocked".to_string()));
+                .with_actor(requesting_user_id.to_string())
+                .with_action("delete".to_string())
+                .with_target(format!("session:{}", session_id))
+                .with_outcome("blocked".to_string())
+                .with_reason("User attempted to delete another user's session".to_string())
+                .with_session_id(session_id.to_string())
+                .with_correlation_id(format!("session-delete-{}", session_id))
+                .with_detail("target_user".to_string(), session.user_id.clone()));
 
                 return Err(AuthError::UnauthorizedClient { client_id: "Access denied".to_string() });
             }
@@ -575,9 +583,12 @@ pub async fn delete_session_endpoint(
                 "auth-service".to_string(),
                 "Session deleted successfully".to_string(),
             )
-            .with_user_id(requesting_user_id)
-            .with_session_id(session_id)
-            .with_outcome("success".to_string()));
+            .with_actor(requesting_user_id.to_string())
+            .with_action("delete".to_string())
+            .with_target(format!("session:{}", session_id))
+            .with_outcome("success".to_string())
+            .with_session_id(session_id.to_string())
+            .with_correlation_id(format!("session-delete-{}", session_id)));
 
             Ok(Json(serde_json::json!({
                 "success": true,
@@ -617,10 +628,14 @@ pub async fn refresh_session_endpoint(
                     "auth-service".to_string(),
                     "Unauthorized session refresh attempt".to_string(),
                 )
-                .with_user_id(requesting_user_id)
-                .with_session_id(session_id.clone())
-                .with_detail("target_user".to_string(), session.user_id.clone())
-                .with_outcome("blocked".to_string()));
+                .with_actor(requesting_user_id.to_string())
+                .with_action("refresh".to_string())
+                .with_target(format!("session:{}", session_id))
+                .with_outcome("blocked".to_string())
+                .with_reason("User attempted to refresh another user's session".to_string())
+                .with_session_id(session_id.to_string())
+                .with_correlation_id(format!("session-refresh-{}", session_id))
+                .with_detail("target_user".to_string(), session.user_id.clone()));
 
                 return Err(AuthError::UnauthorizedClient { client_id: "Access denied".to_string() });
             }

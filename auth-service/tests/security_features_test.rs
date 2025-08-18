@@ -6,6 +6,16 @@ use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use auth_service::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
 use std::time::Duration;
+#[derive(Debug)]
+struct TestError(&'static str);
+
+impl std::fmt::Display for TestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for TestError {}
 
 async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -118,31 +128,32 @@ async fn test_request_signing() {
 async fn test_circuit_breaker_basic() {
     let config = CircuitBreakerConfig {
         failure_threshold: 1,
-        success_threshold: 1,
-        timeout: Duration::from_millis(50),
-        reset_timeout: Duration::from_millis(100),
+        recovery_timeout: Duration::from_millis(100),
+        request_timeout: Duration::from_millis(50),
+        half_open_max_calls: 3,
+        minimum_request_threshold: 1,
     };
-    let cb = CircuitBreaker::new(config);
+    let cb = CircuitBreaker::new("test", config);
 
     // Initially closed
-    assert_eq!(cb.state().await, CircuitState::Closed);
+    assert_eq!(cb.state(), CircuitState::Closed);
 
     // First failure should open circuit
-    let result = cb.call(async { Err::<(), &str>("failure") }).await;
+    let result = cb.call(async { Err::<(), TestError>(TestError("failure")) }).await;
     assert!(result.is_err());
     // Due to automatic transition, it might already be HalfOpen
-    let state = cb.state().await;
+    let state = cb.state();
     assert!(matches!(state, CircuitState::Open | CircuitState::HalfOpen));
 
     // Wait for reset timeout
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // After timeout, a success should recover the circuit
-    let result = cb.call(async { Ok::<(), &str>(()) }).await;
+    let result = cb.call(async { Ok::<(), TestError>(()) }).await;
     assert!(result.is_ok());
 
     // After a success, circuit should be closed (since success_threshold is 1)
-    assert_eq!(cb.state().await, CircuitState::Closed);
+    assert_eq!(cb.state(), CircuitState::Closed);
 }
 
 #[tokio::test]

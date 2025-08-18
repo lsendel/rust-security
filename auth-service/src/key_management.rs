@@ -238,9 +238,12 @@ impl KeyManagementService {
             "auth-service".to_string(),
             "New cryptographic key generated".to_string(),
         )
+        .with_actor("system".to_string())
+        .with_action("key_generate".to_string())
+        .with_target("jwt_keys".to_string())
         .with_outcome("success".to_string())
+        .with_reason("New key generated for JWT signing operations".to_string())
         .with_resource(kid.clone())
-        .with_action("key_generated".to_string())
         .with_detail("key_algorithm".to_string(), &self.config.algorithm)
         .with_detail("key_size".to_string(), self.config.key_size);
         
@@ -294,9 +297,12 @@ impl KeyManagementService {
             "auth-service".to_string(),
             "Key activated for JWT signing".to_string(),
         )
+        .with_actor(actor.to_string())
+        .with_action("key_activate".to_string())
+        .with_target("signing_key".to_string())
         .with_outcome("success".to_string())
+        .with_reason("Key successfully activated as primary signing key".to_string())
         .with_resource(kid.to_string())
-        .with_action("key_activated".to_string())
         .with_detail("key_id".to_string(), kid);
         
         SecurityLogger::log_event(&event);
@@ -365,9 +371,12 @@ impl KeyManagementService {
             "auth-service".to_string(),
             format!("Key revoked: {}", reason),
         )
-        .with_outcome("success".to_string())
+        .with_actor(actor.to_string())
+        .with_action("key_revoke".to_string())
+        .with_target("signing_key".to_string())
+        .with_outcome(if needs_emergency_rotation { "revoked_with_emergency_rotation".to_string() } else { "revoked".to_string() })
+        .with_reason(format!("Key revocation required: {}", reason))
         .with_resource(kid.to_string())
-        .with_action("key_revoked".to_string())
         .with_detail("revocation_reason".to_string(), reason)
         .with_detail("emergency_rotation_needed".to_string(), needs_emergency_rotation);
         
@@ -402,9 +411,12 @@ impl KeyManagementService {
             "auth-service".to_string(),
             "Emergency key rotation performed".to_string(),
         )
+        .with_actor(actor.to_string())
+        .with_action("key_emergency_rotate".to_string())
+        .with_target("signing_key".to_string())
         .with_outcome("success".to_string())
+        .with_reason("Emergency rotation triggered due to active key compromise".to_string())
         .with_resource(new_kid.clone())
-        .with_action("emergency_rotation".to_string())
         .with_detail("new_key_id".to_string(), &new_kid)
         .with_detail("trigger".to_string(), "key_compromise");
         

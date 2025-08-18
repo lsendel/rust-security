@@ -296,16 +296,41 @@ impl PerIpRateLimiter {
             SecuritySeverity::Warning
         };
 
+        // Determine actor and action based on context
+        let (actor, action, target, outcome) = match reason {
+            "blacklisted" => (
+                "system".to_string(),
+                "blacklist_check".to_string(),
+                ip.to_string(),
+                "blocked".to_string()
+            ),
+            "rate_limited" => (
+                ip.to_string(),
+                "rate_limit_check".to_string(),
+                "auth_service".to_string(),
+                "blocked".to_string()
+            ),
+            _ => (
+                ip.to_string(),
+                "rate_limit_check".to_string(),
+                "auth_service".to_string(),
+                if allowed { "allowed".to_string() } else { "blocked".to_string() }
+            )
+        };
+
         let mut event = SecurityEvent::new(
             SecurityEventType::RateLimitViolation,
             severity,
             "auth-service".to_string(),
             format!("Rate limit {} for IP {}", if allowed { "passed" } else { "exceeded" }, ip),
         )
-        .with_action("per_ip_rate_limit".to_string())
+        .with_actor(actor)
+        .with_action(action)
+        .with_target(target)
+        .with_outcome(outcome)
+        .with_reason(format!("Per-IP rate limiting: {}", reason))
         .with_detail("ip_address".to_string(), ip.to_string())
-        .with_detail("reason".to_string(), reason.to_string())
-        .with_outcome(if allowed { "allowed" } else { "blocked" }.to_string());
+        .with_detail("reason".to_string(), reason.to_string());
 
         if let Some(ua) = user_agent {
             event = event.with_detail("user_agent".to_string(), ua.to_string());

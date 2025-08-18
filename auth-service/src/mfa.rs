@@ -364,11 +364,14 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 "auth-service".to_string(),
                 "TOTP replay attack detected".to_string(),
             )
-            .with_action("totp_verify".to_string())
+            .with_actor("user".to_string())
+            .with_action("mfa_verify".to_string())
+            .with_target("mfa_token".to_string())
+            .with_outcome("blocked".to_string())
+            .with_reason("TOTP code already used - replay attack detected".to_string())
             .with_user_id(req.user_id.clone())
             .with_detail("code".to_string(), "REDACTED")
-            .with_detail("attack_type".to_string(), "replay")
-            .with_outcome("blocked".to_string()));
+            .with_detail("attack_type".to_string(), "replay"));
 
             return Json(TotpVerifyResponse { verified: false });
         }
@@ -407,9 +410,12 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                     "auth-service".to_string(),
                     "TOTP verification successful".to_string(),
                 )
-                .with_action("totp_verify".to_string())
-                .with_user_id(req.user_id)
-                .with_outcome("success".to_string()));
+                .with_actor("user".to_string())
+                .with_action("mfa_verify".to_string())
+                .with_target("mfa_token".to_string())
+                .with_outcome("success".to_string())
+                .with_reason("TOTP code validated successfully".to_string())
+                .with_user_id(req.user_id));
 
                 return Json(TotpVerifyResponse { verified: true });
             } else {
@@ -421,10 +427,13 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                     "auth-service".to_string(),
                     "TOTP nonce tracking failed".to_string(),
                 )
-                .with_action("totp_verify".to_string())
+                .with_actor("system".to_string())
+                .with_action("mfa_verify".to_string())
+                .with_target("mfa_token".to_string())
+                .with_outcome("error".to_string())
+                .with_reason("Redis nonce tracking failed - unable to prevent replay attacks".to_string())
                 .with_user_id(req.user_id)
-                .with_detail("reason".to_string(), "nonce_tracking_failed")
-                .with_outcome("denied".to_string()));
+                .with_detail("reason".to_string(), "nonce_tracking_failed"));
 
                 return Json(TotpVerifyResponse { verified: false });
             }
@@ -534,7 +543,11 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
             "auth-service".to_string(),
             "OTP send failed".to_string(),
         )
-        .with_action("otp_send".to_string())
+        .with_actor("system".to_string())
+        .with_action("mfa_generate".to_string())
+        .with_target("otp_code".to_string())
+        .with_outcome("failure".to_string())
+        .with_reason("Failed to send OTP via delivery provider".to_string())
         .with_detail("channel".to_string(), req.channel.clone())
         .with_detail("destination".to_string(), "masked");
         SecurityLogger::log_event(&event);
@@ -546,7 +559,11 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
         "auth-service".to_string(),
         "OTP sent".to_string(),
     )
-    .with_action("otp_send".to_string())
+    .with_actor("system".to_string())
+    .with_action("mfa_generate".to_string())
+    .with_target("otp_code".to_string())
+    .with_outcome("success".to_string())
+    .with_reason("OTP code generated and sent successfully".to_string())
     .with_detail("channel".to_string(), req.channel.clone())
     .with_detail("destination".to_string(), "masked");
     SecurityLogger::log_event(&event);
@@ -567,9 +584,12 @@ pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerif
                     "auth-service".to_string(),
                     "OTP verified".to_string(),
                 )
-                .with_action("otp_verify".to_string())
-                .with_user_id(req.user_id.clone())
-                .with_outcome("success".to_string());
+                .with_actor("user".to_string())
+                .with_action("mfa_verify".to_string())
+                .with_target("otp_code".to_string())
+                .with_outcome("success".to_string())
+                .with_reason("OTP code verified successfully".to_string())
+                .with_user_id(req.user_id.clone());
                 SecurityLogger::log_event(&event);
                 return Json(OtpVerifyResponse { verified: true });
             }
@@ -581,9 +601,12 @@ pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerif
         "auth-service".to_string(),
         "OTP verification failed".to_string(),
     )
-    .with_action("otp_verify".to_string())
-    .with_user_id(req.user_id)
-    .with_outcome("failure".to_string());
+    .with_actor("user".to_string())
+    .with_action("mfa_verify".to_string())
+    .with_target("otp_code".to_string())
+    .with_outcome("failure".to_string())
+    .with_reason("OTP code validation failed - invalid or expired code".to_string())
+    .with_user_id(req.user_id);
     SecurityLogger::log_event(&event);
     Json(OtpVerifyResponse { verified: false })
 }
@@ -616,9 +639,12 @@ pub async fn mfa_session_verify(
         "auth-service".to_string(),
         "Session marked MFA-verified".to_string(),
     )
+    .with_actor("user".to_string())
     .with_action("mfa_session_verify".to_string())
-    .with_user_id(body.user_id)
-    .with_outcome("success".to_string());
+    .with_target("user_session".to_string())
+    .with_outcome("success".to_string())
+    .with_reason("Session MFA verification window established".to_string())
+    .with_user_id(body.user_id);
     SecurityLogger::log_event(&event);
     Json(MfaSessionVerifyResponse { acknowledged: true })
 }

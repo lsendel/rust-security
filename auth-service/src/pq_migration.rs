@@ -425,9 +425,13 @@ impl MigrationManager {
             "pq-migration".to_string(),
             format!("Migration phase started: {}", phase.name),
         )
+        .with_actor("system".to_string())
+        .with_action("pq_start_phase".to_string())
+        .with_target("migration_phase".to_string())
+        .with_outcome("started".to_string())
+        .with_reason(format!("Starting migration phase: {}", phase.description))
         .with_detail("phase_id".to_string(), phase_id.to_string())
-        .with_detail("risk_level".to_string(), format!("{:?}", phase.risk_assessment.overall_risk))
-        .with_outcome("started".to_string()));
+        .with_detail("risk_level".to_string(), format!("{:?}", phase.risk_assessment.overall_risk)));
 
         Ok(())
     }
@@ -520,12 +524,16 @@ impl MigrationManager {
             "pq-migration".to_string(),
             "Performance benchmark completed".to_string(),
         )
+        .with_actor("pq_system".to_string())
+        .with_action("pq_benchmark".to_string())
+        .with_target("crypto_performance".to_string())
+        .with_outcome("completed".to_string())
+        .with_reason("Post-quantum cryptography performance assessment completed".to_string())
         .with_detail("algorithm".to_string(), benchmark.algorithm.clone())
         .with_detail("iterations".to_string(), iterations)
         .with_detail("avg_duration_ms".to_string(), benchmark.metrics.avg_duration_ms)
         .with_detail("throughput_ops_per_sec".to_string(), benchmark.metrics.throughput_ops_per_sec)
-        .with_detail("error_rate_percent".to_string(), benchmark.metrics.error_rate_percent)
-        .with_outcome("completed".to_string()));
+        .with_detail("error_rate_percent".to_string(), benchmark.metrics.error_rate_percent));
 
         Ok(benchmark)
     }
@@ -612,8 +620,12 @@ impl MigrationManager {
             "pq-migration".to_string(),
             "Migration rollback initiated".to_string(),
         )
-        .with_detail("trigger".to_string(), format!("{:?}", trigger))
-        .with_outcome("initiated".to_string()));
+        .with_actor("system".to_string())
+        .with_action("pq_rollback".to_string())
+        .with_target("crypto_system".to_string())
+        .with_outcome("initiated".to_string())
+        .with_reason("Migration rollback triggered due to detected issues".to_string())
+        .with_detail("trigger".to_string(), format!("{:?}", trigger)));
 
         // Implementation would depend on the current migration state
         // For now, we'll just log the action

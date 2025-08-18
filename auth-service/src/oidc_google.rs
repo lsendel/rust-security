@@ -38,7 +38,11 @@ pub async fn google_login() -> impl IntoResponse {
         "auth-service".to_string(),
         "Google OAuth login initiated".to_string(),
     )
-    .with_action("oauth_login_initiate".to_string())
+    .with_actor(client_id.clone())
+    .with_action("oauth_initiate".to_string())
+    .with_target("google_oauth".to_string())
+    .with_outcome("initiated".to_string())
+    .with_reason("User redirected to Google OAuth authorization endpoint".to_string())
     .with_detail("provider".to_string(), "google")
     .with_detail("client_id".to_string(), client_id.clone())
     .with_detail("scope".to_string(), scope));
@@ -73,7 +77,11 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
         "auth-service".to_string(),
         "Google OAuth callback received".to_string(),
     )
+    .with_actor("google_oauth".to_string())
     .with_action("oauth_callback".to_string())
+    .with_target("auth_service".to_string())
+    .with_outcome("received".to_string())
+    .with_reason("OAuth authorization code callback from Google".to_string())
     .with_detail("provider".to_string(), "google")
     .with_detail("has_code".to_string(), !q.code.is_empty())
     .with_detail("has_state".to_string(), q.state.is_some()));
@@ -88,6 +96,11 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                 "auth-service".to_string(),
                 "Failed to create Google OIDC HTTP client".to_string(),
             )
+            .with_actor("system".to_string())
+            .with_action("http_client_creation".to_string())
+            .with_target("oidc_client".to_string())
+            .with_outcome("failure".to_string())
+            .with_reason("Unable to initialize resilient HTTP client for Google OIDC communication".to_string())
             .with_detail("error".to_string(), e.to_string()));
             
             return Json(serde_json::json!({
@@ -121,10 +134,13 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                         "auth-service".to_string(),
                         "Google OAuth token exchange failed".to_string(),
                     )
+                    .with_actor("google_oauth".to_string())
                     .with_action("oauth_token_exchange".to_string())
+                    .with_target("oauth_token".to_string())
+                    .with_outcome("failure".to_string())
+                    .with_reason("Google OAuth server returned HTTP error during token exchange".to_string())
                     .with_detail("provider".to_string(), "google")
-                    .with_detail("error".to_string(), e.to_string())
-                    .with_outcome("failure".to_string()));
+                    .with_detail("error".to_string(), e.to_string()));
 
                     return Json(serde_json::json!({ "error": e.to_string() })).into_response();
                 }
@@ -156,11 +172,14 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                                     "auth-service".to_string(),
                                     "Google OAuth authentication successful".to_string(),
                                 )
+                                .with_actor("google_oauth".to_string())
                                 .with_action("oauth_authentication".to_string())
+                                .with_target("user".to_string())
+                                .with_outcome("success".to_string())
+                                .with_reason("Google ID token verified and local tokens minted successfully".to_string())
                                 .with_detail("provider".to_string(), "google")
                                 .with_user_id(sub)
-                                .with_detail("id_token_verified".to_string(), verified.0)
-                                .with_outcome("success".to_string()));
+                                .with_detail("id_token_verified".to_string(), verified.0));
                             }
                         } else {
                             // Log ID token verification failure
@@ -170,9 +189,12 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                                 "auth-service".to_string(),
                                 "Google OAuth ID token verification failed".to_string(),
                             )
+                            .with_actor("google_oauth".to_string())
                             .with_action("oauth_id_token_verification".to_string())
-                            .with_detail("provider".to_string(), "google")
-                            .with_outcome("failure".to_string()));
+                            .with_target("id_token".to_string())
+                            .with_outcome("failure".to_string())
+                            .with_reason("Google ID token signature validation or claim verification failed".to_string())
+                            .with_detail("provider".to_string(), "google"));
                         }
                     }
                     Json(result).into_response()

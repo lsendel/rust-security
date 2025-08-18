@@ -235,7 +235,12 @@ impl AuthFailureTracker {
         }
 
         // Log the event
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&event)
+            .with_actor(if is_suspicious { "attacker" } else { "user" })
+            .with_action("authenticate")
+            .with_target("auth_service")
+            .with_outcome("failure")
+            .with_reason(failure_reason);
 
         // Log additional alert for suspicious activity
         if is_suspicious {
@@ -288,7 +293,12 @@ impl AuthFailureTracker {
             event = event.with_detail("user_agent".to_string(), ua.to_string());
         }
 
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&event)
+            .with_actor("system")
+            .with_action("detect_attack")
+            .with_target("user_account")
+            .with_outcome("detected")
+            .with_reason("Suspicious authentication patterns detected");
     }
 
     /// Get failure statistics

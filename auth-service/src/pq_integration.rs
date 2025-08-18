@@ -117,7 +117,11 @@ pub async fn initialize_post_quantum_integration() -> Result<()> {
         "pq-integration".to_string(),
         "Post-quantum cryptography integration initialized".to_string(),
     )
-    .with_outcome("success".to_string()));
+    .with_actor("system".to_string())
+    .with_action("pq_integration_init".to_string())
+    .with_target("pq_integration".to_string())
+    .with_outcome("success".to_string())
+    .with_reason("All post-quantum integration components initialized successfully".to_string()));
 
     Ok(())
 }
@@ -248,9 +252,13 @@ pub async fn create_pq_jwt(
         "pq-integration".to_string(),
         "Post-quantum JWT token created via admin endpoint".to_string(),
     )
+    .with_actor("admin".to_string())
+    .with_action("pq_token_create".to_string())
+    .with_target("jwt_tokens".to_string())
+    .with_outcome("success".to_string())
+    .with_reason("Admin requested post-quantum JWT token creation".to_string())
     .with_detail("force_post_quantum".to_string(), force_pq)
-    .with_detail("expires_in".to_string(), expires_in)
-    .with_outcome("success".to_string()));
+    .with_detail("expires_in".to_string(), expires_in));
 
     Ok(Json(serde_json::json!({
         "access_token": token,
@@ -330,9 +338,12 @@ pub async fn force_key_rotation(
         "pq-integration".to_string(),
         "Key rotation forced via admin endpoint".to_string(),
     )
-    .with_detail("rotated_count".to_string(), rotated_keys.len())
-    .with_detail("reason".to_string(), request.reason.unwrap_or_default())
-    .with_outcome("success".to_string()));
+    .with_actor("admin".to_string())
+    .with_action("pq_force_rotation".to_string())
+    .with_target("pq_keys".to_string())
+    .with_outcome("success".to_string())
+    .with_reason(format!("Admin-initiated key rotation: {}", request.reason.unwrap_or("manual".to_string())))
+    .with_detail("rotated_count".to_string(), rotated_keys.len()));
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -421,10 +432,13 @@ pub async fn emergency_rollback(
         "pq-integration".to_string(),
         "Emergency rollback executed".to_string(),
     )
+    .with_actor("admin".to_string())
+    .with_action("pq_emergency_rollback".to_string())
+    .with_target("crypto_system".to_string())
+    .with_outcome("executed".to_string())
+    .with_reason(format!("Emergency rollback triggered: {} - {}", request.trigger, request.reason))
     .with_detail("trigger".to_string(), request.trigger)
-    .with_detail("reason".to_string(), request.reason)
-    .with_detail("rotated_keys".to_string(), rotated_keys.len())
-    .with_outcome("executed".to_string()));
+    .with_detail("rotated_keys".to_string(), rotated_keys.len()));
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -550,7 +564,11 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
                 "pq-integration".to_string(),
                 "Enhanced JWT verification successful".to_string(),
             )
-            .with_outcome("success".to_string()));
+            .with_actor("pq_system".to_string())
+            .with_action("pq_verify".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("JWT token successfully verified using enhanced verification".to_string()));
             
             Ok(claims)
         }
@@ -562,8 +580,12 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
                 "pq-integration".to_string(),
                 "Enhanced JWT verification failed".to_string(),
             )
-            .with_detail("error".to_string(), e.to_string())
-            .with_outcome("failure".to_string()));
+            .with_actor("pq_system".to_string())
+            .with_action("pq_verify".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("failure".to_string())
+            .with_reason("JWT token verification failed during enhanced validation".to_string())
+            .with_detail("error".to_string(), e.to_string()));
             
             Err(AuthError::InvalidToken(e.to_string()))
         }

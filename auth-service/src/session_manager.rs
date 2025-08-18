@@ -217,6 +217,11 @@ impl SessionManager {
             "auth-service".to_string(),
             "Session created".to_string(),
         )
+        .with_actor(user_id.clone())
+        .with_action("create".to_string())
+        .with_target(format!("session:{}", session.id))
+        .with_outcome("success".to_string())
+        .with_reason("New session established after successful authentication".to_string())
         .with_user_id(user_id)
         .with_ip_address(ip_address)
         .with_session_id(session.id.clone())
@@ -295,6 +300,11 @@ impl SessionManager {
                 "auth-service".to_string(),
                 "Session refreshed".to_string(),
             )
+            .with_actor(session.user_id.clone())
+            .with_action("refresh".to_string())
+            .with_target(format!("session:{}", session.id))
+            .with_outcome("success".to_string())
+            .with_reason("Session lifetime extended successfully".to_string())
             .with_session_id(session.id.clone())
             .with_user_id(session.user_id.clone())
             .with_ip_address(session.ip_address.clone())
@@ -321,6 +331,11 @@ impl SessionManager {
                 "auth-service".to_string(),
                 "Session invalidated".to_string(),
             )
+            .with_actor("system".to_string())
+            .with_action("invalidate".to_string())
+            .with_target(format!("session:{}", session.id))
+            .with_outcome("success".to_string())
+            .with_reason("All user sessions invalidated on request".to_string())
             .with_session_id(session.id.clone())
             .with_user_id(session.user_id.clone())
             .with_ip_address(session.ip_address.clone())
@@ -515,6 +530,11 @@ impl SessionManager {
                     "auth-service".to_string(),
                     "Session evicted due to concurrent limit".to_string(),
                 )
+                .with_actor("system".to_string())
+                .with_action("evict".to_string())
+                .with_target(format!("session:{}", session.id))
+                .with_outcome("success".to_string())
+                .with_reason("Session removed to enforce concurrent session limit".to_string())
                 .with_session_id(session.id.clone())
                 .with_user_id(session.user_id.clone())
                 .with_ip_address(session.ip_address.clone())

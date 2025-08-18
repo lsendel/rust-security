@@ -203,10 +203,19 @@ impl ClientAuthenticator {
             "auth-service".to_string(),
             format!("Client authentication {}", if success { "succeeded" } else { "failed" }),
         )
-        .with_action("client_authentication".to_string())
+        .with_actor("client".to_string())
+        .with_action("authenticate".to_string())
+        .with_target("auth_service".to_string())
+        .with_outcome(if success { "success" } else { "failure" }.to_string())
+        .with_reason(match reason {
+            "success" => "Valid client credentials provided".to_string(),
+            "invalid_credentials" => "Invalid client secret provided".to_string(),
+            "inactive_client" => "Client account is inactive".to_string(),
+            "unknown_client" => "Client ID not found in system".to_string(),
+            _ => format!("Authentication failed: {}", reason)
+        })
         .with_detail("client_id".to_string(), client_id.to_string())
-        .with_detail("reason".to_string(), reason.to_string())
-        .with_outcome(if success { "success" } else { "failure" }.to_string());
+        .with_detail("reason".to_string(), reason.to_string());
 
         if let Some(ip) = ip_address {
             event = event.with_detail("ip_address".to_string(), ip.to_string());
