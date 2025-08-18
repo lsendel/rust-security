@@ -15,6 +15,13 @@ spec:
       labels:
         app: redis
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: redis
         image: redis:7-alpine
@@ -31,6 +38,8 @@ spec:
         volumeMounts:
         - name: redis-data
           mountPath: /data
+        - name: tmp-volume
+          mountPath: /tmp
         resources:
           requests:
             memory: "128Mi"
@@ -38,6 +47,19 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+          seccompProfile:
+            type: RuntimeDefault
         livenessProbe:
           exec:
             command:
@@ -56,6 +78,8 @@ spec:
       - name: redis-data
         persistentVolumeClaim:
           claimName: redis-pvc
+      - name: tmp-volume
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
