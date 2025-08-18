@@ -57,7 +57,7 @@ repos:
       # Generate SBOM on dependency changes
       - id: sbom-generation
         name: SBOM Generation
-        entry: python3 scripts/security/sbom-generator.py --project-root . --output sbom.spdx.json --verify
+        entry: bash -c 'cd compliance-tools && cargo run --bin sbom-generator -- --project-root .. --output ../sbom.spdx.json --verify'
         language: system
         files: Cargo\.(toml|lock)$
         pass_filenames: false
@@ -170,29 +170,21 @@ repos:
       # License compliance check
       - id: license-compliance
         name: License Compliance
-        entry: python3 -c "
-import toml
-import sys
-
-# Read Cargo.toml
-with open('Cargo.toml', 'r') as f:
-    cargo = toml.load(f)
-
-# Check for required license
-if 'package' not in cargo or 'license' not in cargo['package']:
-    print('❌ Missing license in Cargo.toml')
-    sys.exit(1)
-
-# Allowed licenses for supply chain compliance
-allowed_licenses = ['MIT', 'Apache-2.0', 'BSD-3-Clause']
-license = cargo['package']['license']
-
-if license not in allowed_licenses:
-    print(f'❌ License {license} not in approved list: {allowed_licenses}')
-    sys.exit(1)
-
-print(f'✅ License {license} is compliant')
-"
+        entry: bash -c '
+if ! grep -q "^license.*=" Cargo.toml; then
+    echo "❌ Missing license in Cargo.toml"
+    exit 1
+fi
+license=$(grep "^license.*=" Cargo.toml | cut -d"\"" -f2)
+case "$license" in
+    "MIT"|"Apache-2.0"|"BSD-3-Clause")
+        echo "✅ License $license is compliant"
+        ;;
+    *)
+        echo "❌ License $license not in approved list: MIT, Apache-2.0, BSD-3-Clause"
+        exit 1
+        ;;
+esac'
         language: system
         files: Cargo\.toml$
 

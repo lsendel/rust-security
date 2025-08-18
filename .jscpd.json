@@ -1,0 +1,28 @@
+{
+  "threshold": 2,
+  "minTokens": 50,
+  "reporters": [
+    "console",
+    "sarif"
+  ],
+  "ignore": [
+    "**/target/**",
+    "**/.git/**",
+    "**/.github/**",
+    "**/node_modules/**",
+    "**/logs/**",
+    "**/test_results/**",
+    "**/performance_results/**",
+    "**/docs/**",
+    "**/*.lock",
+    "**/*.log",
+    "**/*.json",
+    "**/*.png",
+    "**/*.jpg",
+    "**/*.jpeg",
+    "**/*.gif"
+  ],
+  "patterns": [
+    "**/*.{rs,kt,java,ts,tsx,js,jsx,sh,yml,yaml,tf,proto,go,py}"
+  ]
+}

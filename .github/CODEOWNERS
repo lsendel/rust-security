@@ -1,0 +1,27 @@
+# Code ownership and default reviewers
+# Syntax: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything
+*       @your-org/engineering-leads
+
+# Rust code
+*.rs    @your-org/rust-reviewers
+/src/   @your-org/rust-reviewers
+/auth-service/ @your-org/rust-reviewers
+/policy-service/ @your-org/rust-reviewers
+
+# GitHub workflows
+/.github/workflows/ @your-org/devops
+
+# Helm charts and k8s manifests
+/helm/  @your-org/platform
+/k8s/   @your-org/platform
+
+# Documentation
+/docs/  @your-org/docs
+*.md    @your-org/docs
+
+# Security policies and supply-chain
+SECURITY.md @your-org/security
+supply-chain-security.yml @your-org/security
+/.github/workflows/supply-chain-security.yml @your-org/security

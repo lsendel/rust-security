@@ -14,6 +14,10 @@ path = "src/bin/compliance_report_generator.rs"
 name = "threat-feed-validator"
 path = "src/bin/threat_feed_validator.rs"
 
+[[bin]]
+name = "sbom-generator"
+path = "src/bin/sbom_generator.rs"
+
 
 [dependencies]
 # Core dependencies
@@ -67,6 +71,9 @@ redis = { version = "0.26", features = ["tokio-comp", "connection-manager"], opt
 # File system operations
 walkdir = "2.5"
 tempfile = "3.10"
+
+# Cryptography
+sha2 = "0.10"
 
 # Date/time parsing
 regex = "1.10"
