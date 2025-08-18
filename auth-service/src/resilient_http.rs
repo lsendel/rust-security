@@ -1,9 +1,10 @@
 use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, TimeoutConfig, RetryConfig, RetryBackoff};
 use crate::errors::AuthError;
 use std::time::Duration;
-use std::sync::Arc;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
+use bytes::Bytes;
+use http::header::IntoHeaderName;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ResilientHttpConfig {
@@ -133,10 +134,8 @@ impl ResilientRequestBuilder {
 
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
-        reqwest::header::HeaderName: TryFrom<K>,
-        <reqwest::header::HeaderName as TryFrom<K>>::Error: Into<reqwest::Error>,
-        reqwest::header::HeaderValue: TryFrom<V>,
-        <reqwest::header::HeaderValue as TryFrom<V>>::Error: Into<reqwest::Error>,
+        K: IntoHeaderName,
+        V: AsRef<str>,
     {
         self.request_builder = self.request_builder.header(key, value);
         self
@@ -253,7 +252,7 @@ impl ResilientResponse {
         })
     }
 
-    pub async fn bytes(self) -> Result<bytes::Bytes, AuthError> {
+    pub async fn bytes(self) -> Result<Bytes, AuthError> {
         self.response.bytes().await.map_err(|e| AuthError::ServiceUnavailable {
             reason: format!("Failed to read response bytes: {}", e),
         })

@@ -65,6 +65,11 @@ async fn main() -> anyhow::Result<()> {
         auth_service::policy_cache::start_cache_cleanup_task(cache_clone).await;
     });
 
+    // Initialize backpressure system
+    let backpressure_config = auth_service::backpressure::BackpressureConfig::from_env();
+    let backpressure_state = Arc::new(auth_service::backpressure::BackpressureState::new(backpressure_config));
+    tracing::info!("Backpressure system initialized");
+
     // Create application state
     let app_state = AppState {
         token_store,
@@ -72,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         allowed_scopes: cfg.allowed_scopes.clone(),
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
         policy_cache,
+        backpressure_state,
     };
 
     // Build application with OpenAPI documentation

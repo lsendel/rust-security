@@ -88,6 +88,7 @@ pub mod circuit_breaker;
 pub mod resilient_store;
 pub mod resilient_http;
 pub mod resilience_config;
+pub mod backpressure;
 pub mod redirect_validation;
 pub mod secure_random;
 pub mod client_auth;
@@ -655,6 +656,7 @@ pub struct AppState {
     pub allowed_scopes: Vec<String>,
     pub authorization_codes: Arc<RwLock<HashMap<String, AuthorizationCode>>>,
     pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
+    pub backpressure_state: Arc<crate::backpressure::BackpressureState>,
 }
 
 // TokenStore moved to store.rs
@@ -2082,6 +2084,11 @@ pub fn app(state: AppState) -> Router {
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
                 .layer(PropagateRequestIdLayer::x_request_id())
                 .layer(cors)
+                .layer(axum::middleware::from_fn_with_state(
+                    state.backpressure_state.clone(),
+                    crate::backpressure::backpressure_middleware
+                ))
+                .layer(axum::middleware::from_fn(crate::backpressure::adaptive_body_limit_middleware))
                 .layer(axum::middleware::from_fn(crate::security::validate_request_signature))
                 .layer(axum::middleware::from_fn(crate::per_ip_rate_limit::per_ip_rate_limit_middleware))
                 .layer(axum::middleware::from_fn(crate::rate_limit_optimized::optimized_rate_limit))

@@ -79,45 +79,60 @@ impl ResilientRedisClient {
 
     pub async fn get<K, V>(&self, key: K) -> Result<Option<V>, AuthError>
     where
-        K: redis::ToRedisArgs + Send + Sync + Clone,
+        K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
         V: redis::FromRedisValue + Send + Sync,
     {
-        self.execute_with_retry(|mut conn| async move {
-            conn.get(key.clone()).await
+        let key = key.clone();
+        self.execute_with_retry(move |mut conn| {
+            let key_clone = key.clone();
+            async move {
+                conn.get(key_clone).await
+            }
         })
         .await
     }
 
     pub async fn set<K, V>(&self, key: K, value: V) -> Result<(), AuthError>
     where
-        K: redis::ToRedisArgs + Send + Sync,
-        V: redis::ToRedisArgs + Send + Sync,
+        K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
+        V: redis::ToRedisArgs + Send + Sync + Clone + 'static,
     {
-        self.execute_with_retry(|mut conn| async move {
-            let _: () = conn.set(&key, &value).await?;
-            Ok(())
+        self.execute_with_retry(move |mut conn| {
+            let key_clone = key.clone();
+            let value_clone = value.clone();
+            async move {
+                let _: () = conn.set(&key_clone, &value_clone).await?;
+                Ok(())
+            }
         })
         .await
     }
 
     pub async fn set_ex<K, V>(&self, key: K, value: V, seconds: u64) -> Result<(), AuthError>
     where
-        K: redis::ToRedisArgs + Send + Sync,
-        V: redis::ToRedisArgs + Send + Sync,
+        K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
+        V: redis::ToRedisArgs + Send + Sync + Clone + 'static,
     {
-        self.execute_with_retry(|mut conn| async move {
-            let _: () = conn.set_ex(&key, &value, seconds).await?;
-            Ok(())
+        self.execute_with_retry(move |mut conn| {
+            let key_clone = key.clone();
+            let value_clone = value.clone();
+            async move {
+                let _: () = conn.set_ex(&key_clone, &value_clone, seconds).await?;
+                Ok(())
+            }
         })
         .await
     }
 
     pub async fn del<K>(&self, key: K) -> Result<u64, AuthError>
     where
-        K: redis::ToRedisArgs + Send + Sync,
+        K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
     {
-        self.execute_with_retry(|mut conn| async move {
-            conn.del(&key).await
+        self.execute_with_retry(move |mut conn| {
+            let key_clone = key.clone();
+            async move {
+                conn.del(&key_clone).await
+            }
         })
         .await
     }
