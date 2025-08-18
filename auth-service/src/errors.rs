@@ -38,8 +38,10 @@ pub enum AuthError {
     Forbidden { reason: String },
 
     // Rate limiting errors
+    #[error("Rate limit exceeded")]
+    RateLimitExceeded,
     #[error("Rate limit exceeded for IP: {ip}")]
-    RateLimitExceeded { ip: String },
+    IpRateLimitExceeded { ip: String },
     #[error("Rate limit exceeded for client: {client_id}")]
     ClientRateLimitExceeded { client_id: String },
 
@@ -64,6 +66,8 @@ pub enum AuthError {
     // Network/HTTP errors
     #[error("HTTP client error")]
     HttpClientError { source: reqwest::Error },
+    #[error("Service unavailable: {reason}")]
+    ServiceUnavailable { reason: String },
     #[error("Timeout error: {operation}")]
     TimeoutError { operation: String },
     #[error("Circuit breaker open for: {service}")]
@@ -216,7 +220,11 @@ impl IntoResponse for AuthError {
                 StatusCode::FORBIDDEN,
                 ErrorResponse::new("access_denied", &sanitize_user_input(&reason))
             ),
-            AuthError::RateLimitExceeded { ip: _ } => (
+            AuthError::RateLimitExceeded => (
+                StatusCode::TOO_MANY_REQUESTS,
+                ErrorResponse::new("rate_limit_exceeded", "rate limit exceeded")
+            ),
+            AuthError::IpRateLimitExceeded { ip: _ } => (
                 StatusCode::TOO_MANY_REQUESTS,
                 ErrorResponse::new("rate_limit_exceeded", "too many requests from this IP")
             ),
@@ -336,6 +344,10 @@ impl IntoResponse for AuthError {
                         .with_error_id(error_id)
                 )
             },
+            AuthError::ServiceUnavailable { reason } => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                ErrorResponse::new("service_unavailable", &sanitize_user_input(&reason))
+            ),
             AuthError::TimeoutError { operation } => {
                 let error_id = Uuid::new_v4();
                 tracing::warn!(error_id = %error_id, operation = %operation, "Operation timeout");

@@ -354,6 +354,7 @@ dependencies = [
  "bb8-redis",
  "bincode",
  "bloomfilter",
+ "bytes",
  "candle-core",
  "candle-nn",
  "candle-transformers",

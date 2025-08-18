@@ -19,6 +19,7 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec![],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)

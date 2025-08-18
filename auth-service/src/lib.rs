@@ -68,6 +68,7 @@ pub mod errors;
 pub mod keys;
 pub mod key_rotation;
 pub mod key_management;
+pub mod policy_cache;
 pub mod rate_limit_optimized;
 pub mod security;
 pub mod security_headers;
@@ -84,6 +85,9 @@ pub mod oidc_google;
 pub mod oidc_microsoft;
 pub mod oidc_github;
 pub mod circuit_breaker;
+pub mod resilient_store;
+pub mod resilient_http;
+pub mod resilience_config;
 pub mod redirect_validation;
 pub mod secure_random;
 pub mod client_auth;
@@ -650,6 +654,7 @@ pub struct AppState {
     pub client_credentials: HashMap<String, String>,
     pub allowed_scopes: Vec<String>,
     pub authorization_codes: Arc<RwLock<HashMap<String, AuthorizationCode>>>,
+    pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
 }
 
 // TokenStore moved to store.rs
@@ -739,6 +744,9 @@ pub async fn authorize_check(
 )
     -> Result<Json<AuthorizationCheckResponse>, AuthError>
 {
+    use crate::policy_cache::{normalize_policy_request, PolicyResponse};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
     // Extract bearer token and introspect locally
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
@@ -752,7 +760,7 @@ pub async fn authorize_check(
     if !rec.active {
         return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
     }
-
+    
     // Compose principal from token record
     let principal_id = rec
         .sub
@@ -764,11 +772,13 @@ pub async fn authorize_check(
         // Attach simple attrs if needed later (tenant/brand/location)
         "attrs": {}
     });
-
+    
     // Context: merge provided context or default empty object
     let mut context = req.context.unwrap_or_else(|| serde_json::json!({}));
     // Surface mfa flags for policy step-up decisions
-    if let Some(required) = req.mfa_required { context["mfa_required"] = serde_json::json!(required); }
+    if let Some(required) = req.mfa_required { 
+        context["mfa_required"] = serde_json::json!(required); 
+    }
     if let Some(verified) = req.mfa_verified {
         context["mfa_verified"] = serde_json::json!(verified);
     } else {
@@ -784,22 +794,81 @@ pub async fn authorize_check(
             }
         }
     }
+    
+    // Normalize policy request for caching
+    let cache_request = normalize_policy_request(
+        principal.clone(),
+        req.action.clone(),
+        req.resource.clone(),
+        context.clone(),
+    );
+    
+    // Check cache first
+    if let Some(cached_response) = state.policy_cache.get(&cache_request).await {
+        tracing::info!(
+            decision = %cached_response.decision,
+            cached_at = cached_response.cached_at,
+            "Policy decision served from cache"
+        );
+        return Ok(Json(AuthorizationCheckResponse { 
+            decision: cached_response.decision 
+        }));
+    }
+    
+    // Cache miss - evaluate policy via service
+    let decision = evaluate_policy_remote(
+        &headers,
+        principal,
+        req.action.clone(),
+        req.resource.clone(),
+        context,
+    ).await?;
+    
+    // Store in cache with appropriate TTL based on decision
+    let policy_response = PolicyResponse {
+        decision: decision.clone(),
+        cached_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        ttl_seconds: match decision.as_str() {
+            "Allow" => 300,  // 5 minutes for allow decisions
+            "Deny" => 60,    // 1 minute for deny decisions
+            _ => 10,         // 10 seconds for unknown/error decisions
+        },
+    };
+    
+    // Cache the response (ignore errors to not affect main flow)
+    if let Err(e) = state.policy_cache.put(&cache_request, policy_response).await {
+        tracing::warn!(error = %e, "Failed to cache policy response");
+    }
+    
+    Ok(Json(AuthorizationCheckResponse { decision }))
+}
 
+/// Evaluate policy remotely against policy service
+async fn evaluate_policy_remote(
+    headers: &axum::http::HeaderMap,
+    principal: serde_json::Value,
+    action: String,
+    resource: serde_json::Value,
+    context: serde_json::Value,
+) -> Result<String, AuthError> {
     // Build request to policy-service
     let request_id = headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
+    
     let payload = PolicyAuthorizeRequest {
-        request_id: request_id,
+        request_id,
         principal,
-        action: req.action,
-        resource: req.resource,
+        action,
+        resource,
         context,
     };
-
+    
     // Allow per-request override of policy URL to avoid env races in tests
     let policy_base = headers
         .get("x-policy-url")
@@ -815,59 +884,155 @@ pub async fn authorize_check(
                 }
             }
         });
-    let url = if policy_base.is_empty() { String::new() } else { format!("{}/v1/authorize", policy_base) };
-
+    
+    let url = if policy_base.is_empty() { 
+        String::new() 
+    } else { 
+        format!("{}/v1/authorize", policy_base) 
+    };
+    
     // Permissive fallback unless strict mode is enabled
     let strict = headers
         .get("x-policy-enforcement")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.eq_ignore_ascii_case("strict"))
         .unwrap_or(false);
-
+    
     let client = reqwest::Client::new();
+    
     // Deterministic behavior for explicit invalid test URL
     if policy_base.contains("invalid.invalid") {
         if strict {
             return Err(internal_error("Policy service unavailable"));
         } else {
-            return Ok(Json(AuthorizationCheckResponse { decision: "Allow".to_string() }));
+            return Ok("Allow".to_string());
         }
     }
+    
     // Additional strict guard: if strict and policy URL is clearly invalid, error early
-    // Do not early-return based on URL string; rely on request header behavior below to allow permissive fallback when not strict
     let decision = if url.is_empty() {
-        if strict { return Err(internal_error("Policy service URL not configured")); }
+        if strict { 
+            return Err(internal_error("Policy service URL not configured")); 
+        }
         "Allow".to_string()
-    } else { match client.post(url).json(&payload).send().await {
-        Ok(resp) => match resp.error_for_status() {
-            Ok(ok) => match ok.json::<PolicyAuthorizeResponse>().await {
-                Ok(r) => r.decision,
+    } else { 
+        match client.post(url).json(&payload).send().await {
+            Ok(resp) => match resp.error_for_status() {
+                Ok(ok) => match ok.json::<PolicyAuthorizeResponse>().await {
+                    Ok(r) => r.decision,
+                    Err(err) => {
+                        tracing::warn!(error = %err, "Failed to parse policy response; falling back");
+                        if strict { 
+                            return Err(internal_error(&format!("Policy response parse error: {}", err))); 
+                        }
+                        "Allow".to_string()
+                    }
+                },
                 Err(err) => {
-                    tracing::warn!(error = %err, "Failed to parse policy response; falling back");
-                    if strict { return Err(internal_error(&format!("Policy response parse error: {}", err))); }
+                    tracing::warn!(error = %err, "Policy service returned error status; falling back");
+                    if strict { 
+                        return Err(internal_error(&format!("Policy service HTTP error: {}", err))); 
+                    }
                     "Allow".to_string()
                 }
             },
             Err(err) => {
-                tracing::warn!(error = %err, "Policy service returned error status; falling back");
-                if strict { return Err(internal_error(&format!("Policy service HTTP error: {}", err))); }
+                tracing::warn!(error = %err, "Policy service unavailable; falling back");
+                if strict { 
+                    return Err(internal_error(&format!("Policy service connection error: {}", err))); 
+                }
                 "Allow".to_string()
             }
-        },
-        Err(err) => {
-            tracing::warn!(error = %err, "Policy service unavailable; falling back");
-            if strict { return Err(internal_error(&format!("Policy service connection error: {}", err))); }
-            "Allow".to_string()
         }
-    }};
-
-    Ok(Json(AuthorizationCheckResponse { decision }))
+    };
+    
+    Ok(decision)
 }
 
 pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
     })
+}
+
+/// Get policy cache statistics
+#[utoipa::path(
+    get,
+    path = "/admin/policy-cache/stats",
+    responses((status = 200, description = "Policy cache statistics", body = serde_json::Value))
+)]
+pub async fn get_policy_cache_stats(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    let stats = state.policy_cache.get_stats().await;
+    
+    let hit_ratio = if stats.hits + stats.misses > 0 {
+        stats.hits as f64 / (stats.hits + stats.misses) as f64 * 100.0
+    } else {
+        0.0
+    };
+    
+    Ok(Json(serde_json::json!({
+        "hits": stats.hits,
+        "misses": stats.misses,
+        "hit_ratio_percent": hit_ratio,
+        "entries": stats.entries,
+        "evictions": stats.evictions,
+        "errors": stats.errors,
+        "last_cleanup_time": stats.last_cleanup_time,
+        "avg_response_time_ms": stats.avg_response_time_ms
+    })))
+}
+
+/// Clear policy cache
+#[utoipa::path(
+    post,
+    path = "/admin/policy-cache/clear",
+    responses((status = 200, description = "Cache cleared", body = serde_json::Value))
+)]
+pub async fn clear_policy_cache(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    let cleared = state.policy_cache.clear().await;
+    
+    tracing::info!(cleared = cleared, "Policy cache manually cleared");
+    
+    Ok(Json(serde_json::json!({
+        "cleared": cleared,
+        "message": "Policy cache cleared successfully"
+    })))
+}
+
+/// Invalidate policy cache entries by pattern
+#[derive(Debug, Clone, serde::Deserialize, utoipa::ToSchema)]
+pub struct PolicyCacheInvalidateRequest {
+    /// Pattern to match cache keys (simple substring match)
+    pub pattern: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/admin/policy-cache/invalidate",
+    request_body = PolicyCacheInvalidateRequest,
+    responses((status = 200, description = "Cache entries invalidated", body = serde_json::Value))
+)]
+pub async fn invalidate_policy_cache(
+    State(state): State<AppState>,
+    Json(req): Json<PolicyCacheInvalidateRequest>,
+) -> Result<Json<serde_json::Value>, AuthError> {
+    let removed = state.policy_cache.invalidate(&req.pattern).await;
+    
+    tracing::info!(
+        pattern = %req.pattern,
+        removed = removed,
+        "Policy cache entries invalidated by pattern"
+    );
+    
+    Ok(Json(serde_json::json!({
+        "pattern": req.pattern,
+        "removed": removed,
+        "message": format!("Invalidated {} cache entries matching pattern", removed)
+    })))
 }
 
 #[utoipa::path(
@@ -1668,7 +1833,11 @@ async fn create_id_token(
 ) -> Option<String> {
     subject.as_ref()?;
 
-    let (kid, encoding_key) = keys::current_signing_key().await;
+    let (kid, encoding_key) = keys::current_signing_key().await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to get signing key");
+            e
+        }).ok()?;
     let header = jsonwebtoken::Header {
         alg: jsonwebtoken::Algorithm::RS256,
         kid: Some(kid),
@@ -1890,6 +2059,10 @@ pub fn app(state: AppState) -> Router {
         .route("/admin/keys/rotation/force", post(admin_force_rotation))
         // Rate limiting admin endpoints (protected)
         .route("/admin/rate-limit/stats", get(get_rate_limit_stats_endpoint))
+        // Policy cache admin endpoints (protected)
+        .route("/admin/policy-cache/stats", get(get_policy_cache_stats))
+        .route("/admin/policy-cache/clear", post(clear_policy_cache))
+        .route("/admin/policy-cache/invalidate", post(invalidate_policy_cache))
         // Session management endpoints
         .route("/session/create", post(create_session_endpoint))
         .route("/session/:id", get(get_session_endpoint))

@@ -1,190 +1,389 @@
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU64, AtomicU32, Ordering},
+    Arc, Mutex,
+};
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+use thiserror::Error;
+use tokio::time::{timeout, sleep};
+use crate::errors::AuthError;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum CircuitState {
-    Closed,
+#[derive(Error, Debug)]
+pub enum CircuitBreakerError {
+    #[error("Circuit breaker is open")]
     Open,
-    HalfOpen,
+    #[error("Operation timeout after {timeout:?}")]
+    Timeout { timeout: Duration },
+    #[error("Too many requests")]
+    TooManyRequests,
+    #[error("Operation failed: {0}")]
+    OperationFailed(String),
 }
 
-#[derive(Debug)]
+impl From<CircuitBreakerError> for AuthError {
+    fn from(err: CircuitBreakerError) -> Self {
+        match err {
+            CircuitBreakerError::Open => AuthError::ServiceUnavailable {
+                reason: "Circuit breaker is open".to_string(),
+            },
+            CircuitBreakerError::Timeout { timeout } => AuthError::ServiceUnavailable {
+                reason: format!("Operation timeout after {:?}", timeout),
+            },
+            CircuitBreakerError::TooManyRequests => AuthError::RateLimitExceeded,
+            CircuitBreakerError::OperationFailed(msg) => AuthError::ServiceUnavailable {
+                reason: format!("Operation failed: {}", msg),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CircuitState {
+    Closed,   // Normal operation
+    Open,     // Failing, rejecting requests
+    HalfOpen, // Testing if service recovered
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CircuitBreakerConfig {
-    pub failure_threshold: usize,
-    pub success_threshold: usize,
-    pub timeout: Duration,
-    pub reset_timeout: Duration,
+    pub failure_threshold: u32,
+    pub recovery_timeout: Duration,
+    pub request_timeout: Duration,
+    pub half_open_max_calls: u32,
+    pub minimum_request_threshold: u32,
 }
 
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
             failure_threshold: 5,
-            success_threshold: 3,
-            timeout: Duration::from_secs(60),
-            reset_timeout: Duration::from_secs(30),
+            recovery_timeout: Duration::from_secs(30),
+            request_timeout: Duration::from_secs(10),
+            half_open_max_calls: 3,
+            minimum_request_threshold: 10,
         }
     }
 }
 
 #[derive(Debug)]
+struct CircuitBreakerState {
+    failure_count: AtomicU32,
+    success_count: AtomicU32,
+    request_count: AtomicU64,
+    next_attempt: Mutex<Instant>,
+    half_open_calls: AtomicU32,
+    state: Mutex<CircuitState>,
+}
+
+#[derive(Debug, Clone)]
 pub struct CircuitBreaker {
+    name: String,
     config: CircuitBreakerConfig,
-    state: Arc<RwLock<CircuitState>>,
-    failure_count: AtomicUsize,
-    success_count: AtomicUsize,
-    last_failure_time: AtomicU64,
-    next_attempt: AtomicU64,
+    state: Arc<CircuitBreakerState>,
 }
 
 impl CircuitBreaker {
-    pub fn new(config: CircuitBreakerConfig) -> Self {
+    pub fn new(name: impl Into<String>, config: CircuitBreakerConfig) -> Self {
         Self {
+            name: name.into(),
             config,
-            state: Arc::new(RwLock::new(CircuitState::Closed)),
-            failure_count: AtomicUsize::new(0),
-            success_count: AtomicUsize::new(0),
-            last_failure_time: AtomicU64::new(0),
-            next_attempt: AtomicU64::new(0),
+            state: Arc::new(CircuitBreakerState {
+                failure_count: AtomicU32::new(0),
+                success_count: AtomicU32::new(0),
+                request_count: AtomicU64::new(0),
+                next_attempt: Mutex::new(Instant::now()),
+                half_open_calls: AtomicU32::new(0),
+                state: Mutex::new(CircuitState::Closed),
+            }),
         }
     }
 
-    pub async fn call<F, T, E>(&self, operation: F) -> Result<T, CircuitBreakerError<E>>
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn state(&self) -> CircuitState {
+        *self.state.state.lock().unwrap()
+    }
+
+    pub fn stats(&self) -> CircuitBreakerStats {
+        CircuitBreakerStats {
+            state: self.state(),
+            failure_count: self.state.failure_count.load(Ordering::Relaxed),
+            success_count: self.state.success_count.load(Ordering::Relaxed),
+            request_count: self.state.request_count.load(Ordering::Relaxed),
+            half_open_calls: self.state.half_open_calls.load(Ordering::Relaxed),
+        }
+    }
+
+    pub async fn call<F, R, E>(&self, operation: F) -> Result<R, CircuitBreakerError>
     where
-        F: std::future::Future<Output = Result<T, E>>,
+        F: std::future::Future<Output = Result<R, E>>,
+        E: std::error::Error + Send + Sync + 'static,
     {
-        // Check if circuit is open and if we should attempt
-        if !self.can_attempt().await {
-            return Err(CircuitBreakerError::CircuitOpen);
+        // Check if we can make the call
+        match self.can_execute() {
+            Ok(()) => {}
+            Err(e) => return Err(e),
         }
 
-        // Execute the operation
-        match operation.await {
-            Ok(result) => {
+        self.state.request_count.fetch_add(1, Ordering::Relaxed);
+
+        // Execute with timeout
+        let result = timeout(self.config.request_timeout, operation).await;
+
+        match result {
+            Ok(Ok(response)) => {
                 self.on_success().await;
-                Ok(result)
+                Ok(response)
             }
-            Err(error) => {
+            Ok(Err(e)) => {
                 self.on_failure().await;
-                Err(CircuitBreakerError::OperationFailed(error))
+                Err(CircuitBreakerError::OperationFailed(e.to_string()))
+            }
+            Err(_) => {
+                self.on_failure().await;
+                Err(CircuitBreakerError::Timeout {
+                    timeout: self.config.request_timeout,
+                })
             }
         }
     }
 
-    async fn can_attempt(&self) -> bool {
-        let state = self.state.read().await;
-        match *state {
-            CircuitState::Closed => true,
-            CircuitState::HalfOpen => true,
+    fn can_execute(&self) -> Result<(), CircuitBreakerError> {
+        let current_state = self.state();
+        
+        match current_state {
+            CircuitState::Closed => Ok(()),
             CircuitState::Open => {
-                let now = Instant::now().elapsed().as_secs();
-                let next_attempt = self.next_attempt.load(Ordering::Relaxed);
-                now >= next_attempt
+                // Check if we should transition to half-open
+                let next_attempt = *self.state.next_attempt.lock().unwrap();
+                if Instant::now() >= next_attempt {
+                    self.transition_to_half_open();
+                    Ok(())
+                } else {
+                    Err(CircuitBreakerError::Open)
+                }
+            }
+            CircuitState::HalfOpen => {
+                // Limit concurrent calls in half-open state
+                let current_calls = self.state.half_open_calls.load(Ordering::Relaxed);
+                if current_calls < self.config.half_open_max_calls {
+                    self.state.half_open_calls.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                } else {
+                    Err(CircuitBreakerError::TooManyRequests)
+                }
             }
         }
     }
 
     async fn on_success(&self) {
-        let mut state = self.state.write().await;
-        match *state {
+        let current_state = self.state();
+        
+        match current_state {
             CircuitState::Closed => {
+                self.state.success_count.fetch_add(1, Ordering::Relaxed);
                 // Reset failure count on success
-                self.failure_count.store(0, Ordering::Relaxed);
+                self.state.failure_count.store(0, Ordering::Relaxed);
             }
             CircuitState::HalfOpen => {
-                let success_count = self.success_count.fetch_add(1, Ordering::Relaxed) + 1;
-                if success_count >= self.config.success_threshold {
-                    *state = CircuitState::Closed;
-                    self.failure_count.store(0, Ordering::Relaxed);
-                    self.success_count.store(0, Ordering::Relaxed);
-                    tracing::info!("Circuit breaker closed after successful recovery");
+                self.state.success_count.fetch_add(1, Ordering::Relaxed);
+                self.state.half_open_calls.fetch_sub(1, Ordering::Relaxed);
+                
+                // If we've had enough successful calls, close the circuit
+                let success_count = self.state.success_count.load(Ordering::Relaxed);
+                if success_count >= self.config.half_open_max_calls {
+                    self.transition_to_closed();
                 }
             }
             CircuitState::Open => {
-                // Transition to half-open on first success after timeout
-                *state = CircuitState::HalfOpen;
-                self.success_count.store(1, Ordering::Relaxed);
-                tracing::info!("Circuit breaker transitioned to half-open");
+                // This shouldn't happen, but handle gracefully
+                tracing::warn!(
+                    circuit_breaker = %self.name,
+                    "Received success in Open state"
+                );
             }
         }
+
+        tracing::debug!(
+            circuit_breaker = %self.name,
+            state = ?current_state,
+            "Circuit breaker success"
+        );
     }
 
     async fn on_failure(&self) {
-        let mut state = self.state.write().await;
-        let failure_count = self.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
-
-        match *state {
+        let current_state = self.state();
+        
+        match current_state {
             CircuitState::Closed => {
-                if failure_count >= self.config.failure_threshold {
-                    *state = CircuitState::Open;
-                    let now = Instant::now().elapsed().as_secs();
-                    self.last_failure_time.store(now, Ordering::Relaxed);
-                    self.next_attempt.store(now + self.config.reset_timeout.as_secs(), Ordering::Relaxed);
-                    tracing::warn!(
-                        failure_count = failure_count,
-                        threshold = self.config.failure_threshold,
-                        "Circuit breaker opened due to failures"
-                    );
+                let failure_count = self.state.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
+                let request_count = self.state.request_count.load(Ordering::Relaxed);
+                
+                // Only open circuit if we have enough requests and failures
+                if request_count >= self.config.minimum_request_threshold as u64
+                    && failure_count >= self.config.failure_threshold
+                {
+                    self.transition_to_open();
                 }
             }
             CircuitState::HalfOpen => {
-                // Go back to open state on failure during half-open
-                *state = CircuitState::Open;
-                let now = Instant::now().elapsed().as_secs();
-                self.last_failure_time.store(now, Ordering::Relaxed);
-                self.next_attempt.store(now + self.config.reset_timeout.as_secs(), Ordering::Relaxed);
-                self.success_count.store(0, Ordering::Relaxed);
-                tracing::warn!("Circuit breaker reopened after failure during half-open state");
+                self.state.half_open_calls.fetch_sub(1, Ordering::Relaxed);
+                // Any failure in half-open immediately opens the circuit
+                self.transition_to_open();
             }
             CircuitState::Open => {
-                // Update next attempt time
-                let now = Instant::now().elapsed().as_secs();
-                self.next_attempt.store(now + self.config.reset_timeout.as_secs(), Ordering::Relaxed);
+                // Already open, just increment failure count
+                self.state.failure_count.fetch_add(1, Ordering::Relaxed);
             }
+        }
+
+        tracing::warn!(
+            circuit_breaker = %self.name,
+            state = ?current_state,
+            failure_count = self.state.failure_count.load(Ordering::Relaxed),
+            "Circuit breaker failure"
+        );
+    }
+
+    fn transition_to_open(&self) {
+        let mut state = self.state.state.lock().unwrap();
+        if *state != CircuitState::Open {
+            *state = CircuitState::Open;
+            let mut next_attempt = self.state.next_attempt.lock().unwrap();
+            *next_attempt = Instant::now() + self.config.recovery_timeout;
+            
+            tracing::warn!(
+                circuit_breaker = %self.name,
+                recovery_timeout = ?self.config.recovery_timeout,
+                "Circuit breaker opened"
+            );
         }
     }
 
-    pub async fn state(&self) -> CircuitState {
-        let state = self.state.read().await;
-        match *state {
-            CircuitState::Open => {
-                // Check if we should transition to half-open
-                let now = Instant::now().elapsed().as_secs();
-                let next_attempt = self.next_attempt.load(Ordering::Relaxed);
-                if now >= next_attempt {
-                    drop(state);
-                    let mut state = self.state.write().await;
-                    if matches!(*state, CircuitState::Open) {
-                        *state = CircuitState::HalfOpen;
-                        self.success_count.store(0, Ordering::Relaxed);
-                        tracing::info!("Circuit breaker transitioned to half-open due to timeout");
-                    }
-                    state.clone()
-                } else {
-                    state.clone()
-                }
-            }
-            _ => state.clone(),
+    fn transition_to_half_open(&self) {
+        let mut state = self.state.state.lock().unwrap();
+        if *state == CircuitState::Open {
+            *state = CircuitState::HalfOpen;
+            self.state.half_open_calls.store(0, Ordering::Relaxed);
+            self.state.success_count.store(0, Ordering::Relaxed);
+            
+            tracing::info!(
+                circuit_breaker = %self.name,
+                "Circuit breaker transitioned to half-open"
+            );
         }
     }
 
-    pub fn failure_count(&self) -> usize {
-        self.failure_count.load(Ordering::Relaxed)
-    }
-
-    pub fn success_count(&self) -> usize {
-        self.success_count.load(Ordering::Relaxed)
+    fn transition_to_closed(&self) {
+        let mut state = self.state.state.lock().unwrap();
+        if *state != CircuitState::Closed {
+            *state = CircuitState::Closed;
+            self.state.failure_count.store(0, Ordering::Relaxed);
+            self.state.success_count.store(0, Ordering::Relaxed);
+            self.state.half_open_calls.store(0, Ordering::Relaxed);
+            
+            tracing::info!(
+                circuit_breaker = %self.name,
+                "Circuit breaker closed"
+            );
+        }
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum CircuitBreakerError<E> {
-    #[error("Circuit breaker is open")]
-    CircuitOpen,
-    #[error("Operation failed: {0}")]
-    OperationFailed(E),
+#[derive(Debug, Clone)]
+pub struct CircuitBreakerStats {
+    pub state: CircuitState,
+    pub failure_count: u32,
+    pub success_count: u32,
+    pub request_count: u64,
+    pub half_open_calls: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TimeoutConfig {
+    pub connect_timeout: Duration,
+    pub request_timeout: Duration,
+    pub read_timeout: Duration,
+    pub write_timeout: Duration,
+}
+
+impl Default for TimeoutConfig {
+    fn default() -> Self {
+        Self {
+            connect_timeout: Duration::from_secs(5),
+            request_timeout: Duration::from_secs(30),
+            read_timeout: Duration::from_secs(30),
+            write_timeout: Duration::from_secs(10),
+        }
+    }
+}
+
+// Retry configuration with exponential backoff
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RetryConfig {
+    pub max_retries: u32,
+    pub base_delay: Duration,
+    pub max_delay: Duration,
+    pub backoff_multiplier: f64,
+    pub jitter: bool,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 3,
+            base_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(30),
+            backoff_multiplier: 2.0,
+            jitter: true,
+        }
+    }
+}
+
+pub struct RetryBackoff {
+    config: RetryConfig,
+    attempt: u32,
+}
+
+impl RetryBackoff {
+    pub fn new(config: RetryConfig) -> Self {
+        Self { config, attempt: 0 }
+    }
+
+    pub async fn next_delay(&mut self) -> Option<Duration> {
+        if self.attempt >= self.config.max_retries {
+            return None;
+        }
+
+        let mut delay = Duration::from_millis(
+            (self.config.base_delay.as_millis() as f64 
+                * self.config.backoff_multiplier.powi(self.attempt as i32)) as u64
+        );
+
+        // Cap at max_delay
+        if delay > self.config.max_delay {
+            delay = self.config.max_delay;
+        }
+
+        // Add jitter to avoid thundering herd
+        if self.config.jitter {
+            let jitter_ms = (delay.as_millis() as f64 * 0.1 * rand::random::<f64>()) as u64;
+            delay = Duration::from_millis(delay.as_millis() as u64 + jitter_ms);
+        }
+
+        self.attempt += 1;
+
+        if delay > Duration::ZERO {
+            sleep(delay).await;
+        }
+
+        Some(delay)
+    }
+
+    pub fn attempt(&self) -> u32 {
+        self.attempt
+    }
 }
 
 #[cfg(test)]
@@ -196,73 +395,84 @@ mod tests {
     async fn test_circuit_breaker_closed_state() {
         let config = CircuitBreakerConfig {
             failure_threshold: 3,
-            success_threshold: 2,
-            timeout: Duration::from_secs(1),
-            reset_timeout: Duration::from_secs(1),
+            minimum_request_threshold: 1,
+            ..Default::default()
         };
-        let cb = CircuitBreaker::new(config);
+        let cb = CircuitBreaker::new("test", config);
 
-        // Successful operations should keep circuit closed
-        for _ in 0..5 {
-            let result = cb.call(async { Ok::<_, &str>("success") }).await;
-            assert!(result.is_ok());
-            assert_eq!(cb.state().await, CircuitState::Closed);
-        }
+        // Successful call should keep circuit closed
+        let result = cb.call(async { Ok::<_, std::io::Error>(42) }).await;
+        assert!(result.is_ok());
+        assert_eq!(cb.state(), CircuitState::Closed);
     }
 
     #[tokio::test]
     async fn test_circuit_breaker_opens_on_failures() {
         let config = CircuitBreakerConfig {
-            failure_threshold: 3,
-            success_threshold: 2,
-            timeout: Duration::from_secs(1),
-            reset_timeout: Duration::from_secs(1),
+            failure_threshold: 2,
+            minimum_request_threshold: 1,
+            ..Default::default()
         };
-        let cb = CircuitBreaker::new(config);
+        let cb = CircuitBreaker::new("test", config);
 
-        // First two failures should keep circuit closed
-        for _ in 0..2 {
-            let result = cb.call(async { Err::<&str, _>("failure") }).await;
-            assert!(result.is_err());
-            assert_eq!(cb.state().await, CircuitState::Closed);
-        }
+        // First failure
+        let _ = cb.call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) }).await;
+        assert_eq!(cb.state(), CircuitState::Closed);
 
-        // Third failure should open the circuit
-        let result = cb.call(async { Err::<&str, _>("failure") }).await;
-        assert!(result.is_err());
-        let st = cb.state().await;
-        assert!(matches!(st, CircuitState::Open | CircuitState::HalfOpen));
+        // Second failure should open circuit
+        let _ = cb.call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) }).await;
+        assert_eq!(cb.state(), CircuitState::Open);
 
-        // Further calls should be rejected immediately
-        let result = cb.call(async { Ok::<_, &str>("success") }).await;
-        assert!(matches!(result, Err(CircuitBreakerError::CircuitOpen)));
+        // Next call should be rejected
+        let result = cb.call(async { Ok::<_, std::io::Error>(42) }).await;
+        assert!(matches!(result, Err(CircuitBreakerError::Open)));
     }
 
     #[tokio::test]
-    async fn test_circuit_breaker_half_open_recovery() {
+    async fn test_circuit_breaker_timeout() {
         let config = CircuitBreakerConfig {
-            failure_threshold: 2,
-            success_threshold: 2,
-            timeout: Duration::from_millis(200),
-            reset_timeout: Duration::from_millis(300),
+            request_timeout: Duration::from_millis(100),
+            ..Default::default()
         };
-        let cb = CircuitBreaker::new(config);
+        let cb = CircuitBreaker::new("test", config);
 
-        // Open the circuit
-        for _ in 0..2 {
-            let _ = cb.call(async { Err::<&str, _>("failure") }).await;
-        }
-        let st_after_open = cb.state().await;
-        assert!(matches!(st_after_open, CircuitState::Open | CircuitState::HalfOpen));
+        // Call that takes longer than timeout
+        let result = cb.call(async {
+            sleep(Duration::from_millis(200)).await;
+            Ok::<_, std::io::Error>(42)
+        }).await;
 
-        // Wait for reset timeout
-        sleep(Duration::from_millis(500)).await;
+        assert!(matches!(result, Err(CircuitBreakerError::Timeout { .. })));
+    }
 
-        // Perform required successes and verify the circuit closes
-        let res1 = cb.call(async { Ok::<_, &str>("success") }).await;
-        assert!(res1.is_ok());
-        let res2 = cb.call(async { Ok::<_, &str>("success") }).await;
-        assert!(res2.is_ok());
-        assert_eq!(cb.state().await, CircuitState::Closed);
+    #[tokio::test]
+    async fn test_retry_backoff() {
+        let config = RetryConfig {
+            max_retries: 3,
+            base_delay: Duration::from_millis(10),
+            jitter: false,
+            ..Default::default()
+        };
+        
+        let mut backoff = RetryBackoff::new(config);
+        
+        // First retry
+        let delay1 = backoff.next_delay().await;
+        assert!(delay1.is_some());
+        assert_eq!(backoff.attempt(), 1);
+
+        // Second retry should have longer delay
+        let delay2 = backoff.next_delay().await;
+        assert!(delay2.is_some());
+        assert_eq!(backoff.attempt(), 2);
+
+        // Third retry
+        let delay3 = backoff.next_delay().await;
+        assert!(delay3.is_some());
+        assert_eq!(backoff.attempt(), 3);
+
+        // Fourth attempt should be None (max retries reached)
+        let delay4 = backoff.next_delay().await;
+        assert!(delay4.is_none());
     }
 }

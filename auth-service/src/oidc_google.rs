@@ -1,6 +1,7 @@
 use axum::{extract::Query, response::IntoResponse, Json};
 use crate::{mint_local_tokens_for_subject, AppState};
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::resilient_http::OidcHttpClient;
 use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -77,7 +78,26 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
     .with_detail("has_code".to_string(), !q.code.is_empty())
     .with_detail("has_state".to_string(), q.state.is_some()));
 
-    let resp = reqwest::Client::new()
+    // Use resilient HTTP client for Google OAuth token exchange
+    let http_client = match OidcHttpClient::new("google") {
+        Ok(client) => client,
+        Err(e) => {
+            SecurityLogger::log_event(&SecurityEvent::new(
+                SecurityEventType::AuthenticationFailure,
+                SecuritySeverity::High,
+                "auth-service".to_string(),
+                "Failed to create Google OIDC HTTP client".to_string(),
+            )
+            .with_detail("error".to_string(), e.to_string()));
+            
+            return Json(serde_json::json!({
+                "error": "server_error",
+                "error_description": "Internal server error",
+            })).into_response();
+        }
+    };
+
+    let resp = http_client
         .post("https://oauth2.googleapis.com/token")
         .form(&[
             ("code", q.code.as_str()),
@@ -91,21 +111,24 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
 
     match resp {
         Ok(rsp) => {
-            if let Err(e) = rsp.error_for_status_ref() {
-                // Log token exchange failure
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::AuthenticationFailure,
-                    SecuritySeverity::Medium,
-                    "auth-service".to_string(),
-                    "Google OAuth token exchange failed".to_string(),
-                )
-                .with_action("oauth_token_exchange".to_string())
-                .with_detail("provider".to_string(), "google")
-                .with_detail("error".to_string(), e.to_string())
-                .with_outcome("failure".to_string()));
+            let rsp = match rsp.error_for_status() {
+                Ok(response) => response,
+                Err(e) => {
+                    // Log token exchange failure
+                    SecurityLogger::log_event(&SecurityEvent::new(
+                        SecurityEventType::AuthenticationFailure,
+                        SecuritySeverity::Medium,
+                        "auth-service".to_string(),
+                        "Google OAuth token exchange failed".to_string(),
+                    )
+                    .with_action("oauth_token_exchange".to_string())
+                    .with_detail("provider".to_string(), "google")
+                    .with_detail("error".to_string(), e.to_string())
+                    .with_outcome("failure".to_string()));
 
-                return Json(serde_json::json!({ "error": e.to_string() })).into_response();
-            }
+                    return Json(serde_json::json!({ "error": e.to_string() })).into_response();
+                }
+            };
             match rsp.json::<Value>().await {
                 Ok(v) => {
                     // Validate id_token if present

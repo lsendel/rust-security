@@ -15,6 +15,7 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["openid".to_string(), "profile".to_string(), "email".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
     };
 
     let router = app(app_state);

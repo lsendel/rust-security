@@ -55,12 +55,23 @@ async fn main() -> anyhow::Result<()> {
         TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new())))
     };
 
+    // Initialize policy cache
+    let policy_cache_config = auth_service::policy_cache::PolicyCacheConfig::default();
+    let policy_cache = Arc::new(auth_service::policy_cache::PolicyCache::new(policy_cache_config));
+    
+    // Start policy cache cleanup task
+    let cache_clone = policy_cache.clone();
+    tokio::spawn(async move {
+        auth_service::policy_cache::start_cache_cleanup_task(cache_clone).await;
+    });
+
     // Create application state
     let app_state = AppState {
         token_store,
         client_credentials: cfg.client_credentials.clone(),
         allowed_scopes: cfg.allowed_scopes.clone(),
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
+        policy_cache,
     };
 
     // Build application with OpenAPI documentation
