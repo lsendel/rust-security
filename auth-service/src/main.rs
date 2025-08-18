@@ -1,3 +1,8 @@
+//! Main entry point for the Auth Service.
+//!
+//! This service provides authentication, key management, and token storage.
+//! It is designed with security best practices and modularity in mind.
+
 use tokio::net::TcpListener;
 mod config;
 
@@ -58,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     // Initialize policy cache
     let policy_cache_config = auth_service::policy_cache::PolicyCacheConfig::default();
     let policy_cache = Arc::new(auth_service::policy_cache::PolicyCache::new(policy_cache_config));
-    
+
     // Start policy cache cleanup task
     let cache_clone = policy_cache.clone();
     tokio::spawn(async move {
@@ -99,22 +104,22 @@ async fn main() -> anyhow::Result<()> {
     // Start enhanced session cleanup scheduler with graceful shutdown
     use auth_service::session_cleanup::{SessionCleanupConfig, create_and_start_session_cleanup, ShutdownSignal};
     use auth_service::session_manager::{SessionManager, SessionConfig};
-    
+
     let session_cleanup_config = SessionCleanupConfig::default();
     let session_manager = Arc::new(SessionManager::new(SessionConfig::default()));
-    
+
     tokio::spawn(async move {
         match create_and_start_session_cleanup(session_cleanup_config, session_manager).await {
             Ok(scheduler) => {
                 tracing::info!("Session cleanup scheduler started successfully");
-                
+
                 // Store scheduler reference for graceful shutdown
                 // In a real application, you'd want to store this in the app state
                 // for proper shutdown coordination
-                
+
                 // Keep the scheduler running until shutdown
                 tokio::signal::ctrl_c().await.ok();
-                
+
                 if let Err(e) = scheduler.shutdown(ShutdownSignal::Graceful).await {
                     tracing::warn!(error = %e, "Failed to shutdown session cleanup gracefully");
                 }

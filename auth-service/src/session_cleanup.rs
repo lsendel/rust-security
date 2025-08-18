@@ -143,7 +143,7 @@ impl SessionCleanupScheduler {
         info!("Starting session cleanup scheduler");
         
         // Log scheduler startup
-        SecurityLogger::log_event(&SecurityEvent::new(
+        SecurityLogger::log_event(&mut SecurityEvent::new(
             SecurityEventType::ConfigurationChange,
             SecuritySeverity::Low,
             "auth-service".to_string(),
@@ -195,7 +195,7 @@ impl SessionCleanupScheduler {
         
         // Log scheduler shutdown
         let stats = self.stats.read().await;
-        SecurityLogger::log_event(&SecurityEvent::new(
+        SecurityLogger::log_event(&mut SecurityEvent::new(
             SecurityEventType::ConfigurationChange,
             SecuritySeverity::Low,
             "auth-service".to_string(),
@@ -401,7 +401,7 @@ impl SessionCleanupScheduler {
         
         // Log cleanup results
         if result.total_cleaned() > 0 {
-            SecurityLogger::log_event(&SecurityEvent::new(
+            SecurityLogger::log_event(&mut SecurityEvent::new(
                 SecurityEventType::DataAccess,
                 SecuritySeverity::Low,
                 "auth-service".to_string(),

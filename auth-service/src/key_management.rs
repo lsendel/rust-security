@@ -233,7 +233,7 @@ impl KeyManagementService {
         self.log_audit_event(KeyEventType::KeyGenerated, &kid, Some(actor), true, None).await;
 
         // Log security event
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::KeyManagement,
             SecuritySeverity::Info,
             "auth-service".to_string(),
@@ -248,7 +248,7 @@ impl KeyManagementService {
         .with_detail("key_algorithm".to_string(), &self.config.algorithm)
         .with_detail("key_size".to_string(), self.config.key_size);
         
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
 
         info!(kid = %kid, "Key generated successfully");
         Ok(kid)
@@ -292,7 +292,7 @@ impl KeyManagementService {
         self.log_audit_event(KeyEventType::KeyActivated, kid, Some(actor), true, None).await;
 
         // Log security event
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::KeyManagement,
             SecuritySeverity::Info,
             "auth-service".to_string(),
@@ -306,7 +306,7 @@ impl KeyManagementService {
         .with_resource(kid.to_string())
         .with_detail("key_id".to_string(), kid);
         
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
 
         info!(kid = %kid, "Key activated successfully");
         Ok(())
@@ -366,7 +366,7 @@ impl KeyManagementService {
         self.log_audit_event(KeyEventType::KeyRevoked, kid, Some(actor), true, Some(reason)).await;
 
         // Log security event
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::SuspiciousActivity,
             SecuritySeverity::High,
             "auth-service".to_string(),
@@ -381,7 +381,7 @@ impl KeyManagementService {
         .with_detail("revocation_reason".to_string(), redact_log(reason))
         .with_detail("emergency_rotation_needed".to_string(), needs_emergency_rotation);
         
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
 
         // Perform emergency rotation if needed
         if needs_emergency_rotation {
@@ -406,7 +406,7 @@ impl KeyManagementService {
         self.log_audit_event(KeyEventType::EmergencyRotation, &new_kid, Some(actor), true, None).await;
 
         // Log security event
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::SuspiciousActivity,
             SecuritySeverity::Critical,
             "auth-service".to_string(),
@@ -421,7 +421,7 @@ impl KeyManagementService {
         .with_detail("new_key_id".to_string(), &new_kid)
         .with_detail("trigger".to_string(), "key_compromise");
         
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
 
         error!(new_kid = %new_kid, "Emergency rotation completed");
         Ok(())

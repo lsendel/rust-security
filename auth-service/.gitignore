@@ -1,0 +1,10 @@
+# Ignore sensitive and generated files
+keys/
+config/
+target/
+*.log
+.env
+.DS_Store
+.idea/
+.vscode/
+

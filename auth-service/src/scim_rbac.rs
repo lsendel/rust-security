@@ -298,7 +298,7 @@ impl ScimAuthorizationManager {
 
     /// Log successful authorization
     fn log_authorization_success(&self, context: &ScimUserContext, operation: &ScimOperation) {
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::Authorization,
             SecuritySeverity::Info,
             "scim-service".to_string(),
@@ -313,12 +313,12 @@ impl ScimAuthorizationManager {
         .with_detail("operation".to_string(), format!("{:?}", operation))
         .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default());
 
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
     }
 
     /// Log failed authorization
     fn log_authorization_failure(&self, context: &ScimUserContext, operation: &ScimOperation, reason: &str) {
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::Authorization,
             SecuritySeverity::Warning,
             "scim-service".to_string(),
@@ -334,7 +334,7 @@ impl ScimAuthorizationManager {
         .with_detail("reason".to_string(), reason.to_string())
         .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default());
 
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
     }
 }
 

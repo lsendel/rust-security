@@ -336,7 +336,7 @@ impl PerIpRateLimiter {
             event = event.with_detail("user_agent".to_string(), ua.to_string());
         }
 
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
     }
 }
 

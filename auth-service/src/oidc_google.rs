@@ -33,7 +33,7 @@ pub async fn google_login() -> impl IntoResponse {
     );
 
     // Log OAuth initiation
-    SecurityLogger::log_event(&SecurityEvent::new(
+    SecurityLogger::log_event(&mut SecurityEvent::new(
         SecurityEventType::AuthenticationAttempt,
         SecuritySeverity::Low,
         "auth-service".to_string(),
@@ -72,7 +72,7 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
     }
 
     // Log OAuth callback attempt
-    SecurityLogger::log_event(&SecurityEvent::new(
+    SecurityLogger::log_event(&mut SecurityEvent::new(
         SecurityEventType::AuthenticationAttempt,
         SecuritySeverity::Low,
         "auth-service".to_string(),
@@ -91,7 +91,7 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
     let http_client = match OidcHttpClient::new("google") {
         Ok(client) => client,
         Err(e) => {
-            SecurityLogger::log_event(&SecurityEvent::new(
+            SecurityLogger::log_event(&mut SecurityEvent::new(
                 SecurityEventType::AuthenticationFailure,
                 SecuritySeverity::High,
                 "auth-service".to_string(),
@@ -129,7 +129,7 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                 Ok(response) => response,
                 Err(e) => {
                     // Log token exchange failure
-                    SecurityLogger::log_event(&SecurityEvent::new(
+                    SecurityLogger::log_event(&mut SecurityEvent::new(
                         SecurityEventType::AuthenticationFailure,
                         SecuritySeverity::Medium,
                         "auth-service".to_string(),
@@ -167,7 +167,7 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                                 result["local_tokens"] = serde_json::to_value(local).unwrap_or_else(|_| serde_json::json!({}));
 
                                 // Log successful authentication
-                                SecurityLogger::log_event(&SecurityEvent::new(
+                                SecurityLogger::log_event(&mut SecurityEvent::new(
                                     SecurityEventType::AuthenticationSuccess,
                                     SecuritySeverity::Low,
                                     "auth-service".to_string(),
@@ -184,7 +184,7 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                             }
                         } else {
                             // Log ID token verification failure
-                            SecurityLogger::log_event(&SecurityEvent::new(
+                            SecurityLogger::log_event(&mut SecurityEvent::new(
                                 SecurityEventType::AuthenticationFailure,
                                 SecuritySeverity::High,
                                 "auth-service".to_string(),

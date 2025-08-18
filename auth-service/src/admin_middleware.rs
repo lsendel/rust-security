@@ -47,10 +47,10 @@ pub async fn admin_auth_middleware(
     let config = AdminAuthConfig::default();
     let path = request.uri().path();
     let method = request.method().as_str();
-    
+
     // Extract client IP for audit logging
     let client_ip = extract_client_ip(&headers);
-    
+
     // Verify Bearer token and admin scope
     match require_admin_scope(&headers, &state).await {
         Ok(_) => {
@@ -60,9 +60,9 @@ pub async fn admin_auth_middleware(
                 client_ip = client_ip.as_deref(),
                 "Admin authentication successful"
             );
-            
+
             // Log successful admin access
-            let event = SecurityEvent {
+            let mut event = SecurityEvent {
                 event_id: uuid::Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now(),
                 event_type: SecurityEventType::AdminAccess,
@@ -92,12 +92,12 @@ pub async fn admin_auth_middleware(
                 response_time_ms: None,
             };
             SecurityLogger::log_event(&event);
-            
+
             // If request signing is required, validate the signature
             if config.require_request_signing {
                 if let Err(e) = validate_request_signature(&headers, &config, method, path).await {
                     // Log failed signature verification
-                    let event = SecurityEvent {
+                    let mut event = SecurityEvent {
                         event_id: uuid::Uuid::new_v4().to_string(),
                         timestamp: chrono::Utc::now(),
                         event_type: SecurityEventType::SecurityViolation,
@@ -127,11 +127,11 @@ pub async fn admin_auth_middleware(
                         response_time_ms: None,
                     };
                     SecurityLogger::log_event(&event);
-                    
+
                     return Err((StatusCode::BAD_REQUEST, format!("Request signature validation failed: {}", e)).into_response());
                 }
             }
-            
+
             // Proceed with the request
             Ok(next.run(request).await)
         }
@@ -143,12 +143,12 @@ pub async fn admin_auth_middleware(
                 client_ip = client_ip.as_deref(),
                 "Admin authentication failed"
             );
-            
+
             // Log failed authentication attempt
             let mut details = std::collections::HashMap::new();
             details.insert("auth_error".to_string(), serde_json::json!(redact_log(&auth_error.to_string())));
-            
-            let event = SecurityEvent {
+
+            let mut event = SecurityEvent {
                 event_id: uuid::Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now(),
                 event_type: SecurityEventType::AuthenticationFailure,
@@ -178,7 +178,7 @@ pub async fn admin_auth_middleware(
                 response_time_ms: None,
             };
             SecurityLogger::log_event(&event);
-            
+
             Err(auth_error.into_response())
         }
     }
@@ -194,40 +194,40 @@ async fn require_admin_scope(
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    
+
     let token = auth
         .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken { 
-            reason: "Missing or malformed authorization header".to_string() 
+        .ok_or_else(|| AuthError::InvalidToken {
+            reason: "Missing or malformed authorization header".to_string()
         })?;
-        
+
     if token.is_empty() {
-        return Err(AuthError::InvalidToken { 
-            reason: "Empty bearer token".to_string() 
+        return Err(AuthError::InvalidToken {
+            reason: "Empty bearer token".to_string()
         });
     }
 
     // Validate token and extract record
     let record = state.token_store.get_record(token).await
-        .map_err(|_| AuthError::InvalidToken { 
-            reason: "Token not found or invalid".to_string() 
+        .map_err(|_| AuthError::InvalidToken {
+            reason: "Token not found or invalid".to_string()
         })?;
-    
+
     // Check if token is active
     if !record.active {
-        return Err(AuthError::InvalidToken { 
-            reason: "Token is inactive".to_string() 
+        return Err(AuthError::InvalidToken {
+            reason: "Token is inactive".to_string()
         });
     }
-    
+
     // Check for admin scope
     match record.scope {
         Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
             // Additional validation could be added here (e.g., token expiry, client validation)
             Ok(())
         },
-        _ => Err(AuthError::Forbidden { 
-            reason: "Insufficient privileges: admin scope required".to_string() 
+        _ => Err(AuthError::Forbidden {
+            reason: "Insufficient privileges: admin scope required".to_string()
         }),
     }
 }
@@ -245,26 +245,26 @@ async fn validate_request_signature(
             reason: "Request signing is required but no signing secret is configured".to_string(),
         });
     };
-    
+
     // Extract signature and timestamp headers
     let signature = headers.get("x-signature")
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| AuthError::InvalidRequest {
             reason: "Missing x-signature header".to_string(),
         })?;
-        
+
     let timestamp_str = headers.get("x-timestamp")
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| AuthError::InvalidRequest {
             reason: "Missing x-timestamp header".to_string(),
         })?;
-    
+
     // Parse and validate timestamp
     let timestamp: u64 = timestamp_str.parse()
         .map_err(|_| AuthError::InvalidRequest {
             reason: "Invalid timestamp format".to_string(),
         })?;
-    
+
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| AuthError::InternalError {
@@ -272,25 +272,25 @@ async fn validate_request_signature(
             context: "Failed to get current timestamp".to_string(),
         })?
         .as_secs();
-    
+
     // Check timestamp skew
     if current_time.abs_diff(timestamp) > config.max_timestamp_skew {
         return Err(AuthError::InvalidRequest {
             reason: "Request timestamp is too far from current time".to_string(),
         });
     }
-    
+
     // Calculate expected signature
     let payload = format!("{}:{}:{}", method, path, timestamp);
     let expected_signature = calculate_hmac_sha256(signing_secret, &payload)?;
-    
+
     // Constant-time comparison to prevent timing attacks
     if !constant_time_compare(signature, &expected_signature) {
         return Err(AuthError::InvalidRequest {
             reason: "Invalid request signature".to_string(),
         });
     }
-    
+
     Ok(())
 }
 
@@ -298,15 +298,15 @@ async fn validate_request_signature(
 fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, AuthError> {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
-    
+
     type HmacSha256 = Hmac<Sha256>;
-    
+
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
         .map_err(|_| AuthError::CryptographicError {
             operation: "hmac_initialization".to_string(),
             source: Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid HMAC key")),
         })?;
-        
+
     mac.update(payload.as_bytes());
     let result = mac.finalize();
     Ok(hex::encode(result.into_bytes()))
@@ -317,7 +317,7 @@ fn constant_time_compare(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    
+
     let mut result = 0u8;
     for (byte_a, byte_b) in a.bytes().zip(b.bytes()) {
         result |= byte_a ^ byte_b;
@@ -336,21 +336,21 @@ fn extract_client_ip(headers: &HeaderMap) -> Option<String> {
             }
         }
     }
-    
+
     // Try X-Real-IP (nginx)
     if let Some(real_ip) = headers.get("x-real-ip") {
         if let Ok(ip_str) = real_ip.to_str() {
             return Some(ip_str.to_string());
         }
     }
-    
+
     // Try CF-Connecting-IP (Cloudflare)
     if let Some(cf_ip) = headers.get("cf-connecting-ip") {
         if let Ok(ip_str) = cf_ip.to_str() {
             return Some(ip_str.to_string());
         }
     }
-    
+
     None
 }
 
@@ -373,7 +373,7 @@ fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_constant_time_compare() {
         assert!(constant_time_compare("hello", "hello"));
@@ -383,22 +383,22 @@ mod tests {
         assert!(!constant_time_compare("", "hello"));
         assert!(constant_time_compare("", ""));
     }
-    
+
     #[test]
     fn test_calculate_hmac_sha256() {
         let secret = "test_secret";
         let payload = "GET:/admin/test:1234567890";
         let signature = calculate_hmac_sha256(secret, payload).unwrap();
-        
+
         // Verify the signature is deterministic
         let signature2 = calculate_hmac_sha256(secret, payload).unwrap();
         assert_eq!(signature, signature2);
-        
+
         // Verify different payload gives different signature
         let different_signature = calculate_hmac_sha256(secret, "different").unwrap();
         assert_ne!(signature, different_signature);
     }
-    
+
     #[test]
     fn test_admin_auth_config_default() {
         let config = AdminAuthConfig::default();
@@ -406,23 +406,23 @@ mod tests {
         assert_eq!(config.rate_limit_per_minute, 100);
         assert!(!config.require_request_signing);
     }
-    
+
     #[test]
     fn test_extract_client_ip() {
         let mut headers = HeaderMap::new();
-        
+
         // Test X-Forwarded-For
         headers.insert("x-forwarded-for", "192.168.1.1, 10.0.0.1".parse().unwrap());
         assert_eq!(extract_client_ip(&headers), Some("192.168.1.1".to_string()));
-        
+
         // Test X-Real-IP (should prefer X-Forwarded-For)
         headers.insert("x-real-ip", "10.0.0.2".parse().unwrap());
         assert_eq!(extract_client_ip(&headers), Some("192.168.1.1".to_string()));
-        
+
         // Test without X-Forwarded-For
         headers.remove("x-forwarded-for");
         assert_eq!(extract_client_ip(&headers), Some("10.0.0.2".to_string()));
-        
+
         // Test CF-Connecting-IP
         headers.remove("x-real-ip");
         headers.insert("cf-connecting-ip", "1.2.3.4".parse().unwrap());

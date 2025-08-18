@@ -359,7 +359,7 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
         // First check if this code has already been used (replay attack detection)
         if is_totp_code_used(&req.user_id, &req.code).await {
             // Log potential replay attack
-            let event = SecurityEvent::new(
+            let mut event = SecurityEvent::new(
                 SecurityEventType::MfaFailure,
                 SecuritySeverity::High,
                 "auth-service".to_string(),
@@ -373,7 +373,7 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
             .with_user_id(req.user_id.clone())
             .with_detail("code".to_string(), "REDACTED")
             .with_detail("attack_type".to_string(), "replay");
-            SecurityLogger::log_event(&event);
+            SecurityLogger::log_event(&mut event);
 
             return Json(TotpVerifyResponse { verified: false });
         }
@@ -406,7 +406,7 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 set_last_verified(&req.user_id).await;
 
                 // Log successful TOTP verification
-                let event = SecurityEvent::new(
+                let mut event = SecurityEvent::new(
                     SecurityEventType::MfaAttempt,
                     SecuritySeverity::Low,
                     "auth-service".to_string(),
@@ -418,13 +418,13 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 .with_outcome("success".to_string())
                 .with_reason("TOTP code validated successfully".to_string())
                 .with_user_id(req.user_id);
-                SecurityLogger::log_event(&event);
+                SecurityLogger::log_event(&mut event);
 
                 return Json(TotpVerifyResponse { verified: true });
             } else {
                 // Failed to track nonce (Redis issue or code already used)
                 // Log this as a potential issue
-                let event = SecurityEvent::new(
+                let mut event = SecurityEvent::new(
                     SecurityEventType::MfaFailure,
                     SecuritySeverity::Medium,
                     "auth-service".to_string(),
@@ -437,7 +437,7 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 .with_reason("Redis nonce tracking failed - unable to prevent replay attacks".to_string())
                 .with_user_id(req.user_id)
                 .with_detail("reason".to_string(), "nonce_tracking_failed");
-                SecurityLogger::log_event(&event);
+                SecurityLogger::log_event(&mut event);
 
                 return Json(TotpVerifyResponse { verified: false });
             }
@@ -554,10 +554,10 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
         .with_reason("Failed to send OTP via delivery provider".to_string())
         .with_detail("channel".to_string(), req.channel.clone())
         .with_detail("destination".to_string(), "masked");
-        SecurityLogger::log_event(&event);
+        SecurityLogger::log_event(&mut event);
         return Json(OtpSendResponse { sent: false });
     }
-    let event = SecurityEvent::new(
+    let mut event = SecurityEvent::new(
         SecurityEventType::MfaAttempt,
         SecuritySeverity::Low,
         "auth-service".to_string(),
@@ -570,7 +570,7 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
     .with_reason("OTP code generated and sent successfully".to_string())
     .with_detail("channel".to_string(), req.channel.clone())
     .with_detail("destination".to_string(), "masked");
-    SecurityLogger::log_event(&event);
+    SecurityLogger::log_event(&mut event);
     Json(OtpSendResponse { sent: true })
 }
 
@@ -582,7 +582,7 @@ pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerif
                 let _ : Result<i64, _> = redis::cmd("DEL").arg(&key).query_async(&mut conn).await;
                 set_verified(&req.user_id).await;
                 set_last_verified(&req.user_id).await;
-                let event = SecurityEvent::new(
+                let mut event = SecurityEvent::new(
                     SecurityEventType::MfaAttempt,
                     SecuritySeverity::Low,
                     "auth-service".to_string(),
@@ -594,12 +594,12 @@ pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerif
                 .with_outcome("success".to_string())
                 .with_reason("OTP code verified successfully".to_string())
                 .with_user_id(req.user_id.clone());
-                SecurityLogger::log_event(&event);
+                SecurityLogger::log_event(&mut event);
                 return Json(OtpVerifyResponse { verified: true });
             }
         }
     }
-    let event = SecurityEvent::new(
+    let mut event = SecurityEvent::new(
         SecurityEventType::MfaFailure,
         SecuritySeverity::Medium,
         "auth-service".to_string(),
@@ -611,7 +611,7 @@ pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerif
     .with_outcome("failure".to_string())
     .with_reason("OTP code validation failed - invalid or expired code".to_string())
     .with_user_id(req.user_id);
-    SecurityLogger::log_event(&event);
+    SecurityLogger::log_event(&mut event);
     Json(OtpVerifyResponse { verified: false })
 }
 
@@ -637,7 +637,7 @@ pub async fn mfa_session_verify(
         let _ = state.token_store.set_mfa_verified(token, true, Some(window)).await;
     }
     set_last_verified(&body.user_id).await;
-    let event = SecurityEvent::new(
+    let mut event = SecurityEvent::new(
         SecurityEventType::MfaAttempt,
         SecuritySeverity::Low,
         "auth-service".to_string(),
@@ -649,7 +649,7 @@ pub async fn mfa_session_verify(
     .with_outcome("success".to_string())
     .with_reason("Session MFA verification window established".to_string())
     .with_user_id(body.user_id);
-    SecurityLogger::log_event(&event);
+    SecurityLogger::log_event(&mut event);
     Json(MfaSessionVerifyResponse { acknowledged: true })
 }
 

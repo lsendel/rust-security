@@ -55,83 +55,83 @@ pub enum SecurityEventType {
 pub struct SecurityEvent {
     /// Unique event identifier
     pub event_id: String,
-    
+
     /// Event timestamp in UTC
     pub timestamp: DateTime<Utc>,
-    
+
     /// Event type for categorization
     pub event_type: SecurityEventType,
-    
+
     /// Severity level
     pub severity: SecuritySeverity,
-    
+
     /// Source service or component
     pub source: String,
-    
+
     /// Actor who initiated the action (user, client, system)
     pub actor: Option<String>,
-    
+
     /// Action performed (create, read, update, delete, authenticate, etc.)
     pub action: Option<String>,
-    
+
     /// Target resource or object affected
     pub target: Option<String>,
-    
+
     /// Outcome of the event (success, failure, blocked, etc.)
     pub outcome: String,
-    
+
     /// Reason for the outcome (error message, policy violation, etc.)
     pub reason: Option<String>,
-    
+
     /// Correlation ID for tracing across services
     pub correlation_id: Option<String>,
-    
+
     /// Client IP address (potentially redacted)
     pub ip_address: Option<String>,
-    
+
     /// User agent string (potentially redacted)
     pub user_agent: Option<String>,
-    
+
     /// Client identifier (if applicable)
     pub client_id: Option<String>,
-    
+
     /// User identifier (if applicable) - always redacted in logs
     pub user_id: Option<String>,
-    
+
     /// Request ID for correlation
     pub request_id: Option<String>,
-    
+
     /// Session ID for correlation
     pub session_id: Option<String>,
-    
+
     /// Event description
     pub description: String,
-    
+
     /// Additional event details (PII-safe)
     pub details: HashMap<String, Value>,
-    
+
     /// Resource accessed or affected (legacy field, use target instead)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<String>,
-    
+
     /// Risk score (0-100)
     pub risk_score: Option<u8>,
-    
+
     /// Geographic location (if available)
     pub location: Option<String>,
-    
+
     /// Device fingerprint
     pub device_fingerprint: Option<String>,
-    
+
     /// HTTP method (for web requests)
     pub http_method: Option<String>,
-    
+
     /// HTTP status code (for web responses)
     pub http_status: Option<u16>,
-    
+
     /// Request path (potentially redacted)
     pub request_path: Option<String>,
-    
+
     /// Response time in milliseconds
     pub response_time_ms: Option<u64>,
 }
@@ -174,143 +174,143 @@ impl SecurityEvent {
             response_time_ms: None,
         }
     }
-    
+
     /// Builder pattern methods for setting optional fields
     pub fn with_client_id(mut self, client_id: String) -> Self {
         self.client_id = Some(client_id);
         self
     }
-    
+
     pub fn with_request_id(mut self, request_id: String) -> Self {
         self.request_id = Some(request_id);
         self
     }
-    
+
     pub fn with_session_id(mut self, session_id: String) -> Self {
         self.session_id = Some(session_id);
         self
     }
-    
+
     pub fn with_outcome(mut self, outcome: String) -> Self {
         self.outcome = outcome;
         self
     }
-    
+
     pub fn with_resource(mut self, resource: String) -> Self {
         self.resource = Some(resource);
         self
     }
-    
+
     pub fn with_action(mut self, action: String) -> Self {
         self.action = Some(action);
         self
     }
-    
+
     pub fn with_risk_score(mut self, risk_score: u8) -> Self {
         self.risk_score = Some(risk_score.min(100));
         self
     }
-    
+
     pub fn with_detail<T: Serialize>(mut self, key: String, value: T) -> Self {
         if let Ok(json_value) = serde_json::to_value(value) {
             self.details.insert(key, json_value);
         }
         self
     }
-    
+
     pub fn with_location(mut self, location: String) -> Self {
         self.location = Some(location);
         self
     }
-    
+
     pub fn with_device_fingerprint(mut self, fingerprint: String) -> Self {
         self.device_fingerprint = Some(fingerprint);
         self
     }
-    
+
     /// Set the actor (who initiated the action)
     pub fn with_actor(mut self, actor: String) -> Self {
         self.actor = Some(PiiRedactor::redact_actor(&actor));
         self
     }
-    
+
     /// Set the target (resource or object affected)
     pub fn with_target(mut self, target: String) -> Self {
         self.target = Some(target);
         self
     }
-    
+
     /// Set the reason for the outcome
     pub fn with_reason(mut self, reason: String) -> Self {
         self.reason = Some(PiiRedactor::redact_reason(&reason));
         self
     }
-    
+
     /// Set the correlation ID for tracing
     pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
         self.correlation_id = Some(correlation_id);
         self
     }
-    
+
     /// Set HTTP method
     pub fn with_http_method(mut self, method: String) -> Self {
         self.http_method = Some(method);
         self
     }
-    
+
     /// Set HTTP status code
     pub fn with_http_status(mut self, status: u16) -> Self {
         self.http_status = Some(status);
         self
     }
-    
+
     /// Set request path with PII redaction
     pub fn with_request_path(mut self, path: String) -> Self {
         self.request_path = Some(PiiRedactor::redact_path(&path));
         self
     }
-    
+
     /// Set response time in milliseconds
     pub fn with_response_time_ms(mut self, time_ms: u64) -> Self {
         self.response_time_ms = Some(time_ms);
         self
     }
-    
+
     /// Override user_id with PII redaction
     pub fn with_user_id(mut self, user_id: String) -> Self {
         self.user_id = Some(PiiRedactor::redact_user_id(&user_id));
         self
     }
-    
+
     /// Override ip_address with optional PII redaction
     pub fn with_ip_address(mut self, ip_address: String) -> Self {
         self.ip_address = Some(PiiRedactor::redact_ip_address(&ip_address));
         self
     }
-    
+
     /// Override user_agent with PII redaction
     pub fn with_user_agent(mut self, user_agent: String) -> Self {
         self.user_agent = Some(PiiRedactor::redact_user_agent(&user_agent));
         self
     }
-    
+
     /// Apply comprehensive PII/SPI protection to the entire event
     pub fn apply_pii_protection(&mut self) {
         let redactor = PiiSpiRedactor::new();
-        
+
         // Protect description field
         self.description = redactor.redact_log_message(&self.description);
-        
+
         // Protect reason field if present
         if let Some(ref reason) = self.reason {
             self.reason = Some(redactor.redact_log_message(reason));
         }
-        
+
         // Protect request path if present
         if let Some(ref path) = self.request_path {
             self.request_path = Some(PiiRedactor::redact_path(path));
         }
-        
+
         // Protect details map values
         for (key, value) in self.details.iter_mut() {
             if let Value::String(ref s) = value {
@@ -318,7 +318,7 @@ impl SecurityEvent {
                 *value = Value::String(redacted);
             }
         }
-        
+
         // Additional protection for location data if present
         if let Some(ref location) = self.location {
             // Redact precise location data but keep general region
@@ -336,13 +336,13 @@ impl PiiRedactor {
         if user_id.len() <= 4 {
             return "*".repeat(user_id.len());
         }
-        
+
         let first = &user_id[0..2];
         let last = &user_id[user_id.len()-2..];
         let middle = "*".repeat(4); // Fixed length for consistency
         format!("{}{}{}", first, middle, last)
     }
-    
+
     /// Redact IP address (keep first 3 octets for IPv4, first 4 groups for IPv6)
     pub fn redact_ip_address(ip: &str) -> String {
         if ip.contains(':') {
@@ -365,16 +365,16 @@ impl PiiRedactor {
             "***".to_string()
         }
     }
-    
+
     /// Redact sensitive parts of user agent
     pub fn redact_user_agent(user_agent: &str) -> String {
         // Remove potential email addresses and phone numbers
         let email_pattern = regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
         let phone_pattern = regex::Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").unwrap();
-        
+
         let redacted = email_pattern.replace_all(user_agent, "[EMAIL_REDACTED]");
         let redacted = phone_pattern.replace_all(&redacted, "[PHONE_REDACTED]");
-        
+
         // Truncate if too long
         if redacted.len() > 200 {
             format!("{}...[TRUNCATED]", &redacted[0..197])
@@ -382,7 +382,7 @@ impl PiiRedactor {
             redacted.to_string()
         }
     }
-    
+
     /// Redact sensitive information from request paths
     pub fn redact_path(path: &str) -> String {
         // Common patterns that might contain sensitive info
@@ -393,15 +393,15 @@ impl PiiRedactor {
             (regex::Regex::new(r"[?&]password=[^&]*").unwrap(), "&password=[REDACTED]"),
             (regex::Regex::new(r"[?&]email=[^&]*").unwrap(), "&email=[REDACTED]"),
         ];
-        
+
         let mut redacted = path.to_string();
         for (pattern, replacement) in &patterns {
             redacted = pattern.replace_all(&redacted, *replacement).to_string();
         }
-        
+
         redacted
     }
-    
+
     /// Redact sensitive information from actor field
     pub fn redact_actor(actor: &str) -> String {
         // Check if it looks like an email and redact
@@ -416,7 +416,7 @@ impl PiiRedactor {
                 return format!("{}@{}", username, parts[1]);
             }
         }
-        
+
         // For non-email actors, limit length but don't redact
         if actor.len() > 50 {
             format!("{}...[TRUNCATED]", &actor[0..47])
@@ -424,7 +424,7 @@ impl PiiRedactor {
             actor.to_string()
         }
     }
-    
+
     /// Redact sensitive information from reason field
     pub fn redact_reason(reason: &str) -> String {
         // Remove tokens, secrets, and other sensitive data from error messages
@@ -434,12 +434,12 @@ impl PiiRedactor {
             (regex::Regex::new(r"password:\s*[^\s]+").unwrap(), "password: [REDACTED]"),
             (regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(), "[EMAIL_REDACTED]"),
         ];
-        
+
         let mut redacted = reason.to_string();
         for (pattern, replacement) in &patterns {
             redacted = pattern.replace_all(&redacted, *replacement).to_string();
         }
-        
+
         redacted
     }
 }
@@ -456,7 +456,7 @@ mod tests {
         assert_eq!(PiiRedactor::redact_user_id("ab"), "**");
     }
 
-    #[test] 
+    #[test]
     fn test_pii_redaction_ip_address() {
         assert_eq!(PiiRedactor::redact_ip_address("192.168.1.100"), "192.168.1.***");
         assert_eq!(PiiRedactor::redact_ip_address("2001:db8:85a3:8d3:1319:8a2e:370:7348"), "2001:db8:85a3:8d3::***");
@@ -468,7 +468,7 @@ mod tests {
         assert_eq!(PiiRedactor::redact_actor("user@example.com"), "u*@example.com");
         assert_eq!(PiiRedactor::redact_actor("ab@example.com"), "**@example.com");
         assert_eq!(PiiRedactor::redact_actor("system_user"), "system_user");
-        
+
         let long_actor = "a".repeat(60);
         let redacted = PiiRedactor::redact_actor(&long_actor);
         // 47 chars + "..." + "[TRUNCATED]" = 47 + 3 + 11 = 61 characters
@@ -552,25 +552,24 @@ impl SecurityLogger {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Log a security event with appropriate level and PII protection
     pub fn log_event(event: &SecurityEvent) {
-        let event = &event;
-        // Apply PII redaction to the entire event before logging
-        let mut sanitized_event = event.clone();
-        sanitized_event.apply_pii_protection();
-        
-        let event_json = match serde_json::to_string(&sanitized_event) {
+        // Clone and apply PII redaction to avoid mutating caller state
+        let mut event = event.clone();
+        event.apply_pii_protection();
+
+        let event_json = match serde_json::to_string(&event) {
             Ok(json) => json,
             Err(e) => {
                 error!("Failed to serialize security event: {}", e);
                 return;
             }
         };
-        
+
         // Additional protection for the JSON string itself
         let protected_json = redact_log(&event_json);
-        
+
         match event.severity {
             SecuritySeverity::Critical => {
                 error!(
@@ -646,7 +645,7 @@ impl SecurityLogger {
             }
         }
     }
-    
+
     /// Log authentication attempt
     pub fn log_auth_attempt(
         client_id: &str,
@@ -668,20 +667,20 @@ impl SecurityLogger {
         .with_client_id(client_id.to_string())
         .with_ip_address(ip_address.to_string())
         .with_outcome(outcome.to_string());
-        
+
         if let Some(ua) = user_agent {
             event = event.with_user_agent(ua.to_string());
         }
-        
+
         if let Some(details) = details {
             for (key, value) in details {
                 event.details.insert(key, value);
             }
         }
-        
+
         SecurityLogger::log_event(&event);
     }
-    
+
     /// Log token operation
     pub fn log_token_operation(
         operation: &str,
@@ -696,7 +695,7 @@ impl SecurityLogger {
             "revoke" => SecurityEventType::TokenRevoked,
             _ => SecurityEventType::SystemError,
         };
-        
+
         let mut event = SecurityEvent::new(
             event_type,
             SecuritySeverity::Low,
@@ -708,16 +707,16 @@ impl SecurityLogger {
         .with_outcome(outcome.to_string())
         .with_detail("token_type".to_string(), token_type)
         .with_detail("operation".to_string(), operation);
-        
+
         if let Some(details) = details {
             for (key, value) in details {
                 event.details.insert(key, value);
             }
         }
-        
+
         SecurityLogger::log_event(&event);
     }
-    
+
     /// Log security violation
     pub fn log_security_violation(
         violation_type: &str,
@@ -742,20 +741,20 @@ impl SecurityLogger {
         .with_outcome("violation_detected".to_string())
         .with_risk_score(risk_score)
         .with_detail("violation_type".to_string(), violation_type);
-        
+
         if let Some(client_id) = client_id {
             event = event.with_client_id(client_id.to_string());
         }
-        
+
         if let Some(details) = details {
             for (key, value) in details {
                 event.details.insert(key, value);
             }
         }
-        
+
         SecurityLogger::log_event(&event);
     }
-    
+
     /// Log input validation failure
     pub fn log_validation_failure(
         endpoint: &str,
@@ -774,20 +773,20 @@ impl SecurityLogger {
         .with_outcome("validation_failed".to_string())
         .with_resource(endpoint.to_string())
         .with_detail("validation_type".to_string(), validation_type);
-        
+
         if let Some(client_id) = client_id {
             event = event.with_client_id(client_id.to_string());
         }
-        
+
         if let Some(details) = details {
             for (key, value) in details {
                 event.details.insert(key, value);
             }
         }
-        
+
         SecurityLogger::log_event(&event);
     }
-    
+
     /// Log rate limit exceeded
     pub fn log_rate_limit_exceeded(
         client_id: &str,
@@ -808,7 +807,7 @@ impl SecurityLogger {
         .with_resource(endpoint.to_string())
         .with_detail("current_rate".to_string(), current_rate)
         .with_detail("rate_limit".to_string(), limit);
-        
+
         SecurityLogger::log_event(&event);
     }
 }

@@ -1,3 +1,8 @@
+//! Core library for the Auth Service.
+//!
+//! Contains shared types, constants, metrics, and API definitions for authentication and security.
+//! All public items should be documented for maintainability and security.
+
 use std::{collections::HashMap, sync::Arc};
 
 use crate::pii_protection::redact_log;
@@ -985,7 +990,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
         "service": "auth-service",
         "version": env!("CARGO_PKG_VERSION"),
     });
-    
+
     // Check token store health
     let token_store_health = match state.token_store.health_check().await {
         Ok(healthy) => serde_json::json!({
@@ -1000,7 +1005,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
             "error": redact_log(&e.to_string())
         })
     };
-    
+
     // Check token store metrics
     let token_metrics = match state.token_store.get_metrics().await {
         Ok(metrics) => serde_json::json!({
@@ -1017,24 +1022,25 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
             "error": redact_log(&e.to_string())
         })
     };
-    
+
     // Check policy cache health
     let policy_cache_stats = state.policy_cache.get_stats().await;
     let policy_cache_health = serde_json::json!({
         "status": "healthy",
         "stats": {
-            "total_entries": policy_cache_stats.total_entries,
+            "entries": policy_cache_stats.entries,
             "hits": policy_cache_stats.hits,
             "misses": policy_cache_stats.misses,
-            "hit_ratio": policy_cache_stats.hit_ratio(),
+            "hit_ratio": if policy_cache_stats.hits + policy_cache_stats.misses > 0 { (policy_cache_stats.hits as f64) / ((policy_cache_stats.hits + policy_cache_stats.misses) as f64) } else { 0.0 },
             "evictions": policy_cache_stats.evictions,
-            "size_bytes": policy_cache_stats.size_bytes,
+            "avg_response_time_ms": policy_cache_stats.avg_response_time_ms,
+            "last_cleanup_time": policy_cache_stats.last_cleanup_time,
         }
     });
-    
+
     // Check key rotation status
     let key_status = crate::key_rotation::get_rotation_status().await;
-    
+
     // Check rate limiting stats
     let rate_limit_stats = crate::rate_limit_optimized::get_rate_limit_stats();
     let rate_limit_health = serde_json::json!({
@@ -1049,26 +1055,26 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
             }
         }
     });
-    
+
     // Check session manager health (if available)
     // Note: This would require a reference to the session manager from app state
-    
+
     // Aggregate health status
     let overall_status = if token_store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
         "healthy"
     } else {
         "degraded"
     };
-    
+
     health_data["status"] = serde_json::Value::String(overall_status.to_string());
     health_data["components"] = serde_json::json!({
         "token_store": token_store_health,
         "token_metrics": token_metrics,
         "policy_cache": policy_cache_health,
-        "key_rotation": key_status,
+        "key_rotation": key_status.0,
         "rate_limiting": rate_limit_health,
     });
-    
+
     Ok(Json(health_data))
 }
 
@@ -1199,7 +1205,8 @@ pub async fn introspect(
     let request_id = headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
     // Input validation
     if let Err(e) = crate::security::validate_token_input(&body.token) {
@@ -1241,7 +1248,7 @@ pub async fn introspect(
         event = event.with_request_id(req_id);
     }
 
-    SecurityLogger::log_event(&event);
+    SecurityLogger::log_event(&mut event);
 
     // Keep backward compatibility with old audit log
     audit(
@@ -1294,7 +1301,7 @@ pub async fn oauth_authorize(
         .validate_redirect_uri(&req.client_id, &req.redirect_uri) {
 
         // Log security violation
-        SecurityLogger::log_event(&SecurityEvent::new(
+        SecurityLogger::log_event(&mut SecurityEvent::new(
             SecurityEventType::SecurityViolation,
             SecuritySeverity::Critical,
             "auth-service".to_string(),
@@ -1315,7 +1322,7 @@ pub async fn oauth_authorize(
         if method != "S256" {
             if method == "plain" {
                 // Log potential downgrade attack attempt
-                SecurityLogger::log_event(&SecurityEvent::new(
+                SecurityLogger::log_event(&mut SecurityEvent::new(
                     SecurityEventType::SecurityViolation,
                     SecuritySeverity::High,
                     "auth-service".to_string(),
@@ -1397,7 +1404,7 @@ pub async fn oauth_authorize(
         event = event.with_request_id(request_id.to_string());
     }
 
-    SecurityLogger::log_event(&event);
+    SecurityLogger::log_event(&mut event);
 
     audit(
         "authorization_code_issued",
@@ -1702,7 +1709,7 @@ pub async fn issue_token(
                 Some([
                     ("grant_type".to_string(), serde_json::Value::String("refresh_token".to_string())),
                     ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
-                    ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                    ("has_id_token".to_string, serde_json::Value::Bool(make_id_token)),
                 ].into()),
             );
 
@@ -1882,7 +1889,7 @@ pub async fn userinfo(
         event = event.with_request_id(request_id.to_string());
     }
 
-    SecurityLogger::log_event(&event);
+    SecurityLogger::log_event(&mut event);
 
     // pull ephemeral mfa_verified flag if Redis-backed store is used (optional)
     let mfa_verified = false; // kept simple; policy step-up can rely on /mfa/session/verify

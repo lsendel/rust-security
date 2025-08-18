@@ -199,7 +199,7 @@ impl SessionManager {
         duration: Option<u64>,
     ) -> Result<Session, SessionError> {
         let duration = duration.unwrap_or(self.config.default_duration);
-        
+
         // Enforce maximum session duration
         let duration = std::cmp::min(duration, self.config.max_duration);
 
@@ -290,10 +290,10 @@ impl SessionManager {
         if let Some(mut session) = self.get_session(session_id).await? {
             let duration = duration.unwrap_or(self.config.default_duration);
             let duration = std::cmp::min(duration, self.config.max_duration);
-            
+
             session.refresh(duration);
             self.store_session(&session).await?;
-            
+
             // Log session refresh
             SecurityLogger::log_event(&SecurityEvent::new(
                 SecurityEventType::DataAccess,
@@ -324,7 +324,7 @@ impl SessionManager {
 
         for session in sessions {
             self.delete_session(&session.id).await?;
-            
+
             // Log session invalidation
             SecurityLogger::log_event(&SecurityEvent::new(
                 SecurityEventType::AuthenticationFailure,
@@ -449,7 +449,7 @@ impl SessionManager {
 
     async fn delete_session_from_redis(&self, client: &redis::Client, session_id: &str) -> Result<(), redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
-        
+
         // Get session to find user_id
         if let Some(session) = self.get_session_from_redis(client, session_id).await? {
             let user_key = format!("user_sessions:{}", session.user_id);
@@ -496,7 +496,7 @@ impl SessionManager {
     async fn get_user_sessions_from_redis(&self, client: &redis::Client, user_id: &str) -> Result<Vec<Session>, redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
         let user_key = format!("user_sessions:{}", user_id);
-        
+
         let session_ids: Vec<String> = redis::cmd("SMEMBERS")
             .arg(&user_key)
             .query_async(&mut conn)
@@ -514,16 +514,16 @@ impl SessionManager {
 
     async fn enforce_concurrent_session_limit(&self, user_id: &str) -> Result<(), SessionError> {
         let sessions = self.get_user_sessions(user_id).await?;
-        
+
         if sessions.len() >= self.config.max_concurrent_sessions as usize {
             // Remove oldest sessions
             let mut sessions = sessions;
             sessions.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-            
+
             let sessions_to_remove = sessions.len() - (self.config.max_concurrent_sessions as usize - 1);
             for session in sessions.iter().take(sessions_to_remove) {
                 self.delete_session(&session.id).await?;
-                
+
                 // Log session eviction
                 SecurityLogger::log_event(&SecurityEvent::new(
                     SecurityEventType::AuthenticationFailure,
@@ -590,7 +590,7 @@ pub async fn start_session_cleanup_task() {
 
     loop {
         interval.tick().await;
-        
+
         match SESSION_MANAGER.cleanup_sessions().await {
             Ok(count) => {
                 if count > 0 {
@@ -612,7 +612,7 @@ mod tests {
     async fn test_session_creation() {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
-        
+
         let session = manager.create_session(
             "test_user".to_string(),
             Some("test_client".to_string()),
@@ -632,7 +632,7 @@ mod tests {
     async fn test_session_retrieval() {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
-        
+
         let session = manager.create_session(
             "test_user".to_string(),
             None,
@@ -650,7 +650,7 @@ mod tests {
     async fn test_session_refresh() {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
-        
+
         let session = manager.create_session(
             "test_user".to_string(),
             None,
@@ -660,9 +660,9 @@ mod tests {
         ).await.unwrap();
 
         let original_expires = session.expires_at;
-        
+
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         let refreshed = manager.refresh_session(&session.id, Some(7200)).await.unwrap();
         assert!(refreshed.is_some());
         assert!(refreshed.unwrap().expires_at > original_expires);
@@ -672,7 +672,7 @@ mod tests {
     async fn test_session_deletion() {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
-        
+
         let session = manager.create_session(
             "test_user".to_string(),
             None,
@@ -682,7 +682,7 @@ mod tests {
         ).await.unwrap();
 
         manager.delete_session(&session.id).await.unwrap();
-        
+
         let retrieved = manager.get_session(&session.id).await.unwrap();
         assert!(retrieved.is_none());
     }
@@ -698,7 +698,7 @@ mod tests {
         );
 
         assert!(!session.is_expired(None));
-        
+
         // Simulate expired session
         session.expires_at = current_timestamp() - 100;
         assert!(session.is_expired(None));
@@ -715,7 +715,7 @@ mod tests {
         );
 
         assert!(!session.is_inactive(1800, None)); // 30 min timeout
-        
+
         // Simulate inactive session
         session.last_accessed = current_timestamp() - 2000; // 33+ minutes ago
         assert!(session.is_inactive(1800, None));
