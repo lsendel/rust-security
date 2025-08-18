@@ -1,18 +1,20 @@
-use axum::http;
+use std::sync::Arc;
+
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{self, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use cedar_policy::{Authorizer, Context, Entities, PolicySet, Request};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use thiserror::Error;
-use tower_http::cors::CorsLayer;
-use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::CorsLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
+};
 use utoipa::{OpenApi, ToSchema};
 
 #[derive(Debug, Error)]

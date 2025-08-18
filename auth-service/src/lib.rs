@@ -1,5 +1,7 @@
+use std::{collections::HashMap, sync::Arc};
+
 use axum::{
-    extract::{Form, Query, State, Path},
+    extract::{Form, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post},
@@ -9,17 +11,18 @@ use base64::Engine as _;
 use once_cell::sync::Lazy;
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
-use tower_http::cors::CorsLayer;
-use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::CorsLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
+};
 use url::Url;
+use utoipa::ToSchema;
+
 #[cfg(feature = "docs")]
 use utoipa::OpenApi;
-use utoipa::ToSchema;
 #[cfg(feature = "docs")]
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -64,38 +67,53 @@ async fn metrics_handler() -> Response {
         .unwrap()
 }
 
+// Core modules
 pub mod errors;
-pub mod keys;
-pub mod key_rotation;
-pub mod key_management;
-pub mod policy_cache;
-pub mod rate_limit_optimized;
-pub mod security;
-pub mod security_headers;
-pub mod security_metrics;
-pub mod security_monitoring;
-pub mod security_logging;
-pub mod session_manager;
 pub mod store;
+pub mod validation;
+
+// Authentication and authorization
+pub mod client_auth;
 pub mod mfa;
-pub mod webauthn;
 pub mod otp_provider;
-pub mod scim;
+pub mod session_manager;
+pub mod webauthn;
+
+// OIDC providers
+pub mod oidc_github;
 pub mod oidc_google;
 pub mod oidc_microsoft;
-pub mod oidc_github;
-pub mod circuit_breaker;
-pub mod resilient_store;
-pub mod resilient_http;
-pub mod resilience_config;
-pub mod backpressure;
+
+// SCIM support
+pub mod scim;
+pub mod scim_rbac;
+
+// Security modules
+pub mod auth_failure_logging;
 pub mod redirect_validation;
 pub mod secure_random;
-pub mod client_auth;
+pub mod security;
+pub mod security_headers;
+pub mod security_logging;
+pub mod security_metrics;
+pub mod security_monitoring;
+
+// Key management
+pub mod key_management;
+pub mod key_rotation;
+pub mod keys;
+
+// Rate limiting and resilience
+pub mod backpressure;
 pub mod per_ip_rate_limit;
-pub mod scim_rbac;
-pub mod auth_failure_logging;
-pub mod validation;
+pub mod policy_cache;
+pub mod rate_limit_optimized;
+
+// Resilience and reliability
+pub mod circuit_breaker;
+pub mod resilience_config;
+pub mod resilient_http;
+pub mod resilient_store;
 
 pub use errors::{AuthError, ErrorResponse, internal_error, validation_error, token_store_error};
 pub use validation::{ValidatedDto, ValidationResult, middleware::{ValidatedJson, ValidatedQuery}};

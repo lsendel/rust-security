@@ -1,15 +1,13 @@
-use tokio::net::TcpListener;
 mod config;
 
+use std::{collections::HashMap, sync::Arc};
+
 use auth_service::{
-    app,
+    app, keys, // Key management module
     store::{redis_store, TokenStore},
-    keys, // Add keys module import
     ApiDoc, AppState,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::{net::TcpListener, sync::RwLock};
 use utoipa::OpenApi;
 
 #[tokio::main]
