@@ -3,180 +3,187 @@ name = "auth-service"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
-axum = { version = "0.7", features = ["macros"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
-uuid = { version = "1", features = ["v4", "serde"] }
-thiserror = "1"
-http = "1"
-hyper = { version = "1", features = ["full"] }
-tower = { version = "0.5", features = ["limit"] }
-tower-http = { version = "0.6", features = ["trace", "request-id", "limit", "cors", "timeout"] }
-bytes = "1.0"
-anyhow = "1"
-dotenvy = "0.15"
-redis = { version = "0.32", features = ["tokio-comp", "aio", "connection-manager"] }
-utoipa = { version = "4", features = ["axum_extras", "uuid"] }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+http = { workspace = true }
+hyper = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+bytes = { workspace = true }
+anyhow = { workspace = true }
+dotenvy = { workspace = true }
+redis = { workspace = true }
+utoipa = { workspace = true }
 # Swagger UI is optional; enable with `--features docs`
-utoipa-swagger-ui = { version = "6", features = ["axum"], optional = true }
+utoipa-swagger-ui = { workspace = true, optional = true }
 # Security enhancements
-validator = { version = "0.20", features = ["derive"] }
-secrecy = "0.10"
-argon2 = "0.5"
-jsonwebtoken = "9"
+validator = { workspace = true }
+secrecy = { workspace = true }
+argon2 = { workspace = true }
+jsonwebtoken = { workspace = true }
 # Using jsonwebtoken for RSA operations (more secure than direct RSA usage)
 # Removed vulnerable rsa crate (RUSTSEC-2023-0071)
-chrono = { version = "0.4", features = ["serde"] }
-envy = "0.4"
-hmac = "0.12"
-sha1 = "0.10"
-data-encoding = "2.6"
-sha2 = "0.10"
+chrono = { workspace = true }
+envy = { workspace = true }
+hmac = { workspace = true }
+sha1 = { workspace = true }
+data-encoding = { workspace = true }
+sha2 = { workspace = true }
 # TLS/HTTPS support
-axum-server = { version = "0.7", features = ["tls-rustls"] }
-rcgen = "0.13"
+axum-server = { workspace = true }
+rcgen = { workspace = true }
 # Secret management
-async-trait = "0.1"
-aes-gcm = "0.10"
-chacha20poly1305 = "0.10"
-hex = "0.4"
-rand = "0.8"
-once_cell = "1"
-base64 = "0.21"
+async-trait = { workspace = true }
+aes-gcm = { workspace = true }
+chacha20poly1305 = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+once_cell = { workspace = true }
+base64 = { workspace = true }
 # SOAR optional dependencies
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"], optional = true }
-handlebars = { version = "6.1", optional = true }
-lettre = { version = "0.11", features = ["smtp-transport", "pool", "hostname", "builder", "rustls-tls"], default-features = false, optional = true }
-tera = { version = "1.20", optional = true }
-tempfile = { version = "3.10", optional = true }
-walkdir = { version = "2.5", optional = true }
+sqlx = { workspace = true, optional = true }
+handlebars = { workspace = true, optional = true }
+lettre = { workspace = true, optional = true }
+tera = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+walkdir = { workspace = true, optional = true }
 # Updated to fix protobuf vulnerability RUSTSEC-2024-0437
-prometheus = "0.14"
-getrandom = "0.2"
-urlencoding = "2.1"
-url = "2.5"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
-regex = "1"
+prometheus = { workspace = true }
+getrandom = { workspace = true }
+urlencoding = { workspace = true }
+url = { workspace = true }
+reqwest = { workspace = true }
+regex = { workspace = true }
 # High-performance rate limiting
-dashmap = "6.1"
-num_cpus = "1.16"
+dashmap = { workspace = true }
+num_cpus = { workspace = true }
 # OpenTelemetry for distributed tracing
-opentelemetry = { version = "0.21", optional = true }
-opentelemetry-jaeger = { version = "0.20", optional = true }
-tracing-opentelemetry = { version = "0.22", optional = true }
-opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"], optional = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry-jaeger = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
 # Performance and benchmarking
-criterion = { version = "0.5", features = ["html_reports"], optional = true }
+criterion = { workspace = true, optional = true }
 # SIMD and hardware acceleration
-simd = { version = "0.2", optional = true }
-ring = "0.17"
-aes = "0.8"
-rayon = "1.8"
+simd = { workspace = true, optional = true }
+ring = { workspace = true }
+aes = { workspace = true }
+rayon = { workspace = true }
 # Memory optimization
-mimalloc = { version = "0.1", optional = true }
-jemalloc = { version = "0.3", optional = true }
+mimalloc = { workspace = true, optional = true }
+jemalloc = { workspace = true, optional = true }
 # High-performance async runtime
-tokio-metrics = "0.3"
+tokio-metrics = { workspace = true }
 # Connection pooling optimization
-bb8 = "0.8"
-bb8-redis = "0.24"
-deadpool = "0.12"
-deadpool-redis = "0.14"
+bb8 = { workspace = true }
+bb8-redis = { workspace = true }
+deadpool = { workspace = true }
+deadpool-redis = { workspace = true }
 # Optimized serialization
-rmp-serde = "1.1"
-bincode = "1.3"
+rmp-serde = { workspace = true }
+bincode = { workspace = true }
 # Metrics and profiling
-pprof = { version = "0.13", features = ["criterion", "flamegraph"], optional = true }
+pprof = { workspace = true, optional = true }
 
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
-smartcore = { version = "0.3", features = ["serde"], optional = true }
-candle-core = { version = "0.8", optional = true }
-candle-nn = { version = "0.8", optional = true }
-candle-transformers = { version = "0.8", optional = true }
-ndarray = { version = "0.16", features = ["serde"], optional = true }
-nalgebra = { version = "0.32", features = ["serde"], optional = true }
+smartcore = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+ndarray = { workspace = true, optional = true }
+nalgebra = { workspace = true, optional = true }
 # Graph analysis for attack pattern detection
-petgraph = { version = "0.6", features = ["serde"], optional = true }
+petgraph = { workspace = true, optional = true }
 # Time series analysis
-tsc = { version = "0.1", optional = true }
+tsc = { workspace = true, optional = true }
 # Statistics and analytics
-statrs = { version = "0.17", optional = true }
+statrs = { workspace = true, optional = true }
 # Advanced collections for threat correlation
-indexmap = { version = "2.0", features = ["serde"], optional = true }
+indexmap = { workspace = true, optional = true }
 # Async channels and queues
-flume = { version = "0.11", optional = true }
-crossbeam = { version = "0.8", optional = true }
+flume = { workspace = true, optional = true }
+crossbeam = { workspace = true, optional = true }
 # Geospatial analysis for location anomalies
-geo = { version = "0.28", features = ["serde"], optional = true }
-geoutils = { version = "0.5", optional = true }
+geo = { workspace = true, optional = true }
+geoutils = { workspace = true, optional = true }
 # Enhanced time handling
-time = { version = "0.3", features = ["parsing", "formatting", "serde"], optional = true }
+time = { workspace = true, optional = true }
 # Memory-mapped files for large datasets
-memmap2 = { version = "0.9", optional = true }
+memmap2 = { workspace = true, optional = true }
 # Compression for data storage
-lz4_flex = { version = "0.11", optional = true }
+lz4_flex = { workspace = true, optional = true }
 # IP address analysis
-ipnet = { version = "2.9", optional = true }
+ipnet = { workspace = true, optional = true }
 # Enhanced string processing for log parsing
-fancy-regex = { version = "0.13", optional = true }
-aho-corasick = { version = "1.1", optional = true }
+fancy-regex = { workspace = true, optional = true }
+aho-corasick = { workspace = true, optional = true }
 # Bloom filters for efficient lookups
-bloomfilter = { version = "1.0", optional = true }
+bloomfilter = { workspace = true, optional = true }
 # Probabilistic data structures
-probabilistic-collections = { version = "0.7", optional = true }
+probabilistic-collections = { workspace = true, optional = true }
 # Lazy static for static variables
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 
 # Post-Quantum Cryptography dependencies
-pqcrypto-kyber = { version = "0.8", optional = true }
-pqcrypto-dilithium = { version = "0.4", optional = true }
+pqcrypto-kyber = { workspace = true, optional = true }
+pqcrypto-dilithium = { workspace = true, optional = true }
 # Hybrid cryptography support
-p256 = { version = "0.13", optional = true }
-p384 = { version = "0.13", optional = true }
-ed25519-dalek = { version = "2.1", optional = true }
-x25519-dalek = { version = "2.0", optional = true }
+p256 = { workspace = true, optional = true }
+p384 = { workspace = true, optional = true }
+ed25519-dalek = { workspace = true, optional = true }
+x25519-dalek = { workspace = true, optional = true }
 # Certificate and PKI support for post-quantum
-x509-cert = { version = "0.2", optional = true }
-pkcs8 = { version = "0.10", optional = true }
-der = { version = "0.7", optional = true }
+x509-cert = { workspace = true, optional = true }
+pkcs8 = { workspace = true, optional = true }
+der = { workspace = true, optional = true }
 # Performance and security utilities
-constant_time_eq = "0.3"
-zeroize = "1.7"
-subtle = "2.5"
+constant_time_eq = { workspace = true }
+zeroize = { workspace = true }
+subtle = { workspace = true }
+
+vaultrs = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
+aws-sdk-secretsmanager = { workspace = true, optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
-serde_json = "1"
+criterion = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
 # Test dependencies
-uuid = { version = "1", features = ["v4"] }
-base64 = "0.21"
-hmac = "0.12"
-sha2 = "0.10"
-sha1 = "0.10"
-data-encoding = "2.6"
-chrono = { version = "0.4", features = ["serde"] }
-url = "2.5"
-urlencoding = "2.1"
+uuid = { workspace = true }
+base64 = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+sha1 = { workspace = true }
+data-encoding = { workspace = true }
+chrono = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
 # Property-based testing
-proptest = "1.4"
-quickcheck = "1.0"
-quickcheck_macros = "1.0"
+proptest = { workspace = true }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
 # Performance testing
-tokio-test = "0.4"
+tokio-test = { workspace = true }
 # Security testing
-regex = "1"
+regex = { workspace = true }
 # Test utilities
-tempfile = "3.10"
-wiremock = "0.6"
+tempfile = { workspace = true }
+wiremock = { workspace = true }
 # Fuzzing
-arbitrary = { version = "1.3", features = ["derive"] }
+arbitrary = { workspace = true }
 # Coverage and benchmarking in tests
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
@@ -207,18 +214,6 @@ name = "performance_suite"
 harness = false
 required-features = ["benchmarks"]
 
-[dependencies.vaultrs]
-version = "0.7"
-optional = true
-
-[dependencies.aws-config]
-version = "1"
-optional = true
-
-[dependencies.aws-sdk-secretsmanager]
-version = "1"
-optional = true
-
 [lib]
 name = "auth_service"
 path = "src/lib.rs"
@@ -226,6 +221,3 @@ path = "src/lib.rs"
 [[bin]]
 name = "auth-service"
 path = "src/main.rs"
-
-# (SOAR dependencies moved under [dependencies] above)
-
