@@ -189,18 +189,16 @@ impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, message) = match self {
             #[cfg(any(feature = "sqlite", feature = "postgres"))]
-            AppError::Database(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Database error".to_string(),
-            ),
+            AppError::Database(_) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string())
+            }
             AppError::Auth(msg) => (StatusCode::UNAUTHORIZED, msg),
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
-            AppError::Internal => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal server error".to_string(),
-            ),
+            AppError::Internal => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+            }
         };
 
         (
@@ -223,35 +221,29 @@ pub struct AppState {
 impl AppState {
     /// Create a new AppState with in-memory storage
     pub fn new() -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+        let jwt_secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
         let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
 
-        Self {
-            user_repository: Arc::new(InMemoryUserRepository::new()),
-            jwt_service,
-        }
+        Self { user_repository: Arc::new(InMemoryUserRepository::new()), jwt_service }
     }
 
     /// Create AppState with a specific repository
     pub fn with_repository(repository: Arc<dyn UserRepository>) -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+        let jwt_secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
         let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
 
-        Self {
-            user_repository: repository,
-            jwt_service,
-        }
+        Self { user_repository: repository, jwt_service }
     }
 
     /// Create AppState from database
     pub fn from_database(database: Database) -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+        let jwt_secret =
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
         let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
 
-        Self {
-            user_repository: database.user_repository(),
-            jwt_service,
-        }
+        Self { user_repository: database.user_repository(), jwt_service }
     }
 
     /// Create AppState with custom JWT service
@@ -429,14 +421,10 @@ pub async fn create_user(
     } else {
         "no_password_set".to_string()
     };
-    let user = state
-        .user_repository
-        .create(request, password_hash)
-        .await
-        .map_err(|e| match e {
-            DbError::EmailExists => AppError::Validation("Email already exists".to_string()),
-            _ => AppError::Internal,
-        })?;
+    let user = state.user_repository.create(request, password_hash).await.map_err(|e| match e {
+        DbError::EmailExists => AppError::Validation("Email already exists".to_string()),
+        _ => AppError::Internal,
+    })?;
 
     // Return the created user with 201 status
     Ok((StatusCode::CREATED, Json(user)).into_response())
@@ -448,19 +436,13 @@ pub async fn get_user(
     Path(user_id): Path<u64>,
 ) -> Result<Json<User>, AppError> {
     if user_id == 0 || user_id > i32::MAX as u64 {
-        return Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        )));
+        return Err(AppError::NotFound(format!("User with ID {} not found", user_id)));
     }
     let id32 = user_id as i32;
     // Use repository to find user by ID
     match state.user_repository.find_by_id(id32).await? {
         Some(user) => Ok(Json(user)),
-        None => Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        ))),
+        None => Err(AppError::NotFound(format!("User with ID {} not found", user_id))),
     }
 }
 
@@ -484,25 +466,17 @@ pub async fn register(
     };
 
     // Create the user
-    let user = state
-        .user_repository
-        .create(create_request, password_hash)
-        .await
-        .map_err(|e| match e {
+    let user =
+        state.user_repository.create(create_request, password_hash).await.map_err(|e| match e {
             DbError::EmailExists => AppError::Validation("Email already exists".to_string()),
             _ => AppError::Internal,
         })?;
 
     // Generate JWT token
-    let token = state
-        .jwt_service
-        .generate_token(user.id, &user.email, user.role.clone())?;
+    let token = state.jwt_service.generate_token(user.id, &user.email, user.role.clone())?;
 
     // Return auth response
-    let response = AuthResponse {
-        token,
-        user: user.into(),
-    };
+    let response = AuthResponse { token, user: user.into() };
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -527,15 +501,10 @@ pub async fn login(
     }
 
     // Generate JWT token
-    let token = state
-        .jwt_service
-        .generate_token(user.id, &user.email, user.role.clone())?;
+    let token = state.jwt_service.generate_token(user.id, &user.email, user.role.clone())?;
 
     // Return auth response
-    let response = AuthResponse {
-        token,
-        user: user.into(),
-    };
+    let response = AuthResponse { token, user: user.into() };
 
     Ok(Json(response))
 }
@@ -552,10 +521,7 @@ pub async fn update_user(
     // Update the user
     match state.user_repository.update(user_id, request).await? {
         Some(user) => Ok(Json(user)),
-        None => Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        ))),
+        None => Err(AppError::NotFound(format!("User with ID {} not found", user_id))),
     }
 }
 
@@ -570,10 +536,7 @@ pub async fn delete_user(
     if deleted {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(AppError::NotFound(format!(
-            "User with ID {} not found",
-            user_id
-        )))
+        Err(AppError::NotFound(format!("User with ID {} not found", user_id)))
     }
 }
 
@@ -622,10 +585,7 @@ mod tests {
             password: Some("password123".to_string()),
             role: Some(UserRole::User),
         };
-        assert_eq!(
-            request.validate().unwrap_err(),
-            "Name cannot exceed 100 characters"
-        );
+        assert_eq!(request.validate().unwrap_err(), "Name cannot exceed 100 characters");
     }
 
     #[test]
@@ -658,10 +618,7 @@ mod tests {
             password: Some("password123".to_string()),
             role: Some(UserRole::User),
         };
-        assert_eq!(
-            request.validate().unwrap_err(),
-            "Email cannot exceed 255 characters"
-        );
+        assert_eq!(request.validate().unwrap_err(), "Email cannot exceed 255 characters");
     }
 
     #[test]
@@ -672,10 +629,7 @@ mod tests {
             password: Some("short".to_string()),
             role: Some(UserRole::User),
         };
-        assert_eq!(
-            request.validate().unwrap_err(),
-            "Password must be at least 8 characters long"
-        );
+        assert_eq!(request.validate().unwrap_err(), "Password must be at least 8 characters long");
     }
 
     #[test]

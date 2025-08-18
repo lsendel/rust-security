@@ -74,13 +74,13 @@ pub struct MultiLayerMfaCache {
     l1_totp_cache: Arc<RwLock<HashMap<String, CacheEntry<TotpCacheData>>>>,
     l1_session_cache: Arc<RwLock<HashMap<String, CacheEntry<UserSessionCache>>>>,
     l1_rate_limit_cache: Arc<RwLock<HashMap<String, CacheEntry<RateLimitCache>>>>,
-    
+
     // L2: Redis cache (distributed)
     redis: Option<ConnectionManager>,
-    
+
     // Cache configuration
     config: CacheConfig,
-    
+
     // Cache statistics
     stats: Arc<RwLock<CacheStats>>,
 }
@@ -145,7 +145,7 @@ impl CacheStats {
 impl MultiLayerMfaCache {
     pub async fn new(config: CacheConfig) -> Self {
         let redis = Self::create_redis_connection().await;
-        
+
         Self {
             l1_totp_cache: Arc::new(RwLock::new(HashMap::new())),
             l1_session_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -186,10 +186,10 @@ impl MultiLayerMfaCache {
         // L2 Cache check (Redis)
         if let Some(data) = self.get_from_l2_cache(&format!("mfa:totp:{}", user_id)).await? {
             let totp_data: TotpCacheData = serde_json::from_str(&data)?;
-            
+
             // Populate L1 cache
             self.set_l1_totp_cache(user_id, &totp_data).await?;
-            
+
             self.record_l2_hit().await;
             return Ok(Some(totp_data));
         }
@@ -222,7 +222,7 @@ impl MultiLayerMfaCache {
 
     async fn set_l1_totp_cache(&self, user_id: &str, data: &TotpCacheData) -> MfaResult<()> {
         let mut l1_cache = self.l1_totp_cache.write().await;
-        
+
         // LRU eviction if cache is full
         if l1_cache.len() >= self.config.l1_max_entries {
             self.evict_lru_totp_entry(&mut l1_cache).await;
@@ -230,7 +230,7 @@ impl MultiLayerMfaCache {
 
         let entry = CacheEntry::new(data.clone(), Some(self.config.l1_ttl));
         l1_cache.insert(user_id.to_string(), entry);
-        
+
         Ok(())
     }
 
@@ -254,10 +254,10 @@ impl MultiLayerMfaCache {
         // L2 Cache check
         if let Some(data) = self.get_from_l2_cache(&format!("mfa:session:{}", session_id)).await? {
             let session_data: UserSessionCache = serde_json::from_str(&data)?;
-            
+
             // Populate L1 cache
             self.set_l1_session_cache(session_id, &session_data).await?;
-            
+
             self.record_l2_hit().await;
             return Ok(Some(session_data));
         }
@@ -290,14 +290,14 @@ impl MultiLayerMfaCache {
 
     async fn set_l1_session_cache(&self, session_id: &str, data: &UserSessionCache) -> MfaResult<()> {
         let mut l1_cache = self.l1_session_cache.write().await;
-        
+
         if l1_cache.len() >= self.config.l1_max_entries {
             self.evict_lru_session_entry(&mut l1_cache).await;
         }
 
         let entry = CacheEntry::new(data.clone(), Some(self.config.l1_ttl));
         l1_cache.insert(session_id.to_string(), entry);
-        
+
         Ok(())
     }
 
@@ -324,14 +324,14 @@ impl MultiLayerMfaCache {
     pub async fn set_rate_limit_data(&self, key: &str, data: &RateLimitCache) -> MfaResult<()> {
         // Set in L1 cache for fast access
         let mut l1_cache = self.l1_rate_limit_cache.write().await;
-        
+
         if l1_cache.len() >= self.config.l1_max_entries {
             self.evict_lru_rate_limit_entry(&mut l1_cache).await;
         }
 
         let entry = CacheEntry::new(data.clone(), Some(self.config.rate_limit_cache_ttl));
         l1_cache.insert(key.to_string(), entry);
-        
+
         Ok(())
     }
 
@@ -375,7 +375,7 @@ impl MultiLayerMfaCache {
                 .filter(|(_, entry)| entry.value.user_id == user_id)
                 .map(|(key, _)| key.clone())
                 .collect();
-            
+
             for key in keys_to_remove {
                 session_cache.remove(&key);
             }
@@ -538,7 +538,7 @@ impl MultiLayerMfaCache {
                 .filter(|(_, entry)| entry.is_expired())
                 .map(|(key, _)| key.clone())
                 .collect();
-            
+
             for key in expired_keys {
                 cache.remove(&key);
                 cleaned += 1;
@@ -553,7 +553,7 @@ impl MultiLayerMfaCache {
                 .filter(|(_, entry)| entry.is_expired())
                 .map(|(key, _)| key.clone())
                 .collect();
-            
+
             for key in expired_keys {
                 cache.remove(&key);
                 cleaned += 1;
@@ -568,7 +568,7 @@ impl MultiLayerMfaCache {
                 .filter(|(_, entry)| entry.is_expired())
                 .map(|(key, _)| key.clone())
                 .collect();
-            
+
             for key in expired_keys {
                 cache.remove(&key);
                 cleaned += 1;
@@ -624,7 +624,7 @@ pub async fn start_cache_maintenance_task(cache: Arc<MultiLayerMfaCache>) {
 
     loop {
         interval.tick().await;
-        
+
         if let Err(e) = cache.cleanup_expired_entries().await {
             tracing::error!("Cache maintenance error: {}", e);
         }
@@ -632,7 +632,7 @@ pub async fn start_cache_maintenance_task(cache: Arc<MultiLayerMfaCache>) {
         // Log cache statistics periodically
         let stats = cache.get_stats().await;
         let sizes = cache.get_cache_sizes().await;
-        
+
         tracing::info!(
             "Cache stats - Hit ratio: {:.2}%, L1 entries: {}, L2 available: {}",
             stats.hit_ratio() * 100.0,
@@ -650,7 +650,7 @@ mod tests {
     async fn test_cache_entry_expiration() {
         let entry = CacheEntry::new("test_data".to_string(), Some(Duration::from_millis(100)));
         assert!(!entry.is_expired());
-        
+
         tokio::time::sleep(Duration::from_millis(150)).await;
         assert!(entry.is_expired());
     }
@@ -658,7 +658,7 @@ mod tests {
     #[tokio::test]
     async fn test_l1_cache_operations() {
         let cache = MultiLayerMfaCache::with_default_config().await;
-        
+
         let totp_data = TotpCacheData {
             secret: vec![1, 2, 3, 4],
             config: EnhancedTotpConfig::default(),
@@ -679,7 +679,7 @@ mod tests {
     #[tokio::test]
     async fn test_cache_invalidation() {
         let cache = MultiLayerMfaCache::with_default_config().await;
-        
+
         let totp_data = TotpCacheData {
             secret: vec![1, 2, 3, 4],
             config: EnhancedTotpConfig::default(),
@@ -703,7 +703,7 @@ mod tests {
         let test_data = "This is a test string that should be compressed";
         let compressed = cache.compress_data(test_data).unwrap();
         let decompressed = cache.decompress_data(&compressed).unwrap();
-        
+
         assert_eq!(test_data, decompressed);
         assert!(compressed.len() < test_data.len()); // Should be compressed
     }
@@ -741,7 +741,7 @@ mod tests {
     #[tokio::test]
     async fn test_cache_statistics() {
         let cache = MultiLayerMfaCache::with_default_config().await;
-        
+
         let totp_data = TotpCacheData {
             secret: vec![1, 2, 3, 4],
             config: EnhancedTotpConfig::default(),

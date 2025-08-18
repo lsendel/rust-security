@@ -221,7 +221,7 @@ impl JsonFileLogger {
 impl AuditSink for JsonFileLogger {
     fn log_event(&self, event: &MfaAuditEvent) -> Result<(), AuditError> {
         let json_line = serde_json::to_string(event)?;
-        
+
         // In a real implementation, you'd want to use a proper async file writer
         // with rotation, buffering, etc. This is a simplified version.
         if let Err(e) = std::fs::OpenOptions::new()
@@ -330,7 +330,7 @@ pub struct MfaAuditor {
 impl MfaAuditor {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        
+
         let mut auditor = Self {
             sinks: vec![Arc::new(StructuredLogger)],
             event_sender: Some(tx),

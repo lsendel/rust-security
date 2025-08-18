@@ -1,57 +1,55 @@
+use crate::errors::AuthError;
+use axum::{extract::Request, middleware::Next, response::Response};
+use once_cell::sync::Lazy;
+use prometheus::{
+    register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
+};
+use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
-use axum::{
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+use tokio::time::timeout;
 use tower::ServiceBuilder;
 use tower_http::timeout::TimeoutLayer;
-use tokio::time::timeout;
-use crate::errors::AuthError;
-use prometheus::{IntCounter, IntGauge, Histogram, register_int_counter, register_int_gauge, register_histogram};
-use once_cell::sync::Lazy;
 
 // Configuration constants
 #[derive(Debug, Clone)]
 pub struct BackpressureConfig {
     // Request body limits per endpoint type
     pub oauth_request_limit: usize,
-    pub scim_request_limit: usize, 
+    pub scim_request_limit: usize,
     pub admin_request_limit: usize,
     pub default_request_limit: usize,
-    
+
     // Response body limits
     pub max_response_size: usize,
-    
+
     // Timeout configuration
     pub request_timeout: Duration,
     pub slow_request_threshold: Duration,
-    
+
     // Concurrency limits
     pub max_concurrent_requests: usize,
     pub max_concurrent_per_ip: usize,
-    
+
     // Backpressure thresholds
     pub memory_pressure_threshold: usize, // bytes
     pub queue_depth_threshold: usize,
-    
+
     // Load shedding configuration
-    pub load_shed_threshold: f64, // 0.0 to 1.0
+    pub load_shed_threshold: f64,   // 0.0 to 1.0
     pub admission_sample_rate: f64, // 0.0 to 1.0
 }
 
 impl Default for BackpressureConfig {
     fn default() -> Self {
         Self {
-            oauth_request_limit: 64 * 1024,    // 64KB for OAuth requests
-            scim_request_limit: 512 * 1024,    // 512KB for SCIM operations
-            admin_request_limit: 128 * 1024,   // 128KB for admin operations
-            default_request_limit: 32 * 1024,  // 32KB default
+            oauth_request_limit: 64 * 1024,     // 64KB for OAuth requests
+            scim_request_limit: 512 * 1024,     // 512KB for SCIM operations
+            admin_request_limit: 128 * 1024,    // 128KB for admin operations
+            default_request_limit: 32 * 1024,   // 32KB default
             max_response_size: 2 * 1024 * 1024, // 2MB response limit
             request_timeout: Duration::from_secs(30),
             slow_request_threshold: Duration::from_secs(5),
@@ -118,16 +116,17 @@ impl BackpressureConfig {
 }
 
 // Metrics
-static REQUESTS_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!("auth_requests_total", "Total number of requests").unwrap()
-});
+static REQUESTS_TOTAL: Lazy<IntCounter> =
+    Lazy::new(|| register_int_counter!("auth_requests_total", "Total number of requests").unwrap());
 
 static REQUESTS_REJECTED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!("auth_requests_rejected_total", "Total number of rejected requests").unwrap()
+    register_int_counter!("auth_requests_rejected_total", "Total number of rejected requests")
+        .unwrap()
 });
 
 static CONCURRENT_REQUESTS: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!("auth_concurrent_requests", "Current number of concurrent requests").unwrap()
+    register_int_gauge!("auth_concurrent_requests", "Current number of concurrent requests")
+        .unwrap()
 });
 
 static REQUEST_BODY_SIZE: Lazy<Histogram> = Lazy::new(|| {
@@ -178,9 +177,9 @@ impl BackpressureState {
         // Check per-IP limit
         {
             let mut counters = self.per_ip_counters.lock().unwrap();
-            let ip_counter = counters.entry(client_ip.to_string())
-                .or_insert_with(|| AtomicUsize::new(0));
-            
+            let ip_counter =
+                counters.entry(client_ip.to_string()).or_insert_with(|| AtomicUsize::new(0));
+
             let ip_concurrent = ip_counter.load(Ordering::Relaxed);
             if ip_concurrent >= self.config.max_concurrent_per_ip {
                 REQUESTS_REJECTED_TOTAL.inc();
@@ -212,9 +211,10 @@ impl BackpressureState {
         let load_ratio = current_concurrent as f64 / self.config.max_concurrent_requests as f64;
         if load_ratio >= self.config.load_shed_threshold {
             // Probabilistic admission control
-            let admit_probability = 1.0 - ((load_ratio - self.config.load_shed_threshold) / 
-                                         (1.0 - self.config.load_shed_threshold));
-            
+            let admit_probability = 1.0
+                - ((load_ratio - self.config.load_shed_threshold)
+                    / (1.0 - self.config.load_shed_threshold));
+
             if rand::random::<f64>() > admit_probability {
                 REQUESTS_REJECTED_TOTAL.inc();
                 return Err(AuthError::ServiceUnavailable {
@@ -233,8 +233,8 @@ impl BackpressureState {
 
         // Increment per-IP counter
         let mut counters = self.per_ip_counters.lock().unwrap();
-        let ip_counter = counters.entry(client_ip.to_string())
-            .or_insert_with(|| AtomicUsize::new(0));
+        let ip_counter =
+            counters.entry(client_ip.to_string()).or_insert_with(|| AtomicUsize::new(0));
         ip_counter.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -250,7 +250,8 @@ impl BackpressureState {
 
         // Cleanup IP counters periodically (simple cleanup)
         let mut last_check = self.last_load_check.lock().unwrap();
-        if last_check.elapsed() > Duration::from_secs(300) { // 5 minutes
+        if last_check.elapsed() > Duration::from_secs(300) {
+            // 5 minutes
             counters.retain(|_, counter| counter.load(Ordering::Relaxed) > 0);
             *last_check = Instant::now();
         }
@@ -288,9 +289,10 @@ pub async fn backpressure_middleware(
     next: Next,
 ) -> Result<Response, AuthError> {
     let start_time = Instant::now();
-    
+
     // Extract client IP (simplified - in production, use proper IP extraction)
-    let client_ip = request.headers()
+    let client_ip = request
+        .headers()
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown")
@@ -302,7 +304,7 @@ pub async fn backpressure_middleware(
 
     // Admission control
     state.should_admit_request(&client_ip)?;
-    
+
     // Track request start
     state.on_request_start(&client_ip);
 
@@ -317,10 +319,10 @@ pub async fn backpressure_middleware(
 
     // Process request with timeout
     let result = timeout(state.config.request_timeout, next.run(request)).await;
-    
+
     // Track request end
     state.on_request_end(&client_ip);
-    
+
     // Record metrics
     let duration = start_time.elapsed();
     REQUEST_DURATION.observe(duration.as_secs_f64());
@@ -336,9 +338,7 @@ pub async fn backpressure_middleware(
 
     match result {
         Ok(response) => Ok(response),
-        Err(_) => Err(AuthError::TimeoutError {
-            operation: "request_processing".to_string(),
-        }),
+        Err(_) => Err(AuthError::TimeoutError { operation: "request_processing".to_string() }),
     }
 }
 
@@ -358,14 +358,13 @@ pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize 
 // Create comprehensive backpressure middleware stack
 pub fn create_backpressure_middleware(
     config: BackpressureConfig,
-) -> (ServiceBuilder<tower::layer::util::Stack<
-    TimeoutLayer,
-    tower::layer::util::Identity,
->>, Arc<BackpressureState>) {
+) -> (
+    ServiceBuilder<tower::layer::util::Stack<TimeoutLayer, tower::layer::util::Identity>>,
+    Arc<BackpressureState>,
+) {
     let state = Arc::new(BackpressureState::new(config.clone()));
-    
-    let middleware = ServiceBuilder::new()
-        .layer(TimeoutLayer::new(config.request_timeout));
+
+    let middleware = ServiceBuilder::new().layer(TimeoutLayer::new(config.request_timeout));
 
     (middleware, state)
 }
@@ -377,9 +376,9 @@ pub async fn adaptive_body_limit_middleware(
 ) -> Result<Response, AuthError> {
     let config = BackpressureConfig::from_env();
     let path = request.uri().path();
-    
+
     let limit = get_request_body_limit(path, &config);
-    
+
     // Check content-length header
     if let Some(content_length) = request.headers().get("content-length") {
         if let Ok(size_str) = content_length.to_str() {
@@ -387,7 +386,10 @@ pub async fn adaptive_body_limit_middleware(
                 if size > limit {
                     return Err(AuthError::ValidationError {
                         field: "request_body".to_string(),
-                        reason: format!("Request body too large: {} bytes (limit: {} bytes)", size, limit),
+                        reason: format!(
+                            "Request body too large: {} bytes (limit: {} bytes)",
+                            size, limit
+                        ),
                     });
                 }
             }
@@ -417,23 +419,23 @@ mod tests {
             max_concurrent_per_ip: 1,
             ..Default::default()
         };
-        
+
         let state = BackpressureState::new(config);
-        
+
         // First request should be admitted
         assert!(state.should_admit_request("192.168.1.1").is_ok());
         state.on_request_start("192.168.1.1");
-        
+
         // Second request from same IP should be rejected
         assert!(state.should_admit_request("192.168.1.1").is_err());
-        
+
         // Request from different IP should be admitted
         assert!(state.should_admit_request("192.168.1.2").is_ok());
         state.on_request_start("192.168.1.2");
-        
+
         // Third request should be rejected (global limit)
         assert!(state.should_admit_request("192.168.1.3").is_err());
-        
+
         // Clean up
         state.on_request_end("192.168.1.1");
         state.on_request_end("192.168.1.2");
@@ -442,7 +444,7 @@ mod tests {
     #[test]
     fn test_request_body_limits() {
         let config = BackpressureConfig::default();
-        
+
         assert_eq!(get_request_body_limit("/oauth/token", &config), config.oauth_request_limit);
         assert_eq!(get_request_body_limit("/scim/Users", &config), config.scim_request_limit);
         assert_eq!(get_request_body_limit("/admin/metrics", &config), config.admin_request_limit);
@@ -453,14 +455,14 @@ mod tests {
     async fn test_state_stats() {
         let config = BackpressureConfig::default();
         let state = BackpressureState::new(config);
-        
+
         state.on_request_start("192.168.1.1");
         state.on_request_start("192.168.1.2");
-        
+
         let stats = state.stats();
         assert_eq!(stats.concurrent_requests, 2);
         assert_eq!(stats.per_ip_active_connections, 2);
-        
+
         state.on_request_end("192.168.1.1");
         let stats = state.stats();
         assert_eq!(stats.concurrent_requests, 1);

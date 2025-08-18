@@ -1,9 +1,12 @@
-use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, TimeoutConfig, RetryConfig, RetryBackoff};
+use crate::circuit_breaker::{
+    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, RetryBackoff, RetryConfig,
+    TimeoutConfig,
+};
 use crate::errors::AuthError;
 use crate::pii_protection::redact_log;
+use redis::{aio::ConnectionManager, AsyncCommands};
 use std::time::Duration;
 use tokio::time::timeout;
-use redis::{aio::ConnectionManager, AsyncCommands};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ResilientRedisConfig {
@@ -55,25 +58,19 @@ impl ResilientRedisClient {
             reason: format!("Failed to create Redis client: {}", e),
         })?;
 
-        let connection_manager = timeout(
-            config.timeouts.connect_timeout,
-            client.get_connection_manager(),
-        )
-        .await
-        .map_err(|_| AuthError::ServiceUnavailable {
-            reason: "Redis connection timeout".to_string(),
-        })?
-        .map_err(|e| AuthError::ServiceUnavailable {
-            reason: format!("Failed to create Redis connection manager: {}", e),
-        })?;
+        let connection_manager =
+            timeout(config.timeouts.connect_timeout, client.get_connection_manager())
+                .await
+                .map_err(|_| AuthError::ServiceUnavailable {
+                    reason: "Redis connection timeout".to_string(),
+                })?
+                .map_err(|e| AuthError::ServiceUnavailable {
+                    reason: format!("Failed to create Redis connection manager: {}", e),
+                })?;
 
         let circuit_breaker = CircuitBreaker::new("redis", config.circuit_breaker.clone());
 
-        Ok(Self {
-            connection_manager,
-            circuit_breaker,
-            config,
-        })
+        Ok(Self { connection_manager, circuit_breaker, config })
     }
 
     pub async fn get<K, V>(&self, key: K) -> Result<Option<V>, AuthError>
@@ -84,9 +81,7 @@ impl ResilientRedisClient {
         let key = key.clone();
         self.execute_with_retry(move |mut conn| {
             let key_clone = key.clone();
-            async move {
-                conn.get(key_clone).await
-            }
+            async move { conn.get(key_clone).await }
         })
         .await
     }
@@ -129,9 +124,7 @@ impl ResilientRedisClient {
     {
         self.execute_with_retry(move |mut conn| {
             let key_clone = key.clone();
-            async move {
-                conn.del(&key_clone).await
-            }
+            async move { conn.del(&key_clone).await }
         })
         .await
     }
@@ -156,9 +149,7 @@ impl ResilientRedisClient {
     {
         self.execute_with_retry(move |mut conn| {
             let key_clone = key.clone();
-            async move {
-                conn.expire(&key_clone, seconds as i64).await
-            }
+            async move { conn.expire(&key_clone, seconds as i64).await }
         })
         .await
     }
@@ -177,9 +168,9 @@ impl ResilientRedisClient {
 
         loop {
             let conn = self.connection_manager.clone();
-            
+
             let result = self.circuit_breaker.call(operation(conn)).await;
-            
+
             match result {
                 Ok(value) => return Ok(value),
                 Err(CircuitBreakerError::Open) => {
@@ -230,7 +221,11 @@ pub struct ResilientPipeline {
 }
 
 impl ResilientPipeline {
-    fn new(connection_manager: ConnectionManager, circuit_breaker: &CircuitBreaker, config: &ResilientRedisConfig) -> Self {
+    fn new(
+        connection_manager: ConnectionManager,
+        circuit_breaker: &CircuitBreaker,
+        config: &ResilientRedisConfig,
+    ) -> Self {
         Self {
             pipe: redis::pipe(),
             connection_manager,
@@ -278,15 +273,16 @@ impl ResilientPipeline {
         T: redis::FromRedisValue + Send + Sync,
     {
         let mut backoff = RetryBackoff::new(self.config.retry.clone());
-        
+
         loop {
             let conn = self.connection_manager.clone();
             let pipe = self.pipe.clone();
-            
-            let result = self.circuit_breaker.call(async move {
-                pipe.query_async(&mut conn.clone()).await
-            }).await;
-            
+
+            let result = self
+                .circuit_breaker
+                .call(async move { pipe.query_async(&mut conn.clone()).await })
+                .await;
+
             match result {
                 Ok(value) => return Ok(value),
                 Err(CircuitBreakerError::Open) => {
@@ -360,12 +356,14 @@ mod tests {
         };
 
         let circuit_breaker = CircuitBreaker::new("test-redis", config);
-        
+
         // Simulate a slow operation that will timeout
-        let result = circuit_breaker.call(async {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            Ok::<(), std::io::Error>(())
-        }).await;
+        let result = circuit_breaker
+            .call(async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Ok::<(), std::io::Error>(())
+            })
+            .await;
 
         assert!(matches!(result, Err(CircuitBreakerError::Timeout { .. })));
     }

@@ -21,34 +21,25 @@ pub struct JwtService {
 impl JwtService {
     /// Create a new JWT service
     pub fn new(secret: String, expiration_hours: Option<u64>) -> Self {
-        Self {
-            secret,
-            expiration_hours: expiration_hours.unwrap_or(24),
-        }
+        Self { secret, expiration_hours: expiration_hours.unwrap_or(24) }
     }
 
     /// Generate a JWT token for a user
-    pub fn generate_token(&self, user_id: i32, email: &str, role: UserRole) -> Result<String, AppError> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| AppError::Internal)?
-            .as_secs();
+    pub fn generate_token(
+        &self,
+        user_id: i32,
+        email: &str,
+        role: UserRole,
+    ) -> Result<String, AppError> {
+        let now =
+            SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| AppError::Internal)?.as_secs();
 
         let exp = now + (self.expiration_hours * 3600);
 
-        let claims = Claims {
-            sub: user_id,
-            email: email.to_string(),
-            role,
-            exp: exp as usize,
-        };
+        let claims = Claims { sub: user_id, email: email.to_string(), role, exp: exp as usize };
 
-        encode(
-            &Header::default(),
-            &claims,
-            &EncodingKey::from_secret(self.secret.as_ref()),
-        )
-        .map_err(|_| AppError::Auth("Failed to generate token".to_string()))
+        encode(&Header::default(), &claims, &EncodingKey::from_secret(self.secret.as_ref()))
+            .map_err(|_| AppError::Auth("Failed to generate token".to_string()))
     }
 
     /// Validate a JWT token and return claims
@@ -78,8 +69,7 @@ impl PasswordService {
 
     /// Verify a password against a hash
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
-        verify(password, hash)
-            .map_err(|_| AppError::Auth("Failed to verify password".to_string()))
+        verify(password, hash).map_err(|_| AppError::Auth("Failed to verify password".to_string()))
     }
 
     // No stub implementations when auth is not enabled because `auth` is now default
@@ -91,10 +81,7 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let auth_header = req
-        .headers()
-        .get(AUTHORIZATION)
-        .and_then(|header| header.to_str().ok());
+    let auth_header = req.headers().get(AUTHORIZATION).and_then(|header| header.to_str().ok());
 
     let token = match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
@@ -114,14 +101,18 @@ pub async fn auth_middleware(
 }
 
 /// Authorization middleware to check user roles
-pub fn require_role(required_role: UserRole) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>> + Clone {
+pub fn require_role(
+    required_role: UserRole,
+) -> impl Fn(
+    Request,
+    Next,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>,
+> + Clone {
     move |req: Request, next: Next| {
         let required_role = required_role.clone();
         Box::pin(async move {
-            let claims = req
-                .extensions()
-                .get::<Claims>()
-                .ok_or(StatusCode::UNAUTHORIZED)?;
+            let claims = req.extensions().get::<Claims>().ok_or(StatusCode::UNAUTHORIZED)?;
 
             match (&claims.role, &required_role) {
                 (UserRole::Admin, _) => Ok(next.run(req).await), // Admin can access everything

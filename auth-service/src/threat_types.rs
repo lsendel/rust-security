@@ -284,42 +284,42 @@ pub struct UserBehaviorProfile {
     pub user_id: String,
     pub created_at: DateTime<Utc>,
     pub last_updated: DateTime<Utc>,
-    
+
     // Time-based patterns
     pub typical_login_hours: Vec<u8>,
     pub typical_days_of_week: Vec<u8>,
     pub login_frequency_pattern: IndexMap<String, u32>,
     pub avg_session_duration_minutes: f64,
     pub session_duration_variance: f64,
-    
+
     // Location patterns
     pub typical_locations: HashSet<String>,
     pub typical_countries: HashSet<String>,
     pub location_entropy: f64,
-    
+
     // Device and network patterns
     pub typical_devices: HashSet<String>,
     pub typical_user_agents: HashSet<String>,
     pub typical_ip_ranges: Vec<String>,
     pub device_change_frequency: f64,
-    
+
     // Behavioral metrics
     pub avg_authentication_attempts: f64,
     pub failed_login_baseline: f64,
     pub mfa_usage_rate: f64,
     pub risk_baseline: f64,
     pub behavior_entropy: f64,
-    
+
     // Activity patterns
     pub typical_resources_accessed: HashSet<String>,
     pub activity_volume_pattern: Vec<f64>,
     pub request_rate_baseline: f64,
-    
+
     // Security metrics
     pub security_events_count: u64,
     pub last_security_incident: Option<DateTime<Utc>>,
     pub threat_exposure_score: f64,
-    
+
     // Machine learning features
     pub ml_feature_vector: Vec<f64>,
     pub anomaly_scores_history: Vec<f64>,
@@ -337,13 +337,13 @@ pub struct AttackPattern {
     pub detection_confidence: f64,
     pub first_observed: DateTime<Utc>,
     pub last_observed: DateTime<Utc>,
-    
+
     // Pattern characteristics
     pub event_sequence: Vec<SecurityEventType>,
     pub timing_constraints: Vec<TimingConstraint>,
     pub entity_relationships: Vec<EntityRelationship>,
     pub statistical_signatures: Vec<StatisticalSignature>,
-    
+
     // Impact and response
     pub potential_impact: BusinessImpact,
     pub recommended_responses: Vec<MitigationAction>,
@@ -442,18 +442,18 @@ pub struct ThreatResponsePlan {
     pub updated_at: DateTime<Utc>,
     pub execution_start: Option<DateTime<Utc>>,
     pub execution_end: Option<DateTime<Utc>>,
-    
+
     // Response configuration
     pub auto_execute: bool,
     pub requires_approval: bool,
     pub approval_timeout_minutes: u32,
     pub escalation_rules: Vec<EscalationRule>,
-    
+
     // Actions and results
     pub planned_actions: Vec<PlannedAction>,
     pub executed_actions: Vec<ExecutedAction>,
     pub failed_actions: Vec<FailedAction>,
-    
+
     // Monitoring and verification
     pub success_criteria: Vec<SuccessCriterion>,
     pub rollback_plan: Option<RollbackPlan>,
@@ -647,7 +647,13 @@ impl SecurityEvent {
 
         // Outcome impact
         let outcome_modifier = match self.outcome {
-            EventOutcome::Success => if matches!(self.event_type, SecurityEventType::AuthenticationSuccess) { -10 } else { 0 },
+            EventOutcome::Success => {
+                if matches!(self.event_type, SecurityEventType::AuthenticationSuccess) {
+                    -10
+                } else {
+                    0
+                }
+            }
             EventOutcome::Failure => 15,
             EventOutcome::Blocked => 10,
             EventOutcome::Suspicious => 25,
@@ -657,9 +663,10 @@ impl SecurityEvent {
         // MFA usage bonus
         let mfa_modifier = if self.mfa_used { -5 } else { 10 };
 
-        let final_score = ((score as f64 * severity_multiplier) as i16 + outcome_modifier + mfa_modifier)
-            .max(0)
-            .min(100) as u8;
+        let final_score =
+            ((score as f64 * severity_multiplier) as i16 + outcome_modifier + mfa_modifier)
+                .max(0)
+                .min(100) as u8;
 
         self.risk_score = Some(final_score);
     }
@@ -673,7 +680,10 @@ impl SecurityEvent {
                 | SecurityEventType::UnauthorizedAccess
                 | SecurityEventType::SecurityPolicyViolation
                 | SecurityEventType::SuspiciousActivity
-        ) || matches!(self.outcome, EventOutcome::Failure | EventOutcome::Blocked | EventOutcome::Suspicious)
+        ) || matches!(
+            self.outcome,
+            EventOutcome::Failure | EventOutcome::Blocked | EventOutcome::Suspicious
+        )
     }
 
     /// Get time window for threat correlation (in minutes)
@@ -690,11 +700,7 @@ impl SecurityEvent {
 
 impl ThreatSignature {
     /// Create a new threat signature
-    pub fn new(
-        threat_type: ThreatType,
-        severity: ThreatSeverity,
-        confidence: f64,
-    ) -> Self {
+    pub fn new(threat_type: ThreatType, severity: ThreatSeverity, confidence: f64) -> Self {
         Self {
             threat_id: Uuid::new_v4().to_string(),
             threat_type,
@@ -847,7 +853,7 @@ impl UserBehaviorProfile {
             entropy += -hour_distribution * hour_distribution.log2();
         }
 
-        // Location entropy  
+        // Location entropy
         if !self.typical_locations.is_empty() {
             let location_factor = (self.typical_locations.len() as f64).min(10.0) / 10.0;
             entropy += location_factor;
@@ -864,7 +870,9 @@ impl UserBehaviorProfile {
 
     /// Check if behavior is suspicious based on entropy and patterns
     pub fn is_behavior_suspicious(&self) -> bool {
-        self.behavior_entropy > 0.8 || self.failed_login_baseline > 5.0 || self.threat_exposure_score > 0.7
+        self.behavior_entropy > 0.8
+            || self.failed_login_baseline > 5.0
+            || self.threat_exposure_score > 0.7
     }
 
     /// Get profile age in days

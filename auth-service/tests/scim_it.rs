@@ -17,8 +17,14 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec![],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -171,13 +177,14 @@ async fn scim_groups_pagination_and_filter() {
 
     // create groups
     for i in 0..5 {
-        let g = ScimGroup { id: String::new(), display_name: format!("group{}", i), members: vec![] };
+        let g =
+            ScimGroup { id: String::new(), display_name: format!("group{}", i), members: vec![] };
         let res = client.post(format!("{}/scim/v2/Groups", base)).json(&g).send().await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
 
     let filtered: ListResponse<ScimGroup> = client
-        .get(format!("{}/scim/v2/Groups?filter=displayName%20co%20%22group" , base))
+        .get(format!("{}/scim/v2/Groups?filter=displayName%20co%20%22group", base))
         .send()
         .await
         .unwrap()
@@ -222,12 +229,8 @@ async fn test_bulk_create_users() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -279,12 +282,8 @@ async fn test_bulk_create_groups() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -305,17 +304,9 @@ async fn test_bulk_mixed_operations() {
     let client = reqwest::Client::new();
 
     // First create a user to update/delete later
-    let user = ScimUser {
-        id: String::new(),
-        user_name: "existing.user".to_string(),
-        active: true,
-    };
-    let create_response = client
-        .post(format!("{}/scim/v2/Users", base))
-        .json(&user)
-        .send()
-        .await
-        .unwrap();
+    let user = ScimUser { id: String::new(), user_name: "existing.user".to_string(), active: true };
+    let create_response =
+        client.post(format!("{}/scim/v2/Users", base)).json(&user).send().await.unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
     let created_user: ScimUser = create_response.json().await.unwrap();
 
@@ -356,12 +347,8 @@ async fn test_bulk_mixed_operations() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -423,12 +410,8 @@ async fn test_bulk_error_handling() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -476,12 +459,8 @@ async fn test_bulk_fail_on_errors() {
         fail_on_errors: Some(1),
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -498,27 +477,21 @@ async fn test_bulk_invalid_schema() {
 
     let bulk_request = BulkRequest {
         schemas: vec!["invalid:schema".to_string()],
-        operations: vec![
-            BulkOperation {
-                method: BulkOperationMethod::Post,
-                bulk_id: None,
-                path: "/Users".to_string(),
-                data: Some(serde_json::json!({
-                    "userName": "test.user",
-                    "active": true
-                })),
-                version: None,
-            },
-        ],
+        operations: vec![BulkOperation {
+            method: BulkOperationMethod::Post,
+            bulk_id: None,
+            path: "/Users".to_string(),
+            data: Some(serde_json::json!({
+                "userName": "test.user",
+                "active": true
+            })),
+            version: None,
+        }],
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
@@ -538,12 +511,8 @@ async fn test_bulk_empty_operations() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
@@ -584,12 +553,8 @@ async fn test_bulk_duplicate_bulk_ids() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
@@ -605,27 +570,21 @@ async fn test_bulk_update_nonexistent_resource() {
 
     let bulk_request = BulkRequest {
         schemas: vec!["urn:ietf:params:scim:api:messages:2.0:BulkRequest".to_string()],
-        operations: vec![
-            BulkOperation {
-                method: BulkOperationMethod::Put,
-                bulk_id: None,
-                path: "/Users/nonexistent-id".to_string(),
-                data: Some(serde_json::json!({
-                    "userName": "updated.user",
-                    "active": false
-                })),
-                version: None,
-            },
-        ],
+        operations: vec![BulkOperation {
+            method: BulkOperationMethod::Put,
+            bulk_id: None,
+            path: "/Users/nonexistent-id".to_string(),
+            data: Some(serde_json::json!({
+                "userName": "updated.user",
+                "active": false
+            })),
+            version: None,
+        }],
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -661,12 +620,8 @@ async fn test_bulk_large_operation_count() {
         fail_on_errors: None,
     };
 
-    let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
-        .json(&bulk_request)
-        .send()
-        .await
-        .unwrap();
+    let response =
+        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
 
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
 
@@ -674,5 +629,3 @@ async fn test_bulk_large_operation_count() {
     assert_eq!(error_response.status, "413");
     assert!(error_response.detail.contains("Too many operations"));
 }
-
-

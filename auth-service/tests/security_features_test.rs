@@ -1,11 +1,11 @@
-use reqwest::header::{CONTENT_TYPE, USER_AGENT};
+use auth_service::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
 use auth_service::{app, store::TokenStore, AppState};
+use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use auth_service::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
-use std::time::Duration;
 #[derive(Debug)]
 struct TestError(&'static str);
 
@@ -33,8 +33,14 @@ async fn spawn_app() -> String {
         client_credentials,
         allowed_scopes: vec!["read".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -80,13 +86,19 @@ async fn test_token_binding() {
 
 #[tokio::test]
 async fn test_pkce_functions() {
-    use auth_service::security::{generate_code_verifier, generate_code_challenge, verify_code_challenge};
+    use auth_service::security::{
+        generate_code_challenge, generate_code_verifier, verify_code_challenge,
+    };
 
     // Test code verifier generation
     let verifier = generate_code_verifier();
     assert!(verifier.len() >= 43);
     assert!(verifier.len() <= 128);
-    assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~'));
+    assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric()
+        || c == '-'
+        || c == '.'
+        || c == '_'
+        || c == '~'));
 
     // Test code challenge generation
     let challenge = generate_code_challenge(&verifier);
@@ -104,7 +116,9 @@ async fn test_request_signing() {
     let method = "POST";
     let path = "/oauth/revoke";
     let body = "token=test_token";
-    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    let timestamp =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+            as i64;
     let secret = "test_secret";
 
     // Generate signature
@@ -112,15 +126,20 @@ async fn test_request_signing() {
     assert!(!signature.is_empty());
 
     // Verify signature
-    let is_valid = verify_request_signature(method, path, body, timestamp, &signature, secret).unwrap();
+    let is_valid =
+        verify_request_signature(method, path, body, timestamp, &signature, secret).unwrap();
     assert!(is_valid);
 
     // Verify with wrong secret should fail
-    let is_valid = verify_request_signature(method, path, body, timestamp, &signature, "wrong_secret").unwrap();
+    let is_valid =
+        verify_request_signature(method, path, body, timestamp, &signature, "wrong_secret")
+            .unwrap();
     assert!(!is_valid);
 
     // Verify with wrong body should fail
-    let is_valid = verify_request_signature(method, path, "wrong_body", timestamp, &signature, secret).unwrap();
+    let is_valid =
+        verify_request_signature(method, path, "wrong_body", timestamp, &signature, secret)
+            .unwrap();
     assert!(!is_valid);
 }
 

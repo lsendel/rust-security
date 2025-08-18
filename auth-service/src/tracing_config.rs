@@ -21,10 +21,10 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
     // Get configuration from environment
     let jaeger_endpoint = env::var("JAEGER_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:14268/api/traces".to_string());
-    
+
     let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
     let service_version = env::var("SERVICE_VERSION").unwrap_or_else(|_| "0.1.0".to_string());
-    
+
     // Configure OpenTelemetry tracer
     let tracer = new_agent_pipeline()
         .with_service_name(service_name)
@@ -48,7 +48,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
 
     // Configure tracing subscriber with multiple layers
     let telemetry_layer = OpenTelemetryLayer::new(tracer);
-    
+
     let env_filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| {
             match environment.as_str() {
@@ -122,19 +122,19 @@ impl RequestContext {
     /// Create context from incoming headers
     pub fn from_headers(headers: &HeaderMap) -> Self {
         let mut context = Self::new();
-        
+
         // Extract existing request ID or generate new one
         if let Some(req_id) = headers.get(X_REQUEST_ID_HEADER)
             .and_then(|v| v.to_str().ok()) {
             context.request_id = req_id.to_string();
         }
-        
+
         // Extract existing correlation ID or generate new one
         if let Some(corr_id) = headers.get(X_CORRELATION_ID_HEADER)
             .and_then(|v| v.to_str().ok()) {
             context.correlation_id = corr_id.to_string();
         }
-        
+
         // Parse W3C Trace Context from traceparent header
         if let Some(traceparent) = headers.get(TRACEPARENT_HEADER)
             .and_then(|v| v.to_str().ok()) {
@@ -144,13 +144,13 @@ impl RequestContext {
                 context.trace_flags = Some(trace_context.trace_flags);
             }
         }
-        
+
         // Extract tracestate
         if let Some(tracestate) = headers.get(TRACESTATE_HEADER)
             .and_then(|v| v.to_str().ok()) {
             context.trace_state = Some(tracestate.to_string());
         }
-        
+
         context
     }
 
@@ -163,17 +163,17 @@ impl RequestContext {
     /// Convert context to headers for outbound requests
     pub fn to_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        
+
         // Always include request ID
         if let Ok(value) = HeaderValue::from_str(&self.request_id) {
             headers.insert(HeaderName::from_static(X_REQUEST_ID_HEADER), value);
         }
-        
+
         // Always include correlation ID
         if let Ok(value) = HeaderValue::from_str(&self.correlation_id) {
             headers.insert(HeaderName::from_static(X_CORRELATION_ID_HEADER), value);
         }
-        
+
         // Include traceparent if we have trace context
         if let (Some(trace_id), Some(span_id)) = (&self.trace_id, &self.span_id) {
             let trace_flags = self.trace_flags.unwrap_or(0);
@@ -182,14 +182,14 @@ impl RequestContext {
                 headers.insert(HeaderName::from_static(TRACEPARENT_HEADER), value);
             }
         }
-        
+
         // Include tracestate if present
         if let Some(tracestate) = &self.trace_state {
             if let Ok(value) = HeaderValue::from_str(tracestate) {
                 headers.insert(HeaderName::from_static(TRACESTATE_HEADER), value);
             }
         }
-        
+
         headers
     }
 
@@ -198,14 +198,14 @@ impl RequestContext {
         let mut fields = HashMap::new();
         fields.insert("request_id".to_string(), serde_json::Value::String(self.request_id.clone()));
         fields.insert("correlation_id".to_string(), serde_json::Value::String(self.correlation_id.clone()));
-        
+
         if let Some(trace_id) = &self.trace_id {
             fields.insert("trace_id".to_string(), serde_json::Value::String(trace_id.clone()));
         }
         if let Some(span_id) = &self.span_id {
             fields.insert("span_id".to_string(), serde_json::Value::String(span_id.clone()));
         }
-        
+
         fields
     }
 
@@ -214,7 +214,7 @@ impl RequestContext {
         let span = Span::current();
         span.record("request_id", &self.request_id);
         span.record("correlation_id", &self.correlation_id);
-        
+
         if let Some(trace_id) = &self.trace_id {
             span.record("trace_id", trace_id);
         }
@@ -240,26 +240,26 @@ fn parse_traceparent(traceparent: &str) -> Result<TraceContext, &'static str> {
     if parts.len() != 4 {
         return Err("Invalid traceparent format");
     }
-    
+
     // Version must be 00
     if parts[0] != "00" {
         return Err("Unsupported traceparent version");
     }
-    
+
     // Trace ID must be 32 hex chars
     if parts[1].len() != 32 || !parts[1].chars().all(|c| c.is_ascii_hexdigit()) {
         return Err("Invalid trace ID");
     }
-    
+
     // Span ID must be 16 hex chars
     if parts[2].len() != 16 || !parts[2].chars().all(|c| c.is_ascii_hexdigit()) {
         return Err("Invalid span ID");
     }
-    
+
     // Parse trace flags
     let trace_flags = u8::from_str_radix(parts[3], 16)
         .map_err(|_| "Invalid trace flags")?;
-    
+
     Ok(TraceContext {
         trace_id: parts[1].to_string(),
         span_id: parts[2].to_string(),
@@ -337,21 +337,21 @@ pub async fn inject_request_context(
 ) -> axum::response::Response {
     // Extract or create request context
     let context = RequestContext::from_headers(request.headers());
-    
+
     // Create a new span ID for this service
     let mut service_context = context.clone();
     service_context.with_new_span_id();
-    
+
     // If no trace context exists, create a root context
     if service_context.trace_id.is_none() {
         service_context = create_root_context();
         service_context.request_id = context.request_id;
         service_context.correlation_id = context.correlation_id;
     }
-    
+
     // Add context to request extensions
     request.extensions_mut().insert(service_context.clone());
-    
+
     let method = request.method().to_string();
     let path = request.uri().path().to_string();
     let user_agent = request
@@ -359,7 +359,7 @@ pub async fn inject_request_context(
         .get("user-agent")
         .and_then(|h| h.to_str().ok())
         .unwrap_or("unknown");
-    
+
     // Create tracing span with context
     let span = tracing::info_span!(
         "http_request",
@@ -377,7 +377,7 @@ pub async fn inject_request_context(
     );
 
     let start_time = std::time::Instant::now();
-    
+
     // Execute request within span
     let response = async move {
         tracing::debug!("Processing HTTP request");
@@ -388,11 +388,11 @@ pub async fn inject_request_context(
 
     let duration = start_time.elapsed();
     let status_code = response.status().as_u16();
-    
+
     // Record span attributes
     span.record("http.status_code", status_code);
     span.record("request.duration_ms", duration.as_millis() as u64);
-    
+
     // Set OpenTelemetry status
     if status_code >= 400 {
         span.record("otel.status_code", "ERROR");
@@ -429,11 +429,11 @@ pub async fn inject_request_context(
             "HTTP request completed"
         );
     }
-    
+
     // Add context headers to response
     let mut response = response;
     let headers = response.headers_mut();
-    
+
     if let Ok(value) = HeaderValue::from_str(&service_context.request_id) {
         headers.insert(HeaderName::from_static(X_REQUEST_ID_HEADER), value);
     }
@@ -463,14 +463,14 @@ impl TracingHttpClient {
         context: &RequestContext,
     ) -> Result<reqwest::Response, reqwest::Error> {
         let mut request = self.client.get(url);
-        
+
         // Add tracing headers
         for (name, value) in context.to_headers() {
             if let (Ok(name_str), Ok(value_str)) = (name.as_str(), value.to_str()) {
                 request = request.header(name_str, value_str);
             }
         }
-        
+
         // Create span for outbound request
         let span = tracing::info_span!(
             "http_client_request",
@@ -482,7 +482,7 @@ impl TracingHttpClient {
             span_id = context.span_id.as_deref().unwrap_or(""),
             otel.kind = "client"
         );
-        
+
         async move {
             request.send().await
         }.instrument(span).await
@@ -496,14 +496,14 @@ impl TracingHttpClient {
         context: &RequestContext,
     ) -> Result<reqwest::Response, reqwest::Error> {
         let mut request = self.client.post(url).json(body);
-        
+
         // Add tracing headers
         for (name, value) in context.to_headers() {
             if let (Ok(name_str), Ok(value_str)) = (name.as_str(), value.to_str()) {
                 request = request.header(name_str, value_str);
             }
         }
-        
+
         // Create span for outbound request
         let span = tracing::info_span!(
             "http_client_request",
@@ -515,7 +515,7 @@ impl TracingHttpClient {
             span_id = context.span_id.as_deref().unwrap_or(""),
             otel.kind = "client"
         );
-        
+
         async move {
             request.send().await
         }.instrument(span).await
@@ -538,7 +538,7 @@ pub fn current_request_context() -> RequestContext {
     // Try to get from current span context
     let span = Span::current();
     let mut context = RequestContext::new();
-    
+
     // Extract fields from current span if available
     span.with_subscriber(|(id, subscriber)| {
         if let Some(span_data) = subscriber.span(id) {
@@ -548,7 +548,7 @@ pub fn current_request_context() -> RequestContext {
             }
         }
     });
-    
+
     context
 }
 
@@ -567,7 +567,7 @@ mod tests {
     fn test_parse_valid_traceparent() {
         let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
         let result = parse_traceparent(traceparent).unwrap();
-        
+
         assert_eq!(result.trace_id, "4bf92f3577b34da6a3ce929d0e0e4736");
         assert_eq!(result.span_id, "00f067aa0ba902b7");
         assert_eq!(result.trace_flags, 1);
@@ -577,13 +577,13 @@ mod tests {
     fn test_parse_invalid_traceparent() {
         // Invalid format
         assert!(parse_traceparent("invalid").is_err());
-        
+
         // Wrong version
         assert!(parse_traceparent("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err());
-        
+
         // Invalid trace ID
         assert!(parse_traceparent("00-invalid-00f067aa0ba902b7-01").is_err());
-        
+
         // Invalid span ID
         assert!(parse_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-invalid-01").is_err());
     }
@@ -594,9 +594,9 @@ mod tests {
         headers.insert("x-request-id", "test-request-id".parse().unwrap());
         headers.insert("x-correlation-id", "test-correlation-id".parse().unwrap());
         headers.insert("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".parse().unwrap());
-        
+
         let context = RequestContext::from_headers(&headers);
-        
+
         assert_eq!(context.request_id, "test-request-id");
         assert_eq!(context.correlation_id, "test-correlation-id");
         assert_eq!(context.trace_id, Some("4bf92f3577b34da6a3ce929d0e0e4736".to_string()));
@@ -610,13 +610,13 @@ mod tests {
         context.trace_id = Some("4bf92f3577b34da6a3ce929d0e0e4736".to_string());
         context.span_id = Some("00f067aa0ba902b7".to_string());
         context.trace_flags = Some(1);
-        
+
         let headers = context.to_headers();
-        
+
         assert!(headers.contains_key("x-request-id"));
         assert!(headers.contains_key("x-correlation-id"));
         assert!(headers.contains_key("traceparent"));
-        
+
         let traceparent = headers.get("traceparent").unwrap().to_str().unwrap();
         assert!(traceparent.starts_with("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"));
     }
@@ -625,10 +625,10 @@ mod tests {
     fn test_generate_ids() {
         let trace_id = generate_trace_id();
         let span_id = generate_span_id();
-        
+
         assert_eq!(trace_id.len(), 32);
         assert_eq!(span_id.len(), 16);
-        
+
         // Ensure they're valid hex
         assert!(trace_id.chars().all(|c| c.is_ascii_hexdigit()));
         assert!(span_id.chars().all(|c| c.is_ascii_hexdigit()));
@@ -637,7 +637,7 @@ mod tests {
     #[test]
     fn test_create_root_context() {
         let context = create_root_context();
-        
+
         assert!(context.trace_id.is_some());
         assert!(context.span_id.is_some());
         assert_eq!(context.trace_flags, Some(1));
@@ -649,7 +649,7 @@ mod tests {
     fn test_request_context_new() {
         let context1 = RequestContext::new();
         let context2 = RequestContext::new();
-        
+
         // Each context should have unique IDs
         assert_ne!(context1.request_id, context2.request_id);
         assert_ne!(context1.correlation_id, context2.correlation_id);
@@ -660,9 +660,9 @@ mod tests {
         let mut context = RequestContext::new();
         context.trace_id = Some("test-trace-id".to_string());
         context.span_id = Some("test-span-id".to_string());
-        
+
         let fields = context.to_log_fields();
-        
+
         assert!(fields.contains_key("request_id"));
         assert!(fields.contains_key("correlation_id"));
         assert!(fields.contains_key("trace_id"));
@@ -674,7 +674,7 @@ mod tests {
         // Set test environment
         std::env::set_var("ENVIRONMENT", "test");
         std::env::set_var("JAEGER_ENDPOINT", "http://localhost:14268/api/traces");
-        
+
         // This would normally initialize tracing, but we'll skip for tests
         // to avoid conflicts with other tests
         info!("Tracing test completed");

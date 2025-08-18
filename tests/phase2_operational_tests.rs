@@ -6,25 +6,23 @@ impl RegressionTestSuite {
     /// Test performance metrics endpoint
     pub async fn test_performance_metrics(&mut self) {
         println!("\n⚡ Phase 2: Operational Excellence");
-        
+
         self.run_test("Performance Metrics", || async {
-            let response = self.client
-                .get(&format!("{}/metrics", self.auth_base_url))
-                .send()
-                .await?;
+            let response =
+                self.client.get(&format!("{}/metrics", self.auth_base_url)).send().await?;
 
             if response.status() != 200 {
                 return Err(format!("Metrics endpoint failed: {}", response.status()).into());
             }
 
             let metrics_text = response.text().await?;
-            
+
             // Check for key metrics
             let expected_metrics = [
                 "http_requests_total",
                 "http_request_duration_seconds",
                 "auth_service_token_requests_total",
-                "process_resident_memory_bytes"
+                "process_resident_memory_bytes",
             ];
 
             let mut found_metrics = Vec::new();
@@ -43,7 +41,8 @@ impl RegressionTestSuite {
                 "found_metrics": found_metrics,
                 "total_metrics_found": found_metrics.len()
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test caching functionality
@@ -107,7 +106,8 @@ impl RegressionTestSuite {
     pub async fn test_distributed_tracing(&mut self) {
         self.run_test("Distributed Tracing", || async {
             // Test that tracing headers are properly handled
-            let response = self.client
+            let response = self
+                .client
                 .get(&format!("{}/health", self.auth_base_url))
                 .header("X-Trace-Id", "test-trace-123")
                 .header("X-Span-Id", "test-span-456")
@@ -120,28 +120,27 @@ impl RegressionTestSuite {
 
             // Check if response includes tracing information
             let headers = response.headers();
-            let has_trace_headers = headers.get("X-Trace-Id").is_some() || 
-                                   headers.get("X-Request-Id").is_some();
+            let has_trace_headers =
+                headers.get("X-Trace-Id").is_some() || headers.get("X-Request-Id").is_some();
 
             Ok(Some(json!({
                 "tracing_headers_supported": has_trace_headers,
                 "response_headers": headers.len(),
                 "status": "tracing_infrastructure_present"
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test monitoring endpoints
     pub async fn test_monitoring_endpoints(&mut self) {
         self.run_test("Monitoring Endpoints", || async {
             let mut endpoints_tested = Vec::new();
-            
+
             // Test health endpoint
-            let health_response = self.client
-                .get(&format!("{}/health", self.auth_base_url))
-                .send()
-                .await?;
-            
+            let health_response =
+                self.client.get(&format!("{}/health", self.auth_base_url)).send().await?;
+
             endpoints_tested.push(json!({
                 "endpoint": "/health",
                 "status": health_response.status().as_u16(),
@@ -149,11 +148,9 @@ impl RegressionTestSuite {
             }));
 
             // Test metrics endpoint
-            let metrics_response = self.client
-                .get(&format!("{}/metrics", self.auth_base_url))
-                .send()
-                .await?;
-            
+            let metrics_response =
+                self.client.get(&format!("{}/metrics", self.auth_base_url)).send().await?;
+
             endpoints_tested.push(json!({
                 "endpoint": "/metrics",
                 "status": metrics_response.status().as_u16(),
@@ -161,20 +158,17 @@ impl RegressionTestSuite {
             }));
 
             // Test OpenAPI endpoint
-            let openapi_response = self.client
-                .get(&format!("{}/openapi.json", self.auth_base_url))
-                .send()
-                .await?;
-            
+            let openapi_response =
+                self.client.get(&format!("{}/openapi.json", self.auth_base_url)).send().await?;
+
             endpoints_tested.push(json!({
                 "endpoint": "/openapi.json",
                 "status": openapi_response.status().as_u16(),
                 "working": openapi_response.status() == 200
             }));
 
-            let working_endpoints = endpoints_tested.iter()
-                .filter(|e| e["working"].as_bool().unwrap_or(false))
-                .count();
+            let working_endpoints =
+                endpoints_tested.iter().filter(|e| e["working"].as_bool().unwrap_or(false)).count();
 
             if working_endpoints < 2 {
                 return Err("Insufficient monitoring endpoints working".into());
@@ -185,14 +179,16 @@ impl RegressionTestSuite {
                 "working_endpoints": working_endpoints,
                 "total_endpoints": endpoints_tested.len()
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test key rotation functionality
     pub async fn test_key_rotation(&mut self) {
         self.run_test("Key Rotation", || async {
             // Test key rotation status endpoint (if available)
-            let status_response = self.client
+            let status_response = self
+                .client
                 .get(&format!("{}/admin/key-rotation/status", self.auth_base_url))
                 .send()
                 .await;
@@ -223,13 +219,14 @@ impl RegressionTestSuite {
                     })))
                 }
             }
-        }).await;
+        })
+        .await;
     }
 
     /// Test policy evaluation performance
     pub async fn test_policy_evaluation(&mut self) {
         println!("\n🛡️  Policy Service Tests");
-        
+
         self.run_test("Policy Evaluation", || async {
             let test_request = json!({
                 "request_id": "test_regression_001",
@@ -239,7 +236,8 @@ impl RegressionTestSuite {
                 "context": {"ip": "192.168.1.100", "time": "2025-08-16T10:48:00Z"}
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&format!("{}/v1/authorize", self.policy_base_url))
                 .header("Content-Type", "application/json")
                 .json(&test_request)
@@ -251,7 +249,7 @@ impl RegressionTestSuite {
             }
 
             let policy_result: Value = response.json().await?;
-            
+
             // Validate policy response structure
             let required_fields = ["request_id", "decision", "timestamp"];
             for field in &required_fields {
@@ -261,7 +259,8 @@ impl RegressionTestSuite {
             }
 
             Ok(Some(policy_result))
-        }).await;
+        })
+        .await;
     }
 
     /// Test Cedar policies
@@ -269,33 +268,43 @@ impl RegressionTestSuite {
         self.run_test("Cedar Policies", || async {
             // Test multiple policy scenarios
             let test_scenarios = vec![
-                (json!({
-                    "request_id": "cedar_test_1",
-                    "principal": {"type": "User", "id": "user1"},
-                    "action": "orders:read",
-                    "resource": {"type": "Order", "id": "order1"},
-                    "context": {}
-                }), "read_access"),
-                (json!({
-                    "request_id": "cedar_test_2", 
-                    "principal": {"type": "Admin", "id": "admin1"},
-                    "action": "users:delete",
-                    "resource": {"type": "User", "id": "user2"},
-                    "context": {}
-                }), "admin_access"),
-                (json!({
-                    "request_id": "cedar_test_3",
-                    "principal": {"type": "Guest", "id": "guest1"},
-                    "action": "orders:write",
-                    "resource": {"type": "Order", "id": "order3"},
-                    "context": {}
-                }), "guest_write_denied")
+                (
+                    json!({
+                        "request_id": "cedar_test_1",
+                        "principal": {"type": "User", "id": "user1"},
+                        "action": "orders:read",
+                        "resource": {"type": "Order", "id": "order1"},
+                        "context": {}
+                    }),
+                    "read_access",
+                ),
+                (
+                    json!({
+                        "request_id": "cedar_test_2",
+                        "principal": {"type": "Admin", "id": "admin1"},
+                        "action": "users:delete",
+                        "resource": {"type": "User", "id": "user2"},
+                        "context": {}
+                    }),
+                    "admin_access",
+                ),
+                (
+                    json!({
+                        "request_id": "cedar_test_3",
+                        "principal": {"type": "Guest", "id": "guest1"},
+                        "action": "orders:write",
+                        "resource": {"type": "Order", "id": "order3"},
+                        "context": {}
+                    }),
+                    "guest_write_denied",
+                ),
             ];
 
             let mut results = Vec::new();
-            
+
             for (request, scenario) in test_scenarios {
-                let response = self.client
+                let response = self
+                    .client
                     .post(&format!("{}/v1/authorize", self.policy_base_url))
                     .header("Content-Type", "application/json")
                     .json(&request)
@@ -318,9 +327,8 @@ impl RegressionTestSuite {
                 }
             }
 
-            let successful_scenarios = results.iter()
-                .filter(|r| r["success"].as_bool().unwrap_or(false))
-                .count();
+            let successful_scenarios =
+                results.iter().filter(|r| r["success"].as_bool().unwrap_or(false)).count();
 
             if successful_scenarios == 0 {
                 return Err("No policy scenarios succeeded".into());
@@ -331,7 +339,8 @@ impl RegressionTestSuite {
                 "successful_scenarios": successful_scenarios,
                 "results": results
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test policy performance
@@ -351,7 +360,8 @@ impl RegressionTestSuite {
 
             for _ in 0..num_requests {
                 let start = Instant::now();
-                let response = self.client
+                let response = self
+                    .client
                     .post(&format!("{}/v1/authorize", self.policy_base_url))
                     .header("Content-Type", "application/json")
                     .json(&test_request)
@@ -381,6 +391,7 @@ impl RegressionTestSuite {
                 "performance_acceptable": performance_acceptable,
                 "threshold_ms": 100.0
             })))
-        }).await;
+        })
+        .await;
     }
 }

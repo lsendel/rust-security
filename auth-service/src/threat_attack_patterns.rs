@@ -1,10 +1,14 @@
 use crate::threat_types::*;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use indexmap::IndexMap;
-use petgraph::{Graph, Directed, graph::NodeIndex, algo::{dijkstra, connected_components}};
-use prometheus::{Counter, Histogram, Gauge, register_counter, register_histogram, register_gauge};
+use petgraph::{
+    algo::{connected_components, dijkstra},
+    graph::NodeIndex,
+    Directed, Graph,
+};
+use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque, BTreeMap};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
@@ -300,23 +304,23 @@ pub struct EntityOverlapMetrics {
 /// Attack pattern detector with graph analysis
 pub struct AttackPatternDetector {
     config: Arc<RwLock<AttackPatternConfig>>,
-    
+
     // Attack graph
     attack_graph: Arc<Mutex<Graph<AttackGraphNode, AttackGraphEdge, Directed>>>,
     node_indices: Arc<RwLock<HashMap<String, NodeIndex>>>,
-    
+
     // Pattern detection
     active_sequences: Arc<RwLock<HashMap<String, DetectedAttackSequence>>>,
     detection_rules: Arc<RwLock<HashMap<String, SequenceDetectionRule>>>,
-    
+
     // Clustering and analysis
     behavioral_clusters: Arc<RwLock<HashMap<String, AttackCluster>>>,
     temporal_windows: Arc<RwLock<VecDeque<TemporalWindow>>>,
-    
+
     // Event processing
     event_buffer: Arc<Mutex<VecDeque<SecurityEvent>>>,
     correlation_cache: Arc<RwLock<HashMap<String, CorrelationResult>>>,
-    
+
     // Statistics
     detection_statistics: Arc<Mutex<DetectionStatistics>>,
 }
@@ -388,7 +392,8 @@ impl AttackPatternConfig {
             SequenceDetectionRule {
                 rule_id: "credential_stuffing_sequence".to_string(),
                 name: "Credential Stuffing Attack Sequence".to_string(),
-                description: "Detects patterns consistent with credential stuffing attacks".to_string(),
+                description: "Detects patterns consistent with credential stuffing attacks"
+                    .to_string(),
                 enabled: true,
                 pattern_type: AttackPatternType::Sequential,
                 event_sequence: vec![
@@ -409,14 +414,12 @@ impl AttackPatternConfig {
                         max_occurrences: Some(1),
                     },
                 ],
-                timing_constraints: vec![
-                    TimingConstraint {
-                        constraint_type: TimingConstraintType::MaxInterval,
-                        min_duration_seconds: None,
-                        max_duration_seconds: Some(300), // 5 minutes
-                        frequency_threshold: Some(0.5),
-                    },
-                ],
+                timing_constraints: vec![TimingConstraint {
+                    constraint_type: TimingConstraintType::MaxInterval,
+                    min_duration_seconds: None,
+                    max_duration_seconds: Some(300), // 5 minutes
+                    frequency_threshold: Some(0.5),
+                }],
                 confidence_weight: 0.8,
                 severity_modifier: 1.2,
                 required_entities: EntityRequirements {
@@ -452,7 +455,10 @@ impl AttackPatternConfig {
                         max_occurrences: Some(1),
                     },
                     SequenceEventMatcher {
-                        event_types: vec![SecurityEventType::PasswordChange, SecurityEventType::MfaChallenge],
+                        event_types: vec![
+                            SecurityEventType::PasswordChange,
+                            SecurityEventType::MfaChallenge,
+                        ],
                         outcome_filter: None,
                         severity_filter: None,
                         custom_filters: HashMap::new(),
@@ -460,14 +466,12 @@ impl AttackPatternConfig {
                         max_occurrences: Some(3),
                     },
                 ],
-                timing_constraints: vec![
-                    TimingConstraint {
-                        constraint_type: TimingConstraintType::MaxInterval,
-                        min_duration_seconds: None,
-                        max_duration_seconds: Some(3600), // 1 hour
-                        frequency_threshold: None,
-                    },
-                ],
+                timing_constraints: vec![TimingConstraint {
+                    constraint_type: TimingConstraintType::MaxInterval,
+                    min_duration_seconds: None,
+                    max_duration_seconds: Some(3600), // 1 hour
+                    frequency_threshold: None,
+                }],
                 confidence_weight: 0.9,
                 severity_modifier: 1.5,
                 required_entities: EntityRequirements {
@@ -494,7 +498,9 @@ impl Default for BehavioralClusteringConfig {
                 ("temporal".to_string(), 0.3),
                 ("spatial".to_string(), 0.2),
                 ("behavioral".to_string(), 0.5),
-            ].into_iter().collect(),
+            ]
+            .into_iter()
+            .collect(),
             outlier_threshold: 2.5,
         }
     }
@@ -551,7 +557,7 @@ impl AttackPatternDetector {
     async fn load_detection_rules(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
         let mut rules = self.detection_rules.write().await;
-        
+
         for rule in &config.sequence_detection_rules {
             rules.insert(rule.rule_id.clone(), rule.clone());
         }
@@ -561,7 +567,10 @@ impl AttackPatternDetector {
     }
 
     /// Process a security event for attack pattern detection
-    pub async fn process_event(&self, event: SecurityEvent) -> Result<Vec<DetectedAttackSequence>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn process_event(
+        &self,
+        event: SecurityEvent,
+    ) -> Result<Vec<DetectedAttackSequence>, Box<dyn std::error::Error + Send + Sync>> {
         let timer = GRAPH_ANALYSIS_DURATION.start_timer();
         let mut detected_sequences = Vec::new();
 
@@ -569,7 +578,7 @@ impl AttackPatternDetector {
         {
             let mut buffer = self.event_buffer.lock().await;
             let config = self.config.read().await;
-            
+
             buffer.push_back(event.clone());
             if buffer.len() > config.max_graph_nodes {
                 buffer.pop_front();
@@ -595,7 +604,10 @@ impl AttackPatternDetector {
     }
 
     /// Update the attack graph with a new event
-    async fn update_attack_graph(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn update_attack_graph(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut graph = self.attack_graph.lock().await;
         let mut node_indices = self.node_indices.write().await;
 
@@ -663,7 +675,7 @@ impl AttackPatternDetector {
             for j in (i + 1)..event_nodes.len() {
                 let (node1, type1) = event_nodes[i];
                 let (node2, type2) = event_nodes[j];
-                
+
                 let edge_type = self.determine_edge_type(&type1, &type2);
                 let edge = AttackGraphEdge {
                     edge_id: Uuid::new_v4().to_string(),
@@ -739,19 +751,28 @@ impl AttackPatternDetector {
     }
 
     /// Determine edge type between two node types
-    fn determine_edge_type(&self, type1: &AttackNodeType, type2: &AttackNodeType) -> AttackEdgeType {
+    fn determine_edge_type(
+        &self,
+        type1: &AttackNodeType,
+        type2: &AttackNodeType,
+    ) -> AttackEdgeType {
         match (type1, type2) {
             (AttackNodeType::User, AttackNodeType::IpAddress) => AttackEdgeType::NetworkConnection,
             (AttackNodeType::User, AttackNodeType::Device) => AttackEdgeType::SameEntity,
             (AttackNodeType::User, AttackNodeType::Session) => AttackEdgeType::SameEntity,
-            (AttackNodeType::IpAddress, AttackNodeType::Device) => AttackEdgeType::NetworkConnection,
+            (AttackNodeType::IpAddress, AttackNodeType::Device) => {
+                AttackEdgeType::NetworkConnection
+            }
             (AttackNodeType::Device, AttackNodeType::Session) => AttackEdgeType::SameEntity,
             _ => AttackEdgeType::TemporalSequence,
         }
     }
 
     /// Detect immediate patterns in the current event
-    async fn detect_immediate_patterns(&self, event: &SecurityEvent) -> Result<Vec<DetectedAttackSequence>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn detect_immediate_patterns(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<DetectedAttackSequence>, Box<dyn std::error::Error + Send + Sync>> {
         let mut detected_sequences = Vec::new();
         let rules = self.detection_rules.read().await;
         let buffer = self.event_buffer.lock().await;
@@ -782,11 +803,8 @@ impl AttackPatternDetector {
         let cutoff_time = current_event.timestamp - time_window;
 
         // Get relevant events within time window
-        let relevant_events: Vec<_> = event_buffer
-            .iter()
-            .filter(|e| e.timestamp > cutoff_time)
-            .cloned()
-            .collect();
+        let relevant_events: Vec<_> =
+            event_buffer.iter().filter(|e| e.timestamp > cutoff_time).cloned().collect();
 
         // Check if the event sequence matches the rule
         let matched_events = self.match_event_sequence(rule, &relevant_events, current_event)?;
@@ -802,7 +820,8 @@ impl AttackPatternDetector {
         }
 
         // Calculate confidence and completeness
-        let confidence = rule.confidence_weight * self.calculate_sequence_confidence(&matched_events);
+        let confidence =
+            rule.confidence_weight * self.calculate_sequence_confidence(&matched_events);
         if confidence < config.min_confidence_threshold {
             return None;
         }
@@ -843,7 +862,9 @@ impl AttackPatternDetector {
             risk_score: (confidence * 100.0 * rule.severity_modifier) as u8,
             first_event: matched_events.first()?.timestamp,
             last_event: matched_events.last()?.timestamp,
-            duration_minutes: matched_events.last()?.timestamp
+            duration_minutes: matched_events
+                .last()?
+                .timestamp
                 .signed_duration_since(matched_events.first()?.timestamp)
                 .num_minutes(),
             affected_entities: self.extract_affected_entities(&matched_events),
@@ -897,7 +918,11 @@ impl AttackPatternDetector {
     }
 
     /// Check if event matches criteria
-    fn event_matches_criteria(&self, event: &SecurityEvent, matcher: &SequenceEventMatcher) -> bool {
+    fn event_matches_criteria(
+        &self,
+        event: &SecurityEvent,
+        matcher: &SequenceEventMatcher,
+    ) -> bool {
         // Check event type
         if !matcher.event_types.contains(&event.event_type) {
             return false;
@@ -932,7 +957,11 @@ impl AttackPatternDetector {
     }
 
     /// Check entity requirements for matched events
-    fn check_entity_requirements(&self, requirements: &EntityRequirements, events: &[SecurityEvent]) -> bool {
+    fn check_entity_requirements(
+        &self,
+        requirements: &EntityRequirements,
+        events: &[SecurityEvent],
+    ) -> bool {
         if events.len() < 2 {
             return true; // No requirements to check for single event
         }
@@ -948,19 +977,23 @@ impl AttackPatternDetector {
             }
 
             if requirements.same_ip {
-                if prev_event.ip_address != curr_event.ip_address || prev_event.ip_address.is_none() {
+                if prev_event.ip_address != curr_event.ip_address || prev_event.ip_address.is_none()
+                {
                     return false;
                 }
             }
 
             if requirements.same_session {
-                if prev_event.session_id != curr_event.session_id || prev_event.session_id.is_none() {
+                if prev_event.session_id != curr_event.session_id || prev_event.session_id.is_none()
+                {
                     return false;
                 }
             }
 
             if requirements.same_device {
-                if prev_event.device_fingerprint != curr_event.device_fingerprint || prev_event.device_fingerprint.is_none() {
+                if prev_event.device_fingerprint != curr_event.device_fingerprint
+                    || prev_event.device_fingerprint.is_none()
+                {
                     return false;
                 }
             }
@@ -972,7 +1005,11 @@ impl AttackPatternDetector {
     }
 
     /// Check timing constraints for matched events
-    fn check_timing_constraints(&self, constraints: &[TimingConstraint], events: &[SecurityEvent]) -> bool {
+    fn check_timing_constraints(
+        &self,
+        constraints: &[TimingConstraint],
+        events: &[SecurityEvent],
+    ) -> bool {
         if events.len() < 2 {
             return true;
         }
@@ -981,10 +1018,13 @@ impl AttackPatternDetector {
             match constraint.constraint_type {
                 TimingConstraintType::MaxInterval => {
                     if let Some(max_duration) = constraint.max_duration_seconds {
-                        let total_duration = events.last().unwrap().timestamp
+                        let total_duration = events
+                            .last()
+                            .unwrap()
+                            .timestamp
                             .signed_duration_since(events.first().unwrap().timestamp)
                             .num_seconds() as u64;
-                        
+
                         if total_duration > max_duration {
                             return false;
                         }
@@ -992,10 +1032,13 @@ impl AttackPatternDetector {
                 }
                 TimingConstraintType::MinInterval => {
                     if let Some(min_duration) = constraint.min_duration_seconds {
-                        let total_duration = events.last().unwrap().timestamp
+                        let total_duration = events
+                            .last()
+                            .unwrap()
+                            .timestamp
                             .signed_duration_since(events.first().unwrap().timestamp)
                             .num_seconds() as u64;
-                        
+
                         if total_duration < min_duration {
                             return false;
                         }
@@ -1003,12 +1046,15 @@ impl AttackPatternDetector {
                 }
                 TimingConstraintType::Frequency => {
                     if let Some(threshold) = constraint.frequency_threshold {
-                        let duration = events.last().unwrap().timestamp
+                        let duration = events
+                            .last()
+                            .unwrap()
+                            .timestamp
                             .signed_duration_since(events.first().unwrap().timestamp)
                             .num_seconds() as f64;
-                        
+
                         let frequency = events.len() as f64 / (duration / 60.0); // events per minute
-                        
+
                         if frequency < threshold {
                             return false;
                         }
@@ -1043,30 +1089,37 @@ impl AttackPatternDetector {
     }
 
     /// Extract affected entities from events
-    fn extract_affected_entities(&self, events: &[SecurityEvent]) -> HashMap<AttackNodeType, HashSet<String>> {
+    fn extract_affected_entities(
+        &self,
+        events: &[SecurityEvent],
+    ) -> HashMap<AttackNodeType, HashSet<String>> {
         let mut entities = HashMap::new();
 
         for event in events {
             if let Some(user_id) = &event.user_id {
-                entities.entry(AttackNodeType::User)
+                entities
+                    .entry(AttackNodeType::User)
                     .or_insert_with(HashSet::new)
                     .insert(user_id.clone());
             }
 
             if let Some(ip) = event.ip_address {
-                entities.entry(AttackNodeType::IpAddress)
+                entities
+                    .entry(AttackNodeType::IpAddress)
                     .or_insert_with(HashSet::new)
                     .insert(ip.to_string());
             }
 
             if let Some(device) = &event.device_fingerprint {
-                entities.entry(AttackNodeType::Device)
+                entities
+                    .entry(AttackNodeType::Device)
                     .or_insert_with(HashSet::new)
                     .insert(device.clone());
             }
 
             if let Some(session) = &event.session_id {
-                entities.entry(AttackNodeType::Session)
+                entities
+                    .entry(AttackNodeType::Session)
                     .or_insert_with(HashSet::new)
                     .insert(session.clone());
             }
@@ -1099,14 +1152,18 @@ impl AttackPatternDetector {
     }
 
     /// Generate attack prediction
-    fn generate_attack_prediction(&self, events: &[SecurityEvent], rule: &SequenceDetectionRule) -> AttackPrediction {
+    fn generate_attack_prediction(
+        &self,
+        events: &[SecurityEvent],
+        rule: &SequenceDetectionRule,
+    ) -> AttackPrediction {
         // Simplified prediction logic
         let mut next_phases = Vec::new();
         let mut probability_scores = HashMap::new();
 
         // Predict next likely phases based on current coverage
         let current_phases = self.analyze_kill_chain_coverage(events);
-        
+
         if !current_phases.contains(&AttackPhase::Persistence) {
             next_phases.push(AttackPhase::Persistence);
             probability_scores.insert(AttackPhase::Persistence, 0.7);
@@ -1135,14 +1192,15 @@ impl AttackPatternDetector {
     /// Update temporal windows with new event
     async fn update_temporal_windows(&self, event: &SecurityEvent) {
         let config = self.config.read().await;
-        let window_size = Duration::minutes(config.temporal_analysis_config.window_size_minutes as i64);
-        
+        let window_size =
+            Duration::minutes(config.temporal_analysis_config.window_size_minutes as i64);
+
         let mut windows = self.temporal_windows.write().await;
-        
+
         // Create new window if needed
-        if windows.is_empty() || 
-           event.timestamp.signed_duration_since(windows.back().unwrap().end_time) > window_size {
-            
+        if windows.is_empty()
+            || event.timestamp.signed_duration_since(windows.back().unwrap().end_time) > window_size
+        {
             let new_window = TemporalWindow {
                 window_id: Uuid::new_v4().to_string(),
                 start_time: event.timestamp,
@@ -1151,7 +1209,7 @@ impl AttackPatternDetector {
                 analysis_complete: false,
                 detected_patterns: Vec::new(),
             };
-            
+
             windows.push_back(new_window);
         } else {
             // Add to existing window
@@ -1178,10 +1236,10 @@ impl AttackPatternDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 let graph = attack_graph.lock().await;
                 let config_guard = config.read().await;
-                
+
                 if graph.node_count() > 0 {
                     // Perform graph analysis
                     // TODO: Implement sophisticated graph algorithms
@@ -1189,9 +1247,12 @@ impl AttackPatternDetector {
                     // - Centrality analysis
                     // - Path analysis
                     // - Anomaly detection in graph structure
-                    
-                    debug!("Graph analysis completed: {} nodes, {} edges", 
-                           graph.node_count(), graph.edge_count());
+
+                    debug!(
+                        "Graph analysis completed: {} nodes, {} edges",
+                        graph.node_count(),
+                        graph.edge_count()
+                    );
                 }
             }
         });
@@ -1207,14 +1268,15 @@ impl AttackPatternDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 let mut sequences = active_sequences.write().await;
                 let config_guard = config.read().await;
-                let cutoff_time = Utc::now() - Duration::hours(config_guard.pattern_timeout_hours as i64);
-                
+                let cutoff_time =
+                    Utc::now() - Duration::hours(config_guard.pattern_timeout_hours as i64);
+
                 // Remove expired sequences
                 sequences.retain(|_, sequence| sequence.last_event > cutoff_time);
-                
+
                 ACTIVE_ATTACK_SEQUENCES.set(sequences.len() as f64);
             }
         });
@@ -1231,16 +1293,16 @@ impl AttackPatternDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 let buffer = event_buffer.lock().await;
                 let config_guard = config.read().await;
-                
+
                 if buffer.len() > config_guard.behavioral_clustering_config.min_cluster_size {
                     // TODO: Implement clustering algorithm
                     // - Feature extraction from events
                     // - DBSCAN or similar clustering
                     // - Cluster analysis and characterization
-                    
+
                     debug!("Behavioral clustering analysis completed");
                 }
             }
@@ -1257,10 +1319,10 @@ impl AttackPatternDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 let mut windows = temporal_windows.write().await;
                 let config_guard = config.read().await;
-                
+
                 // Analyze completed windows
                 for window in windows.iter_mut() {
                     if !window.analysis_complete && Utc::now() > window.end_time {
@@ -1268,7 +1330,7 @@ impl AttackPatternDetector {
                         // - Burst detection
                         // - Periodicity analysis
                         // - Trend analysis
-                        
+
                         window.analysis_complete = true;
                         debug!("Temporal analysis completed for window {}", window.window_id);
                     }
@@ -1292,10 +1354,10 @@ impl AttackPatternDetector {
     /// Shutdown the detector
     pub async fn shutdown(&self) {
         info!("Shutting down Attack Pattern Detector");
-        
+
         // Save important state
         // Clean up resources
-        
+
         info!("Attack Pattern Detector shutdown complete");
     }
 }

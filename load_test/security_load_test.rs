@@ -154,7 +154,7 @@ impl LoadTestExecutor {
 
     /// Execute token endpoint load test
     async fn test_token_endpoint(&self, clients: usize, duration: Duration, rps: u64) -> TestMetrics {
-        info!("Starting token endpoint load test: {} clients, {} RPS, {:?} duration", 
+        info!("Starting token endpoint load test: {} clients, {} RPS, {:?} duration",
               clients, rps, duration);
 
         let start_time = Instant::now();
@@ -177,7 +177,7 @@ impl LoadTestExecutor {
 
     /// Execute introspection endpoint load test
     async fn test_introspection_endpoint(&self, clients: usize, duration: Duration, rps: u64) -> TestMetrics {
-        info!("Starting introspection endpoint load test: {} clients, {} RPS, {:?} duration", 
+        info!("Starting introspection endpoint load test: {} clients, {} RPS, {:?} duration",
               clients, rps, duration);
 
         // First, generate some tokens to introspect
@@ -258,7 +258,7 @@ impl LoadTestExecutor {
 
         while Instant::now() < end_time {
             let request_start = Instant::now();
-            
+
             let result = self.make_token_request(0).await;
             let duration = request_start.elapsed();
 
@@ -346,7 +346,7 @@ impl LoadTestExecutor {
 
     /// Stress test with gradually increasing load
     async fn stress_test(&self, start_rps: u64, max_rps: u64, increment_interval: Duration) -> TestMetrics {
-        info!("Starting stress test: {} -> {} RPS, increment every {:?}", 
+        info!("Starting stress test: {} -> {} RPS, increment every {:?}",
               start_rps, max_rps, increment_interval);
 
         let mut current_rps = start_rps;
@@ -354,14 +354,14 @@ impl LoadTestExecutor {
 
         while current_rps <= max_rps {
             info!("Stress testing at {} RPS", current_rps);
-            
+
             let interval = Duration::from_nanos(1_000_000_000 / current_rps);
             let phase_start = Instant::now();
             let phase_end = phase_start + increment_interval;
 
             while Instant::now() < phase_end {
                 let request_start = Instant::now();
-                
+
                 let result = self.make_token_request(0).await;
                 self.record_result(TestResult {
                     endpoint: "/oauth/token".to_string(),
@@ -395,7 +395,7 @@ impl LoadTestExecutor {
 
         while Instant::now() < end_time {
             let request_start = Instant::now();
-            
+
             let result = self.make_token_request(client_id).await;
             let request_duration = request_start.elapsed();
 
@@ -424,7 +424,7 @@ impl LoadTestExecutor {
 
         while Instant::now() < end_time {
             let request_start = Instant::now();
-            
+
             let token = &tokens[rand::random::<usize>() % tokens.len()];
             let result = self.make_introspection_request(token).await;
             let request_duration = request_start.elapsed();
@@ -452,7 +452,7 @@ impl LoadTestExecutor {
 
         while Instant::now() < end_time {
             let request_start = Instant::now();
-            
+
             let result = match attack_type {
                 AttackType::CredentialStuffing => self.make_credential_stuffing_request(client_id).await,
                 AttackType::BruteForce => self.make_brute_force_request(client_id).await,
@@ -488,7 +488,7 @@ impl LoadTestExecutor {
 
         while Instant::now() < end_time {
             let request_start = Instant::now();
-            
+
             // Choose request type based on distribution
             let random_value = rand::random::<u32>() % total_weight;
             let mut current_weight = 0;
@@ -554,7 +554,7 @@ impl LoadTestExecutor {
 
     async fn make_token_request(&self, client_id: usize) -> RequestResult {
         let _permit = self.semaphore.acquire().await.unwrap();
-        
+
         let payload = json!({
             "grant_type": "client_credentials",
             "client_id": format!("test_client_{}", client_id),
@@ -588,7 +588,7 @@ impl LoadTestExecutor {
 
     async fn make_introspection_request(&self, token: &str) -> RequestResult {
         let _permit = self.semaphore.acquire().await.unwrap();
-        
+
         let payload = json!({
             "token": token,
             "token_type_hint": "access_token"
@@ -621,7 +621,7 @@ impl LoadTestExecutor {
 
     async fn make_userinfo_request(&self, token: &str) -> RequestResult {
         let _permit = self.semaphore.acquire().await.unwrap();
-        
+
         let response = self.client
             .get(&format!("{}/oauth/userinfo", self.base_url))
             .bearer_auth(token)
@@ -648,7 +648,7 @@ impl LoadTestExecutor {
 
     async fn make_bad_request(&self) -> RequestResult {
         let _permit = self.semaphore.acquire().await.unwrap();
-        
+
         let payload = json!({
             "grant_type": "invalid_grant",
             "client_id": "invalid_client",
@@ -689,9 +689,9 @@ impl LoadTestExecutor {
             ("test", "test"),
             ("guest", "guest"),
         ];
-        
+
         let (username, password) = credentials[client_id % credentials.len()];
-        
+
         let payload = json!({
             "grant_type": "password",
             "username": username,
@@ -725,9 +725,9 @@ impl LoadTestExecutor {
             "password123", "admin123", "qwerty", "letmein", "password1",
             "123456789", "welcome", "monkey", "dragon", "master"
         ];
-        
+
         let password = password_attempts[client_id % password_attempts.len()];
-        
+
         let payload = json!({
             "grant_type": "password",
             "username": "target_user",
@@ -741,7 +741,7 @@ impl LoadTestExecutor {
     async fn make_token_enumeration_request(&self, client_id: usize) -> RequestResult {
         // Simulate token enumeration attack
         let fake_token = format!("tk_enumeration_attempt_{:06}", client_id);
-        
+
         let payload = json!({
             "token": fake_token,
             "token_type_hint": "access_token"
@@ -770,10 +770,10 @@ impl LoadTestExecutor {
 
     async fn make_ddos_request(&self, client_id: usize) -> RequestResult {
         // Simulate DDoS with rapid requests from many IPs
-        let fake_ip = format!("192.168.{}.{}", 
-                             (client_id / 256) % 256, 
+        let fake_ip = format!("192.168.{}.{}",
+                             (client_id / 256) % 256,
                              client_id % 256);
-        
+
         let payload = json!({
             "grant_type": "client_credentials",
             "client_id": format!("ddos_client_{}", client_id),
@@ -826,7 +826,7 @@ impl LoadTestExecutor {
 
     async fn generate_test_tokens(&self, count: usize) -> Vec<String> {
         let mut tokens = Vec::new();
-        
+
         for i in 0..count {
             let payload = json!({
                 "grant_type": "client_credentials",
@@ -860,7 +860,7 @@ impl LoadTestExecutor {
 
     fn parse_distribution(&self, distribution: &str) -> HashMap<String, u32> {
         let mut dist = HashMap::new();
-        
+
         for part in distribution.split(',') {
             if let Some((req_type, weight_str)) = part.split_once(':') {
                 if let Ok(weight) = weight_str.parse::<u32>() {
@@ -883,7 +883,7 @@ impl LoadTestExecutor {
 
     async fn calculate_metrics(&self) -> TestMetrics {
         let results = self.results.read().await;
-        
+
         if results.is_empty() {
             return TestMetrics {
                 total_requests: 0,
@@ -914,7 +914,7 @@ impl LoadTestExecutor {
         );
         let max_response_time = durations.iter().max().copied().unwrap_or(Duration::ZERO);
         let min_response_time = durations.iter().min().copied().unwrap_or(Duration::ZERO);
-        
+
         let p95_index = ((durations.len() as f64) * 0.95) as usize;
         let p99_index = ((durations.len() as f64) * 0.99) as usize;
         let p95_response_time = durations.get(p95_index).copied().unwrap_or(Duration::ZERO);
@@ -931,7 +931,7 @@ impl LoadTestExecutor {
                     .min()
                     .unwrap_or(Instant::now())
             );
-        
+
         let throughput_rps = if test_duration.as_secs_f64() > 0.0 {
             total_requests as f64 / test_duration.as_secs_f64()
         } else {

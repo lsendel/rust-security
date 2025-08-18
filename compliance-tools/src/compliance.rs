@@ -4,8 +4,8 @@ use crate::*;
 
 // Re-export common types
 pub use crate::{
-    ComplianceControl, ComplianceFramework, ImplementationStatus, EffectivenessLevel,
-    RiskLevel, SecurityMetric, MetricStatus,
+    ComplianceControl, ComplianceFramework, EffectivenessLevel, ImplementationStatus, MetricStatus,
+    RiskLevel, SecurityMetric,
 };
 
 /// Compliance framework implementations
@@ -246,42 +246,40 @@ impl ComplianceFrameworks {
 
     /// Get NIST control definitions (placeholder)
     pub fn get_nist_controls() -> Vec<ComplianceControl> {
-        vec![
-            ComplianceControl {
-                control_id: "AC-1".to_string(),
-                framework: ComplianceFramework::Nist,
-                title: "Access Control Policy and Procedures".to_string(),
-                description: "Develop, document, and disseminate access control policy and procedures.".to_string(),
-                implementation_status: ImplementationStatus::Implemented,
-                effectiveness: EffectivenessLevel::Effective,
-                evidence: vec!["Access control policy documentation".to_string()],
-                last_tested: chrono::Utc::now(),
-                next_review: chrono::Utc::now() + chrono::Duration::days(365),
-                risk_level: RiskLevel::Medium,
-                assigned_to: Some("Security Team".to_string()),
-                remediation_plan: None,
-            },
-        ]
+        vec![ComplianceControl {
+            control_id: "AC-1".to_string(),
+            framework: ComplianceFramework::Nist,
+            title: "Access Control Policy and Procedures".to_string(),
+            description: "Develop, document, and disseminate access control policy and procedures."
+                .to_string(),
+            implementation_status: ImplementationStatus::Implemented,
+            effectiveness: EffectivenessLevel::Effective,
+            evidence: vec!["Access control policy documentation".to_string()],
+            last_tested: chrono::Utc::now(),
+            next_review: chrono::Utc::now() + chrono::Duration::days(365),
+            risk_level: RiskLevel::Medium,
+            assigned_to: Some("Security Team".to_string()),
+            remediation_plan: None,
+        }]
     }
 
     /// Get PCI DSS control definitions (placeholder)
     pub fn get_pci_controls() -> Vec<ComplianceControl> {
-        vec![
-            ComplianceControl {
-                control_id: "PCI-1.1".to_string(),
-                framework: ComplianceFramework::Pci,
-                title: "Firewall Configuration Standards".to_string(),
-                description: "Establish and implement firewall and router configuration standards.".to_string(),
-                implementation_status: ImplementationStatus::Implemented,
-                effectiveness: EffectivenessLevel::Effective,
-                evidence: vec!["Firewall configuration documentation".to_string()],
-                last_tested: chrono::Utc::now(),
-                next_review: chrono::Utc::now() + chrono::Duration::days(90),
-                risk_level: RiskLevel::High,
-                assigned_to: Some("Network Security Team".to_string()),
-                remediation_plan: None,
-            },
-        ]
+        vec![ComplianceControl {
+            control_id: "PCI-1.1".to_string(),
+            framework: ComplianceFramework::Pci,
+            title: "Firewall Configuration Standards".to_string(),
+            description: "Establish and implement firewall and router configuration standards."
+                .to_string(),
+            implementation_status: ImplementationStatus::Implemented,
+            effectiveness: EffectivenessLevel::Effective,
+            evidence: vec!["Firewall configuration documentation".to_string()],
+            last_tested: chrono::Utc::now(),
+            next_review: chrono::Utc::now() + chrono::Duration::days(90),
+            risk_level: RiskLevel::High,
+            assigned_to: Some("Network Security Team".to_string()),
+            remediation_plan: None,
+        }]
     }
 
     /// Get HIPAA control definitions (placeholder)

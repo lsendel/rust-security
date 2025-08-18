@@ -54,6 +54,14 @@ repos:
         files: Cargo\.(toml|lock)$
         pass_filenames: false
 
+      # Unit tests (quick feedback)
+      - id: cargo-test
+        name: Cargo Test
+        entry: bash -c 'TEST_MODE=1 cargo test --workspace --all-features -- --test-threads=1'
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
       # Generate SBOM on dependency changes
       - id: sbom-generation
         name: SBOM Generation

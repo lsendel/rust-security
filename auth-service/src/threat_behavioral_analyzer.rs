@@ -1,9 +1,9 @@
 use crate::threat_types::*;
-use chrono::{DateTime, Utc, Duration};
-use flume::{Receiver, Sender, unbounded};
+use chrono::{DateTime, Duration, Utc};
+use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
 use nalgebra::{DMatrix, DVector};
-use prometheus::{Counter, Histogram, Gauge, register_counter, register_histogram, register_gauge};
+use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde_json;
 use smartcore::ensemble::random_forest_classifier::RandomForestClassifier;
@@ -12,11 +12,11 @@ use smartcore::linalg::basic::vector::DenseVector;
 use smartcore::model_selection::train_test_split;
 use smartcore::preprocessing::standard_scaler::StandardScaler;
 use smartcore::tree::decision_tree_classifier::SplitCriterion;
+use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
-use statrs::distribution::{Normal, ContinuousCDF};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
@@ -30,7 +30,7 @@ lazy_static::lazy_static! {
     ).unwrap();
 
     static ref BEHAVIORAL_ANOMALIES_DETECTED: Counter = register_counter!(
-        "threat_hunting_behavioral_anomalies_total", 
+        "threat_hunting_behavioral_anomalies_total",
         "Total behavioral anomalies detected"
     ).unwrap();
 
@@ -143,27 +143,27 @@ pub struct BehavioralMLModel {
 pub struct AdvancedBehavioralThreatDetector {
     config: Arc<RwLock<BehavioralAnalysisConfig>>,
     redis_client: Arc<Mutex<Option<ConnectionManager>>>,
-    
+
     // Event processing
     event_buffer: Arc<Mutex<VecDeque<SecurityEvent>>>,
     event_sender: Sender<SecurityEvent>,
     event_receiver: Receiver<SecurityEvent>,
-    
+
     // User behavior tracking
     user_profiles: Arc<RwLock<HashMap<String, UserBehaviorProfile>>>,
     user_session_tracking: Arc<RwLock<HashMap<String, Vec<SessionInfo>>>>,
-    
+
     // Threat tracking
     active_threats: Arc<RwLock<HashMap<String, ThreatSignature>>>,
     threat_correlations: Arc<RwLock<HashMap<String, Vec<String>>>>,
-    
+
     // Machine learning models
     ml_models: Arc<RwLock<HashMap<String, BehavioralMLModel>>>,
-    
+
     // Statistics and analysis
     ip_reputation_cache: Arc<RwLock<HashMap<IpAddr, IPReputationInfo>>>,
     statistical_baselines: Arc<RwLock<HashMap<String, StatisticalBaseline>>>,
-    
+
     // Performance tracking
     analysis_metrics: Arc<Mutex<AnalysisMetrics>>,
 }
@@ -280,7 +280,7 @@ impl AdvancedBehavioralThreatDetector {
     /// Create a new behavioral threat detector
     pub fn new(config: BehavioralAnalysisConfig) -> Self {
         let (event_sender, event_receiver) = unbounded();
-        
+
         Self {
             config: Arc::new(RwLock::new(config)),
             redis_client: Arc::new(Mutex::new(None)),
@@ -328,10 +328,10 @@ impl AdvancedBehavioralThreatDetector {
         let config = self.config.read().await;
         let client = redis::Client::open(config.redis_config.url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
-        
+
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = Some(manager);
-        
+
         info!("Redis connection established for threat hunting");
         Ok(())
     }
@@ -342,7 +342,7 @@ impl AdvancedBehavioralThreatDetector {
         if let Some(ref client) = *redis_client {
             let config = self.config.read().await;
             let pattern = format!("{}user_profile:*", config.redis_config.key_prefix);
-            
+
             let keys: Vec<String> = redis::cmd("KEYS")
                 .arg(&pattern)
                 .query_async(&mut client.clone())
@@ -372,7 +372,7 @@ impl AdvancedBehavioralThreatDetector {
     /// Initialize machine learning models
     async fn initialize_ml_models(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut models = self.ml_models.write().await;
-        
+
         // Initialize behavioral anomaly detection model
         let behavioral_model = BehavioralMLModel {
             classifier: None,
@@ -394,13 +394,16 @@ impl AdvancedBehavioralThreatDetector {
         };
 
         models.insert("behavioral_anomaly".to_string(), behavioral_model);
-        
+
         info!("ML models initialized for threat detection");
         Ok(())
     }
 
     /// Process a security event for threat detection
-    pub async fn analyze_event(&self, event: SecurityEvent) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn analyze_event(
+        &self,
+        event: SecurityEvent,
+    ) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = SystemTime::now();
         let mut threats_detected = Vec::new();
 
@@ -421,7 +424,7 @@ impl AdvancedBehavioralThreatDetector {
         let mut metrics = self.analysis_metrics.lock().await;
         metrics.events_processed += 1;
         metrics.threats_detected += threats_detected.len() as u64;
-        
+
         if let Ok(duration) = start_time.elapsed() {
             metrics.processing_time_ms += duration.as_millis() as u64;
         }
@@ -439,7 +442,10 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Detect credential stuffing attacks
-    async fn detect_credential_stuffing(&self, event: &SecurityEvent) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn detect_credential_stuffing(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
         let mut threats = Vec::new();
 
         if !matches!(event.event_type, SecurityEventType::AuthenticationFailure) {
@@ -452,19 +458,19 @@ impl AdvancedBehavioralThreatDetector {
 
         let config = self.config.read().await;
         let thresholds = &config.thresholds.credential_stuffing;
-        
+
         // Analyze recent events from this IP
         let event_buffer = self.event_buffer.lock().await;
         let cutoff_time = Utc::now() - Duration::minutes(thresholds.time_window_minutes as i64);
-        
+
         let mut failed_attempts = 0;
         let mut unique_users = HashSet::new();
-        
+
         for buffered_event in event_buffer.iter() {
-            if buffered_event.ip_address == Some(ip_address) &&
-               buffered_event.timestamp > cutoff_time &&
-               matches!(buffered_event.event_type, SecurityEventType::AuthenticationFailure) {
-                
+            if buffered_event.ip_address == Some(ip_address)
+                && buffered_event.timestamp > cutoff_time
+                && matches!(buffered_event.event_type, SecurityEventType::AuthenticationFailure)
+            {
                 failed_attempts += 1;
                 if let Some(user_id) = &buffered_event.user_id {
                     unique_users.insert(user_id.clone());
@@ -473,9 +479,9 @@ impl AdvancedBehavioralThreatDetector {
         }
 
         // Check if thresholds are exceeded
-        if failed_attempts >= thresholds.failed_logins_per_minute &&
-           unique_users.len() >= thresholds.unique_usernames_per_ip as usize {
-            
+        if failed_attempts >= thresholds.failed_logins_per_minute
+            && unique_users.len() >= thresholds.unique_usernames_per_ip as usize
+        {
             let mut threat = ThreatSignature::new(
                 ThreatType::CredentialStuffing,
                 ThreatSeverity::High,
@@ -494,7 +500,10 @@ impl AdvancedBehavioralThreatDetector {
                 first_seen: cutoff_time,
                 last_seen: event.timestamp,
                 source: "behavioral_analyzer".to_string(),
-                tags: ["credential_stuffing", "high_volume", "multiple_users"].iter().map(|s| s.to_string()).collect(),
+                tags: ["credential_stuffing", "high_volume", "multiple_users"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             };
 
             threat.add_indicator(indicator);
@@ -514,7 +523,10 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Detect account takeover attempts
-    async fn detect_account_takeover(&self, event: &SecurityEvent) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn detect_account_takeover(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
         let mut threats = Vec::new();
 
         if !matches!(event.event_type, SecurityEventType::AuthenticationSuccess) {
@@ -533,7 +545,7 @@ impl AdvancedBehavioralThreatDetector {
 
         let config = self.config.read().await;
         let thresholds = &config.thresholds.account_takeover;
-        
+
         let mut anomaly_indicators = Vec::new();
         let mut confidence = 0.0;
 
@@ -543,17 +555,21 @@ impl AdvancedBehavioralThreatDetector {
                 anomaly_indicators.push("Unusual login country".to_string());
                 confidence += 0.4;
             }
-            
+
             // Check for rapid location changes
             if let Some(lat) = event_location.latitude {
                 if let Some(lon) = event_location.longitude {
                     let recent_sessions = self.get_recent_user_sessions(user_id, 24).await;
                     for session in recent_sessions {
                         if let Some(session_location) = &session.location {
-                            if let (Some(session_lat), Some(session_lon)) = (session_location.latitude, session_location.longitude) {
-                                let distance = self.calculate_distance(lat, lon, session_lat, session_lon);
+                            if let (Some(session_lat), Some(session_lon)) =
+                                (session_location.latitude, session_location.longitude)
+                            {
+                                let distance =
+                                    self.calculate_distance(lat, lon, session_lat, session_lon);
                                 if distance > thresholds.location_distance_km {
-                                    anomaly_indicators.push(format!("Rapid location change: {:.0} km", distance));
+                                    anomaly_indicators
+                                        .push(format!("Rapid location change: {:.0} km", distance));
                                     confidence += 0.3;
                                     break;
                                 }
@@ -589,7 +605,9 @@ impl AdvancedBehavioralThreatDetector {
 
         // Check for recent failed attempts
         let recent_failures = self.count_recent_failures(user_id, 60).await;
-        if recent_failures > (profile.failed_login_baseline * thresholds.behavior_deviation_threshold) as u32 {
+        if recent_failures
+            > (profile.failed_login_baseline * thresholds.behavior_deviation_threshold) as u32
+        {
             anomaly_indicators.push(format!("Elevated failure rate: {} attempts", recent_failures));
             confidence += 0.2;
         }
@@ -611,11 +629,14 @@ impl AdvancedBehavioralThreatDetector {
                 let indicator = ThreatIndicator {
                     indicator_type: IndicatorType::BehaviorPattern,
                     value: indicator_desc.clone(),
-                    confidence: confidence,
+                    confidence,
                     first_seen: event.timestamp,
                     last_seen: event.timestamp,
                     source: "behavioral_analyzer".to_string(),
-                    tags: ["account_takeover", "behavioral_anomaly"].iter().map(|s| s.to_string()).collect(),
+                    tags: ["account_takeover", "behavioral_anomaly"]
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                 };
                 threat.add_indicator(indicator);
             }
@@ -637,7 +658,10 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Detect brute force attacks
-    async fn detect_brute_force(&self, event: &SecurityEvent) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn detect_brute_force(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
         let mut threats = Vec::new();
 
         if !matches!(event.event_type, SecurityEventType::AuthenticationFailure) {
@@ -650,19 +674,18 @@ impl AdvancedBehavioralThreatDetector {
 
         let config = self.config.read().await;
         let thresholds = &config.thresholds.brute_force;
-        
+
         // Count recent failures for this user
-        let recent_failures = self.count_recent_failures(user_id, thresholds.time_window_minutes).await;
-        
+        let recent_failures =
+            self.count_recent_failures(user_id, thresholds.time_window_minutes).await;
+
         if recent_failures >= thresholds.failed_attempts_threshold {
             // Get unique source IPs
-            let source_ips = self.get_recent_failure_ips(user_id, thresholds.time_window_minutes).await;
-            
-            let mut threat = ThreatSignature::new(
-                ThreatType::BruteForce,
-                ThreatSeverity::Medium,
-                0.8,
-            );
+            let source_ips =
+                self.get_recent_failure_ips(user_id, thresholds.time_window_minutes).await;
+
+            let mut threat =
+                ThreatSignature::new(ThreatType::BruteForce, ThreatSeverity::Medium, 0.8);
 
             threat.add_affected_entity(user_id.clone());
             for ip in source_ips {
@@ -671,9 +694,13 @@ impl AdvancedBehavioralThreatDetector {
 
             let indicator = ThreatIndicator {
                 indicator_type: IndicatorType::BehaviorPattern,
-                value: format!("High failure rate: {} attempts in {} minutes", recent_failures, thresholds.time_window_minutes),
+                value: format!(
+                    "High failure rate: {} attempts in {} minutes",
+                    recent_failures, thresholds.time_window_minutes
+                ),
                 confidence: 0.8,
-                first_seen: event.timestamp - Duration::minutes(thresholds.time_window_minutes as i64),
+                first_seen: event.timestamp
+                    - Duration::minutes(thresholds.time_window_minutes as i64),
                 last_seen: event.timestamp,
                 source: "behavioral_analyzer".to_string(),
                 tags: ["brute_force", "high_volume"].iter().map(|s| s.to_string()).collect(),
@@ -696,7 +723,10 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Detect session hijacking attempts
-    async fn detect_session_hijacking(&self, event: &SecurityEvent) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn detect_session_hijacking(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
         let mut threats = Vec::new();
 
         let Some(session_id) = &event.session_id else {
@@ -705,19 +735,16 @@ impl AdvancedBehavioralThreatDetector {
 
         // Get session tracking information
         let session_tracking = self.user_session_tracking.read().await;
-        let user_sessions = if let Some(user_id) = &event.user_id {
-            session_tracking.get(user_id)
-        } else {
-            None
-        };
+        let user_sessions =
+            if let Some(user_id) = &event.user_id { session_tracking.get(user_id) } else { None };
 
         if let Some(sessions) = user_sessions {
             let current_session = sessions.iter().find(|s| s.session_id == *session_id);
-            
+
             if let Some(session) = current_session {
                 let config = self.config.read().await;
                 let thresholds = &config.thresholds.session_hijacking;
-                
+
                 let mut anomaly_indicators = Vec::new();
                 let mut confidence = 0.0;
 
@@ -730,24 +757,46 @@ impl AdvancedBehavioralThreatDetector {
                 }
 
                 // Check for location jumps
-                if let (Some(event_location), Some(session_location)) = (&event.location, &session.location) {
-                    if let (Some(event_lat), Some(event_lon), Some(session_lat), Some(session_lon)) = 
-                       (event_location.latitude, event_location.longitude, session_location.latitude, session_location.longitude) {
-                        
-                        let distance = self.calculate_distance(event_lat, event_lon, session_lat, session_lon);
-                        let time_diff = event.timestamp.signed_duration_since(session.last_activity).num_minutes();
-                        
-                        if distance > thresholds.location_jump_threshold_km && time_diff < thresholds.time_threshold_minutes as i64 {
-                            anomaly_indicators.push(format!("Impossible travel: {:.0} km in {} minutes", distance, time_diff));
+                if let (Some(event_location), Some(session_location)) =
+                    (&event.location, &session.location)
+                {
+                    if let (
+                        Some(event_lat),
+                        Some(event_lon),
+                        Some(session_lat),
+                        Some(session_lon),
+                    ) = (
+                        event_location.latitude,
+                        event_location.longitude,
+                        session_location.latitude,
+                        session_location.longitude,
+                    ) {
+                        let distance =
+                            self.calculate_distance(event_lat, event_lon, session_lat, session_lon);
+                        let time_diff = event
+                            .timestamp
+                            .signed_duration_since(session.last_activity)
+                            .num_minutes();
+
+                        if distance > thresholds.location_jump_threshold_km
+                            && time_diff < thresholds.time_threshold_minutes as i64
+                        {
+                            anomaly_indicators.push(format!(
+                                "Impossible travel: {:.0} km in {} minutes",
+                                distance, time_diff
+                            ));
                             confidence += 0.6;
                         }
                     }
                 }
 
                 // Check for device fingerprint changes
-                if let (Some(event_device), Some(session_device)) = (&event.device_fingerprint, &session.device_fingerprint) {
+                if let (Some(event_device), Some(session_device)) =
+                    (&event.device_fingerprint, &session.device_fingerprint)
+                {
                     if event_device != session_device {
-                        anomaly_indicators.push("Device fingerprint change during session".to_string());
+                        anomaly_indicators
+                            .push("Device fingerprint change during session".to_string());
                         confidence += 0.3;
                     }
                 }
@@ -763,7 +812,7 @@ impl AdvancedBehavioralThreatDetector {
                     if let Some(user_id) = &event.user_id {
                         threat.add_affected_entity(user_id.clone());
                     }
-                    
+
                     if let Some(ip) = event.ip_address {
                         threat.add_source_ip(ip);
                     }
@@ -772,11 +821,14 @@ impl AdvancedBehavioralThreatDetector {
                         let indicator = ThreatIndicator {
                             indicator_type: IndicatorType::SessionId,
                             value: indicator_desc.clone(),
-                            confidence: confidence,
+                            confidence,
                             first_seen: session.start_time,
                             last_seen: event.timestamp,
                             source: "behavioral_analyzer".to_string(),
-                            tags: ["session_hijacking", "session_anomaly"].iter().map(|s| s.to_string()).collect(),
+                            tags: ["session_hijacking", "session_anomaly"]
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect(),
                         };
                         threat.add_indicator(indicator);
                     }
@@ -800,7 +852,10 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Detect behavioral anomalies using ML
-    async fn detect_behavioral_anomaly(&self, event: &SecurityEvent) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn detect_behavioral_anomaly(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>> {
         let mut threats = Vec::new();
 
         let Some(user_id) = &event.user_id else {
@@ -821,13 +876,13 @@ impl AdvancedBehavioralThreatDetector {
         // TODO: Implement ML prediction using smartcore
         // For now, use statistical anomaly detection
         let anomaly_score = self.calculate_statistical_anomaly_score(event, &features).await;
-        
+
         let config = self.config.read().await;
         let thresholds = &config.thresholds.behavioral_anomaly;
-        
+
         if anomaly_score < thresholds.anomaly_score_threshold {
             let confidence = (anomaly_score.abs() / 2.0).min(0.95);
-            
+
             let mut threat = ThreatSignature::new(
                 ThreatType::BehavioralAnomaly,
                 if confidence > 0.7 { ThreatSeverity::High } else { ThreatSeverity::Medium },
@@ -842,11 +897,14 @@ impl AdvancedBehavioralThreatDetector {
             let indicator = ThreatIndicator {
                 indicator_type: IndicatorType::BehaviorPattern,
                 value: format!("Statistical anomaly detected (score: {:.3})", anomaly_score),
-                confidence: confidence,
+                confidence,
                 first_seen: event.timestamp,
                 last_seen: event.timestamp,
                 source: "ml_behavioral_analyzer".to_string(),
-                tags: ["behavioral_anomaly", "ml_detection"].iter().map(|s| s.to_string()).collect(),
+                tags: ["behavioral_anomaly", "ml_detection"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             };
 
             threat.add_indicator(indicator);
@@ -877,13 +935,13 @@ impl AdvancedBehavioralThreatDetector {
 
         tokio::spawn(async move {
             info!("Starting event processor task");
-            
+
             while let Ok(event) = event_receiver.recv_async().await {
                 // Add to event buffer
                 {
                     let mut buffer = event_buffer.lock().await;
                     let config_guard = config.read().await;
-                    
+
                     buffer.push_back(event.clone());
                     if buffer.len() > config_guard.event_buffer_size {
                         buffer.pop_front();
@@ -893,9 +951,10 @@ impl AdvancedBehavioralThreatDetector {
                 // Update user profile
                 if let Some(user_id) = &event.user_id {
                     let mut profiles = user_profiles.write().await;
-                    let profile = profiles.entry(user_id.clone())
+                    let profile = profiles
+                        .entry(user_id.clone())
                         .or_insert_with(|| UserBehaviorProfile::new(user_id.clone()));
-                    
+
                     profile.update_with_event(&event);
                     USER_PROFILES_UPDATED.inc();
                 }
@@ -903,10 +962,13 @@ impl AdvancedBehavioralThreatDetector {
                 // Update session tracking
                 if let (Some(user_id), Some(session_id)) = (&event.user_id, &event.session_id) {
                     let mut session_tracking = user_session_tracking.write().await;
-                    let user_sessions = session_tracking.entry(user_id.clone()).or_insert_with(Vec::new);
-                    
+                    let user_sessions =
+                        session_tracking.entry(user_id.clone()).or_insert_with(Vec::new);
+
                     // Find existing session or create new one
-                    if let Some(session) = user_sessions.iter_mut().find(|s| s.session_id == *session_id) {
+                    if let Some(session) =
+                        user_sessions.iter_mut().find(|s| s.session_id == *session_id)
+                    {
                         session.last_activity = event.timestamp;
                         session.events_count += 1;
                     } else {
@@ -942,16 +1004,19 @@ impl AdvancedBehavioralThreatDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 let profiles = user_profiles.read().await;
                 let redis_client_guard = redis_client.lock().await;
-                
+
                 if let Some(ref client) = *redis_client_guard {
                     let config_guard = config.read().await;
-                    
+
                     for profile in profiles.values() {
-                        let key = format!("{}user_profile:{}", config_guard.redis_config.key_prefix, profile.user_id);
-                        
+                        let key = format!(
+                            "{}user_profile:{}",
+                            config_guard.redis_config.key_prefix, profile.user_id
+                        );
+
                         if let Ok(profile_json) = serde_json::to_string(profile) {
                             let _: Result<(), redis::RedisError> = redis::cmd("SETEX")
                                 .arg(&key)
@@ -976,18 +1041,19 @@ impl AdvancedBehavioralThreatDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 let threats = active_threats.read().await;
                 let mut correlations = threat_correlations.write().await;
-                
+
                 // Find correlations between threats
                 for threat in threats.values() {
-                    let related_threats = threats.values()
+                    let related_threats = threats
+                        .values()
                         .filter(|t| t.threat_id != threat.threat_id)
                         .filter(|t| Self::threats_are_related(threat, t))
                         .map(|t| t.threat_id.clone())
                         .collect::<Vec<_>>();
-                    
+
                     if !related_threats.is_empty() {
                         correlations.insert(threat.threat_id.clone(), related_threats);
                     }
@@ -1009,14 +1075,14 @@ impl AdvancedBehavioralThreatDetector {
 
             loop {
                 interval.tick().await;
-                
+
                 // TODO: Implement ML model training with smartcore
                 // This would involve:
                 // 1. Extracting features from recent events
                 // 2. Preparing training data
                 // 3. Training/updating models
                 // 4. Evaluating model performance
-                
+
                 info!("ML model training cycle completed");
             }
         });
@@ -1087,13 +1153,17 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Calculate statistical anomaly score
-    async fn calculate_statistical_anomaly_score(&self, event: &SecurityEvent, features: &[f64]) -> f64 {
+    async fn calculate_statistical_anomaly_score(
+        &self,
+        event: &SecurityEvent,
+        features: &[f64],
+    ) -> f64 {
         // Simplified anomaly detection using statistical methods
         // In a real implementation, this would use more sophisticated algorithms
-        
+
         let baselines = self.statistical_baselines.read().await;
         let mut anomaly_score = 0.0;
-        
+
         for (i, &feature_value) in features.iter().enumerate() {
             let metric_name = format!("feature_{}", i);
             if let Some(baseline) = baselines.get(&metric_name) {
@@ -1116,7 +1186,7 @@ impl AdvancedBehavioralThreatDetector {
         if let Some(ref client) = *redis_client {
             let config = self.config.read().await;
             let key = format!("{}threat:{}", config.redis_config.key_prefix, threat.threat_id);
-            
+
             if let Ok(threat_json) = serde_json::to_string(&threat) {
                 let _: Result<(), redis::RedisError> = redis::cmd("SETEX")
                     .arg(&key)
@@ -1132,14 +1202,10 @@ impl AdvancedBehavioralThreatDetector {
     async fn get_recent_user_sessions(&self, user_id: &str, hours: u32) -> Vec<SessionInfo> {
         let session_tracking = self.user_session_tracking.read().await;
         let cutoff = Utc::now() - Duration::hours(hours as i64);
-        
-        session_tracking.get(user_id)
-            .map(|sessions| {
-                sessions.iter()
-                    .filter(|s| s.last_activity > cutoff)
-                    .cloned()
-                    .collect()
-            })
+
+        session_tracking
+            .get(user_id)
+            .map(|sessions| sessions.iter().filter(|s| s.last_activity > cutoff).cloned().collect())
             .unwrap_or_default()
     }
 
@@ -1147,8 +1213,9 @@ impl AdvancedBehavioralThreatDetector {
     async fn count_recent_failures(&self, user_id: &str, minutes: u64) -> u32 {
         let event_buffer = self.event_buffer.lock().await;
         let cutoff = Utc::now() - Duration::minutes(minutes as i64);
-        
-        event_buffer.iter()
+
+        event_buffer
+            .iter()
             .filter(|e| e.user_id.as_ref() == Some(user_id))
             .filter(|e| e.timestamp > cutoff)
             .filter(|e| matches!(e.event_type, SecurityEventType::AuthenticationFailure))
@@ -1159,8 +1226,9 @@ impl AdvancedBehavioralThreatDetector {
     async fn get_recent_failure_ips(&self, user_id: &str, minutes: u64) -> HashSet<IpAddr> {
         let event_buffer = self.event_buffer.lock().await;
         let cutoff = Utc::now() - Duration::minutes(minutes as i64);
-        
-        event_buffer.iter()
+
+        event_buffer
+            .iter()
             .filter(|e| e.user_id.as_ref() == Some(user_id))
             .filter(|e| e.timestamp > cutoff)
             .filter(|e| matches!(e.event_type, SecurityEventType::AuthenticationFailure))
@@ -1171,18 +1239,19 @@ impl AdvancedBehavioralThreatDetector {
     /// Calculate distance between two points (simplified haversine formula)
     fn calculate_distance(&self, lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
         const EARTH_RADIUS_KM: f64 = 6371.0;
-        
+
         let lat1_rad = lat1.to_radians();
         let lon1_rad = lon1.to_radians();
         let lat2_rad = lat2.to_radians();
         let lon2_rad = lon2.to_radians();
-        
+
         let dlat = lat2_rad - lat1_rad;
         let dlon = lon2_rad - lon1_rad;
-        
-        let a = (dlat / 2.0).sin().powi(2) + lat1_rad.cos() * lat2_rad.cos() * (dlon / 2.0).sin().powi(2);
+
+        let a = (dlat / 2.0).sin().powi(2)
+            + lat1_rad.cos() * lat2_rad.cos() * (dlon / 2.0).sin().powi(2);
         let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-        
+
         EARTH_RADIUS_KM * c
     }
 
@@ -1201,12 +1270,12 @@ impl AdvancedBehavioralThreatDetector {
     /// Shutdown the detector
     pub async fn shutdown(&self) {
         info!("Shutting down Advanced Behavioral Threat Detector");
-        
+
         // Save final state to Redis
         // Close connections
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = None;
-        
+
         info!("Advanced Behavioral Threat Detector shutdown complete");
     }
 }

@@ -146,7 +146,7 @@ impl HighPerformanceMfaService {
             let audit_event = MfaAuditEvent::rate_limit_exceeded(request.user_id.clone(), crate::mfa::audit::MfaMethod::TOTP)
                 .with_context("operation".to_string(), serde_json::Value::String("registration".to_string()));
             self.auditor.log_mfa_event(audit_event).await?;
-            
+
             return Err(MfaError::rate_limit_exceeded(
                 "registration",
                 rate_limit_result.retry_after_secs.unwrap_or(3600),
@@ -227,7 +227,7 @@ impl HighPerformanceMfaService {
         if !rate_limit_result.allowed {
             let audit_event = MfaAuditEvent::rate_limit_exceeded(request.user_id.clone(), crate::mfa::audit::MfaMethod::TOTP);
             self.auditor.log_mfa_event(audit_event).await?;
-            
+
             return Ok(TotpVerificationResponse {
                 verified: false,
                 reason: Some("rate_limited".to_string()),
@@ -248,7 +248,7 @@ impl HighPerformanceMfaService {
         if !self.replay_protection.check_and_mark_used(&request.user_id, &request.code, 90).await? {
             let audit_event = MfaAuditEvent::replay_attempt_detected(request.user_id.clone());
             self.auditor.log_mfa_event(audit_event).await?;
-            
+
             return Ok(TotpVerificationResponse {
                 verified: false,
                 reason: Some("code_reused".to_string()),
@@ -416,7 +416,7 @@ impl HighPerformanceMfaService {
         // Fetch from storage
         let secret = self.storage.get_decrypted_secret(user_id).await?;
         let totp_config_storage = self.storage.get_totp_config(user_id).await?;
-        
+
         let enhanced_config = EnhancedTotpConfig::new(
             TotpAlgorithm::from_str(&totp_config_storage.algorithm)?,
             totp_config_storage.digits,
@@ -435,7 +435,7 @@ impl HighPerformanceMfaService {
 
     async fn verify_backup_code(&self, user_id: &str, code: &str) -> MfaResult<bool> {
         let stored_codes = self.storage.get_backup_codes(user_id).await?;
-        
+
         for stored_hash in &stored_codes {
             if self.verify_backup_code_hash(code, stored_hash) {
                 // Remove the used backup code
@@ -445,7 +445,7 @@ impl HighPerformanceMfaService {
                 return Ok(true);
             }
         }
-        
+
         Ok(false)
     }
 
@@ -663,13 +663,13 @@ mod tests {
     async fn test_backup_code_generation() {
         let service = HighPerformanceMfaService::new().await.unwrap();
         let codes = service.generate_backup_codes();
-        
+
         assert_eq!(codes.len(), 8);
         for code in &codes {
             assert_eq!(code.len(), 10);
             assert!(code.chars().all(|c| c.is_ascii_alphanumeric()));
         }
-        
+
         // Ensure codes are unique
         let unique_codes: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(unique_codes.len(), codes.len());
@@ -679,17 +679,17 @@ mod tests {
     async fn test_backup_code_hashing() {
         let service = HighPerformanceMfaService::new().await.unwrap();
         let code = "ABCD123456";
-        
+
         let hash1 = service.hash_backup_code(code);
         let hash2 = service.hash_backup_code(code);
-        
+
         // Hashes should be different due to salt
         assert_ne!(hash1, hash2);
-        
+
         // But both should verify correctly
         assert!(service.verify_backup_code_hash(code, &hash1));
         assert!(service.verify_backup_code_hash(code, &hash2));
-        
+
         // Wrong code should not verify
         assert!(!service.verify_backup_code_hash("WRONG12345", &hash1));
     }

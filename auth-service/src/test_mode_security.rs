@@ -6,7 +6,7 @@ static TEST_MODE_ENABLED: Lazy<AtomicBool> = Lazy::new(|| {
     let enabled = is_test_mode_raw();
     if enabled {
         warn!("TEST_MODE is enabled - this should NEVER happen in production");
-        
+
         // Log security implications
         warn!("TEST_MODE bypasses:");
         warn!("  - Client secret strength validation");
@@ -15,12 +15,12 @@ static TEST_MODE_ENABLED: Lazy<AtomicBool> = Lazy::new(|| {
         warn!("  - Rate limiting");
         warn!("  - Some SCIM authentication checks");
     }
-    
+
     AtomicBool::new(enabled)
 });
 
 /// Counter for test mode usage tracking
-static TEST_MODE_USAGE_COUNT: Lazy<std::sync::atomic::AtomicU64> = 
+static TEST_MODE_USAGE_COUNT: Lazy<std::sync::atomic::AtomicU64> =
     Lazy::new(|| std::sync::atomic::AtomicU64::new(0));
 
 /// Production safety check - prevents test mode in production environments
@@ -30,24 +30,24 @@ pub fn is_test_mode() -> bool {
         if is_test_mode_raw() {
             error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
             error!("This creates serious security vulnerabilities and MUST be disabled immediately");
-            
+
             // Log to security audit trail
             audit_log_security_violation();
-            
+
             // In production, we force disable test mode regardless of environment variable
             return false;
         }
     }
-    
+
     let enabled = TEST_MODE_ENABLED.load(Ordering::Relaxed);
     if enabled {
         // Track usage for monitoring
         TEST_MODE_USAGE_COUNT.fetch_add(1, Ordering::Relaxed);
-        
+
         // Log each test mode usage for audit trail
         warn!("Test mode bypass used (count: {})", TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed));
     }
-    
+
     enabled
 }
 
@@ -63,9 +63,9 @@ fn is_production_environment() -> bool {
     let environment = std::env::var("ENVIRONMENT").unwrap_or_default();
     let app_env = std::env::var("APP_ENV").unwrap_or_default();
     let node_env = std::env::var("NODE_ENV").unwrap_or_default();
-    
-    rust_env == "production" || 
-    environment == "production" || 
+
+    rust_env == "production" ||
+    environment == "production" ||
     app_env == "production" ||
     node_env == "production" ||
     // Also check for staging as production-like
@@ -104,18 +104,18 @@ pub fn emergency_disable_test_mode() {
 /// Validate test mode is appropriate for current environment
 pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
     let mut issues = Vec::new();
-    
+
     // Check production environment
     if is_production_environment() && is_test_mode_raw() {
         issues.push("TEST_MODE is enabled in production environment".to_string());
     }
-    
+
     // Check for long-running test mode (potential forgotten test environment)
     let usage_count = TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed);
     if usage_count > 1000 {
         issues.push(format!("Test mode has been used {} times - possible forgotten test environment", usage_count));
     }
-    
+
     // Check for test mode in CI/CD environments that should be production-like
     if std::env::var("CI").is_ok() && is_test_mode_raw() {
         let ci_env = std::env::var("CI_ENVIRONMENT_NAME").unwrap_or_default();
@@ -123,7 +123,7 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
             issues.push(format!("Test mode enabled in CI environment: {}", ci_env));
         }
     }
-    
+
     if issues.is_empty() {
         Ok(())
     } else {
@@ -135,12 +135,12 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
 fn audit_log_security_violation() {
     // This would typically integrate with your security logging system
     error!("SECURITY_AUDIT: TEST_MODE_PRODUCTION_VIOLATION");
-    error!("Environment: RUST_ENV={}, ENVIRONMENT={}", 
+    error!("Environment: RUST_ENV={}, ENVIRONMENT={}",
            std::env::var("RUST_ENV").unwrap_or_default(),
            std::env::var("ENVIRONMENT").unwrap_or_default());
     error!("Process: PID={}", std::process::id());
     error!("Timestamp: {}", chrono::Utc::now().to_rfc3339());
-    
+
     // Log to structured format for SIEM integration
     info!(
         target: "security_audit",
@@ -155,17 +155,17 @@ fn audit_log_security_violation() {
 /// Initialize test mode with security checks
 pub fn initialize_test_mode_security() {
     info!("Initializing test mode security checks");
-    
+
     // Force evaluation of test mode status
     let _enabled = TEST_MODE_ENABLED.load(Ordering::Relaxed);
-    
+
     // Validate security posture
     if let Err(issues) = validate_test_mode_security() {
         for issue in issues {
             error!("Test mode security issue: {}", issue);
         }
     }
-    
+
     info!("Test mode security initialization complete");
 }
 
@@ -202,13 +202,13 @@ mod tests {
         // Set production environment
         std::env::set_var("RUST_ENV", "production");
         std::env::set_var("TEST_MODE", "1");
-        
+
         // Should return false despite TEST_MODE=1 due to production safety
         assert!(!is_test_mode());
-        
+
         // Raw check should still see the variable
         assert!(is_test_mode_raw());
-        
+
         // Cleanup
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("TEST_MODE");
@@ -219,13 +219,13 @@ mod tests {
         // Clear production env
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("ENVIRONMENT");
-        
+
         // Set test mode
         std::env::set_var("TEST_MODE", "1");
-        
+
         // Should work in development
         assert!(is_test_mode());
-        
+
         // Cleanup
         std::env::remove_var("TEST_MODE");
     }
@@ -235,11 +235,11 @@ mod tests {
         // Test production violation detection
         std::env::set_var("RUST_ENV", "production");
         std::env::set_var("TEST_MODE", "1");
-        
+
         let validation = validate_test_mode_security();
         assert!(validation.is_err());
         assert!(validation.unwrap_err().iter().any(|issue| issue.contains("production")));
-        
+
         // Cleanup
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("TEST_MODE");
@@ -250,10 +250,10 @@ mod tests {
         // Clear production env
         std::env::remove_var("RUST_ENV");
         std::env::set_var("TEST_MODE", "1");
-        
+
         let result = if_test_mode(|| 42);
         assert_eq!(result, Some(42));
-        
+
         std::env::remove_var("TEST_MODE");
         let result = if_test_mode(|| 42);
         assert_eq!(result, None);

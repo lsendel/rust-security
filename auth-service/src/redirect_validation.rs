@@ -1,8 +1,8 @@
+use crate::AuthError;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::collections::HashSet;
 use url::Url;
-use crate::AuthError;
-use regex::Regex;
-use once_cell::sync::Lazy;
 
 /// Comprehensive redirect URI validation for OAuth2 security
 pub struct RedirectUriValidator {
@@ -25,22 +25,27 @@ pub struct RedirectUriValidator {
 // Suspicious patterns to detect in URIs
 static SUSPICIOUS_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     vec![
-        Regex::new(r"\.\.[\\/]").unwrap(), // Path traversal
-        Regex::new(r#"[<>"']"#).unwrap(),     // HTML/JS injection chars
-        Regex::new(r"javascript:").unwrap(), // JavaScript protocol
-        Regex::new(r"data:").unwrap(),       // Data protocol
-        Regex::new(r"vbscript:").unwrap(),   // VBScript protocol
-        Regex::new(r"file:").unwrap(),       // File protocol
+        Regex::new(r"\.\.[\\/]").unwrap(),         // Path traversal
+        Regex::new(r#"[<>"']"#).unwrap(),          // HTML/JS injection chars
+        Regex::new(r"javascript:").unwrap(),       // JavaScript protocol
+        Regex::new(r"data:").unwrap(),             // Data protocol
+        Regex::new(r"vbscript:").unwrap(),         // VBScript protocol
+        Regex::new(r"file:").unwrap(),             // File protocol
         Regex::new(r"\\x[0-9a-fA-F]{2}").unwrap(), // Hex encoded chars
-        Regex::new(r"%[0-9a-fA-F]{2}").unwrap(),     // URL encoded suspicious chars
+        Regex::new(r"%[0-9a-fA-F]{2}").unwrap(),   // URL encoded suspicious chars
     ]
 });
 
 static COMMON_TLDS: Lazy<HashSet<String>> = Lazy::new(|| {
-    ["com", "org", "net", "edu", "gov", "mil", "int", "io", "co", "uk", "de", "fr", "jp", "cn", "au", "ca", "br", "ru", "in", "mx", "es", "it", "nl", "se", "no", "dk", "fi", "pl", "be", "at", "ch", "cz", "hu", "pt", "ro", "gr", "bg", "hr", "sk", "si", "lt", "lv", "ee", "ie", "lu", "mt", "cy"]
-        .iter()
-        .map(|&s| s.to_string())
-        .collect()
+    [
+        "com", "org", "net", "edu", "gov", "mil", "int", "io", "co", "uk", "de", "fr", "jp", "cn",
+        "au", "ca", "br", "ru", "in", "mx", "es", "it", "nl", "se", "no", "dk", "fi", "pl", "be",
+        "at", "ch", "cz", "hu", "pt", "ro", "gr", "bg", "hr", "sk", "si", "lt", "lv", "ee", "ie",
+        "lu", "mt", "cy",
+    ]
+    .iter()
+    .map(|&s| s.to_string())
+    .collect()
 });
 
 impl RedirectUriValidator {
@@ -72,7 +77,11 @@ impl RedirectUriValidator {
     }
 
     /// Register allowed redirect URIs for a client
-    pub fn register_client_uris(&mut self, client_id: &str, uris: Vec<String>) -> Result<(), AuthError> {
+    pub fn register_client_uris(
+        &mut self,
+        client_id: &str,
+        uris: Vec<String>,
+    ) -> Result<(), AuthError> {
         let mut validated_uris = HashSet::new();
 
         for uri in uris {
@@ -88,11 +97,15 @@ impl RedirectUriValidator {
     }
 
     /// Comprehensive redirect URI validation
-    pub fn validate_redirect_uri(&self, client_id: &str, redirect_uri: &str) -> Result<(), AuthError> {
+    pub fn validate_redirect_uri(
+        &self,
+        client_id: &str,
+        redirect_uri: &str,
+    ) -> Result<(), AuthError> {
         // 1. Length validation
         if redirect_uri.len() > self.max_uri_length {
             return Err(AuthError::InvalidRequest {
-                reason: "Redirect URI exceeds maximum length".to_string()
+                reason: "Redirect URI exceeds maximum length".to_string(),
             });
         }
 
@@ -113,31 +126,32 @@ impl RedirectUriValidator {
         // Basic string-level path traversal guard prior to parsing (URL parsing may normalize dot segments)
         if uri.contains("/../") || uri.ends_with("/..") {
             return Err(AuthError::InvalidRequest {
-                reason: "Path traversal detected in redirect URI".to_string()
+                reason: "Path traversal detected in redirect URI".to_string(),
             });
         }
         // Parse URL
-        let parsed_url = Url::parse(uri)
-            .map_err(|_| AuthError::InvalidRequest { reason: "Invalid redirect URI format".to_string() })?;
+        let parsed_url = Url::parse(uri).map_err(|_| AuthError::InvalidRequest {
+            reason: "Invalid redirect URI format".to_string(),
+        })?;
 
         // Basic scheme presence; detailed scheme enforcement happens in security policies
         if parsed_url.scheme() != "https" && parsed_url.scheme() != "http" {
             return Err(AuthError::InvalidRequest {
-                reason: format!("Unsupported scheme: {}", parsed_url.scheme())
+                reason: format!("Unsupported scheme: {}", parsed_url.scheme()),
             });
         }
 
         // Validate host exists
         if parsed_url.host().is_none() {
             return Err(AuthError::InvalidRequest {
-                reason: "Redirect URI must have a valid host".to_string()
+                reason: "Redirect URI must have a valid host".to_string(),
             });
         }
 
         // Prevent fragment in redirect URI (OAuth2 security best practice)
         if parsed_url.fragment().is_some() {
             return Err(AuthError::InvalidRequest {
-                reason: "Redirect URI must not contain fragments".to_string()
+                reason: "Redirect URI must not contain fragments".to_string(),
             });
         }
 
@@ -145,14 +159,19 @@ impl RedirectUriValidator {
     }
 
     /// Validate against client's registered redirect URIs
-    fn validate_client_whitelist(&self, client_id: &str, redirect_uri: &str) -> Result<(), AuthError> {
-        let client_uris = self.client_redirect_uris.get(client_id)
-            .ok_or_else(|| AuthError::UnauthorizedClient { client_id: "Client not registered".to_string() })?;
+    fn validate_client_whitelist(
+        &self,
+        client_id: &str,
+        redirect_uri: &str,
+    ) -> Result<(), AuthError> {
+        let client_uris = self.client_redirect_uris.get(client_id).ok_or_else(|| {
+            AuthError::UnauthorizedClient { client_id: "Client not registered".to_string() }
+        })?;
 
         // Exact match required for security
         if !client_uris.contains(redirect_uri) {
             return Err(AuthError::InvalidRequest {
-                reason: "Redirect URI not registered for this client".to_string()
+                reason: "Redirect URI not registered for this client".to_string(),
             });
         }
 
@@ -169,7 +188,7 @@ impl RedirectUriValidator {
             if let Some(host) = parsed_url.host_str() {
                 if !self.is_localhost(host) {
                     return Err(AuthError::InvalidRequest {
-                        reason: "HTTPS required for redirect URIs in production".to_string()
+                        reason: "HTTPS required for redirect URIs in production".to_string(),
                     });
                 }
             }
@@ -179,21 +198,21 @@ impl RedirectUriValidator {
         if let Some(host) = parsed_url.host_str() {
             if self.is_ip_address(host) && !self.is_localhost(host) {
                 return Err(AuthError::InvalidRequest {
-                    reason: "IP addresses not allowed in redirect URIs".to_string()
+                    reason: "IP addresses not allowed in redirect URIs".to_string(),
                 });
             }
 
             // Check for blocked domains
             if self.is_blocked_domain(host) {
                 return Err(AuthError::InvalidRequest {
-                    reason: "Domain is on the blocklist".to_string()
+                    reason: "Domain is on the blocklist".to_string(),
                 });
             }
 
             // Validate TLD
             if !self.is_valid_tld(host) {
                 return Err(AuthError::InvalidRequest {
-                    reason: "Invalid or suspicious TLD".to_string()
+                    reason: "Invalid or suspicious TLD".to_string(),
                 });
             }
         }
@@ -202,7 +221,7 @@ impl RedirectUriValidator {
         for pattern in &self.suspicious_patterns {
             if pattern.is_match(redirect_uri) {
                 return Err(AuthError::InvalidRequest {
-                    reason: "Suspicious pattern detected in redirect URI".to_string()
+                    reason: "Suspicious pattern detected in redirect URI".to_string(),
                 });
             }
         }
@@ -211,14 +230,14 @@ impl RedirectUriValidator {
         let raw_path = parsed_url.path();
         if raw_path.contains("..") || raw_path.contains("//") {
             return Err(AuthError::InvalidRequest {
-                reason: "Path traversal detected in redirect URI".to_string()
+                reason: "Path traversal detected in redirect URI".to_string(),
             });
         }
 
         // Check for encoded attack attempts
         if self.contains_encoded_attacks(redirect_uri) {
             return Err(AuthError::InvalidRequest {
-                reason: "Encoded attack detected in redirect URI".to_string()
+                reason: "Encoded attack detected in redirect URI".to_string(),
             });
         }
 
@@ -246,7 +265,7 @@ impl RedirectUriValidator {
         if self.is_localhost(host) || self.is_ip_address(host) {
             return true;
         }
-        
+
         if let Some(tld) = host.split('.').last() {
             self.allowed_tlds.contains(&tld.to_lowercase())
         } else {
@@ -258,25 +277,23 @@ impl RedirectUriValidator {
     /// Check for encoded attack patterns
     fn contains_encoded_attacks(&self, uri: &str) -> bool {
         let decoded = urlencoding::decode(uri).unwrap_or_default();
-        
+
         // Check for double encoding
         let double_decoded = urlencoding::decode(&decoded).unwrap_or_default();
         if decoded != double_decoded {
             return true;
         }
-        
+
         // Check for dangerous decoded patterns
-        let dangerous_patterns = [
-            "<script", "javascript:", "vbscript:", "data:",
-            "file:", "..\\.", "../.", "\\x", 
-        ];
-        
+        let dangerous_patterns =
+            ["<script", "javascript:", "vbscript:", "data:", "file:", "..\\.", "../.", "\\x"];
+
         for pattern in &dangerous_patterns {
             if decoded.to_lowercase().contains(pattern) {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -294,7 +311,8 @@ impl RedirectUriValidator {
 /// Default redirect URI configurations for common clients
 impl Default for RedirectUriValidator {
     fn default() -> Self {
-        let mut validator = Self::new(std::env::var("ENVIRONMENT").unwrap_or_default() == "production");
+        let mut validator =
+            Self::new(std::env::var("ENVIRONMENT").unwrap_or_default() == "production");
 
         // Register default test client
         let _ = validator.register_client_uris(
@@ -302,7 +320,7 @@ impl Default for RedirectUriValidator {
             vec![
                 "https://example.com/callback".to_string(),
                 "http://localhost:3000/callback".to_string(),
-            ]
+            ],
         );
 
         validator
@@ -316,57 +334,62 @@ mod tests {
     #[test]
     fn test_valid_redirect_uri() {
         let mut validator = RedirectUriValidator::new(false);
-        validator.register_client_uris(
-            "test_client",
-            vec!["https://example.com/callback".to_string()]
-        ).unwrap();
+        validator
+            .register_client_uris("test_client", vec!["https://example.com/callback".to_string()])
+            .unwrap();
 
-        assert!(validator.validate_redirect_uri("test_client", "https://example.com/callback").is_ok());
+        assert!(validator
+            .validate_redirect_uri("test_client", "https://example.com/callback")
+            .is_ok());
     }
 
     #[test]
     fn test_unregistered_redirect_uri() {
         let mut validator = RedirectUriValidator::new(false);
-        validator.register_client_uris(
-            "test_client",
-            vec!["https://example.com/callback".to_string()]
-        ).unwrap();
+        validator
+            .register_client_uris("test_client", vec!["https://example.com/callback".to_string()])
+            .unwrap();
 
-        assert!(validator.validate_redirect_uri("test_client", "https://evil.com/callback").is_err());
+        assert!(validator
+            .validate_redirect_uri("test_client", "https://evil.com/callback")
+            .is_err());
     }
 
     #[test]
     fn test_fragment_rejection() {
         let mut validator = RedirectUriValidator::new(false);
-        validator.register_client_uris(
-            "test_client",
-            vec!["https://example.com/callback#fragment".to_string()]
-        ).unwrap_err(); // Should fail during registration
+        validator
+            .register_client_uris(
+                "test_client",
+                vec!["https://example.com/callback#fragment".to_string()],
+            )
+            .unwrap_err(); // Should fail during registration
     }
 
     #[test]
     fn test_https_enforcement() {
         let mut validator = RedirectUriValidator::new(true); // Production mode
-        let result = validator.register_client_uris(
-            "test_client",
-            vec!["http://example.com/callback".to_string()]
-        );
+        let result = validator
+            .register_client_uris("test_client", vec!["http://example.com/callback".to_string()]);
 
         // Should allow registration but fail validation
         if result.is_ok() {
-            assert!(validator.validate_redirect_uri("test_client", "http://example.com/callback").is_err());
+            assert!(validator
+                .validate_redirect_uri("test_client", "http://example.com/callback")
+                .is_err());
         }
     }
 
     #[test]
     fn test_localhost_exception() {
         let mut validator = RedirectUriValidator::new(true); // Production mode
-        validator.register_client_uris(
-            "test_client",
-            vec!["http://localhost:3000/callback".to_string()]
-        ).unwrap();
+        validator
+            .register_client_uris("test_client", vec!["http://localhost:3000/callback".to_string()])
+            .unwrap();
 
-        assert!(validator.validate_redirect_uri("test_client", "http://localhost:3000/callback").is_ok());
+        assert!(validator
+            .validate_redirect_uri("test_client", "http://localhost:3000/callback")
+            .is_ok());
     }
 
     #[test]
@@ -374,7 +397,7 @@ mod tests {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator.register_client_uris(
             "test_client",
-            vec!["https://example.com/../callback".to_string()]
+            vec!["https://example.com/../callback".to_string()],
         );
 
         assert!(result.is_err());
@@ -383,10 +406,8 @@ mod tests {
     #[test]
     fn test_ip_address_rejection() {
         let mut validator = RedirectUriValidator::new(false);
-        let result = validator.register_client_uris(
-            "test_client",
-            vec!["https://192.168.1.1/callback".to_string()]
-        );
+        let result = validator
+            .register_client_uris("test_client", vec!["https://192.168.1.1/callback".to_string()]);
 
         assert!(result.is_err());
     }
@@ -403,11 +424,9 @@ mod tests {
     fn test_blocked_domains() {
         let mut validator = RedirectUriValidator::new(false);
         validator.block_domain("evil.com");
-        
-        let result = validator.register_client_uris(
-            "test_client",
-            vec!["https://evil.com/callback".to_string()]
-        );
+
+        let result = validator
+            .register_client_uris("test_client", vec!["https://evil.com/callback".to_string()]);
         assert!(result.is_err());
     }
 
@@ -416,7 +435,7 @@ mod tests {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator.register_client_uris(
             "test_client",
-            vec!["https://example.badtld/callback".to_string()]
+            vec!["https://example.badtld/callback".to_string()],
         );
         assert!(result.is_err());
     }
@@ -424,10 +443,8 @@ mod tests {
     #[test]
     fn test_javascript_protocol_attack() {
         let mut validator = RedirectUriValidator::new(false);
-        let result = validator.register_client_uris(
-            "test_client",
-            vec!["javascript:alert('xss')".to_string()]
-        );
+        let result = validator
+            .register_client_uris("test_client", vec!["javascript:alert('xss')".to_string()]);
         assert!(result.is_err());
     }
 
@@ -436,7 +453,7 @@ mod tests {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator.register_client_uris(
             "test_client",
-            vec!["data:text/html,<script>alert('xss')</script>".to_string()]
+            vec!["data:text/html,<script>alert('xss')</script>".to_string()],
         );
         assert!(result.is_err());
     }
@@ -444,18 +461,19 @@ mod tests {
     #[test]
     fn test_encoded_attack_detection() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         // Test URL encoded script tag
         let result = validator.register_client_uris(
             "test_client",
-            vec!["https://example.com/callback?param=%3Cscript%3Ealert('xss')%3C/script%3E".to_string()]
+            vec!["https://example.com/callback?param=%3Cscript%3Ealert('xss')%3C/script%3E"
+                .to_string()],
         );
         assert!(result.is_err());
-        
+
         // Test double encoding
         let result = validator.register_client_uris(
             "test_client2",
-            vec!["https://example.com/callback?param=%25%33%43script%25%33%45".to_string()]
+            vec!["https://example.com/callback?param=%25%33%43script%25%33%45".to_string()],
         );
         assert!(result.is_err());
     }
@@ -465,7 +483,7 @@ mod tests {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator.register_client_uris(
             "test_client",
-            vec!["https://example.com/callback\\x3cscript\\x3e".to_string()]
+            vec!["https://example.com/callback\\x3cscript\\x3e".to_string()],
         );
         assert!(result.is_err());
     }
@@ -473,19 +491,17 @@ mod tests {
     #[test]
     fn test_path_injection_variants() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         let attack_paths = vec![
             "https://example.com/..\\..\\etc\\passwd",
             "https://example.com/callback/../../../etc/passwd",
             "https://example.com/callback/..%2F..%2F..%2Fetc%2Fpasswd",
             "https://example.com/callback/..%252F..%252F..%252Fetc%252Fpasswd",
         ];
-        
+
         for attack_path in attack_paths {
-            let result = validator.register_client_uris(
-                "test_client",
-                vec![attack_path.to_string()]
-            );
+            let result =
+                validator.register_client_uris("test_client", vec![attack_path.to_string()]);
             assert!(result.is_err(), "Should reject path: {}", attack_path);
         }
     }
@@ -493,13 +509,12 @@ mod tests {
     #[test]
     fn test_open_redirect_attempts() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         // Register legitimate URI first
-        validator.register_client_uris(
-            "test_client",
-            vec!["https://example.com/callback".to_string()]
-        ).unwrap();
-        
+        validator
+            .register_client_uris("test_client", vec!["https://example.com/callback".to_string()])
+            .unwrap();
+
         // Test various open redirect attempts
         let redirect_attempts = vec![
             "https://example.com/callback?redirect=https://evil.com",
@@ -507,7 +522,7 @@ mod tests {
             "https://example.com@evil.com/callback", // This should be parsed as evil.com domain
             "https://example.com.evil.com/callback",
         ];
-        
+
         for attempt in redirect_attempts {
             let result = validator.validate_redirect_uri("test_client", attempt);
             assert!(result.is_err(), "Should reject redirect attempt: {}", attempt);
@@ -517,19 +532,16 @@ mod tests {
     #[test]
     fn test_homograph_attacks() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         // Test domain spoofing with similar-looking characters
         let spoofed_domains = vec![
             "https://еxample.com/callback", // Cyrillic 'е' instead of 'e'
-            "https://example.co‍m/callback",   // Hidden Unicode character
-            "https://goog1e.com/callback",   // Visual similarity
+            "https://example.co‍m/callback", // Hidden Unicode character
+            "https://goog1e.com/callback",  // Visual similarity
         ];
-        
+
         for domain in spoofed_domains {
-            let result = validator.register_client_uris(
-                "test_client",
-                vec![domain.to_string()]
-            );
+            let result = validator.register_client_uris("test_client", vec![domain.to_string()]);
             // These might pass basic validation but should be caught by TLD validation
             // or manual review processes
             println!("Testing spoofed domain: {} - Result: {:?}", domain, result);
@@ -539,13 +551,13 @@ mod tests {
     #[test]
     fn test_punycode_domains() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         // Test punycode domain (legitimate internationalized domain)
         let result = validator.register_client_uris(
             "test_client",
-            vec!["https://xn--fsq.com/callback".to_string()] // Punycode for Chinese domain
+            vec!["https://xn--fsq.com/callback".to_string()], // Punycode for Chinese domain
         );
-        
+
         // This should pass if the TLD is valid
         println!("Punycode domain result: {:?}", result);
     }
@@ -553,22 +565,19 @@ mod tests {
     #[test]
     fn test_port_variations() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         // Test various port configurations
         let port_tests = vec![
-            ("https://example.com:443/callback", true),  // Standard HTTPS port
+            ("https://example.com:443/callback", true), // Standard HTTPS port
             ("https://example.com:8443/callback", true), // Common alt HTTPS port
-            ("http://localhost:3000/callback", true),    // Development
-            ("https://example.com:22/callback", true),   // SSH port (should allow but log)
-            ("https://example.com:80/callback", true),   // HTTP port on HTTPS (should work)
+            ("http://localhost:3000/callback", true),   // Development
+            ("https://example.com:22/callback", true),  // SSH port (should allow but log)
+            ("https://example.com:80/callback", true),  // HTTP port on HTTPS (should work)
         ];
-        
+
         for (uri, should_pass) in port_tests {
-            let result = validator.register_client_uris(
-                "test_client",
-                vec![uri.to_string()]
-            );
-            
+            let result = validator.register_client_uris("test_client", vec![uri.to_string()]);
+
             if should_pass {
                 assert!(result.is_ok(), "Should allow URI: {}", uri);
             } else {
@@ -580,18 +589,15 @@ mod tests {
     #[test]
     fn test_url_shortener_blocking() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         let shortener_domains = vec![
             "https://bit.ly/callback",
             "https://tinyurl.com/callback",
             "https://t.co/callback",
         ];
-        
+
         for domain in shortener_domains {
-            let result = validator.register_client_uris(
-                "test_client",
-                vec![domain.to_string()]
-            );
+            let result = validator.register_client_uris("test_client", vec![domain.to_string()]);
             assert!(result.is_err(), "Should block URL shortener: {}", domain);
         }
     }
@@ -601,19 +607,18 @@ mod tests {
 impl RedirectUriValidator {
     /// Load blocked domains from environment
     pub fn from_env() -> Self {
-        let enforce_https = std::env::var("OAUTH_ENFORCE_HTTPS")
-            .unwrap_or_else(|_| "true".to_string())
-            == "true";
-            
+        let enforce_https =
+            std::env::var("OAUTH_ENFORCE_HTTPS").unwrap_or_else(|_| "true".to_string()) == "true";
+
         let mut validator = Self::new(enforce_https);
-        
+
         // Load additional blocked domains from environment
         if let Ok(blocked) = std::env::var("OAUTH_BLOCKED_DOMAINS") {
             for domain in blocked.split(',') {
                 validator.block_domain(domain.trim());
             }
         }
-        
+
         validator
     }
 }
@@ -629,17 +634,15 @@ mod integration_tests {
         // Simulate production environment
         std::env::set_var("OAUTH_ENFORCE_HTTPS", "true");
         std::env::set_var("OAUTH_BLOCKED_DOMAINS", "evil.com,malicious.org,spam.net");
-        
+
         let validator = RedirectUriValidator::from_env();
-        
+
         // Test that HTTPS is enforced
         let mut test_validator = validator;
-        let result = test_validator.register_client_uris(
-            "prod_client",
-            vec!["http://example.com/callback".to_string()]
-        );
+        let result = test_validator
+            .register_client_uris("prod_client", vec!["http://example.com/callback".to_string()]);
         assert!(result.is_err());
-        
+
         // Clean up
         std::env::remove_var("OAUTH_ENFORCE_HTTPS");
         std::env::remove_var("OAUTH_BLOCKED_DOMAINS");
@@ -648,43 +651,34 @@ mod integration_tests {
     #[test]
     fn test_comprehensive_attack_suite() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         // Comprehensive list of attack vectors
         let attack_vectors = vec![
             // XSS attempts
             "https://example.com/callback?param=<script>alert('xss')</script>",
             "javascript:alert('xss')",
             "vbscript:msgbox('xss')",
-            
             // Path traversal
             "https://example.com/../../../etc/passwd",
             "https://example.com/..\\..\\..\\etc\\passwd",
-            
             // Protocol manipulation
             "file:///etc/passwd",
             "data:text/html,<script>alert('xss')</script>",
-            
             // Encoding bypasses
             "https://example.com/callback%2e%2e%2f%2e%2e%2f",
             "https://example.com/callback%252e%252e%252f",
-            
             // Domain spoofing
             "https://examp1e.com/callback", // 1 instead of l
             "https://example.c0m/callback", // 0 instead of o
-            
             // IP address attempts
             "https://192.168.1.1/callback",
             "https://[::1]/callback",
-            
             // Fragment injection
             "https://example.com/callback#javascript:alert('xss')",
         ];
-        
+
         for attack in attack_vectors {
-            let result = validator.register_client_uris(
-                "attack_client",
-                vec![attack.to_string()]
-            );
+            let result = validator.register_client_uris("attack_client", vec![attack.to_string()]);
             assert!(result.is_err(), "Should block attack vector: {}", attack);
         }
     }
@@ -692,21 +686,18 @@ mod integration_tests {
     #[test]
     fn test_legitimate_use_cases() {
         let mut validator = RedirectUriValidator::new(false);
-        
+
         let legitimate_uris = vec![
             "https://myapp.com/oauth/callback",
-            "https://subdomain.myapp.com/auth/return", 
+            "https://subdomain.myapp.com/auth/return",
             "https://api.service.io/v1/auth/callback",
-            "http://localhost:3000/callback", // Dev environment
+            "http://localhost:3000/callback",    // Dev environment
             "http://127.0.0.1:8080/auth/return", // Local dev
             "https://myapp.com:8443/secure/callback", // Custom HTTPS port
         ];
-        
+
         for uri in legitimate_uris {
-            let result = validator.register_client_uris(
-                "legit_client",
-                vec![uri.to_string()]
-            );
+            let result = validator.register_client_uris("legit_client", vec![uri.to_string()]);
             assert!(result.is_ok(), "Should allow legitimate URI: {}", uri);
         }
     }

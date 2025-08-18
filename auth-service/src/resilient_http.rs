@@ -1,9 +1,12 @@
-use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, TimeoutConfig, RetryConfig, RetryBackoff};
+use crate::circuit_breaker::{
+    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, RetryBackoff, RetryConfig,
+    TimeoutConfig,
+};
 use crate::errors::AuthError;
-use std::time::Duration;
+use bytes::Bytes;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
-use bytes::Bytes;
+use std::time::Duration;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ResilientHttpConfig {
@@ -68,43 +71,23 @@ impl ResilientHttpClient {
 
         let circuit_breaker = CircuitBreaker::new(name, config.circuit_breaker.clone());
 
-        Ok(Self {
-            client,
-            circuit_breaker,
-            config,
-        })
+        Ok(Self { client, circuit_breaker, config })
     }
 
     pub fn get(&self, url: &str) -> ResilientRequestBuilder {
-        ResilientRequestBuilder::new(
-            self.client.get(url),
-            &self.circuit_breaker,
-            &self.config,
-        )
+        ResilientRequestBuilder::new(self.client.get(url), &self.circuit_breaker, &self.config)
     }
 
     pub fn post(&self, url: &str) -> ResilientRequestBuilder {
-        ResilientRequestBuilder::new(
-            self.client.post(url),
-            &self.circuit_breaker,
-            &self.config,
-        )
+        ResilientRequestBuilder::new(self.client.post(url), &self.circuit_breaker, &self.config)
     }
 
     pub fn put(&self, url: &str) -> ResilientRequestBuilder {
-        ResilientRequestBuilder::new(
-            self.client.put(url),
-            &self.circuit_breaker,
-            &self.config,
-        )
+        ResilientRequestBuilder::new(self.client.put(url), &self.circuit_breaker, &self.config)
     }
 
     pub fn delete(&self, url: &str) -> ResilientRequestBuilder {
-        ResilientRequestBuilder::new(
-            self.client.delete(url),
-            &self.circuit_breaker,
-            &self.config,
-        )
+        ResilientRequestBuilder::new(self.client.delete(url), &self.circuit_breaker, &self.config)
     }
 
     pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
@@ -124,11 +107,7 @@ impl ResilientRequestBuilder {
         circuit_breaker: &CircuitBreaker,
         config: &ResilientHttpConfig,
     ) -> Self {
-        Self {
-            request_builder,
-            circuit_breaker: circuit_breaker.clone(),
-            config: config.clone(),
-        }
+        Self { request_builder, circuit_breaker: circuit_breaker.clone(), config: config.clone() }
     }
 
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
@@ -179,14 +158,12 @@ impl ResilientRequestBuilder {
 
         loop {
             // Clone request builder for retry attempts
-            let request = self.request_builder.try_clone()
-                .ok_or_else(|| AuthError::ServiceUnavailable {
+            let request =
+                self.request_builder.try_clone().ok_or_else(|| AuthError::ServiceUnavailable {
                     reason: "Cannot retry request with streaming body".to_string(),
                 })?;
 
-            let result = self.circuit_breaker.call(async move {
-                request.send().await
-            }).await;
+            let result = self.circuit_breaker.call(async move { request.send().await }).await;
 
             match result {
                 Ok(response) => {
@@ -266,10 +243,14 @@ impl ResilientResponse {
 
     pub fn error_for_status(self) -> Result<Self, AuthError> {
         let status = self.response.status();
-        
+
         if status.is_client_error() || status.is_server_error() {
             Err(AuthError::ServiceUnavailable {
-                reason: format!("HTTP error {}: {}", status.as_u16(), status.canonical_reason().unwrap_or("Unknown")),
+                reason: format!(
+                    "HTTP error {}: {}",
+                    status.as_u16(),
+                    status.canonical_reason().unwrap_or("Unknown")
+                ),
             })
         } else {
             Ok(self)

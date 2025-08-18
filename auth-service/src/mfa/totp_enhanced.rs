@@ -294,7 +294,7 @@ impl EnhancedTotpGenerator {
 
     pub fn security_score(&self) -> u8 {
         let mut score = self.algorithm_strength_score() * 2;
-        
+
         // Digits contribution
         score += match self.config.digits {
             6 => 1,
@@ -342,10 +342,10 @@ mod tests {
         for config in configs {
             let generator = EnhancedTotpGenerator::new(config);
             let code = generator.generate_code(&secret, Some(timestamp)).unwrap();
-            
+
             assert_eq!(code.len(), 6);
             assert!(code.chars().all(|c| c.is_ascii_digit()));
-            
+
             // Verify the code
             assert!(generator.verify_code(&secret, &code, Some(timestamp)).unwrap());
         }
@@ -360,7 +360,7 @@ mod tests {
             let config = EnhancedTotpConfig::new(TotpAlgorithm::SHA256, digits, 30, 1, "test".to_string()).unwrap();
             let generator = EnhancedTotpGenerator::new(config);
             let code = generator.generate_code(&secret, Some(timestamp)).unwrap();
-            
+
             assert_eq!(code.len(), digits as usize);
             assert!(generator.verify_code(&secret, &code, Some(timestamp)).unwrap());
         }
@@ -370,19 +370,19 @@ mod tests {
     fn test_time_skew_tolerance() {
         let secret = EnhancedTotpGenerator::generate_secret();
         let base_time = 1234567890;
-        
+
         let config = EnhancedTotpConfig::new(TotpAlgorithm::SHA256, 6, 30, 2, "test".to_string()).unwrap();
         let generator = EnhancedTotpGenerator::new(config);
-        
+
         let code = generator.generate_code(&secret, Some(base_time)).unwrap();
-        
+
         // Should work within tolerance
         assert!(generator.verify_code(&secret, &code, Some(base_time)).unwrap());
         assert!(generator.verify_code(&secret, &code, Some(base_time + 30)).unwrap()); // +1 period
         assert!(generator.verify_code(&secret, &code, Some(base_time + 60)).unwrap()); // +2 periods
         assert!(generator.verify_code(&secret, &code, Some(base_time - 30)).unwrap()); // -1 period
         assert!(generator.verify_code(&secret, &code, Some(base_time - 60)).unwrap()); // -2 periods
-        
+
         // Should fail outside tolerance
         assert!(!generator.verify_code(&secret, &code, Some(base_time + 90)).unwrap()); // +3 periods
         assert!(!generator.verify_code(&secret, &code, Some(base_time - 90)).unwrap()); // -3 periods
@@ -391,17 +391,17 @@ mod tests {
     #[test]
     fn test_different_periods() {
         let secret = EnhancedTotpGenerator::generate_secret();
-        
+
         for period in [15, 30, 60] {
             let config = EnhancedTotpConfig::new(TotpAlgorithm::SHA256, 6, period, 1, "test".to_string()).unwrap();
             let generator = EnhancedTotpGenerator::new(config);
-            
+
             let code1 = generator.generate_code(&secret, Some(1000)).unwrap();
             let code2 = generator.generate_code(&secret, Some(1000 + period)).unwrap();
-            
+
             // Codes should be different across period boundaries
             assert_ne!(code1, code2);
-            
+
             // But same within the same period
             let code3 = generator.generate_code(&secret, Some(1000 + period / 2)).unwrap();
             assert_eq!(code1, code3);
@@ -413,9 +413,9 @@ mod tests {
         let config = EnhancedTotpConfig::new(TotpAlgorithm::SHA256, 8, 15, 0, "MyApp".to_string()).unwrap();
         let secret = EnhancedTotpGenerator::generate_secret();
         let secret_base32 = BASE32.encode(&secret);
-        
+
         let url = config.generate_otpauth_url("user@example.com", &secret_base32);
-        
+
         assert!(url.starts_with("otpauth://totp/"));
         assert!(url.contains("MyApp"));
         assert!(url.contains("user@example.com"));
@@ -430,11 +430,11 @@ mod tests {
         let low_security = EnhancedTotpGenerator::new(
             EnhancedTotpConfig::new(TotpAlgorithm::SHA1, 6, 60, 2, "test".to_string()).unwrap()
         );
-        
+
         let high_security = EnhancedTotpGenerator::new(
             EnhancedTotpConfig::new(TotpAlgorithm::SHA512, 8, 15, 0, "test".to_string()).unwrap()
         );
-        
+
         assert!(high_security.security_score() > low_security.security_score());
     }
 
@@ -443,19 +443,19 @@ mod tests {
         let secret = EnhancedTotpGenerator::generate_secret();
         let generator = EnhancedTotpGenerator::with_default_config();
         let timestamp = 1234567890;
-        
+
         let correct_code = generator.generate_code(&secret, Some(timestamp)).unwrap();
         let wrong_code = "000000";
-        
+
         // Both should take similar time (constant time comparison)
         let start = std::time::Instant::now();
         let _result1 = generator.verify_code(&secret, &correct_code, Some(timestamp));
         let time1 = start.elapsed();
-        
+
         let start = std::time::Instant::now();
         let _result2 = generator.verify_code(&secret, wrong_code, Some(timestamp));
         let time2 = start.elapsed();
-        
+
         // This is a rough test - in practice, the times should be very similar
         // due to constant-time comparison
         assert!(time1.as_nanos() > 0);

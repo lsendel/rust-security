@@ -503,9 +503,9 @@ mod tests {
     async fn test_into_response() {
         let error = MfaError::invalid_input("code", "must be numeric");
         let response = error.into_response();
-        
+
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        
+
         // In a real test, you'd deserialize the response body and check the structure
     }
 }

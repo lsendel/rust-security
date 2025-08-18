@@ -7,7 +7,7 @@ impl RegressionTestSuite {
     /// Test complete end-to-end flow
     pub async fn test_end_to_end_flow(&mut self) {
         println!("\n🔄 Integration & End-to-End Tests");
-        
+
         self.run_test("End-to-End Flow", || async {
             // Step 1: Get OAuth token
             let token_response = self.client
@@ -114,7 +114,7 @@ impl RegressionTestSuite {
             for i in 0..concurrent_requests {
                 let client = self.client.clone();
                 let auth_url = self.auth_base_url.clone();
-                
+
                 let handle = tokio::spawn(async move {
                     let response = client
                         .post(&format!("{}/oauth/token", auth_url))
@@ -129,7 +129,7 @@ impl RegressionTestSuite {
                         Err(e) => Err(format!("Request {} failed: {}", i, e))
                     }
                 });
-                
+
                 handles.push(handle);
             }
 
@@ -181,11 +181,19 @@ impl RegressionTestSuite {
                 // Invalid method
                 (format!("{}/oauth/token", self.auth_base_url), "GET", None, 405),
                 // Invalid JSON
-                (format!("{}/oauth/introspect", self.auth_base_url), "POST", 
-                 Some("{invalid json}"), 400),
+                (
+                    format!("{}/oauth/introspect", self.auth_base_url),
+                    "POST",
+                    Some("{invalid json}"),
+                    400,
+                ),
                 // Missing required fields
-                (format!("{}/oauth/token", self.auth_base_url), "POST", 
-                 Some("grant_type=client_credentials"), 400),
+                (
+                    format!("{}/oauth/token", self.auth_base_url),
+                    "POST",
+                    Some("grant_type=client_credentials"),
+                    400,
+                ),
             ];
 
             let mut error_results = Vec::new();
@@ -196,8 +204,7 @@ impl RegressionTestSuite {
                     "POST" => {
                         let mut req = self.client.post(&url);
                         if let Some(body_content) = body {
-                            req = req.header("Content-Type", "application/json")
-                                    .body(body_content);
+                            req = req.header("Content-Type", "application/json").body(body_content);
                         }
                         req
                     }
@@ -206,7 +213,7 @@ impl RegressionTestSuite {
 
                 let response = request.send().await?;
                 let actual_status = response.status().as_u16();
-                
+
                 error_results.push(json!({
                     "url": url,
                     "method": method,
@@ -216,14 +223,15 @@ impl RegressionTestSuite {
                 }));
             }
 
-            let correct_errors = error_results.iter()
-                .filter(|r| r["correct"].as_bool().unwrap_or(false))
-                .count();
+            let correct_errors =
+                error_results.iter().filter(|r| r["correct"].as_bool().unwrap_or(false)).count();
 
             let error_handling_rate = (correct_errors as f64 / error_results.len() as f64) * 100.0;
 
             if error_handling_rate < 75.0 {
-                return Err(format!("Error handling rate too low: {:.1}%", error_handling_rate).into());
+                return Err(
+                    format!("Error handling rate too low: {:.1}%", error_handling_rate).into()
+                );
             }
 
             Ok(Some(json!({
@@ -232,7 +240,8 @@ impl RegressionTestSuite {
                 "error_handling_rate": error_handling_rate,
                 "results": error_results
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test failover scenarios
@@ -243,7 +252,8 @@ impl RegressionTestSuite {
 
             // Test auth service resilience
             let auth_start = Instant::now();
-            let auth_response = self.client
+            let auth_response = self
+                .client
                 .get(&format!("{}/health", self.auth_base_url))
                 .timeout(Duration::from_secs(5))
                 .send()
@@ -269,7 +279,8 @@ impl RegressionTestSuite {
 
             // Test policy service resilience
             let policy_start = Instant::now();
-            let policy_response = self.client
+            let policy_response = self
+                .client
                 .get(&format!("{}/health", self.policy_base_url))
                 .timeout(Duration::from_secs(5))
                 .send()
@@ -293,7 +304,8 @@ impl RegressionTestSuite {
                 }
             }
 
-            let available_services = resilience_results.iter()
+            let available_services = resilience_results
+                .iter()
                 .filter(|r| r["available"].as_bool().unwrap_or(false))
                 .count();
 
@@ -307,6 +319,7 @@ impl RegressionTestSuite {
                 "available_services": available_services,
                 "resilience_results": resilience_results
             })))
-        }).await;
+        })
+        .await;
     }
 }

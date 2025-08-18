@@ -13,8 +13,14 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["read".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -24,9 +30,7 @@ async fn spawn_app() -> String {
 async fn openid_metadata_and_jwks() {
     let base = spawn_app().await;
 
-    let res = reqwest::get(format!("{}/.well-known/openid-configuration", base))
-        .await
-        .unwrap();
+    let res = reqwest::get(format!("{}/.well-known/openid-configuration", base)).await.unwrap();
     assert!(res.status().is_success());
     let body: serde_json::Value = res.json().await.unwrap();
     assert!(body.get("issuer").is_some());

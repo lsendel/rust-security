@@ -1,5 +1,5 @@
 //! SOAR Case Management System
-//! 
+//!
 //! This module provides comprehensive case management capabilities including:
 //! - Automated case creation from alerts
 //! - Case lifecycle management
@@ -8,52 +8,52 @@
 //! - Collaboration and communication tools
 //! - Reporting and analytics
 
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use crate::soar_core::*;
-use crate::security_monitoring::{SecurityAlert, SecurityAlertType, AlertSeverity};
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity, SecurityLogger};
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres, Row};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, error, info, warn, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 /// Comprehensive case management system
 pub struct CaseManagementSystem {
     /// System configuration
     config: Arc<RwLock<CaseManagementConfig>>,
-    
+
     /// Active cases in memory cache
     active_cases: Arc<DashMap<String, SecurityCase>>,
-    
+
     /// Case templates
     case_templates: Arc<RwLock<HashMap<String, CaseTemplate>>>,
-    
+
     /// SLA tracker
     sla_tracker: Arc<SlaTracker>,
-    
+
     /// Evidence manager
     evidence_manager: Arc<EvidenceManager>,
-    
+
     /// Workflow integration
     workflow_client: Option<Arc<dyn WorkflowClient + Send + Sync>>,
-    
+
     /// Database connection pool
     db_pool: Arc<Pool<Postgres>>,
-    
+
     /// Case metrics
     metrics: Arc<Mutex<CaseManagementMetrics>>,
-    
+
     /// Notification system
     notification_system: Arc<CaseNotificationSystem>,
-    
+
     /// Collaboration manager
     collaboration_manager: Arc<CollaborationManager>,
-    
+
     /// Event publisher
     event_publisher: Option<tokio::sync::mpsc::Sender<SoarEvent>>,
 }
@@ -63,19 +63,19 @@ pub struct CaseManagementSystem {
 pub struct EnhancedCaseTemplate {
     /// Base template
     pub base_template: CaseTemplate,
-    
+
     /// Automation rules for case creation
     pub automation_rules: Vec<CaseAutomationRule>,
-    
+
     /// Assignment rules
     pub assignment_rules: Vec<AssignmentRule>,
-    
+
     /// Escalation policies
     pub escalation_policies: Vec<CaseEscalationPolicy>,
-    
+
     /// Communication templates
     pub communication_templates: Vec<CommunicationTemplate>,
-    
+
     /// Quality assurance checklist
     pub qa_checklist: Vec<QualityCheckItem>,
 }
@@ -85,19 +85,19 @@ pub struct EnhancedCaseTemplate {
 pub struct CaseAutomationRule {
     /// Rule ID
     pub id: String,
-    
+
     /// Rule name
     pub name: String,
-    
+
     /// Trigger conditions
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Actions to take
     pub actions: Vec<AutomationAction>,
-    
+
     /// Rule priority
     pub priority: u8,
-    
+
     /// Whether rule is active
     pub active: bool,
 }
@@ -107,13 +107,13 @@ pub struct CaseAutomationRule {
 pub struct AutomationAction {
     /// Action type
     pub action_type: AutomationActionType,
-    
+
     /// Action parameters
     pub parameters: HashMap<String, serde_json::Value>,
-    
+
     /// Delay before execution
     pub delay_minutes: u32,
-    
+
     /// Conditions for execution
     pub execution_conditions: Vec<TriggerCondition>,
 }
@@ -140,19 +140,19 @@ pub enum AutomationActionType {
 pub struct AssignmentRule {
     /// Rule ID
     pub id: String,
-    
+
     /// Rule name
     pub name: String,
-    
+
     /// Conditions for assignment
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Assignment target
     pub assignment_target: AssignmentTarget,
-    
+
     /// Rule weight for conflict resolution
     pub weight: f64,
-    
+
     /// Time constraints
     pub time_constraints: Option<TimeConstraints>,
 }
@@ -165,10 +165,7 @@ pub enum AssignmentTarget {
     Role(String),
     RoundRobin(Vec<String>),
     LeastLoaded(Vec<String>),
-    SkillBased {
-        required_skills: Vec<String>,
-        candidates: Vec<String>,
-    },
+    SkillBased { required_skills: Vec<String>, candidates: Vec<String> },
     Custom(String),
 }
 
@@ -177,19 +174,19 @@ pub enum AssignmentTarget {
 pub struct CaseEscalationPolicy {
     /// Policy ID
     pub id: String,
-    
+
     /// Policy name
     pub name: String,
-    
+
     /// Escalation triggers
     pub triggers: Vec<EscalationTrigger>,
-    
+
     /// Escalation levels
     pub escalation_levels: Vec<CaseEscalationLevel>,
-    
+
     /// Maximum escalations
     pub max_escalations: u32,
-    
+
     /// Cooldown period between escalations
     pub cooldown_minutes: u32,
 }
@@ -199,13 +196,13 @@ pub struct CaseEscalationPolicy {
 pub struct EscalationTrigger {
     /// Trigger type
     pub trigger_type: EscalationTriggerType,
-    
+
     /// Trigger conditions
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Threshold values
     pub threshold: Option<serde_json::Value>,
-    
+
     /// Time-based triggers
     pub time_based: Option<TimeBased>,
 }
@@ -227,10 +224,10 @@ pub enum EscalationTriggerType {
 pub struct TimeBased {
     /// Duration after which to trigger
     pub duration_minutes: u32,
-    
+
     /// Reference point for timing
     pub reference_point: TimeReference,
-    
+
     /// Business hours consideration
     pub business_hours_only: bool,
 }
@@ -250,16 +247,16 @@ pub enum TimeReference {
 pub struct CaseEscalationLevel {
     /// Level identifier
     pub level: u32,
-    
+
     /// Level name
     pub name: String,
-    
+
     /// Escalation targets
     pub targets: Vec<EscalationTarget>,
-    
+
     /// Actions to take at this level
     pub actions: Vec<EscalationAction>,
-    
+
     /// Delay before next level
     pub next_level_delay_minutes: u32,
 }
@@ -269,10 +266,10 @@ pub struct CaseEscalationLevel {
 pub struct EscalationAction {
     /// Action type
     pub action_type: EscalationActionType,
-    
+
     /// Action parameters
     pub parameters: HashMap<String, serde_json::Value>,
-    
+
     /// Whether action blocks further escalation
     pub blocking: bool,
 }
@@ -294,22 +291,22 @@ pub enum EscalationActionType {
 pub struct CommunicationTemplate {
     /// Template ID
     pub id: String,
-    
+
     /// Template name
     pub name: String,
-    
+
     /// Template type
     pub template_type: CommunicationTemplateType,
-    
+
     /// Subject template
     pub subject_template: String,
-    
+
     /// Body template
     pub body_template: String,
-    
+
     /// Recipients
     pub recipients: Vec<RecipientRule>,
-    
+
     /// Trigger conditions
     pub triggers: Vec<TriggerCondition>,
 }
@@ -330,10 +327,10 @@ pub enum CommunicationTemplateType {
 pub struct RecipientRule {
     /// Recipient type
     pub recipient_type: RecipientType,
-    
+
     /// Recipient identifier
     pub identifier: String,
-    
+
     /// Conditions for inclusion
     pub conditions: Vec<TriggerCondition>,
 }
@@ -355,22 +352,22 @@ pub enum RecipientType {
 pub struct QualityCheckItem {
     /// Check ID
     pub id: String,
-    
+
     /// Check name
     pub name: String,
-    
+
     /// Check description
     pub description: String,
-    
+
     /// Check type
     pub check_type: QualityCheckType,
-    
+
     /// When to perform this check
     pub trigger_phase: CasePhase,
-    
+
     /// Whether check is mandatory
     pub mandatory: bool,
-    
+
     /// Check criteria
     pub criteria: Vec<QualityCriterion>,
 }
@@ -398,13 +395,13 @@ pub enum CasePhase {
 pub struct QualityCriterion {
     /// Criterion name
     pub name: String,
-    
+
     /// Expected value or condition
     pub expected: serde_json::Value,
-    
+
     /// Weight in overall quality score
     pub weight: f64,
-    
+
     /// Whether criterion is critical
     pub critical: bool,
 }
@@ -413,16 +410,16 @@ pub struct QualityCriterion {
 pub struct EvidenceManager {
     /// Evidence storage configuration
     storage_config: EvidenceStorageConfig,
-    
+
     /// Active evidence items
     evidence_items: Arc<DashMap<String, Evidence>>,
-    
+
     /// Chain of custody tracking
     custody_chains: Arc<DashMap<String, Vec<CustodyEntry>>>,
-    
+
     /// Evidence integrity checker
     integrity_checker: Arc<IntegrityChecker>,
-    
+
     /// Storage backends
     storage_backends: HashMap<String, Box<dyn EvidenceStorage + Send + Sync>>,
 }
@@ -432,16 +429,16 @@ pub struct EvidenceManager {
 pub struct EvidenceStorageConfig {
     /// Primary storage backend
     pub primary_backend: String,
-    
+
     /// Backup storage backends
     pub backup_backends: Vec<String>,
-    
+
     /// Encryption settings
     pub encryption_config: EncryptionConfig,
-    
+
     /// Retention policies
     pub retention_policies: Vec<RetentionPolicy>,
-    
+
     /// Access control settings
     pub access_control: EvidenceAccessControl,
 }
@@ -451,10 +448,10 @@ pub struct EvidenceStorageConfig {
 pub struct EncryptionConfig {
     /// Encryption algorithm
     pub algorithm: EncryptionAlgorithm,
-    
+
     /// Key management settings
     pub key_management: KeyManagementConfig,
-    
+
     /// Integrity verification
     pub integrity_verification: IntegrityMethod,
 }
@@ -472,10 +469,10 @@ pub enum EncryptionAlgorithm {
 pub struct KeyManagementConfig {
     /// Key derivation method
     pub derivation_method: KeyDerivationMethod,
-    
+
     /// Key rotation policy
     pub rotation_policy: KeyRotationPolicy,
-    
+
     /// Key escrow settings
     pub escrow_settings: Option<KeyEscrowSettings>,
 }
@@ -494,10 +491,10 @@ pub enum KeyDerivationMethod {
 pub struct KeyRotationPolicy {
     /// Rotation frequency
     pub frequency: KeyRotationFrequency,
-    
+
     /// Automatic rotation
     pub automatic: bool,
-    
+
     /// Rotation triggers
     pub triggers: Vec<RotationTrigger>,
 }
@@ -529,10 +526,10 @@ pub enum RotationTrigger {
 pub struct KeyEscrowSettings {
     /// Escrow provider
     pub provider: String,
-    
+
     /// Recovery threshold
     pub recovery_threshold: u32,
-    
+
     /// Authorized recovery agents
     pub recovery_agents: Vec<String>,
 }
@@ -552,19 +549,19 @@ pub enum IntegrityMethod {
 pub struct RetentionPolicy {
     /// Policy ID
     pub id: String,
-    
+
     /// Policy name
     pub name: String,
-    
+
     /// Evidence types covered
     pub evidence_types: Vec<EvidenceType>,
-    
+
     /// Retention duration
     pub retention_duration: RetentionDuration,
-    
+
     /// Disposal method
     pub disposal_method: DisposalMethod,
-    
+
     /// Legal hold handling
     pub legal_hold_handling: LegalHoldHandling,
 }
@@ -604,13 +601,13 @@ pub enum LegalHoldHandling {
 pub struct EvidenceAccessControl {
     /// Default access level
     pub default_access: AccessLevel,
-    
+
     /// Role-based access rules
     pub role_access: HashMap<String, AccessLevel>,
-    
+
     /// User-specific access rules
     pub user_access: HashMap<String, AccessLevel>,
-    
+
     /// Access logging
     pub access_logging: AccessLoggingConfig,
 }
@@ -631,13 +628,13 @@ pub enum AccessLevel {
 pub struct AccessLoggingConfig {
     /// Enable access logging
     pub enabled: bool,
-    
+
     /// Log all access attempts
     pub log_all_attempts: bool,
-    
+
     /// Log failed attempts only
     pub log_failures_only: bool,
-    
+
     /// Audit trail retention
     pub audit_retention_days: u32,
 }
@@ -649,21 +646,12 @@ pub trait EvidenceStorage {
         evidence: &Evidence,
         data: &[u8],
     ) -> Result<String, EvidenceError>;
-    
-    async fn retrieve_evidence(
-        &self,
-        evidence_id: &str,
-    ) -> Result<Vec<u8>, EvidenceError>;
-    
-    async fn delete_evidence(
-        &self,
-        evidence_id: &str,
-    ) -> Result<(), EvidenceError>;
-    
-    async fn verify_integrity(
-        &self,
-        evidence_id: &str,
-    ) -> Result<bool, EvidenceError>;
+
+    async fn retrieve_evidence(&self, evidence_id: &str) -> Result<Vec<u8>, EvidenceError>;
+
+    async fn delete_evidence(&self, evidence_id: &str) -> Result<(), EvidenceError>;
+
+    async fn verify_integrity(&self, evidence_id: &str) -> Result<bool, EvidenceError>;
 }
 
 /// Evidence error types
@@ -678,10 +666,10 @@ pub struct EvidenceError {
 pub struct IntegrityChecker {
     /// Verification methods
     verification_methods: Vec<IntegrityMethod>,
-    
+
     /// Verification schedule
     verification_schedule: VerificationSchedule,
-    
+
     /// Integrity violations handler
     violations_handler: Arc<IntegrityViolationsHandler>,
 }
@@ -691,10 +679,10 @@ pub struct IntegrityChecker {
 pub struct VerificationSchedule {
     /// Immediate verification
     pub immediate: bool,
-    
+
     /// Periodic verification
     pub periodic: Option<PeriodicVerification>,
-    
+
     /// Event-triggered verification
     pub event_triggered: Vec<VerificationTrigger>,
 }
@@ -704,10 +692,10 @@ pub struct VerificationSchedule {
 pub struct PeriodicVerification {
     /// Verification interval
     pub interval: VerificationInterval,
-    
+
     /// Random offset to distribute load
     pub random_offset_minutes: u32,
-    
+
     /// Verification window
     pub verification_window: Option<TimeWindow>,
 }
@@ -737,13 +725,13 @@ pub enum VerificationTrigger {
 pub struct TimeWindow {
     /// Start hour (24-hour format)
     pub start_hour: u8,
-    
+
     /// End hour (24-hour format)
     pub end_hour: u8,
-    
+
     /// Days of week
     pub days_of_week: Vec<chrono::Weekday>,
-    
+
     /// Timezone
     pub timezone: String,
 }
@@ -752,10 +740,10 @@ pub struct TimeWindow {
 pub struct IntegrityViolationsHandler {
     /// Violation response policies
     response_policies: Vec<ViolationResponsePolicy>,
-    
+
     /// Notification settings
     notification_settings: ViolationNotificationSettings,
-    
+
     /// Remediation actions
     remediation_actions: Vec<RemediationAction>,
 }
@@ -765,19 +753,19 @@ pub struct IntegrityViolationsHandler {
 pub struct ViolationResponsePolicy {
     /// Policy ID
     pub id: String,
-    
+
     /// Violation types covered
     pub violation_types: Vec<ViolationType>,
-    
+
     /// Severity threshold
     pub severity_threshold: ViolationSeverity,
-    
+
     /// Immediate actions
     pub immediate_actions: Vec<ImmediateAction>,
-    
+
     /// Investigation requirements
     pub investigation_required: bool,
-    
+
     /// Notification requirements
     pub notification_requirements: Vec<NotificationRequirement>,
 }
@@ -818,13 +806,13 @@ pub enum ImmediateAction {
 pub struct NotificationRequirement {
     /// Recipient type
     pub recipient_type: RecipientType,
-    
+
     /// Notification urgency
     pub urgency: NotificationUrgency,
-    
+
     /// Notification channels
     pub channels: Vec<NotificationChannel>,
-    
+
     /// Content template
     pub content_template: String,
 }
@@ -854,13 +842,13 @@ pub enum NotificationChannel {
 pub struct ViolationNotificationSettings {
     /// Enable notifications
     pub enabled: bool,
-    
+
     /// Notification recipients
     pub recipients: Vec<NotificationRecipient>,
-    
+
     /// Notification templates
     pub templates: HashMap<ViolationType, String>,
-    
+
     /// Escalation rules
     pub escalation_rules: Vec<NotificationEscalationRule>,
 }
@@ -870,10 +858,10 @@ pub struct ViolationNotificationSettings {
 pub struct NotificationRecipient {
     /// Recipient identifier
     pub id: String,
-    
+
     /// Recipient type
     pub recipient_type: RecipientType,
-    
+
     /// Notification preferences
     pub preferences: NotificationPreferences,
 }
@@ -883,10 +871,10 @@ pub struct NotificationRecipient {
 pub struct NotificationPreferences {
     /// Preferred channels
     pub preferred_channels: Vec<NotificationChannel>,
-    
+
     /// Quiet hours
     pub quiet_hours: Option<TimeWindow>,
-    
+
     /// Severity threshold
     pub severity_threshold: ViolationSeverity,
 }
@@ -896,13 +884,13 @@ pub struct NotificationPreferences {
 pub struct NotificationEscalationRule {
     /// Rule ID
     pub id: String,
-    
+
     /// Trigger conditions
     pub triggers: Vec<EscalationTrigger>,
-    
+
     /// Escalation delay
     pub delay_minutes: u32,
-    
+
     /// Escalation targets
     pub targets: Vec<EscalationTarget>,
 }
@@ -912,16 +900,16 @@ pub struct NotificationEscalationRule {
 pub struct RemediationAction {
     /// Action ID
     pub id: String,
-    
+
     /// Action type
     pub action_type: RemediationActionType,
-    
+
     /// Action parameters
     pub parameters: HashMap<String, serde_json::Value>,
-    
+
     /// Trigger conditions
     pub triggers: Vec<RemediationTrigger>,
-    
+
     /// Success criteria
     pub success_criteria: Vec<SuccessCriterion>,
 }
@@ -950,13 +938,13 @@ pub enum RemediationTrigger {
 pub struct CaseNotificationSystem {
     /// Notification configuration
     config: NotificationSystemConfig,
-    
+
     /// Notification templates
     templates: Arc<RwLock<HashMap<String, CommunicationTemplate>>>,
-    
+
     /// Notification queue
     notification_queue: Arc<tokio::sync::Mutex<Vec<PendingNotification>>>,
-    
+
     /// Delivery status tracking
     delivery_tracking: Arc<DashMap<String, NotificationDeliveryStatus>>,
 }
@@ -966,16 +954,16 @@ pub struct CaseNotificationSystem {
 pub struct NotificationSystemConfig {
     /// Enable notifications
     pub enabled: bool,
-    
+
     /// Default notification channels
     pub default_channels: Vec<NotificationChannel>,
-    
+
     /// Rate limiting
     pub rate_limiting: NotificationRateLimit,
-    
+
     /// Retry configuration
     pub retry_config: NotificationRetryConfig,
-    
+
     /// Aggregation settings
     pub aggregation_settings: NotificationAggregationSettings,
 }
@@ -985,10 +973,10 @@ pub struct NotificationSystemConfig {
 pub struct NotificationRateLimit {
     /// Maximum notifications per hour
     pub max_per_hour: u32,
-    
+
     /// Maximum notifications per day
     pub max_per_day: u32,
-    
+
     /// Rate limit by recipient
     pub per_recipient_limits: HashMap<String, RecipientRateLimit>,
 }
@@ -998,10 +986,10 @@ pub struct NotificationRateLimit {
 pub struct RecipientRateLimit {
     /// Maximum notifications per hour
     pub max_per_hour: u32,
-    
+
     /// Maximum notifications per day
     pub max_per_day: u32,
-    
+
     /// Priority-based limits
     pub priority_limits: HashMap<NotificationUrgency, u32>,
 }
@@ -1011,13 +999,13 @@ pub struct RecipientRateLimit {
 pub struct NotificationRetryConfig {
     /// Maximum retry attempts
     pub max_attempts: u32,
-    
+
     /// Retry intervals
     pub retry_intervals: Vec<u32>, // minutes
-    
+
     /// Backoff strategy
     pub backoff_strategy: BackoffStrategy,
-    
+
     /// Retry conditions
     pub retry_conditions: Vec<RetryCondition>,
 }
@@ -1027,13 +1015,13 @@ pub struct NotificationRetryConfig {
 pub struct NotificationAggregationSettings {
     /// Enable aggregation
     pub enabled: bool,
-    
+
     /// Aggregation window
     pub window_minutes: u32,
-    
+
     /// Maximum notifications in aggregate
     pub max_notifications: u32,
-    
+
     /// Aggregation rules
     pub rules: Vec<AggregationRule>,
 }
@@ -1043,13 +1031,13 @@ pub struct NotificationAggregationSettings {
 pub struct AggregationRule {
     /// Rule ID
     pub id: String,
-    
+
     /// Grouping criteria
     pub grouping_criteria: Vec<String>,
-    
+
     /// Aggregation template
     pub template: String,
-    
+
     /// Minimum notifications to aggregate
     pub min_notifications: u32,
 }
@@ -1059,28 +1047,28 @@ pub struct AggregationRule {
 pub struct PendingNotification {
     /// Notification ID
     pub id: String,
-    
+
     /// Case ID
     pub case_id: String,
-    
+
     /// Notification type
     pub notification_type: CommunicationTemplateType,
-    
+
     /// Recipients
     pub recipients: Vec<String>,
-    
+
     /// Content
     pub content: NotificationContent,
-    
+
     /// Priority
     pub priority: NotificationUrgency,
-    
+
     /// Scheduled delivery time
     pub scheduled_for: DateTime<Utc>,
-    
+
     /// Retry count
     pub retry_count: u32,
-    
+
     /// Aggregation group
     pub aggregation_group: Option<String>,
 }
@@ -1090,13 +1078,13 @@ pub struct PendingNotification {
 pub struct NotificationContent {
     /// Subject line
     pub subject: String,
-    
+
     /// Message body
     pub body: String,
-    
+
     /// Attachments
     pub attachments: Vec<NotificationAttachment>,
-    
+
     /// Metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -1106,10 +1094,10 @@ pub struct NotificationContent {
 pub struct NotificationAttachment {
     /// Attachment name
     pub name: String,
-    
+
     /// Content type
     pub content_type: String,
-    
+
     /// Content data or reference
     pub content: AttachmentContent,
 }
@@ -1127,16 +1115,16 @@ pub enum AttachmentContent {
 pub struct NotificationDeliveryStatus {
     /// Notification ID
     pub notification_id: String,
-    
+
     /// Delivery status
     pub status: DeliveryStatus,
-    
+
     /// Delivery attempts
     pub attempts: Vec<DeliveryAttempt>,
-    
+
     /// Last update time
     pub last_updated: DateTime<Utc>,
-    
+
     /// Error information
     pub error: Option<DeliveryError>,
 }
@@ -1157,16 +1145,16 @@ pub enum DeliveryStatus {
 pub struct DeliveryAttempt {
     /// Attempt number
     pub attempt_number: u32,
-    
+
     /// Attempt time
     pub attempted_at: DateTime<Utc>,
-    
+
     /// Channel used
     pub channel: NotificationChannel,
-    
+
     /// Result
     pub result: DeliveryResult,
-    
+
     /// Response details
     pub response_details: Option<serde_json::Value>,
 }
@@ -1185,13 +1173,13 @@ pub enum DeliveryResult {
 pub struct DeliveryError {
     /// Error code
     pub code: String,
-    
+
     /// Error message
     pub message: String,
-    
+
     /// Error details
     pub details: Option<serde_json::Value>,
-    
+
     /// Whether error is retryable
     pub retryable: bool,
 }
@@ -1200,16 +1188,16 @@ pub struct DeliveryError {
 pub struct CollaborationManager {
     /// Active collaboration sessions
     sessions: Arc<DashMap<String, CollaborationSession>>,
-    
+
     /// Team configurations
     team_configs: Arc<RwLock<HashMap<String, TeamConfiguration>>>,
-    
+
     /// Communication channels
     communication_channels: Arc<DashMap<String, CommunicationChannel>>,
-    
+
     /// Document sharing
     document_sharing: Arc<DocumentSharingManager>,
-    
+
     /// Real-time updates
     real_time_updates: Arc<RealTimeUpdateManager>,
 }
@@ -1219,25 +1207,25 @@ pub struct CollaborationManager {
 pub struct CollaborationSession {
     /// Session ID
     pub id: String,
-    
+
     /// Associated case ID
     pub case_id: String,
-    
+
     /// Session type
     pub session_type: CollaborationSessionType,
-    
+
     /// Participants
     pub participants: Vec<SessionParticipant>,
-    
+
     /// Session status
     pub status: SessionStatus,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
-    
+
     /// Session metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -1258,16 +1246,16 @@ pub enum CollaborationSessionType {
 pub struct SessionParticipant {
     /// User ID
     pub user_id: String,
-    
+
     /// Role in session
     pub role: ParticipantRole,
-    
+
     /// Joined timestamp
     pub joined_at: DateTime<Utc>,
-    
+
     /// Participation status
     pub status: ParticipantStatus,
-    
+
     /// Permissions
     pub permissions: Vec<CollaborationPermission>,
 }
@@ -1321,22 +1309,22 @@ pub enum CollaborationPermission {
 pub struct TeamConfiguration {
     /// Team ID
     pub id: String,
-    
+
     /// Team name
     pub name: String,
-    
+
     /// Team members
     pub members: Vec<TeamMember>,
-    
+
     /// Team roles and responsibilities
     pub roles: HashMap<String, TeamRole>,
-    
+
     /// Escalation hierarchy
     pub escalation_hierarchy: Vec<EscalationLevel>,
-    
+
     /// Communication preferences
     pub communication_preferences: TeamCommunicationPreferences,
-    
+
     /// Operational schedules
     pub schedules: Vec<OperationalSchedule>,
 }
@@ -1346,19 +1334,19 @@ pub struct TeamConfiguration {
 pub struct TeamMember {
     /// User ID
     pub user_id: String,
-    
+
     /// Primary role
     pub primary_role: String,
-    
+
     /// Secondary roles
     pub secondary_roles: Vec<String>,
-    
+
     /// Skills and certifications
     pub skills: Vec<Skill>,
-    
+
     /// Availability
     pub availability: MemberAvailability,
-    
+
     /// Contact information
     pub contact_info: ContactInformation,
 }
@@ -1368,22 +1356,22 @@ pub struct TeamMember {
 pub struct TeamRole {
     /// Role ID
     pub id: String,
-    
+
     /// Role name
     pub name: String,
-    
+
     /// Role description
     pub description: String,
-    
+
     /// Responsibilities
     pub responsibilities: Vec<String>,
-    
+
     /// Required skills
     pub required_skills: Vec<String>,
-    
+
     /// Permissions
     pub permissions: Vec<String>,
-    
+
     /// Escalation level
     pub escalation_level: u32,
 }
@@ -1393,19 +1381,19 @@ pub struct TeamRole {
 pub struct Skill {
     /// Skill ID
     pub id: String,
-    
+
     /// Skill name
     pub name: String,
-    
+
     /// Skill category
     pub category: String,
-    
+
     /// Proficiency level
     pub proficiency: SkillProficiency,
-    
+
     /// Certifications
     pub certifications: Vec<String>,
-    
+
     /// Last validated
     pub last_validated: Option<DateTime<Utc>>,
 }
@@ -1425,16 +1413,16 @@ pub enum SkillProficiency {
 pub struct MemberAvailability {
     /// Current status
     pub current_status: AvailabilityStatus,
-    
+
     /// Working hours
     pub working_hours: WorkingHours,
-    
+
     /// Time zone
     pub timezone: String,
-    
+
     /// Planned absences
     pub planned_absences: Vec<PlannedAbsence>,
-    
+
     /// On-call schedule
     pub on_call_schedule: Option<OnCallSchedule>,
 }
@@ -1455,10 +1443,10 @@ pub enum AvailabilityStatus {
 pub struct WorkingHours {
     /// Days of week
     pub days: Vec<WorkDay>,
-    
+
     /// Flexible hours
     pub flexible: bool,
-    
+
     /// Core hours
     pub core_hours: Option<TimeWindow>,
 }
@@ -1468,13 +1456,13 @@ pub struct WorkingHours {
 pub struct WorkDay {
     /// Day of week
     pub day: chrono::Weekday,
-    
+
     /// Start time
     pub start_time: chrono::NaiveTime,
-    
+
     /// End time
     pub end_time: chrono::NaiveTime,
-    
+
     /// Break periods
     pub breaks: Vec<BreakPeriod>,
 }
@@ -1484,10 +1472,10 @@ pub struct WorkDay {
 pub struct BreakPeriod {
     /// Start time
     pub start_time: chrono::NaiveTime,
-    
+
     /// End time
     pub end_time: chrono::NaiveTime,
-    
+
     /// Break type
     pub break_type: BreakType,
 }
@@ -1507,16 +1495,16 @@ pub enum BreakType {
 pub struct PlannedAbsence {
     /// Absence ID
     pub id: String,
-    
+
     /// Start date
     pub start_date: chrono::NaiveDate,
-    
+
     /// End date
     pub end_date: chrono::NaiveDate,
-    
+
     /// Absence type
     pub absence_type: AbsenceType,
-    
+
     /// Coverage arrangements
     pub coverage: Option<CoverageArrangement>,
 }
@@ -1538,10 +1526,10 @@ pub enum AbsenceType {
 pub struct CoverageArrangement {
     /// Covering person
     pub covering_person: String,
-    
+
     /// Coverage type
     pub coverage_type: CoverageType,
-    
+
     /// Coverage scope
     pub scope: CoverageScope,
 }
@@ -1569,13 +1557,13 @@ pub enum CoverageScope {
 pub struct OnCallSchedule {
     /// Schedule ID
     pub id: String,
-    
+
     /// On-call periods
     pub periods: Vec<OnCallPeriod>,
-    
+
     /// Escalation chain
     pub escalation_chain: Vec<String>,
-    
+
     /// Response time requirements
     pub response_times: HashMap<AlertSeverity, u32>,
 }
@@ -1585,13 +1573,13 @@ pub struct OnCallSchedule {
 pub struct OnCallPeriod {
     /// Start time
     pub start_time: DateTime<Utc>,
-    
+
     /// End time
     pub end_time: DateTime<Utc>,
-    
+
     /// On-call level
     pub level: OnCallLevel,
-    
+
     /// Contact method
     pub contact_method: ContactMethod,
 }
@@ -1621,16 +1609,16 @@ pub enum ContactMethod {
 pub struct ContactInformation {
     /// Primary email
     pub primary_email: String,
-    
+
     /// Secondary email
     pub secondary_email: Option<String>,
-    
+
     /// Phone numbers
     pub phone_numbers: Vec<PhoneNumber>,
-    
+
     /// Instant messaging
     pub instant_messaging: Vec<InstantMessagingContact>,
-    
+
     /// Emergency contacts
     pub emergency_contacts: Vec<EmergencyContact>,
 }
@@ -1640,10 +1628,10 @@ pub struct ContactInformation {
 pub struct PhoneNumber {
     /// Number
     pub number: String,
-    
+
     /// Type
     pub phone_type: PhoneType,
-    
+
     /// Preferred for notifications
     pub preferred: bool,
 }
@@ -1662,10 +1650,10 @@ pub enum PhoneType {
 pub struct InstantMessagingContact {
     /// Platform
     pub platform: InstantMessagingPlatform,
-    
+
     /// Handle/username
     pub handle: String,
-    
+
     /// Preferred for notifications
     pub preferred: bool,
 }
@@ -1686,13 +1674,13 @@ pub enum InstantMessagingPlatform {
 pub struct EmergencyContact {
     /// Contact name
     pub name: String,
-    
+
     /// Relationship
     pub relationship: String,
-    
+
     /// Phone number
     pub phone: String,
-    
+
     /// Email
     pub email: Option<String>,
 }
@@ -1702,13 +1690,13 @@ pub struct EmergencyContact {
 pub struct TeamCommunicationPreferences {
     /// Primary communication channel
     pub primary_channel: CommunicationChannelType,
-    
+
     /// Secondary channels
     pub secondary_channels: Vec<CommunicationChannelType>,
-    
+
     /// Escalation channels
     pub escalation_channels: Vec<CommunicationChannelType>,
-    
+
     /// Communication protocols
     pub protocols: Vec<CommunicationProtocol>,
 }
@@ -1731,16 +1719,16 @@ pub enum CommunicationChannelType {
 pub struct CommunicationProtocol {
     /// Protocol name
     pub name: String,
-    
+
     /// Applicable situations
     pub situations: Vec<CommunicationSituation>,
-    
+
     /// Required participants
     pub required_participants: Vec<String>,
-    
+
     /// Communication template
     pub template: String,
-    
+
     /// Response time requirements
     pub response_time: u32, // minutes
 }
@@ -1763,13 +1751,13 @@ pub enum CommunicationSituation {
 pub struct OperationalSchedule {
     /// Schedule name
     pub name: String,
-    
+
     /// Schedule type
     pub schedule_type: ScheduleType,
-    
+
     /// Time periods
     pub periods: Vec<SchedulePeriod>,
-    
+
     /// Coverage requirements
     pub coverage_requirements: CoverageRequirements,
 }
@@ -1789,16 +1777,16 @@ pub enum ScheduleType {
 pub struct SchedulePeriod {
     /// Start time
     pub start_time: DateTime<Utc>,
-    
+
     /// End time
     pub end_time: DateTime<Utc>,
-    
+
     /// Assigned personnel
     pub assigned_personnel: Vec<String>,
-    
+
     /// Minimum staffing
     pub minimum_staffing: u32,
-    
+
     /// Skills requirements
     pub skills_requirements: Vec<String>,
 }
@@ -1808,13 +1796,13 @@ pub struct SchedulePeriod {
 pub struct CoverageRequirements {
     /// Minimum team size
     pub minimum_team_size: u32,
-    
+
     /// Required roles
     pub required_roles: Vec<String>,
-    
+
     /// Required skills
     pub required_skills: Vec<String>,
-    
+
     /// Geographic coverage
     pub geographic_coverage: Option<GeographicCoverage>,
 }
@@ -1824,10 +1812,10 @@ pub struct CoverageRequirements {
 pub struct GeographicCoverage {
     /// Required regions
     pub regions: Vec<String>,
-    
+
     /// Time zone coverage
     pub timezone_coverage: Vec<String>,
-    
+
     /// Language requirements
     pub language_requirements: Vec<String>,
 }
@@ -1837,25 +1825,25 @@ pub struct GeographicCoverage {
 pub struct CommunicationChannel {
     /// Channel ID
     pub id: String,
-    
+
     /// Channel name
     pub name: String,
-    
+
     /// Channel type
     pub channel_type: CommunicationChannelType,
-    
+
     /// Participants
     pub participants: Vec<String>,
-    
+
     /// Channel status
     pub status: ChannelStatus,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
-    
+
     /// Channel metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -1873,13 +1861,13 @@ pub enum ChannelStatus {
 pub struct DocumentSharingManager {
     /// Shared documents
     shared_documents: Arc<DashMap<String, SharedDocument>>,
-    
+
     /// Access control manager
     access_control: Arc<DocumentAccessControl>,
-    
+
     /// Version control system
     version_control: Arc<DocumentVersionControl>,
-    
+
     /// Collaboration tracking
     collaboration_tracking: Arc<DocumentCollaborationTracking>,
 }
@@ -1889,28 +1877,28 @@ pub struct DocumentSharingManager {
 pub struct SharedDocument {
     /// Document ID
     pub id: String,
-    
+
     /// Document name
     pub name: String,
-    
+
     /// Document type
     pub document_type: DocumentType,
-    
+
     /// Content reference
     pub content_reference: String,
-    
+
     /// Owner
     pub owner: String,
-    
+
     /// Shared with
     pub shared_with: Vec<DocumentShare>,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Last modified
     pub last_modified: DateTime<Utc>,
-    
+
     /// Document metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -1932,13 +1920,13 @@ pub enum DocumentType {
 pub struct DocumentShare {
     /// Recipient
     pub recipient: ShareRecipient,
-    
+
     /// Permissions
     pub permissions: Vec<DocumentPermission>,
-    
+
     /// Shared timestamp
     pub shared_at: DateTime<Utc>,
-    
+
     /// Expiration
     pub expires_at: Option<DateTime<Utc>>,
 }
@@ -1968,7 +1956,7 @@ pub enum DocumentPermission {
 pub struct DocumentAccessControl {
     /// Access policies
     access_policies: Vec<DocumentAccessPolicy>,
-    
+
     /// Audit logging
     audit_logger: Arc<DocumentAuditLogger>,
 }
@@ -1978,16 +1966,16 @@ pub struct DocumentAccessControl {
 pub struct DocumentAccessPolicy {
     /// Policy ID
     pub id: String,
-    
+
     /// Policy name
     pub name: String,
-    
+
     /// Applicable document types
     pub document_types: Vec<DocumentType>,
-    
+
     /// Access rules
     pub access_rules: Vec<DocumentAccessRule>,
-    
+
     /// Restrictions
     pub restrictions: Vec<DocumentRestriction>,
 }
@@ -1997,10 +1985,10 @@ pub struct DocumentAccessPolicy {
 pub struct DocumentAccessRule {
     /// Principal (user, role, team)
     pub principal: Principal,
-    
+
     /// Permissions
     pub permissions: Vec<DocumentPermission>,
-    
+
     /// Conditions
     pub conditions: Vec<AccessCondition>,
 }
@@ -2040,7 +2028,7 @@ pub enum DocumentRestriction {
 pub struct DocumentAuditLogger {
     /// Audit events
     audit_events: Arc<RwLock<Vec<DocumentAuditEvent>>>,
-    
+
     /// Audit configuration
     config: DocumentAuditConfig,
 }
@@ -2050,28 +2038,28 @@ pub struct DocumentAuditLogger {
 pub struct DocumentAuditEvent {
     /// Event ID
     pub id: String,
-    
+
     /// Document ID
     pub document_id: String,
-    
+
     /// User ID
     pub user_id: String,
-    
+
     /// Action performed
     pub action: DocumentAction,
-    
+
     /// Timestamp
     pub timestamp: DateTime<Utc>,
-    
+
     /// IP address
     pub ip_address: Option<String>,
-    
+
     /// User agent
     pub user_agent: Option<String>,
-    
+
     /// Result
     pub result: ActionResult,
-    
+
     /// Additional details
     pub details: HashMap<String, serde_json::Value>,
 }
@@ -2105,16 +2093,16 @@ pub enum ActionResult {
 pub struct DocumentAuditConfig {
     /// Enable audit logging
     pub enabled: bool,
-    
+
     /// Actions to audit
     pub audited_actions: Vec<DocumentAction>,
-    
+
     /// Retention period
     pub retention_days: u32,
-    
+
     /// Real-time alerting
     pub real_time_alerting: bool,
-    
+
     /// Alert conditions
     pub alert_conditions: Vec<AuditAlertCondition>,
 }
@@ -2124,13 +2112,13 @@ pub struct DocumentAuditConfig {
 pub struct AuditAlertCondition {
     /// Condition name
     pub name: String,
-    
+
     /// Trigger criteria
     pub criteria: AuditCriteria,
-    
+
     /// Alert severity
     pub severity: AlertSeverity,
-    
+
     /// Notification targets
     pub notification_targets: Vec<String>,
 }
@@ -2150,10 +2138,10 @@ pub enum AuditCriteria {
 pub struct DocumentVersionControl {
     /// Document versions
     versions: Arc<DashMap<String, Vec<DocumentVersion>>>,
-    
+
     /// Version control policies
     policies: Vec<VersionControlPolicy>,
-    
+
     /// Merge conflict resolver
     conflict_resolver: Arc<MergeConflictResolver>,
 }
@@ -2163,28 +2151,28 @@ pub struct DocumentVersionControl {
 pub struct DocumentVersion {
     /// Version ID
     pub id: String,
-    
+
     /// Document ID
     pub document_id: String,
-    
+
     /// Version number
     pub version_number: String,
-    
+
     /// Author
     pub author: String,
-    
+
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Change description
     pub change_description: String,
-    
+
     /// Content hash
     pub content_hash: String,
-    
+
     /// Parent version
     pub parent_version: Option<String>,
-    
+
     /// Version metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -2194,16 +2182,16 @@ pub struct DocumentVersion {
 pub struct VersionControlPolicy {
     /// Policy name
     pub name: String,
-    
+
     /// Document types covered
     pub document_types: Vec<DocumentType>,
-    
+
     /// Versioning strategy
     pub versioning_strategy: VersioningStrategy,
-    
+
     /// Retention policy
     pub retention_policy: VersionRetentionPolicy,
-    
+
     /// Branch management
     pub branch_management: BranchManagementPolicy,
 }
@@ -2223,10 +2211,10 @@ pub enum VersioningStrategy {
 pub struct VersionRetentionPolicy {
     /// Maximum versions to keep
     pub max_versions: Option<u32>,
-    
+
     /// Retention duration
     pub retention_duration: Option<Duration>,
-    
+
     /// Major version retention
     pub major_version_retention: MajorVersionRetention,
 }
@@ -2245,13 +2233,13 @@ pub enum MajorVersionRetention {
 pub struct BranchManagementPolicy {
     /// Allow branching
     pub allow_branching: bool,
-    
+
     /// Branch naming convention
     pub naming_convention: String,
-    
+
     /// Auto-merge policies
     pub auto_merge_policies: Vec<AutoMergePolicy>,
-    
+
     /// Merge approval requirements
     pub merge_approval: MergeApprovalRequirements,
 }
@@ -2261,10 +2249,10 @@ pub struct BranchManagementPolicy {
 pub struct AutoMergePolicy {
     /// Policy name
     pub name: String,
-    
+
     /// Merge conditions
     pub conditions: Vec<MergeCondition>,
-    
+
     /// Conflict resolution strategy
     pub conflict_resolution: ConflictResolutionStrategy,
 }
@@ -2295,13 +2283,13 @@ pub enum ConflictResolutionStrategy {
 pub struct MergeApprovalRequirements {
     /// Required approvers
     pub required_approvers: u32,
-    
+
     /// Approval roles
     pub approval_roles: Vec<String>,
-    
+
     /// Self-approval allowed
     pub self_approval_allowed: bool,
-    
+
     /// Approval timeout
     pub approval_timeout_hours: u32,
 }
@@ -2310,10 +2298,10 @@ pub struct MergeApprovalRequirements {
 pub struct MergeConflictResolver {
     /// Resolution strategies
     strategies: Vec<ConflictResolutionStrategy>,
-    
+
     /// Manual resolution queue
     manual_queue: Arc<tokio::sync::Mutex<Vec<PendingConflictResolution>>>,
-    
+
     /// Resolution history
     resolution_history: Arc<RwLock<Vec<ConflictResolutionRecord>>>,
 }
@@ -2323,25 +2311,25 @@ pub struct MergeConflictResolver {
 pub struct PendingConflictResolution {
     /// Resolution ID
     pub id: String,
-    
+
     /// Document ID
     pub document_id: String,
-    
+
     /// Conflicting versions
     pub conflicting_versions: Vec<String>,
-    
+
     /// Conflict details
     pub conflicts: Vec<ConflictDetail>,
-    
+
     /// Assigned resolver
     pub assigned_resolver: Option<String>,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Due date
     pub due_date: DateTime<Utc>,
-    
+
     /// Priority
     pub priority: ConflictPriority,
 }
@@ -2351,13 +2339,13 @@ pub struct PendingConflictResolution {
 pub struct ConflictDetail {
     /// Conflict type
     pub conflict_type: ConflictType,
-    
+
     /// Location in document
     pub location: ConflictLocation,
-    
+
     /// Conflicting content
     pub conflicting_content: Vec<ConflictingContent>,
-    
+
     /// Suggested resolution
     pub suggested_resolution: Option<String>,
 }
@@ -2377,13 +2365,13 @@ pub enum ConflictType {
 pub struct ConflictLocation {
     /// Section identifier
     pub section: Option<String>,
-    
+
     /// Line number
     pub line_number: Option<u32>,
-    
+
     /// Character position
     pub character_position: Option<u32>,
-    
+
     /// Path in structured document
     pub path: Option<String>,
 }
@@ -2393,13 +2381,13 @@ pub struct ConflictLocation {
 pub struct ConflictingContent {
     /// Version ID
     pub version_id: String,
-    
+
     /// Author
     pub author: String,
-    
+
     /// Content
     pub content: String,
-    
+
     /// Timestamp
     pub timestamp: DateTime<Utc>,
 }
@@ -2418,19 +2406,19 @@ pub enum ConflictPriority {
 pub struct ConflictResolutionRecord {
     /// Record ID
     pub id: String,
-    
+
     /// Conflict ID
     pub conflict_id: String,
-    
+
     /// Resolution method
     pub resolution_method: ResolutionMethod,
-    
+
     /// Resolver
     pub resolver: String,
-    
+
     /// Resolution timestamp
     pub resolved_at: DateTime<Utc>,
-    
+
     /// Resolution details
     pub details: ResolutionDetails,
 }
@@ -2449,13 +2437,13 @@ pub enum ResolutionMethod {
 pub struct ResolutionDetails {
     /// Chosen resolution
     pub chosen_resolution: String,
-    
+
     /// Rationale
     pub rationale: String,
-    
+
     /// Approval chain
     pub approvals: Vec<ResolutionApproval>,
-    
+
     /// Time taken
     pub resolution_time_minutes: u32,
 }
@@ -2465,10 +2453,10 @@ pub struct ResolutionDetails {
 pub struct ResolutionApproval {
     /// Approver
     pub approver: String,
-    
+
     /// Approval timestamp
     pub approved_at: DateTime<Utc>,
-    
+
     /// Comments
     pub comments: Option<String>,
 }
@@ -2477,10 +2465,10 @@ pub struct ResolutionApproval {
 pub struct DocumentCollaborationTracking {
     /// Active collaboration sessions
     active_sessions: Arc<DashMap<String, DocumentCollaborationSession>>,
-    
+
     /// Collaboration history
     collaboration_history: Arc<RwLock<Vec<CollaborationHistoryRecord>>>,
-    
+
     /// Real-time sync manager
     real_time_sync: Arc<RealTimeSyncManager>,
 }
@@ -2490,22 +2478,22 @@ pub struct DocumentCollaborationTracking {
 pub struct DocumentCollaborationSession {
     /// Session ID
     pub id: String,
-    
+
     /// Document ID
     pub document_id: String,
-    
+
     /// Active collaborators
     pub collaborators: Vec<ActiveCollaborator>,
-    
+
     /// Session start time
     pub started_at: DateTime<Utc>,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
-    
+
     /// Real-time changes
     pub real_time_changes: Vec<RealTimeChange>,
-    
+
     /// Conflict resolution mode
     pub conflict_resolution_mode: ConflictResolutionMode,
 }
@@ -2515,16 +2503,16 @@ pub struct DocumentCollaborationSession {
 pub struct ActiveCollaborator {
     /// User ID
     pub user_id: String,
-    
+
     /// Current cursor position
     pub cursor_position: Option<DocumentPosition>,
-    
+
     /// Selected text range
     pub selection: Option<TextRange>,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
-    
+
     /// Collaboration mode
     pub mode: CollaborationMode,
 }
@@ -2534,10 +2522,10 @@ pub struct ActiveCollaborator {
 pub struct DocumentPosition {
     /// Line number
     pub line: u32,
-    
+
     /// Column number
     pub column: u32,
-    
+
     /// Section ID
     pub section_id: Option<String>,
 }
@@ -2547,7 +2535,7 @@ pub struct DocumentPosition {
 pub struct TextRange {
     /// Start position
     pub start: DocumentPosition,
-    
+
     /// End position
     pub end: DocumentPosition,
 }
@@ -2566,22 +2554,22 @@ pub enum CollaborationMode {
 pub struct RealTimeChange {
     /// Change ID
     pub id: String,
-    
+
     /// Author
     pub author: String,
-    
+
     /// Change type
     pub change_type: ChangeType,
-    
+
     /// Position
     pub position: DocumentPosition,
-    
+
     /// Content
     pub content: String,
-    
+
     /// Timestamp
     pub timestamp: DateTime<Utc>,
-    
+
     /// Acknowledged by
     pub acknowledged_by: Vec<String>,
 }
@@ -2611,28 +2599,28 @@ pub enum ConflictResolutionMode {
 pub struct CollaborationHistoryRecord {
     /// Record ID
     pub id: String,
-    
+
     /// Document ID
     pub document_id: String,
-    
+
     /// Session ID
     pub session_id: String,
-    
+
     /// Participants
     pub participants: Vec<String>,
-    
+
     /// Session duration
     pub duration_minutes: u32,
-    
+
     /// Total changes made
     pub total_changes: u32,
-    
+
     /// Conflicts encountered
     pub conflicts_count: u32,
-    
+
     /// Session summary
     pub summary: String,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
 }
@@ -2641,13 +2629,13 @@ pub struct CollaborationHistoryRecord {
 pub struct RealTimeSyncManager {
     /// Sync configuration
     config: RealTimeSyncConfig,
-    
+
     /// Active sync sessions
     sync_sessions: Arc<DashMap<String, SyncSession>>,
-    
+
     /// Change propagation queue
     change_queue: Arc<tokio::sync::Mutex<VecDeque<SyncChange>>>,
-    
+
     /// Conflict detector
     conflict_detector: Arc<ConflictDetector>,
 }
@@ -2657,16 +2645,16 @@ pub struct RealTimeSyncManager {
 pub struct RealTimeSyncConfig {
     /// Enable real-time sync
     pub enabled: bool,
-    
+
     /// Sync interval milliseconds
     pub sync_interval_ms: u64,
-    
+
     /// Maximum changes per batch
     pub max_changes_per_batch: u32,
-    
+
     /// Conflict detection enabled
     pub conflict_detection_enabled: bool,
-    
+
     /// Auto-resolution enabled
     pub auto_resolution_enabled: bool,
 }
@@ -2676,19 +2664,19 @@ pub struct RealTimeSyncConfig {
 pub struct SyncSession {
     /// Session ID
     pub id: String,
-    
+
     /// Document ID
     pub document_id: String,
-    
+
     /// Connected clients
     pub connected_clients: Vec<SyncClient>,
-    
+
     /// Last sync timestamp
     pub last_sync: DateTime<Utc>,
-    
+
     /// Pending changes
     pub pending_changes: Vec<SyncChange>,
-    
+
     /// Sync statistics
     pub stats: SyncStatistics,
 }
@@ -2698,16 +2686,16 @@ pub struct SyncSession {
 pub struct SyncClient {
     /// Client ID
     pub client_id: String,
-    
+
     /// User ID
     pub user_id: String,
-    
+
     /// Last seen timestamp
     pub last_seen: DateTime<Utc>,
-    
+
     /// Client version
     pub client_version: String,
-    
+
     /// Connection status
     pub connection_status: ConnectionStatus,
 }
@@ -2726,19 +2714,19 @@ pub enum ConnectionStatus {
 pub struct SyncChange {
     /// Change ID
     pub id: String,
-    
+
     /// Author client ID
     pub author_client_id: String,
-    
+
     /// Change details
     pub change: RealTimeChange,
-    
+
     /// Vector clock for ordering
     pub vector_clock: VectorClock,
-    
+
     /// Dependencies
     pub dependencies: Vec<String>,
-    
+
     /// Sync status
     pub sync_status: SyncStatus,
 }
@@ -2764,16 +2752,16 @@ pub enum SyncStatus {
 pub struct SyncStatistics {
     /// Total changes synced
     pub total_changes_synced: u64,
-    
+
     /// Average sync latency
     pub avg_sync_latency_ms: f64,
-    
+
     /// Conflicts detected
     pub conflicts_detected: u64,
-    
+
     /// Conflicts resolved automatically
     pub conflicts_auto_resolved: u64,
-    
+
     /// Connection issues
     pub connection_issues: u64,
 }
@@ -2782,10 +2770,10 @@ pub struct SyncStatistics {
 pub struct ConflictDetector {
     /// Detection algorithms
     algorithms: Vec<ConflictDetectionAlgorithm>,
-    
+
     /// Detection configuration
     config: ConflictDetectionConfig,
-    
+
     /// Conflict resolution strategies
     resolution_strategies: Vec<AutoResolutionStrategy>,
 }
@@ -2806,13 +2794,13 @@ pub enum ConflictDetectionAlgorithm {
 pub struct ConflictDetectionConfig {
     /// Enable detection
     pub enabled: bool,
-    
+
     /// Detection sensitivity
     pub sensitivity: ConflictSensitivity,
-    
+
     /// Detection algorithms to use
     pub algorithms: Vec<ConflictDetectionAlgorithm>,
-    
+
     /// Real-time detection
     pub real_time_detection: bool,
 }
@@ -2831,16 +2819,16 @@ pub enum ConflictSensitivity {
 pub struct AutoResolutionStrategy {
     /// Strategy name
     pub name: String,
-    
+
     /// Applicable conflict types
     pub conflict_types: Vec<ConflictType>,
-    
+
     /// Resolution algorithm
     pub algorithm: ResolutionAlgorithm,
-    
+
     /// Confidence threshold
     pub confidence_threshold: f64,
-    
+
     /// Fallback strategy
     pub fallback: Option<String>,
 }
@@ -2860,13 +2848,13 @@ pub enum ResolutionAlgorithm {
 pub struct RealTimeUpdateManager {
     /// Update channels
     update_channels: Arc<DashMap<String, UpdateChannel>>,
-    
+
     /// Subscription manager
     subscription_manager: Arc<SubscriptionManager>,
-    
+
     /// Event dispatcher
     event_dispatcher: Arc<EventDispatcher>,
-    
+
     /// Update configuration
     config: RealTimeUpdateConfig,
 }
@@ -2876,19 +2864,19 @@ pub struct RealTimeUpdateManager {
 pub struct UpdateChannel {
     /// Channel ID
     pub id: String,
-    
+
     /// Channel type
     pub channel_type: UpdateChannelType,
-    
+
     /// Subscribers
     pub subscribers: Vec<Subscriber>,
-    
+
     /// Update frequency
     pub update_frequency: UpdateFrequency,
-    
+
     /// Last update
     pub last_update: DateTime<Utc>,
-    
+
     /// Channel status
     pub status: ChannelStatus,
 }
@@ -2909,16 +2897,16 @@ pub enum UpdateChannelType {
 pub struct Subscriber {
     /// Subscriber ID
     pub id: String,
-    
+
     /// Subscriber type
     pub subscriber_type: SubscriberType,
-    
+
     /// Subscription preferences
     pub preferences: SubscriptionPreferences,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
-    
+
     /// Connection status
     pub connection_status: ConnectionStatus,
 }
@@ -2938,16 +2926,16 @@ pub enum SubscriberType {
 pub struct SubscriptionPreferences {
     /// Update types
     pub update_types: Vec<UpdateType>,
-    
+
     /// Delivery method
     pub delivery_method: DeliveryMethod,
-    
+
     /// Update frequency
     pub frequency: UpdateFrequency,
-    
+
     /// Filters
     pub filters: Vec<UpdateFilter>,
-    
+
     /// Quiet hours
     pub quiet_hours: Option<TimeWindow>,
 }
@@ -2990,10 +2978,10 @@ pub enum UpdateFrequency {
 pub struct UpdateFilter {
     /// Filter name
     pub name: String,
-    
+
     /// Filter criteria
     pub criteria: FilterCriteria,
-    
+
     /// Include or exclude
     pub include: bool,
 }
@@ -3013,10 +3001,10 @@ pub enum FilterCriteria {
 pub struct SubscriptionManager {
     /// Active subscriptions
     subscriptions: Arc<DashMap<String, Subscription>>,
-    
+
     /// Subscription policies
     policies: Vec<SubscriptionPolicy>,
-    
+
     /// Rate limiting
     rate_limiter: Arc<SubscriptionRateLimiter>,
 }
@@ -3026,19 +3014,19 @@ pub struct SubscriptionManager {
 pub struct Subscription {
     /// Subscription ID
     pub id: String,
-    
+
     /// Subscriber
     pub subscriber: Subscriber,
-    
+
     /// Subscribed channels
     pub channels: Vec<String>,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Last activity
     pub last_activity: DateTime<Utc>,
-    
+
     /// Subscription metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -3048,16 +3036,16 @@ pub struct Subscription {
 pub struct SubscriptionPolicy {
     /// Policy name
     pub name: String,
-    
+
     /// Applicable subscriber types
     pub subscriber_types: Vec<SubscriberType>,
-    
+
     /// Maximum subscriptions
     pub max_subscriptions: u32,
-    
+
     /// Allowed channels
     pub allowed_channels: Vec<UpdateChannelType>,
-    
+
     /// Rate limits
     pub rate_limits: SubscriptionRateLimits,
 }
@@ -3067,13 +3055,13 @@ pub struct SubscriptionPolicy {
 pub struct SubscriptionRateLimits {
     /// Updates per minute
     pub updates_per_minute: u32,
-    
+
     /// Updates per hour
     pub updates_per_hour: u32,
-    
+
     /// Updates per day
     pub updates_per_day: u32,
-    
+
     /// Burst limit
     pub burst_limit: u32,
 }
@@ -3082,7 +3070,7 @@ pub struct SubscriptionRateLimits {
 pub struct SubscriptionRateLimiter {
     /// Rate limit buckets
     buckets: Arc<DashMap<String, RateLimitBucket>>,
-    
+
     /// Rate limit configuration
     config: RateLimitConfig,
 }
@@ -3092,13 +3080,13 @@ pub struct SubscriptionRateLimiter {
 pub struct RateLimitBucket {
     /// Bucket capacity
     pub capacity: u32,
-    
+
     /// Current tokens
     pub tokens: u32,
-    
+
     /// Last refill
     pub last_refill: DateTime<Utc>,
-    
+
     /// Refill rate per second
     pub refill_rate: f64,
 }
@@ -3108,10 +3096,10 @@ pub struct RateLimitBucket {
 pub struct RateLimitConfig {
     /// Default bucket capacity
     pub default_capacity: u32,
-    
+
     /// Default refill rate
     pub default_refill_rate: f64,
-    
+
     /// Per-subscriber overrides
     pub subscriber_overrides: HashMap<String, RateLimitOverride>,
 }
@@ -3121,10 +3109,10 @@ pub struct RateLimitConfig {
 pub struct RateLimitOverride {
     /// Bucket capacity
     pub capacity: u32,
-    
+
     /// Refill rate
     pub refill_rate: f64,
-    
+
     /// Burst multiplier
     pub burst_multiplier: f64,
 }
@@ -3133,10 +3121,10 @@ pub struct RateLimitOverride {
 pub struct EventDispatcher {
     /// Dispatch queues
     dispatch_queues: HashMap<UpdateChannelType, tokio::sync::mpsc::Sender<DispatchEvent>>,
-    
+
     /// Event processors
     event_processors: Vec<Arc<dyn EventProcessor + Send + Sync>>,
-    
+
     /// Dispatch configuration
     config: DispatchConfig,
 }
@@ -3146,22 +3134,22 @@ pub struct EventDispatcher {
 pub struct DispatchEvent {
     /// Event ID
     pub id: String,
-    
+
     /// Event type
     pub event_type: UpdateType,
-    
+
     /// Event data
     pub data: serde_json::Value,
-    
+
     /// Target channels
     pub target_channels: Vec<String>,
-    
+
     /// Priority
     pub priority: EventPriority,
-    
+
     /// Created timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Retry count
     pub retry_count: u32,
 }
@@ -3197,19 +3185,19 @@ pub struct ProcessingError {
 pub struct DispatchConfig {
     /// Enable dispatch
     pub enabled: bool,
-    
+
     /// Dispatch batch size
     pub batch_size: u32,
-    
+
     /// Dispatch interval
     pub dispatch_interval_ms: u64,
-    
+
     /// Maximum retries
     pub max_retries: u32,
-    
+
     /// Retry backoff
     pub retry_backoff_ms: Vec<u64>,
-    
+
     /// Dead letter queue
     pub dead_letter_queue_enabled: bool,
 }
@@ -3219,19 +3207,19 @@ pub struct DispatchConfig {
 pub struct RealTimeUpdateConfig {
     /// Enable real-time updates
     pub enabled: bool,
-    
+
     /// Update delivery modes
     pub delivery_modes: Vec<DeliveryMethod>,
-    
+
     /// Default update frequency
     pub default_frequency: UpdateFrequency,
-    
+
     /// Maximum concurrent connections
     pub max_concurrent_connections: u32,
-    
+
     /// Connection timeout
     pub connection_timeout_seconds: u64,
-    
+
     /// Heartbeat interval
     pub heartbeat_interval_seconds: u64,
 }
@@ -3241,31 +3229,31 @@ pub struct RealTimeUpdateConfig {
 pub struct CaseManagementMetrics {
     /// Total cases created
     pub total_cases_created: u64,
-    
+
     /// Cases by status
     pub cases_by_status: HashMap<CaseStatus, u64>,
-    
+
     /// Cases by severity
     pub cases_by_severity: HashMap<AlertSeverity, u64>,
-    
+
     /// Average case resolution time
     pub avg_resolution_time_hours: f64,
-    
+
     /// SLA compliance rate
     pub sla_compliance_rate: f64,
-    
+
     /// Cases escalated
     pub cases_escalated: u64,
-    
+
     /// Evidence items collected
     pub evidence_items_collected: u64,
-    
+
     /// Collaboration sessions
     pub collaboration_sessions: u64,
-    
+
     /// Workflow integrations triggered
     pub workflow_integrations_triggered: u64,
-    
+
     /// Last metric update
     pub last_updated: DateTime<Utc>,
 }
@@ -3278,9 +3266,10 @@ pub trait WorkflowClient {
         inputs: HashMap<String, serde_json::Value>,
         context: HashMap<String, serde_json::Value>,
     ) -> Result<String, WorkflowError>;
-    
-    async fn get_workflow_status(&self, instance_id: &str) -> Result<WorkflowStatus, WorkflowError>;
-    
+
+    async fn get_workflow_status(&self, instance_id: &str)
+        -> Result<WorkflowStatus, WorkflowError>;
+
     async fn cancel_workflow(&self, instance_id: &str) -> Result<(), WorkflowError>;
 }
 
@@ -3304,28 +3293,28 @@ impl CaseManagementSystem {
             collaboration_manager: Arc::new(CollaborationManager::new().await?),
             event_publisher,
         };
-        
+
         Ok(system)
     }
-    
+
     /// Initialize the case management system
     #[instrument(skip(self))]
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing case management system");
-        
+
         // Load case templates
         self.load_case_templates().await?;
-        
+
         // Start background processors
         self.start_sla_monitor().await;
         self.start_notification_processor().await;
         self.start_metrics_collector().await;
         self.start_cleanup_processor().await;
-        
+
         info!("Case management system initialized successfully");
         Ok(())
     }
-    
+
     /// Create a new security case
     #[instrument(skip(self, related_alerts))]
     pub async fn create_case(
@@ -3337,17 +3326,21 @@ impl CaseManagementSystem {
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let case_id = Uuid::new_v4().to_string();
         let now = Utc::now();
-        
+
         // Calculate SLA deadlines based on severity
         let config = self.config.read().await;
-        let response_deadline = now + Duration::minutes(
-            config.sla_config.response_time_minutes.get(&severity).copied().unwrap_or(60) as i64
-        );
-        let resolution_deadline = now + Duration::hours(
-            config.sla_config.resolution_time_hours.get(&severity).copied().unwrap_or(24) as i64
-        );
+        let response_deadline = now
+            + Duration::minutes(
+                config.sla_config.response_time_minutes.get(&severity).copied().unwrap_or(60)
+                    as i64,
+            );
+        let resolution_deadline = now
+            + Duration::hours(
+                config.sla_config.resolution_time_hours.get(&severity).copied().unwrap_or(24)
+                    as i64,
+            );
         drop(config);
-        
+
         // Create case
         let case = SecurityCase {
             id: case_id.clone(),
@@ -3362,21 +3355,29 @@ impl CaseManagementSystem {
             related_alerts,
             related_workflows: Vec::new(),
             evidence: Vec::new(),
-            timeline: vec![
-                TimelineEntry {
-                    id: Uuid::new_v4().to_string(),
-                    timestamp: now,
-                    entry_type: TimelineEntryType::CaseCreated,
-                    actor: "system".to_string(),
-                    description: "Case created automatically".to_string(),
-                    data: None,
-                },
-            ],
+            timeline: vec![TimelineEntry {
+                id: Uuid::new_v4().to_string(),
+                timestamp: now,
+                entry_type: TimelineEntryType::CaseCreated,
+                actor: "system".to_string(),
+                description: "Case created automatically".to_string(),
+                data: None,
+            }],
             tags: Vec::new(),
             custom_fields: HashMap::new(),
             sla_info: SlaInfo {
-                response_time_minutes: config.sla_config.response_time_minutes.get(&severity).copied().unwrap_or(60),
-                resolution_time_hours: config.sla_config.resolution_time_hours.get(&severity).copied().unwrap_or(24),
+                response_time_minutes: config
+                    .sla_config
+                    .response_time_minutes
+                    .get(&severity)
+                    .copied()
+                    .unwrap_or(60),
+                resolution_time_hours: config
+                    .sla_config
+                    .resolution_time_hours
+                    .get(&severity)
+                    .copied()
+                    .unwrap_or(24),
                 response_deadline,
                 resolution_deadline,
                 response_sla_breached: false,
@@ -3385,16 +3386,16 @@ impl CaseManagementSystem {
                 time_to_resolution: None,
             },
         };
-        
+
         // Store case in memory cache
         self.active_cases.insert(case_id.clone(), case.clone());
-        
+
         // Persist to database
         self.persist_case(&case).await?;
-        
+
         // Apply automation rules
         self.apply_automation_rules(&case).await?;
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.lock().await;
@@ -3403,7 +3404,7 @@ impl CaseManagementSystem {
             *metrics.cases_by_severity.entry(severity.clone()).or_insert(0) += 1;
             metrics.last_updated = now;
         }
-        
+
         // Publish case creation event
         if let Some(ref publisher) = self.event_publisher {
             let event = SoarEvent {
@@ -3419,16 +3420,16 @@ impl CaseManagementSystem {
                     AlertSeverity::Low => 4,
                 },
             };
-            
+
             if let Err(e) = publisher.send(event).await {
                 warn!("Failed to publish case creation event: {}", e);
             }
         }
-        
+
         info!("Created security case: {} (severity: {:?})", case_id, severity);
         Ok(case_id)
     }
-    
+
     /// Update case status
     #[instrument(skip(self))]
     pub async fn update_case_status(
@@ -3442,7 +3443,7 @@ impl CaseManagementSystem {
             let old_status = case.status.clone();
             case.status = new_status.clone();
             case.updated_at = Utc::now();
-            
+
             // Add timeline entry
             case.timeline.push(TimelineEntry {
                 id: Uuid::new_v4().to_string(),
@@ -3452,15 +3453,15 @@ impl CaseManagementSystem {
                 description: format!("Status changed from {:?} to {:?}", old_status, new_status),
                 data: notes.map(|n| serde_json::json!({"notes": n})),
             });
-            
+
             // Update SLA info if case is resolved
             if new_status == CaseStatus::Resolved && case.sla_info.time_to_resolution.is_none() {
                 case.sla_info.time_to_resolution = Some(Utc::now() - case.created_at);
             }
-            
+
             // Persist changes
             self.persist_case(&case).await?;
-            
+
             // Update metrics
             {
                 let mut metrics = self.metrics.lock().await;
@@ -3469,15 +3470,15 @@ impl CaseManagementSystem {
                 }
                 *metrics.cases_by_status.entry(new_status.clone()).or_insert(0) += 1;
             }
-            
+
             info!("Updated case {} status from {:?} to {:?}", case_id, old_status, new_status);
         } else {
             return Err(format!("Case not found: {}", case_id).into());
         }
-        
+
         Ok(())
     }
-    
+
     /// Assign case to user
     #[instrument(skip(self))]
     pub async fn assign_case(
@@ -3490,7 +3491,7 @@ impl CaseManagementSystem {
             let old_assignee = case.assignee.clone();
             case.assignee = Some(assignee.to_string());
             case.updated_at = Utc::now();
-            
+
             // Add timeline entry
             case.timeline.push(TimelineEntry {
                 id: Uuid::new_v4().to_string(),
@@ -3503,23 +3504,23 @@ impl CaseManagementSystem {
                     "new_assignee": assignee
                 })),
             });
-            
+
             // Update SLA info if this is first assignment
             if old_assignee.is_none() && case.sla_info.time_to_response.is_none() {
                 case.sla_info.time_to_response = Some(Utc::now() - case.created_at);
             }
-            
+
             // Persist changes
             self.persist_case(&case).await?;
-            
+
             info!("Assigned case {} to {}", case_id, assignee);
         } else {
             return Err(format!("Case not found: {}", case_id).into());
         }
-        
+
         Ok(())
     }
-    
+
     /// Add evidence to case
     #[instrument(skip(self, evidence_data))]
     pub async fn add_evidence(
@@ -3531,7 +3532,7 @@ impl CaseManagementSystem {
         collector: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let evidence_id = Uuid::new_v4().to_string();
-        
+
         // Create evidence record
         let evidence = Evidence {
             id: evidence_id.clone(),
@@ -3542,24 +3543,22 @@ impl CaseManagementSystem {
             collected_at: Utc::now(),
             collected_by: collector.to_string(),
             hash: self.calculate_evidence_hash(&evidence_data),
-            chain_of_custody: vec![
-                CustodyEntry {
-                    timestamp: Utc::now(),
-                    handler: collector.to_string(),
-                    action: "collected".to_string(),
-                    comments: Some("Initial evidence collection".to_string()),
-                },
-            ],
+            chain_of_custody: vec![CustodyEntry {
+                timestamp: Utc::now(),
+                handler: collector.to_string(),
+                action: "collected".to_string(),
+                comments: Some("Initial evidence collection".to_string()),
+            }],
         };
-        
+
         // Store evidence data
         let storage_path = self.evidence_manager.store_evidence(&evidence, &evidence_data).await?;
-        
+
         // Update case with evidence
         if let Some(mut case) = self.active_cases.get_mut(case_id) {
             case.evidence.push(evidence.clone());
             case.updated_at = Utc::now();
-            
+
             // Add timeline entry
             case.timeline.push(TimelineEntry {
                 id: Uuid::new_v4().to_string(),
@@ -3573,23 +3572,23 @@ impl CaseManagementSystem {
                     "file_size": evidence_data.len()
                 })),
             });
-            
+
             // Persist changes
             self.persist_case(&case).await?;
-            
+
             // Update metrics
             {
                 let mut metrics = self.metrics.lock().await;
                 metrics.evidence_items_collected += 1;
             }
-            
+
             info!("Added evidence '{}' to case {}", evidence_name, case_id);
             Ok(evidence_id)
         } else {
             Err(format!("Case not found: {}", case_id).into())
         }
     }
-    
+
     /// Evaluate case creation from alert
     #[instrument(skip(self, alert))]
     pub async fn evaluate_case_creation(
@@ -3597,140 +3596,149 @@ impl CaseManagementSystem {
         alert: &SecurityAlert,
     ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
-        
+
         // Check if auto case creation is enabled
         if !config.auto_create_cases {
             return Ok(None);
         }
-        
+
         // Check severity threshold
         if alert.severity < config.case_creation_threshold {
             return Ok(None);
         }
-        
+
         // Create case for qualifying alerts
-        let case_id = self.create_case(
-            format!("Security Alert: {}", alert.title),
-            alert.description.clone(),
-            alert.severity.clone(),
-            vec![alert.id.clone()],
-        ).await?;
-        
+        let case_id = self
+            .create_case(
+                format!("Security Alert: {}", alert.title),
+                alert.description.clone(),
+                alert.severity.clone(),
+                vec![alert.id.clone()],
+            )
+            .await?;
+
         Ok(Some(case_id))
     }
-    
+
     /// Get case by ID
     pub async fn get_case(&self, case_id: &str) -> Option<SecurityCase> {
         self.active_cases.get(case_id).map(|entry| entry.clone())
     }
-    
+
     /// Get case metrics
     pub async fn get_metrics(&self) -> CaseManagementMetrics {
         self.metrics.lock().await.clone()
     }
-    
+
     /// Persist case to database
-    async fn persist_case(&self, case: &SecurityCase) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn persist_case(
+        &self,
+        case: &SecurityCase,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement database persistence
         debug!("Persisting case {} to database", case.id);
         Ok(())
     }
-    
+
     /// Apply automation rules to case
-    async fn apply_automation_rules(&self, case: &SecurityCase) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn apply_automation_rules(
+        &self,
+        case: &SecurityCase,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement automation rule application
         debug!("Applying automation rules to case {}", case.id);
         Ok(())
     }
-    
+
     /// Calculate evidence hash
     fn calculate_evidence_hash(&self, data: &[u8]) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(data);
         format!("{:x}", hasher.finalize())
     }
-    
+
     /// Load case templates
     async fn load_case_templates(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Load templates from configuration or database
         info!("Loaded case templates");
         Ok(())
     }
-    
+
     /// Start SLA monitor
     async fn start_sla_monitor(&self) {
         let sla_tracker = self.sla_tracker.clone();
-        
+
         tokio::spawn(async move {
             sla_tracker.start_monitoring().await;
         });
     }
-    
+
     /// Start notification processor
     async fn start_notification_processor(&self) {
         let notification_system = self.notification_system.clone();
-        
+
         tokio::spawn(async move {
             notification_system.start_processor().await;
         });
     }
-    
+
     /// Start metrics collector
     async fn start_metrics_collector(&self) {
         let metrics = self.metrics.clone();
         let active_cases = self.active_cases.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(300)); // 5 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let mut metrics_guard = metrics.lock().await;
-                
+
                 // Update case status counts
                 metrics_guard.cases_by_status.clear();
                 metrics_guard.cases_by_severity.clear();
-                
+
                 for case_entry in active_cases.iter() {
                     let case = case_entry.value();
                     *metrics_guard.cases_by_status.entry(case.status.clone()).or_insert(0) += 1;
                     *metrics_guard.cases_by_severity.entry(case.severity.clone()).or_insert(0) += 1;
                 }
-                
+
                 metrics_guard.last_updated = Utc::now();
-                
+
                 debug!("Updated case management metrics");
             }
         });
     }
-    
+
     /// Start cleanup processor
     async fn start_cleanup_processor(&self) {
         let active_cases = self.active_cases.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(86400)); // 24 hours
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let cutoff_time = Utc::now() - Duration::days(30);
                 let mut to_remove = Vec::new();
-                
+
                 for case_entry in active_cases.iter() {
                     let case = case_entry.value();
-                    if (case.status == CaseStatus::Closed || case.status == CaseStatus::Resolved) 
-                        && case.updated_at < cutoff_time {
+                    if (case.status == CaseStatus::Closed || case.status == CaseStatus::Resolved)
+                        && case.updated_at < cutoff_time
+                    {
                         to_remove.push(case.id.clone());
                     }
                 }
-                
+
                 for case_id in to_remove {
                     active_cases.remove(&case_id);
                 }
-                
+
                 debug!("Cleaned up old cases from memory cache");
             }
         });
@@ -3776,7 +3784,7 @@ impl EvidenceManager {
             storage_backends: HashMap::new(),
         })
     }
-    
+
     async fn store_evidence(
         &self,
         evidence: &Evidence,
@@ -3851,7 +3859,7 @@ impl CaseNotificationSystem {
             delivery_tracking: Arc::new(DashMap::new()),
         })
     }
-    
+
     async fn start_processor(&self) {
         info!("Case notification processor started");
     }
@@ -3882,10 +3890,7 @@ impl DocumentSharingManager {
 
 impl DocumentAccessControl {
     fn new() -> Self {
-        Self {
-            access_policies: Vec::new(),
-            audit_logger: Arc::new(DocumentAuditLogger::new()),
-        }
+        Self { access_policies: Vec::new(), audit_logger: Arc::new(DocumentAuditLogger::new()) }
     }
 }
 

@@ -143,13 +143,13 @@ impl AdvancedRiskEngine {
 
     pub async fn assess_comprehensive_risk(&self, context: &AuthContext) -> MfaResult<RiskAssessment> {
         let mut factors = HashMap::new();
-        
+
         // Get historical patterns for the user
         let historical_patterns = self.get_user_historical_patterns(&context.user_id).await?;
-        
+
         // Anomaly detection
         let anomaly_scores = self.detect_anomalies(context, &historical_patterns).await?;
-        
+
         // Threat intelligence analysis
         let threat_intel = if self.threat_intel_enabled {
             self.analyze_threat_intelligence(context).await?
@@ -320,19 +320,19 @@ impl AdvancedRiskEngine {
         let current_time = context.current_time;
         let datetime = chrono::DateTime::from_timestamp(current_time as i64, 0)
             .unwrap_or_else(|| chrono::Utc::now());
-        
+
         let hour = datetime.hour() as u8;
         let weekday = datetime.weekday().num_days_from_sunday() as u8;
 
         // Check against hourly patterns
         let hourly_familiarity = patterns.auth_frequency.hourly_pattern[hour as usize];
-        
+
         // Check against daily patterns
         let daily_familiarity = patterns.auth_frequency.weekly_pattern[weekday as usize];
 
         // Combine temporal signals
         let temporal_familiarity = (hourly_familiarity + daily_familiarity) / 2.0;
-        
+
         // Anomaly is inverse of familiarity
         1.0 - temporal_familiarity
     }
@@ -344,7 +344,7 @@ impl AdvancedRiskEngine {
         if let Some(last_auth) = context.previous_auth_time {
             let time_since_last = context.current_time.saturating_sub(last_auth);
             let days_since_last = time_since_last as f64 / (24.0 * 3600.0);
-            
+
             // If it's been much longer than usual between authentications
             if days_since_last > patterns.auth_frequency.daily_average * 3.0 {
                 anomaly_score += 0.3;
@@ -466,10 +466,10 @@ impl AdvancedRiskEngine {
         ) {
             let distance_km = self.calculate_distance(lat1, lon1, lat2.0, lat2.1);
             let time_diff_hours = (context.current_time.saturating_sub(last_location.last_seen) as f64) / 3600.0;
-            
+
             if time_diff_hours > 0.0 {
                 let speed_kmh = distance_km / time_diff_hours;
-                
+
                 // Impossible if faster than commercial aviation (1000 km/h)
                 if speed_kmh > 1000.0 {
                     return Ok(Some(0.9));
@@ -573,10 +573,10 @@ impl AdvancedRiskEngine {
         // Simple similarity based on common tokens
         let tokens1: std::collections::HashSet<&str> = ua1.split_whitespace().collect();
         let tokens2: std::collections::HashSet<&str> = ua2.split_whitespace().collect();
-        
+
         let intersection_size = tokens1.intersection(&tokens2).count();
         let union_size = tokens1.union(&tokens2).count();
-        
+
         if union_size == 0 { 0.0 } else { intersection_size as f64 / union_size as f64 }
     }
 
@@ -616,7 +616,7 @@ mod tests {
     #[tokio::test]
     async fn test_anomaly_detection() {
         let engine = AdvancedRiskEngine::new().await;
-        
+
         let context = AuthContext {
             user_id: "test_user".to_string(),
             ip_address: Some("192.168.1.1".parse().unwrap()),
@@ -635,7 +635,7 @@ mod tests {
         };
 
         let anomalies = engine.detect_anomalies(&context, &None).await.unwrap();
-        
+
         // New user should have some anomaly scores
         assert!(anomalies.overall_anomaly > 0.0);
         assert!(anomalies.device_anomaly > 0.0);

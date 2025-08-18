@@ -1,10 +1,10 @@
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use tracing::{info, warn, error, instrument};
-use dashmap::DashMap;
+use tracing::{error, info, instrument, warn};
 
 use crate::errors::AuthError;
 
@@ -31,8 +31,8 @@ impl Default for PolicyCacheConfig {
             default_ttl: Duration::from_secs(300), // 5 minutes
             max_entries: 10000,
             enabled: true,
-            deny_ttl: Duration::from_secs(60),     // 1 minute for deny decisions
-            error_ttl: Duration::from_secs(10),    // 10 seconds for errors
+            deny_ttl: Duration::from_secs(60), // 1 minute for deny decisions
+            error_ttl: Duration::from_secs(10), // 10 seconds for errors
             cleanup_interval: Duration::from_secs(60), // Clean up every minute
         }
     }
@@ -103,7 +103,7 @@ impl PolicyCache {
     fn generate_cache_key(&self, request: &PolicyRequest) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         request.hash(&mut hasher);
         format!("policy:{:x}", hasher.finish())
@@ -117,7 +117,7 @@ impl PolicyCache {
         }
 
         let key = self.generate_cache_key(request);
-        
+
         if let Some(mut entry) = self.cache.get_mut(&key) {
             // Check if entry is still valid
             if Instant::now() < entry.expires_at {
@@ -125,7 +125,7 @@ impl PolicyCache {
                 entry.hit_count += 1;
                 let mut stats = self.stats.write().await;
                 stats.hits += 1;
-                
+
                 info!(
                     cache_key = %key,
                     decision = %entry.response.decision,
@@ -133,16 +133,16 @@ impl PolicyCache {
                     age_seconds = entry.created_at.elapsed().as_secs(),
                     "Policy cache hit"
                 );
-                
+
                 return Some(entry.response.clone());
             } else {
                 // Entry expired, remove it
                 drop(entry);
                 self.cache.remove(&key);
-                
+
                 let mut stats = self.stats.write().await;
                 stats.evictions += 1;
-                
+
                 warn!(
                     cache_key = %key,
                     "Policy cache entry expired and removed"
@@ -153,13 +153,17 @@ impl PolicyCache {
         // Cache miss
         let mut stats = self.stats.write().await;
         stats.misses += 1;
-        
+
         None
     }
 
     /// Store policy decision in cache
     #[instrument(skip(self))]
-    pub async fn put(&self, request: &PolicyRequest, response: PolicyResponse) -> Result<(), AuthError> {
+    pub async fn put(
+        &self,
+        request: &PolicyRequest,
+        response: PolicyResponse,
+    ) -> Result<(), AuthError> {
         if !self.config.enabled {
             return Ok(());
         }
@@ -170,7 +174,7 @@ impl PolicyCache {
         }
 
         let key = self.generate_cache_key(request);
-        
+
         // Determine TTL based on decision type
         let ttl = match response.decision.as_str() {
             "Deny" => self.config.deny_ttl,
@@ -205,7 +209,7 @@ impl PolicyCache {
     #[instrument(skip(self))]
     pub async fn invalidate(&self, pattern: &str) -> usize {
         let mut removed = 0;
-        
+
         // For now, implement simple prefix matching
         // In production, could support more sophisticated patterns
         self.cache.retain(|key, _| {
@@ -260,10 +264,7 @@ impl PolicyCache {
         }
 
         // Sort by hit count (ascending) then by age (oldest first)
-        to_remove.sort_by(|a, b| {
-            a.1.cmp(&b.1)
-                .then_with(|| a.2.cmp(&b.2))
-        });
+        to_remove.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.cmp(&b.2)));
 
         // Remove the least valuable entries
         let mut removed = 0;
@@ -342,25 +343,21 @@ impl PolicyCache {
 
     /// Get current Unix timestamp
     fn current_timestamp() -> u64 {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
     }
 }
 
 /// Background task for periodic cache cleanup
 pub async fn start_cache_cleanup_task(cache: Arc<PolicyCache>) {
     let mut interval = tokio::time::interval(cache.config.cleanup_interval);
-    
+
     loop {
         interval.tick().await;
-        
+
         if cache.needs_cleanup().await {
-            if let Err(e) = tokio::time::timeout(
-                Duration::from_secs(30),
-                cache.cleanup_expired()
-            ).await {
+            if let Err(e) =
+                tokio::time::timeout(Duration::from_secs(30), cache.cleanup_expired()).await
+            {
                 error!(error = %e, "Policy cache cleanup timeout");
             }
         }
@@ -384,12 +381,7 @@ pub fn normalize_policy_request(
         // Keep mfa_required, mfa_verified as they affect policy decisions
     }
 
-    PolicyRequest {
-        principal,
-        action,
-        resource,
-        context: normalized_context,
-    }
+    PolicyRequest { principal, action, resource, context: normalized_context }
 }
 
 #[cfg(test)]
@@ -551,10 +543,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_disabled_cache() {
-        let config = PolicyCacheConfig {
-            enabled: false,
-            ..Default::default()
-        };
+        let config = PolicyCacheConfig { enabled: false, ..Default::default() };
         let cache = PolicyCache::new(config);
 
         let request = PolicyRequest {

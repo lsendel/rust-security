@@ -123,11 +123,11 @@ impl SecureKeyManager {
     async fn load_from_vault(&self, vault_client: &VaultClient) -> Result<String, KeyError> {
         let secret_path = std::env::var("VAULT_RSA_KEY_PATH")
             .unwrap_or_else(|_| "secret/auth-service/rsa-key".to_string());
-        
+
         let secret: Value = kv2::read(vault_client, "kv", &secret_path)
             .await
             .map_err(|e| KeyError::VaultError(format!("Failed to read from Vault: {}", e)))?;
-        
+
         secret.get("private_key")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
@@ -137,7 +137,7 @@ impl SecureKeyManager {
     async fn load_from_secure_file(&self, path: &str) -> Result<String, KeyError> {
         // Validate file permissions and ownership for security
         self.validate_file_security(path)?;
-        
+
         tokio::fs::read_to_string(path)
             .await
             .map_err(|e| KeyError::FileError(format!("Failed to read key file {}: {}", path, e)))
@@ -147,13 +147,13 @@ impl SecureKeyManager {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            
+
             let metadata = std::fs::metadata(path)
                 .map_err(|e| KeyError::FileError(format!("Cannot access file metadata: {}", e)))?;
-            
+
             let permissions = metadata.permissions();
             let mode = permissions.mode();
-            
+
             // File should be readable only by owner (0o600 or 0o400)
             if mode & 0o077 != 0 {
                 return Err(KeyError::ValidationFailed(
@@ -161,7 +161,7 @@ impl SecureKeyManager {
                 ));
             }
         }
-        
+
         Ok(())
     }
 
@@ -177,18 +177,18 @@ JD6haS8+DLfaLM2Drci/wD/cKkU6zqO+npmOyMFVMBaWwoZj7NWcmrvWC5vJubaJ
 AkpJ17uAEymw0OQDVxuj/QeAORSncNOArRvxwIDAQABAoIBAQC5oQbKk8D5r2Jn
 ...
 -----END RSA PRIVATE KEY-----"#;
-        
+
         Ok(DEV_PRIVATE_KEY.to_string())
     }
 
     async fn create_key_material(&self, private_key_pem: String, source: KeySource) -> Result<SecureKeyMaterial, KeyError> {
         let kid = format!("key-{}-{}", now_unix(), match source {
             KeySource::Environment => "env",
-            KeySource::Vault => "vault", 
+            KeySource::Vault => "vault",
             KeySource::SecureFile => "file",
             KeySource::Development => "dev",
         });
-        
+
         // Create jsonwebtoken keys
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
             .map_err(|e| KeyError::LoadingFailed(format!("Invalid encoding key: {}", e)))?;
@@ -197,7 +197,7 @@ AkpJ17uAEymw0OQDVxuj/QeAORSncNOArRvxwIDAQABAoIBAQC5oQbKk8D5r2Jn
 
         // Extract public key components for JWK
         let (n, e) = self.extract_public_key_components(&private_key_pem)?;
-        
+
         let public_jwk = serde_json::json!({
             "kty": "RSA",
             "use": "sig",
@@ -224,39 +224,39 @@ AkpJ17uAEymw0OQDVxuj/QeAORSncNOArRvxwIDAQABAoIBAQC5oQbKk8D5r2Jn
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex)
             .map_err(|e| KeyError::ValidationFailed(format!("Failed to decode modulus: {}", e)))?;
-        
+
         let n = base64url(&modulus_bytes);
         let e = base64url(&[0x01, 0x00, 0x01]); // Standard RSA exponent (65537)
-        
+
         Ok((n, e))
     }
 
     pub async fn ensure_key_available(&self) -> Result<(), KeyError> {
         let keys = ACTIVE_KEYS.read().await;
-        
-        let needs_new_key = keys.is_empty() || 
+
+        let needs_new_key = keys.is_empty() ||
             keys.iter().any(|k| now_unix() - k.created_at > self.key_rotation_interval);
-        
+
         if needs_new_key {
             drop(keys); // Release read lock
-            
+
             let (private_key, source) = self.load_private_key().await?;
             let new_key = self.create_key_material(private_key, source).await?;
-            
+
             let mut keys = ACTIVE_KEYS.write().await;
-            
+
             // Keep keys for grace period during rotation
             keys.retain(|k| now_unix() - k.created_at < (self.key_rotation_interval * 2));
             keys.push(new_key);
-            
+
             // Limit total keys
             if keys.len() > self.max_keys {
                 keys.remove(0);
             }
-            
+
             tracing::info!("Key rotation completed, {} keys active", keys.len());
         }
-        
+
         Ok(())
     }
 }
@@ -265,11 +265,11 @@ fn base64url(data: &[u8]) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
 }
 
-fn now_unix() -> u64 { 
+fn now_unix() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs() 
+        .as_secs()
 }
 
 // Public API functions for compatibility with existing code
@@ -277,7 +277,7 @@ fn now_unix() -> u64 {
 pub async fn jwks_document() -> Value {
     let keys = ACTIVE_KEYS.read().await;
     let jwk_keys: Vec<Value> = keys.iter().map(|k| k.public_jwk.clone()).collect();
-    
+
     serde_json::json!({
         "keys": jwk_keys
     })
@@ -289,7 +289,7 @@ pub async fn current_signing_key() -> (String, EncodingKey) {
         // Return emergency fallback - this should trigger alerts in production
         return ("emergency-fallback".to_string(), EncodingKey::from_secret(b"emergency-secret"));
     }
-    
+
     let keys = ACTIVE_KEYS.read().await;
     if let Some(key_material) = keys.first() {
         (key_material.kid.clone(), key_material.encoding_key.clone())
@@ -330,31 +330,31 @@ pub async fn get_key_sources() -> Vec<KeySource> {
 
 pub async fn validate_security_posture() -> Result<(), Vec<String>> {
     let mut issues = Vec::new();
-    
+
     // Check if we're in production with insecure keys
     let is_production = std::env::var("RUST_ENV").unwrap_or_default() == "production" ||
                        std::env::var("ENVIRONMENT").unwrap_or_default() == "production";
-    
+
     if is_production {
         let sources = get_key_sources().await;
         if sources.iter().any(|s| matches!(s, KeySource::Development)) {
             issues.push("Development keys detected in production environment".to_string());
         }
-        
-        if std::env::var("RSA_PRIVATE_KEY").is_err() && 
+
+        if std::env::var("RSA_PRIVATE_KEY").is_err() &&
            std::env::var("RSA_PRIVATE_KEY_PATH").is_err() {
             #[cfg(not(feature = "vault"))]
             issues.push("No secure key source configured for production".to_string());
         }
     }
-    
+
     // Check file permissions if using file-based keys
     if let Ok(path) = std::env::var("RSA_PRIVATE_KEY_PATH") {
         if let Err(e) = KEY_MANAGER.validate_file_security(&path) {
             issues.push(format!("Key file security issue: {}", e));
         }
     }
-    
+
     if issues.is_empty() {
         Ok(())
     } else {
@@ -371,7 +371,7 @@ mod tests {
         // Clear any production environment for test
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("ENVIRONMENT");
-        
+
         let manager = SecureKeyManager::new();
         let result = manager.generate_development_key().await;
         assert!(result.is_ok());
@@ -381,13 +381,13 @@ mod tests {
     async fn test_production_safety() {
         // Set production environment
         std::env::set_var("RUST_ENV", "production");
-        
+
         let manager = SecureKeyManager::new();
         let result = manager.load_private_key().await;
-        
+
         // Should fail in production without secure key source
         assert!(matches!(result, Err(KeyError::NoSecureKeySource)));
-        
+
         // Cleanup
         std::env::remove_var("RUST_ENV");
     }
@@ -395,14 +395,14 @@ mod tests {
     #[tokio::test]
     async fn test_environment_variable_priority() {
         std::env::set_var("RSA_PRIVATE_KEY", "test-key-content");
-        
+
         let manager = SecureKeyManager::new();
         let result = manager.load_private_key().await;
-        
+
         assert!(result.is_ok());
         let (_, source) = result.unwrap();
         assert!(matches!(source, KeySource::Environment));
-        
+
         // Cleanup
         std::env::remove_var("RSA_PRIVATE_KEY");
     }
@@ -412,10 +412,10 @@ mod tests {
         // Test in development mode
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("ENVIRONMENT");
-        
+
         // Initialize with development key
         initialize_keys().await.unwrap();
-        
+
         let validation = validate_security_posture().await;
         // Should pass in development
         assert!(validation.is_ok());
@@ -424,18 +424,18 @@ mod tests {
     #[tokio::test]
     async fn test_key_rotation() {
         std::env::remove_var("RUST_ENV");
-        
+
         let manager = SecureKeyManager::new().with_rotation_interval(1); // 1 second for test
-        
+
         manager.ensure_key_available().await.unwrap();
         let kid1 = get_current_kid().await.unwrap();
-        
+
         // Wait for rotation interval
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-        
+
         manager.ensure_key_available().await.unwrap();
         let kid2 = get_current_kid().await.unwrap();
-        
+
         // Should have rotated
         assert_ne!(kid1, kid2);
     }

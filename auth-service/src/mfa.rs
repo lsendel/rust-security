@@ -1,20 +1,20 @@
+use argon2::password_hash::{rand_core::OsRng, SaltString};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{extract::State, Json};
 use data_encoding::BASE32;
 use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
+use redis;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use redis;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{rand_core::OsRng, SaltString};
 
-use crate::AppState;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::otp_provider::{MockSender, OtpSender, TwilioSender};
 use crate::pii_protection::redact_log;
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::AppState;
 
 // Declare the crypto module
 pub mod crypto;
@@ -56,10 +56,11 @@ pub struct BackupCodesResponse {
 struct TotpRecord {
     secret: Vec<u8>,
     verified: bool,
-    backup_codes: HashSet<String>,  // Stores hashed backup codes
+    backup_codes: HashSet<String>, // Stores hashed backup codes
 }
 
-static MFA_STORE: Lazy<RwLock<HashMap<String, TotpRecord>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static MFA_STORE: Lazy<RwLock<HashMap<String, TotpRecord>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
     let url = std::env::var("REDIS_URL").ok()?;
@@ -73,7 +74,10 @@ async fn persist_secret(user_id: &str, secret: &[u8]) {
     if let Ok(enc) = manager.encrypt_secret(secret).await {
         if let Some(mut conn) = redis_conn().await {
             let key = format!("mfa:totp:{}:secret", user_id);
-            let ttl = std::env::var("MFA_TOTP_SECRET_TTL_SECS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+            let ttl = std::env::var("MFA_TOTP_SECRET_TTL_SECS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
             let payload = serde_json::to_string(&enc).unwrap_or_default();
             if ttl > 0 {
                 let _ = redis::cmd("SETEX")
@@ -100,12 +104,7 @@ async fn persist_secret(user_id: &str, secret: &[u8]) {
 async fn set_verified(user_id: &str) {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:totp:{}:verified", user_id);
-        let _ = redis::cmd("SET")
-            .arg(&key)
-            .arg("1")
-            .query_async::<String>(&mut conn)
-            .await
-            .ok();
+        let _ = redis::cmd("SET").arg(&key).arg("1").query_async::<String>(&mut conn).await.ok();
     }
 }
 
@@ -113,12 +112,7 @@ async fn set_last_verified(user_id: &str) {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:last_verified:{}", user_id);
         let now = now_unix() as i64;
-        let _ = redis::cmd("SET")
-            .arg(&key)
-            .arg(now)
-            .query_async::<String>(&mut conn)
-            .await
-            .ok();
+        let _ = redis::cmd("SET").arg(&key).arg(now).query_async::<String>(&mut conn).await.ok();
     }
 }
 
@@ -162,11 +156,7 @@ async fn is_totp_code_used(user_id: &str, code: &str) -> bool {
         let nonce_key = format!("mfa:totp:nonce:{}:{}", user_id, code);
 
         // Check if the nonce exists
-        match redis::cmd("EXISTS")
-            .arg(&nonce_key)
-            .query_async::<i64>(&mut conn)
-            .await
-        {
+        match redis::cmd("EXISTS").arg(&nonce_key).query_async::<i64>(&mut conn).await {
             Ok(exists) => exists == 1,
             Err(_) => false, // If we can't check, assume not used
         }
@@ -178,10 +168,8 @@ async fn is_totp_code_used(user_id: &str, code: &str) -> bool {
 pub async fn is_recently_verified(user_id: &str, window_secs: u64) -> bool {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:last_verified:{}", user_id);
-        if let Ok(Some(ts)) = redis::cmd("GET")
-            .arg(&key)
-            .query_async::<Option<i64>>(&mut conn)
-            .await
+        if let Ok(Some(ts)) =
+            redis::cmd("GET").arg(&key).query_async::<Option<i64>>(&mut conn).await
         {
             let now = now_unix() as i64;
             return now.saturating_sub(ts) <= window_secs as i64;
@@ -197,9 +185,7 @@ fn hash_backup_code(code: &str) -> String {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 
-    argon2.hash_password(code.as_bytes(), &salt)
-        .expect("Failed to hash backup code")
-        .to_string()
+    argon2.hash_password(code.as_bytes(), &salt).expect("Failed to hash backup code").to_string()
 }
 
 fn verify_backup_code(code: &str, hash: &str) -> bool {
@@ -216,25 +202,15 @@ async fn persist_backup_codes(user_id: &str, codes: &[String]) {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:totp:{}:backup", user_id);
         let hashed: Vec<String> = codes.iter().map(|c| hash_backup_code(c)).collect();
-        let _ = redis::cmd("DEL")
-            .arg(&key)
-            .query_async::<i64>(&mut conn)
-            .await
-            .ok();
-        let _ = redis::cmd("SADD")
-            .arg(&key)
-            .arg(hashed)
-            .query_async::<i64>(&mut conn)
-            .await
-            .ok();
-        let ttl = std::env::var("MFA_TOTP_BACKUP_TTL_SECS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+        let _ = redis::cmd("DEL").arg(&key).query_async::<i64>(&mut conn).await.ok();
+        let _ = redis::cmd("SADD").arg(&key).arg(hashed).query_async::<i64>(&mut conn).await.ok();
+        let ttl = std::env::var("MFA_TOTP_BACKUP_TTL_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
         if ttl > 0 {
-            let _ = redis::cmd("EXPIRE")
-                .arg(&key)
-                .arg(ttl)
-                .query_async::<i64>(&mut conn)
-                .await
-                .ok();
+            let _ =
+                redis::cmd("EXPIRE").arg(&key).arg(ttl).query_async::<i64>(&mut conn).await.ok();
         }
     }
 }
@@ -244,10 +220,8 @@ async fn consume_backup_code(user_id: &str, code: &str) -> bool {
         let key = format!("mfa:totp:{}:backup", user_id);
 
         // Fetch all hashed backup codes from Redis
-        if let Ok(stored_hashes) = redis::cmd("SMEMBERS")
-            .arg(&key)
-            .query_async::<Vec<String>>(&mut conn)
-            .await
+        if let Ok(stored_hashes) =
+            redis::cmd("SMEMBERS").arg(&key).query_async::<Vec<String>>(&mut conn).await
         {
             // Find matching hash by verifying against each stored hash
             for stored_hash in stored_hashes {
@@ -269,10 +243,7 @@ async fn consume_backup_code(user_id: &str, code: &str) -> bool {
 }
 
 fn now_unix() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn hotp(secret: &[u8], counter: u64) -> u32 {
@@ -304,7 +275,10 @@ fn format_code(code: u32, digits: u32) -> String {
     s
 }
 
-pub async fn totp_register(State(_state): State<AppState>, Json(req): Json<TotpRegisterRequest>) -> Json<TotpRegisterResponse> {
+pub async fn totp_register(
+    State(_state): State<AppState>,
+    Json(req): Json<TotpRegisterRequest>,
+) -> Json<TotpRegisterResponse> {
     // 20-byte random secret
     let secret = {
         let mut bytes = vec![0u8; 20];
@@ -323,15 +297,18 @@ pub async fn totp_register(State(_state): State<AppState>, Json(req): Json<TotpR
 
     persist_secret(&req.user_id, &secret).await;
     let mut store = MFA_STORE.write().await;
-    store.insert(req.user_id.clone(), TotpRecord { secret, verified: false, backup_codes: HashSet::new() });
+    store.insert(
+        req.user_id.clone(),
+        TotpRecord { secret, verified: false, backup_codes: HashSet::new() },
+    );
 
-    Json(TotpRegisterResponse {
-        secret_base32: secret_b32,
-        otpauth_url: uri,
-    })
+    Json(TotpRegisterResponse { secret_base32: secret_b32, otpauth_url: uri })
 }
 
-pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVerifyRequest>) -> Json<TotpVerifyResponse> {
+pub async fn totp_verify(
+    State(_state): State<AppState>,
+    Json(req): Json<TotpVerifyRequest>,
+) -> Json<TotpVerifyResponse> {
     // Check backup code in Redis first
     if consume_backup_code(&req.user_id, &req.code).await {
         set_verified(&req.user_id).await;
@@ -401,7 +378,9 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
             // Track this code as used to prevent replay attacks
             if track_totp_nonce(&req.user_id, &req.code, 120).await {
                 let mut w = MFA_STORE.write().await;
-                if let Some(rec_w) = w.get_mut(&req.user_id) { rec_w.verified = true; }
+                if let Some(rec_w) = w.get_mut(&req.user_id) {
+                    rec_w.verified = true;
+                }
                 set_verified(&req.user_id).await;
                 set_last_verified(&req.user_id).await;
 
@@ -434,7 +413,9 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 .with_action("mfa_verify".to_string())
                 .with_target("mfa_token".to_string())
                 .with_outcome("error".to_string())
-                .with_reason("Redis nonce tracking failed - unable to prevent replay attacks".to_string())
+                .with_reason(
+                    "Redis nonce tracking failed - unable to prevent replay attacks".to_string(),
+                )
                 .with_user_id(req.user_id)
                 .with_detail("reason".to_string(), "nonce_tracking_failed");
                 SecurityLogger::log_event(&mut event);
@@ -446,35 +427,44 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
     Json(TotpVerifyResponse { verified: false })
 }
 
-pub async fn totp_generate_backup_codes(State(_state): State<AppState>, Json(req): Json<TotpRegisterRequest>) -> Json<BackupCodesResponse> {
+pub async fn totp_generate_backup_codes(
+    State(_state): State<AppState>,
+    Json(req): Json<TotpRegisterRequest>,
+) -> Json<BackupCodesResponse> {
     // generate 8 codes, 10 chars each base32-like
     let mut codes = Vec::new();
     let alphabet = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no lookalikes
     for _ in 0..8 {
         let mut b = [0u8; 10];
         getrandom::getrandom(&mut b).expect("random");
-        let code: String = b.iter().map(|x| alphabet[(*x as usize) % alphabet.len()] as char).collect();
+        let code: String =
+            b.iter().map(|x| alphabet[(*x as usize) % alphabet.len()] as char).collect();
         codes.push(code);
     }
     persist_backup_codes(&req.user_id, &codes).await;
     let mut w = MFA_STORE.write().await;
-    let entry = w.entry(req.user_id).or_insert(TotpRecord { secret: vec![], verified: false, backup_codes: HashSet::new() });
+    let entry = w.entry(req.user_id).or_insert(TotpRecord {
+        secret: vec![],
+        verified: false,
+        backup_codes: HashSet::new(),
+    });
     // Store hashed versions in memory
     entry.backup_codes = codes.iter().map(|c| hash_backup_code(c)).collect();
     Json(BackupCodesResponse { codes })
 }
 
-
 // --- SMS/Email OTP (mock delivery) ---
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OtpSendRequest {
     pub user_id: String,
-    pub channel: String,      // "sms" | "email"
-    pub destination: String,  // phone or email
+    pub channel: String,     // "sms" | "email"
+    pub destination: String, // phone or email
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct OtpSendResponse { pub sent: bool }
+pub struct OtpSendResponse {
+    pub sent: bool,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OtpVerifyRequest {
@@ -483,10 +473,16 @@ pub struct OtpVerifyRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct OtpVerifyResponse { pub verified: bool }
+pub struct OtpVerifyResponse {
+    pub verified: bool,
+}
 
-fn hash_otp(code: &str) -> String { hash_backup_code(code) }
-fn verify_otp(code: &str, hash: &str) -> bool { verify_backup_code(code, hash) }
+fn hash_otp(code: &str) -> String {
+    hash_backup_code(code)
+}
+fn verify_otp(code: &str, hash: &str) -> bool {
+    verify_backup_code(code, hash)
+}
 
 fn generate_otp_code() -> String {
     let mut bytes = [0u8; 4];
@@ -495,14 +491,21 @@ fn generate_otp_code() -> String {
     format!("{:06}", num)
 }
 
-pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendRequest>) -> Json<OtpSendResponse> {
+pub async fn otp_send(
+    State(_state): State<AppState>,
+    Json(req): Json<OtpSendRequest>,
+) -> Json<OtpSendResponse> {
     // simple rate limit: N sends per hour per user
     if let Some(mut conn) = redis_conn().await {
         let rl_key = format!("mfa:otp:rate:{}", req.user_id);
-        let sends_per_hour: i64 = std::env::var("MFA_OTP_SENDS_PER_HOUR").ok().and_then(|s| s.parse::<i64>().ok()).unwrap_or(5);
+        let sends_per_hour: i64 = std::env::var("MFA_OTP_SENDS_PER_HOUR")
+            .ok()
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(5);
         if let Ok(count) = redis::cmd("INCR").arg(&rl_key).query_async::<i64>(&mut conn).await {
             if count == 1 {
-                let _ : Result<i64, _> = redis::cmd("EXPIRE").arg(&rl_key).arg(3600).query_async(&mut conn).await;
+                let _: Result<i64, _> =
+                    redis::cmd("EXPIRE").arg(&rl_key).arg(3600).query_async(&mut conn).await;
             }
             if count > sends_per_hour {
                 tracing::warn!(target = "mfa", user = %redact_log(&req.user_id), "OTP rate limit exceeded");
@@ -514,7 +517,10 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
     // persist hash with TTL
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:otp:{}", req.user_id);
-        let ttl = std::env::var("MFA_OTP_TTL_SECS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(300);
+        let ttl = std::env::var("MFA_OTP_TTL_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(300);
         let _ = redis::cmd("SETEX")
             .arg(&key)
             .arg(ttl)
@@ -525,19 +531,19 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
     }
     // delivery via provider (mock or Twilio skeleton)
     let provider: Box<dyn OtpSender> = match std::env::var("OTP_SMS_PROVIDER").ok().as_deref() {
-        Some("twilio") if req.channel.eq_ignore_ascii_case("sms") => {
-            Box::new(TwilioSender {
-                account_sid: std::env::var("TWILIO_ACCOUNT_SID").unwrap_or_default(),
-                auth_token: std::env::var("TWILIO_AUTH_TOKEN").unwrap_or_default(),
-                from: std::env::var("TWILIO_FROM_NUMBER").unwrap_or_default(),
-            })
-        }
+        Some("twilio") if req.channel.eq_ignore_ascii_case("sms") => Box::new(TwilioSender {
+            account_sid: std::env::var("TWILIO_ACCOUNT_SID").unwrap_or_default(),
+            auth_token: std::env::var("TWILIO_AUTH_TOKEN").unwrap_or_default(),
+            from: std::env::var("TWILIO_FROM_NUMBER").unwrap_or_default(),
+        }),
         _ => Box::new(MockSender),
     };
     let send_res = if req.channel.eq_ignore_ascii_case("sms") {
         provider.send_sms(&req.destination, &format!("Your code is {}", code)).await
     } else {
-        provider.send_email(&req.destination, "Your verification code", &format!("Code: {}", code)).await
+        provider
+            .send_email(&req.destination, "Your verification code", &format!("Code: {}", code))
+            .await
     };
     if send_res.is_err() {
         tracing::warn!(target = "mfa", channel = %redact_log(&req.channel), destination = %redact_log("masked"), "OTP send failed");
@@ -574,12 +580,17 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
     Json(OtpSendResponse { sent: true })
 }
 
-pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerifyRequest>) -> Json<OtpVerifyResponse> {
+pub async fn otp_verify(
+    State(_state): State<AppState>,
+    Json(req): Json<OtpVerifyRequest>,
+) -> Json<OtpVerifyResponse> {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:otp:{}", req.user_id);
-        if let Ok(Some(stored)) = redis::cmd("GET").arg(&key).query_async::<Option<String>>(&mut conn).await {
+        if let Ok(Some(stored)) =
+            redis::cmd("GET").arg(&key).query_async::<Option<String>>(&mut conn).await
+        {
             if verify_otp(&req.code, &stored) {
-                let _ : Result<i64, _> = redis::cmd("DEL").arg(&key).query_async(&mut conn).await;
+                let _: Result<i64, _> = redis::cmd("DEL").arg(&key).query_async(&mut conn).await;
                 set_verified(&req.user_id).await;
                 set_last_verified(&req.user_id).await;
                 let mut event = SecurityEvent::new(
@@ -617,23 +628,28 @@ pub async fn otp_verify(State(_state): State<AppState>, Json(req): Json<OtpVerif
 
 // Mark current session/token as MFA-verified for a window; also record per-user last verified
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MfaSessionVerifyRequest { pub user_id: String }
+pub struct MfaSessionVerifyRequest {
+    pub user_id: String,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MfaSessionVerifyResponse { pub acknowledged: bool }
+pub struct MfaSessionVerifyResponse {
+    pub acknowledged: bool,
+}
 
 pub async fn mfa_session_verify(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<MfaSessionVerifyRequest>,
 ) -> Json<MfaSessionVerifyResponse> {
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let auth =
+        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
     let token = auth.strip_prefix("Bearer ").unwrap_or("");
     if !token.is_empty() {
-        let window = std::env::var("MFA_VERIFIED_WINDOW_SECS").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(300);
+        let window = std::env::var("MFA_VERIFIED_WINDOW_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(300);
         let _ = state.token_store.set_mfa_verified(token, true, Some(window)).await;
     }
     set_last_verified(&body.user_id).await;
@@ -652,5 +668,3 @@ pub async fn mfa_session_verify(
     SecurityLogger::log_event(&mut event);
     Json(MfaSessionVerifyResponse { acknowledged: true })
 }
-
-

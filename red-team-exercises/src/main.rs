@@ -1,5 +1,5 @@
 //! Red Team Exercise Suite for Rust Authentication Service
-//! 
+//!
 //! This comprehensive suite validates all implemented security measures through
 //! realistic attack scenarios that mirror actual threat actor techniques.
 
@@ -10,15 +10,15 @@ use std::time::{Duration, Instant};
 use tracing::{error, info, warn};
 
 mod attack_framework;
+mod reporting;
 mod scenarios;
 mod tools;
 mod validation;
-mod reporting;
 
 use attack_framework::RedTeamFramework;
+use reporting::RedTeamReporter;
 use scenarios::*;
 use validation::SecurityControlValidator;
-use reporting::RedTeamReporter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
                 .long("target")
                 .value_name("URL")
                 .help("Target authentication service URL")
-                .default_value("http://localhost:8080")
+                .default_value("http://localhost:8080"),
         )
         .arg(
             Arg::new("scenario")
@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
                 .long("scenario")
                 .value_name("SCENARIO")
                 .help("Specific scenario to run (all, auth, mfa, idor, etc.)")
-                .default_value("all")
+                .default_value("all"),
         )
         .arg(
             Arg::new("intensity")
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
                 .long("intensity")
                 .value_name("LEVEL")
                 .help("Attack intensity level (low, medium, high)")
-                .default_value("medium")
+                .default_value("medium"),
         )
         .arg(
             Arg::new("duration")
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
                 .long("duration")
                 .value_name("SECONDS")
                 .help("Exercise duration in seconds")
-                .default_value("300")
+                .default_value("300"),
         )
         .arg(
             Arg::new("output")
@@ -71,13 +71,13 @@ async fn main() -> anyhow::Result<()> {
                 .long("output")
                 .value_name("FILE")
                 .help("Output report file path")
-                .default_value("red_team_report.json")
+                .default_value("red_team_report.json"),
         )
         .arg(
             Arg::new("validate-only")
                 .long("validate-only")
                 .help("Only validate security controls without attacks")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
         .get_matches();
 
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         // Run comprehensive red team exercises
         let start_time = Instant::now();
-        
+
         match scenario.as_str() {
             "all" => {
                 run_all_scenarios(&mut framework, &mut reporter, intensity, duration).await?;
@@ -165,7 +165,7 @@ async fn run_all_scenarios(
     duration: u64,
 ) -> anyhow::Result<()> {
     println!("{}", "🚀 RUNNING ALL ATTACK SCENARIOS".blue().bold());
-    
+
     let scenarios = vec![
         ("Authentication Bypass", run_authentication_scenarios),
         ("MFA Bypass", run_mfa_scenarios),
@@ -178,19 +178,19 @@ async fn run_all_scenarios(
     ];
 
     let scenario_duration = duration / scenarios.len() as u64;
-    
+
     for (name, scenario_fn) in scenarios {
         println!("\n{} {}", "▶".blue(), name.cyan().bold());
-        
+
         let start = Instant::now();
         if let Err(e) = scenario_fn(framework, reporter, intensity).await {
             error!("Scenario '{}' failed: {}", name, e);
             reporter.add_scenario_error(name, e.to_string());
         }
-        
+
         let elapsed = start.elapsed();
         info!("Scenario '{}' completed in {:?}", name, elapsed);
-        
+
         // Respect scenario duration limits
         if elapsed < Duration::from_secs(scenario_duration) {
             tokio::time::sleep(Duration::from_secs(scenario_duration) - elapsed).await;

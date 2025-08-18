@@ -1,6 +1,6 @@
-use axum::{extract::Query, response::IntoResponse, Json};
 use crate::{mint_local_tokens_for_subject, AppState};
 use axum::extract::State;
+use axum::{extract::Query, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -13,7 +13,9 @@ pub struct OAuthCallbackQuery {
 }
 
 #[derive(Debug, Serialize)]
-pub struct OAuthLoginUrl { pub url: String }
+pub struct OAuthLoginUrl {
+    pub url: String,
+}
 
 #[derive(Debug, Deserialize)]
 struct GitHubTokenResponse {
@@ -49,7 +51,7 @@ pub async fn github_login() -> impl IntoResponse {
         .unwrap_or_else(|_| "http://localhost:8080/oauth/github/callback".to_string());
     let state = uuid::Uuid::new_v4().to_string();
     let scope = "user:email read:user";
-    
+
     let auth_url = format!(
         "https://github.com/login/oauth/authorize?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
         urlencoding::encode(&client_id),
@@ -57,13 +59,13 @@ pub async fn github_login() -> impl IntoResponse {
         urlencoding::encode(scope),
         urlencoding::encode(&state)
     );
-    
+
     Json(OAuthLoginUrl { url: auth_url })
 }
 
 pub async fn github_callback(
-    State(state): State<AppState>, 
-    Query(q): Query<OAuthCallbackQuery>
+    State(state): State<AppState>,
+    Query(q): Query<OAuthCallbackQuery>,
 ) -> impl IntoResponse {
     // Check for OAuth errors first
     if let Some(error) = q.error {
@@ -72,7 +74,8 @@ pub async fn github_callback(
             "error": error,
             "error_description": error_desc,
             "state": q.state
-        })).into_response();
+        }))
+        .into_response();
     }
 
     // Get the authorization code
@@ -83,7 +86,8 @@ pub async fn github_callback(
                 "error": "missing_code",
                 "error_description": "Authorization code is required",
                 "state": q.state
-            })).into_response();
+            }))
+            .into_response();
         }
     };
 
@@ -93,7 +97,8 @@ pub async fn github_callback(
         .unwrap_or_else(|_| "http://localhost:8080/oauth/github/callback".to_string());
 
     // Exchange authorization code for access token
-    let token_response = exchange_code_for_token(&code, &client_id, &client_secret, &redirect_uri).await;
+    let token_response =
+        exchange_code_for_token(&code, &client_id, &client_secret, &redirect_uri).await;
 
     match token_response {
         Ok(token_resp) => {
@@ -111,7 +116,8 @@ pub async fn github_callback(
                     });
 
                     // GitHub uses user ID as the stable identifier
-                    let sub = user_info.get("id")
+                    let sub = user_info
+                        .get("id")
                         .and_then(|id| id.as_u64())
                         .map(|id| format!("github:{}", id))
                         .unwrap_or_else(|| "unknown".to_string());
@@ -119,28 +125,26 @@ pub async fn github_callback(
                     // Mint local tokens for the GitHub user
                     let scope = Some("openid profile email".to_string());
                     if let Ok(local) = mint_local_tokens_for_subject(&state, sub, scope).await {
-                        result["local_tokens"] = serde_json::to_value(local)
-                            .unwrap_or_else(|_| serde_json::json!({}));
+                        result["local_tokens"] =
+                            serde_json::to_value(local).unwrap_or_else(|_| serde_json::json!({}));
                     }
 
                     Json(result).into_response()
                 }
-                Err(e) => {
-                    Json(serde_json::json!({
-                        "error": "user_info_failed",
-                        "error_description": e.to_string(),
-                        "state": q.state
-                    })).into_response()
-                }
+                Err(e) => Json(serde_json::json!({
+                    "error": "user_info_failed",
+                    "error_description": e.to_string(),
+                    "state": q.state
+                }))
+                .into_response(),
             }
         }
-        Err(e) => {
-            Json(serde_json::json!({
-                "error": "token_exchange_failed",
-                "error_description": e.to_string(),
-                "state": q.state
-            })).into_response()
-        }
+        Err(e) => Json(serde_json::json!({
+            "error": "token_exchange_failed",
+            "error_description": e.to_string(),
+            "state": q.state
+        }))
+        .into_response(),
     }
 }
 
@@ -151,7 +155,7 @@ async fn exchange_code_for_token(
     redirect_uri: &str,
 ) -> Result<GitHubTokenResponse, Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::new();
-    
+
     let params = [
         ("client_id", client_id),
         ("client_secret", client_secret),
@@ -172,11 +176,11 @@ async fn exchange_code_for_token(
     }
 
     let token_response: GitHubTokenResponse = response.json().await?;
-    
+
     // Check for errors in the response
     if let Some(error) = token_response.error {
-        let description = token_response.error_description
-            .unwrap_or_else(|| "Unknown error".to_string());
+        let description =
+            token_response.error_description.unwrap_or_else(|| "Unknown error".to_string());
         return Err(format!("GitHub OAuth error: {} - {}", error, description).into());
     }
 
@@ -187,7 +191,7 @@ async fn get_github_user_info(
     access_token: &str,
 ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::new();
-    
+
     // Get basic user info
     let user_response = client
         .get("https://api.github.com/user")
@@ -227,7 +231,7 @@ async fn get_primary_email(
     access_token: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::new();
-    
+
     let emails_response = client
         .get("https://api.github.com/user/emails")
         .header("Authorization", format!("Bearer {}", access_token))
@@ -237,27 +241,29 @@ async fn get_primary_email(
         .await?;
 
     if !emails_response.status().is_success() {
-        return Err(format!("Failed to get GitHub user emails: {}", emails_response.status()).into());
+        return Err(
+            format!("Failed to get GitHub user emails: {}", emails_response.status()).into()
+        );
     }
 
     let emails: Vec<GitHubEmail> = emails_response.json().await?;
-    
+
     // Find primary verified email, fallback to first verified email, then first email
     for email in &emails {
         if email.primary && email.verified {
             return Ok(email.email.clone());
         }
     }
-    
+
     for email in &emails {
         if email.verified {
             return Ok(email.email.clone());
         }
     }
-    
+
     if let Some(first_email) = emails.first() {
         return Ok(first_email.email.clone());
     }
-    
+
     Err("No email found for GitHub user".into())
 }

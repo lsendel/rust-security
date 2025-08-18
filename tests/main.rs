@@ -1,7 +1,7 @@
-mod regression_test_suite;
+mod integration_tests;
 mod phase1_security_tests;
 mod phase2_operational_tests;
-mod integration_tests;
+mod regression_test_suite;
 
 use regression_test_suite::RegressionTestSuite;
 use std::env;
@@ -10,14 +10,10 @@ use std::env;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
-    
-    let auth_url = args.get(1)
-        .unwrap_or(&"http://localhost:8080".to_string())
-        .clone();
-    
-    let policy_url = args.get(2)
-        .unwrap_or(&"http://localhost:8081".to_string())
-        .clone();
+
+    let auth_url = args.get(1).unwrap_or(&"http://localhost:8080".to_string()).clone();
+
+    let policy_url = args.get(2).unwrap_or(&"http://localhost:8081".to_string()).clone();
 
     println!("🧪 Rust Security Workspace - Comprehensive Regression Test Suite");
     println!("Version: 2.0.0 (Phase 1 + Phase 2)");
@@ -31,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match test_suite.run_all_tests().await {
         Ok(summary) => {
             summary.print_summary();
-            
+
             // Exit with appropriate code
             if summary.success_rate >= 95.0 {
                 println!("\n🎉 All tests passed! System is ready for production.");
@@ -59,7 +55,7 @@ mod tests {
     async fn test_regression_suite_basic() {
         // Basic test to ensure the test suite can be created
         let suite = RegressionTestSuite::new("http://localhost:8080", "http://localhost:8081");
-        
+
         // This test just verifies the structure compiles and can be instantiated
         assert_eq!(suite.auth_base_url, "http://localhost:8080");
         assert_eq!(suite.policy_base_url, "http://localhost:8081");

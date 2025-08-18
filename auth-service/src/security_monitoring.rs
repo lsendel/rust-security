@@ -180,20 +180,23 @@ impl SecurityMonitor {
                 let mut buffer = Vec::new();
                 if encoder.encode(&metric_families, &mut buffer).is_ok() {
                     let metrics_text = String::from_utf8_lossy(&buffer);
-                    
+
                     // Parse metrics and check thresholds
                     for threshold in &config_guard.thresholds {
                         if !threshold.enabled {
                             continue;
                         }
 
-                        if let Some(current_value) = Self::extract_metric_value(&metrics_text, &threshold.metric_name) {
+                        if let Some(current_value) =
+                            Self::extract_metric_value(&metrics_text, &threshold.metric_name)
+                        {
                             let mut snapshots = metric_snapshots.lock().await;
-                            let previous_value = snapshots.get(&threshold.metric_name).copied().unwrap_or(0.0);
+                            let previous_value =
+                                snapshots.get(&threshold.metric_name).copied().unwrap_or(0.0);
                             snapshots.insert(threshold.metric_name.clone(), current_value);
 
                             let delta = current_value - previous_value;
-                            
+
                             if delta >= threshold.threshold_value {
                                 let alert = SecurityAlert {
                                     id: uuid::Uuid::new_v4().to_string(),
@@ -225,7 +228,7 @@ impl SecurityMonitor {
                                 // Store alert
                                 let mut alerts = active_alerts.lock().await;
                                 alerts.insert(alert.id.clone(), alert.clone());
-                                
+
                                 let mut history = alert_history.lock().await;
                                 history.push(alert.clone());
 
@@ -238,9 +241,15 @@ impl SecurityMonitor {
                                     let client_clone = client.clone();
                                     let alert_clone = alert.clone();
                                     let endpoint_clone = endpoint.clone();
-                                    
+
                                     tokio::spawn(async move {
-                                        if let Err(e) = Self::send_notification(&client_clone, &endpoint_clone, &alert_clone).await {
+                                        if let Err(e) = Self::send_notification(
+                                            &client_clone,
+                                            &endpoint_clone,
+                                            &alert_clone,
+                                        )
+                                        .await
+                                        {
                                             error!("Failed to send notification: {}", e);
                                         }
                                     });
@@ -346,13 +355,13 @@ impl SecurityMonitor {
         };
 
         let mut request = client.post(&endpoint.url);
-        
+
         for (key, value) in &endpoint.headers {
             request = request.header(key, value);
         }
 
         let response = request.json(&payload).send().await?;
-        
+
         if !response.status().is_success() {
             return Err(format!("Notification failed with status: {}", response.status()).into());
         }
@@ -403,11 +412,7 @@ impl SecurityMonitor {
 
     pub async fn get_alert_history(&self, limit: Option<usize>) -> Vec<SecurityAlert> {
         let history = self.alert_history.lock().await;
-        let start = if let Some(limit) = limit {
-            history.len().saturating_sub(limit)
-        } else {
-            0
-        };
+        let start = if let Some(limit) = limit { history.len().saturating_sub(limit) } else { 0 };
         history[start..].to_vec()
     }
 
@@ -450,7 +455,7 @@ impl SecurityMonitor {
 
         let mut alerts = self.active_alerts.lock().await;
         alerts.insert(alert.id.clone(), alert.clone());
-        
+
         let mut history = self.alert_history.lock().await;
         history.push(alert);
     }
@@ -509,21 +514,23 @@ mod tests {
     #[tokio::test]
     async fn test_alert_creation_and_resolution() {
         let monitor = SecurityMonitor::new();
-        
-        monitor.create_alert(
-            SecurityAlertType::AuthenticationFailure,
-            AlertSeverity::High,
-            "Test Alert".to_string(),
-            "Test Description".to_string(),
-            Some("192.168.1.1".to_string()),
-            None,
-            None,
-            HashMap::new(),
-        ).await;
+
+        monitor
+            .create_alert(
+                SecurityAlertType::AuthenticationFailure,
+                AlertSeverity::High,
+                "Test Alert".to_string(),
+                "Test Description".to_string(),
+                Some("192.168.1.1".to_string()),
+                None,
+                None,
+                HashMap::new(),
+            )
+            .await;
 
         let alerts = monitor.get_active_alerts().await;
         assert_eq!(alerts.len(), 1);
-        
+
         let alert_id = &alerts[0].id;
         let resolved = monitor.resolve_alert(alert_id, Some("Test resolution".to_string())).await;
         assert!(resolved);
@@ -537,13 +544,13 @@ mod tests {
 auth_failures_total{client_id="test",reason="invalid_credentials",ip_address="192.168.1.1"} 5
 auth_attempts_total{client_id="test",method="client_credentials",result="success"} 10
 "#;
-        
+
         let value = SecurityMonitor::extract_metric_value(metrics_text, "auth_failures_total");
         assert_eq!(value, Some(5.0));
-        
+
         let value2 = SecurityMonitor::extract_metric_value(metrics_text, "auth_attempts_total");
         assert_eq!(value2, Some(10.0));
-        
+
         let none_value = SecurityMonitor::extract_metric_value(metrics_text, "nonexistent_metric");
         assert_eq!(none_value, None);
     }

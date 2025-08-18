@@ -25,31 +25,31 @@ pub const MAX_CODE_CHALLENGE_LENGTH: usize = 128;
 pub struct TokenRequest {
     #[validate(length(min = 1, max = 50))]
     pub grant_type: String,
-    
+
     #[validate(length(max = 255))]
     pub client_id: Option<String>,
-    
+
     #[validate(length(max = 512))]
     pub client_secret: Option<String>,
-    
+
     #[validate(length(max = 1024))]
     pub code: Option<String>,
-    
+
     #[validate(url, length(max = 2048))]
     pub redirect_uri: Option<String>,
-    
+
     #[validate(length(max = 2048))]
     pub refresh_token: Option<String>,
-    
+
     #[validate(length(max = 1000), custom(function = "validate_scope"))]
     pub scope: Option<String>,
-    
+
     #[validate(length(max = 128))]
     pub code_verifier: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub username: Option<String>,
-    
+
     #[validate(length(min = 1, max = 255))]
     pub password: Option<String>,
 }
@@ -59,31 +59,31 @@ pub struct TokenRequest {
 pub struct AuthorizationRequest {
     #[validate(length(min = 1, max = 50))]
     pub response_type: String,
-    
+
     #[validate(length(min = 1, max = 255))]
     pub client_id: String,
-    
+
     #[validate(url, length(max = 2048))]
     pub redirect_uri: String,
-    
+
     #[validate(length(max = 1000), custom(function = "validate_scope"))]
     pub scope: Option<String>,
-    
+
     #[validate(length(max = 128))]
     pub state: Option<String>,
-    
+
     #[validate(length(max = 128))]
     pub nonce: Option<String>,
-    
+
     #[validate(length(max = 128))]
     pub code_challenge: Option<String>,
-    
+
     #[validate(length(max = 10))]
     pub code_challenge_method: Option<String>,
-    
+
     #[validate(range(min = 1, max = 3600))]
     pub max_age: Option<u32>,
-    
+
     #[validate(length(max = 500))]
     pub prompt: Option<String>,
 }
@@ -93,56 +93,56 @@ pub struct AuthorizationRequest {
 pub struct ScimUser {
     #[validate(length(max = 255))]
     pub id: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub external_id: Option<String>,
-    
+
     #[validate(length(min = 1, max = 255))]
     pub user_name: String,
-    
+
     #[validate(nested)]
     pub name: Option<ScimName>,
-    
+
     #[validate(length(max = 255))]
     pub display_name: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub nick_name: Option<String>,
-    
+
     #[validate(url, length(max = 2048))]
     pub profile_url: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub title: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub user_type: Option<String>,
-    
+
     #[validate(length(max = 10))]
     pub preferred_language: Option<String>,
-    
+
     #[validate(length(max = 10))]
     pub locale: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub timezone: Option<String>,
-    
+
     pub active: Option<bool>,
-    
+
     #[validate(nested)]
     pub emails: Option<Vec<ScimEmail>>,
-    
+
     #[validate(nested)]
     pub phone_numbers: Option<Vec<ScimPhoneNumber>>,
-    
+
     pub addresses: Option<Vec<ScimAddress>>,
-    
+
     pub groups: Option<Vec<ScimGroup>>,
-    
+
     pub roles: Option<Vec<ScimRole>>,
-    
+
     pub entitlements: Option<Vec<ScimEntitlement>>,
-    
+
     pub x509_certificates: Option<Vec<ScimX509Certificate>>,
 }
 
@@ -151,19 +151,19 @@ pub struct ScimUser {
 pub struct ScimName {
     #[validate(length(max = 255))]
     pub formatted: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub family_name: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub given_name: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub middle_name: Option<String>,
-    
+
     #[validate(length(max = 20))]
     pub honorific_prefix: Option<String>,
-    
+
     #[validate(length(max = 20))]
     pub honorific_suffix: Option<String>,
 }
@@ -173,12 +173,12 @@ pub struct ScimName {
 pub struct ScimEmail {
     #[validate(email, length(max = 320))]
     pub value: String,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
-    
+
     pub primary: Option<bool>,
-    
+
     #[validate(length(max = 255))]
     pub display: Option<String>,
 }
@@ -188,12 +188,12 @@ pub struct ScimEmail {
 pub struct ScimPhoneNumber {
     #[validate(length(max = 20), custom(function = "validate_phone_number"))]
     pub value: String,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
-    
+
     pub primary: Option<bool>,
-    
+
     #[validate(length(max = 255))]
     pub display: Option<String>,
 }
@@ -203,25 +203,25 @@ pub struct ScimPhoneNumber {
 pub struct ScimAddress {
     #[validate(length(max = 500))]
     pub formatted: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub street_address: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub locality: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub region: Option<String>,
-    
+
     #[validate(length(max = 20))]
     pub postal_code: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub country: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
-    
+
     pub primary: Option<bool>,
 }
 
@@ -230,10 +230,10 @@ pub struct ScimAddress {
 pub struct ScimGroup {
     #[validate(length(max = 255))]
     pub value: String,
-    
+
     #[validate(length(max = 255))]
     pub display: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
 }
@@ -243,13 +243,13 @@ pub struct ScimGroup {
 pub struct ScimRole {
     #[validate(length(max = 255))]
     pub value: String,
-    
+
     #[validate(length(max = 255))]
     pub display: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
-    
+
     pub primary: Option<bool>,
 }
 
@@ -258,13 +258,13 @@ pub struct ScimRole {
 pub struct ScimEntitlement {
     #[validate(length(max = 255))]
     pub value: String,
-    
+
     #[validate(length(max = 255))]
     pub display: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
-    
+
     pub primary: Option<bool>,
 }
 
@@ -273,13 +273,13 @@ pub struct ScimEntitlement {
 pub struct ScimX509Certificate {
     #[validate(length(max = 10000))]
     pub value: String,
-    
+
     #[validate(length(max = 255))]
     pub display: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub type_: Option<String>,
-    
+
     pub primary: Option<bool>,
 }
 
@@ -288,22 +288,22 @@ pub struct ScimX509Certificate {
 pub struct ScimFilterQuery {
     #[validate(length(max = 500), custom(function = "validate_scim_filter"))]
     pub filter: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub attributes: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub excluded_attributes: Option<String>,
-    
+
     #[validate(range(min = 1, max = 1000))]
     pub count: Option<usize>,
-    
+
     #[validate(range(min = 1))]
     pub start_index: Option<usize>,
-    
+
     #[validate(length(max = 100))]
     pub sort_by: Option<String>,
-    
+
     #[validate(length(max = 10))]
     pub sort_order: Option<String>,
 }
@@ -313,42 +313,42 @@ pub struct ScimFilterQuery {
 pub struct OidcIdTokenClaims {
     #[validate(length(max = 255))]
     pub iss: String,
-    
+
     #[validate(length(max = 255))]
     pub sub: String,
-    
+
     #[validate(length(max = 255))]
     pub aud: String,
-    
+
     pub exp: i64,
     pub iat: i64,
-    
+
     #[validate(length(max = 128))]
     pub nonce: Option<String>,
-    
+
     #[validate(length(max = 128))]
     pub at_hash: Option<String>,
-    
+
     #[validate(length(max = 128))]
     pub c_hash: Option<String>,
-    
+
     #[validate(email, length(max = 320))]
     pub email: Option<String>,
-    
+
     pub email_verified: Option<bool>,
-    
+
     #[validate(length(max = 255))]
     pub name: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub given_name: Option<String>,
-    
+
     #[validate(length(max = 100))]
     pub family_name: Option<String>,
-    
+
     #[validate(url, length(max = 2048))]
     pub picture: Option<String>,
-    
+
     #[validate(length(max = 10))]
     pub locale: Option<String>,
 }
@@ -358,10 +358,10 @@ pub struct OidcIdTokenClaims {
 pub struct MfaChallengeRequest {
     #[validate(length(min = 1, max = 255))]
     pub user_id: String,
-    
+
     #[validate(length(max = 50))]
     pub challenge_type: String,
-    
+
     #[validate(length(max = 2048))]
     pub context: Option<String>,
 }
@@ -371,10 +371,10 @@ pub struct MfaChallengeRequest {
 pub struct MfaVerificationRequest {
     #[validate(length(min = 1, max = 255))]
     pub challenge_id: String,
-    
+
     #[validate(length(min = 1, max = 20))]
     pub code: String,
-    
+
     #[validate(length(max = 2048))]
     pub backup_code: Option<String>,
 }
@@ -384,13 +384,13 @@ pub struct MfaVerificationRequest {
 pub struct TokenIntrospectionRequest {
     #[validate(length(min = 1, max = 2048))]
     pub token: String,
-    
+
     #[validate(length(max = 50))]
     pub token_type_hint: Option<String>,
-    
+
     #[validate(length(max = 255))]
     pub client_id: Option<String>,
-    
+
     #[validate(length(max = 512))]
     pub client_secret: Option<String>,
 }
@@ -400,13 +400,13 @@ pub struct TokenIntrospectionRequest {
 pub struct SessionCreateRequest {
     #[validate(length(min = 1, max = 255))]
     pub user_id: String,
-    
+
     #[validate(length(max = 255))]
     pub client_id: Option<String>,
-    
+
     #[validate(range(min = 60, max = 86400))] // 1 minute to 24 hours
     pub duration: Option<u64>,
-    
+
     #[validate(length(max = 1000))]
     pub scope: Option<String>,
 }
@@ -416,13 +416,13 @@ pub struct SessionCreateRequest {
 pub struct KeyRotationRequest {
     #[validate(length(max = 255))]
     pub key_id: Option<String>,
-    
+
     #[validate(length(max = 50))]
     pub algorithm: Option<String>,
-    
+
     #[validate(range(min = 2048, max = 4096))]
     pub key_size: Option<u32>,
-    
+
     pub force: Option<bool>,
 }
 
@@ -431,19 +431,19 @@ pub struct KeyRotationRequest {
 pub struct CorsConfig {
     #[validate(nested)]
     pub allowed_origins: Vec<AllowedOrigin>,
-    
+
     #[validate(length(max = 100))]
     pub allowed_methods: Vec<String>,
-    
+
     #[validate(length(max = 100))]
     pub allowed_headers: Vec<String>,
-    
+
     #[validate(length(max = 100))]
     pub exposed_headers: Vec<String>,
-    
+
     #[validate(range(max = 86400))] // Max 24 hours
     pub max_age: Option<u64>,
-    
+
     pub allow_credentials: bool,
 }
 
@@ -452,7 +452,7 @@ pub struct CorsConfig {
 pub struct AllowedOrigin {
     #[validate(length(max = 2048), custom(function = "validate_origin"))]
     pub origin: String,
-    
+
     pub exact_match: bool,
 }
 
@@ -461,13 +461,13 @@ pub struct AllowedOrigin {
 pub struct RateLimitConfig {
     #[validate(range(min = 1, max = 10000))]
     pub requests_per_window: u32,
-    
+
     #[validate(range(min = 1, max = 3600))]
     pub window_duration_secs: u32,
-    
+
     #[validate(range(min = 0, max = 1000))]
     pub burst_allowance: u32,
-    
+
     #[validate(range(min = 60, max = 86400))]
     pub cleanup_interval_secs: u32,
 }
@@ -480,28 +480,28 @@ fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     if scope.is_empty() {
         return Err(ValidationError::new("scope_empty"));
     }
-    
+
     let scopes: Vec<&str> = scope.split_whitespace().collect();
     if scopes.is_empty() {
         return Err(ValidationError::new("scope_invalid"));
     }
-    
+
     // Validate each scope token
     for scope_token in scopes {
         if scope_token.is_empty() {
             return Err(ValidationError::new("scope_token_empty"));
         }
-        
+
         // Scope tokens should not contain certain characters
         if scope_token.contains(['\"', '\\', '\r', '\n', '\t']) {
             return Err(ValidationError::new("scope_token_invalid_chars"));
         }
-        
+
         if scope_token.len() > 100 {
             return Err(ValidationError::new("scope_token_too_long"));
         }
     }
-    
+
     Ok(())
 }
 
@@ -510,7 +510,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     if filter.is_empty() {
         return Ok(());
     }
-    
+
     // Basic SCIM filter validation
     // Check for balanced parentheses
     let mut paren_count = 0;
@@ -526,24 +526,24 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
             _ => {}
         }
     }
-    
+
     if paren_count != 0 {
         return Err(ValidationError::new("scim_filter_unbalanced_parens"));
     }
-    
+
     // Check for SQL injection patterns
     let filter_lower = filter.to_lowercase();
     let sql_patterns = [
-        "drop ", "delete ", "insert ", "update ", "create ", "alter ",
-        "exec", "union", "script", "--", "/*", "*/", ";",
+        "drop ", "delete ", "insert ", "update ", "create ", "alter ", "exec", "union", "script",
+        "--", "/*", "*/", ";",
     ];
-    
+
     for pattern in &sql_patterns {
         if filter_lower.contains(pattern) {
             return Err(ValidationError::new("scim_filter_sql_injection"));
         }
     }
-    
+
     // Check for XSS patterns
     let xss_patterns = ["<script", "javascript:", "onload=", "onerror="];
     for pattern in &xss_patterns {
@@ -551,7 +551,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
             return Err(ValidationError::new("scim_filter_xss_attempt"));
         }
     }
-    
+
     Ok(())
 }
 
@@ -561,17 +561,17 @@ fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
     if phone.is_empty() {
         return Err(ValidationError::new("phone_empty"));
     }
-    
+
     // Allow digits, spaces, hyphens, parentheses, and + for international format
     if !phone.chars().all(|c| c.is_ascii_digit() || " -+()".contains(c)) {
         return Err(ValidationError::new("phone_invalid_chars"));
     }
-    
+
     // Must contain at least some digits
     if !phone.chars().any(|c| c.is_ascii_digit()) {
         return Err(ValidationError::new("phone_no_digits"));
     }
-    
+
     Ok(())
 }
 
@@ -580,7 +580,7 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     if origin == "*" {
         return Ok(()); // Wildcard is allowed
     }
-    
+
     // Must be a valid URL or localhost
     if origin.starts_with("http://") || origin.starts_with("https://") {
         // Basic URL validation
@@ -593,7 +593,7 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     } else {
         return Err(ValidationError::new("origin_invalid_format"));
     }
-    
+
     Ok(())
 }
 
@@ -607,7 +607,7 @@ pub struct ValidationResult {
 impl From<ValidationErrors> for ValidationResult {
     fn from(errors: ValidationErrors) -> Self {
         let mut error_map = HashMap::new();
-        
+
         for (field, field_errors) in errors.field_errors() {
             let mut error_messages = Vec::new();
             for error in field_errors {
@@ -635,11 +635,8 @@ impl From<ValidationErrors> for ValidationResult {
             }
             error_map.insert(field.to_string(), error_messages);
         }
-        
-        ValidationResult {
-            valid: false,
-            errors: Some(error_map),
-        }
+
+        ValidationResult { valid: false, errors: Some(error_map) }
     }
 }
 
@@ -648,14 +645,11 @@ pub trait ValidatedDto: Validate + Sized {
     /// Validate the DTO and return a structured result
     fn validate_dto(&self) -> ValidationResult {
         match self.validate() {
-            Ok(()) => ValidationResult {
-                valid: true,
-                errors: None,
-            },
+            Ok(()) => ValidationResult { valid: true, errors: None },
             Err(errors) => errors.into(),
         }
     }
-    
+
     /// Validate and return the DTO or an error
     fn validate_and_return(self) -> Result<Self, ValidationResult> {
         let result = self.validate_dto();
@@ -684,8 +678,8 @@ impl ValidatedDto for RateLimitConfig {}
 /// Validation middleware for Axum extractors
 pub mod middleware {
     use super::*;
+    use crate::errors::{validation_error, AuthError};
     use axum::{extract::FromRequest, http::Request};
-    use crate::errors::{AuthError, validation_error};
 
     /// Validated JSON extractor that automatically validates DTOs
     pub struct ValidatedJson<T>(pub T);
@@ -698,11 +692,14 @@ pub mod middleware {
     {
         type Rejection = AuthError;
 
-        async fn from_request(req: Request<axum::body::Body>, state: &S) -> Result<Self, Self::Rejection> {
+        async fn from_request(
+            req: Request<axum::body::Body>,
+            state: &S,
+        ) -> Result<Self, Self::Rejection> {
             let axum::Json(dto) = axum::Json::<T>::from_request(req, state)
                 .await
                 .map_err(|_| validation_error("json", "Invalid JSON format"))?;
-            
+
             match dto.validate_and_return() {
                 Ok(validated_dto) => Ok(ValidatedJson(validated_dto)),
                 Err(validation_result) => {
@@ -712,7 +709,7 @@ pub mod middleware {
                         .map(|(field, errors)| format!("{}: {}", field, errors.join(", ")))
                         .collect::<Vec<_>>()
                         .join("; ");
-                    
+
                     Err(validation_error("validation", &error_msg))
                 }
             }
@@ -730,11 +727,14 @@ pub mod middleware {
     {
         type Rejection = AuthError;
 
-        async fn from_request(req: Request<axum::body::Body>, state: &S) -> Result<Self, Self::Rejection> {
+        async fn from_request(
+            req: Request<axum::body::Body>,
+            state: &S,
+        ) -> Result<Self, Self::Rejection> {
             let axum::extract::Query(dto) = axum::extract::Query::<T>::from_request(req, state)
                 .await
                 .map_err(|_| validation_error("query", "Invalid query parameters"))?;
-            
+
             match dto.validate_and_return() {
                 Ok(validated_dto) => Ok(ValidatedQuery(validated_dto)),
                 Err(validation_result) => {
@@ -744,7 +744,7 @@ pub mod middleware {
                         .map(|(field, errors)| format!("{}: {}", field, errors.join(", ")))
                         .collect::<Vec<_>>()
                         .join("; ");
-                    
+
                     Err(validation_error("validation", &error_msg))
                 }
             }
@@ -770,9 +770,9 @@ mod tests {
             username: None,
             password: None,
         };
-        
+
         assert!(request.validate_dto().valid);
-        
+
         // Test invalid grant type (too long)
         request.grant_type = "a".repeat(100);
         assert!(!request.validate_dto().valid);
@@ -792,14 +792,14 @@ mod tests {
         assert!(validate_scim_filter("").is_ok());
         assert!(validate_scim_filter("userName eq \"john\"").is_ok());
         assert!(validate_scim_filter("(userName eq \"john\")").is_ok());
-        
+
         // Test unbalanced parentheses
         assert!(validate_scim_filter("(userName eq \"john\"").is_err());
         assert!(validate_scim_filter("userName eq \"john\")").is_err());
-        
+
         // Test SQL injection
         assert!(validate_scim_filter("userName eq \"john\"; DROP TABLE users").is_err());
-        
+
         // Test XSS
         assert!(validate_scim_filter("userName eq \"<script>alert('xss')</script>\"").is_err());
     }
@@ -809,7 +809,7 @@ mod tests {
         assert!(validate_phone_number("+1-555-123-4567").is_ok());
         assert!(validate_phone_number("(555) 123-4567").is_ok());
         assert!(validate_phone_number("5551234567").is_ok());
-        
+
         assert!(validate_phone_number("").is_err());
         assert!(validate_phone_number("invalid-phone").is_err());
         assert!(validate_phone_number("abc-def-ghij").is_err());
@@ -821,7 +821,7 @@ mod tests {
         assert!(validate_origin("https://example.com").is_ok());
         assert!(validate_origin("http://localhost:3000").is_ok());
         assert!(validate_origin("localhost").is_ok());
-        
+
         assert!(validate_origin("invalid-origin").is_err());
         assert!(validate_origin("ftp://example.com").is_err());
     }
@@ -867,7 +867,7 @@ mod tests {
             entitlements: None,
             x509_certificates: None,
         };
-        
+
         assert!(user.validate_dto().valid);
     }
 }

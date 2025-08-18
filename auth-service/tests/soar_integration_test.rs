@@ -1,12 +1,12 @@
 //! Integration tests for SOAR (Security Orchestration, Automation, and Response) system
 #![cfg(feature = "soar")]
 
-use auth_service::security_monitoring::{SecurityAlert, SecurityAlertType, AlertSeverity};
-use auth_service::soar_core::*;
-use auth_service::soar_workflow::*;
-use auth_service::soar_executors::*;
-use auth_service::soar_correlation::*;
+use auth_service::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use auth_service::soar_case_management::*;
+use auth_service::soar_core::*;
+use auth_service::soar_correlation::*;
+use auth_service::soar_executors::*;
+use auth_service::soar_workflow::*;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -180,13 +180,15 @@ async fn test_workflow_scheduling() {
     let inputs = HashMap::new();
     let context = HashMap::new();
 
-    let result = orchestrator.schedule_workflow(
-        "test_playbook".to_string(),
-        future_time,
-        inputs,
-        context,
-        5, // priority
-    ).await;
+    let result = orchestrator
+        .schedule_workflow(
+            "test_playbook".to_string(),
+            future_time,
+            inputs,
+            context,
+            5, // priority
+        )
+        .await;
 
     assert!(result.is_ok());
     let schedule_id = result.unwrap();
@@ -255,10 +257,7 @@ async fn test_security_audit_logging() {
 /// Test performance under load
 #[tokio::test]
 async fn test_performance_load() {
-    let config = SoarConfig {
-        max_concurrent_workflows: 50,
-        ..Default::default()
-    };
+    let config = SoarConfig { max_concurrent_workflows: 50, ..Default::default() };
 
     let soar_core = SoarCore::new(config).await.unwrap();
     let _ = soar_core.initialize().await;
@@ -294,41 +293,37 @@ fn create_test_playbook() -> SecurityPlaybook {
         name: "Test Security Playbook".to_string(),
         description: "A test playbook for integration testing".to_string(),
         version: "1.0.0".to_string(),
-        triggers: vec![
-            PlaybookTrigger {
-                trigger_type: TriggerType::ManualTrigger,
-                conditions: Vec::new(),
-                priority: 1,
+        triggers: vec![PlaybookTrigger {
+            trigger_type: TriggerType::ManualTrigger,
+            conditions: Vec::new(),
+            priority: 1,
+        }],
+        steps: vec![WorkflowStep {
+            id: "test_step".to_string(),
+            name: "Test Step".to_string(),
+            step_type: StepType::Action,
+            action: StepAction::CustomAction {
+                action_type: "test_action".to_string(),
+                parameters: HashMap::new(),
             },
-        ],
-        steps: vec![
-            WorkflowStep {
-                id: "test_step".to_string(),
-                name: "Test Step".to_string(),
-                step_type: StepType::Action,
-                action: StepAction::CustomAction {
-                    action_type: "test_action".to_string(),
-                    parameters: HashMap::new(),
-                },
-                inputs: HashMap::new(),
-                outputs: HashMap::new(),
-                dependencies: Vec::new(),
-                conditions: Vec::new(),
-                timeout_minutes: 5,
-                retry_config: RetryConfig {
-                    max_attempts: 1,
-                    delay_seconds: 0,
-                    backoff_strategy: BackoffStrategy::Fixed,
-                    retry_conditions: Vec::new(),
-                },
-                error_handling: ErrorHandling {
-                    on_error: ErrorAction::Continue,
-                    continue_on_error: true,
-                    notify_on_error: false,
-                    custom_handlers: Vec::new(),
-                },
+            inputs: HashMap::new(),
+            outputs: HashMap::new(),
+            dependencies: Vec::new(),
+            conditions: Vec::new(),
+            timeout_minutes: 5,
+            retry_config: RetryConfig {
+                max_attempts: 1,
+                delay_seconds: 0,
+                backoff_strategy: BackoffStrategy::Fixed,
+                retry_conditions: Vec::new(),
             },
-        ],
+            error_handling: ErrorHandling {
+                on_error: ErrorAction::Continue,
+                continue_on_error: true,
+                notify_on_error: false,
+                custom_handlers: Vec::new(),
+            },
+        }],
         inputs: Vec::new(),
         outputs: Vec::new(),
         timeout_minutes: 30,
@@ -354,20 +349,16 @@ fn create_complex_test_playbook() -> SecurityPlaybook {
         name: "Complex Test Security Playbook".to_string(),
         description: "A complex test playbook with multiple steps".to_string(),
         version: "1.0.0".to_string(),
-        triggers: vec![
-            PlaybookTrigger {
-                trigger_type: TriggerType::AlertReceived,
-                conditions: vec![
-                    TriggerCondition {
-                        field: "severity".to_string(),
-                        operator: ConditionOperator::Equals,
-                        value: Value::String("high".to_string()),
-                        required: true,
-                    },
-                ],
-                priority: 1,
-            },
-        ],
+        triggers: vec![PlaybookTrigger {
+            trigger_type: TriggerType::AlertReceived,
+            conditions: vec![TriggerCondition {
+                field: "severity".to_string(),
+                operator: ConditionOperator::Equals,
+                value: Value::String("high".to_string()),
+                required: true,
+            }],
+            priority: 1,
+        }],
         steps: vec![
             WorkflowStep {
                 id: "analyze_alert".to_string(),
@@ -407,14 +398,12 @@ fn create_complex_test_playbook() -> SecurityPlaybook {
                 inputs: HashMap::new(),
                 outputs: HashMap::new(),
                 dependencies: vec!["analyze_alert".to_string()],
-                conditions: vec![
-                    TriggerCondition {
-                        field: "analysis_result.threat_level".to_string(),
-                        operator: ConditionOperator::GreaterThan,
-                        value: Value::Number(serde_json::Number::from(7)),
-                        required: true,
-                    },
-                ],
+                conditions: vec![TriggerCondition {
+                    field: "analysis_result.threat_level".to_string(),
+                    operator: ConditionOperator::GreaterThan,
+                    value: Value::Number(serde_json::Number::from(7)),
+                    required: true,
+                }],
                 timeout_minutes: 5,
                 retry_config: RetryConfig {
                     max_attempts: 3,
@@ -477,16 +466,14 @@ fn create_complex_test_playbook() -> SecurityPlaybook {
                 validation: None,
             },
         ],
-        outputs: vec![
-            ParameterDefinition {
-                name: "actions_taken".to_string(),
-                param_type: ParameterType::Array,
-                required: false,
-                default_value: None,
-                description: "List of actions taken".to_string(),
-                validation: None,
-            },
-        ],
+        outputs: vec![ParameterDefinition {
+            name: "actions_taken".to_string(),
+            param_type: ParameterType::Array,
+            required: false,
+            default_value: None,
+            description: "List of actions taken".to_string(),
+            validation: None,
+        }],
         timeout_minutes: 30,
         auto_executable: true,
         required_approvals: Vec::new(),

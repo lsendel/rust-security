@@ -148,7 +148,7 @@ impl MfaRateLimiter {
         window_secs: u64,
     ) -> Result<RateLimitResult, RateLimitError> {
         let key = format!("mfa:rate:{}:{}:{}", limit_type, user_id, Self::current_time().await / window_secs);
-        
+
         // Use multi-command transaction for atomicity
         let (current_count, ttl): (i64, i64) = redis::pipe()
             .atomic()
@@ -267,23 +267,23 @@ impl MfaRateLimiter {
                 "backup_code" => &self.fallback.backup_code_attempts,
                 _ => return Err(RateLimitError::InvalidConfiguration(format!("Unknown limit type: {}", limit_type))),
             };
-            
+
             let mut attempts = attempts_map.write().await;
             attempts.remove(user_id);
         }
-        
+
         tracing::info!("Reset rate limit for user {} and type {}", user_id, limit_type);
         Ok(())
     }
 
     pub async fn get_rate_limit_status(&self, user_id: &str) -> Result<HashMap<String, RateLimitResult>, RateLimitError> {
         let mut status = HashMap::new();
-        
+
         status.insert("verification".to_string(), self.check_verification_attempts(user_id).await?);
         status.insert("registration".to_string(), self.check_registration_attempts(user_id).await?);
         status.insert("otp_send".to_string(), self.check_otp_send_attempts(user_id).await?);
         status.insert("backup_code".to_string(), self.check_backup_code_attempts(user_id).await?);
-        
+
         Ok(status)
     }
 
@@ -309,7 +309,7 @@ impl MfaRateLimiter {
         if cleaned > 0 {
             tracing::debug!("Cleaned up {} expired rate limit entries", cleaned);
         }
-        
+
         Ok(cleaned)
     }
 }

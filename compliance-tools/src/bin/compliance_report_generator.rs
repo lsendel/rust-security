@@ -1,12 +1,16 @@
 //! Compliance Report Generator
-//! 
+//!
 //! A Rust-based replacement for the Python compliance_report_generator.py
 //! Generates comprehensive compliance reports for SOC 2, ISO 27001, GDPR, and other frameworks
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::{Arg, Command};
-use compliance_tools::{*, prometheus_client::PrometheusClient, reporting::{ReportRenderer, ComplianceReportData, AuditSummary}};
+use compliance_tools::{
+    prometheus_client::PrometheusClient,
+    reporting::{AuditSummary, ComplianceReportData, ReportRenderer},
+    *,
+};
 use serde_json;
 use std::path::PathBuf;
 use tracing::{error, info, warn};
@@ -82,16 +86,16 @@ async fn main() -> Result<()> {
 
     // Load configuration
     let config = load_compliance_config(config_path).await?;
-    
+
     // Create compliance reporter
     let mut reporter = ComplianceReporter::new(config).await?;
-    
+
     // Parse framework
     let compliance_framework = parse_framework(framework)?;
-    
+
     // Parse format
     let report_format = parse_format(format)?;
-    
+
     // Generate report
     let report_config = ReportGenerationConfig {
         framework: compliance_framework,
@@ -101,7 +105,7 @@ async fn main() -> Result<()> {
         output_path: PathBuf::from(output_path),
         classification: ClassificationLevel::Internal,
     };
-    
+
     match reporter.generate_report(report_config).await {
         Ok(report_metadata) => {
             info!("✅ Compliance report generated successfully");
@@ -109,7 +113,7 @@ async fn main() -> Result<()> {
             info!("⚠️  Issues found: {}", report_metadata.issues_found);
             info!("📈 Compliance score: {:.1}%", report_metadata.compliance_score);
             info!("📄 Report saved to: {}", output_path);
-            
+
             if report_metadata.issues_found > 0 {
                 warn!("⚠️  {} compliance issues require attention", report_metadata.issues_found);
             }
@@ -125,9 +129,9 @@ async fn main() -> Result<()> {
 
 async fn load_compliance_config(config_path: &str) -> Result<ComplianceConfig> {
     info!("Loading compliance configuration from: {}", config_path);
-    
+
     let config_content = tokio::fs::read_to_string(config_path).await?;
-    
+
     // Try YAML first, then JSON
     if config_path.ends_with(".yaml") || config_path.ends_with(".yml") {
         let config: ComplianceConfig = serde_yaml::from_str(&config_content)?;
@@ -196,25 +200,22 @@ impl ComplianceReporter {
         } else {
             None
         };
-        
+
         let metrics_collector = MetricsCollector::new(&config).await?;
-        
-        Ok(Self {
-            config,
-            metrics_collector,
-            prometheus_client,
-        })
+
+        Ok(Self { config, metrics_collector, prometheus_client })
     }
-    
+
     async fn generate_report(&mut self, config: ReportGenerationConfig) -> Result<ReportMetadata> {
         info!("Generating compliance report for framework: {:?}", config.framework);
-        
+
         // Collect metrics and data
         let security_metrics = self.collect_security_metrics().await?;
         let compliance_controls = self.assess_compliance_controls(&config.framework).await?;
-        let security_incidents = self.collect_security_incidents(config.assessment_period_days).await?;
+        let security_incidents =
+            self.collect_security_incidents(config.assessment_period_days).await?;
         let audit_logs = self.analyze_audit_logs(config.assessment_period_days).await?;
-        
+
         // Generate report
         let report_data = ComplianceReportData {
             framework: config.framework.clone(),
@@ -227,23 +228,26 @@ impl ComplianceReporter {
             generation_time: Utc::now(),
             classification: config.classification.clone(),
         };
-        
+
         // Calculate metadata
         let controls_assessed = compliance_controls.len() as u32;
-        let issues_found = compliance_controls.iter()
-            .filter(|c| c.implementation_status != ImplementationStatus::Implemented || 
-                       c.effectiveness != EffectivenessLevel::Effective)
+        let issues_found = compliance_controls
+            .iter()
+            .filter(|c| {
+                c.implementation_status != ImplementationStatus::Implemented
+                    || c.effectiveness != EffectivenessLevel::Effective
+            })
             .count() as u32;
-        
+
         let compliance_score = if controls_assessed > 0 {
             ((controls_assessed - issues_found) as f64 / controls_assessed as f64) * 100.0
         } else {
             0.0
         };
-        
+
         // Generate output
         self.render_report(&report_data, &config).await?;
-        
+
         Ok(ReportMetadata {
             controls_assessed,
             issues_found,
@@ -251,16 +255,21 @@ impl ComplianceReporter {
             generation_time: Utc::now(),
         })
     }
-    
+
     async fn collect_security_metrics(&self) -> Result<Vec<SecurityMetric>> {
         info!("Collecting security metrics");
-        self.metrics_collector.collect_all_metrics().await
+        self.metrics_collector
+            .collect_all_metrics()
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to collect metrics: {}", e))
     }
-    
-    async fn assess_compliance_controls(&self, framework: &ComplianceFramework) -> Result<Vec<ComplianceControl>> {
+
+    async fn assess_compliance_controls(
+        &self,
+        framework: &ComplianceFramework,
+    ) -> Result<Vec<ComplianceControl>> {
         info!("Assessing compliance controls for framework: {:?}", framework);
-        
+
         // This would typically load control definitions and assess them
         // For now, return example controls
         let controls = match framework {
@@ -269,22 +278,22 @@ impl ComplianceReporter {
             ComplianceFramework::Gdpr => self.get_gdpr_controls().await?,
             _ => Vec::new(),
         };
-        
+
         Ok(controls)
     }
-    
+
     async fn collect_security_incidents(&self, period_days: u32) -> Result<Vec<SecurityIncident>> {
         info!("Collecting security incidents for the last {} days", period_days);
         // Implementation would collect from incident management system
         Ok(Vec::new())
     }
-    
+
     async fn analyze_audit_logs(&self, period_days: u32) -> Result<AuditSummary> {
         info!("Analyzing audit logs for the last {} days", period_days);
         // Implementation would analyze audit logs
         Ok(AuditSummary::default())
     }
-    
+
     async fn get_soc2_controls(&self) -> Result<Vec<ComplianceControl>> {
         // SOC 2 control examples
         Ok(vec![
@@ -295,7 +304,10 @@ impl ComplianceReporter {
                 description: "Implements logical and physical access controls".to_string(),
                 implementation_status: ImplementationStatus::Implemented,
                 effectiveness: EffectivenessLevel::Effective,
-                evidence: vec!["Access control policies".to_string(), "IAM configurations".to_string()],
+                evidence: vec![
+                    "Access control policies".to_string(),
+                    "IAM configurations".to_string(),
+                ],
                 last_tested: Utc::now(),
                 next_review: Utc::now() + chrono::Duration::days(90),
                 risk_level: RiskLevel::Low,
@@ -306,7 +318,8 @@ impl ComplianceReporter {
                 control_id: "CC6.2".to_string(),
                 framework: ComplianceFramework::Soc2,
                 title: "Multi-Factor Authentication".to_string(),
-                description: "Requires multi-factor authentication for privileged access".to_string(),
+                description: "Requires multi-factor authentication for privileged access"
+                    .to_string(),
                 implementation_status: ImplementationStatus::Implemented,
                 effectiveness: EffectivenessLevel::Effective,
                 evidence: vec!["MFA policies".to_string(), "Authentication logs".to_string()],
@@ -318,52 +331,52 @@ impl ComplianceReporter {
             },
         ])
     }
-    
+
     async fn get_iso27001_controls(&self) -> Result<Vec<ComplianceControl>> {
         // ISO 27001 control examples
-        Ok(vec![
-            ComplianceControl {
-                control_id: "A.9.1.1".to_string(),
-                framework: ComplianceFramework::Iso27001,
-                title: "Access Control Policy".to_string(),
-                description: "Establish, document and review access control policy".to_string(),
-                implementation_status: ImplementationStatus::Implemented,
-                effectiveness: EffectivenessLevel::Effective,
-                evidence: vec!["Access control policy document".to_string()],
-                last_tested: Utc::now(),
-                next_review: Utc::now() + chrono::Duration::days(365),
-                risk_level: RiskLevel::Medium,
-                assigned_to: Some("CISO".to_string()),
-                remediation_plan: None,
-            },
-        ])
+        Ok(vec![ComplianceControl {
+            control_id: "A.9.1.1".to_string(),
+            framework: ComplianceFramework::Iso27001,
+            title: "Access Control Policy".to_string(),
+            description: "Establish, document and review access control policy".to_string(),
+            implementation_status: ImplementationStatus::Implemented,
+            effectiveness: EffectivenessLevel::Effective,
+            evidence: vec!["Access control policy document".to_string()],
+            last_tested: Utc::now(),
+            next_review: Utc::now() + chrono::Duration::days(365),
+            risk_level: RiskLevel::Medium,
+            assigned_to: Some("CISO".to_string()),
+            remediation_plan: None,
+        }])
     }
-    
+
     async fn get_gdpr_controls(&self) -> Result<Vec<ComplianceControl>> {
         // GDPR control examples
-        Ok(vec![
-            ComplianceControl {
-                control_id: "Art.32".to_string(),
-                framework: ComplianceFramework::Gdpr,
-                title: "Security of Processing".to_string(),
-                description: "Implement appropriate technical and organizational measures".to_string(),
-                implementation_status: ImplementationStatus::Implemented,
-                effectiveness: EffectivenessLevel::Effective,
-                evidence: vec!["Encryption policies".to_string(), "Access controls".to_string()],
-                last_tested: Utc::now(),
-                next_review: Utc::now() + chrono::Duration::days(180),
-                risk_level: RiskLevel::High,
-                assigned_to: Some("DPO".to_string()),
-                remediation_plan: None,
-            },
-        ])
+        Ok(vec![ComplianceControl {
+            control_id: "Art.32".to_string(),
+            framework: ComplianceFramework::Gdpr,
+            title: "Security of Processing".to_string(),
+            description: "Implement appropriate technical and organizational measures".to_string(),
+            implementation_status: ImplementationStatus::Implemented,
+            effectiveness: EffectivenessLevel::Effective,
+            evidence: vec!["Encryption policies".to_string(), "Access controls".to_string()],
+            last_tested: Utc::now(),
+            next_review: Utc::now() + chrono::Duration::days(180),
+            risk_level: RiskLevel::High,
+            assigned_to: Some("DPO".to_string()),
+            remediation_plan: None,
+        }])
     }
-    
-    async fn render_report(&self, data: &ComplianceReportData, config: &ReportGenerationConfig) -> Result<()> {
+
+    async fn render_report(
+        &self,
+        data: &ComplianceReportData,
+        config: &ReportGenerationConfig,
+    ) -> Result<()> {
         info!("Rendering report in format: {:?}", config.output_format);
-        
+
         let reporter = ReportRenderer::new();
-        
+
         match config.output_format {
             ReportFormat::Html => {
                 reporter.render_html(data, &config.output_path).await?;
@@ -381,8 +394,7 @@ impl ComplianceReporter {
                 return Err(anyhow::anyhow!("Unsupported format: {:?}", config.output_format));
             }
         }
-        
+
         Ok(())
     }
 }
-

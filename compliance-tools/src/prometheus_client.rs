@@ -1,6 +1,6 @@
 //! Prometheus client for collecting security metrics
 
-use crate::{ComplianceError, ComplianceResult, SecurityMetric, MetricStatus};
+use crate::{ComplianceError, ComplianceResult, MetricStatus, SecurityMetric};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -21,41 +21,40 @@ impl PrometheusClient {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self {
-            base_url: base_url.trim_end_matches('/').to_string(),
-            client,
-        }
+        Self { base_url: base_url.trim_end_matches('/').to_string(), client }
     }
 
     /// Execute a Prometheus query
-    pub async fn query(&self, query: &str, time: Option<DateTime<Utc>>) -> ComplianceResult<PrometheusResponse> {
+    pub async fn query(
+        &self,
+        query: &str,
+        time: Option<DateTime<Utc>>,
+    ) -> ComplianceResult<PrometheusResponse> {
         let mut url = format!("{}/api/v1/query", self.base_url);
         let mut params = vec![("query", query.to_string())];
-        
+
         if let Some(time) = time {
             params.push(("time", time.timestamp().to_string()));
         }
 
         debug!("Executing Prometheus query: {}", query);
 
-        let response = self.client
-            .get(&url)
-            .query(&params)
-            .send()
-            .await?;
+        let response = self.client.get(&url).query(&params).send().await?;
 
         if !response.status().is_success() {
-            return Err(ComplianceError::DataCollection(
-                format!("Prometheus query failed with status: {}", response.status())
-            ));
+            return Err(ComplianceError::DataCollection(format!(
+                "Prometheus query failed with status: {}",
+                response.status()
+            )));
         }
 
         let prometheus_response: PrometheusResponse = response.json().await?;
-        
+
         if prometheus_response.status != "success" {
-            return Err(ComplianceError::DataCollection(
-                format!("Prometheus query error: {:?}", prometheus_response.error)
-            ));
+            return Err(ComplianceError::DataCollection(format!(
+                "Prometheus query error: {:?}",
+                prometheus_response.error
+            )));
         }
 
         Ok(prometheus_response)
@@ -63,11 +62,11 @@ impl PrometheusClient {
 
     /// Execute a range query
     pub async fn query_range(
-        &self, 
-        query: &str, 
-        start: DateTime<Utc>, 
-        end: DateTime<Utc>, 
-        step: &str
+        &self,
+        query: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        step: &str,
     ) -> ComplianceResult<PrometheusResponse> {
         let url = format!("{}/api/v1/query_range", self.base_url);
         let params = vec![
@@ -77,26 +76,29 @@ impl PrometheusClient {
             ("step", step.to_string()),
         ];
 
-        debug!("Executing Prometheus range query: {} ({}s to {}s)", query, start.timestamp(), end.timestamp());
+        debug!(
+            "Executing Prometheus range query: {} ({}s to {}s)",
+            query,
+            start.timestamp(),
+            end.timestamp()
+        );
 
-        let response = self.client
-            .get(&url)
-            .query(&params)
-            .send()
-            .await?;
+        let response = self.client.get(&url).query(&params).send().await?;
 
         if !response.status().is_success() {
-            return Err(ComplianceError::DataCollection(
-                format!("Prometheus range query failed with status: {}", response.status())
-            ));
+            return Err(ComplianceError::DataCollection(format!(
+                "Prometheus range query failed with status: {}",
+                response.status()
+            )));
         }
 
         let prometheus_response: PrometheusResponse = response.json().await?;
-        
+
         if prometheus_response.status != "success" {
-            return Err(ComplianceError::DataCollection(
-                format!("Prometheus range query error: {:?}", prometheus_response.error)
-            ));
+            return Err(ComplianceError::DataCollection(format!(
+                "Prometheus range query error: {:?}",
+                prometheus_response.error
+            )));
         }
 
         Ok(prometheus_response)
@@ -113,49 +115,49 @@ impl PrometheusClient {
                 "authentication_success_rate",
                 r#"rate(auth_service_authentication_success_total[5m]) / (rate(auth_service_authentication_success_total[5m]) + rate(auth_service_authentication_failure_total[5m])) * 100"#,
                 95.0,
-                "Authentication success rate percentage"
+                "Authentication success rate percentage",
             ),
             (
                 "failed_login_attempts",
                 "increase(auth_service_authentication_failure_total[1h])",
                 100.0,
-                "Failed login attempts in the last hour"
+                "Failed login attempts in the last hour",
             ),
             (
                 "active_sessions",
                 "auth_service_active_sessions",
                 1000.0,
-                "Number of currently active sessions"
+                "Number of currently active sessions",
             ),
             (
                 "token_validation_errors",
                 "increase(auth_service_token_validation_errors_total[1h])",
                 50.0,
-                "Token validation errors in the last hour"
+                "Token validation errors in the last hour",
             ),
             (
                 "rate_limit_hits",
                 "increase(auth_service_rate_limit_exceeded_total[1h])",
                 200.0,
-                "Rate limit violations in the last hour"
+                "Rate limit violations in the last hour",
             ),
             (
                 "mfa_success_rate",
                 r#"rate(auth_service_mfa_success_total[5m]) / (rate(auth_service_mfa_success_total[5m]) + rate(auth_service_mfa_failure_total[5m])) * 100"#,
                 98.0,
-                "MFA success rate percentage"
+                "MFA success rate percentage",
             ),
             (
                 "threat_detections",
                 "increase(threat_hunting_patterns_detected_total[1h])",
                 10.0,
-                "Threat patterns detected in the last hour"
+                "Threat patterns detected in the last hour",
             ),
             (
                 "security_alerts",
                 "threat_hunting_active_threats",
                 5.0,
-                "Currently active security threats"
+                "Currently active security threats",
             ),
         ];
 
@@ -167,10 +169,18 @@ impl PrometheusClient {
                             if let Ok(value) = value_str.parse::<f64>() {
                                 let status = if name.contains("rate") {
                                     // For rates, higher is better
-                                    if value >= threshold { MetricStatus::Pass } else { MetricStatus::Fail }
+                                    if value >= threshold {
+                                        MetricStatus::Pass
+                                    } else {
+                                        MetricStatus::Fail
+                                    }
                                 } else {
                                     // For counts, lower is better
-                                    if value <= threshold { MetricStatus::Pass } else { MetricStatus::Fail }
+                                    if value <= threshold {
+                                        MetricStatus::Pass
+                                    } else {
+                                        MetricStatus::Fail
+                                    }
                                 };
 
                                 metrics.push(SecurityMetric {
@@ -208,26 +218,31 @@ impl PrometheusClient {
 
     /// Get available metrics from Prometheus
     pub async fn get_available_metrics(&self) -> ComplianceResult<Vec<String>> {
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/api/v1/label/__name__/values", self.base_url))
             .send()
             .await?;
 
         if !response.status().is_success() {
-            return Err(ComplianceError::DataCollection(
-                format!("Failed to get metrics list: {}", response.status())
-            ));
+            return Err(ComplianceError::DataCollection(format!(
+                "Failed to get metrics list: {}",
+                response.status()
+            )));
         }
 
         let prometheus_response: PrometheusResponse = response.json().await?;
-        
+
         if prometheus_response.status != "success" {
-            return Err(ComplianceError::DataCollection(
-                format!("Prometheus metrics list error: {:?}", prometheus_response.error)
-            ));
+            return Err(ComplianceError::DataCollection(format!(
+                "Prometheus metrics list error: {:?}",
+                prometheus_response.error
+            )));
         }
 
-        let metrics = prometheus_response.data.result
+        let metrics = prometheus_response
+            .data
+            .result
             .into_iter()
             .filter_map(|result| result.value.get(0)?.as_str().map(|s| s.to_string()))
             .collect();
@@ -237,7 +252,8 @@ impl PrometheusClient {
 
     /// Check if Prometheus is healthy
     pub async fn health_check(&self) -> ComplianceResult<bool> {
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/api/v1/query", self.base_url))
             .query(&[("query", "up")])
             .send()
@@ -282,7 +298,7 @@ mod tests {
     #[tokio::test]
     async fn test_prometheus_query() {
         let mock_server = MockServer::start().await;
-        
+
         let mock_response = serde_json::json!({
             "status": "success",
             "data": {
@@ -305,7 +321,7 @@ mod tests {
 
         let client = PrometheusClient::new(mock_server.uri());
         let result = client.query("test_metric", None).await.unwrap();
-        
+
         assert_eq!(result.status, "success");
         assert_eq!(result.data.result.len(), 1);
     }
@@ -313,7 +329,7 @@ mod tests {
     #[tokio::test]
     async fn test_collect_security_metrics() {
         let mock_server = MockServer::start().await;
-        
+
         // Mock authentication success rate query
         let auth_success_response = serde_json::json!({
             "status": "success",
@@ -336,7 +352,7 @@ mod tests {
 
         let client = PrometheusClient::new(mock_server.uri());
         let metrics = client.collect_security_metrics().await.unwrap();
-        
+
         assert!(!metrics.is_empty());
     }
 }

@@ -14,14 +14,19 @@ struct AuthorizeReq {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct AuthorizeResp { decision: String }
+struct AuthorizeResp {
+    decision: String,
+}
 
 async fn spawn_auth_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     // Use env-based client registration to bypass secret strength checks in secure authenticator
-    std::env::set_var("CLIENT_CREDENTIALS", "test_client:very_strong_secret_with_mixed_chars_123!@#");
+    std::env::set_var(
+        "CLIENT_CREDENTIALS",
+        "test_client:very_strong_secret_with_mixed_chars_123!@#",
+    );
 
     std::env::set_var("TEST_MODE", "1");
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
@@ -31,15 +36,23 @@ async fn spawn_auth_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
 }
 
 async fn spawn_mock_policy(_decision: &'static str) -> String {
-    async fn handler() -> Json<AuthorizeResp> { Json(AuthorizeResp { decision: "Allow".to_string() }) }
+    async fn handler() -> Json<AuthorizeResp> {
+        Json(AuthorizeResp { decision: "Allow".to_string() })
+    }
     let app = Router::new().route("/v1/authorize", post(handler));
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -171,5 +184,3 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
         .unwrap();
     assert_eq!(res.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
 }
-
-

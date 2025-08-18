@@ -1,14 +1,16 @@
+use crate::threat_attack_patterns::{AttackPatternConfig, AttackPatternDetector};
+use crate::threat_behavioral_analyzer::{
+    AdvancedBehavioralThreatDetector, BehavioralAnalysisConfig,
+};
+use crate::threat_intelligence::{ThreatIntelligenceConfig, ThreatIntelligenceCorrelator};
+use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOrchestrator};
 use crate::threat_types::*;
-use crate::threat_behavioral_analyzer::{AdvancedBehavioralThreatDetector, BehavioralAnalysisConfig};
-use crate::threat_intelligence::{ThreatIntelligenceCorrelator, ThreatIntelligenceConfig};
-use crate::threat_attack_patterns::{AttackPatternDetector, AttackPatternConfig};
 use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingConfig};
-use crate::threat_response_orchestrator::{ThreatResponseOrchestrator, ThreatResponseConfig};
 
-use chrono::{DateTime, Utc, Duration};
-use flume::{Receiver, Sender, unbounded};
+use chrono::{DateTime, Duration, Utc};
+use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
-use prometheus::{Counter, Histogram, Gauge, register_counter, register_histogram, register_gauge};
+use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -62,7 +64,7 @@ pub struct ThreatHuntingConfig {
     pub threat_retention_hours: u64,
     pub performance_tuning: PerformanceTuning,
     pub redis_config: ThreatHuntingRedisConfig,
-    
+
     // Module configurations
     pub behavioral_analysis: BehavioralAnalysisConfig,
     pub threat_intelligence: ThreatIntelligenceConfig,
@@ -102,24 +104,24 @@ pub struct ThreatHuntingRedisConfig {
 /// Main threat hunting orchestrator that coordinates all subsystems
 pub struct ThreatHuntingOrchestrator {
     config: Arc<RwLock<ThreatHuntingConfig>>,
-    
+
     // Core subsystems
     behavioral_analyzer: Arc<AdvancedBehavioralThreatDetector>,
     threat_intelligence: Arc<ThreatIntelligenceCorrelator>,
     attack_pattern_detector: Arc<AttackPatternDetector>,
     user_profiler: Arc<AdvancedUserBehaviorProfiler>,
     response_orchestrator: Arc<ThreatResponseOrchestrator>,
-    
+
     // Event processing infrastructure
     event_ingestion_queue: Sender<SecurityEvent>,
     event_processing_receiver: Receiver<SecurityEvent>,
     correlation_engine: Arc<ThreatCorrelationEngine>,
-    
+
     // State management
     redis_client: Arc<Mutex<Option<ConnectionManager>>>,
     active_investigations: Arc<RwLock<HashMap<String, ThreatInvestigation>>>,
     system_metrics: Arc<Mutex<SystemMetrics>>,
-    
+
     // Processing control
     shutdown_signal: Arc<tokio::sync::Notify>,
     processing_tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
@@ -371,14 +373,19 @@ impl ThreatHuntingOrchestrator {
     /// Create a new threat hunting orchestrator
     pub fn new(config: ThreatHuntingConfig) -> Self {
         let (event_sender, event_receiver) = unbounded();
-        
+
         // Initialize subsystems with their configurations
-        let behavioral_analyzer = Arc::new(AdvancedBehavioralThreatDetector::new(config.behavioral_analysis.clone()));
-        let threat_intelligence = Arc::new(ThreatIntelligenceCorrelator::new(config.threat_intelligence.clone()));
-        let attack_pattern_detector = Arc::new(AttackPatternDetector::new(config.attack_patterns.clone()));
-        let user_profiler = Arc::new(AdvancedUserBehaviorProfiler::new(config.user_profiling.clone()));
-        let response_orchestrator = Arc::new(ThreatResponseOrchestrator::new(config.response_orchestration.clone()));
-        
+        let behavioral_analyzer =
+            Arc::new(AdvancedBehavioralThreatDetector::new(config.behavioral_analysis.clone()));
+        let threat_intelligence =
+            Arc::new(ThreatIntelligenceCorrelator::new(config.threat_intelligence.clone()));
+        let attack_pattern_detector =
+            Arc::new(AttackPatternDetector::new(config.attack_patterns.clone()));
+        let user_profiler =
+            Arc::new(AdvancedUserBehaviorProfiler::new(config.user_profiling.clone()));
+        let response_orchestrator =
+            Arc::new(ThreatResponseOrchestrator::new(config.response_orchestration.clone()));
+
         // Initialize correlation engine
         let correlation_engine = Arc::new(ThreatCorrelationEngine::new());
 
@@ -434,23 +441,30 @@ impl ThreatHuntingOrchestrator {
     /// Initialize Redis connection with cluster support
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
         let config = self.config.read().await;
-        
+
         // For now, use the first URL (in production, implement cluster support)
-        let redis_url = config.redis_config.cluster_urls.first()
-            .ok_or_else(|| redis::RedisError::from((redis::ErrorKind::InvalidClientConfig, "No Redis URLs configured")))?;
-            
+        let redis_url = config.redis_config.cluster_urls.first().ok_or_else(|| {
+            redis::RedisError::from((
+                redis::ErrorKind::InvalidClientConfig,
+                "No Redis URLs configured",
+            ))
+        })?;
+
         let client = redis::Client::open(redis_url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
-        
+
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = Some(manager);
-        
+
         info!("Redis connection established for threat hunting orchestrator");
         Ok(())
     }
 
     /// Process a security event through the threat hunting pipeline
-    pub async fn process_event(&self, event: SecurityEvent) -> Result<ThreatHuntingResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn process_event(
+        &self,
+        event: SecurityEvent,
+    ) -> Result<ThreatHuntingResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = SystemTime::now();
         let timer = THREAT_HUNTING_PROCESSING_TIME.start_timer();
 
@@ -514,7 +528,11 @@ impl ThreatHuntingOrchestrator {
                 risk_score: user_result.risk_score,
                 risk_level: self.convert_risk_score_to_level(user_result.risk_score),
                 risk_factors: vec!["placeholder".to_string()],
-                behavioral_anomalies: user_result.anomalies_detected.iter().map(|a| a.description.clone()).collect(),
+                behavioral_anomalies: user_result
+                    .anomalies_detected
+                    .iter()
+                    .map(|a| a.description.clone())
+                    .collect(),
                 peer_comparison_percentile: 0.5, // Placeholder
                 recommended_actions: user_result.recommendations,
             });
@@ -522,25 +540,30 @@ impl ThreatHuntingOrchestrator {
 
         // Perform threat correlation
         if !result.threats_detected.is_empty() {
-            let correlations = self.correlation_engine.correlate_threats(&result.threats_detected).await;
+            let correlations =
+                self.correlation_engine.correlate_threats(&result.threats_detected).await;
             result.correlations_found = correlations;
         }
 
         // Create response plans for high-severity threats
         for threat in &result.threats_detected {
             if threat.severity >= ThreatSeverity::High {
-                match self.response_orchestrator.create_response_plan(
-                    threat.clone(),
-                    ThreatContext {
-                        attack_vector: Some("authentication".to_string()),
-                        targeted_assets: HashSet::new(),
-                        business_impact: BusinessImpact::Medium,
-                        regulatory_implications: Vec::new(),
-                        related_cves: Vec::new(),
-                        threat_actor_profile: None,
-                        tactics_techniques_procedures: Vec::new(),
-                    }
-                ).await {
+                match self
+                    .response_orchestrator
+                    .create_response_plan(
+                        threat.clone(),
+                        ThreatContext {
+                            attack_vector: Some("authentication".to_string()),
+                            targeted_assets: HashSet::new(),
+                            business_impact: BusinessImpact::Medium,
+                            regulatory_implications: Vec::new(),
+                            related_cves: Vec::new(),
+                            threat_actor_profile: None,
+                            tactics_techniques_procedures: Vec::new(),
+                        },
+                    )
+                    .await
+                {
                     Ok(plan) => {
                         result.response_plans_created.push(plan.plan_id);
                         THREAT_HUNTING_RESPONSE_PLANS_EXECUTED.inc();
@@ -554,9 +577,9 @@ impl ThreatHuntingOrchestrator {
 
         // Calculate overall confidence
         if !result.threats_detected.is_empty() {
-            result.confidence_score = result.threats_detected.iter()
-                .map(|t| t.confidence)
-                .sum::<f64>() / result.threats_detected.len() as f64;
+            result.confidence_score =
+                result.threats_detected.iter().map(|t| t.confidence).sum::<f64>()
+                    / result.threats_detected.len() as f64;
         }
 
         // Record processing time
@@ -575,7 +598,13 @@ impl ThreatHuntingOrchestrator {
     }
 
     /// Analyze user behavior for the event
-    async fn analyze_user_behavior(&self, event: &SecurityEvent) -> Result<crate::threat_user_profiler::BehavioralAnalysisResult, Box<dyn std::error::Error + Send + Sync>> {
+    async fn analyze_user_behavior(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<
+        crate::threat_user_profiler::BehavioralAnalysisResult,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         if let Some(user_id) = &event.user_id {
             self.user_profiler.analyze_user_behavior(user_id, event.clone()).await
         } else {
@@ -603,9 +632,9 @@ impl ThreatHuntingOrchestrator {
 
         let processing_task = tokio::spawn(async move {
             info!("Starting threat hunting event processor");
-            
+
             let mut interval = interval(TokioDuration::from_millis(100));
-            
+
             loop {
                 tokio::select! {
                     _ = shutdown_signal.notified() => {
@@ -619,7 +648,7 @@ impl ThreatHuntingOrchestrator {
                         drop(config_guard);
 
                         let mut batch = Vec::with_capacity(batch_size);
-                        
+
                         // Collect batch of events
                         for _ in 0..batch_size {
                             match receiver.try_recv() {
@@ -648,9 +677,9 @@ impl ThreatHuntingOrchestrator {
 
         let correlation_task = tokio::spawn(async move {
             info!("Starting threat correlation engine");
-            
+
             let mut interval = interval(TokioDuration::from_secs(60)); // Run every minute
-            
+
             loop {
                 tokio::select! {
                     _ = shutdown_signal.notified() => {
@@ -675,9 +704,9 @@ impl ThreatHuntingOrchestrator {
 
         let monitor_task = tokio::spawn(async move {
             info!("Starting system monitor");
-            
+
             let mut interval = interval(TokioDuration::from_secs(30));
-            
+
             loop {
                 tokio::select! {
                     _ = shutdown_signal.notified() => {
@@ -687,10 +716,10 @@ impl ThreatHuntingOrchestrator {
                     _ = interval.tick() => {
                         // Update system metrics
                         let mut metrics = system_metrics.lock().await;
-                        
+
                         // TODO: Collect actual system metrics
                         metrics.system_uptime_hours += 0.5 / 60.0; // 30 seconds
-                        
+
                         // Update Prometheus metrics
                         THREAT_HUNTING_SYSTEM_HEALTH.set(1.0); // Healthy
                     }
@@ -706,7 +735,7 @@ impl ThreatHuntingOrchestrator {
     pub async fn get_system_status(&self) -> SystemStatus {
         let metrics = self.system_metrics.lock().await;
         let active_investigations = self.active_investigations.read().await;
-        
+
         SystemStatus {
             system_health: SystemHealth::Healthy,
             uptime_hours: metrics.system_uptime_hours,
@@ -822,7 +851,7 @@ impl ThreatCorrelationEngine {
 
     pub async fn correlate_threats(&self, threats: &[ThreatSignature]) -> Vec<ThreatCorrelation> {
         let mut correlations = Vec::new();
-        
+
         // Simplified correlation logic
         if threats.len() > 1 {
             let correlation = ThreatCorrelation {
@@ -841,11 +870,11 @@ impl ThreatCorrelationEngine {
                 },
                 campaign_indicators: None,
             };
-            
+
             correlations.push(correlation);
             THREAT_HUNTING_ACTIVE_CORRELATIONS.inc();
         }
-        
+
         correlations
     }
 
@@ -855,26 +884,22 @@ impl ThreatCorrelationEngine {
     }
 
     fn default_correlation_rules() -> Vec<CorrelationRule> {
-        vec![
-            CorrelationRule {
-                rule_id: "ip_based_correlation".to_string(),
-                name: "IP Address Based Correlation".to_string(),
-                description: "Correlate threats from the same IP address".to_string(),
-                enabled: true,
-                correlation_type: CorrelationType::EntityBased,
-                time_window_minutes: 60,
-                similarity_threshold: 0.8,
-                required_threat_types: Vec::new(),
-                correlation_fields: vec![
-                    CorrelationField {
-                        field_name: "source_ip".to_string(),
-                        field_type: FieldType::IpAddress,
-                        weight: 1.0,
-                        fuzzy_matching: false,
-                    }
-                ],
-            },
-        ]
+        vec![CorrelationRule {
+            rule_id: "ip_based_correlation".to_string(),
+            name: "IP Address Based Correlation".to_string(),
+            description: "Correlate threats from the same IP address".to_string(),
+            enabled: true,
+            correlation_type: CorrelationType::EntityBased,
+            time_window_minutes: 60,
+            similarity_threshold: 0.8,
+            required_threat_types: Vec::new(),
+            correlation_fields: vec![CorrelationField {
+                field_name: "source_ip".to_string(),
+                field_type: FieldType::IpAddress,
+                weight: 1.0,
+                fuzzy_matching: false,
+            }],
+        }]
     }
 }
 

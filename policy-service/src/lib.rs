@@ -36,20 +36,15 @@ impl From<cedar_policy::ParseErrors> for PolicyError {
 impl IntoResponse for PolicyError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            PolicyError::Io(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("IO error: {}", err),
-            ),
-            PolicyError::Parse(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Parse error: {}", err),
-            ),
+            PolicyError::Io(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("IO error: {}", err))
+            }
+            PolicyError::Parse(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Parse error: {}", err))
+            }
             PolicyError::Internal(err) => {
                 tracing::error!("Internal error: {}", err);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error".to_string(),
-                )
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
             }
         };
 
@@ -86,11 +81,7 @@ pub fn load_policies_and_entities() -> Result<Arc<AppState>, PolicyError> {
     let entities = Entities::from_json_str(&entities_str, None)
         .map_err(|e| PolicyError::Parse(e.to_string()))?;
 
-    Ok(Arc::new(AppState {
-        authorizer: Authorizer::new(),
-        policies,
-        entities,
-    }))
+    Ok(Arc::new(AppState { authorizer: Authorizer::new(), policies, entities }))
 }
 
 #[utoipa::path(
@@ -123,18 +114,14 @@ pub async fn authorize(
         .map_err(|e| PolicyError::Parse(format!("Failed to parse context: {}", e)))?;
 
     let request = Request::new(Some(principal), Some(action), Some(resource), context, None)
-        .map_err(|e| PolicyError::Parse(format!("Failed to create authorization request: {}", e)))?;
+        .map_err(|e| {
+            PolicyError::Parse(format!("Failed to create authorization request: {}", e))
+        })?;
 
-    let decision = state
-        .authorizer
-        .is_authorized(&request, &state.policies, &state.entities)
-        .decision();
+    let decision =
+        state.authorizer.is_authorized(&request, &state.policies, &state.entities).decision();
 
-    let decision_str = if decision == cedar_policy::Decision::Allow {
-        "Allow"
-    } else {
-        "Deny"
-    };
+    let decision_str = if decision == cedar_policy::Decision::Allow { "Allow" } else { "Deny" };
 
     // Log authorization decision for audit
     tracing::info!(
@@ -144,9 +131,7 @@ pub async fn authorize(
         "Authorization decision made"
     );
 
-    Ok(Json(AuthorizeResponse {
-        decision: decision_str.to_string(),
-    }))
+    Ok(Json(AuthorizeResponse { decision: decision_str.to_string() }))
 }
 
 fn parse_entity(v: &serde_json::Value) -> Result<cedar_policy::EntityUid, PolicyError> {
@@ -169,14 +154,11 @@ pub fn app(state: Arc<AppState>) -> Router {
             // Default to no origins unless explicitly configured
             let layer = CorsLayer::new();
             layer
-        },
+        }
     };
 
     let router = Router::new()
-        .route(
-            "/health",
-            get(|| async { Json(serde_json::json!({"status": "ok"})) }),
-        )
+        .route("/health", get(|| async { Json(serde_json::json!({"status": "ok"})) }))
         .route("/v1/authorize", post(authorize))
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
@@ -190,8 +172,5 @@ pub fn app(state: Arc<AppState>) -> Router {
 }
 
 #[derive(utoipa::OpenApi)]
-#[openapi(
-    paths(authorize),
-    components(schemas(AuthorizeRequest, AuthorizeResponse))
-)]
+#[openapi(paths(authorize), components(schemas(AuthorizeRequest, AuthorizeResponse)))]
 pub struct ApiDoc;

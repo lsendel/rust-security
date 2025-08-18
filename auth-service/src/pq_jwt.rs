@@ -1,8 +1,8 @@
 //! # Post-Quantum JWT Implementation
-//! 
+//!
 //! This module provides JWT token signing and verification using post-quantum
 //! digital signature algorithms, with hybrid support for gradual migration.
-//! 
+//!
 //! ## Features
 //! - JWT signing with CRYSTALS-Dilithium signatures
 //! - Hybrid JWT tokens with both classical and post-quantum signatures
@@ -10,16 +10,16 @@
 //! - Custom JWT headers for post-quantum algorithm identification
 //! - Migration support for existing token validation
 
-use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use base64::Engine as _;
-use jsonwebtoken::{Header, Algorithm};
+use jsonwebtoken::{Algorithm, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use tracing::{error, info, warn};
 
-use crate::post_quantum_crypto::{get_pq_manager, PQAlgorithm, SecurityLevel, MigrationMode};
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::post_quantum_crypto::{get_pq_manager, MigrationMode, PQAlgorithm, SecurityLevel};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 
 /// Post-quantum JWT header with additional metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,14 +90,13 @@ impl PQJwtManager {
         algorithm: Option<PQAlgorithm>,
         expires_in: Option<u64>,
     ) -> Result<String> {
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs() as i64;
+        let current_time =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs() as i64;
 
         // Add standard JWT claims
         let mut claims = payload.as_object().unwrap_or(&serde_json::Map::new()).clone();
         claims.insert("iat".to_string(), Value::Number(current_time.into()));
-        
+
         if let Some(exp_secs) = expires_in {
             let exp_time = current_time + exp_secs as i64;
             claims.insert("exp".to_string(), Value::Number(exp_time.into()));
@@ -111,15 +110,9 @@ impl PQJwtManager {
         let payload_value = Value::Object(claims);
 
         match self.migration_mode {
-            MigrationMode::Classical => {
-                self.create_classical_jwt(&payload_value).await
-            }
-            MigrationMode::Hybrid => {
-                self.create_hybrid_jwt(&payload_value, algorithm).await
-            }
-            MigrationMode::PostQuantumOnly => {
-                self.create_pq_jwt(&payload_value, algorithm).await
-            }
+            MigrationMode::Classical => self.create_classical_jwt(&payload_value).await,
+            MigrationMode::Hybrid => self.create_hybrid_jwt(&payload_value, algorithm).await,
+            MigrationMode::PostQuantumOnly => self.create_pq_jwt(&payload_value, algorithm).await,
             MigrationMode::GradualMigration => {
                 // Start with hybrid, eventually move to post-quantum only
                 if self.should_use_post_quantum_only().await {
@@ -132,14 +125,20 @@ impl PQJwtManager {
     }
 
     /// Create a pure post-quantum JWT
-    async fn create_pq_jwt(&self, payload: &Value, algorithm: Option<PQAlgorithm>) -> Result<String> {
+    async fn create_pq_jwt(
+        &self,
+        payload: &Value,
+        algorithm: Option<PQAlgorithm>,
+    ) -> Result<String> {
         let manager = get_pq_manager();
-        
+
         if !manager.is_available() {
             return Err(anyhow!("Post-quantum cryptography not available"));
         }
 
-        let kid = manager.current_signing_key_id().await
+        let kid = manager
+            .current_signing_key_id()
+            .await
             .ok_or_else(|| anyhow!("No post-quantum signing key available"))?;
 
         let header = PQJwtHeader {
@@ -163,34 +162,43 @@ impl PQJwtManager {
 
         // Sign with post-quantum algorithm
         let signature_bytes = manager.sign(message.as_bytes(), Some(&kid)).await?;
-        let signature_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&signature_bytes);
+        let signature_b64 =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&signature_bytes);
 
         let token = format!("{}.{}", message, signature_b64);
 
         // Log token creation
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::KeyManagement,
-            SecuritySeverity::Low,
-            "pq-jwt".to_string(),
-            "Post-quantum JWT token created".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_sign".to_string())
-        .with_target("jwt_token".to_string())
-        .with_outcome("success".to_string())
-        .with_reason("Pure post-quantum JWT token signed with Dilithium".to_string())
-        .with_detail("algorithm".to_string(), "DILITHIUM3")
-        .with_detail("hybrid".to_string(), false)
-        .with_detail("kid".to_string(), kid));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::KeyManagement,
+                SecuritySeverity::Low,
+                "pq-jwt".to_string(),
+                "Post-quantum JWT token created".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_sign".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Pure post-quantum JWT token signed with Dilithium".to_string())
+            .with_detail("algorithm".to_string(), "DILITHIUM3")
+            .with_detail("hybrid".to_string(), false)
+            .with_detail("kid".to_string(), kid),
+        );
 
         Ok(token)
     }
 
     /// Create a hybrid JWT with both classical and post-quantum signatures
-    async fn create_hybrid_jwt(&self, payload: &Value, algorithm: Option<PQAlgorithm>) -> Result<String> {
+    async fn create_hybrid_jwt(
+        &self,
+        payload: &Value,
+        algorithm: Option<PQAlgorithm>,
+    ) -> Result<String> {
         let manager = get_pq_manager();
-        
-        let kid = manager.current_signing_key_id().await
+
+        let kid = manager
+            .current_signing_key_id()
+            .await
             .ok_or_else(|| anyhow!("No signing key available"))?;
 
         let header = PQJwtHeader {
@@ -220,25 +228,31 @@ impl PQJwtManager {
             self.sign_classical(message.as_bytes()).await?
         };
 
-        let signature_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&signature_bytes);
+        let signature_b64 =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&signature_bytes);
         let token = format!("{}.{}", message, signature_b64);
 
         // Log token creation
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::KeyManagement,
-            SecuritySeverity::Low,
-            "pq-jwt".to_string(),
-            "Hybrid JWT token created".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_sign".to_string())
-        .with_target("jwt_token".to_string())
-        .with_outcome("success".to_string())
-        .with_reason("Hybrid JWT token signed with both classical and post-quantum algorithms".to_string())
-        .with_detail("algorithm".to_string(), "HYBRID-DILITHIUM3-ED25519")
-        .with_detail("hybrid".to_string(), true)
-        .with_detail("kid".to_string(), kid)
-        .with_detail("pq_available".to_string(), manager.is_available()));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::KeyManagement,
+                SecuritySeverity::Low,
+                "pq-jwt".to_string(),
+                "Hybrid JWT token created".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_sign".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("success".to_string())
+            .with_reason(
+                "Hybrid JWT token signed with both classical and post-quantum algorithms"
+                    .to_string(),
+            )
+            .with_detail("algorithm".to_string(), "HYBRID-DILITHIUM3-ED25519")
+            .with_detail("hybrid".to_string(), true)
+            .with_detail("kid".to_string(), kid)
+            .with_detail("pq_available".to_string(), manager.is_available()),
+        );
 
         Ok(token)
     }
@@ -258,20 +272,22 @@ impl PQJwtManager {
             .map_err(|e| anyhow!("Failed to create classical JWT: {}", e))?;
 
         // Log classical token creation
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::KeyManagement,
-            SecuritySeverity::Low,
-            "pq-jwt".to_string(),
-            "Classical JWT token created".to_string(),
-        )
-        .with_actor("system".to_string())
-        .with_action("jwt_sign".to_string())
-        .with_target("jwt_token".to_string())
-        .with_outcome("success".to_string())
-        .with_reason("Classical JWT token for backward compatibility".to_string())
-        .with_detail("algorithm".to_string(), "RS256")
-        .with_detail("hybrid".to_string(), false)
-        .with_detail("kid".to_string(), kid));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::KeyManagement,
+                SecuritySeverity::Low,
+                "pq-jwt".to_string(),
+                "Classical JWT token created".to_string(),
+            )
+            .with_actor("system".to_string())
+            .with_action("jwt_sign".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Classical JWT token for backward compatibility".to_string())
+            .with_detail("algorithm".to_string(), "RS256")
+            .with_detail("hybrid".to_string(), false)
+            .with_detail("kid".to_string(), kid),
+        );
 
         Ok(token)
     }
@@ -298,16 +314,19 @@ impl PQJwtManager {
     }
 
     /// Verify a post-quantum JWT token
-    async fn verify_pq_token(&self, token: &str, header: &PQJwtHeader) -> Result<(PQJwtHeader, Value)> {
+    async fn verify_pq_token(
+        &self,
+        token: &str,
+        header: &PQJwtHeader,
+    ) -> Result<(PQJwtHeader, Value)> {
         let parts: Vec<&str> = token.split('.').collect();
         let message = format!("{}.{}", parts[0], parts[1]);
-        
+
         let signature_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(parts[2])
             .map_err(|_| anyhow!("Invalid signature encoding"))?;
 
-        let kid = header.kid.as_ref()
-            .ok_or_else(|| anyhow!("Missing key ID in token header"))?;
+        let kid = header.kid.as_ref().ok_or_else(|| anyhow!("Missing key ID in token header"))?;
 
         let manager = get_pq_manager();
 
@@ -334,7 +353,7 @@ impl PQJwtManager {
         let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(parts[1])
             .map_err(|_| anyhow!("Invalid payload encoding"))?;
-        
+
         let payload: Value = serde_json::from_slice(&payload_bytes)?;
 
         // Verify expiration
@@ -342,27 +361,29 @@ impl PQJwtManager {
             let current_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_secs() as i64;
-            
+
             if current_time >= exp {
                 return Err(anyhow!("Token has expired"));
             }
         }
 
         // Log successful verification
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::DataAccess,
-            SecuritySeverity::Low,
-            "pq-jwt".to_string(),
-            "Post-quantum JWT token verified".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_verify".to_string())
-        .with_target("jwt_token".to_string())
-        .with_outcome("success".to_string())
-        .with_reason("Post-quantum JWT token signature verification successful".to_string())
-        .with_detail("algorithm".to_string(), header.pq_alg.clone().unwrap_or_default())
-        .with_detail("hybrid".to_string(), header.hybrid.unwrap_or(false))
-        .with_detail("kid".to_string(), kid.clone()));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::DataAccess,
+                SecuritySeverity::Low,
+                "pq-jwt".to_string(),
+                "Post-quantum JWT token verified".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_verify".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Post-quantum JWT token signature verification successful".to_string())
+            .with_detail("algorithm".to_string(), header.pq_alg.clone().unwrap_or_default())
+            .with_detail("hybrid".to_string(), header.hybrid.unwrap_or(false))
+            .with_detail("kid".to_string(), kid.clone()),
+        );
 
         Ok((header.clone(), payload))
     }
@@ -371,16 +392,16 @@ impl PQJwtManager {
     async fn verify_classical_token(&self, token: &str) -> Result<(PQJwtHeader, Value)> {
         // Use existing JWT verification from jsonwebtoken
         let header = jsonwebtoken::decode_header(token)?;
-        
+
         // For now, just verify structure - in production, implement full verification
         let validation = jsonwebtoken::Validation::new(Algorithm::RS256);
-        
+
         // This is a simplified version - in production, you'd need proper key retrieval
         let parts: Vec<&str> = token.split('.').collect();
         let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(parts[1])
             .map_err(|_| anyhow!("Invalid payload encoding"))?;
-        
+
         let payload: Value = serde_json::from_slice(&payload_bytes)?;
 
         // Convert classical header to PQ header format
@@ -396,20 +417,22 @@ impl PQJwtManager {
         };
 
         // Log classical token verification
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::DataAccess,
-            SecuritySeverity::Low,
-            "pq-jwt".to_string(),
-            "Classical JWT token verified".to_string(),
-        )
-        .with_actor("system".to_string())
-        .with_action("jwt_verify".to_string())
-        .with_target("jwt_token".to_string())
-        .with_outcome("success".to_string())
-        .with_reason("Classical JWT token verification for backward compatibility".to_string())
-        .with_detail("algorithm".to_string(), format!("{:?}", header.alg))
-        .with_detail("hybrid".to_string(), false)
-        .with_detail("kid".to_string(), header.kid.unwrap_or_default()));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::DataAccess,
+                SecuritySeverity::Low,
+                "pq-jwt".to_string(),
+                "Classical JWT token verified".to_string(),
+            )
+            .with_actor("system".to_string())
+            .with_action("jwt_verify".to_string())
+            .with_target("jwt_token".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Classical JWT token verification for backward compatibility".to_string())
+            .with_detail("algorithm".to_string(), format!("{:?}", header.alg))
+            .with_detail("hybrid".to_string(), false)
+            .with_detail("kid".to_string(), header.kid.unwrap_or_default()),
+        );
 
         Ok((pq_header, payload))
     }
@@ -417,14 +440,14 @@ impl PQJwtManager {
     /// Extract claims from a verified token
     pub async fn extract_claims(&self, token: &str) -> Result<HashMap<String, Value>> {
         let (_, payload) = self.verify_token(token).await?;
-        
+
         let mut claims = HashMap::new();
         if let Some(obj) = payload.as_object() {
             for (key, value) in obj {
                 claims.insert(key.clone(), value.clone());
             }
         }
-        
+
         Ok(claims)
     }
 
@@ -435,7 +458,7 @@ impl PQJwtManager {
         // - Client capabilities
         // - Security posture requirements
         // - Environment configuration
-        
+
         std::env::var("FORCE_POST_QUANTUM_ONLY")
             .map(|v| v.eq_ignore_ascii_case("true"))
             .unwrap_or(false)
@@ -458,7 +481,7 @@ impl PQJwtManager {
     pub async fn create_pq_jwk(&self, kid: &str) -> Result<Value> {
         let manager = get_pq_manager();
         let jwks = manager.jwks_document().await;
-        
+
         if let Some(keys) = jwks.get("keys").and_then(|k| k.as_array()) {
             for key in keys {
                 if let Some(key_kid) = key.get("kid").and_then(|k| k.as_str()) {
@@ -468,7 +491,7 @@ impl PQJwtManager {
                 }
             }
         }
-        
+
         Err(anyhow!("Post-quantum key not found: {}", kid))
     }
 
@@ -476,12 +499,13 @@ impl PQJwtManager {
     pub fn supported_algorithms(&self) -> Vec<String> {
         let mut algorithms = vec![
             "PQ-DILITHIUM2".to_string(),
-            "PQ-DILITHIUM3".to_string(), 
+            "PQ-DILITHIUM3".to_string(),
             "PQ-DILITHIUM5".to_string(),
         ];
 
-        if self.migration_mode == MigrationMode::Hybrid || 
-           self.migration_mode == MigrationMode::GradualMigration {
+        if self.migration_mode == MigrationMode::Hybrid
+            || self.migration_mode == MigrationMode::GradualMigration
+        {
             algorithms.extend([
                 "HYBRID-DILITHIUM2-ED25519".to_string(),
                 "HYBRID-DILITHIUM3-ED25519".to_string(),
@@ -490,9 +514,10 @@ impl PQJwtManager {
             ]);
         }
 
-        if self.migration_mode == MigrationMode::Classical ||
-           self.migration_mode == MigrationMode::Hybrid ||
-           self.migration_mode == MigrationMode::GradualMigration {
+        if self.migration_mode == MigrationMode::Classical
+            || self.migration_mode == MigrationMode::Hybrid
+            || self.migration_mode == MigrationMode::GradualMigration
+        {
             algorithms.extend([
                 "RS256".to_string(),
                 "RS384".to_string(),
@@ -508,7 +533,7 @@ impl PQJwtManager {
 }
 
 /// Global post-quantum JWT manager
-static PQ_JWT_MANAGER: once_cell::sync::Lazy<PQJwtManager> = 
+static PQ_JWT_MANAGER: once_cell::sync::Lazy<PQJwtManager> =
     once_cell::sync::Lazy::new(|| PQJwtManager::default());
 
 /// Get the global post-quantum JWT manager
@@ -517,10 +542,7 @@ pub fn get_pq_jwt_manager() -> &'static PQJwtManager {
 }
 
 /// Convenience function to create a post-quantum JWT token
-pub async fn create_pq_jwt_token(
-    payload: Value,
-    expires_in: Option<u64>,
-) -> Result<String> {
+pub async fn create_pq_jwt_token(payload: Value, expires_in: Option<u64>) -> Result<String> {
     get_pq_jwt_manager().create_token(payload, None, expires_in).await
 }
 
@@ -537,23 +559,23 @@ pub async fn create_pq_access_token(
     expires_in: u64,
 ) -> Result<String> {
     let mut payload = serde_json::Map::new();
-    
+
     if let Some(sub) = subject {
         payload.insert("sub".to_string(), Value::String(sub));
     }
-    
+
     if let Some(cid) = client_id {
         payload.insert("client_id".to_string(), Value::String(cid));
     }
-    
+
     if let Some(scp) = scope {
         payload.insert("scope".to_string(), Value::String(scp));
     }
-    
+
     payload.insert("token_type".to_string(), Value::String("access_token".to_string()));
-    
+
     let payload_value = Value::Object(payload);
-    
+
     get_pq_jwt_manager().create_token(payload_value, None, Some(expires_in)).await
 }
 
@@ -585,7 +607,7 @@ mod tests {
             "sub": "test-user",
             "iss": "test-issuer"
         });
-        
+
         // This might fail if keys are not initialized, which is expected in test
         let result = manager.create_token(payload, None, Some(3600)).await;
         // Just test that the function can be called
@@ -597,7 +619,7 @@ mod tests {
         // Test JWT structure validation
         let invalid_token = "invalid.token";
         let manager = PQJwtManager::default();
-        
+
         let result = manager.verify_token(invalid_token).await;
         assert!(result.is_err());
     }
@@ -606,13 +628,13 @@ mod tests {
     fn test_migration_mode_logic() {
         let hybrid_manager = PQJwtManager::new(MigrationMode::Hybrid);
         let pq_manager = PQJwtManager::new(MigrationMode::PostQuantumOnly);
-        
+
         let hybrid_algorithms = hybrid_manager.supported_algorithms();
         let pq_algorithms = pq_manager.supported_algorithms();
-        
+
         // Hybrid should support more algorithms
         assert!(hybrid_algorithms.len() >= pq_algorithms.len());
-        
+
         // Both should support Dilithium
         assert!(hybrid_algorithms.contains(&"PQ-DILITHIUM3".to_string()));
         assert!(pq_algorithms.contains(&"PQ-DILITHIUM3".to_string()));

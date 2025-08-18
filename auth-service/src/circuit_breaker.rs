@@ -1,11 +1,11 @@
+use crate::errors::AuthError;
 use std::sync::{
-    atomic::{AtomicU64, AtomicU32, Ordering},
+    atomic::{AtomicU32, AtomicU64, Ordering},
     Arc, Mutex,
 };
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use tokio::time::{timeout, sleep};
-use crate::errors::AuthError;
+use tokio::time::{sleep, timeout};
 
 #[derive(Error, Debug)]
 pub enum CircuitBreakerError {
@@ -22,16 +22,16 @@ pub enum CircuitBreakerError {
 impl From<CircuitBreakerError> for AuthError {
     fn from(err: CircuitBreakerError) -> Self {
         match err {
-            CircuitBreakerError::Open => AuthError::ServiceUnavailable {
-                reason: "Circuit breaker is open".to_string(),
-            },
+            CircuitBreakerError::Open => {
+                AuthError::ServiceUnavailable { reason: "Circuit breaker is open".to_string() }
+            }
             CircuitBreakerError::Timeout { timeout } => AuthError::ServiceUnavailable {
                 reason: format!("Operation timeout after {:?}", timeout),
             },
             CircuitBreakerError::TooManyRequests => AuthError::RateLimitExceeded,
-            CircuitBreakerError::OperationFailed(msg) => AuthError::ServiceUnavailable {
-                reason: format!("Operation failed: {}", msg),
-            },
+            CircuitBreakerError::OperationFailed(msg) => {
+                AuthError::ServiceUnavailable { reason: format!("Operation failed: {}", msg) }
+            }
         }
     }
 }
@@ -142,16 +142,14 @@ impl CircuitBreaker {
             }
             Err(_) => {
                 self.on_failure().await;
-                Err(CircuitBreakerError::Timeout {
-                    timeout: self.config.request_timeout,
-                })
+                Err(CircuitBreakerError::Timeout { timeout: self.config.request_timeout })
             }
         }
     }
 
     fn can_execute(&self) -> Result<(), CircuitBreakerError> {
         let current_state = self.state();
-        
+
         match current_state {
             CircuitState::Closed => Ok(()),
             CircuitState::Open => {
@@ -179,7 +177,7 @@ impl CircuitBreaker {
 
     async fn on_success(&self) {
         let current_state = self.state();
-        
+
         match current_state {
             CircuitState::Closed => {
                 self.state.success_count.fetch_add(1, Ordering::Relaxed);
@@ -189,7 +187,7 @@ impl CircuitBreaker {
             CircuitState::HalfOpen => {
                 self.state.success_count.fetch_add(1, Ordering::Relaxed);
                 self.state.half_open_calls.fetch_sub(1, Ordering::Relaxed);
-                
+
                 // If we've had enough successful calls, close the circuit
                 let success_count = self.state.success_count.load(Ordering::Relaxed);
                 if success_count >= self.config.half_open_max_calls {
@@ -214,12 +212,12 @@ impl CircuitBreaker {
 
     async fn on_failure(&self) {
         let current_state = self.state();
-        
+
         match current_state {
             CircuitState::Closed => {
                 let failure_count = self.state.failure_count.fetch_add(1, Ordering::Relaxed) + 1;
                 let request_count = self.state.request_count.load(Ordering::Relaxed);
-                
+
                 // Only open circuit if we have enough requests and failures
                 if request_count >= self.config.minimum_request_threshold as u64
                     && failure_count >= self.config.failure_threshold
@@ -252,7 +250,7 @@ impl CircuitBreaker {
             *state = CircuitState::Open;
             let mut next_attempt = self.state.next_attempt.lock().unwrap();
             *next_attempt = Instant::now() + self.config.recovery_timeout;
-            
+
             tracing::warn!(
                 circuit_breaker = %self.name,
                 recovery_timeout = ?self.config.recovery_timeout,
@@ -267,7 +265,7 @@ impl CircuitBreaker {
             *state = CircuitState::HalfOpen;
             self.state.half_open_calls.store(0, Ordering::Relaxed);
             self.state.success_count.store(0, Ordering::Relaxed);
-            
+
             tracing::info!(
                 circuit_breaker = %self.name,
                 "Circuit breaker transitioned to half-open"
@@ -282,7 +280,7 @@ impl CircuitBreaker {
             self.state.failure_count.store(0, Ordering::Relaxed);
             self.state.success_count.store(0, Ordering::Relaxed);
             self.state.half_open_calls.store(0, Ordering::Relaxed);
-            
+
             tracing::info!(
                 circuit_breaker = %self.name,
                 "Circuit breaker closed"
@@ -357,8 +355,8 @@ impl RetryBackoff {
         }
 
         let mut delay = Duration::from_millis(
-            (self.config.base_delay.as_millis() as f64 
-                * self.config.backoff_multiplier.powi(self.attempt as i32)) as u64
+            (self.config.base_delay.as_millis() as f64
+                * self.config.backoff_multiplier.powi(self.attempt as i32)) as u64,
         );
 
         // Cap at max_delay
@@ -416,11 +414,15 @@ mod tests {
         let cb = CircuitBreaker::new("test", config);
 
         // First failure
-        let _ = cb.call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) }).await;
+        let _ = cb
+            .call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) })
+            .await;
         assert_eq!(cb.state(), CircuitState::Closed);
 
         // Second failure should open circuit
-        let _ = cb.call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) }).await;
+        let _ = cb
+            .call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) })
+            .await;
         assert_eq!(cb.state(), CircuitState::Open);
 
         // Next call should be rejected
@@ -437,10 +439,12 @@ mod tests {
         let cb = CircuitBreaker::new("test", config);
 
         // Call that takes longer than timeout
-        let result = cb.call(async {
-            sleep(Duration::from_millis(200)).await;
-            Ok::<_, std::io::Error>(42)
-        }).await;
+        let result = cb
+            .call(async {
+                sleep(Duration::from_millis(200)).await;
+                Ok::<_, std::io::Error>(42)
+            })
+            .await;
 
         assert!(matches!(result, Err(CircuitBreakerError::Timeout { .. })));
     }
@@ -453,9 +457,9 @@ mod tests {
             jitter: false,
             ..Default::default()
         };
-        
+
         let mut backoff = RetryBackoff::new(config);
-        
+
         // First retry
         let delay1 = backoff.next_delay().await;
         assert!(delay1.is_some());

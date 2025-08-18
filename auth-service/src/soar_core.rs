@@ -1,5 +1,5 @@
 //! Core SOAR (Security Orchestration, Automation, and Response) Engine
-//! 
+//!
 //! This module provides the foundational components for the SOAR system including:
 //! - Workflow orchestration engine
 //! - Security playbook execution
@@ -7,15 +7,15 @@
 //! - Automated response actions
 //! - Integration framework for external security tools
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity, SecurityLogger};
-use crate::security_monitoring::{SecurityAlert, SecurityAlertType, AlertSeverity};
-use chrono::{DateTime, Utc, Duration};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use handlebars::{Handlebars, TemplateError};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -23,32 +23,32 @@ use uuid::Uuid;
 pub struct SoarCore {
     /// Configuration for the SOAR system
     config: Arc<RwLock<SoarConfig>>,
-    
+
     /// Workflow engine for executing security playbooks
     workflow_engine: Arc<WorkflowEngine>,
-    
+
     /// Alert correlation engine
     correlation_engine: Arc<AlertCorrelationEngine>,
-    
+
     /// Response automation engine
     response_engine: Arc<ResponseAutomationEngine>,
-    
+
     /// Case management system
     case_manager: Arc<CaseManager>,
-    
+
     /// Integration framework for external tools
     integration_framework: Arc<IntegrationFramework>,
-    
+
     /// Metrics collector
     metrics_collector: Arc<SoarMetrics>,
-    
+
     /// Active workflow instances
     active_workflows: Arc<DashMap<String, WorkflowInstance>>,
-    
+
     /// Event processing queue
     event_queue: mpsc::Sender<SoarEvent>,
     event_receiver: Arc<Mutex<mpsc::Receiver<SoarEvent>>>,
-    
+
     /// Template engine for notifications
     template_engine: Arc<Handlebars<'static>>,
 }
@@ -58,31 +58,31 @@ pub struct SoarCore {
 pub struct SoarConfig {
     /// Whether SOAR is enabled
     pub enabled: bool,
-    
+
     /// Maximum concurrent workflows
     pub max_concurrent_workflows: usize,
-    
+
     /// Default workflow timeout in minutes
     pub default_workflow_timeout_minutes: u32,
-    
+
     /// Auto-response threshold configuration
     pub auto_response_config: AutoResponseConfig,
-    
+
     /// Alert correlation configuration
     pub correlation_config: CorrelationConfig,
-    
+
     /// Notification configuration
     pub notification_config: NotificationConfig,
-    
+
     /// Integration configurations
     pub integrations: HashMap<String, IntegrationConfig>,
-    
+
     /// Security playbook definitions
     pub playbooks: HashMap<String, SecurityPlaybook>,
-    
+
     /// Escalation policies
     pub escalation_policies: Vec<EscalationPolicy>,
-    
+
     /// Case management settings
     pub case_management: CaseManagementConfig,
 }
@@ -92,19 +92,19 @@ pub struct SoarConfig {
 pub struct AutoResponseConfig {
     /// Enable automatic response
     pub enabled: bool,
-    
+
     /// Severity threshold for auto-response
     pub severity_threshold: AlertSeverity,
-    
+
     /// Confidence threshold for auto-response (0-100)
     pub confidence_threshold: u8,
-    
+
     /// Types of threats that can be auto-responded to
     pub allowed_threat_types: Vec<SecurityAlertType>,
-    
+
     /// Maximum actions per auto-response
     pub max_actions_per_response: u8,
-    
+
     /// Cooldown period between auto-responses in minutes
     pub cooldown_minutes: u32,
 }
@@ -114,13 +114,13 @@ pub struct AutoResponseConfig {
 pub struct CorrelationConfig {
     /// Time window for correlation in minutes
     pub correlation_window_minutes: u32,
-    
+
     /// Minimum events to trigger correlation
     pub min_events_for_correlation: u32,
-    
+
     /// Maximum correlation cache size
     pub max_correlation_cache_size: usize,
-    
+
     /// Correlation rules
     pub correlation_rules: Vec<CorrelationRule>,
 }
@@ -130,16 +130,16 @@ pub struct CorrelationConfig {
 pub struct NotificationConfig {
     /// Email settings
     pub email: Option<EmailConfig>,
-    
+
     /// Slack integration
     pub slack: Option<SlackConfig>,
-    
+
     /// PagerDuty integration
     pub pagerduty: Option<PagerDutyConfig>,
-    
+
     /// Custom webhook configurations
     pub webhooks: Vec<WebhookConfig>,
-    
+
     /// SMS configuration
     pub sms: Option<SmsConfig>,
 }
@@ -195,16 +195,16 @@ pub struct SmsConfig {
 pub struct IntegrationConfig {
     /// Integration type (SIEM, EDR, Firewall, etc.)
     pub integration_type: IntegrationType,
-    
+
     /// Connection parameters
     pub connection_params: HashMap<String, String>,
-    
+
     /// Authentication configuration
     pub auth_config: AuthConfig,
-    
+
     /// Whether integration is enabled
     pub enabled: bool,
-    
+
     /// Health check configuration
     pub health_check: HealthCheckConfig,
 }
@@ -255,16 +255,16 @@ pub struct HealthCheckConfig {
 pub struct CaseManagementConfig {
     /// Automatic case creation settings
     pub auto_create_cases: bool,
-    
+
     /// Severity threshold for case creation
     pub case_creation_threshold: AlertSeverity,
-    
+
     /// Default assignee for cases
     pub default_assignee: Option<String>,
-    
+
     /// Case retention period in days
     pub retention_days: u32,
-    
+
     /// SLA configurations
     pub sla_config: SlaConfig,
 }
@@ -274,10 +274,10 @@ pub struct CaseManagementConfig {
 pub struct SlaConfig {
     /// Response time SLAs by severity
     pub response_time_minutes: HashMap<AlertSeverity, u32>,
-    
+
     /// Resolution time SLAs by severity
     pub resolution_time_hours: HashMap<AlertSeverity, u32>,
-    
+
     /// Escalation thresholds
     pub escalation_thresholds: HashMap<AlertSeverity, u32>,
 }
@@ -287,37 +287,37 @@ pub struct SlaConfig {
 pub struct SecurityPlaybook {
     /// Unique playbook identifier
     pub id: String,
-    
+
     /// Playbook name
     pub name: String,
-    
+
     /// Description of the playbook
     pub description: String,
-    
+
     /// Playbook version
     pub version: String,
-    
+
     /// Triggers that activate this playbook
     pub triggers: Vec<PlaybookTrigger>,
-    
+
     /// Workflow steps
     pub steps: Vec<WorkflowStep>,
-    
+
     /// Input parameters
     pub inputs: Vec<ParameterDefinition>,
-    
+
     /// Output definitions
     pub outputs: Vec<ParameterDefinition>,
-    
+
     /// Timeout for the entire playbook
     pub timeout_minutes: u32,
-    
+
     /// Whether the playbook can run automatically
     pub auto_executable: bool,
-    
+
     /// Required approvals
     pub required_approvals: Vec<ApprovalRequirement>,
-    
+
     /// Metadata
     pub metadata: PlaybookMetadata,
 }
@@ -327,10 +327,10 @@ pub struct SecurityPlaybook {
 pub struct PlaybookTrigger {
     /// Trigger type
     pub trigger_type: TriggerType,
-    
+
     /// Conditions that must be met
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Priority of this trigger
     pub priority: u8,
 }
@@ -351,13 +351,13 @@ pub enum TriggerType {
 pub struct TriggerCondition {
     /// Field to evaluate
     pub field: String,
-    
+
     /// Operator for comparison
     pub operator: ConditionOperator,
-    
+
     /// Expected value
     pub value: serde_json::Value,
-    
+
     /// Whether this condition is required
     pub required: bool,
 }
@@ -383,34 +383,34 @@ pub enum ConditionOperator {
 pub struct WorkflowStep {
     /// Step identifier
     pub id: String,
-    
+
     /// Step name
     pub name: String,
-    
+
     /// Step type
     pub step_type: StepType,
-    
+
     /// Action to perform
     pub action: StepAction,
-    
+
     /// Input parameters for this step
     pub inputs: HashMap<String, serde_json::Value>,
-    
+
     /// Output variable mappings
     pub outputs: HashMap<String, String>,
-    
+
     /// Dependencies on other steps
     pub dependencies: Vec<String>,
-    
+
     /// Conditions for step execution
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Timeout for this step
     pub timeout_minutes: u32,
-    
+
     /// Retry configuration
     pub retry_config: RetryConfig,
-    
+
     /// Error handling
     pub error_handling: ErrorHandling,
 }
@@ -432,25 +432,14 @@ pub enum StepType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StepAction {
     /// Block an IP address
-    BlockIp {
-        ip_address: String,
-        duration_minutes: u32,
-        reason: String,
-    },
-    
+    BlockIp { ip_address: String, duration_minutes: u32, reason: String },
+
     /// Lock a user account
-    LockAccount {
-        user_id: String,
-        duration_minutes: u32,
-        reason: String,
-    },
-    
+    LockAccount { user_id: String, duration_minutes: u32, reason: String },
+
     /// Revoke tokens
-    RevokeTokens {
-        user_id: Option<String>,
-        token_type: Option<String>,
-    },
-    
+    RevokeTokens { user_id: Option<String>, token_type: Option<String> },
+
     /// Send notification
     SendNotification {
         notification_type: String,
@@ -459,29 +448,20 @@ pub enum StepAction {
         message: String,
         priority: String,
     },
-    
+
     /// Query SIEM
-    QuerySiem {
-        query: String,
-        time_range: String,
-        max_results: u32,
-    },
-    
+    QuerySiem { query: String, time_range: String, max_results: u32 },
+
     /// Create incident ticket
-    CreateTicket {
-        title: String,
-        description: String,
-        priority: String,
-        assignee: Option<String>,
-    },
-    
+    CreateTicket { title: String, description: String, priority: String, assignee: Option<String> },
+
     /// Execute script
     ExecuteScript {
         script_type: String,
         script_content: String,
         parameters: HashMap<String, String>,
     },
-    
+
     /// HTTP request
     HttpRequest {
         method: String,
@@ -489,12 +469,9 @@ pub enum StepAction {
         headers: HashMap<String, String>,
         body: Option<String>,
     },
-    
+
     /// Custom action
-    CustomAction {
-        action_type: String,
-        parameters: HashMap<String, serde_json::Value>,
-    },
+    CustomAction { action_type: String, parameters: HashMap<String, serde_json::Value> },
 }
 
 /// Parameter definition
@@ -502,19 +479,19 @@ pub enum StepAction {
 pub struct ParameterDefinition {
     /// Parameter name
     pub name: String,
-    
+
     /// Parameter type
     pub param_type: ParameterType,
-    
+
     /// Whether parameter is required
     pub required: bool,
-    
+
     /// Default value
     pub default_value: Option<serde_json::Value>,
-    
+
     /// Description
     pub description: String,
-    
+
     /// Validation rules
     pub validation: Option<ParameterValidation>,
 }
@@ -539,16 +516,16 @@ pub enum ParameterType {
 pub struct ParameterValidation {
     /// Minimum value (for numbers)
     pub min: Option<f64>,
-    
+
     /// Maximum value (for numbers)
     pub max: Option<f64>,
-    
+
     /// Regular expression pattern
     pub pattern: Option<String>,
-    
+
     /// Allowed values
     pub allowed_values: Option<Vec<serde_json::Value>>,
-    
+
     /// Custom validation script
     pub custom_validator: Option<String>,
 }
@@ -558,13 +535,13 @@ pub struct ParameterValidation {
 pub struct RetryConfig {
     /// Maximum retry attempts
     pub max_attempts: u32,
-    
+
     /// Retry delay in seconds
     pub delay_seconds: u32,
-    
+
     /// Backoff strategy
     pub backoff_strategy: BackoffStrategy,
-    
+
     /// Conditions that trigger retries
     pub retry_conditions: Vec<RetryCondition>,
 }
@@ -583,7 +560,7 @@ pub enum BackoffStrategy {
 pub struct RetryCondition {
     /// Error type or code
     pub error_type: String,
-    
+
     /// Whether to retry on this error
     pub should_retry: bool,
 }
@@ -593,13 +570,13 @@ pub struct RetryCondition {
 pub struct ErrorHandling {
     /// Action to take on error
     pub on_error: ErrorAction,
-    
+
     /// Whether to continue workflow on error
     pub continue_on_error: bool,
-    
+
     /// Error notification settings
     pub notify_on_error: bool,
-    
+
     /// Custom error handlers
     pub custom_handlers: Vec<CustomErrorHandler>,
 }
@@ -620,10 +597,10 @@ pub enum ErrorAction {
 pub struct CustomErrorHandler {
     /// Error pattern to match
     pub pattern: String,
-    
+
     /// Action to take
     pub action: ErrorAction,
-    
+
     /// Custom parameters
     pub parameters: HashMap<String, serde_json::Value>,
 }
@@ -633,16 +610,16 @@ pub struct CustomErrorHandler {
 pub struct ApprovalRequirement {
     /// Type of approval required
     pub approval_type: ApprovalType,
-    
+
     /// Required approvers
     pub approvers: Vec<String>,
-    
+
     /// Number of approvals needed
     pub required_approvals: u32,
-    
+
     /// Timeout for approval
     pub timeout_minutes: u32,
-    
+
     /// Auto-approve conditions
     pub auto_approve_conditions: Vec<TriggerCondition>,
 }
@@ -661,28 +638,28 @@ pub enum ApprovalType {
 pub struct PlaybookMetadata {
     /// Author information
     pub author: String,
-    
+
     /// Creation date
     pub created_at: DateTime<Utc>,
-    
+
     /// Last modified date
     pub modified_at: DateTime<Utc>,
-    
+
     /// Tags for categorization
     pub tags: Vec<String>,
-    
+
     /// Category
     pub category: String,
-    
+
     /// Severity levels this playbook handles
     pub severity_levels: Vec<AlertSeverity>,
-    
+
     /// Threat types this playbook addresses
     pub threat_types: Vec<SecurityAlertType>,
-    
+
     /// Compliance frameworks
     pub compliance_frameworks: Vec<String>,
-    
+
     /// Documentation links
     pub documentation: Vec<DocumentationLink>,
 }
@@ -692,10 +669,10 @@ pub struct PlaybookMetadata {
 pub struct DocumentationLink {
     /// Link title
     pub title: String,
-    
+
     /// URL
     pub url: String,
-    
+
     /// Link type
     pub link_type: String,
 }
@@ -705,13 +682,13 @@ pub struct DocumentationLink {
 pub struct EscalationPolicy {
     /// Policy identifier
     pub id: String,
-    
+
     /// Policy name
     pub name: String,
-    
+
     /// Escalation rules
     pub rules: Vec<EscalationRule>,
-    
+
     /// Default escalation path
     pub default_escalation: Vec<EscalationLevel>,
 }
@@ -721,10 +698,10 @@ pub struct EscalationPolicy {
 pub struct EscalationRule {
     /// Conditions for escalation
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Escalation levels
     pub escalation_levels: Vec<EscalationLevel>,
-    
+
     /// Rule priority
     pub priority: u8,
 }
@@ -734,16 +711,16 @@ pub struct EscalationRule {
 pub struct EscalationLevel {
     /// Level identifier
     pub id: String,
-    
+
     /// Level name
     pub name: String,
-    
+
     /// Delay before escalation
     pub delay_minutes: u32,
-    
+
     /// Notification targets
     pub notification_targets: Vec<NotificationTarget>,
-    
+
     /// Actions to take at this level
     pub actions: Vec<StepAction>,
 }
@@ -753,10 +730,10 @@ pub struct EscalationLevel {
 pub struct NotificationTarget {
     /// Target type
     pub target_type: NotificationTargetType,
-    
+
     /// Target identifier
     pub target_id: String,
-    
+
     /// Message template
     pub message_template: String,
 }
@@ -778,25 +755,25 @@ pub enum NotificationTargetType {
 pub struct CorrelationRule {
     /// Rule identifier
     pub id: String,
-    
+
     /// Rule name
     pub name: String,
-    
+
     /// Conditions for correlation
     pub conditions: Vec<CorrelationCondition>,
-    
+
     /// Time window for correlation
     pub time_window_minutes: u32,
-    
+
     /// Minimum events to trigger
     pub min_events: u32,
-    
+
     /// Maximum events to consider
     pub max_events: u32,
-    
+
     /// Correlation action
     pub action: CorrelationAction,
-    
+
     /// Priority of this rule
     pub priority: u8,
 }
@@ -806,13 +783,13 @@ pub struct CorrelationRule {
 pub struct CorrelationCondition {
     /// Field to correlate on
     pub field: String,
-    
+
     /// Correlation type
     pub correlation_type: CorrelationType,
-    
+
     /// Threshold values
     pub threshold: Option<f64>,
-    
+
     /// Weight for this condition
     pub weight: f64,
 }
@@ -833,10 +810,10 @@ pub enum CorrelationType {
 pub struct CorrelationAction {
     /// Action type
     pub action_type: CorrelationActionType,
-    
+
     /// Parameters for the action
     pub parameters: HashMap<String, serde_json::Value>,
-    
+
     /// Playbook to trigger
     pub trigger_playbook: Option<String>,
 }
@@ -857,19 +834,19 @@ pub enum CorrelationActionType {
 pub struct SoarEvent {
     /// Event identifier
     pub id: String,
-    
+
     /// Event timestamp
     pub timestamp: DateTime<Utc>,
-    
+
     /// Event type
     pub event_type: SoarEventType,
-    
+
     /// Event data
     pub data: serde_json::Value,
-    
+
     /// Source of the event
     pub source: String,
-    
+
     /// Priority
     pub priority: u8,
 }
@@ -895,13 +872,13 @@ pub enum SoarEventType {
 pub struct WorkflowEngine {
     /// Active workflow instances
     active_workflows: Arc<DashMap<String, WorkflowInstance>>,
-    
+
     /// Workflow execution queue
     execution_queue: Arc<Mutex<VecDeque<WorkflowExecutionRequest>>>,
-    
+
     /// Step executors
     step_executors: Arc<DashMap<String, Box<dyn StepExecutor + Send + Sync>>>,
-    
+
     /// Template engine for dynamic content
     template_engine: Arc<Handlebars<'static>>,
 }
@@ -911,37 +888,37 @@ pub struct WorkflowEngine {
 pub struct WorkflowInstance {
     /// Instance identifier
     pub id: String,
-    
+
     /// Playbook being executed
     pub playbook_id: String,
-    
+
     /// Current status
     pub status: WorkflowStatus,
-    
+
     /// Start time
     pub started_at: DateTime<Utc>,
-    
+
     /// End time
     pub ended_at: Option<DateTime<Utc>>,
-    
+
     /// Current step index
     pub current_step: usize,
-    
+
     /// Execution context
     pub context: HashMap<String, serde_json::Value>,
-    
+
     /// Step execution results
     pub step_results: HashMap<String, StepResult>,
-    
+
     /// Error information
     pub error: Option<WorkflowError>,
-    
+
     /// Input parameters
     pub inputs: HashMap<String, serde_json::Value>,
-    
+
     /// Output values
     pub outputs: HashMap<String, serde_json::Value>,
-    
+
     /// Approval requests
     pub approval_requests: Vec<ApprovalRequest>,
 }
@@ -964,16 +941,16 @@ pub enum WorkflowStatus {
 pub struct WorkflowExecutionRequest {
     /// Workflow instance ID
     pub instance_id: String,
-    
+
     /// Playbook to execute
     pub playbook: SecurityPlaybook,
-    
+
     /// Input parameters
     pub inputs: HashMap<String, serde_json::Value>,
-    
+
     /// Execution context
     pub context: HashMap<String, serde_json::Value>,
-    
+
     /// Response channel
     pub response_tx: oneshot::Sender<Result<WorkflowResult, WorkflowError>>,
 }
@@ -983,16 +960,16 @@ pub struct WorkflowExecutionRequest {
 pub struct WorkflowResult {
     /// Instance ID
     pub instance_id: String,
-    
+
     /// Final status
     pub status: WorkflowStatus,
-    
+
     /// Output values
     pub outputs: HashMap<String, serde_json::Value>,
-    
+
     /// Execution duration
     pub duration_ms: u64,
-    
+
     /// Step results
     pub step_results: HashMap<String, StepResult>,
 }
@@ -1002,22 +979,22 @@ pub struct WorkflowResult {
 pub struct StepResult {
     /// Step ID
     pub step_id: String,
-    
+
     /// Execution status
     pub status: StepStatus,
-    
+
     /// Start time
     pub started_at: DateTime<Utc>,
-    
+
     /// End time
     pub ended_at: Option<DateTime<Utc>>,
-    
+
     /// Output data
     pub outputs: HashMap<String, serde_json::Value>,
-    
+
     /// Error information
     pub error: Option<StepError>,
-    
+
     /// Retry attempts
     pub retry_count: u32,
 }
@@ -1038,13 +1015,13 @@ pub enum StepStatus {
 pub struct StepError {
     /// Error code
     pub code: String,
-    
+
     /// Error message
     pub message: String,
-    
+
     /// Error details
     pub details: Option<serde_json::Value>,
-    
+
     /// Whether the error is retryable
     pub retryable: bool,
 }
@@ -1054,13 +1031,13 @@ pub struct StepError {
 pub struct WorkflowError {
     /// Error code
     pub code: String,
-    
+
     /// Error message
     pub message: String,
-    
+
     /// Error details
     pub details: Option<serde_json::Value>,
-    
+
     /// Failed step ID
     pub failed_step: Option<String>,
 }
@@ -1070,34 +1047,34 @@ pub struct WorkflowError {
 pub struct ApprovalRequest {
     /// Request ID
     pub id: String,
-    
+
     /// Workflow instance ID
     pub workflow_instance_id: String,
-    
+
     /// Step ID requiring approval
     pub step_id: String,
-    
+
     /// Approval type
     pub approval_type: ApprovalType,
-    
+
     /// Required approvers
     pub required_approvers: Vec<String>,
-    
+
     /// Number of approvals needed
     pub required_approvals: u32,
-    
+
     /// Current approvals
     pub current_approvals: Vec<Approval>,
-    
+
     /// Request timestamp
     pub requested_at: DateTime<Utc>,
-    
+
     /// Expiration timestamp
     pub expires_at: DateTime<Utc>,
-    
+
     /// Status
     pub status: ApprovalStatus,
-    
+
     /// Approval context
     pub context: HashMap<String, serde_json::Value>,
 }
@@ -1107,13 +1084,13 @@ pub struct ApprovalRequest {
 pub struct Approval {
     /// Approver ID
     pub approver_id: String,
-    
+
     /// Approval decision
     pub decision: ApprovalDecision,
-    
+
     /// Approval timestamp
     pub approved_at: DateTime<Utc>,
-    
+
     /// Comments
     pub comments: Option<String>,
 }
@@ -1143,7 +1120,7 @@ pub trait StepExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, serde_json::Value>,
     ) -> Result<HashMap<String, serde_json::Value>, StepError>;
-    
+
     fn get_step_type(&self) -> String;
 }
 
@@ -1151,10 +1128,10 @@ pub trait StepExecutor {
 pub struct AlertCorrelationEngine {
     /// Correlation rules
     correlation_rules: Arc<RwLock<Vec<CorrelationRule>>>,
-    
+
     /// Alert cache for correlation
     alert_cache: Arc<DashMap<String, Vec<SecurityAlert>>>,
-    
+
     /// Correlation results
     correlation_results: Arc<DashMap<String, CorrelationResult>>,
 }
@@ -1164,19 +1141,19 @@ pub struct AlertCorrelationEngine {
 pub struct CorrelationResult {
     /// Result ID
     pub id: String,
-    
+
     /// Correlated alerts
     pub alerts: Vec<String>,
-    
+
     /// Correlation rule that matched
     pub rule_id: String,
-    
+
     /// Correlation score
     pub score: f64,
-    
+
     /// Correlation timestamp
     pub timestamp: DateTime<Utc>,
-    
+
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -1185,10 +1162,10 @@ pub struct CorrelationResult {
 pub struct ResponseAutomationEngine {
     /// Auto-response rules
     auto_response_rules: Arc<RwLock<Vec<AutoResponseRule>>>,
-    
+
     /// Response execution history
     response_history: Arc<DashMap<String, ResponseExecution>>,
-    
+
     /// Cooldown tracking
     cooldown_tracker: Arc<DashMap<String, DateTime<Utc>>>,
 }
@@ -1198,28 +1175,28 @@ pub struct ResponseAutomationEngine {
 pub struct AutoResponseRule {
     /// Rule ID
     pub id: String,
-    
+
     /// Rule name
     pub name: String,
-    
+
     /// Trigger conditions
     pub conditions: Vec<TriggerCondition>,
-    
+
     /// Playbook to execute
     pub playbook_id: String,
-    
+
     /// Auto-response parameters
     pub parameters: HashMap<String, serde_json::Value>,
-    
+
     /// Confidence threshold
     pub confidence_threshold: u8,
-    
+
     /// Cooldown period in minutes
     pub cooldown_minutes: u32,
-    
+
     /// Maximum executions per time window
     pub max_executions_per_window: u32,
-    
+
     /// Time window in minutes
     pub time_window_minutes: u32,
 }
@@ -1229,19 +1206,19 @@ pub struct AutoResponseRule {
 pub struct ResponseExecution {
     /// Execution ID
     pub id: String,
-    
+
     /// Rule ID that triggered the response
     pub rule_id: String,
-    
+
     /// Workflow instance ID
     pub workflow_instance_id: String,
-    
+
     /// Execution timestamp
     pub executed_at: DateTime<Utc>,
-    
+
     /// Input data
     pub input_data: serde_json::Value,
-    
+
     /// Execution result
     pub result: ExecutionResult,
 }
@@ -1249,13 +1226,8 @@ pub struct ResponseExecution {
 /// Execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExecutionResult {
-    Success {
-        outputs: HashMap<String, serde_json::Value>,
-    },
-    Failure {
-        error: String,
-        details: Option<serde_json::Value>,
-    },
+    Success { outputs: HashMap<String, serde_json::Value> },
+    Failure { error: String, details: Option<serde_json::Value> },
     Pending,
 }
 
@@ -1263,10 +1235,10 @@ pub enum ExecutionResult {
 pub struct CaseManager {
     /// Active cases
     cases: Arc<DashMap<String, SecurityCase>>,
-    
+
     /// Case templates
     case_templates: Arc<RwLock<HashMap<String, CaseTemplate>>>,
-    
+
     /// SLA tracking
     sla_tracker: Arc<SlaTracker>,
 }
@@ -1276,49 +1248,49 @@ pub struct CaseManager {
 pub struct SecurityCase {
     /// Case ID
     pub id: String,
-    
+
     /// Case title
     pub title: String,
-    
+
     /// Case description
     pub description: String,
-    
+
     /// Case severity
     pub severity: AlertSeverity,
-    
+
     /// Case status
     pub status: CaseStatus,
-    
+
     /// Assigned investigator
     pub assignee: Option<String>,
-    
+
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
-    
+
     /// Last updated timestamp
     pub updated_at: DateTime<Utc>,
-    
+
     /// Due date
     pub due_date: Option<DateTime<Utc>>,
-    
+
     /// Related alerts
     pub related_alerts: Vec<String>,
-    
+
     /// Related workflows
     pub related_workflows: Vec<String>,
-    
+
     /// Case evidence
     pub evidence: Vec<Evidence>,
-    
+
     /// Case timeline
     pub timeline: Vec<TimelineEntry>,
-    
+
     /// Case tags
     pub tags: Vec<String>,
-    
+
     /// Custom fields
     pub custom_fields: HashMap<String, serde_json::Value>,
-    
+
     /// SLA information
     pub sla_info: SlaInfo,
 }
@@ -1339,28 +1311,28 @@ pub enum CaseStatus {
 pub struct CaseTemplate {
     /// Template ID
     pub id: String,
-    
+
     /// Template name
     pub name: String,
-    
+
     /// Default title template
     pub title_template: String,
-    
+
     /// Default description template
     pub description_template: String,
-    
+
     /// Default severity
     pub default_severity: AlertSeverity,
-    
+
     /// Default assignee
     pub default_assignee: Option<String>,
-    
+
     /// Required fields
     pub required_fields: Vec<String>,
-    
+
     /// Custom field definitions
     pub custom_fields: Vec<CustomFieldDefinition>,
-    
+
     /// Associated playbooks
     pub associated_playbooks: Vec<String>,
 }
@@ -1370,16 +1342,16 @@ pub struct CaseTemplate {
 pub struct CustomFieldDefinition {
     /// Field name
     pub name: String,
-    
+
     /// Field type
     pub field_type: ParameterType,
-    
+
     /// Whether field is required
     pub required: bool,
-    
+
     /// Default value
     pub default_value: Option<serde_json::Value>,
-    
+
     /// Field options (for select fields)
     pub options: Option<Vec<String>>,
 }
@@ -1389,28 +1361,28 @@ pub struct CustomFieldDefinition {
 pub struct Evidence {
     /// Evidence ID
     pub id: String,
-    
+
     /// Evidence type
     pub evidence_type: EvidenceType,
-    
+
     /// Evidence name
     pub name: String,
-    
+
     /// Evidence description
     pub description: String,
-    
+
     /// Evidence data or file path
     pub data: EvidenceData,
-    
+
     /// Collection timestamp
     pub collected_at: DateTime<Utc>,
-    
+
     /// Collector information
     pub collected_by: String,
-    
+
     /// Hash for integrity
     pub hash: String,
-    
+
     /// Chain of custody
     pub chain_of_custody: Vec<CustodyEntry>,
 }
@@ -1442,13 +1414,13 @@ pub enum EvidenceData {
 pub struct CustodyEntry {
     /// Timestamp
     pub timestamp: DateTime<Utc>,
-    
+
     /// Person handling evidence
     pub handler: String,
-    
+
     /// Action taken
     pub action: String,
-    
+
     /// Comments
     pub comments: Option<String>,
 }
@@ -1458,19 +1430,19 @@ pub struct CustodyEntry {
 pub struct TimelineEntry {
     /// Entry ID
     pub id: String,
-    
+
     /// Timestamp
     pub timestamp: DateTime<Utc>,
-    
+
     /// Entry type
     pub entry_type: TimelineEntryType,
-    
+
     /// Actor
     pub actor: String,
-    
+
     /// Description
     pub description: String,
-    
+
     /// Additional data
     pub data: Option<serde_json::Value>,
 }
@@ -1495,25 +1467,25 @@ pub enum TimelineEntryType {
 pub struct SlaInfo {
     /// Response time SLA in minutes
     pub response_time_minutes: u32,
-    
+
     /// Resolution time SLA in hours
     pub resolution_time_hours: u32,
-    
+
     /// Response deadline
     pub response_deadline: DateTime<Utc>,
-    
+
     /// Resolution deadline
     pub resolution_deadline: DateTime<Utc>,
-    
+
     /// Whether response SLA is breached
     pub response_sla_breached: bool,
-    
+
     /// Whether resolution SLA is breached
     pub resolution_sla_breached: bool,
-    
+
     /// Time to response (if responded)
     pub time_to_response: Option<Duration>,
-    
+
     /// Time to resolution (if resolved)
     pub time_to_resolution: Option<Duration>,
 }
@@ -1522,7 +1494,7 @@ pub struct SlaInfo {
 pub struct SlaTracker {
     /// SLA configurations
     sla_configs: Arc<RwLock<HashMap<AlertSeverity, SlaConfig>>>,
-    
+
     /// Active SLA timers
     active_timers: Arc<DashMap<String, SlaTimer>>,
 }
@@ -1532,16 +1504,16 @@ pub struct SlaTracker {
 pub struct SlaTimer {
     /// Case ID
     pub case_id: String,
-    
+
     /// Timer type
     pub timer_type: SlaTimerType,
-    
+
     /// Deadline
     pub deadline: DateTime<Utc>,
-    
+
     /// Warning threshold (percentage of SLA)
     pub warning_threshold: f64,
-    
+
     /// Warning sent flag
     pub warning_sent: bool,
 }
@@ -1557,10 +1529,10 @@ pub enum SlaTimerType {
 pub struct IntegrationFramework {
     /// Registered integrations
     integrations: Arc<DashMap<String, Box<dyn Integration + Send + Sync>>>,
-    
+
     /// Health check results
     health_status: Arc<DashMap<String, IntegrationHealth>>,
-    
+
     /// Integration metrics
     metrics: Arc<DashMap<String, IntegrationMetrics>>,
 }
@@ -1572,11 +1544,11 @@ pub trait Integration {
         action: &StepAction,
         context: &HashMap<String, serde_json::Value>,
     ) -> Result<HashMap<String, serde_json::Value>, IntegrationError>;
-    
+
     async fn health_check(&self) -> Result<IntegrationHealth, IntegrationError>;
-    
+
     fn get_integration_type(&self) -> IntegrationType;
-    
+
     fn get_integration_name(&self) -> String;
 }
 
@@ -1585,13 +1557,13 @@ pub trait Integration {
 pub struct IntegrationError {
     /// Error code
     pub code: String,
-    
+
     /// Error message
     pub message: String,
-    
+
     /// Error details
     pub details: Option<serde_json::Value>,
-    
+
     /// Whether the error is retryable
     pub retryable: bool,
 }
@@ -1601,19 +1573,19 @@ pub struct IntegrationError {
 pub struct IntegrationHealth {
     /// Integration name
     pub integration_name: String,
-    
+
     /// Health status
     pub status: HealthStatus,
-    
+
     /// Last check timestamp
     pub last_check: DateTime<Utc>,
-    
+
     /// Response time in milliseconds
     pub response_time_ms: u64,
-    
+
     /// Error message (if unhealthy)
     pub error_message: Option<String>,
-    
+
     /// Additional health metrics
     pub metrics: HashMap<String, f64>,
 }
@@ -1632,22 +1604,22 @@ pub enum HealthStatus {
 pub struct IntegrationMetrics {
     /// Integration name
     pub integration_name: String,
-    
+
     /// Total requests
     pub total_requests: u64,
-    
+
     /// Successful requests
     pub successful_requests: u64,
-    
+
     /// Failed requests
     pub failed_requests: u64,
-    
+
     /// Average response time
     pub avg_response_time_ms: f64,
-    
+
     /// Last request timestamp
     pub last_request: Option<DateTime<Utc>>,
-    
+
     /// Error rate (percentage)
     pub error_rate: f64,
 }
@@ -1656,13 +1628,13 @@ pub struct IntegrationMetrics {
 pub struct SoarMetrics {
     /// Workflow execution metrics
     workflow_metrics: Arc<DashMap<String, WorkflowMetrics>>,
-    
+
     /// Alert processing metrics
     alert_metrics: Arc<Mutex<AlertMetrics>>,
-    
+
     /// Case management metrics
     case_metrics: Arc<Mutex<CaseMetrics>>,
-    
+
     /// Overall system metrics
     system_metrics: Arc<Mutex<SystemMetrics>>,
 }
@@ -1672,22 +1644,22 @@ pub struct SoarMetrics {
 pub struct WorkflowMetrics {
     /// Playbook ID
     pub playbook_id: String,
-    
+
     /// Total executions
     pub total_executions: u64,
-    
+
     /// Successful executions
     pub successful_executions: u64,
-    
+
     /// Failed executions
     pub failed_executions: u64,
-    
+
     /// Average execution time
     pub avg_execution_time_ms: f64,
-    
+
     /// Last execution timestamp
     pub last_execution: Option<DateTime<Utc>>,
-    
+
     /// Success rate
     pub success_rate: f64,
 }
@@ -1697,19 +1669,19 @@ pub struct WorkflowMetrics {
 pub struct AlertMetrics {
     /// Total alerts processed
     pub total_alerts: u64,
-    
+
     /// Alerts by severity
     pub alerts_by_severity: HashMap<AlertSeverity, u64>,
-    
+
     /// Alerts by type
     pub alerts_by_type: HashMap<SecurityAlertType, u64>,
-    
+
     /// Correlated alerts
     pub correlated_alerts: u64,
-    
+
     /// Auto-responded alerts
     pub auto_responded_alerts: u64,
-    
+
     /// Average processing time
     pub avg_processing_time_ms: f64,
 }
@@ -1719,19 +1691,19 @@ pub struct AlertMetrics {
 pub struct CaseMetrics {
     /// Total cases
     pub total_cases: u64,
-    
+
     /// Cases by status
     pub cases_by_status: HashMap<CaseStatus, u64>,
-    
+
     /// Cases by severity
     pub cases_by_severity: HashMap<AlertSeverity, u64>,
-    
+
     /// Average time to response
     pub avg_time_to_response_minutes: f64,
-    
+
     /// Average time to resolution
     pub avg_time_to_resolution_hours: f64,
-    
+
     /// SLA breach rate
     pub sla_breach_rate: f64,
 }
@@ -1741,22 +1713,22 @@ pub struct CaseMetrics {
 pub struct SystemMetrics {
     /// System uptime
     pub uptime_seconds: u64,
-    
+
     /// Active workflows
     pub active_workflows: u64,
-    
+
     /// Active cases
     pub active_cases: u64,
-    
+
     /// Integration health summary
     pub healthy_integrations: u64,
-    
+
     /// Total integrations
     pub total_integrations: u64,
-    
+
     /// Memory usage
     pub memory_usage_mb: f64,
-    
+
     /// CPU usage percentage
     pub cpu_usage_percent: f64,
 }
@@ -1807,13 +1779,7 @@ impl Default for CorrelationConfig {
 
 impl Default for NotificationConfig {
     fn default() -> Self {
-        Self {
-            email: None,
-            slack: None,
-            pagerduty: None,
-            webhooks: Vec::new(),
-            sms: None,
-        }
+        Self { email: None, slack: None, pagerduty: None, webhooks: Vec::new(), sms: None }
     }
 }
 
@@ -1836,24 +1802,20 @@ impl Default for SlaConfig {
         response_time_minutes.insert(AlertSeverity::High, 30);
         response_time_minutes.insert(AlertSeverity::Medium, 60);
         response_time_minutes.insert(AlertSeverity::Low, 240);
-        
+
         let mut resolution_time_hours = HashMap::new();
         resolution_time_hours.insert(AlertSeverity::Critical, 4);
         resolution_time_hours.insert(AlertSeverity::High, 8);
         resolution_time_hours.insert(AlertSeverity::Medium, 24);
         resolution_time_hours.insert(AlertSeverity::Low, 72);
-        
+
         let mut escalation_thresholds = HashMap::new();
         escalation_thresholds.insert(AlertSeverity::Critical, 80); // 80% of SLA
         escalation_thresholds.insert(AlertSeverity::High, 75);
         escalation_thresholds.insert(AlertSeverity::Medium, 75);
         escalation_thresholds.insert(AlertSeverity::Low, 70);
-        
-        Self {
-            response_time_minutes,
-            resolution_time_hours,
-            escalation_thresholds,
-        }
+
+        Self { response_time_minutes, resolution_time_hours, escalation_thresholds }
     }
 }
 
@@ -1861,14 +1823,14 @@ impl SoarCore {
     /// Create a new SOAR core instance
     pub async fn new(config: SoarConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let (event_tx, event_rx) = mpsc::channel(1000);
-        
+
         // Initialize template engine
         let mut template_engine = Handlebars::new();
         template_engine.set_strict_mode(true);
-        
+
         // Register default templates
         Self::register_default_templates(&mut template_engine)?;
-        
+
         let soar_core = Self {
             config: Arc::new(RwLock::new(config)),
             workflow_engine: Arc::new(WorkflowEngine::new().await?),
@@ -1882,31 +1844,31 @@ impl SoarCore {
             event_receiver: Arc::new(Mutex::new(event_rx)),
             template_engine: Arc::new(template_engine),
         };
-        
+
         Ok(soar_core)
     }
-    
+
     /// Initialize the SOAR system
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing SOAR system");
-        
+
         // Start background processors
         self.start_event_processor().await;
         self.start_correlation_processor().await;
         self.start_workflow_processor().await;
         self.start_sla_monitor().await;
         self.start_health_checker().await;
-        
+
         // Initialize integrations
         self.initialize_integrations().await?;
-        
+
         // Load default playbooks
         self.load_default_playbooks().await?;
-        
+
         info!("SOAR system initialized successfully");
         Ok(())
     }
-    
+
     /// Register default templates
     fn register_default_templates(
         template_engine: &mut Handlebars<'static>,
@@ -1935,7 +1897,7 @@ impl SoarCore {
 Case ID: {{case_id}}
             "#,
         )?;
-        
+
         // Workflow notification template
         template_engine.register_template_string(
             "workflow_notification",
@@ -1961,7 +1923,7 @@ Case ID: {{case_id}}
 {{/if}}
             "#,
         )?;
-        
+
         // Case update template
         template_engine.register_template_string(
             "case_update",
@@ -1986,10 +1948,10 @@ Case ID: {{case_id}}
 {{/if}}
             "#,
         )?;
-        
+
         Ok(())
     }
-    
+
     /// Process a security alert
     pub async fn process_alert(
         &self,
@@ -2008,11 +1970,11 @@ Case ID: {{case_id}}
                 AlertSeverity::Low => 4,
             },
         };
-        
+
         self.event_queue.send(event).await?;
         Ok(())
     }
-    
+
     /// Trigger a workflow manually
     pub async fn trigger_workflow(
         &self,
@@ -2021,13 +1983,11 @@ Case ID: {{case_id}}
         context: HashMap<String, serde_json::Value>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
-        let playbook = config.playbooks.get(&playbook_id)
-            .ok_or("Playbook not found")?
-            .clone();
+        let playbook = config.playbooks.get(&playbook_id).ok_or("Playbook not found")?.clone();
         drop(config);
-        
+
         let instance_id = Uuid::new_v4().to_string();
-        
+
         // Create workflow instance
         let instance = WorkflowInstance {
             id: instance_id.clone(),
@@ -2043,9 +2003,9 @@ Case ID: {{case_id}}
             outputs: HashMap::new(),
             approval_requests: Vec::new(),
         };
-        
+
         self.active_workflows.insert(instance_id.clone(), instance);
-        
+
         // Queue for execution
         let (response_tx, _response_rx) = oneshot::channel();
         let execution_request = WorkflowExecutionRequest {
@@ -2055,9 +2015,9 @@ Case ID: {{case_id}}
             context,
             response_tx,
         };
-        
+
         self.workflow_engine.queue_execution(execution_request).await?;
-        
+
         // Log workflow trigger event
         let event = SoarEvent {
             id: Uuid::new_v4().to_string(),
@@ -2071,20 +2031,17 @@ Case ID: {{case_id}}
             source: "soar_core".to_string(),
             priority: 3,
         };
-        
+
         self.event_queue.send(event).await?;
-        
+
         Ok(instance_id)
     }
-    
+
     /// Get workflow status
-    pub async fn get_workflow_status(
-        &self,
-        instance_id: &str,
-    ) -> Option<WorkflowInstance> {
+    pub async fn get_workflow_status(&self, instance_id: &str) -> Option<WorkflowInstance> {
         self.active_workflows.get(instance_id).map(|entry| entry.clone())
     }
-    
+
     /// Create a security case
     pub async fn create_case(
         &self,
@@ -2093,19 +2050,14 @@ Case ID: {{case_id}}
         severity: AlertSeverity,
         related_alerts: Vec<String>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        self.case_manager.create_case(
-            title,
-            description,
-            severity,
-            related_alerts,
-        ).await
+        self.case_manager.create_case(title, description, severity, related_alerts).await
     }
-    
+
     /// Get system metrics
     pub async fn get_metrics(&self) -> HashMap<String, serde_json::Value> {
         self.metrics_collector.get_all_metrics().await
     }
-    
+
     /// Start event processor
     async fn start_event_processor(&self) {
         let event_receiver = self.event_receiver.clone();
@@ -2113,41 +2065,47 @@ Case ID: {{case_id}}
         let response_engine = self.response_engine.clone();
         let case_manager = self.case_manager.clone();
         let metrics_collector = self.metrics_collector.clone();
-        
+
         tokio::spawn(async move {
             let mut receiver = event_receiver.lock().await;
             while let Some(event) = receiver.recv().await {
                 debug!("Processing SOAR event: {:?}", event.event_type);
-                
+
                 match event.event_type {
                     SoarEventType::AlertReceived => {
-                        if let Ok(alert) = serde_json::from_value::<SecurityAlert>(event.data.clone()) {
+                        if let Ok(alert) =
+                            serde_json::from_value::<SecurityAlert>(event.data.clone())
+                        {
                             // Process correlation
                             if let Err(e) = correlation_engine.process_alert(&alert).await {
                                 error!("Alert correlation failed: {}", e);
                             }
-                            
+
                             // Check for auto-response
                             if let Err(e) = response_engine.evaluate_auto_response(&alert).await {
                                 error!("Auto-response evaluation failed: {}", e);
                             }
-                            
+
                             // Create case if needed
                             if let Err(e) = case_manager.evaluate_case_creation(&alert).await {
                                 error!("Case creation evaluation failed: {}", e);
                             }
-                            
+
                             // Update metrics
                             metrics_collector.record_alert_processed(&alert).await;
                         }
                     }
                     SoarEventType::WorkflowCompleted => {
-                        if let Ok(result) = serde_json::from_value::<WorkflowResult>(event.data.clone()) {
+                        if let Ok(result) =
+                            serde_json::from_value::<WorkflowResult>(event.data.clone())
+                        {
                             metrics_collector.record_workflow_completed(&result).await;
                         }
                     }
                     SoarEventType::WorkflowFailed => {
-                        if let Ok(error) = serde_json::from_value::<WorkflowError>(event.data.clone()) {
+                        if let Ok(error) =
+                            serde_json::from_value::<WorkflowError>(event.data.clone())
+                        {
                             metrics_collector.record_workflow_failed(&error).await;
                         }
                     }
@@ -2158,47 +2116,49 @@ Case ID: {{case_id}}
             }
         });
     }
-    
+
     /// Start correlation processor
     async fn start_correlation_processor(&self) {
         let correlation_engine = self.correlation_engine.clone();
-        
+
         tokio::spawn(async move {
             correlation_engine.start_correlation_processor().await;
         });
     }
-    
+
     /// Start workflow processor
     async fn start_workflow_processor(&self) {
         let workflow_engine = self.workflow_engine.clone();
-        
+
         tokio::spawn(async move {
             workflow_engine.start_execution_processor().await;
         });
     }
-    
+
     /// Start SLA monitor
     async fn start_sla_monitor(&self) {
         let case_manager = self.case_manager.clone();
-        
+
         tokio::spawn(async move {
             case_manager.start_sla_monitor().await;
         });
     }
-    
+
     /// Start health checker
     async fn start_health_checker(&self) {
         let integration_framework = self.integration_framework.clone();
-        
+
         tokio::spawn(async move {
             integration_framework.start_health_checker().await;
         });
     }
-    
+
     /// Initialize integrations
-    async fn initialize_integrations(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn initialize_integrations(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
-        
+
         for (name, integration_config) in &config.integrations {
             if integration_config.enabled {
                 info!("Initializing integration: {}", name);
@@ -2207,34 +2167,33 @@ Case ID: {{case_id}}
                 // based on the integration type and configuration
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Load default playbooks
     async fn load_default_playbooks(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut config = self.config.write().await;
-        
+
         // Load default playbooks for common scenarios
         config.playbooks.insert(
             "credential_stuffing_response".to_string(),
             Self::create_credential_stuffing_playbook(),
         );
-        
+
         config.playbooks.insert(
             "account_takeover_response".to_string(),
             Self::create_account_takeover_playbook(),
         );
-        
-        config.playbooks.insert(
-            "rate_limit_exceeded_response".to_string(),
-            Self::create_rate_limit_playbook(),
-        );
-        
+
+        config
+            .playbooks
+            .insert("rate_limit_exceeded_response".to_string(), Self::create_rate_limit_playbook());
+
         info!("Loaded {} default playbooks", config.playbooks.len());
         Ok(())
     }
-    
+
     /// Create credential stuffing response playbook
     fn create_credential_stuffing_playbook() -> SecurityPlaybook {
         SecurityPlaybook {
@@ -2242,33 +2201,33 @@ Case ID: {{case_id}}
             name: "Credential Stuffing Response".to_string(),
             description: "Automated response to credential stuffing attacks".to_string(),
             version: "1.0.0".to_string(),
-            triggers: vec![
-                PlaybookTrigger {
-                    trigger_type: TriggerType::AlertReceived,
-                    conditions: vec![
-                        TriggerCondition {
-                            field: "alert_type".to_string(),
-                            operator: ConditionOperator::Equals,
-                            value: serde_json::Value::String("AuthenticationFailure".to_string()),
-                            required: true,
-                        },
-                        TriggerCondition {
-                            field: "severity".to_string(),
-                            operator: ConditionOperator::GreaterThanOrEqual,
-                            value: serde_json::Value::String("Medium".to_string()),
-                            required: true,
-                        },
-                    ],
-                    priority: 1,
-                },
-            ],
+            triggers: vec![PlaybookTrigger {
+                trigger_type: TriggerType::AlertReceived,
+                conditions: vec![
+                    TriggerCondition {
+                        field: "alert_type".to_string(),
+                        operator: ConditionOperator::Equals,
+                        value: serde_json::Value::String("AuthenticationFailure".to_string()),
+                        required: true,
+                    },
+                    TriggerCondition {
+                        field: "severity".to_string(),
+                        operator: ConditionOperator::GreaterThanOrEqual,
+                        value: serde_json::Value::String("Medium".to_string()),
+                        required: true,
+                    },
+                ],
+                priority: 1,
+            }],
             steps: vec![
                 WorkflowStep {
                     id: "analyze_source_ips".to_string(),
                     name: "Analyze Source IPs".to_string(),
                     step_type: StepType::Action,
                     action: StepAction::QuerySiem {
-                        query: "source_ip:{{alert.source_ip}} AND event_type:authentication_failure".to_string(),
+                        query:
+                            "source_ip:{{alert.source_ip}} AND event_type:authentication_failure"
+                                .to_string(),
                         time_range: "1h".to_string(),
                         max_results: 100,
                     },
@@ -2302,14 +2261,12 @@ Case ID: {{case_id}}
                     inputs: HashMap::new(),
                     outputs: HashMap::new(),
                     dependencies: vec!["analyze_source_ips".to_string()],
-                    conditions: vec![
-                        TriggerCondition {
-                            field: "ip_analysis.failure_count".to_string(),
-                            operator: ConditionOperator::GreaterThan,
-                            value: serde_json::Value::Number(serde_json::Number::from(10)),
-                            required: true,
-                        },
-                    ],
+                    conditions: vec![TriggerCondition {
+                        field: "ip_analysis.failure_count".to_string(),
+                        operator: ConditionOperator::GreaterThan,
+                        value: serde_json::Value::Number(serde_json::Number::from(10)),
+                        required: true,
+                    }],
                     timeout_minutes: 2,
                     retry_config: RetryConfig {
                         max_attempts: 3,
@@ -2332,7 +2289,8 @@ Case ID: {{case_id}}
                         notification_type: "slack".to_string(),
                         recipients: vec!["#security-alerts".to_string()],
                         subject: "Credential Stuffing Attack Blocked".to_string(),
-                        message: "Blocked IP {{alert.source_ip}} due to credential stuffing attack".to_string(),
+                        message: "Blocked IP {{alert.source_ip}} due to credential stuffing attack"
+                            .to_string(),
                         priority: "high".to_string(),
                     },
                     inputs: HashMap::new(),
@@ -2354,26 +2312,22 @@ Case ID: {{case_id}}
                     },
                 },
             ],
-            inputs: vec![
-                ParameterDefinition {
-                    name: "alert".to_string(),
-                    param_type: ParameterType::Object,
-                    required: true,
-                    default_value: None,
-                    description: "Security alert data".to_string(),
-                    validation: None,
-                },
-            ],
-            outputs: vec![
-                ParameterDefinition {
-                    name: "blocked_ips".to_string(),
-                    param_type: ParameterType::Array,
-                    required: false,
-                    default_value: None,
-                    description: "List of blocked IP addresses".to_string(),
-                    validation: None,
-                },
-            ],
+            inputs: vec![ParameterDefinition {
+                name: "alert".to_string(),
+                param_type: ParameterType::Object,
+                required: true,
+                default_value: None,
+                description: "Security alert data".to_string(),
+                validation: None,
+            }],
+            outputs: vec![ParameterDefinition {
+                name: "blocked_ips".to_string(),
+                param_type: ParameterType::Array,
+                required: false,
+                default_value: None,
+                description: "List of blocked IP addresses".to_string(),
+                validation: None,
+            }],
             timeout_minutes: 30,
             auto_executable: true,
             required_approvals: Vec::new(),
@@ -2383,14 +2337,18 @@ Case ID: {{case_id}}
                 modified_at: Utc::now(),
                 tags: vec!["credential-stuffing".to_string(), "automated".to_string()],
                 category: "Authentication Security".to_string(),
-                severity_levels: vec![AlertSeverity::Medium, AlertSeverity::High, AlertSeverity::Critical],
+                severity_levels: vec![
+                    AlertSeverity::Medium,
+                    AlertSeverity::High,
+                    AlertSeverity::Critical,
+                ],
                 threat_types: vec![SecurityAlertType::AuthenticationFailure],
                 compliance_frameworks: vec!["SOC2".to_string(), "ISO27001".to_string()],
                 documentation: Vec::new(),
             },
         }
     }
-    
+
     /// Create account takeover response playbook
     fn create_account_takeover_playbook() -> SecurityPlaybook {
         SecurityPlaybook {
@@ -2545,7 +2503,7 @@ Case ID: {{case_id}}
             },
         }
     }
-    
+
     /// Create rate limit exceeded response playbook
     fn create_rate_limit_playbook() -> SecurityPlaybook {
         SecurityPlaybook {
@@ -2553,20 +2511,16 @@ Case ID: {{case_id}}
             name: "Rate Limit Exceeded Response".to_string(),
             description: "Response to rate limiting violations".to_string(),
             version: "1.0.0".to_string(),
-            triggers: vec![
-                PlaybookTrigger {
-                    trigger_type: TriggerType::AlertReceived,
-                    conditions: vec![
-                        TriggerCondition {
-                            field: "alert_type".to_string(),
-                            operator: ConditionOperator::Equals,
-                            value: serde_json::Value::String("RateLimitExceeded".to_string()),
-                            required: true,
-                        },
-                    ],
-                    priority: 2,
-                },
-            ],
+            triggers: vec![PlaybookTrigger {
+                trigger_type: TriggerType::AlertReceived,
+                conditions: vec![TriggerCondition {
+                    field: "alert_type".to_string(),
+                    operator: ConditionOperator::Equals,
+                    value: serde_json::Value::String("RateLimitExceeded".to_string()),
+                    required: true,
+                }],
+                priority: 2,
+            }],
             steps: vec![
                 WorkflowStep {
                     id: "analyze_traffic_pattern".to_string(),
@@ -2607,14 +2561,12 @@ Case ID: {{case_id}}
                     inputs: HashMap::new(),
                     outputs: HashMap::new(),
                     dependencies: vec!["analyze_traffic_pattern".to_string()],
-                    conditions: vec![
-                        TriggerCondition {
-                            field: "traffic_analysis.violation_count".to_string(),
-                            operator: ConditionOperator::GreaterThan,
-                            value: serde_json::Value::Number(serde_json::Number::from(5)),
-                            required: true,
-                        },
-                    ],
+                    conditions: vec![TriggerCondition {
+                        field: "traffic_analysis.violation_count".to_string(),
+                        operator: ConditionOperator::GreaterThan,
+                        value: serde_json::Value::Number(serde_json::Number::from(5)),
+                        required: true,
+                    }],
                     timeout_minutes: 2,
                     retry_config: RetryConfig {
                         max_attempts: 3,
@@ -2637,9 +2589,16 @@ Case ID: {{case_id}}
                         action_type: "log_incident".to_string(),
                         parameters: [
                             ("severity".to_string(), serde_json::Value::String("low".to_string())),
-                            ("category".to_string(), serde_json::Value::String("rate_limiting".to_string())),
-                            ("source_ip".to_string(), serde_json::Value::String("{{alert.source_ip}}".to_string())),
-                        ].into(),
+                            (
+                                "category".to_string(),
+                                serde_json::Value::String("rate_limiting".to_string()),
+                            ),
+                            (
+                                "source_ip".to_string(),
+                                serde_json::Value::String("{{alert.source_ip}}".to_string()),
+                            ),
+                        ]
+                        .into(),
                     },
                     inputs: HashMap::new(),
                     outputs: HashMap::new(),
@@ -2660,26 +2619,22 @@ Case ID: {{case_id}}
                     },
                 },
             ],
-            inputs: vec![
-                ParameterDefinition {
-                    name: "alert".to_string(),
-                    param_type: ParameterType::Object,
-                    required: true,
-                    default_value: None,
-                    description: "Rate limit violation alert".to_string(),
-                    validation: None,
-                },
-            ],
-            outputs: vec![
-                ParameterDefinition {
-                    name: "action_taken".to_string(),
-                    param_type: ParameterType::String,
-                    required: false,
-                    default_value: None,
-                    description: "Action taken in response to rate limit violation".to_string(),
-                    validation: None,
-                },
-            ],
+            inputs: vec![ParameterDefinition {
+                name: "alert".to_string(),
+                param_type: ParameterType::Object,
+                required: true,
+                default_value: None,
+                description: "Rate limit violation alert".to_string(),
+                validation: None,
+            }],
+            outputs: vec![ParameterDefinition {
+                name: "action_taken".to_string(),
+                param_type: ParameterType::String,
+                required: false,
+                default_value: None,
+                description: "Action taken in response to rate limit violation".to_string(),
+                validation: None,
+            }],
             timeout_minutes: 10,
             auto_executable: true,
             required_approvals: Vec::new(),
@@ -2702,7 +2657,7 @@ Case ID: {{case_id}}
 impl WorkflowEngine {
     async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let template_engine = Handlebars::new();
-        
+
         Ok(Self {
             active_workflows: Arc::new(DashMap::new()),
             execution_queue: Arc::new(Mutex::new(VecDeque::new())),
@@ -2710,7 +2665,7 @@ impl WorkflowEngine {
             template_engine: Arc::new(template_engine),
         })
     }
-    
+
     async fn queue_execution(
         &self,
         _request: WorkflowExecutionRequest,
@@ -2718,7 +2673,7 @@ impl WorkflowEngine {
         // TODO: Implement workflow execution queueing
         Ok(())
     }
-    
+
     async fn start_execution_processor(&self) {
         // TODO: Implement workflow execution processor
         info!("Workflow execution processor started");
@@ -2733,7 +2688,7 @@ impl AlertCorrelationEngine {
             correlation_results: Arc::new(DashMap::new()),
         }
     }
-    
+
     async fn process_alert(
         &self,
         _alert: &SecurityAlert,
@@ -2741,7 +2696,7 @@ impl AlertCorrelationEngine {
         // TODO: Implement alert correlation
         Ok(())
     }
-    
+
     async fn start_correlation_processor(&self) {
         // TODO: Implement correlation processor
         info!("Alert correlation processor started");
@@ -2756,7 +2711,7 @@ impl ResponseAutomationEngine {
             cooldown_tracker: Arc::new(DashMap::new()),
         }
     }
-    
+
     async fn evaluate_auto_response(
         &self,
         _alert: &SecurityAlert,
@@ -2774,7 +2729,7 @@ impl CaseManager {
             sla_tracker: Arc::new(SlaTracker::new()),
         })
     }
-    
+
     async fn create_case(
         &self,
         title: String,
@@ -2784,11 +2739,11 @@ impl CaseManager {
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let case_id = Uuid::new_v4().to_string();
         let now = Utc::now();
-        
+
         // Calculate SLA deadlines
         let response_deadline = now + Duration::minutes(60); // Default 1 hour
         let resolution_deadline = now + Duration::hours(24); // Default 24 hours
-        
+
         let case = SecurityCase {
             id: case_id.clone(),
             title,
@@ -2802,16 +2757,14 @@ impl CaseManager {
             related_alerts,
             related_workflows: Vec::new(),
             evidence: Vec::new(),
-            timeline: vec![
-                TimelineEntry {
-                    id: Uuid::new_v4().to_string(),
-                    timestamp: now,
-                    entry_type: TimelineEntryType::CaseCreated,
-                    actor: "system".to_string(),
-                    description: "Case created automatically".to_string(),
-                    data: None,
-                },
-            ],
+            timeline: vec![TimelineEntry {
+                id: Uuid::new_v4().to_string(),
+                timestamp: now,
+                entry_type: TimelineEntryType::CaseCreated,
+                actor: "system".to_string(),
+                description: "Case created automatically".to_string(),
+                data: None,
+            }],
             tags: Vec::new(),
             custom_fields: HashMap::new(),
             sla_info: SlaInfo {
@@ -2825,13 +2778,13 @@ impl CaseManager {
                 time_to_resolution: None,
             },
         };
-        
+
         self.cases.insert(case_id.clone(), case);
-        
+
         info!("Created security case: {}", case_id);
         Ok(case_id)
     }
-    
+
     async fn evaluate_case_creation(
         &self,
         _alert: &SecurityAlert,
@@ -2839,7 +2792,7 @@ impl CaseManager {
         // TODO: Implement case creation evaluation
         Ok(())
     }
-    
+
     async fn start_sla_monitor(&self) {
         // TODO: Implement SLA monitoring
         info!("SLA monitor started");
@@ -2863,7 +2816,7 @@ impl IntegrationFramework {
             metrics: Arc::new(DashMap::new()),
         }
     }
-    
+
     async fn start_health_checker(&self) {
         // TODO: Implement health checking
         info!("Integration health checker started");
@@ -2901,28 +2854,28 @@ impl SoarMetrics {
             })),
         }
     }
-    
+
     async fn record_alert_processed(&self, _alert: &SecurityAlert) {
         // TODO: Implement alert metrics recording
     }
-    
+
     async fn record_workflow_completed(&self, _result: &WorkflowResult) {
         // TODO: Implement workflow metrics recording
     }
-    
+
     async fn record_workflow_failed(&self, _error: &WorkflowError) {
         // TODO: Implement workflow failure metrics recording
     }
-    
+
     async fn get_all_metrics(&self) -> HashMap<String, serde_json::Value> {
         let mut metrics = HashMap::new();
-        
+
         // TODO: Collect all metrics
         metrics.insert(
             "system_status".to_string(),
             serde_json::Value::String("operational".to_string()),
         );
-        
+
         metrics
     }
 }

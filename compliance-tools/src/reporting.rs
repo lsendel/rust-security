@@ -1,14 +1,14 @@
 //! Report generation and rendering
 
 use crate::{
-    ComplianceError, ComplianceResult, ComplianceControl, SecurityMetric, SecurityIncident,
-    ReportFormat, ComplianceFramework, OrganizationInfo, ClassificationLevel,
+    ClassificationLevel, ComplianceControl, ComplianceError, ComplianceFramework, ComplianceResult,
+    OrganizationInfo, ReportFormat, SecurityIncident, SecurityMetric,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
-use tera::{Tera, Context};
+use tera::{Context, Tera};
 use tokio::fs;
 
 /// Report renderer for generating compliance reports in various formats
@@ -20,26 +20,35 @@ impl ReportRenderer {
     /// Create a new report renderer
     pub fn new() -> Self {
         let mut tera = Tera::new("templates/**/*").unwrap_or_else(|_| Tera::new("").unwrap());
-        
-        // Add built-in templates
-        tera.add_raw_template("compliance_report.html", include_str!("../templates/compliance_report.html"))
-            .expect("Failed to add HTML template");
-        
-        tera.add_raw_template("compliance_report.md", include_str!("../templates/compliance_report.md"))
-            .expect("Failed to add Markdown template");
 
-        Self {
-            template_engine: tera,
-        }
+        // Add built-in templates
+        tera.add_raw_template(
+            "compliance_report.html",
+            include_str!("../templates/compliance_report.html"),
+        )
+        .expect("Failed to add HTML template");
+
+        tera.add_raw_template(
+            "compliance_report.md",
+            include_str!("../templates/compliance_report.md"),
+        )
+        .expect("Failed to add Markdown template");
+
+        Self { template_engine: tera }
     }
 
     /// Render HTML report
-    pub async fn render_html(&self, data: &ComplianceReportData, output_path: &Path) -> ComplianceResult<()> {
+    pub async fn render_html(
+        &self,
+        data: &ComplianceReportData,
+        output_path: &Path,
+    ) -> ComplianceResult<()> {
         let mut context = Context::new();
         context.insert("report", data);
         context.insert("generated_at", &Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string());
-        
-        let html = self.template_engine
+
+        let html = self
+            .template_engine
             .render("compliance_report.html", &context)
             .map_err(|e| ComplianceError::Template(e.to_string()))?;
 
@@ -48,16 +57,24 @@ impl ReportRenderer {
     }
 
     /// Render JSON report
-    pub async fn render_json(&self, data: &ComplianceReportData, output_path: &Path) -> ComplianceResult<()> {
+    pub async fn render_json(
+        &self,
+        data: &ComplianceReportData,
+        output_path: &Path,
+    ) -> ComplianceResult<()> {
         let json = serde_json::to_string_pretty(data)?;
         fs::write(output_path, json).await?;
         Ok(())
     }
 
     /// Render CSV report
-    pub async fn render_csv(&self, data: &ComplianceReportData, output_path: &Path) -> ComplianceResult<()> {
+    pub async fn render_csv(
+        &self,
+        data: &ComplianceReportData,
+        output_path: &Path,
+    ) -> ComplianceResult<()> {
         let mut csv_content = String::new();
-        
+
         // Controls CSV
         csv_content.push_str("Control ID,Framework,Title,Implementation Status,Effectiveness,Risk Level,Last Tested\n");
         for control in &data.compliance_controls {
@@ -91,12 +108,17 @@ impl ReportRenderer {
     }
 
     /// Render Markdown report
-    pub async fn render_markdown(&self, data: &ComplianceReportData, output_path: &Path) -> ComplianceResult<()> {
+    pub async fn render_markdown(
+        &self,
+        data: &ComplianceReportData,
+        output_path: &Path,
+    ) -> ComplianceResult<()> {
         let mut context = Context::new();
         context.insert("report", data);
         context.insert("generated_at", &Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string());
-        
-        let markdown = self.template_engine
+
+        let markdown = self
+            .template_engine
             .render("compliance_report.md", &context)
             .map_err(|e| ComplianceError::Template(e.to_string()))?;
 

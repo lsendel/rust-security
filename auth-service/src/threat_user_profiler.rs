@@ -1,18 +1,18 @@
 use crate::threat_types::*;
-use chrono::{DateTime, Utc, Duration, Timelike, Weekday};
-use flume::{Receiver, Sender, unbounded};
+use chrono::{DateTime, Duration, Timelike, Utc, Weekday};
+use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
 use nalgebra::{DMatrix, DVector};
-use prometheus::{Counter, Histogram, Gauge, register_counter, register_histogram, register_gauge};
+use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use smartcore::metrics::distance::euclidean::Euclidean;
 use smartcore::neighbors::knn_classifier::KNNClassifier;
 use smartcore::preprocessing::standard_scaler::StandardScaler;
-use std::collections::{HashMap, HashSet, VecDeque, BTreeMap};
+use statrs::distribution::{ChiSquared, ContinuousCDF, Normal};
+use statrs::statistics::{OrderStatistics, Statistics};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use statrs::distribution::{Normal, ContinuousCDF, ChiSquared};
-use statrs::statistics::{Statistics, OrderStatistics};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
@@ -249,8 +249,8 @@ pub enum ForecastModel {
 /// Model accuracy metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccuracyMetrics {
-    pub mae: f64, // Mean Absolute Error
-    pub mse: f64, // Mean Squared Error
+    pub mae: f64,  // Mean Absolute Error
+    pub mse: f64,  // Mean Squared Error
     pub rmse: f64, // Root Mean Squared Error
     pub mape: f64, // Mean Absolute Percentage Error
     pub r_squared: f64,
@@ -488,22 +488,22 @@ pub struct PredictedBehavior {
 pub struct AdvancedUserBehaviorProfiler {
     config: Arc<RwLock<UserProfilingConfig>>,
     redis_client: Arc<Mutex<Option<ConnectionManager>>>,
-    
+
     // Profile storage
     user_profiles: Arc<RwLock<HashMap<String, EnhancedUserBehaviorProfile>>>,
     time_series_data: Arc<RwLock<HashMap<String, HashMap<String, BehavioralTimeSeries>>>>,
-    
+
     // Processing queues
     profile_update_queue: Sender<ProfileUpdateRequest>,
     profile_update_receiver: Receiver<ProfileUpdateRequest>,
-    
+
     // ML models and analysis
     ml_models: Arc<RwLock<HashMap<String, BehavioralModel>>>,
     feature_extractors: Arc<RwLock<HashMap<String, FeatureExtractor>>>,
-    
+
     // Peer comparison
     peer_groups: Arc<RwLock<HashMap<String, PeerGroup>>>,
-    
+
     // Statistics and monitoring
     profiling_statistics: Arc<Mutex<ProfilingStatistics>>,
 }
@@ -597,18 +597,18 @@ impl Default for UserProfilingConfig {
             profile_retention_days: 90,
             min_events_for_baseline: 50,
             anomaly_detection_sensitivity: 0.05, // 5% significance level
-            time_series_window_hours: 168, // 1 week
+            time_series_window_hours: 168,       // 1 week
             profile_update_interval_seconds: 300, // 5 minutes
-            ml_model_retraining_hours: 24, // Daily retraining
+            ml_model_retraining_hours: 24,       // Daily retraining
             behavioral_features: BehavioralFeatureConfig::default(),
             temporal_analysis: TemporalAnalysisConfig::default(),
             risk_scoring: RiskScoringConfig::default(),
             redis_config: ProfilingRedisConfig {
                 url: "redis://localhost:6379".to_string(),
                 key_prefix: "user_profiling:".to_string(),
-                profile_ttl_seconds: 86400 * 90, // 90 days
+                profile_ttl_seconds: 86400 * 90,     // 90 days
                 time_series_ttl_seconds: 86400 * 30, // 30 days
-                model_cache_ttl_seconds: 86400 * 7, // 7 days
+                model_cache_ttl_seconds: 86400 * 7,  // 7 days
             },
         }
     }
@@ -633,7 +633,9 @@ impl Default for BehavioralFeatureConfig {
                 ("device".to_string(), 0.15),
                 ("network".to_string(), 0.20),
                 ("activity".to_string(), 0.20),
-            ].into_iter().collect(),
+            ]
+            .into_iter()
+            .collect(),
         }
     }
 }
@@ -663,7 +665,9 @@ impl Default for RiskScoringConfig {
                 ("temporal_anomalies".to_string(), 0.2),
                 ("location_anomalies".to_string(), 0.15),
                 ("peer_deviation".to_string(), 0.1),
-            ].into_iter().collect(),
+            ]
+            .into_iter()
+            .collect(),
             adaptive_thresholds: true,
             peer_comparison_enabled: true,
             threat_intelligence_integration: true,
@@ -675,7 +679,7 @@ impl AdvancedUserBehaviorProfiler {
     /// Create a new advanced user behavior profiler
     pub fn new(config: UserProfilingConfig) -> Self {
         let (profile_update_sender, profile_update_receiver) = unbounded();
-        
+
         Self {
             config: Arc::new(RwLock::new(config)),
             redis_client: Arc::new(Mutex::new(None)),
@@ -724,10 +728,10 @@ impl AdvancedUserBehaviorProfiler {
         let config = self.config.read().await;
         let client = redis::Client::open(config.redis_config.url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
-        
+
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = Some(manager);
-        
+
         info!("Redis connection established for user profiling");
         Ok(())
     }
@@ -738,7 +742,7 @@ impl AdvancedUserBehaviorProfiler {
         if let Some(ref client) = *redis_client {
             let config = self.config.read().await;
             let pattern = format!("{}profile:*", config.redis_config.key_prefix);
-            
+
             let keys: Vec<String> = redis::cmd("KEYS")
                 .arg(&pattern)
                 .query_async(&mut client.clone())
@@ -754,7 +758,8 @@ impl AdvancedUserBehaviorProfiler {
                     .unwrap_or_default();
 
                 if let Some(data) = profile_data {
-                    if let Ok(profile) = serde_json::from_str::<EnhancedUserBehaviorProfile>(&data) {
+                    if let Ok(profile) = serde_json::from_str::<EnhancedUserBehaviorProfile>(&data)
+                    {
                         profiles.insert(profile.base_profile.user_id.clone(), profile);
                     }
                 }
@@ -769,7 +774,7 @@ impl AdvancedUserBehaviorProfiler {
     /// Initialize machine learning models
     async fn initialize_ml_models(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut models = self.ml_models.write().await;
-        
+
         // Anomaly detection model
         let anomaly_model = BehavioralModel {
             model_id: "anomaly_detection".to_string(),
@@ -854,9 +859,13 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Analyze user behavior for a given event
-    pub async fn analyze_user_behavior(&self, user_id: &str, event: SecurityEvent) -> Result<BehavioralAnalysisResult, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn analyze_user_behavior(
+        &self,
+        user_id: &str,
+        event: SecurityEvent,
+    ) -> Result<BehavioralAnalysisResult, Box<dyn std::error::Error + Send + Sync>> {
         let timer = PROFILE_ANALYSIS_DURATION.start_timer();
-        
+
         // Queue profile update
         let update_request = ProfileUpdateRequest {
             user_id: user_id.to_string(),
@@ -895,14 +904,17 @@ impl AdvancedUserBehaviorProfiler {
             }
 
             // Generate behavioral insights
-            analysis_result.behavioral_insights = self.generate_behavioral_insights(profile, &event).await;
+            analysis_result.behavioral_insights =
+                self.generate_behavioral_insights(profile, &event).await;
 
             // Generate recommendations
             analysis_result.recommendations = self.generate_recommendations(profile, &event).await;
         } else {
             // New user - create minimal profile
             analysis_result.confidence = 0.1;
-            analysis_result.recommendations.push("Insufficient data for comprehensive analysis".to_string());
+            analysis_result
+                .recommendations
+                .push("Insufficient data for comprehensive analysis".to_string());
         }
 
         // Update metrics
@@ -915,9 +927,13 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Detect immediate anomaly in user behavior
-    async fn detect_immediate_anomaly(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent) -> Option<BehavioralAnomaly> {
+    async fn detect_immediate_anomaly(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+    ) -> Option<BehavioralAnomaly> {
         let config = self.config.read().await;
-        
+
         // Check temporal anomaly
         if let Some(temporal_anomaly) = self.check_temporal_anomaly(profile, event, &config).await {
             return Some(temporal_anomaly);
@@ -942,37 +958,53 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Check for temporal anomalies
-    async fn check_temporal_anomaly(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent, config: &UserProfilingConfig) -> Option<BehavioralAnomaly> {
+    async fn check_temporal_anomaly(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+        config: &UserProfilingConfig,
+    ) -> Option<BehavioralAnomaly> {
         let event_hour = event.timestamp.hour() as u8;
         let expected_hours = &profile.base_profile.typical_login_hours;
-        
+
         if !expected_hours.is_empty() && !expected_hours.contains(&event_hour) {
             // Calculate how unusual this time is
-            let hour_distances: Vec<i32> = expected_hours.iter()
+            let hour_distances: Vec<i32> = expected_hours
+                .iter()
                 .map(|&h| {
                     let diff = (event_hour as i32 - h as i32).abs();
                     std::cmp::min(diff, 24 - diff) // Handle wrap-around
                 })
                 .collect();
-            
+
             let min_distance = hour_distances.iter().min().unwrap_or(&12);
-            
-            if *min_distance > 3 { // More than 3 hours from any typical time
+
+            if *min_distance > 3 {
+                // More than 3 hours from any typical time
                 let anomaly_score = (*min_distance as f64 / 12.0).min(1.0);
-                
+
                 if anomaly_score > config.anomaly_detection_sensitivity {
                     return Some(BehavioralAnomaly {
                         anomaly_id: Uuid::new_v4().to_string(),
                         detection_timestamp: Utc::now(),
                         anomaly_type: AnomalyType::TemporalAnomaly,
-                        severity: if anomaly_score > 0.8 { ThreatSeverity::High } else { ThreatSeverity::Medium },
+                        severity: if anomaly_score > 0.8 {
+                            ThreatSeverity::High
+                        } else {
+                            ThreatSeverity::Medium
+                        },
                         confidence: anomaly_score,
                         affected_metrics: vec!["login_hour".to_string()],
                         anomaly_score,
-                        description: format!("Login at unusual hour: {} (typical hours: {:?})", event_hour, expected_hours),
+                        description: format!(
+                            "Login at unusual hour: {} (typical hours: {:?})",
+                            event_hour, expected_hours
+                        ),
                         evidence: AnomalyEvidence {
                             statistical_evidence: StatisticalEvidence {
-                                z_scores: [("time_deviation".to_string(), anomaly_score * 3.0)].into_iter().collect(),
+                                z_scores: [("time_deviation".to_string(), anomaly_score * 3.0)]
+                                    .into_iter()
+                                    .collect(),
                                 p_values: HashMap::new(),
                                 chi_squared_stats: HashMap::new(),
                                 distribution_tests: HashMap::new(),
@@ -980,8 +1012,14 @@ impl AdvancedUserBehaviorProfiler {
                             temporal_evidence: TemporalEvidence {
                                 time_of_occurrence: event.timestamp,
                                 expected_time_window: (
-                                    event.timestamp.with_hour(*expected_hours.first().unwrap_or(&0) as u32).unwrap(),
-                                    event.timestamp.with_hour(*expected_hours.last().unwrap_or(&23) as u32).unwrap(),
+                                    event
+                                        .timestamp
+                                        .with_hour(*expected_hours.first().unwrap_or(&0) as u32)
+                                        .unwrap(),
+                                    event
+                                        .timestamp
+                                        .with_hour(*expected_hours.last().unwrap_or(&23) as u32)
+                                        .unwrap(),
                                 ),
                                 temporal_deviation_score: anomaly_score,
                                 seasonal_anomaly_score: 0.0,
@@ -1004,13 +1042,18 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Check for location anomalies
-    async fn check_location_anomaly(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent) -> Option<BehavioralAnomaly> {
+    async fn check_location_anomaly(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+    ) -> Option<BehavioralAnomaly> {
         if let Some(event_location) = &event.location {
             let typical_countries = &profile.base_profile.typical_countries;
-            
-            if !typical_countries.is_empty() && !typical_countries.contains(&event_location.country) {
+
+            if !typical_countries.is_empty() && !typical_countries.contains(&event_location.country)
+            {
                 let anomaly_score = 0.8; // High score for new country
-                
+
                 return Some(BehavioralAnomaly {
                     anomaly_id: Uuid::new_v4().to_string(),
                     detection_timestamp: Utc::now(),
@@ -1019,10 +1062,15 @@ impl AdvancedUserBehaviorProfiler {
                     confidence: anomaly_score,
                     affected_metrics: vec!["location_country".to_string()],
                     anomaly_score,
-                    description: format!("Login from new country: {} (typical: {:?})", event_location.country, typical_countries),
+                    description: format!(
+                        "Login from new country: {} (typical: {:?})",
+                        event_location.country, typical_countries
+                    ),
                     evidence: AnomalyEvidence {
                         statistical_evidence: StatisticalEvidence {
-                            z_scores: [("location_deviation".to_string(), anomaly_score * 3.0)].into_iter().collect(),
+                            z_scores: [("location_deviation".to_string(), anomaly_score * 3.0)]
+                                .into_iter()
+                                .collect(),
                             p_values: HashMap::new(),
                             chi_squared_stats: HashMap::new(),
                             distribution_tests: HashMap::new(),
@@ -1050,13 +1098,17 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Check for device anomalies
-    async fn check_device_anomaly(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent) -> Option<BehavioralAnomaly> {
+    async fn check_device_anomaly(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+    ) -> Option<BehavioralAnomaly> {
         if let Some(device_fingerprint) = &event.device_fingerprint {
             let typical_devices = &profile.base_profile.typical_devices;
-            
+
             if !typical_devices.is_empty() && !typical_devices.contains(device_fingerprint) {
                 let anomaly_score = 0.6; // Medium score for new device
-                
+
                 return Some(BehavioralAnomaly {
                     anomaly_id: Uuid::new_v4().to_string(),
                     detection_timestamp: Utc::now(),
@@ -1068,7 +1120,9 @@ impl AdvancedUserBehaviorProfiler {
                     description: "Login from new device detected".to_string(),
                     evidence: AnomalyEvidence {
                         statistical_evidence: StatisticalEvidence {
-                            z_scores: [("device_novelty".to_string(), anomaly_score * 2.0)].into_iter().collect(),
+                            z_scores: [("device_novelty".to_string(), anomaly_score * 2.0)]
+                                .into_iter()
+                                .collect(),
                             p_values: HashMap::new(),
                             chi_squared_stats: HashMap::new(),
                             distribution_tests: HashMap::new(),
@@ -1096,33 +1150,50 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Check for volume anomalies
-    async fn check_volume_anomaly(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent) -> Option<BehavioralAnomaly> {
+    async fn check_volume_anomaly(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+    ) -> Option<BehavioralAnomaly> {
         // Get recent activity count
-        let recent_events = self.count_recent_events(&profile.base_profile.user_id, Duration::hours(1)).await;
+        let recent_events =
+            self.count_recent_events(&profile.base_profile.user_id, Duration::hours(1)).await;
         let baseline_rate = profile.base_profile.request_rate_baseline;
-        
+
         if baseline_rate > 0.0 && recent_events > (baseline_rate * 3.0) as u32 {
             let anomaly_score = ((recent_events as f64 / baseline_rate) - 1.0).min(1.0);
-            
+
             return Some(BehavioralAnomaly {
                 anomaly_id: Uuid::new_v4().to_string(),
                 detection_timestamp: Utc::now(),
                 anomaly_type: AnomalyType::VolumeAnomaly,
-                severity: if anomaly_score > 0.8 { ThreatSeverity::High } else { ThreatSeverity::Medium },
+                severity: if anomaly_score > 0.8 {
+                    ThreatSeverity::High
+                } else {
+                    ThreatSeverity::Medium
+                },
                 confidence: anomaly_score,
                 affected_metrics: vec!["activity_rate".to_string()],
                 anomaly_score,
-                description: format!("Unusual activity volume: {} events in last hour (baseline: {})", recent_events, baseline_rate),
+                description: format!(
+                    "Unusual activity volume: {} events in last hour (baseline: {})",
+                    recent_events, baseline_rate
+                ),
                 evidence: AnomalyEvidence {
                     statistical_evidence: StatisticalEvidence {
-                        z_scores: [("activity_rate".to_string(), anomaly_score * 3.0)].into_iter().collect(),
+                        z_scores: [("activity_rate".to_string(), anomaly_score * 3.0)]
+                            .into_iter()
+                            .collect(),
                         p_values: HashMap::new(),
                         chi_squared_stats: HashMap::new(),
                         distribution_tests: HashMap::new(),
                     },
                     temporal_evidence: TemporalEvidence {
                         time_of_occurrence: event.timestamp,
-                        expected_time_window: (event.timestamp - Duration::hours(1), event.timestamp),
+                        expected_time_window: (
+                            event.timestamp - Duration::hours(1),
+                            event.timestamp,
+                        ),
                         temporal_deviation_score: anomaly_score,
                         seasonal_anomaly_score: 0.0,
                     },
@@ -1149,23 +1220,46 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Generate behavioral insights
-    async fn generate_behavioral_insights(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent) -> BehavioralInsights {
+    async fn generate_behavioral_insights(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+    ) -> BehavioralInsights {
         BehavioralInsights {
-            consistency_score: profile.behavioral_features.temporal_features.weekly_pattern_consistency,
-            predictability_score: profile.behavioral_features.temporal_features.activity_circadian_rhythm,
-            risk_factors: profile.risk_assessment.risk_factors.iter().map(|rf| rf.factor_name.clone()).collect(),
+            consistency_score: profile
+                .behavioral_features
+                .temporal_features
+                .weekly_pattern_consistency,
+            predictability_score: profile
+                .behavioral_features
+                .temporal_features
+                .activity_circadian_rhythm,
+            risk_factors: profile
+                .risk_assessment
+                .risk_factors
+                .iter()
+                .map(|rf| rf.factor_name.clone())
+                .collect(),
             behavioral_trends: vec![profile.risk_assessment.risk_trend.clone()],
-            peer_comparison_summary: format!("{}th percentile among peers", (profile.peer_comparisons.percentile_rank * 100.0) as u8),
+            peer_comparison_summary: format!(
+                "{}th percentile among peers",
+                (profile.peer_comparisons.percentile_rank * 100.0) as u8
+            ),
             recommendations: Vec::new(),
         }
     }
 
     /// Generate recommendations based on analysis
-    async fn generate_recommendations(&self, profile: &EnhancedUserBehaviorProfile, event: &SecurityEvent) -> Vec<String> {
+    async fn generate_recommendations(
+        &self,
+        profile: &EnhancedUserBehaviorProfile,
+        event: &SecurityEvent,
+    ) -> Vec<String> {
         let mut recommendations = Vec::new();
 
         if profile.risk_assessment.overall_risk_score > 0.7 {
-            recommendations.push("Consider requiring additional authentication factors".to_string());
+            recommendations
+                .push("Consider requiring additional authentication factors".to_string());
         }
 
         if !profile.anomaly_history.is_empty() {
@@ -1188,14 +1282,19 @@ impl AdvancedUserBehaviorProfiler {
 
         tokio::spawn(async move {
             info!("Starting user profile processor");
-            
+
             while let Ok(update_request) = profile_update_receiver.recv_async().await {
                 // Process the profile update
                 let start_time = std::time::SystemTime::now();
-                
+
                 match update_request.update_type {
                     ProfileUpdateType::Incremental => {
-                        Self::process_incremental_update(&user_profiles, &time_series_data, &update_request).await;
+                        Self::process_incremental_update(
+                            &user_profiles,
+                            &time_series_data,
+                            &update_request,
+                        )
+                        .await;
                     }
                     ProfileUpdateType::FullRecomputation => {
                         Self::process_full_recomputation(&user_profiles, &update_request).await;
@@ -1222,30 +1321,29 @@ impl AdvancedUserBehaviorProfiler {
         update_request: &ProfileUpdateRequest,
     ) {
         let mut profiles = user_profiles.write().await;
-        let profile = profiles.entry(update_request.user_id.clone())
-            .or_insert_with(|| {
-                let base_profile = UserBehaviorProfile::new(update_request.user_id.clone());
-                EnhancedUserBehaviorProfile {
-                    base_profile,
-                    time_series_metrics: HashMap::new(),
-                    behavioral_features: BehavioralFeatureVector::default(),
-                    risk_assessment: RiskAssessment::default(),
-                    peer_comparisons: PeerComparisons::default(),
-                    anomaly_history: Vec::new(),
-                    model_predictions: Vec::new(),
-                    profile_confidence: 0.1,
-                    last_comprehensive_analysis: None,
-                }
-            });
+        let profile = profiles.entry(update_request.user_id.clone()).or_insert_with(|| {
+            let base_profile = UserBehaviorProfile::new(update_request.user_id.clone());
+            EnhancedUserBehaviorProfile {
+                base_profile,
+                time_series_metrics: HashMap::new(),
+                behavioral_features: BehavioralFeatureVector::default(),
+                risk_assessment: RiskAssessment::default(),
+                peer_comparisons: PeerComparisons::default(),
+                anomaly_history: Vec::new(),
+                model_predictions: Vec::new(),
+                profile_confidence: 0.1,
+                last_comprehensive_analysis: None,
+            }
+        });
 
         // Update base profile
         profile.base_profile.update_with_event(&update_request.event);
         profile.base_profile.calculate_behavior_entropy();
-        
+
         // Update time series data
         let mut ts_data = time_series_data.write().await;
         let user_ts = ts_data.entry(update_request.user_id.clone()).or_insert_with(HashMap::new);
-        
+
         // Add data point for login frequency
         if matches!(update_request.event.event_type, SecurityEventType::AuthenticationSuccess) {
             let ts = user_ts.entry("login_frequency".to_string()).or_insert_with(|| {
@@ -1293,7 +1391,7 @@ impl AdvancedUserBehaviorProfiler {
         // 3. Rerunning ML models
         // 4. Updating risk assessments
         // 5. Refreshing peer comparisons
-        
+
         debug!("Full recomputation requested for user: {}", update_request.user_id);
     }
 
@@ -1309,7 +1407,7 @@ impl AdvancedUserBehaviorProfiler {
         // 3. Seasonality analysis
         // 4. Change point detection
         // 5. Anomaly detection in time series
-        
+
         debug!("Time series update requested for user: {}", update_request.user_id);
     }
 
@@ -1369,12 +1467,12 @@ impl AdvancedUserBehaviorProfiler {
     /// Shutdown the profiler
     pub async fn shutdown(&self) {
         info!("Shutting down Advanced User Behavior Profiler");
-        
+
         // Save state to Redis
         // Close connections
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = None;
-        
+
         info!("Advanced User Behavior Profiler shutdown complete");
     }
 }

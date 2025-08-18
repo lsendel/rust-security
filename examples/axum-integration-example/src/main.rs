@@ -6,10 +6,7 @@ use tokio::signal;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for structured logging
-    tracing_subscriber::fmt()
-        .with_target(false)
-        .compact()
-        .init();
+    tracing_subscriber::fmt().with_target(false).compact().init();
 
     // Get bind address from environment or use default
     let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
@@ -37,13 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Server successfully bound to {}", addr);
 
     // Start the server with graceful shutdown
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .map_err(|e| {
-            eprintln!("Server error: {}", e);
-            e
-        })?;
+    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await.map_err(|e| {
+        eprintln!("Server error: {}", e);
+        e
+    })?;
 
     tracing::info!("Server shutdown complete");
     Ok(())
@@ -52,9 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Handle graceful shutdown signals
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]

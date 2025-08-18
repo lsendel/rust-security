@@ -1,11 +1,11 @@
 #![cfg(feature = "benchmarks")]
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use std::time::Duration;
-use tokio::runtime::Runtime;
-use auth_service::*;
 use auth_service::store::TokenStore;
+use auth_service::*;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
 
 // Benchmark token store operations
@@ -32,9 +32,7 @@ fn bench_token_store_operations(c: &mut Criterion) {
     group.bench_function("in_memory_set_active", |b| {
         b.iter(|| {
             let token = format!("token_{}", 42u64);
-            black_box(
-                rt.block_on(in_memory_store.set_active(&token, true, Some(3600))).unwrap()
-            );
+            black_box(rt.block_on(in_memory_store.set_active(&token, true, Some(3600))).unwrap());
         });
     });
 
@@ -83,22 +81,22 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
     group.bench_function("hmac_request_signature", |b| {
         b.iter(|| {
-            black_box(generate_request_signature(
-                "POST",
-                "/oauth/token",
-                "grant_type=client_credentials",
-                1234567890,
-                "test_secret"
-            ).unwrap());
+            black_box(
+                generate_request_signature(
+                    "POST",
+                    "/oauth/token",
+                    "grant_type=client_credentials",
+                    1234567890,
+                    "test_secret",
+                )
+                .unwrap(),
+            );
         });
     });
 
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
-            black_box(generate_token_binding(
-                "192.168.1.1",
-                "Mozilla/5.0 (compatible; test)"
-            ));
+            black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0 (compatible; test)"));
         });
     });
 
@@ -143,16 +141,12 @@ fn bench_scim_operations(c: &mut Criterion) {
     ];
 
     for filter in filter_cases {
-        group.bench_with_input(
-            BenchmarkId::new("filter_parsing", filter),
-            filter,
-            |b, filter| {
-                b.iter(|| {
-                    // Would need to expose the parse_scim_filter function
-                    black_box(filter.len());
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("filter_parsing", filter), filter, |b, filter| {
+            b.iter(|| {
+                // Would need to expose the parse_scim_filter function
+                black_box(filter.len());
+            });
+        });
     }
 
     group.finish();
@@ -219,8 +213,13 @@ fn bench_memory_usage(c: &mut Criterion) {
             for i in 0..1000 {
                 let token = format!("memory_test_token_{}", i);
                 let _ = rt.block_on(store.set_active(&token, true, Some(3600)));
-                let _ = rt.block_on(store.set_scope(&token, Some("read write".to_string()), Some(3600)));
-                let _ = rt.block_on(store.set_client_id(&token, format!("client_{}", i), Some(3600)));
+                let _ = rt.block_on(store.set_scope(
+                    &token,
+                    Some("read write".to_string()),
+                    Some(3600),
+                ));
+                let _ =
+                    rt.block_on(store.set_client_id(&token, format!("client_{}", i), Some(3600)));
             }
             black_box(store);
         });

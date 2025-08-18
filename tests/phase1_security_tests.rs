@@ -6,33 +6,36 @@ impl RegressionTestSuite {
     /// Test health endpoints for both services
     pub async fn test_health_endpoints(&mut self) {
         println!("\n🔍 Phase 1: Critical Security Features");
-        
+
         self.run_test("Health Endpoints", || async {
             // Test auth service health
-            let auth_health = self.client
-                .get(&format!("{}/health", self.auth_base_url))
-                .send()
-                .await?;
-            
+            let auth_health =
+                self.client.get(&format!("{}/health", self.auth_base_url)).send().await?;
+
             if auth_health.status() != 200 {
-                return Err(format!("Auth service health check failed: {}", auth_health.status()).into());
+                return Err(
+                    format!("Auth service health check failed: {}", auth_health.status()).into()
+                );
             }
 
             // Test policy service health
-            let policy_health = self.client
-                .get(&format!("{}/health", self.policy_base_url))
-                .send()
-                .await?;
-            
+            let policy_health =
+                self.client.get(&format!("{}/health", self.policy_base_url)).send().await?;
+
             if policy_health.status() != 200 {
-                return Err(format!("Policy service health check failed: {}", policy_health.status()).into());
+                return Err(format!(
+                    "Policy service health check failed: {}",
+                    policy_health.status()
+                )
+                .into());
             }
 
             Ok(Some(json!({
                 "auth_status": auth_health.status().as_u16(),
                 "policy_status": policy_health.status().as_u16()
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test OAuth2 token flow
@@ -50,7 +53,7 @@ impl RegressionTestSuite {
             }
 
             let token_data: Value = response.json().await?;
-            
+
             // Validate token response structure
             let required_fields = ["access_token", "token_type", "expires_in"];
             for field in &required_fields {
@@ -96,7 +99,7 @@ impl RegressionTestSuite {
             }
 
             let introspect_data: Value = introspect_response.json().await?;
-            
+
             // Validate introspection response
             if introspect_data["active"] != true {
                 return Err("Token should be active".into());
@@ -110,19 +113,23 @@ impl RegressionTestSuite {
     pub async fn test_token_revocation(&mut self) {
         self.run_test("Token Revocation", || async {
             // Get a token first
-            let token_response = self.client
+            let token_response = self
+                .client
                 .post(&format!("{}/oauth/token", self.auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
+                .body(
+                    "grant_type=client_credentials&client_id=test_client&client_secret=test_secret",
+                )
                 .send()
                 .await?;
 
             let token_data: Value = token_response.json().await?;
-            let access_token = token_data["access_token"].as_str()
-                .ok_or("No access token in response")?;
+            let access_token =
+                token_data["access_token"].as_str().ok_or("No access token in response")?;
 
             // Revoke the token
-            let revoke_response = self.client
+            let revoke_response = self
+                .client
                 .post(&format!("{}/oauth/revoke", self.auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body(&format!("token={}", access_token))
@@ -134,7 +141,8 @@ impl RegressionTestSuite {
             }
 
             // Verify token is now inactive
-            let introspect_response = self.client
+            let introspect_response = self
+                .client
                 .post(&format!("{}/oauth/introspect", self.auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
@@ -147,26 +155,31 @@ impl RegressionTestSuite {
             }
 
             Ok(Some(json!({"revoked": true, "verified_inactive": true})))
-        }).await;
+        })
+        .await;
     }
 
     /// Test OpenID Connect endpoints
     pub async fn test_openid_connect(&mut self) {
         self.run_test("OpenID Connect", || async {
             // Test OIDC discovery document
-            let discovery_response = self.client
+            let discovery_response = self
+                .client
                 .get(&format!("{}/.well-known/openid-configuration", self.auth_base_url))
                 .send()
                 .await?;
 
             if discovery_response.status() != 200 {
-                return Err(format!("OIDC discovery failed: {}", discovery_response.status()).into());
+                return Err(
+                    format!("OIDC discovery failed: {}", discovery_response.status()).into()
+                );
             }
 
             let discovery_data: Value = discovery_response.json().await?;
-            
+
             // Validate required OIDC fields
-            let required_fields = ["issuer", "authorization_endpoint", "token_endpoint", "jwks_uri"];
+            let required_fields =
+                ["issuer", "authorization_endpoint", "token_endpoint", "jwks_uri"];
             for field in &required_fields {
                 if !discovery_data.get(field).is_some() {
                     return Err(format!("Missing OIDC field: {}", field).into());
@@ -174,40 +187,41 @@ impl RegressionTestSuite {
             }
 
             // Test OAuth2 authorization server metadata
-            let oauth_metadata_response = self.client
+            let oauth_metadata_response = self
+                .client
                 .get(&format!("{}/.well-known/oauth-authorization-server", self.auth_base_url))
                 .send()
                 .await?;
 
             if oauth_metadata_response.status() != 200 {
-                return Err(format!("OAuth metadata failed: {}", oauth_metadata_response.status()).into());
+                return Err(
+                    format!("OAuth metadata failed: {}", oauth_metadata_response.status()).into()
+                );
             }
 
             Ok(Some(discovery_data))
-        }).await;
+        })
+        .await;
     }
 
     /// Test JWKS endpoint
     pub async fn test_jwks_endpoint(&mut self) {
         self.run_test("JWKS Endpoint", || async {
-            let jwks_response = self.client
-                .get(&format!("{}/jwks.json", self.auth_base_url))
-                .send()
-                .await?;
+            let jwks_response =
+                self.client.get(&format!("{}/jwks.json", self.auth_base_url)).send().await?;
 
             if jwks_response.status() != 200 {
                 return Err(format!("JWKS request failed: {}", jwks_response.status()).into());
             }
 
             let jwks_data: Value = jwks_response.json().await?;
-            
+
             // Validate JWKS structure
             if !jwks_data.get("keys").is_some() {
                 return Err("JWKS missing keys array".into());
             }
 
-            let keys = jwks_data["keys"].as_array()
-                .ok_or("Keys should be an array")?;
+            let keys = jwks_data["keys"].as_array().ok_or("Keys should be an array")?;
 
             if keys.is_empty() {
                 return Err("JWKS should contain at least one key".into());
@@ -223,14 +237,16 @@ impl RegressionTestSuite {
             }
 
             Ok(Some(jwks_data))
-        }).await;
+        })
+        .await;
     }
 
     /// Test MFA TOTP functionality
     pub async fn test_mfa_totp(&mut self) {
         self.run_test("MFA TOTP", || async {
             // Test TOTP registration
-            let register_response = self.client
+            let register_response = self
+                .client
                 .post(&format!("{}/mfa/totp/register", self.auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"user_id": "test_user"}))
@@ -238,18 +254,21 @@ impl RegressionTestSuite {
                 .await?;
 
             if register_response.status() != 200 {
-                return Err(format!("TOTP registration failed: {}", register_response.status()).into());
+                return Err(
+                    format!("TOTP registration failed: {}", register_response.status()).into()
+                );
             }
 
             let register_data: Value = register_response.json().await?;
-            
+
             // Validate registration response
             if !register_data.get("secret").is_some() || !register_data.get("qr_code").is_some() {
                 return Err("TOTP registration missing required fields".into());
             }
 
             // Test backup codes generation
-            let backup_response = self.client
+            let backup_response = self
+                .client
                 .post(&format!("{}/mfa/totp/backup-codes/generate", self.auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"user_id": "test_user"}))
@@ -257,7 +276,11 @@ impl RegressionTestSuite {
                 .await?;
 
             if backup_response.status() != 200 {
-                return Err(format!("Backup codes generation failed: {}", backup_response.status()).into());
+                return Err(format!(
+                    "Backup codes generation failed: {}",
+                    backup_response.status()
+                )
+                .into());
             }
 
             let backup_data: Value = backup_response.json().await?;
@@ -270,24 +293,25 @@ impl RegressionTestSuite {
                 "backup_codes_generated": true,
                 "secret_length": register_data["secret"].as_str().unwrap_or("").len()
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test SCIM endpoints
     pub async fn test_scim_endpoints(&mut self) {
         self.run_test("SCIM Endpoints", || async {
             // Test SCIM Users endpoint
-            let users_response = self.client
-                .get(&format!("{}/scim/v2/Users", self.auth_base_url))
-                .send()
-                .await?;
+            let users_response =
+                self.client.get(&format!("{}/scim/v2/Users", self.auth_base_url)).send().await?;
 
             if users_response.status() != 200 {
-                return Err(format!("SCIM Users request failed: {}", users_response.status()).into());
+                return Err(
+                    format!("SCIM Users request failed: {}", users_response.status()).into()
+                );
             }
 
             let users_data: Value = users_response.json().await?;
-            
+
             // Validate SCIM response structure
             let required_fields = ["schemas", "totalResults", "Resources"];
             for field in &required_fields {
@@ -297,13 +321,13 @@ impl RegressionTestSuite {
             }
 
             // Test SCIM Groups endpoint
-            let groups_response = self.client
-                .get(&format!("{}/scim/v2/Groups", self.auth_base_url))
-                .send()
-                .await?;
+            let groups_response =
+                self.client.get(&format!("{}/scim/v2/Groups", self.auth_base_url)).send().await?;
 
             if groups_response.status() != 200 {
-                return Err(format!("SCIM Groups request failed: {}", groups_response.status()).into());
+                return Err(
+                    format!("SCIM Groups request failed: {}", groups_response.status()).into()
+                );
             }
 
             Ok(Some(json!({
@@ -311,7 +335,8 @@ impl RegressionTestSuite {
                 "groups_endpoint": "working",
                 "total_users": users_data["totalResults"]
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test rate limiting
@@ -319,7 +344,7 @@ impl RegressionTestSuite {
         self.run_test("Rate Limiting", || async {
             let mut successful_requests = 0;
             let mut rate_limited_requests = 0;
-            
+
             // Send multiple requests rapidly to trigger rate limiting
             for _ in 0..20 {
                 let response = self.client
@@ -334,7 +359,7 @@ impl RegressionTestSuite {
                     429 => rate_limited_requests += 1,
                     _ => {}
                 }
-                
+
                 // Small delay to avoid overwhelming the server
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             }
@@ -355,28 +380,28 @@ impl RegressionTestSuite {
     /// Test security headers
     pub async fn test_security_headers(&mut self) {
         self.run_test("Security Headers", || async {
-            let response = self.client
-                .get(&format!("{}/health", self.auth_base_url))
-                .send()
-                .await?;
+            let response =
+                self.client.get(&format!("{}/health", self.auth_base_url)).send().await?;
 
             let headers = response.headers();
             let mut found_headers = HashMap::new();
-            
+
             // Check for important security headers
             let security_headers = [
                 "x-content-type-options",
-                "x-frame-options", 
+                "x-frame-options",
                 "x-xss-protection",
                 "strict-transport-security",
                 "content-security-policy",
-                "referrer-policy"
+                "referrer-policy",
             ];
 
             for header_name in &security_headers {
                 if let Some(header_value) = headers.get(*header_name) {
-                    found_headers.insert(header_name.to_string(), 
-                        header_value.to_str().unwrap_or("").to_string());
+                    found_headers.insert(
+                        header_name.to_string(),
+                        header_value.to_str().unwrap_or("").to_string(),
+                    );
                 }
             }
 
@@ -388,7 +413,8 @@ impl RegressionTestSuite {
                 "security_headers_found": found_headers.len(),
                 "headers": found_headers
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test request signing (placeholder - would need actual implementation)
@@ -396,12 +422,13 @@ impl RegressionTestSuite {
         self.run_test("Request Signing", || async {
             // This is a placeholder test since request signing requires specific implementation
             // In a real scenario, you would test HMAC signature validation
-            
+
             Ok(Some(json!({
                 "request_signing": "placeholder_test",
                 "note": "Requires specific HMAC implementation testing"
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test token binding (placeholder)
@@ -409,12 +436,13 @@ impl RegressionTestSuite {
         self.run_test("Token Binding", || async {
             // Placeholder for token binding tests
             // Would test that tokens are bound to client characteristics
-            
+
             Ok(Some(json!({
                 "token_binding": "placeholder_test",
                 "note": "Requires client characteristic validation testing"
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test PKCE flow (placeholder)
@@ -422,12 +450,13 @@ impl RegressionTestSuite {
         self.run_test("PKCE Flow", || async {
             // Placeholder for PKCE testing
             // Would test code verifier/challenge generation and validation
-            
+
             Ok(Some(json!({
                 "pkce_flow": "placeholder_test",
                 "note": "Requires authorization code flow testing"
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test circuit breaker (placeholder)
@@ -435,12 +464,13 @@ impl RegressionTestSuite {
         self.run_test("Circuit Breaker", || async {
             // Placeholder for circuit breaker testing
             // Would test fault tolerance for external dependencies
-            
+
             Ok(Some(json!({
                 "circuit_breaker": "placeholder_test",
                 "note": "Requires external dependency failure simulation"
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test input validation
@@ -459,7 +489,8 @@ impl RegressionTestSuite {
             let mut validation_results = Vec::new();
 
             for (body, expected_status) in invalid_requests {
-                let response = self.client
+                let response = self
+                    .client
                     .post(&format!("{}/oauth/token", self.auth_base_url))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .body(body)
@@ -474,8 +505,8 @@ impl RegressionTestSuite {
                 }));
             }
 
-            let all_correct = validation_results.iter()
-                .all(|r| r["correct"].as_bool().unwrap_or(false));
+            let all_correct =
+                validation_results.iter().all(|r| r["correct"].as_bool().unwrap_or(false));
 
             if !all_correct {
                 return Err("Some input validation tests failed".into());
@@ -485,7 +516,8 @@ impl RegressionTestSuite {
                 "validation_tests": validation_results,
                 "all_passed": all_correct
             })))
-        }).await;
+        })
+        .await;
     }
 
     /// Test audit logging (placeholder)
@@ -493,11 +525,12 @@ impl RegressionTestSuite {
         self.run_test("Audit Logging", || async {
             // Placeholder for audit logging tests
             // Would verify that security events are properly logged
-            
+
             Ok(Some(json!({
                 "audit_logging": "placeholder_test",
                 "note": "Requires log analysis and verification"
             })))
-        }).await;
+        })
+        .await;
     }
 }

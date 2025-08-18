@@ -43,15 +43,15 @@ impl CachedTokenRecord {
         } else {
             u64::MAX // Never expires
         };
-        
+
         Self { record, expires_at }
     }
-    
+
     pub fn is_expired(&self) -> bool {
         if self.expires_at == u64::MAX {
             return false;
         }
-        
+
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -64,12 +64,12 @@ impl OptimizedRedisStore {
         let store = Self {
             connection_pool: Arc::new(OnceCell::new()),
         };
-        
+
         // Initialize connection pool
         store.get_connection().await?;
         Ok(store)
     }
-    
+
     async fn get_connection(&self) -> Result<MultiplexedConnection> {
         let conn = self.connection_pool
             .get_or_try_init(|| async {
@@ -78,7 +78,7 @@ impl OptimizedRedisStore {
                 client.get_multiplexed_async_connection().await
             })
             .await?;
-        
+
         Ok(conn.clone())
     }
 }
@@ -88,13 +88,13 @@ impl OptimizedTokenStore {
     pub fn new_in_memory() -> Self {
         Self::InMemory(Arc::new(DashMap::new()))
     }
-    
+
     /// Create a new optimized Redis token store
     pub async fn new_redis(redis_url: &str) -> Result<Self> {
         let store = OptimizedRedisStore::new(redis_url).await?;
         Ok(Self::Redis(store))
     }
-    
+
     /// Get token record with optimized single operation
     pub async fn get_record(&self, token: &str) -> Result<IntrospectionRecord> {
         match self {
@@ -107,7 +107,7 @@ impl OptimizedTokenStore {
                         map.remove(token);
                     }
                 }
-                
+
                 // Return default inactive record
                 Ok(IntrospectionRecord {
                     active: false,
@@ -122,13 +122,13 @@ impl OptimizedTokenStore {
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let key = format!("token:{}", token);
-                
+
                 // Single HGETALL operation instead of multiple GETs
                 let fields: HashMap<String, String> = redis::cmd("HGETALL")
                     .arg(&key)
                     .query_async(&mut conn)
                     .await?;
-                
+
                 if fields.is_empty() {
                     return Ok(IntrospectionRecord {
                         active: false,
@@ -140,7 +140,7 @@ impl OptimizedTokenStore {
                         token_binding: None,
                     });
                 }
-                
+
                 Ok(IntrospectionRecord {
                     active: fields.get("active").map(|v| v == "1").unwrap_or(false),
                     scope: fields.get("scope").cloned(),
@@ -153,7 +153,7 @@ impl OptimizedTokenStore {
             }
         }
     }
-    
+
     /// Store complete token data in a single operation
     pub async fn store_token_data(
         &self,
@@ -170,11 +170,11 @@ impl OptimizedTokenStore {
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let key = format!("token:{}", token);
-                
+
                 // Single HMSET operation with all fields
                 let mut pipe = redis::pipe();
                 pipe.hset(&key, "active", if record.active { "1" } else { "0" });
-                
+
                 if let Some(ref scope) = record.scope {
                     pipe.hset(&key, "scope", scope);
                 }
@@ -193,17 +193,17 @@ impl OptimizedTokenStore {
                 if let Some(ref token_binding) = record.token_binding {
                     pipe.hset(&key, "token_binding", token_binding);
                 }
-                
+
                 if let Some(ttl) = ttl_seconds {
                     pipe.expire(&key, ttl as i64);
                 }
-                
+
                 pipe.query_async(&mut conn).await?;
                 Ok(())
             }
         }
     }
-    
+
     /// Batch operation for storing multiple tokens
     pub async fn store_tokens_batch(
         &self,
@@ -220,12 +220,12 @@ impl OptimizedTokenStore {
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let mut pipe = redis::pipe();
-                
+
                 for (token, record, ttl) in tokens {
                     let key = format!("token:{}", token);
-                    
+
                     pipe.hset(&key, "active", if record.active { "1" } else { "0" });
-                    
+
                     if let Some(ref scope) = record.scope {
                         pipe.hset(&key, "scope", scope);
                     }
@@ -244,18 +244,18 @@ impl OptimizedTokenStore {
                     if let Some(ref token_binding) = record.token_binding {
                         pipe.hset(&key, "token_binding", token_binding);
                     }
-                    
+
                     if let Some(ttl_secs) = ttl {
                         pipe.expire(&key, *ttl_secs as i64);
                     }
                 }
-                
+
                 pipe.query_async(&mut conn).await?;
                 Ok(())
             }
         }
     }
-    
+
     /// Optimized revoke operation
     pub async fn revoke_token(&self, token: &str) -> Result<()> {
         match self {
@@ -268,7 +268,7 @@ impl OptimizedTokenStore {
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let key = format!("token:{}", token);
-                
+
                 // Just set active to false instead of deleting
                 redis::cmd("HSET")
                     .arg(&key)
@@ -276,12 +276,12 @@ impl OptimizedTokenStore {
                     .arg("0")
                     .query_async(&mut conn)
                     .await?;
-                
+
                 Ok(())
             }
         }
     }
-    
+
     /// Batch revoke operation
     pub async fn revoke_tokens_batch(&self, tokens: &[String]) -> Result<()> {
         match self {
@@ -296,18 +296,18 @@ impl OptimizedTokenStore {
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let mut pipe = redis::pipe();
-                
+
                 for token in tokens {
                     let key = format!("token:{}", token);
                     pipe.hset(&key, "active", "0");
                 }
-                
+
                 pipe.query_async(&mut conn).await?;
                 Ok(())
             }
         }
     }
-    
+
     /// Cleanup expired tokens (for in-memory store)
     pub async fn cleanup_expired(&self) -> Result<usize> {
         match self {
@@ -317,7 +317,7 @@ impl OptimizedTokenStore {
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs();
-                
+
                 map.retain(|_key, cached| {
                     if cached.is_expired() {
                         removed_count += 1;
@@ -326,7 +326,7 @@ impl OptimizedTokenStore {
                         true
                     }
                 });
-                
+
                 Ok(removed_count)
             }
             Self::Redis(_) => {
@@ -335,7 +335,7 @@ impl OptimizedTokenStore {
             }
         }
     }
-    
+
     /// Get store statistics
     pub async fn get_stats(&self) -> Result<TokenStoreStats> {
         match self {
@@ -343,7 +343,7 @@ impl OptimizedTokenStore {
                 let total_tokens = map.len();
                 let mut active_tokens = 0;
                 let mut expired_tokens = 0;
-                
+
                 for entry in map.iter() {
                     if entry.is_expired() {
                         expired_tokens += 1;
@@ -351,7 +351,7 @@ impl OptimizedTokenStore {
                         active_tokens += 1;
                     }
                 }
-                
+
                 Ok(TokenStoreStats {
                     total_tokens,
                     active_tokens,
@@ -361,15 +361,15 @@ impl OptimizedTokenStore {
             }
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
-                
+
                 // Get approximate count of tokens
                 let keys: Vec<String> = redis::cmd("KEYS")
                     .arg("token:*")
                     .query_async(&mut conn)
                     .await?;
-                
+
                 let total_tokens = keys.len();
-                
+
                 // Count active tokens (this is expensive, consider caching)
                 let mut active_tokens = 0;
                 for key in &keys {
@@ -384,7 +384,7 @@ impl OptimizedTokenStore {
                         }
                     }
                 }
-                
+
                 Ok(TokenStoreStats {
                     total_tokens,
                     active_tokens,
@@ -408,10 +408,10 @@ pub struct TokenStoreStats {
 /// Background task for cleaning up expired tokens in in-memory store
 pub async fn start_cleanup_task(store: OptimizedTokenStore) {
     let mut interval = tokio::time::interval(Duration::from_secs(300)); // Every 5 minutes
-    
+
     loop {
         interval.tick().await;
-        
+
         if let Err(e) = store.cleanup_expired().await {
             tracing::warn!("Failed to cleanup expired tokens: {}", e);
         } else {
@@ -423,11 +423,11 @@ pub async fn start_cleanup_task(store: OptimizedTokenStore) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_optimized_in_memory_store() {
         let store = OptimizedTokenStore::new_in_memory();
-        
+
         let record = IntrospectionRecord {
             active: true,
             scope: Some("read write".to_string()),
@@ -437,32 +437,32 @@ mod tests {
             sub: Some("test-user".to_string()),
             token_binding: None,
         };
-        
+
         // Test single storage
         store.store_token_data("test_token", &record, Some(3600)).await.unwrap();
-        
+
         // Test retrieval
         let retrieved = store.get_record("test_token").await.unwrap();
         assert_eq!(retrieved.active, true);
         assert_eq!(retrieved.client_id, Some("test-client".to_string()));
-        
+
         // Test batch storage
         let batch = vec![
             ("batch_token_1".to_string(), record.clone(), Some(3600)),
             ("batch_token_2".to_string(), record.clone(), Some(3600)),
         ];
         store.store_tokens_batch(&batch).await.unwrap();
-        
+
         // Test batch revoke
         store.revoke_tokens_batch(&["batch_token_1".to_string()]).await.unwrap();
         let revoked = store.get_record("batch_token_1").await.unwrap();
         assert_eq!(revoked.active, false);
-        
+
         // Test stats
         let stats = store.get_stats().await.unwrap();
         assert!(stats.total_tokens >= 3);
     }
-    
+
     #[tokio::test]
     async fn test_cached_token_record_expiration() {
         let record = IntrospectionRecord {
@@ -474,15 +474,15 @@ mod tests {
             sub: None,
             token_binding: None,
         };
-        
+
         // Test non-expiring record
         let non_expiring = CachedTokenRecord::new(record.clone(), None);
         assert!(!non_expiring.is_expired());
-        
+
         // Test expiring record (1 second TTL)
         let expiring = CachedTokenRecord::new(record.clone(), Some(1));
         assert!(!expiring.is_expired());
-        
+
         // Wait and check expiration
         tokio::time::sleep(Duration::from_secs(2)).await;
         assert!(expiring.is_expired());

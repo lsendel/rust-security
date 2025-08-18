@@ -15,8 +15,14 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["openid".to_string(), "profile".to_string(), "email".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     };
 
     let router = app(app_state);
@@ -30,10 +36,7 @@ async fn google_callback_invalid_state_returns_400_like_error() {
     let client = Client::new();
 
     let resp = client
-        .get(format!(
-            "{}/oauth/google/callback?code=dummy&state=unknown_state",
-            base
-        ))
+        .get(format!("{}/oauth/google/callback?code=dummy&state=unknown_state", base))
         .send()
         .await
         .unwrap();
@@ -51,10 +54,7 @@ async fn microsoft_callback_invalid_state_returns_400_like_error() {
     let client = Client::new();
 
     let resp = client
-        .get(format!(
-            "{}/oauth/microsoft/callback?code=dummy&state=unknown_state",
-            base
-        ))
+        .get(format!("{}/oauth/microsoft/callback?code=dummy&state=unknown_state", base))
         .send()
         .await
         .unwrap();
@@ -64,5 +64,3 @@ async fn microsoft_callback_invalid_state_returns_400_like_error() {
     let v: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(v.get("error").and_then(|e| e.as_str()), Some("invalid_state"));
 }
-
-

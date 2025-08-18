@@ -17,8 +17,14 @@ async fn spawn_app() -> String {
         client_credentials,
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -49,10 +55,7 @@ async fn token_issue_and_revoke_flow() {
     // Introspect -> active=true and matching exp/iat
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest {
-            token: token.clone(),
-            token_type_hint: None,
-        })
+        .json(&IntrospectRequest { token: token.clone(), token_type_hint: None })
         .send()
         .await
         .unwrap();
@@ -74,10 +77,7 @@ async fn token_issue_and_revoke_flow() {
     // Introspect -> active=false
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest {
-            token,
-            token_type_hint: None,
-        })
+        .json(&IntrospectRequest { token, token_type_hint: None })
         .send()
         .await
         .unwrap();

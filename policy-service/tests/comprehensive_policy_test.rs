@@ -9,7 +9,7 @@ async fn spawn_app() -> String {
 
     let state = load_policies_and_entities().unwrap();
     let app = app(state);
-    
+
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
 }
@@ -37,7 +37,7 @@ async fn test_policy_authorization_allow() {
         .unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let auth_response: AuthorizeResponse = response.json().await.unwrap();
     assert_eq!(auth_response.decision, "Allow");
 }
@@ -65,7 +65,7 @@ async fn test_policy_authorization_deny() {
         .unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let auth_response: AuthorizeResponse = response.json().await.unwrap();
     assert_eq!(auth_response.decision, "Deny");
 }
@@ -93,7 +93,7 @@ async fn test_multi_tenant_isolation() {
         .unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let auth_response: AuthorizeResponse = response.json().await.unwrap();
     assert_eq!(auth_response.decision, "Deny");
 }
@@ -121,7 +121,7 @@ async fn test_attribute_based_access_control() {
         .unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let auth_response: AuthorizeResponse = response.json().await.unwrap();
     assert_eq!(auth_response.decision, "Allow");
 }
@@ -181,14 +181,10 @@ async fn test_health_endpoint() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let response = client
-        .get(format!("{}/health", base))
-        .send()
-        .await
-        .unwrap();
+    let response = client.get(format!("{}/health", base)).send().await.unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let health_response: Value = response.json().await.unwrap();
     assert_eq!(health_response.get("status").unwrap().as_str().unwrap(), "ok");
 }
@@ -198,14 +194,10 @@ async fn test_openapi_endpoint() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let response = client
-        .get(format!("{}/openapi.json", base))
-        .send()
-        .await
-        .unwrap();
+    let response = client.get(format!("{}/openapi.json", base)).send().await.unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let openapi_response: Value = response.json().await.unwrap();
     assert!(openapi_response.get("openapi").is_some());
     assert!(openapi_response.get("paths").is_some());
@@ -237,7 +229,7 @@ async fn test_context_based_authorization() {
         .unwrap();
 
     assert_eq!(response.status(), 200);
-    
+
     let auth_response: AuthorizeResponse = response.json().await.unwrap();
     // Should still be allowed as context doesn't affect the basic policy
     assert_eq!(auth_response.decision, "Allow");

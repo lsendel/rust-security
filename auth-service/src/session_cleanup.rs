@@ -1,6 +1,6 @@
-use crate::session_manager::{SessionManager, SessionError};
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::security_metrics::SECURITY_METRICS;
+use crate::session_manager::{SessionError, SessionManager};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -63,7 +63,7 @@ pub struct CleanupPriorityConfig {
     pub expired_sessions: u8,
     /// Priority for inactive sessions
     pub inactive_sessions: u8,
-    /// Priority for revoked sessions  
+    /// Priority for revoked sessions
     pub revoked_sessions: u8,
     /// Priority for orphaned sessions
     pub orphaned_sessions: u8,
@@ -72,10 +72,10 @@ pub struct CleanupPriorityConfig {
 impl Default for CleanupPriorityConfig {
     fn default() -> Self {
         Self {
-            expired_sessions: 5,    // Highest priority
+            expired_sessions: 5, // Highest priority
             inactive_sessions: 4,
             revoked_sessions: 3,
-            orphaned_sessions: 2,   // Lowest priority
+            orphaned_sessions: 2, // Lowest priority
         }
     }
 }
@@ -141,17 +141,19 @@ impl SessionCleanupScheduler {
         }
 
         info!("Starting session cleanup scheduler");
-        
+
         // Log scheduler startup
-        SecurityLogger::log_event(&mut SecurityEvent::new(
-            SecurityEventType::ConfigurationChange,
-            SecuritySeverity::Low,
-            "auth-service".to_string(),
-            "Session cleanup scheduler started".to_string(),
-        )
-        .with_detail("base_interval_secs".to_string(), self.config.base_interval_secs)
-        .with_detail("jitter_percent".to_string(), self.config.jitter_percent)
-        .with_detail("batch_size".to_string(), self.config.batch_size));
+        SecurityLogger::log_event(
+            &mut SecurityEvent::new(
+                SecurityEventType::ConfigurationChange,
+                SecuritySeverity::Low,
+                "auth-service".to_string(),
+                "Session cleanup scheduler started".to_string(),
+            )
+            .with_detail("base_interval_secs".to_string(), self.config.base_interval_secs)
+            .with_detail("jitter_percent".to_string(), self.config.jitter_percent)
+            .with_detail("batch_size".to_string(), self.config.batch_size),
+        );
 
         let mut cleanup_interval = self.create_jittered_interval();
         cleanup_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -164,7 +166,7 @@ impl SessionCleanupScheduler {
                         self.increment_failed_runs().await;
                     }
                 }
-                
+
                 signal = shutdown_receiver.recv() => {
                     match signal {
                         Ok(ShutdownSignal::Graceful) => {
@@ -192,19 +194,21 @@ impl SessionCleanupScheduler {
 
         self.is_running.store(false, Ordering::SeqCst);
         info!("Session cleanup scheduler stopped");
-        
+
         // Log scheduler shutdown
         let stats = self.stats.read().await;
-        SecurityLogger::log_event(&mut SecurityEvent::new(
-            SecurityEventType::ConfigurationChange,
-            SecuritySeverity::Low,
-            "auth-service".to_string(),
-            "Session cleanup scheduler stopped".to_string(),
-        )
-        .with_detail("total_runs".to_string(), stats.total_runs)
-        .with_detail("successful_runs".to_string(), stats.successful_runs)
-        .with_detail("failed_runs".to_string(), stats.failed_runs)
-        .with_detail("total_sessions_cleaned".to_string(), stats.total_sessions_cleaned));
+        SecurityLogger::log_event(
+            &mut SecurityEvent::new(
+                SecurityEventType::ConfigurationChange,
+                SecuritySeverity::Low,
+                "auth-service".to_string(),
+                "Session cleanup scheduler stopped".to_string(),
+            )
+            .with_detail("total_runs".to_string(), stats.total_runs)
+            .with_detail("successful_runs".to_string(), stats.successful_runs)
+            .with_detail("failed_runs".to_string(), stats.failed_runs)
+            .with_detail("total_sessions_cleaned".to_string(), stats.total_sessions_cleaned),
+        );
 
         Ok(())
     }
@@ -250,15 +254,14 @@ impl SessionCleanupScheduler {
     fn calculate_jittered_interval(&self) -> Duration {
         let base_duration = Duration::from_secs(self.config.base_interval_secs);
         let jitter_amount = base_duration.as_secs_f64() * self.config.jitter_percent;
-        
+
         let mut rng = rand::thread_rng();
         let jitter = rng.gen_range(-jitter_amount..=jitter_amount);
-        
+
         let jittered_secs = (base_duration.as_secs() as f64 + jitter).max(0.0) as u64;
-        let clamped_secs = jittered_secs
-            .max(self.config.min_interval_secs)
-            .min(self.config.max_interval_secs);
-        
+        let clamped_secs =
+            jittered_secs.max(self.config.min_interval_secs).min(self.config.max_interval_secs);
+
         Duration::from_secs(clamped_secs)
     }
 
@@ -267,14 +270,14 @@ impl SessionCleanupScheduler {
         let operation_id = self.current_operation_id.fetch_add(1, Ordering::SeqCst);
         let start_time = Instant::now();
         let timestamp = current_timestamp();
-        
+
         self.cleanup_start_time.store(timestamp, Ordering::SeqCst);
-        
+
         let span = span!(Level::INFO, "cleanup_cycle", operation_id = operation_id);
-        
+
         async move {
             debug!(operation_id = operation_id, "Starting cleanup cycle");
-            
+
             // Update next scheduled time
             {
                 let mut stats = self.stats.write().await;
@@ -282,11 +285,11 @@ impl SessionCleanupScheduler {
             }
 
             let mut cleanup_result = CleanupCycleResult::new(operation_id);
-            
+
             // Run cleanup with timeout
             let cleanup_future = self.execute_cleanup_with_retries(&mut cleanup_result);
             let timeout_duration = Duration::from_secs(self.config.max_cleanup_time_secs);
-            
+
             match tokio::time::timeout(timeout_duration, cleanup_future).await {
                 Ok(result) => {
                     match result {
@@ -308,22 +311,25 @@ impl SessionCleanupScheduler {
                     return Err(timeout_error);
                 }
             }
-            
+
             // Update metrics if enabled
             if self.config.enable_metrics {
                 SECURITY_METRICS.security_events_total
                     .with_label_values(&["session_cleanup", "info", "auth-service"])
                     .inc();
             }
-            
+
             Ok(())
         }.instrument(span).await
     }
 
     /// Execute cleanup with retry logic
-    async fn execute_cleanup_with_retries(&self, result: &mut CleanupCycleResult) -> Result<(), CleanupError> {
+    async fn execute_cleanup_with_retries(
+        &self,
+        result: &mut CleanupCycleResult,
+    ) -> Result<(), CleanupError> {
         let mut last_error = None;
-        
+
         for attempt in 1..=self.config.retry_attempts {
             match self.execute_single_cleanup(result).await {
                 Ok(_) => {
@@ -345,19 +351,22 @@ impl SessionCleanupScheduler {
                         error = %e,
                         "Cleanup attempt failed"
                     );
-                    
+
                     if attempt < self.config.retry_attempts {
                         sleep(Duration::from_secs(self.config.retry_delay_secs)).await;
                     }
                 }
             }
         }
-        
+
         Err(CleanupError::UnknownError)
     }
 
     /// Execute a single cleanup operation
-    async fn execute_single_cleanup(&self, result: &mut CleanupCycleResult) -> Result<(), CleanupError> {
+    async fn execute_single_cleanup(
+        &self,
+        result: &mut CleanupCycleResult,
+    ) -> Result<(), CleanupError> {
         // Prioritized cleanup operations
         let operations = [
             ("expired", self.config.priority_levels.expired_sessions),
@@ -365,18 +374,21 @@ impl SessionCleanupScheduler {
             ("revoked", self.config.priority_levels.revoked_sessions),
             ("orphaned", self.config.priority_levels.orphaned_sessions),
         ];
-        
+
         // Sort by priority (highest first)
         let mut sorted_ops = operations.to_vec();
         sorted_ops.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         for (cleanup_type, _priority) in sorted_ops {
             match cleanup_type {
                 "expired" => {
-                    let count = self.session_manager.cleanup_sessions().await
+                    let count = self
+                        .session_manager
+                        .cleanup_sessions()
+                        .await
                         .map_err(|e| CleanupError::SessionManager(e))?;
                     result.expired_sessions_cleaned += count;
-                    
+
                     debug!(
                         operation_id = result.operation_id,
                         count = count,
@@ -398,27 +410,29 @@ impl SessionCleanupScheduler {
                 _ => {} // Should not happen with current implementation
             }
         }
-        
+
         // Log cleanup results
         if result.total_cleaned() > 0 {
-            SecurityLogger::log_event(&mut SecurityEvent::new(
-                SecurityEventType::DataAccess,
-                SecuritySeverity::Low,
-                "auth-service".to_string(),
-                "Session cleanup completed".to_string(),
-            )
-            .with_detail("operation_id".to_string(), result.operation_id)
-            .with_detail("expired_cleaned".to_string(), result.expired_sessions_cleaned)
-            .with_detail("total_cleaned".to_string(), result.total_cleaned()));
+            SecurityLogger::log_event(
+                &mut SecurityEvent::new(
+                    SecurityEventType::DataAccess,
+                    SecuritySeverity::Low,
+                    "auth-service".to_string(),
+                    "Session cleanup completed".to_string(),
+                )
+                .with_detail("operation_id".to_string(), result.operation_id)
+                .with_detail("expired_cleaned".to_string(), result.expired_sessions_cleaned)
+                .with_detail("total_cleaned".to_string(), result.total_cleaned()),
+            );
         }
-        
+
         Ok(())
     }
 
     /// Update statistics after successful cleanup
     async fn update_successful_cleanup_stats(&self, result: CleanupCycleResult, elapsed: Duration) {
         let mut stats = self.stats.write().await;
-        
+
         stats.total_runs += 1;
         stats.successful_runs += 1;
         stats.total_sessions_cleaned += result.total_cleaned() as u64;
@@ -427,7 +441,7 @@ impl SessionCleanupScheduler {
         stats.revoked_sessions_cleaned += result.revoked_sessions_cleaned as u64;
         stats.orphaned_sessions_cleaned += result.orphaned_sessions_cleaned as u64;
         stats.last_cleanup_time = Some(current_timestamp());
-        
+
         // Update average cleanup time using exponential moving average
         let elapsed_ms = elapsed.as_millis() as f64;
         if stats.avg_cleanup_time_ms == 0.0 {
@@ -447,15 +461,17 @@ impl SessionCleanupScheduler {
     /// Gracefully shutdown, finishing current operation
     async fn graceful_shutdown(&self) {
         info!("Performing graceful cleanup scheduler shutdown");
-        
+
         // Wait for current cleanup to complete if running
         let max_wait = Duration::from_secs(self.config.max_cleanup_time_secs + 10);
         let start_wait = Instant::now();
-        
+
         while start_wait.elapsed() < max_wait {
             let current_start = self.cleanup_start_time.load(Ordering::SeqCst);
-            if current_start == 0 || 
-               current_timestamp().saturating_sub(current_start) > self.config.max_cleanup_time_secs {
+            if current_start == 0
+                || current_timestamp().saturating_sub(current_start)
+                    > self.config.max_cleanup_time_secs
+            {
                 break;
             }
             sleep(Duration::from_millis(100)).await;
@@ -465,12 +481,12 @@ impl SessionCleanupScheduler {
     /// Drain all operations and stop
     async fn drain_and_stop(&self) {
         info!("Draining cleanup operations before shutdown");
-        
+
         // Force one final cleanup
         if let Err(e) = self.run_cleanup_cycle().await {
             warn!(error = %e, "Final cleanup cycle failed during drain");
         }
-        
+
         self.graceful_shutdown().await;
     }
 }
@@ -495,12 +511,12 @@ impl CleanupCycleResult {
             orphaned_sessions_cleaned: 0,
         }
     }
-    
+
     fn total_cleaned(&self) -> u32 {
-        self.expired_sessions_cleaned + 
-        self.inactive_sessions_cleaned + 
-        self.revoked_sessions_cleaned + 
-        self.orphaned_sessions_cleaned
+        self.expired_sessions_cleaned
+            + self.inactive_sessions_cleaned
+            + self.revoked_sessions_cleaned
+            + self.orphaned_sessions_cleaned
     }
 }
 
@@ -523,10 +539,7 @@ pub enum CleanupError {
 
 /// Helper function to get current timestamp
 fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
 /// Factory function to create and start session cleanup scheduler
@@ -536,17 +549,17 @@ pub async fn create_and_start_session_cleanup(
 ) -> Result<Arc<SessionCleanupScheduler>, CleanupError> {
     let scheduler = Arc::new(SessionCleanupScheduler::new(config, session_manager));
     let scheduler_clone = Arc::clone(&scheduler);
-    
+
     // Start the scheduler in a background task
     tokio::spawn(async move {
         if let Err(e) = scheduler_clone.start().await {
             error!(error = %e, "Session cleanup scheduler failed to start");
         }
     });
-    
+
     // Wait a moment to ensure scheduler is initialized
     tokio::time::sleep(Duration::from_millis(100)).await;
-    
+
     Ok(scheduler)
 }
 
@@ -554,7 +567,7 @@ pub async fn create_and_start_session_cleanup(
 mod tests {
     use super::*;
     use crate::session_manager::SessionConfig;
-    
+
     #[tokio::test]
     async fn test_jittered_interval_calculation() {
         let config = SessionCleanupConfig {
@@ -564,18 +577,18 @@ mod tests {
             max_interval_secs: 900,
             ..Default::default()
         };
-        
+
         let session_manager = Arc::new(SessionManager::new(SessionConfig::default()));
         let scheduler = SessionCleanupScheduler::new(config.clone(), session_manager);
-        
+
         // Test multiple intervals to ensure they're within bounds
         for _ in 0..10 {
             let interval = scheduler.calculate_jittered_interval();
             let secs = interval.as_secs();
-            
+
             assert!(secs >= config.min_interval_secs);
             assert!(secs <= config.max_interval_secs);
-            
+
             // Should be within jitter range of base interval
             let base = config.base_interval_secs as f64;
             let max_jitter = base * config.jitter_percent;
@@ -583,7 +596,7 @@ mod tests {
             assert!(secs as f64 <= base + max_jitter);
         }
     }
-    
+
     #[tokio::test]
     async fn test_scheduler_lifecycle() {
         let config = SessionCleanupConfig {
@@ -591,51 +604,49 @@ mod tests {
             max_cleanup_time_secs: 5,
             ..Default::default()
         };
-        
+
         let session_manager = Arc::new(SessionManager::new(SessionConfig::default()));
         let scheduler = Arc::new(SessionCleanupScheduler::new(config, session_manager));
-        
+
         assert!(!scheduler.is_running());
-        
+
         // Start scheduler in background
         let scheduler_clone = Arc::clone(&scheduler);
-        let handle = tokio::spawn(async move {
-            scheduler_clone.start().await
-        });
-        
+        let handle = tokio::spawn(async move { scheduler_clone.start().await });
+
         // Wait for startup
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(scheduler.is_running());
-        
+
         // Test graceful shutdown
         scheduler.shutdown(ShutdownSignal::Graceful).await.unwrap();
-        
+
         // Wait for shutdown with longer timeout
         let result = tokio::time::timeout(Duration::from_secs(10), handle).await;
         assert!(result.is_ok(), "Scheduler should shutdown within timeout");
         assert!(result.unwrap().is_ok(), "Scheduler should shutdown without error");
         assert!(!scheduler.is_running());
     }
-    
+
     #[tokio::test]
     async fn test_cleanup_stats() {
         let config = SessionCleanupConfig::default();
         let session_manager = Arc::new(SessionManager::new(SessionConfig::default()));
         let scheduler = SessionCleanupScheduler::new(config, session_manager);
-        
+
         let stats = scheduler.get_stats().await;
         assert_eq!(stats.total_runs, 0);
         assert_eq!(stats.successful_runs, 0);
         assert_eq!(stats.failed_runs, 0);
         assert_eq!(stats.total_sessions_cleaned, 0);
     }
-    
+
     #[test]
     fn test_cleanup_cycle_result() {
         let mut result = CleanupCycleResult::new(123);
         assert_eq!(result.operation_id, 123);
         assert_eq!(result.total_cleaned(), 0);
-        
+
         result.expired_sessions_cleaned = 5;
         result.inactive_sessions_cleaned = 3;
         assert_eq!(result.total_cleaned(), 8);

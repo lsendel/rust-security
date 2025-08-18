@@ -8,9 +8,9 @@ pub struct TemplateManager;
 impl TemplateManager {
     /// Load template from file
     pub async fn load_template(path: &str) -> ComplianceResult<String> {
-        tokio::fs::read_to_string(path)
-            .await
-            .map_err(|e| ComplianceError::Template(format!("Failed to load template {}: {}", path, e)))
+        tokio::fs::read_to_string(path).await.map_err(|e| {
+            ComplianceError::Template(format!("Failed to load template {}: {}", path, e))
+        })
     }
 
     /// Get default HTML template

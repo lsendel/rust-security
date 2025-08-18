@@ -1,5 +1,5 @@
 //! Security Control Validation Framework
-//! 
+//!
 //! Validates that implemented security controls are functioning correctly
 
 use anyhow::Result;
@@ -43,10 +43,7 @@ impl SecurityControlValidator {
             .danger_accept_invalid_certs(true)
             .build()?;
 
-        Ok(Self {
-            target_url,
-            client,
-        })
+        Ok(Self { target_url, client })
     }
 
     pub async fn validate_all_controls(&self) -> Result<Vec<ValidationResult>> {
@@ -56,36 +53,36 @@ impl SecurityControlValidator {
 
         // IDOR Protection Validation
         results.extend(self.validate_idor_protection().await?);
-        
+
         // TOTP Replay Prevention Validation
         results.extend(self.validate_totp_replay_prevention().await?);
-        
+
         // PKCE Downgrade Protection Validation
         results.extend(self.validate_pkce_downgrade_protection().await?);
-        
+
         // Rate Limiting Validation
         results.extend(self.validate_rate_limiting().await?);
-        
+
         // Zero-Trust Architecture Validation
         results.extend(self.validate_zero_trust_architecture().await?);
-        
+
         // Threat Hunting Detection Validation
         results.extend(self.validate_threat_hunting_detection().await?);
-        
+
         // SOAR Automated Response Validation
         results.extend(self.validate_soar_responses().await?);
-        
+
         // Security Headers Validation
         results.extend(self.validate_security_headers().await?);
-        
+
         // Input Validation
         results.extend(self.validate_input_validation().await?);
-        
+
         // Session Management
         results.extend(self.validate_session_management().await?);
 
         info!("✅ Security control validation completed. Results: {} tests", results.len());
-        
+
         Ok(results)
     }
 
@@ -99,23 +96,29 @@ impl SecurityControlValidator {
             test_name: "Session Ownership Validation".to_string(),
             passed: false,
             description: "Verify that users can only access their own sessions".to_string(),
-            expected_behavior: "Access denied (403/401) when attempting to access other user's sessions".to_string(),
+            expected_behavior:
+                "Access denied (403/401) when attempting to access other user's sessions"
+                    .to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::High,
-            remediation: Some("Implement proper session ownership checks in session endpoints".to_string()),
+            remediation: Some(
+                "Implement proper session ownership checks in session endpoints".to_string(),
+            ),
             evidence: Vec::new(),
         };
 
         // Test session access with different user IDs
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/session/fake-session-id", self.target_url))
             .header("Authorization", "Bearer fake-token")
             .send()
             .await?;
 
         let mut test = test;
-        test.actual_behavior = format!("HTTP Status: {}, Response: {}", 
-            response.status(), 
+        test.actual_behavior = format!(
+            "HTTP Status: {}, Response: {}",
+            response.status(),
             response.text().await.unwrap_or_default().chars().take(100).collect::<String>()
         );
         test.passed = response.status().as_u16() == 401 || response.status().as_u16() == 403;
@@ -132,23 +135,31 @@ impl SecurityControlValidator {
             test_name: "Admin Endpoint Protection".to_string(),
             passed: false,
             description: "Verify that admin endpoints require proper authorization".to_string(),
-            expected_behavior: "Access denied (403/401) when accessing admin endpoints without proper auth".to_string(),
+            expected_behavior:
+                "Access denied (403/401) when accessing admin endpoints without proper auth"
+                    .to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::Critical,
-            remediation: Some("Implement strict authorization checks for admin endpoints".to_string()),
+            remediation: Some(
+                "Implement strict authorization checks for admin endpoints".to_string(),
+            ),
             evidence: Vec::new(),
         };
 
-        let admin_response = self.client
+        let admin_response = self
+            .client
             .get(&format!("{}/admin/keys/rotation/status", self.target_url))
             .send()
             .await?;
 
         admin_test.actual_behavior = format!("HTTP Status: {}", admin_response.status());
-        admin_test.passed = admin_response.status().as_u16() == 401 || admin_response.status().as_u16() == 403;
+        admin_test.passed =
+            admin_response.status().as_u16() == 401 || admin_response.status().as_u16() == 403;
 
         if !admin_test.passed {
-            admin_test.evidence.push("Admin endpoints may be accessible without proper authorization".to_string());
+            admin_test
+                .evidence
+                .push("Admin endpoints may be accessible without proper authorization".to_string());
         }
 
         results.push(admin_test);
@@ -168,7 +179,9 @@ impl SecurityControlValidator {
             expected_behavior: "Second use of same TOTP code should be rejected".to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::High,
-            remediation: Some("Implement TOTP nonce tracking to prevent replay attacks".to_string()),
+            remediation: Some(
+                "Implement TOTP nonce tracking to prevent replay attacks".to_string(),
+            ),
             evidence: Vec::new(),
         };
 
@@ -179,7 +192,8 @@ impl SecurityControlValidator {
         });
 
         // First attempt
-        let first_response = self.client
+        let first_response = self
+            .client
             .post(&format!("{}/mfa/totp/verify", self.target_url))
             .header("Content-Type", "application/json")
             .body(totp_body.to_string())
@@ -187,7 +201,8 @@ impl SecurityControlValidator {
             .await?;
 
         // Second attempt (should be blocked)
-        let second_response = self.client
+        let second_response = self
+            .client
             .post(&format!("{}/mfa/totp/verify", self.target_url))
             .header("Content-Type", "application/json")
             .body(totp_body.to_string())
@@ -195,16 +210,17 @@ impl SecurityControlValidator {
             .await?;
 
         let second_body = second_response.text().await.unwrap_or_default();
-        test.actual_behavior = format!("Second attempt status: {}, Response: {}", 
-            second_response.status(), 
+        test.actual_behavior = format!(
+            "Second attempt status: {}, Response: {}",
+            second_response.status(),
             second_body.chars().take(100).collect::<String>()
         );
 
         // TOTP replay prevention is working if second attempt fails or mentions replay
-        test.passed = second_response.status().as_u16() != 200 || 
-            second_body.to_lowercase().contains("already used") ||
-            second_body.to_lowercase().contains("replay") ||
-            second_body.contains("false");
+        test.passed = second_response.status().as_u16() != 200
+            || second_body.to_lowercase().contains("already used")
+            || second_body.to_lowercase().contains("replay")
+            || second_body.contains("false");
 
         if test.passed {
             test.evidence.push("TOTP replay prevention is active".to_string());
@@ -226,7 +242,8 @@ impl SecurityControlValidator {
             test_name: "Plain PKCE Method Rejection".to_string(),
             passed: false,
             description: "Verify that plain PKCE method is rejected".to_string(),
-            expected_behavior: "OAuth authorize request with plain PKCE method should be rejected".to_string(),
+            expected_behavior: "OAuth authorize request with plain PKCE method should be rejected"
+                .to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::High,
             remediation: Some("Ensure only S256 PKCE method is supported".to_string()),
@@ -239,25 +256,25 @@ impl SecurityControlValidator {
             self.target_url
         );
 
-        let response = self.client
-            .get(&authorize_url)
-            .send()
-            .await?;
+        let response = self.client.get(&authorize_url).send().await?;
 
         let response_body = response.text().await.unwrap_or_default();
-        test.actual_behavior = format!("HTTP Status: {}, Response: {}", 
-            response.status(), 
+        test.actual_behavior = format!(
+            "HTTP Status: {}, Response: {}",
+            response.status(),
             response_body.chars().take(200).collect::<String>()
         );
 
         // PKCE downgrade protection is working if plain method is rejected
-        test.passed = response.status().as_u16() != 200 || 
-            response_body.to_lowercase().contains("plain") && response_body.to_lowercase().contains("not supported");
+        test.passed = response.status().as_u16() != 200
+            || response_body.to_lowercase().contains("plain")
+                && response_body.to_lowercase().contains("not supported");
 
         if test.passed {
             test.evidence.push("PKCE downgrade protection is active".to_string());
         } else {
-            test.evidence.push("Plain PKCE method may be accepted (downgrade vulnerability)".to_string());
+            test.evidence
+                .push("Plain PKCE method may be accepted (downgrade vulnerability)".to_string());
         }
 
         results.push(test);
@@ -274,7 +291,8 @@ impl SecurityControlValidator {
             test_name: "Request Rate Limiting".to_string(),
             passed: false,
             description: "Verify that excessive requests are rate limited".to_string(),
-            expected_behavior: "Requests should be rate limited after threshold is exceeded".to_string(),
+            expected_behavior: "Requests should be rate limited after threshold is exceeded"
+                .to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::Medium,
             remediation: Some("Implement proper rate limiting on all endpoints".to_string()),
@@ -284,7 +302,7 @@ impl SecurityControlValidator {
         // Send multiple rapid requests to trigger rate limiting
         let mut rate_limited = false;
         let mut successful_requests = 0;
-        
+
         for i in 0..20 {
             let start = Instant::now();
             let response = self.client
@@ -308,7 +326,8 @@ impl SecurityControlValidator {
             }
         }
 
-        test.actual_behavior = format!("Rate limited: {}, Successful requests: {}", rate_limited, successful_requests);
+        test.actual_behavior =
+            format!("Rate limited: {}, Successful requests: {}", rate_limited, successful_requests);
         test.passed = rate_limited || successful_requests < 20; // Some form of limiting should occur
 
         if !test.passed {
@@ -346,23 +365,27 @@ impl SecurityControlValidator {
 
         let mut denied_count = 0;
         for endpoint in &protected_endpoints {
-            let response = self.client
-                .get(&format!("{}{}", self.target_url, endpoint))
-                .send()
-                .await?;
+            let response =
+                self.client.get(&format!("{}{}", self.target_url, endpoint)).send().await?;
 
             if response.status().as_u16() == 401 || response.status().as_u16() == 403 {
                 denied_count += 1;
             }
         }
 
-        deny_test.actual_behavior = format!("{}/{} endpoints properly denied access", denied_count, protected_endpoints.len());
+        deny_test.actual_behavior = format!(
+            "{}/{} endpoints properly denied access",
+            denied_count,
+            protected_endpoints.len()
+        );
         deny_test.passed = denied_count == protected_endpoints.len();
 
         if deny_test.passed {
             deny_test.evidence.push("All protected endpoints require authentication".to_string());
         } else {
-            deny_test.evidence.push("Some protected endpoints may be accessible without authentication".to_string());
+            deny_test.evidence.push(
+                "Some protected endpoints may be accessible without authentication".to_string(),
+            );
         }
 
         results.push(deny_test);
@@ -379,7 +402,8 @@ impl SecurityControlValidator {
             test_name: "Suspicious Activity Detection".to_string(),
             passed: false,
             description: "Verify that suspicious activities are detected and logged".to_string(),
-            expected_behavior: "Suspicious requests should trigger security alerts or logging".to_string(),
+            expected_behavior: "Suspicious requests should trigger security alerts or logging"
+                .to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::Medium,
             remediation: Some("Implement comprehensive threat detection and logging".to_string()),
@@ -388,7 +412,11 @@ impl SecurityControlValidator {
 
         // Send suspicious requests that should trigger detection
         let suspicious_requests = vec![
-            ("SQL Injection", "/oauth/token", "grant_type=client_credentials&client_id=' OR '1'='1&client_secret=test"),
+            (
+                "SQL Injection",
+                "/oauth/token",
+                "grant_type=client_credentials&client_id=' OR '1'='1&client_secret=test",
+            ),
             ("XSS Attempt", "/health", "?param=<script>alert(1)</script>"),
             ("Path Traversal", "/session/../admin", ""),
         ];
@@ -408,9 +436,10 @@ impl SecurityControlValidator {
             };
 
             // Check if request was blocked or logged
-            if response.status().as_u16() == 400 || 
-               response.status().as_u16() == 403 ||
-               response.status().as_u16() == 429 {
+            if response.status().as_u16() == 400
+                || response.status().as_u16() == 403
+                || response.status().as_u16() == 429
+            {
                 detections += 1;
                 test.evidence.push(format!("{} attack detected and blocked", attack_type));
             }
@@ -433,7 +462,8 @@ impl SecurityControlValidator {
             test_name: "Automated Threat Response".to_string(),
             passed: false,
             description: "Verify that automated responses are triggered by threats".to_string(),
-            expected_behavior: "Repeated malicious requests should trigger automated blocking".to_string(),
+            expected_behavior: "Repeated malicious requests should trigger automated blocking"
+                .to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::Medium,
             remediation: Some("Implement automated threat response mechanisms".to_string()),
@@ -451,11 +481,14 @@ impl SecurityControlValidator {
                 .send()
                 .await?;
 
-            if response.status().as_u16() == 403 || 
-               response.status().as_u16() == 429 ||
-               response.status().as_u16() == 423 { // Locked
+            if response.status().as_u16() == 403
+                || response.status().as_u16() == 429
+                || response.status().as_u16() == 423
+            {
+                // Locked
                 blocked = true;
-                test.evidence.push(format!("Automated response triggered after {} attempts", i + 1));
+                test.evidence
+                    .push(format!("Automated response triggered after {} attempts", i + 1));
                 break;
             }
 
@@ -466,7 +499,8 @@ impl SecurityControlValidator {
         test.passed = blocked;
 
         if !test.passed {
-            test.evidence.push("No automated response detected after 10 malicious requests".to_string());
+            test.evidence
+                .push("No automated response detected after 10 malicious requests".to_string());
         }
 
         results.push(test);
@@ -490,15 +524,12 @@ impl SecurityControlValidator {
             evidence: Vec::new(),
         };
 
-        let response = self.client
-            .get(&format!("{}/health", self.target_url))
-            .send()
-            .await?;
+        let response = self.client.get(&format!("{}/health", self.target_url)).send().await?;
 
         let headers = response.headers();
         let security_headers = vec![
             "X-Content-Type-Options",
-            "X-Frame-Options", 
+            "X-Frame-Options",
             "X-XSS-Protection",
             "Strict-Transport-Security",
             "Content-Security-Policy",
@@ -512,7 +543,8 @@ impl SecurityControlValidator {
             }
         }
 
-        test.actual_behavior = format!("{}/{} security headers present", present_headers, security_headers.len());
+        test.actual_behavior =
+            format!("{}/{} security headers present", present_headers, security_headers.len());
         test.passed = present_headers >= 3; // At least 3/5 headers should be present
 
         results.push(test);
@@ -528,7 +560,8 @@ impl SecurityControlValidator {
             control_name: "Input Validation".to_string(),
             test_name: "Malicious Input Rejection".to_string(),
             passed: false,
-            description: "Verify that malicious input is properly validated and rejected".to_string(),
+            description: "Verify that malicious input is properly validated and rejected"
+                .to_string(),
             expected_behavior: "Malicious input should be rejected with 400 status".to_string(),
             actual_behavior: "".to_string(),
             risk_level: RiskLevel::High,
@@ -593,7 +626,8 @@ impl SecurityControlValidator {
             "client_id": "test_client"
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/session/create", self.target_url))
             .header("Content-Type", "application/json")
             .body(create_body.to_string())
@@ -609,7 +643,8 @@ impl SecurityControlValidator {
         if test.passed {
             test.evidence.push("Session creation requires authentication".to_string());
         } else {
-            test.evidence.push("Session creation may not require proper authentication".to_string());
+            test.evidence
+                .push("Session creation may not require proper authentication".to_string());
         }
 
         results.push(test);

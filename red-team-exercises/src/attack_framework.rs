@@ -1,10 +1,10 @@
 //! Core Red Team Attack Framework
-//! 
+//!
 //! Provides the foundational infrastructure for executing realistic attack scenarios
 //! against the authentication service while monitoring detection and response capabilities.
 
 use anyhow::Result;
-use reqwest::{Client, header::HeaderMap};
+use reqwest::{header::HeaderMap, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -115,11 +115,11 @@ impl RedTeamFramework {
     ) -> Result<AttackResult> {
         let attack_id = Uuid::new_v4().to_string();
         let url = format!("{}{}", self.target_url, endpoint);
-        
+
         debug!("Executing attack: {} {} {}", attack_type, method, url);
-        
+
         let start_time = Instant::now();
-        
+
         // Build request with evasion techniques if enabled
         let mut request = match method.to_uppercase().as_str() {
             "GET" => self.client.get(&url),
@@ -135,7 +135,7 @@ impl RedTeamFramework {
             request = request.header("User-Agent", &session.user_agent);
             request = request.header("X-Forwarded-For", &session.ip_address);
             request = request.header("X-Real-IP", &session.ip_address);
-            
+
             if let Some(token) = &session.access_token {
                 request = request.header("Authorization", format!("Bearer {}", token));
             }
@@ -161,14 +161,14 @@ impl RedTeamFramework {
         // Execute request with monitoring
         let response = request.send().await?;
         let response_time = start_time.elapsed();
-        
+
         let status = response.status();
         let response_body = response.text().await.unwrap_or_default();
-        
+
         // Analyze response for detection indicators
         let detected = self.analyze_detection_indicators(&response_body, status.as_u16());
         let blocked = self.analyze_blocking_indicators(&response_body, status.as_u16());
-        
+
         let result = AttackResult {
             attack_id,
             attack_type: attack_type.to_string(),
@@ -187,8 +187,10 @@ impl RedTeamFramework {
         let mut results = self.attack_results.write().await;
         results.push(result.clone());
 
-        debug!("Attack result: success={}, detected={}, blocked={}, status={}", 
-               result.success, result.detected, result.blocked, result.http_status);
+        debug!(
+            "Attack result: success={}, detected={}, blocked={}, status={}",
+            result.success, result.detected, result.blocked, result.http_status
+        );
 
         Ok(result)
     }
@@ -205,8 +207,12 @@ impl RedTeamFramework {
         ];
 
         for (client_id, client_secret) in default_creds {
-            if let Ok(tokens) = self.attempt_client_credentials_flow(client_id, client_secret).await {
-                info!("Successfully obtained tokens with credentials: {}:{}", client_id, client_secret);
+            if let Ok(tokens) = self.attempt_client_credentials_flow(client_id, client_secret).await
+            {
+                info!(
+                    "Successfully obtained tokens with credentials: {}:{}",
+                    client_id, client_secret
+                );
                 return Ok((client_id.to_string(), client_secret.to_string()));
             }
         }
@@ -219,7 +225,7 @@ impl RedTeamFramework {
         // Generate test credentials (may work in development environments)
         let test_client_id = "redteam_test_client";
         let test_secret = "redteam_test_secret";
-        
+
         warn!("Using test credentials: {}:{}", test_client_id, test_secret);
         Ok((test_client_id.to_string(), test_secret.to_string()))
     }
@@ -235,7 +241,8 @@ impl RedTeamFramework {
             client_id, client_secret
         );
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/oauth/token", self.target_url))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
@@ -248,7 +255,7 @@ impl RedTeamFramework {
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("No access token in response"))?;
             let refresh_token = token_response["refresh_token"].as_str().map(|s| s.to_string());
-            
+
             Ok((access_token.to_string(), refresh_token))
         } else {
             Err(anyhow::anyhow!("Token request failed with status: {}", response.status()))
@@ -264,7 +271,7 @@ impl RedTeamFramework {
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
             "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
         ];
-        
+
         user_agents[rand::random::<usize>() % user_agents.len()].to_string()
     }
 
@@ -273,16 +280,35 @@ impl RedTeamFramework {
         // Mix of legitimate and suspicious IP ranges
         let ip_ranges = vec![
             format!("192.168.{}.{}", rand::random::<u8>(), rand::random::<u8>()), // Private
-            format!("10.{}.{}.{}", rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()), // Private
-            format!("172.{}.{}.{}", 16 + rand::random::<u8>() % 16, rand::random::<u8>(), rand::random::<u8>()), // Private
-            format!("{}.{}.{}.{}", 1 + rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>(), rand::random::<u8>()), // Public
+            format!(
+                "10.{}.{}.{}",
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>()
+            ), // Private
+            format!(
+                "172.{}.{}.{}",
+                16 + rand::random::<u8>() % 16,
+                rand::random::<u8>(),
+                rand::random::<u8>()
+            ), // Private
+            format!(
+                "{}.{}.{}.{}",
+                1 + rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>(),
+                rand::random::<u8>()
+            ), // Public
         ];
-        
+
         ip_ranges[rand::random::<usize>() % ip_ranges.len()].clone()
     }
 
     /// Apply detection evasion headers
-    async fn apply_evasion_headers(&self, mut request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    async fn apply_evasion_headers(
+        &self,
+        mut request: reqwest::RequestBuilder,
+    ) -> reqwest::RequestBuilder {
         // Randomize request timing
         let delay = Duration::from_millis(rand::random::<u64>() % 1000 + 100);
         tokio::time::sleep(delay).await;
@@ -293,26 +319,37 @@ impl RedTeamFramework {
         request = request.header("Accept-Encoding", "gzip, deflate, br");
         request = request.header("Cache-Control", "no-cache");
         request = request.header("DNT", "1");
-        
+
         // Randomize some header values
         if rand::random::<bool>() {
             request = request.header("X-Requested-With", "XMLHttpRequest");
         }
-        
+
         request
     }
 
     /// Analyze response for detection indicators
     fn analyze_detection_indicators(&self, response_body: &str, status_code: u16) -> bool {
         let detection_keywords = vec![
-            "blocked", "detected", "suspicious", "security", "violation",
-            "rate limit", "too many requests", "forbidden", "unauthorized",
-            "malicious", "threat", "abuse", "anomalous", "invalid",
+            "blocked",
+            "detected",
+            "suspicious",
+            "security",
+            "violation",
+            "rate limit",
+            "too many requests",
+            "forbidden",
+            "unauthorized",
+            "malicious",
+            "threat",
+            "abuse",
+            "anomalous",
+            "invalid",
         ];
 
         let body_lower = response_body.to_lowercase();
-        let detected_by_content = detection_keywords.iter()
-            .any(|keyword| body_lower.contains(keyword));
+        let detected_by_content =
+            detection_keywords.iter().any(|keyword| body_lower.contains(keyword));
 
         // Status code based detection
         let detected_by_status = match status_code {
@@ -328,13 +365,20 @@ impl RedTeamFramework {
     /// Analyze response for blocking indicators
     fn analyze_blocking_indicators(&self, response_body: &str, status_code: u16) -> bool {
         let blocking_keywords = vec![
-            "blocked", "denied", "rejected", "refused", "terminated",
-            "suspended", "banned", "blacklisted", "filtered",
+            "blocked",
+            "denied",
+            "rejected",
+            "refused",
+            "terminated",
+            "suspended",
+            "banned",
+            "blacklisted",
+            "filtered",
         ];
 
         let body_lower = response_body.to_lowercase();
-        let blocked_by_content = blocking_keywords.iter()
-            .any(|keyword| body_lower.contains(keyword));
+        let blocked_by_content =
+            blocking_keywords.iter().any(|keyword| body_lower.contains(keyword));
 
         // Status codes that indicate blocking
         let blocked_by_status = match status_code {
@@ -348,34 +392,36 @@ impl RedTeamFramework {
     }
 
     /// Determine if attack was successful based on context
-    fn determine_attack_success(&self, response_body: &str, status_code: u16, attack_type: &str) -> bool {
+    fn determine_attack_success(
+        &self,
+        response_body: &str,
+        status_code: u16,
+        attack_type: &str,
+    ) -> bool {
         match attack_type {
             "credential_stuffing" | "brute_force" => {
-                status_code == 200 && (
-                    response_body.contains("access_token") ||
-                    response_body.contains("success") ||
-                    response_body.contains("authenticated")
-                )
-            },
-            "token_manipulation" => {
-                status_code == 200 && !response_body.contains("invalid")
-            },
+                status_code == 200
+                    && (response_body.contains("access_token")
+                        || response_body.contains("success")
+                        || response_body.contains("authenticated"))
+            }
+            "token_manipulation" => status_code == 200 && !response_body.contains("invalid"),
             "idor" => {
-                status_code == 200 && (
-                    response_body.contains("user_id") ||
-                    response_body.contains("session") ||
-                    response_body.len() > 100 // Assuming data was returned
-                )
-            },
+                status_code == 200
+                    && (
+                        response_body.contains("user_id")
+                            || response_body.contains("session")
+                            || response_body.len() > 100
+                        // Assuming data was returned
+                    )
+            }
             "mfa_bypass" => {
-                status_code == 200 && (
-                    response_body.contains("verified") ||
-                    response_body.contains("success")
-                )
-            },
+                status_code == 200
+                    && (response_body.contains("verified") || response_body.contains("success"))
+            }
             "rate_limit_bypass" => {
                 status_code != 429 // Not rate limited
-            },
+            }
             _ => status_code == 200,
         }
     }
@@ -385,20 +431,22 @@ impl RedTeamFramework {
         // Try to trigger verbose error responses
         let test_endpoints = vec![
             "/oauth/token",
-            "/oauth/introspect", 
+            "/oauth/introspect",
             "/admin/keys/rotation/status",
             "/.well-known/oauth-authorization-server",
         ];
 
         for endpoint in test_endpoints {
             let url = format!("{}{}", self.target_url, endpoint);
-            
+
             // Try malformed requests to trigger error responses
-            if let Ok(response) = self.client.post(&url)
+            if let Ok(response) = self
+                .client
+                .post(&url)
                 .header("Content-Type", "application/json")
                 .body(r#"{"malformed": json}"#)
                 .send()
-                .await 
+                .await
             {
                 if let Ok(body) = response.text().await {
                     // Look for exposed credentials in error messages
@@ -433,12 +481,21 @@ impl RedTeamFramework {
     pub async fn get_attack_statistics(&self) -> HashMap<String, u64> {
         let results = self.attack_results.read().await;
         let mut stats = HashMap::new();
-        
+
         stats.insert("total_attacks".to_string(), results.len() as u64);
-        stats.insert("successful_attacks".to_string(), results.iter().filter(|r| r.success).count() as u64);
-        stats.insert("detected_attacks".to_string(), results.iter().filter(|r| r.detected).count() as u64);
-        stats.insert("blocked_attacks".to_string(), results.iter().filter(|r| r.blocked).count() as u64);
-        
+        stats.insert(
+            "successful_attacks".to_string(),
+            results.iter().filter(|r| r.success).count() as u64,
+        );
+        stats.insert(
+            "detected_attacks".to_string(),
+            results.iter().filter(|r| r.detected).count() as u64,
+        );
+        stats.insert(
+            "blocked_attacks".to_string(),
+            results.iter().filter(|r| r.blocked).count() as u64,
+        );
+
         let avg_response_time = if !results.is_empty() {
             results.iter().map(|r| r.response_time_ms).sum::<u64>() / results.len() as u64
         } else {

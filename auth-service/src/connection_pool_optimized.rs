@@ -1,11 +1,13 @@
-use deadpool_redis::{Config as RedisConfig, Pool as RedisPool, Runtime, Connection as RedisConnection};
 use bb8_redis::{bb8, RedisConnectionManager, RedisMultiplexedConnection};
+use dashmap::DashMap;
+use deadpool_redis::{
+    Config as RedisConfig, Connection as RedisConnection, Pool as RedisPool, Runtime,
+};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use dashmap::DashMap;
-use tracing::{debug, info, warn, error};
-use serde::{Serialize, Deserialize};
+use tracing::{debug, error, info, warn};
 
 /// Connection pool configuration optimized for security workloads
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,9 +52,9 @@ impl Default for ConnectionPoolConfig {
 /// Circuit breaker states for connection pool resilience
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CircuitBreakerState {
-    Closed,    // Normal operation
-    Open,      // Failing fast
-    HalfOpen,  // Testing if service is back
+    Closed,   // Normal operation
+    Open,     // Failing fast
+    HalfOpen, // Testing if service is back
 }
 
 /// Circuit breaker for handling connection failures
@@ -150,7 +152,10 @@ struct ConnectionMetrics {
 
 impl OptimizedConnectionPool {
     /// Create a new optimized connection pool
-    pub async fn new(redis_url: &str, config: ConnectionPoolConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(
+        redis_url: &str,
+        config: ConnectionPoolConfig,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing optimized Redis connection pool with security features");
 
         // Create deadpool Redis pool for general use
@@ -167,14 +172,14 @@ impl OptimizedConnectionPool {
                 .idle_timeout(Some(config.idle_timeout))
                 .max_lifetime(Some(config.max_connection_lifetime))
                 .build(manager)
-                .await?
+                .await?,
         );
 
         // Create multiplexed connections if enabled
         let multiplexed_pool = if config.enable_multiplexing {
             let client = redis::Client::open(redis_url)?;
             let mut connections = Vec::new();
-            
+
             // Create a smaller pool of multiplexed connections
             let multiplex_count = (config.max_connections / 4).max(2) as usize;
             for _ in 0..multiplex_count {
@@ -186,7 +191,7 @@ impl OptimizedConnectionPool {
                     }
                 }
             }
-            
+
             if !connections.is_empty() {
                 Some(Arc::new(RwLock::new(connections)))
             } else {
@@ -230,9 +235,11 @@ impl OptimizedConnectionPool {
     }
 
     /// Get a connection with automatic load balancing and circuit breaking
-    pub async fn get_connection(&self) -> Result<PooledConnection, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_connection(
+        &self,
+    ) -> Result<PooledConnection, Box<dyn std::error::Error + Send + Sync>> {
         let start = Instant::now();
-        
+
         // Check circuit breaker
         {
             let mut breaker = self.circuit_breaker.write().await;
@@ -254,7 +261,8 @@ impl OptimizedConnectionPool {
         if let Some(ref multiplex_pool) = self.multiplexed_pool {
             let connections = multiplex_pool.read().await;
             if !connections.is_empty() {
-                let conn_index = (self.statistics.read().await.total_requests as usize) % connections.len();
+                let conn_index =
+                    (self.statistics.read().await.total_requests as usize) % connections.len();
                 if let Some(conn) = connections.get(conn_index) {
                     self.record_successful_operation(start.elapsed()).await;
                     return Ok(PooledConnection::Multiplexed(conn.clone()));
@@ -280,10 +288,14 @@ impl OptimizedConnectionPool {
     }
 
     /// Execute a Redis command with automatic retry and circuit breaking
-    pub async fn execute_command<T, F, Fut>(&self, operation: F) -> Result<T, Box<dyn std::error::Error + Send + Sync>>
+    pub async fn execute_command<T, F, Fut>(
+        &self,
+        operation: F,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync>>
     where
         F: Fn(PooledConnection) -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>> + Send,
+        Fut: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>>
+            + Send,
         T: Send,
     {
         const MAX_RETRIES: u32 = 3;
@@ -323,10 +335,14 @@ impl OptimizedConnectionPool {
     }
 
     /// Batch execute multiple Redis commands for optimal performance
-    pub async fn execute_batch<T, F, Fut>(&self, operations: Vec<F>) -> Vec<Result<T, Box<dyn std::error::Error + Send + Sync>>>
+    pub async fn execute_batch<T, F, Fut>(
+        &self,
+        operations: Vec<F>,
+    ) -> Vec<Result<T, Box<dyn std::error::Error + Send + Sync>>>
     where
         F: Fn(PooledConnection) -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>> + Send,
+        Fut: std::future::Future<Output = Result<T, Box<dyn std::error::Error + Send + Sync>>>
+            + Send,
         T: Send,
     {
         let mut results = Vec::with_capacity(operations.len());
@@ -335,9 +351,7 @@ impl OptimizedConnectionPool {
         // Execute operations concurrently
         for operation in operations {
             let pool = self.clone();
-            let handle = tokio::spawn(async move {
-                pool.execute_command(operation).await
-            });
+            let handle = tokio::spawn(async move { pool.execute_command(operation).await });
             handles.push(handle);
         }
 
@@ -355,7 +369,7 @@ impl OptimizedConnectionPool {
     /// Get current pool statistics
     pub async fn get_statistics(&self) -> PoolStatistics {
         let mut stats = self.statistics.read().await.clone();
-        
+
         // Update real-time statistics from bb8 pool
         let pool_state = self.bb8_pool.state().await;
         stats.active_connections = pool_state.connections;
@@ -374,7 +388,7 @@ impl OptimizedConnectionPool {
 
         // Test a connection from the pool
         let conn = self.get_connection().await?;
-        
+
         match conn {
             PooledConnection::Bb8(mut conn) => {
                 let _: String = redis::cmd("PING").query_async(&mut *conn).await?;
@@ -401,16 +415,16 @@ impl OptimizedConnectionPool {
 
         tokio::spawn(async move {
             let mut health_interval = tokio::time::interval(interval);
-            
+
             loop {
                 health_interval.tick().await;
-                
+
                 if let Err(e) = pool.health_check().await {
                     warn!("Connection pool health check failed: {}", e);
-                    
+
                     // Record failure in circuit breaker
                     pool.circuit_breaker.write().await.record_failure();
-                    
+
                     // Update error statistics
                     pool.statistics.write().await.connection_errors += 1;
                 }
@@ -423,12 +437,14 @@ impl OptimizedConnectionPool {
         let mut stats = self.statistics.write().await;
         stats.successful_requests += 1;
         stats.pending_requests = stats.pending_requests.saturating_sub(1);
-        
+
         // Update average response time
         let total_ops = stats.successful_requests + stats.failed_requests;
         if total_ops > 0 {
             stats.avg_response_time = Duration::from_nanos(
-                ((stats.avg_response_time.as_nanos() as u64 * (total_ops - 1)) + duration.as_nanos() as u64) / total_ops
+                ((stats.avg_response_time.as_nanos() as u64 * (total_ops - 1))
+                    + duration.as_nanos() as u64)
+                    / total_ops,
             );
         }
     }
@@ -438,12 +454,14 @@ impl OptimizedConnectionPool {
         let mut stats = self.statistics.write().await;
         stats.failed_requests += 1;
         stats.pending_requests = stats.pending_requests.saturating_sub(1);
-        
+
         // Update average response time (include failed operations)
         let total_ops = stats.successful_requests + stats.failed_requests;
         if total_ops > 0 {
             stats.avg_response_time = Duration::from_nanos(
-                ((stats.avg_response_time.as_nanos() as u64 * (total_ops - 1)) + duration.as_nanos() as u64) / total_ops
+                ((stats.avg_response_time.as_nanos() as u64 * (total_ops - 1))
+                    + duration.as_nanos() as u64)
+                    / total_ops,
             );
         }
     }

@@ -1,10 +1,10 @@
+use crate::pii_protection::{redact_log, DataClassification, PiiSpiRedactor};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 use uuid::Uuid;
-use crate::pii_protection::{redact_log, PiiSpiRedactor, DataClassification};
 
 /// Security event severity levels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -338,7 +338,7 @@ impl PiiRedactor {
         }
 
         let first = &user_id[0..2];
-        let last = &user_id[user_id.len()-2..];
+        let last = &user_id[user_id.len() - 2..];
         let middle = "*".repeat(4); // Fixed length for consistency
         format!("{}{}{}", first, middle, last)
     }
@@ -369,7 +369,8 @@ impl PiiRedactor {
     /// Redact sensitive parts of user agent
     pub fn redact_user_agent(user_agent: &str) -> String {
         // Remove potential email addresses and phone numbers
-        let email_pattern = regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
+        let email_pattern =
+            regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
         let phone_pattern = regex::Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").unwrap();
 
         let redacted = email_pattern.replace_all(user_agent, "[EMAIL_REDACTED]");
@@ -432,7 +433,10 @@ impl PiiRedactor {
             (regex::Regex::new(r"token:\s*[A-Za-z0-9._-]+").unwrap(), "token: [REDACTED]"),
             (regex::Regex::new(r"secret:\s*[A-Za-z0-9._-]+").unwrap(), "secret: [REDACTED]"),
             (regex::Regex::new(r"password:\s*[^\s]+").unwrap(), "password: [REDACTED]"),
-            (regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(), "[EMAIL_REDACTED]"),
+            (
+                regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
+                "[EMAIL_REDACTED]",
+            ),
         ];
 
         let mut redacted = reason.to_string();
@@ -459,7 +463,10 @@ mod tests {
     #[test]
     fn test_pii_redaction_ip_address() {
         assert_eq!(PiiRedactor::redact_ip_address("192.168.1.100"), "192.168.1.***");
-        assert_eq!(PiiRedactor::redact_ip_address("2001:db8:85a3:8d3:1319:8a2e:370:7348"), "2001:db8:85a3:8d3::***");
+        assert_eq!(
+            PiiRedactor::redact_ip_address("2001:db8:85a3:8d3:1319:8a2e:370:7348"),
+            "2001:db8:85a3:8d3::***"
+        );
         assert_eq!(PiiRedactor::redact_ip_address("invalid"), "***");
     }
 
@@ -495,7 +502,10 @@ mod tests {
     fn test_pii_redaction_path() {
         assert_eq!(PiiRedactor::redact_path("/users/12345/profile"), "/users/[USER_ID]/profile");
         assert_eq!(PiiRedactor::redact_path("/api?token=secret123"), "/api&token=[REDACTED]");
-        assert_eq!(PiiRedactor::redact_path("/login?password=mypass"), "/login&password=[REDACTED]");
+        assert_eq!(
+            PiiRedactor::redact_path("/login?password=mypass"),
+            "/login&password=[REDACTED]"
+        );
     }
 
     #[test]
@@ -656,11 +666,7 @@ impl SecurityLogger {
     ) {
         let mut event = SecurityEvent::new(
             SecurityEventType::AuthenticationAttempt,
-            if outcome == "success" {
-                SecuritySeverity::Low
-            } else {
-                SecuritySeverity::Medium
-            },
+            if outcome == "success" { SecuritySeverity::Low } else { SecuritySeverity::Medium },
             "auth-service".to_string(),
             format!("Authentication attempt by client {}", client_id),
         )
@@ -824,11 +830,7 @@ macro_rules! log_security_event {
 macro_rules! log_auth_attempt {
     ($client_id:expr, $ip:expr, $outcome:expr) => {
         $crate::security_logging::SecurityLogger::log_auth_attempt(
-            $client_id,
-            $ip,
-            None,
-            $outcome,
-            None,
+            $client_id, $ip, None, $outcome, None,
         );
     };
     ($client_id:expr, $ip:expr, $user_agent:expr, $outcome:expr) => {

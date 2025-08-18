@@ -1,8 +1,8 @@
 use crate::threat_types::*;
-use chrono::{DateTime, Utc, Duration};
-use flume::{Receiver, Sender, unbounded};
+use chrono::{DateTime, Duration, Utc};
+use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
-use prometheus::{Counter, Histogram, Gauge, register_counter, register_histogram, register_gauge};
+use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
-use tokio::time::{interval, Duration as TokioDuration, timeout};
+use tokio::time::{interval, timeout, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -201,19 +201,19 @@ pub struct ThreatIntelligenceCorrelator {
     config: Arc<RwLock<ThreatIntelligenceConfig>>,
     redis_client: Arc<Mutex<Option<ConnectionManager>>>,
     http_client: Client,
-    
+
     // Indicator storage and caching
     indicators: Arc<RwLock<HashMap<String, ThreatIntelligenceIndicator>>>,
     indicator_cache: Arc<RwLock<HashMap<String, CachedResult>>>,
-    
+
     // Feed management
     feed_status: Arc<RwLock<HashMap<String, FeedSyncStatus>>>,
     rate_limiters: Arc<RwLock<HashMap<String, RateLimiter>>>,
-    
+
     // Query processing
     query_queue: Sender<IntelligenceQuery>,
     query_receiver: Receiver<IntelligenceQuery>,
-    
+
     // Statistics
     statistics: Arc<Mutex<IntelligenceStatistics>>,
 }
@@ -319,7 +319,7 @@ impl ThreatIntelligenceCorrelator {
     /// Create a new threat intelligence correlator
     pub fn new(config: ThreatIntelligenceConfig) -> Self {
         let (query_sender, query_receiver) = unbounded();
-        
+
         let http_client = ClientBuilder::new()
             .timeout(std::time::Duration::from_secs(config.query_timeout_seconds))
             .user_agent("Rust-Security-ThreatHunting/1.0")
@@ -370,10 +370,10 @@ impl ThreatIntelligenceCorrelator {
         let config = self.config.read().await;
         let client = redis::Client::open(config.redis_config.url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
-        
+
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = Some(manager);
-        
+
         info!("Redis connection established for threat intelligence");
         Ok(())
     }
@@ -384,7 +384,7 @@ impl ThreatIntelligenceCorrelator {
         if let Some(ref client) = *redis_client {
             let config = self.config.read().await;
             let pattern = format!("{}indicator:*", config.redis_config.key_prefix);
-            
+
             let keys: Vec<String> = redis::cmd("KEYS")
                 .arg(&pattern)
                 .query_async(&mut client.clone())
@@ -400,7 +400,9 @@ impl ThreatIntelligenceCorrelator {
                     .unwrap_or_default();
 
                 if let Some(data) = indicator_data {
-                    if let Ok(indicator) = serde_json::from_str::<ThreatIntelligenceIndicator>(&data) {
+                    if let Ok(indicator) =
+                        serde_json::from_str::<ThreatIntelligenceIndicator>(&data)
+                    {
                         indicators.insert(indicator.indicator.clone(), indicator);
                     }
                 }
@@ -416,7 +418,7 @@ impl ThreatIntelligenceCorrelator {
     async fn initialize_rate_limiters(&self) {
         let config = self.config.read().await;
         let mut rate_limiters = self.rate_limiters.write().await;
-        
+
         for feed in &config.feeds {
             if feed.enabled {
                 let rate_limiter = RateLimiter {
@@ -432,7 +434,10 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Check threat intelligence for indicators
-    pub async fn check_indicators(&self, event: &SecurityEvent) -> Result<Vec<ThreatIntelligenceMatch>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn check_indicators(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<Vec<ThreatIntelligenceMatch>, Box<dyn std::error::Error + Send + Sync>> {
         let mut matches = Vec::new();
 
         // Extract indicators from the security event
@@ -447,7 +452,9 @@ impl ThreatIntelligenceCorrelator {
             }
 
             // Check local indicators
-            if let Some(local_match) = self.check_local_indicators(&indicator_value, &indicator_type, event).await {
+            if let Some(local_match) =
+                self.check_local_indicators(&indicator_value, &indicator_type, event).await
+            {
                 matches.push(local_match.clone());
                 self.cache_result(&indicator_value, &indicator_type, Some(local_match)).await;
                 continue;
@@ -521,26 +528,35 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Check cache for indicator
-    async fn check_cache(&self, indicator: &str, indicator_type: &IndicatorType) -> Option<ThreatIntelligenceMatch> {
+    async fn check_cache(
+        &self,
+        indicator: &str,
+        indicator_type: &IndicatorType,
+    ) -> Option<ThreatIntelligenceMatch> {
         let cache = self.indicator_cache.read().await;
         let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
-        
+
         if let Some(cached_result) = cache.get(&cache_key) {
             let now = Utc::now();
             let age = now.signed_duration_since(cached_result.cached_at).num_seconds() as u64;
-            
+
             if age < cached_result.ttl_seconds {
                 return cached_result.result.clone();
             }
         }
-        
+
         None
     }
 
     /// Check local indicators database
-    async fn check_local_indicators(&self, indicator: &str, indicator_type: &IndicatorType, event: &SecurityEvent) -> Option<ThreatIntelligenceMatch> {
+    async fn check_local_indicators(
+        &self,
+        indicator: &str,
+        indicator_type: &IndicatorType,
+        event: &SecurityEvent,
+    ) -> Option<ThreatIntelligenceMatch> {
         let indicators = self.indicators.read().await;
-        
+
         if let Some(intel_indicator) = indicators.get(indicator) {
             if intel_indicator.indicator_type == *indicator_type {
                 let match_context = MatchContext {
@@ -558,7 +574,8 @@ impl ThreatIntelligenceCorrelator {
                     confidence: intel_indicator.confidence,
                     risk_score: (intel_indicator.confidence * 100.0) as u8,
                     context: match_context,
-                    recommended_actions: self.get_recommended_actions(&intel_indicator.threat_types),
+                    recommended_actions: self
+                        .get_recommended_actions(&intel_indicator.threat_types),
                 };
 
                 return Some(threat_match);
@@ -599,16 +616,18 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Cache query result
-    async fn cache_result(&self, indicator: &str, indicator_type: &IndicatorType, result: Option<ThreatIntelligenceMatch>) {
+    async fn cache_result(
+        &self,
+        indicator: &str,
+        indicator_type: &IndicatorType,
+        result: Option<ThreatIntelligenceMatch>,
+    ) {
         let mut cache = self.indicator_cache.write().await;
         let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
         let config = self.config.read().await;
-        
-        let cached_result = CachedResult {
-            result,
-            cached_at: Utc::now(),
-            ttl_seconds: config.cache_ttl_seconds,
-        };
+
+        let cached_result =
+            CachedResult { result, cached_at: Utc::now(), ttl_seconds: config.cache_ttl_seconds };
 
         cache.insert(cache_key, cached_result);
     }
@@ -635,10 +654,10 @@ impl ThreatIntelligenceCorrelator {
 
         tokio::spawn(async move {
             info!("Starting threat intelligence query processor");
-            
+
             while let Ok(query) = query_receiver.recv_async().await {
                 let start_time = SystemTime::now();
-                
+
                 // Process the query
                 let result = Self::process_intelligence_query(
                     &query,
@@ -646,7 +665,8 @@ impl ThreatIntelligenceCorrelator {
                     &config,
                     &rate_limiters,
                     &indicators,
-                ).await;
+                )
+                .await;
 
                 // Cache the result
                 Self::cache_query_result(&query, result.clone(), &indicator_cache, &config).await;
@@ -657,9 +677,9 @@ impl ThreatIntelligenceCorrelator {
                 if result.is_some() {
                     stats.matches_total += 1;
                 }
-                
+
                 if let Ok(duration) = start_time.elapsed() {
-                    stats.average_response_time_ms = 
+                    stats.average_response_time_ms =
                         (stats.average_response_time_ms + duration.as_millis() as u64) / 2;
                 }
 
@@ -680,7 +700,7 @@ impl ThreatIntelligenceCorrelator {
         indicators: &Arc<RwLock<HashMap<String, ThreatIntelligenceIndicator>>>,
     ) -> Option<ThreatIntelligenceMatch> {
         let config_guard = config.read().await;
-        
+
         for feed in &config_guard.feeds {
             if !feed.enabled || !feed.supported_indicators.contains(&query.indicator_type) {
                 continue;
@@ -692,7 +712,9 @@ impl ThreatIntelligenceCorrelator {
             }
 
             // Query the feed
-            match Self::query_feed(feed, &query.indicator_value, &query.indicator_type, http_client).await {
+            match Self::query_feed(feed, &query.indicator_value, &query.indicator_type, http_client)
+                .await
+            {
                 Ok(Some(indicator)) => {
                     // Store the indicator
                     let mut indicators_guard = indicators.write().await;
@@ -732,17 +754,20 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Check rate limit for feed
-    async fn check_rate_limit(feed_name: &str, rate_limiters: &Arc<RwLock<HashMap<String, RateLimiter>>>) -> bool {
+    async fn check_rate_limit(
+        feed_name: &str,
+        rate_limiters: &Arc<RwLock<HashMap<String, RateLimiter>>>,
+    ) -> bool {
         let mut limiters = rate_limiters.write().await;
         if let Some(limiter) = limiters.get_mut(feed_name) {
             let now = Utc::now();
-            
+
             // Reset counters if needed
             if now.signed_duration_since(limiter.last_minute_reset).num_minutes() >= 1 {
                 limiter.requests_this_minute = 0;
                 limiter.last_minute_reset = now;
             }
-            
+
             if now.signed_duration_since(limiter.last_hour_reset).num_hours() >= 1 {
                 limiter.requests_this_hour = 0;
                 limiter.last_hour_reset = now;
@@ -769,7 +794,7 @@ impl ThreatIntelligenceCorrelator {
         http_client: &Client,
     ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
         let timer = THREAT_INTEL_RESPONSE_TIME.start_timer();
-        
+
         let result = match feed.feed_type {
             ThreatFeedType::AbuseIpdb => {
                 Self::query_abuse_ipdb(feed, indicator, indicator_type, http_client).await
@@ -803,7 +828,7 @@ impl ThreatIntelligenceCorrelator {
         };
 
         let url = format!("{}?ipAddress={}&maxAgeInDays=90&verbose", feed.api_url, indicator);
-        
+
         let response = http_client
             .get(&url)
             .header("Key", api_key)
@@ -813,7 +838,7 @@ impl ThreatIntelligenceCorrelator {
 
         if response.status().is_success() {
             let abuse_result: AbuseIpdbResponse = response.json().await?;
-            
+
             if abuse_result.abuse_confidence_percentage > 0 {
                 let threat_indicator = ThreatIntelligenceIndicator {
                     indicator: indicator.to_string(),
@@ -833,10 +858,23 @@ impl ThreatIntelligenceCorrelator {
                     feed_name: feed.name.clone(),
                     tags: abuse_result.usage_type.into_iter().collect(),
                     attributes: [
-                        ("country_code".to_string(), serde_json::Value::String(abuse_result.country_code.unwrap_or_default())),
-                        ("isp".to_string(), serde_json::Value::String(abuse_result.isp.unwrap_or_default())),
-                        ("is_whitelisted".to_string(), serde_json::Value::Bool(abuse_result.is_whitelisted)),
-                    ].into_iter().collect(),
+                        (
+                            "country_code".to_string(),
+                            serde_json::Value::String(
+                                abuse_result.country_code.unwrap_or_default(),
+                            ),
+                        ),
+                        (
+                            "isp".to_string(),
+                            serde_json::Value::String(abuse_result.isp.unwrap_or_default()),
+                        ),
+                        (
+                            "is_whitelisted".to_string(),
+                            serde_json::Value::Bool(abuse_result.is_whitelisted),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
                     false_positive_rate: 0.1,
                     reputation_score: abuse_result.abuse_confidence_percentage as f64 / 100.0,
                     malware_families: Vec::new(),
@@ -872,9 +910,13 @@ impl ThreatIntelligenceCorrelator {
         cache: &Arc<RwLock<HashMap<String, CachedResult>>>,
         config: &Arc<RwLock<ThreatIntelligenceConfig>>,
     ) {
-        let cache_key = format!("{}:{}", indicator_type_to_string(&query.indicator_type), query.indicator_value);
+        let cache_key = format!(
+            "{}:{}",
+            indicator_type_to_string(&query.indicator_type),
+            query.indicator_value
+        );
         let config_guard = config.read().await;
-        
+
         let cached_result = CachedResult {
             result,
             cached_at: Utc::now(),
@@ -896,7 +938,7 @@ impl ThreatIntelligenceCorrelator {
 
             loop {
                 interval.tick().await;
-                
+
                 let config_guard = config.read().await;
                 for feed in &config_guard.feeds {
                     if !feed.enabled {
@@ -933,15 +975,16 @@ impl ThreatIntelligenceCorrelator {
 
             loop {
                 interval.tick().await;
-                
+
                 let mut cache = indicator_cache.write().await;
                 let now = Utc::now();
-                
+
                 cache.retain(|_, cached_result| {
-                    let age = now.signed_duration_since(cached_result.cached_at).num_seconds() as u64;
+                    let age =
+                        now.signed_duration_since(cached_result.cached_at).num_seconds() as u64;
                     age < cached_result.ttl_seconds
                 });
-                
+
                 debug!("Cache cleanup completed, {} entries remaining", cache.len());
             }
         });
@@ -958,14 +1001,14 @@ impl ThreatIntelligenceCorrelator {
 
             loop {
                 interval.tick().await;
-                
+
                 let mut stats = statistics.lock().await;
                 let indicators_count = indicators.read().await.len() as u64;
                 let feeds_active = feed_status.read().await.len() as u32;
-                
+
                 stats.indicators_loaded = indicators_count;
                 stats.feeds_active = feeds_active;
-                
+
                 // Update Prometheus metrics
                 ACTIVE_INDICATORS.set(indicators_count as f64);
             }
@@ -981,11 +1024,11 @@ impl ThreatIntelligenceCorrelator {
     /// Shutdown the correlator
     pub async fn shutdown(&self) {
         info!("Shutting down Threat Intelligence Correlator");
-        
+
         // Close Redis connection
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = None;
-        
+
         info!("Threat Intelligence Correlator shutdown complete");
     }
 }

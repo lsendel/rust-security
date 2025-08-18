@@ -1,8 +1,8 @@
 use crate::threat_types::*;
-use chrono::{DateTime, Utc, Duration};
-use flume::{Receiver, Sender, unbounded};
+use chrono::{DateTime, Duration, Utc};
+use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
-use prometheus::{Counter, Histogram, Gauge, register_counter, register_histogram, register_gauge};
+use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
@@ -293,23 +293,23 @@ pub struct ThreatResponseOrchestrator {
     config: Arc<RwLock<ThreatResponseConfig>>,
     redis_client: Arc<Mutex<Option<ConnectionManager>>>,
     http_client: Client,
-    
+
     // Response plan management
     active_plans: Arc<RwLock<HashMap<String, ThreatResponsePlan>>>,
     execution_contexts: Arc<RwLock<HashMap<String, ResponseExecutionContext>>>,
-    
+
     // Processing queues
     response_queue: Sender<ResponseRequest>,
     response_receiver: Receiver<ResponseRequest>,
     notification_queue: Sender<NotificationRequest>,
     notification_receiver: Receiver<NotificationRequest>,
-    
+
     // External integrations
     external_clients: Arc<RwLock<HashMap<String, Box<dyn ExternalIntegration + Send + Sync>>>>,
-    
+
     // Approval management
     pending_approvals: Arc<RwLock<HashMap<String, ApprovalRequest>>>,
-    
+
     // Statistics and monitoring
     orchestration_statistics: Arc<Mutex<OrchestrationStatistics>>,
 }
@@ -358,7 +358,11 @@ pub enum NotificationPriority {
 
 /// External integration trait
 pub trait ExternalIntegration {
-    async fn execute_action(&self, action: &MitigationAction, context: &HashMap<String, serde_json::Value>) -> Result<ActionExecutionResult, Box<dyn std::error::Error + Send + Sync>>;
+    async fn execute_action(
+        &self,
+        action: &MitigationAction,
+        context: &HashMap<String, serde_json::Value>,
+    ) -> Result<ActionExecutionResult, Box<dyn std::error::Error + Send + Sync>>;
     async fn validate_connection(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
     fn get_integration_type(&self) -> &str;
 }
@@ -430,41 +434,60 @@ impl ThreatResponseConfig {
     fn default_action_templates() -> HashMap<String, ActionTemplate> {
         let mut templates = HashMap::new();
 
-        templates.insert("block_ip_1h".to_string(), ActionTemplate {
-            template_id: "block_ip_1h".to_string(),
-            name: "Block IP Address (1 hour)".to_string(),
-            description: "Temporarily block an IP address for 1 hour".to_string(),
-            action_type: MitigationAction::BlockIp { duration_hours: 1 },
-            parameters: [("duration".to_string(), serde_json::Value::Number(serde_json::Number::from(1)))].into_iter().collect(),
-            timeout_minutes: 5,
-            retry_count: 2,
-            prerequisites: Vec::new(),
-            rollback_actions: Vec::new(),
-        });
+        templates.insert(
+            "block_ip_1h".to_string(),
+            ActionTemplate {
+                template_id: "block_ip_1h".to_string(),
+                name: "Block IP Address (1 hour)".to_string(),
+                description: "Temporarily block an IP address for 1 hour".to_string(),
+                action_type: MitigationAction::BlockIp { duration_hours: 1 },
+                parameters: [(
+                    "duration".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(1)),
+                )]
+                .into_iter()
+                .collect(),
+                timeout_minutes: 5,
+                retry_count: 2,
+                prerequisites: Vec::new(),
+                rollback_actions: Vec::new(),
+            },
+        );
 
-        templates.insert("lock_account_24h".to_string(), ActionTemplate {
-            template_id: "lock_account_24h".to_string(),
-            name: "Lock Account (24 hours)".to_string(),
-            description: "Temporarily lock user account for 24 hours".to_string(),
-            action_type: MitigationAction::LockAccount { duration_hours: 24 },
-            parameters: [("duration".to_string(), serde_json::Value::Number(serde_json::Number::from(24)))].into_iter().collect(),
-            timeout_minutes: 3,
-            retry_count: 2,
-            prerequisites: Vec::new(),
-            rollback_actions: Vec::new(),
-        });
+        templates.insert(
+            "lock_account_24h".to_string(),
+            ActionTemplate {
+                template_id: "lock_account_24h".to_string(),
+                name: "Lock Account (24 hours)".to_string(),
+                description: "Temporarily lock user account for 24 hours".to_string(),
+                action_type: MitigationAction::LockAccount { duration_hours: 24 },
+                parameters: [(
+                    "duration".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(24)),
+                )]
+                .into_iter()
+                .collect(),
+                timeout_minutes: 3,
+                retry_count: 2,
+                prerequisites: Vec::new(),
+                rollback_actions: Vec::new(),
+            },
+        );
 
-        templates.insert("revoke_tokens".to_string(), ActionTemplate {
-            template_id: "revoke_tokens".to_string(),
-            name: "Revoke All Tokens".to_string(),
-            description: "Revoke all active tokens for the affected entities".to_string(),
-            action_type: MitigationAction::RevokeTokens,
-            parameters: HashMap::new(),
-            timeout_minutes: 2,
-            retry_count: 3,
-            prerequisites: Vec::new(),
-            rollback_actions: Vec::new(),
-        });
+        templates.insert(
+            "revoke_tokens".to_string(),
+            ActionTemplate {
+                template_id: "revoke_tokens".to_string(),
+                name: "Revoke All Tokens".to_string(),
+                description: "Revoke all active tokens for the affected entities".to_string(),
+                action_type: MitigationAction::RevokeTokens,
+                parameters: HashMap::new(),
+                timeout_minutes: 2,
+                retry_count: 3,
+                prerequisites: Vec::new(),
+                rollback_actions: Vec::new(),
+            },
+        );
 
         templates
     }
@@ -475,7 +498,7 @@ impl ThreatResponseOrchestrator {
     pub fn new(config: ThreatResponseConfig) -> Self {
         let (response_sender, response_receiver) = unbounded();
         let (notification_sender, notification_receiver) = unbounded();
-        
+
         let http_client = ClientBuilder::new()
             .timeout(std::time::Duration::from_secs(30))
             .user_agent("Rust-Security-ThreatResponse/1.0")
@@ -523,19 +546,22 @@ impl ThreatResponseOrchestrator {
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
         let client = redis::Client::open(redis_url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
-        
+
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = Some(manager);
-        
+
         info!("Redis connection established for threat response");
         Ok(())
     }
 
     /// Initialize external integrations
-    async fn initialize_external_integrations(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn initialize_external_integrations(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
         let mut clients = self.external_clients.write().await;
 
@@ -567,9 +593,13 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Create a response plan for a detected threat
-    pub async fn create_response_plan(&self, threat_signature: ThreatSignature, threat_context: ThreatContext) -> Result<ThreatResponsePlan, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn create_response_plan(
+        &self,
+        threat_signature: ThreatSignature,
+        threat_context: ThreatContext,
+    ) -> Result<ThreatResponsePlan, Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
-        
+
         if !config.enabled {
             return Err("Threat response orchestrator is disabled".into());
         }
@@ -581,15 +611,16 @@ impl ThreatResponseOrchestrator {
         let requires_approval = threat_signature.severity >= config.approval_required_threshold;
 
         // Select appropriate actions based on threat type and severity
-        let planned_actions = self.select_response_actions(&threat_signature, &threat_context, &config).await;
+        let planned_actions =
+            self.select_response_actions(&threat_signature, &threat_context, &config).await;
 
         // Create escalation rules
         let escalation_rules = config.escalation_rules.clone();
 
         // Determine auto-execution capability
-        let auto_execute = config.auto_response_enabled && 
-                          !requires_approval && 
-                          threat_signature.severity < ThreatSeverity::Critical;
+        let auto_execute = config.auto_response_enabled
+            && !requires_approval
+            && threat_signature.severity < ThreatSeverity::Critical;
 
         let response_plan = ThreatResponsePlan {
             plan_id: plan_id.clone(),
@@ -642,7 +673,12 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Select appropriate response actions based on threat characteristics
-    async fn select_response_actions(&self, threat_signature: &ThreatSignature, threat_context: &ThreatContext, config: &ThreatResponseConfig) -> Vec<PlannedAction> {
+    async fn select_response_actions(
+        &self,
+        threat_signature: &ThreatSignature,
+        threat_context: &ThreatContext,
+        config: &ThreatResponseConfig,
+    ) -> Vec<PlannedAction> {
         let mut actions = Vec::new();
 
         match threat_signature.threat_type {
@@ -658,9 +694,17 @@ impl ThreatResponseOrchestrator {
                             timeout_minutes: template.timeout_minutes,
                             retry_count: template.retry_count as u8,
                             parameters: [
-                                ("ip_address".to_string(), serde_json::Value::String(ip.to_string())),
-                                ("duration_hours".to_string(), serde_json::Value::Number(serde_json::Number::from(1))),
-                            ].into_iter().collect(),
+                                (
+                                    "ip_address".to_string(),
+                                    serde_json::Value::String(ip.to_string()),
+                                ),
+                                (
+                                    "duration_hours".to_string(),
+                                    serde_json::Value::Number(serde_json::Number::from(1)),
+                                ),
+                            ]
+                            .into_iter()
+                            .collect(),
                         });
                     }
                 }
@@ -674,11 +718,23 @@ impl ThreatResponseOrchestrator {
                     timeout_minutes: 5,
                     retry_count: 2,
                     parameters: [
-                        ("threat_type".to_string(), serde_json::Value::String("credential_stuffing".to_string())),
-                        ("affected_ips".to_string(), serde_json::Value::Array(
-                            threat_signature.source_ips.iter().map(|ip| serde_json::Value::String(ip.to_string())).collect()
-                        )),
-                    ].into_iter().collect(),
+                        (
+                            "threat_type".to_string(),
+                            serde_json::Value::String("credential_stuffing".to_string()),
+                        ),
+                        (
+                            "affected_ips".to_string(),
+                            serde_json::Value::Array(
+                                threat_signature
+                                    .source_ips
+                                    .iter()
+                                    .map(|ip| serde_json::Value::String(ip.to_string()))
+                                    .collect(),
+                            ),
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
                 });
             }
 
@@ -695,8 +751,13 @@ impl ThreatResponseOrchestrator {
                             retry_count: template.retry_count as u8,
                             parameters: [
                                 ("user_id".to_string(), serde_json::Value::String(entity.clone())),
-                                ("duration_hours".to_string(), serde_json::Value::Number(serde_json::Number::from(24))),
-                            ].into_iter().collect(),
+                                (
+                                    "duration_hours".to_string(),
+                                    serde_json::Value::Number(serde_json::Number::from(24)),
+                                ),
+                            ]
+                            .into_iter()
+                            .collect(),
                         });
                     }
                 }
@@ -710,11 +771,18 @@ impl ThreatResponseOrchestrator {
                         dependencies: Vec::new(),
                         timeout_minutes: template.timeout_minutes,
                         retry_count: template.retry_count as u8,
-                        parameters: [
-                            ("affected_entities".to_string(), serde_json::Value::Array(
-                                threat_signature.affected_entities.iter().map(|e| serde_json::Value::String(e.clone())).collect()
-                            )),
-                        ].into_iter().collect(),
+                        parameters: [(
+                            "affected_entities".to_string(),
+                            serde_json::Value::Array(
+                                threat_signature
+                                    .affected_entities
+                                    .iter()
+                                    .map(|e| serde_json::Value::String(e.clone()))
+                                    .collect(),
+                            ),
+                        )]
+                        .into_iter()
+                        .collect(),
                     });
                 }
 
@@ -726,11 +794,18 @@ impl ThreatResponseOrchestrator {
                     dependencies: Vec::new(),
                     timeout_minutes: 10,
                     retry_count: 2,
-                    parameters: [
-                        ("user_ids".to_string(), serde_json::Value::Array(
-                            threat_signature.affected_entities.iter().map(|e| serde_json::Value::String(e.clone())).collect()
-                        )),
-                    ].into_iter().collect(),
+                    parameters: [(
+                        "user_ids".to_string(),
+                        serde_json::Value::Array(
+                            threat_signature
+                                .affected_entities
+                                .iter()
+                                .map(|e| serde_json::Value::String(e.clone()))
+                                .collect(),
+                        ),
+                    )]
+                    .into_iter()
+                    .collect(),
                 });
             }
 
@@ -746,9 +821,19 @@ impl ThreatResponseOrchestrator {
                         retry_count: 3,
                         parameters: [
                             ("user_id".to_string(), serde_json::Value::String(entity.clone())),
-                            ("duration_hours".to_string(), serde_json::Value::Number(serde_json::Number::from(72))),
-                            ("reason".to_string(), serde_json::Value::String("suspected_data_exfiltration".to_string())),
-                        ].into_iter().collect(),
+                            (
+                                "duration_hours".to_string(),
+                                serde_json::Value::Number(serde_json::Number::from(72)),
+                            ),
+                            (
+                                "reason".to_string(),
+                                serde_json::Value::String(
+                                    "suspected_data_exfiltration".to_string(),
+                                ),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
                     });
                 }
 
@@ -761,9 +846,14 @@ impl ThreatResponseOrchestrator {
                     timeout_minutes: 5,
                     retry_count: 2,
                     parameters: [
-                        ("incident_type".to_string(), serde_json::Value::String("data_exfiltration".to_string())),
+                        (
+                            "incident_type".to_string(),
+                            serde_json::Value::String("data_exfiltration".to_string()),
+                        ),
                         ("severity".to_string(), serde_json::Value::String("critical".to_string())),
-                    ].into_iter().collect(),
+                    ]
+                    .into_iter()
+                    .collect(),
                 });
 
                 // Block all source IPs
@@ -777,8 +867,13 @@ impl ThreatResponseOrchestrator {
                         retry_count: 2,
                         parameters: [
                             ("ip_address".to_string(), serde_json::Value::String(ip.to_string())),
-                            ("duration_hours".to_string(), serde_json::Value::Number(serde_json::Number::from(168))),
-                        ].into_iter().collect(),
+                            (
+                                "duration_hours".to_string(),
+                                serde_json::Value::Number(serde_json::Number::from(168)),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
                     });
                 }
             }
@@ -792,9 +887,12 @@ impl ThreatResponseOrchestrator {
                     dependencies: Vec::new(),
                     timeout_minutes: 5,
                     retry_count: 1,
-                    parameters: [
-                        ("threat_type".to_string(), serde_json::Value::String(format!("{:?}", threat_signature.threat_type))),
-                    ].into_iter().collect(),
+                    parameters: [(
+                        "threat_type".to_string(),
+                        serde_json::Value::String(format!("{:?}", threat_signature.threat_type)),
+                    )]
+                    .into_iter()
+                    .collect(),
                 });
 
                 actions.push(PlannedAction {
@@ -813,7 +911,11 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Generate success criteria for response plan
-    fn generate_success_criteria(&self, threat_signature: &ThreatSignature, threat_context: &ThreatContext) -> Vec<SuccessCriterion> {
+    fn generate_success_criteria(
+        &self,
+        threat_signature: &ThreatSignature,
+        threat_context: &ThreatContext,
+    ) -> Vec<SuccessCriterion> {
         let mut criteria = Vec::new();
 
         // Basic success criterion: no more events of this type
@@ -917,25 +1019,32 @@ impl ThreatResponseOrchestrator {
 
         tokio::spawn(async move {
             info!("Starting threat response processor");
-            
+
             while let Ok(response_request) = response_receiver.recv_async().await {
                 let timer = RESPONSE_PLAN_DURATION.start_timer();
-                
+
                 // Execute the response plan
                 let result = Self::execute_response_plan(
                     &response_request,
                     &active_plans,
                     &execution_contexts,
                     &config,
-                ).await;
+                )
+                .await;
 
                 match result {
                     Ok(_) => {
-                        info!("Response plan executed successfully for threat: {}", response_request.threat_signature.threat_id);
+                        info!(
+                            "Response plan executed successfully for threat: {}",
+                            response_request.threat_signature.threat_id
+                        );
                         RESPONSE_ACTIONS_EXECUTED.inc();
                     }
                     Err(e) => {
-                        error!("Failed to execute response plan for threat {}: {}", response_request.threat_signature.threat_id, e);
+                        error!(
+                            "Failed to execute response plan for threat {}: {}",
+                            response_request.threat_signature.threat_id, e
+                        );
                         RESPONSE_ACTIONS_FAILED.inc();
                     }
                 }
@@ -959,7 +1068,8 @@ impl ThreatResponseOrchestrator {
         // Find the corresponding response plan
         let plan_id = {
             let plans = active_plans.read().await;
-            plans.values()
+            plans
+                .values()
                 .find(|plan| plan.threat_id == response_request.threat_signature.threat_id)
                 .map(|plan| plan.plan_id.clone())
         };
@@ -1018,20 +1128,23 @@ impl ThreatResponseOrchestrator {
 
         tokio::spawn(async move {
             info!("Starting notification processor");
-            
+
             while let Ok(notification_request) = notification_receiver.recv_async().await {
-                let result = Self::send_notification(
-                    &notification_request,
-                    &http_client,
-                    &config,
-                ).await;
+                let result =
+                    Self::send_notification(&notification_request, &http_client, &config).await;
 
                 match result {
                     Ok(_) => {
-                        debug!("Notification sent successfully: {}", notification_request.notification_id);
+                        debug!(
+                            "Notification sent successfully: {}",
+                            notification_request.notification_id
+                        );
                     }
                     Err(e) => {
-                        error!("Failed to send notification {}: {}", notification_request.notification_id, e);
+                        error!(
+                            "Failed to send notification {}: {}",
+                            notification_request.notification_id, e
+                        );
                     }
                 }
             }
@@ -1045,7 +1158,7 @@ impl ThreatResponseOrchestrator {
         config: &Arc<RwLock<ThreatResponseConfig>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config_guard = config.read().await;
-        
+
         match notification_request.notification_type {
             NotificationType::Slack => {
                 if let Some(webhook_url) = &config_guard.notification_config.slack_webhook_url {
@@ -1065,14 +1178,14 @@ impl ThreatResponseOrchestrator {
                         }]
                     });
 
-                    let response = http_client
-                        .post(webhook_url)
-                        .json(&payload)
-                        .send()
-                        .await?;
+                    let response = http_client.post(webhook_url).json(&payload).send().await?;
 
                     if !response.status().is_success() {
-                        return Err(format!("Slack notification failed with status: {}", response.status()).into());
+                        return Err(format!(
+                            "Slack notification failed with status: {}",
+                            response.status()
+                        )
+                        .into());
                     }
                 }
             }
@@ -1085,7 +1198,10 @@ impl ThreatResponseOrchestrator {
                 debug!("PagerDuty notification would be sent");
             }
             _ => {
-                debug!("Notification type {:?} not implemented", notification_request.notification_type);
+                debug!(
+                    "Notification type {:?} not implemented",
+                    notification_request.notification_type
+                );
             }
         }
 
@@ -1115,33 +1231,44 @@ impl ThreatResponseOrchestrator {
 
     async fn start_health_monitor(&self) {
         let active_plans = self.active_plans.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(60)); // 1 minute
             loop {
                 interval.tick().await;
-                
+
                 let plans = active_plans.read().await;
                 ACTIVE_RESPONSE_PLANS.set(plans.len() as f64);
-                
+
                 debug!("Health monitoring cycle completed");
             }
         });
     }
 
     /// Submit approval for a response action
-    pub async fn submit_approval(&self, request_id: &str, approved: bool, approver: &str, notes: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn submit_approval(
+        &self,
+        request_id: &str,
+        approved: bool,
+        approver: &str,
+        notes: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut approvals = self.pending_approvals.write().await;
-        
+
         if let Some(approval_request) = approvals.get_mut(request_id) {
-            approval_request.status = if approved { ApprovalStatus::Approved } else { ApprovalStatus::Denied };
+            approval_request.status =
+                if approved { ApprovalStatus::Approved } else { ApprovalStatus::Denied };
             approval_request.approved_by = Some(approver.to_string());
             approval_request.approval_notes = notes;
 
-            info!("Approval {} for request {}", if approved { "granted" } else { "denied" }, request_id);
-            
+            info!(
+                "Approval {} for request {}",
+                if approved { "granted" } else { "denied" },
+                request_id
+            );
+
             // TODO: Trigger continuation of response plan execution
-            
+
             Ok(())
         } else {
             Err("Approval request not found".into())
@@ -1163,13 +1290,13 @@ impl ThreatResponseOrchestrator {
     /// Shutdown the orchestrator
     pub async fn shutdown(&self) {
         info!("Shutting down Threat Response Orchestrator");
-        
+
         // Complete active response plans
         // Save state to Redis
         // Close connections
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = None;
-        
+
         info!("Threat Response Orchestrator shutdown complete");
     }
 }

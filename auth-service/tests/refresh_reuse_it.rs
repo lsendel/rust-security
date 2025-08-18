@@ -9,7 +9,10 @@ async fn spawn_app() -> String {
     let addr = listener.local_addr().unwrap();
 
     // Register a test client via env
-    std::env::set_var("CLIENT_CREDENTIALS", "test_client:very_strong_secret_with_mixed_chars_123!@#");
+    std::env::set_var(
+        "CLIENT_CREDENTIALS",
+        "test_client:very_strong_secret_with_mixed_chars_123!@#",
+    );
     std::env::set_var("TEST_MODE", "1");
 
     let app = app(AppState {
@@ -17,8 +20,14 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["read".to_string(), "write".to_string(), "openid".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -60,7 +69,10 @@ async fn refresh_token_reuse_is_rejected() {
         .await
         .unwrap();
 
-    assert_eq!(res_reuse.status(), reqwest::StatusCode::UNAUTHORIZED, "expected 401 on reuse, got {}", res_reuse.status());
+    assert_eq!(
+        res_reuse.status(),
+        reqwest::StatusCode::UNAUTHORIZED,
+        "expected 401 on reuse, got {}",
+        res_reuse.status()
+    );
 }
-
-

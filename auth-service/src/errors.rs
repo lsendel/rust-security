@@ -1,3 +1,6 @@
+use crate::pii_protection::{
+    redact_error, redact_log, redact_pii_spi, DataClassification, PiiSpiRedactor,
+};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -7,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
-use crate::pii_protection::{redact_error, redact_pii_spi, PiiSpiRedactor, DataClassification, redact_log};
 
 /// Comprehensive error type for the auth service
 #[derive(Debug, Error)]
@@ -53,7 +55,7 @@ pub enum AuthError {
     TokenStoreError { operation: String, source: Box<dyn std::error::Error + Send + Sync> },
     #[error("Serialization error")]
     SerializationError { source: serde_json::Error },
-    
+
     // Atomic operation errors
     #[error("Transaction failed: {reason}")]
     TransactionFailed { reason: String },
@@ -122,10 +124,7 @@ pub enum AuthError {
 
     // Generic errors (use sparingly)
     #[error("Internal server error")]
-    InternalError { 
-        error_id: Uuid,
-        context: String,
-    },
+    InternalError { error_id: Uuid, context: String },
 }
 
 /// Structured error response for API clients
@@ -181,110 +180,118 @@ impl IntoResponse for AuthError {
             // Client errors (4xx)
             AuthError::MissingClientId => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", "missing client_id")
+                ErrorResponse::new("invalid_request", "missing client_id"),
             ),
             AuthError::MissingClientSecret => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", "missing client_secret")
+                ErrorResponse::new("invalid_request", "missing client_secret"),
             ),
             AuthError::InvalidClientCredentials => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("invalid_client", "invalid client credentials")
+                ErrorResponse::new("invalid_client", "invalid client credentials"),
             ),
             AuthError::MissingRefreshToken => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", "missing refresh_token")
+                ErrorResponse::new("invalid_request", "missing refresh_token"),
             ),
             AuthError::InvalidRefreshToken => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("invalid_grant", "invalid refresh token")
+                ErrorResponse::new("invalid_grant", "invalid refresh token"),
             ),
             AuthError::InvalidScope { scope } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_scope", &format!("invalid scope: {}", 
-                    redact_error(&scope)))
+                ErrorResponse::new(
+                    "invalid_scope",
+                    &format!("invalid scope: {}", redact_error(&scope)),
+                ),
             ),
             AuthError::InvalidToken { reason } => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("invalid_token", &redact_error(&reason))
+                ErrorResponse::new("invalid_token", &redact_error(&reason)),
             ),
             AuthError::UnsupportedGrantType { grant_type } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("unsupported_grant_type", &format!("unsupported grant type: {}", 
-                    redact_error(&grant_type)))
+                ErrorResponse::new(
+                    "unsupported_grant_type",
+                    &format!("unsupported grant type: {}", redact_error(&grant_type)),
+                ),
             ),
             AuthError::UnsupportedResponseType { response_type } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("unsupported_response_type", &format!("unsupported response type: {}", 
-                    redact_error(&response_type)))
+                ErrorResponse::new(
+                    "unsupported_response_type",
+                    &format!("unsupported response type: {}", redact_error(&response_type)),
+                ),
             ),
             AuthError::UnauthorizedClient { client_id } => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("unauthorized_client", "unauthorized client")
-                    .with_detail("client_id", serde_json::Value::String(redact_client_id(&client_id)))
+                ErrorResponse::new("unauthorized_client", "unauthorized client").with_detail(
+                    "client_id",
+                    serde_json::Value::String(redact_client_id(&client_id)),
+                ),
             ),
             AuthError::InvalidRequest { reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", &redact_error(&reason))
+                ErrorResponse::new("invalid_request", &redact_error(&reason)),
             ),
-            AuthError::Forbidden { reason } => (
-                StatusCode::FORBIDDEN,
-                ErrorResponse::new("access_denied", &redact_error(&reason))
-            ),
+            AuthError::Forbidden { reason } => {
+                (StatusCode::FORBIDDEN, ErrorResponse::new("access_denied", &redact_error(&reason)))
+            }
             AuthError::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
-                ErrorResponse::new("rate_limit_exceeded", "rate limit exceeded")
+                ErrorResponse::new("rate_limit_exceeded", "rate limit exceeded"),
             ),
             AuthError::IpRateLimitExceeded { ip: _ } => (
                 StatusCode::TOO_MANY_REQUESTS,
-                ErrorResponse::new("rate_limit_exceeded", "too many requests from this IP")
+                ErrorResponse::new("rate_limit_exceeded", "too many requests from this IP"),
             ),
             AuthError::ClientRateLimitExceeded { client_id: _ } => (
                 StatusCode::TOO_MANY_REQUESTS,
-                ErrorResponse::new("rate_limit_exceeded", "too many requests from this client")
+                ErrorResponse::new("rate_limit_exceeded", "too many requests from this client"),
             ),
             AuthError::ValidationError { field, reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", &format!("validation failed for field: {}", 
-                    redact_error(&field)))
-                    .with_detail("validation_error", serde_json::Value::String(redact_error(&reason)))
+                ErrorResponse::new(
+                    "invalid_request",
+                    &format!("validation failed for field: {}", redact_error(&field)),
+                )
+                .with_detail("validation_error", serde_json::Value::String(redact_error(&reason))),
             ),
             AuthError::ScimFilterError { filter: _, reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_filter", &redact_error(&reason))
+                ErrorResponse::new("invalid_filter", &redact_error(&reason)),
             ),
             AuthError::RedirectUriError { uri: _, reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_redirect_uri", &redact_error(&reason))
+                ErrorResponse::new("invalid_redirect_uri", &redact_error(&reason)),
             ),
             AuthError::SessionExpired => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("session_expired", "session has expired")
+                ErrorResponse::new("session_expired", "session has expired"),
             ),
             AuthError::SessionNotFound => (
                 StatusCode::NOT_FOUND,
-                ErrorResponse::new("session_not_found", "session not found")
+                ErrorResponse::new("session_not_found", "session not found"),
             ),
             AuthError::SessionError { reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("session_error", &redact_error(&reason))
+                ErrorResponse::new("session_error", &redact_error(&reason)),
             ),
             AuthError::MfaChallengeRequired { challenge_id } => (
                 StatusCode::UNAUTHORIZED,
                 ErrorResponse::new("mfa_required", "multi-factor authentication required")
-                    .with_detail("challenge_id", serde_json::Value::String(challenge_id))
+                    .with_detail("challenge_id", serde_json::Value::String(challenge_id)),
             ),
-            AuthError::MfaVerificationFailed { reason } => (
-                StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("mfa_failed", &redact_error(&reason))
-            ),
+            AuthError::MfaVerificationFailed { reason } => {
+                (StatusCode::UNAUTHORIZED, ErrorResponse::new("mfa_failed", &redact_error(&reason)))
+            }
             AuthError::OAuthStateMismatch => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", "OAuth state parameter mismatch")
+                ErrorResponse::new("invalid_request", "OAuth state parameter mismatch"),
             ),
             AuthError::AuthorizationCodeExpired => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_grant", "authorization code has expired")
+                ErrorResponse::new("invalid_grant", "authorization code has expired"),
             ),
 
             // Server errors (5xx) - log but don't expose details
@@ -294,48 +301,48 @@ impl IntoResponse for AuthError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "temporary service unavailability")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::TokenStoreError { operation, source } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, operation = %redact_log(&operation), error = %redact_log(&source.to_string()), "Token store error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "temporary service unavailability")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::SerializationError { source } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "Serialization error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "internal service error")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::KeyGenerationError { source } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "Key generation error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "cryptographic service unavailable")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::JwtSigningError { source } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "JWT signing error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "token service unavailable")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::JwtVerificationError { reason } => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("invalid_token", &redact_error(&reason))
+                ErrorResponse::new("invalid_token", &redact_error(&reason)),
             ),
             AuthError::CryptographicError { operation, source } => {
                 let error_id = Uuid::new_v4();
@@ -343,35 +350,36 @@ impl IntoResponse for AuthError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "cryptographic service error")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::HttpClientError { source } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "HTTP client error");
                 (
                     StatusCode::BAD_GATEWAY,
                     ErrorResponse::new("service_unavailable", "external service unavailable")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::ServiceUnavailable { reason } => (
                 StatusCode::SERVICE_UNAVAILABLE,
-                ErrorResponse::new("service_unavailable", &redact_error(&reason))
+                ErrorResponse::new("service_unavailable", &redact_error(&reason)),
             ),
             AuthError::TimeoutError { operation } => {
                 let error_id = Uuid::new_v4();
                 tracing::warn!(error_id = %error_id, operation = %redact_log(&operation), "Operation timeout");
                 (
                     StatusCode::GATEWAY_TIMEOUT,
-                    ErrorResponse::new("timeout", "operation timed out")
-                        .with_error_id(error_id)
+                    ErrorResponse::new("timeout", "operation timed out").with_error_id(error_id),
                 )
-            },
+            }
             AuthError::CircuitBreakerOpen { service } => (
                 StatusCode::SERVICE_UNAVAILABLE,
-                ErrorResponse::new("service_unavailable", &format!("service temporarily unavailable: {}", 
-                    redact_error(&service)))
+                ErrorResponse::new(
+                    "service_unavailable",
+                    &format!("service temporarily unavailable: {}", redact_error(&service)),
+                ),
             ),
             AuthError::ConfigurationError { field, reason } => {
                 let error_id = Uuid::new_v4();
@@ -379,66 +387,69 @@ impl IntoResponse for AuthError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "service configuration error")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::MissingEnvironmentVariable { variable } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, variable = %redact_log(&variable), "Missing environment variable");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "service configuration error")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::OidcProviderError { provider, reason } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, provider = %redact_log(&provider), reason = %redact_log(&reason), "OIDC provider error");
                 (
                     StatusCode::BAD_GATEWAY,
-                    ErrorResponse::new("external_service_error", "authentication provider unavailable")
-                        .with_error_id(error_id)
+                    ErrorResponse::new(
+                        "external_service_error",
+                        "authentication provider unavailable",
+                    )
+                    .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::TransactionFailed { reason } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, reason = %redact_log(&reason), "Transaction failed");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "transaction failed")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::ConcurrentModification => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, "Concurrent modification detected");
                 (
                     StatusCode::CONFLICT,
                     ErrorResponse::new("conflict", "concurrent modification detected")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::TokenFamilyRevocationFailed { reason } => {
                 let error_id = Uuid::new_v4();
                 tracing::error!(error_id = %error_id, reason = %redact_log(&reason), "Token family revocation failed");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "token revocation failed")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
             AuthError::RefreshTokenReuse => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_grant", "refresh token reuse detected")
+                ErrorResponse::new("invalid_grant", "refresh token reuse detected"),
             ),
             AuthError::InternalError { error_id, context } => {
                 tracing::error!(error_id = %error_id, context = %redact_log(&context), "Internal error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "internal service error")
-                        .with_error_id(error_id)
+                        .with_error_id(error_id),
                 )
-            },
+            }
         };
 
         let mut response = Json(error_response).into_response();
@@ -472,14 +483,14 @@ impl From<jsonwebtoken::errors::Error> for AuthError {
         match err.kind() {
             jsonwebtoken::errors::ErrorKind::InvalidToken => {
                 AuthError::JwtVerificationError { reason: "invalid token format".to_string() }
-            },
+            }
             jsonwebtoken::errors::ErrorKind::InvalidSignature => {
                 AuthError::JwtVerificationError { reason: "invalid signature".to_string() }
-            },
+            }
             jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
                 AuthError::JwtVerificationError { reason: "token expired".to_string() }
-            },
-            _ => AuthError::JwtVerificationError { reason: "token validation failed".to_string() }
+            }
+            _ => AuthError::JwtVerificationError { reason: "token validation failed".to_string() },
         }
     }
 }
@@ -488,10 +499,7 @@ impl From<anyhow::Error> for AuthError {
     fn from(err: anyhow::Error) -> Self {
         let error_id = uuid::Uuid::new_v4();
         tracing::error!(error_id = %error_id, error = %redact_log(&err.to_string()), "Converting anyhow error to AuthError");
-        AuthError::InternalError {
-            error_id,
-            context: format!("Internal error: {}", err),
-        }
+        AuthError::InternalError { error_id, context: format!("Internal error: {}", err) }
     }
 }
 
@@ -512,7 +520,7 @@ fn redact_client_id(client_id: &str) -> String {
 fn redact_error_with_context(input: &str, context: &str) -> String {
     let redactor = PiiSpiRedactor::new();
     let redacted = redactor.redact_error_message(input);
-    
+
     // Log for audit purposes (without the sensitive data)
     if redacted != input {
         tracing::warn!(
@@ -522,7 +530,7 @@ fn redact_error_with_context(input: &str, context: &str) -> String {
             "Sensitive data redacted from error message"
         );
     }
-    
+
     redacted
 }
 
@@ -530,26 +538,20 @@ fn redact_error_with_context(input: &str, context: &str) -> String {
 pub fn internal_error(context: &str) -> AuthError {
     let error_id = Uuid::new_v4();
     tracing::error!(error_id = %error_id, context = %redact_log(context), "Internal error created");
-    AuthError::InternalError {
-        error_id,
-        context: context.to_string(),
-    }
+    AuthError::InternalError { error_id, context: context.to_string() }
 }
 
 /// Create a validation error
 pub fn validation_error(field: &str, reason: &str) -> AuthError {
-    AuthError::ValidationError {
-        field: field.to_string(),
-        reason: reason.to_string(),
-    }
+    AuthError::ValidationError { field: field.to_string(), reason: reason.to_string() }
 }
 
 /// Create a token store error
-pub fn token_store_error(operation: &str, source: Box<dyn std::error::Error + Send + Sync>) -> AuthError {
-    AuthError::TokenStoreError {
-        operation: operation.to_string(),
-        source,
-    }
+pub fn token_store_error(
+    operation: &str,
+    source: Box<dyn std::error::Error + Send + Sync>,
+) -> AuthError {
+    AuthError::TokenStoreError { operation: operation.to_string(), source }
 }
 
 #[cfg(test)]
@@ -560,7 +562,9 @@ mod tests {
     fn test_redact_error() {
         assert!(redact_error("user@example.com").contains("u****@example.com"));
         assert!(redact_error("555-123-4567").contains("****4567"));
-        assert!(redact_error("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED"));
+        assert!(
+            redact_error("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED")
+        );
         assert_eq!(redact_error("normal text"), "normal text");
     }
 
@@ -576,7 +580,7 @@ mod tests {
             .with_error_id(Uuid::new_v4())
             .with_correlation_id("corr-123".to_string())
             .with_detail("field", serde_json::Value::String("value".to_string()));
-        
+
         assert_eq!(error.error, "test_error");
         assert_eq!(error.error_description, "test description");
         assert!(error.error_id.is_some());

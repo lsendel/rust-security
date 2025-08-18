@@ -1,4 +1,6 @@
-use auth_service::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use auth_service::security_logging::{
+    SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity,
+};
 use serde_json::Value;
 
 #[test]
@@ -31,12 +33,15 @@ fn test_security_logger_auth_attempt() {
         "127.0.0.1",
         Some("test-agent/1.0"),
         "success",
-        Some([
-            ("grant_type".to_string(), Value::String("client_credentials".to_string())),
-            ("has_scope".to_string(), Value::Bool(true)),
-        ].into()),
+        Some(
+            [
+                ("grant_type".to_string(), Value::String("client_credentials".to_string())),
+                ("has_scope".to_string(), Value::Bool(true)),
+            ]
+            .into(),
+        ),
     );
-    
+
     // If we reach here without panicking, the test passes
     assert!(true);
 }
@@ -49,11 +54,9 @@ fn test_security_logger_token_operation() {
         "test_client",
         "127.0.0.1",
         "success",
-        Some([
-            ("grant_type".to_string(), Value::String("client_credentials".to_string())),
-        ].into()),
+        Some([("grant_type".to_string(), Value::String("client_credentials".to_string()))].into()),
     );
-    
+
     // If we reach here without panicking, the test passes
     assert!(true);
 }
@@ -65,25 +68,17 @@ fn test_security_logger_validation_failure() {
         "invalid_scope",
         Some("test_client"),
         "127.0.0.1",
-        Some([
-            ("requested_scope".to_string(), Value::String("invalid_scope".to_string())),
-        ].into()),
+        Some([("requested_scope".to_string(), Value::String("invalid_scope".to_string()))].into()),
     );
-    
+
     // If we reach here without panicking, the test passes
     assert!(true);
 }
 
 #[test]
 fn test_security_logger_rate_limit() {
-    SecurityLogger::log_rate_limit_exceeded(
-        "test_client",
-        "127.0.0.1",
-        "/oauth/token",
-        100,
-        50,
-    );
-    
+    SecurityLogger::log_rate_limit_exceeded("test_client", "127.0.0.1", "/oauth/token", 100, 50);
+
     // If we reach here without panicking, the test passes
     assert!(true);
 }
@@ -101,7 +96,7 @@ fn test_security_event_risk_score_validation() {
     assert_eq!(event.risk_score, Some(100));
 }
 
-#[test] 
+#[test]
 fn test_security_event_with_details() {
     let mut event = SecurityEvent::new(
         SecurityEventType::TokenIssued,

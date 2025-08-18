@@ -1,8 +1,8 @@
 //! Red Team Exercise Reporting Framework
-//! 
+//!
 //! Generates comprehensive reports on attack scenarios and security control validation
 
-use crate::validation::{ValidationResult, RiskLevel};
+use crate::validation::{RiskLevel, ValidationResult};
 use anyhow::Result;
 use colored::*;
 use serde::{Deserialize, Serialize};
@@ -136,24 +136,33 @@ impl RedTeamReporter {
         }
     }
 
-    pub fn add_scenario_result(&mut self, scenario_name: &str, success: bool, data: HashMap<String, serde_json::Value>) {
-        let attacks_attempted = data.get("total_attempts")
+    pub fn add_scenario_result(
+        &mut self,
+        scenario_name: &str,
+        success: bool,
+        data: HashMap<String, serde_json::Value>,
+    ) {
+        let attacks_attempted = data
+            .get("total_attempts")
             .or_else(|| data.get("attempts"))
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
 
-        let attacks_successful = data.get("successful_attacks")
+        let attacks_successful = data
+            .get("successful_attacks")
             .or_else(|| data.get("successful_logins"))
             .or_else(|| data.get("successful"))
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
 
-        let attacks_detected = data.get("detected_attacks")
+        let attacks_detected = data
+            .get("detected_attacks")
             .or_else(|| data.get("blocked_attempts"))
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
 
-        let attacks_blocked = data.get("blocked_attacks")
+        let attacks_blocked = data
+            .get("blocked_attacks")
             .or_else(|| data.get("rate_limited"))
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
@@ -188,7 +197,7 @@ impl RedTeamReporter {
 
     pub fn generate_report(&self) -> RedTeamReport {
         let duration = self.exercise_duration.unwrap_or_else(|| self.exercise_start.elapsed());
-        
+
         let metadata = ExerciseMetadata {
             timestamp: chrono::Utc::now().to_rfc3339(),
             target_url: "configured_target".to_string(), // Would be passed in
@@ -247,17 +256,11 @@ impl RedTeamReporter {
         let successful_attacks: u32 = self.scenarios.iter().map(|s| s.attacks_successful).sum();
         let detected_attacks: u32 = self.scenarios.iter().map(|s| s.attacks_detected).sum();
 
-        let attack_success_rate = if total_attacks > 0 {
-            successful_attacks as f64 / total_attacks as f64
-        } else {
-            0.0
-        };
+        let attack_success_rate =
+            if total_attacks > 0 { successful_attacks as f64 / total_attacks as f64 } else { 0.0 };
 
-        let detection_rate = if total_attacks > 0 {
-            detected_attacks as f64 / total_attacks as f64
-        } else {
-            0.0
-        };
+        let detection_rate =
+            if total_attacks > 0 { detected_attacks as f64 / total_attacks as f64 } else { 0.0 };
 
         let response_effectiveness = if detected_attacks > 0 {
             (detected_attacks - successful_attacks) as f64 / detected_attacks as f64
@@ -265,7 +268,8 @@ impl RedTeamReporter {
             0.0
         };
 
-        let overall_security_posture = match (critical_findings, high_findings, attack_success_rate) {
+        let overall_security_posture = match (critical_findings, high_findings, attack_success_rate)
+        {
             (0, 0, rate) if rate < 0.1 => SecurityPosture::Excellent,
             (0, h, rate) if h <= 2 && rate < 0.2 => SecurityPosture::Good,
             (c, _, rate) if c == 0 && rate < 0.3 => SecurityPosture::Fair,
@@ -292,11 +296,8 @@ impl RedTeamReporter {
         let detected_attacks: u32 = self.scenarios.iter().map(|s| s.attacks_detected).sum();
         let successful_attacks: u32 = self.scenarios.iter().map(|s| s.attacks_successful).sum();
 
-        let detection_accuracy = if total_attacks > 0 {
-            detected_attacks as f64 / total_attacks as f64
-        } else {
-            0.0
-        };
+        let detection_accuracy =
+            if total_attacks > 0 { detected_attacks as f64 / total_attacks as f64 } else { 0.0 };
 
         // Estimate false positive rate (would need more sophisticated analysis in practice)
         let false_positive_rate = if detection_accuracy > 0.8 { 0.05 } else { 0.1 };
@@ -343,7 +344,8 @@ impl RedTeamReporter {
                         category: result.control_name.clone(),
                         title: format!("Fix: {}", result.test_name),
                         description: remediation.clone(),
-                        impact: format!("Addresses {} risk in {}", 
+                        impact: format!(
+                            "Addresses {} risk in {}",
                             match result.risk_level {
                                 RiskLevel::Critical => "critical",
                                 RiskLevel::High => "high",
@@ -373,8 +375,12 @@ impl RedTeamReporter {
                     priority: Priority::High,
                     category: "Attack Prevention".to_string(),
                     title: format!("Strengthen defenses against {}", scenario.scenario_name),
-                    description: format!("The {} scenario had {} successful attacks out of {} attempts", 
-                        scenario.scenario_name, scenario.attacks_successful, scenario.attacks_attempted),
+                    description: format!(
+                        "The {} scenario had {} successful attacks out of {} attempts",
+                        scenario.scenario_name,
+                        scenario.attacks_successful,
+                        scenario.attacks_attempted
+                    ),
                     impact: "Reduces risk of successful attacks".to_string(),
                     effort: Effort::Medium,
                     implementation_steps: vec![
@@ -405,7 +411,10 @@ impl RedTeamReporter {
                     category: result.control_name.clone(),
                     description: result.description.clone(),
                     attack_vector: "Security Control Failure".to_string(),
-                    impact: format!("Expected: {} | Actual: {}", result.expected_behavior, result.actual_behavior),
+                    impact: format!(
+                        "Expected: {} | Actual: {}",
+                        result.expected_behavior, result.actual_behavior
+                    ),
                     evidence: result.evidence.clone(),
                     remediation: result.remediation.clone().unwrap_or_default(),
                     cve_references: Vec::new(), // Would map to relevant CVEs
@@ -425,12 +434,18 @@ impl RedTeamReporter {
                     title: format!("Successful Attack: {}", scenario.scenario_name),
                     severity: RiskLevel::High,
                     category: "Attack Success".to_string(),
-                    description: format!("Attack scenario '{}' succeeded {} times", 
-                        scenario.scenario_name, scenario.attacks_successful),
+                    description: format!(
+                        "Attack scenario '{}' succeeded {} times",
+                        scenario.scenario_name, scenario.attacks_successful
+                    ),
                     attack_vector: scenario.scenario_name.clone(),
-                    impact: format!("Security controls failed to prevent {} attacks", scenario.attacks_successful),
+                    impact: format!(
+                        "Security controls failed to prevent {} attacks",
+                        scenario.attacks_successful
+                    ),
                     evidence: scenario.key_findings.clone(),
-                    remediation: "Strengthen security controls and detection capabilities".to_string(),
+                    remediation: "Strengthen security controls and detection capabilities"
+                        .to_string(),
                     cve_references: Vec::new(),
                     owasp_mapping: self.map_scenario_to_owasp(&scenario.scenario_name),
                 };
@@ -483,22 +498,36 @@ impl RedTeamReporter {
     fn map_to_owasp(&self, control_name: &str) -> Vec<String> {
         match control_name {
             "IDOR Protection" => vec!["A01:2021-Broken Access Control".to_string()],
-            "TOTP Replay Prevention" => vec!["A07:2021-Identification and Authentication Failures".to_string()],
-            "PKCE Downgrade Protection" => vec!["A07:2021-Identification and Authentication Failures".to_string()],
+            "TOTP Replay Prevention" => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
+            "PKCE Downgrade Protection" => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
             "Rate Limiting" => vec!["A04:2021-Insecure Design".to_string()],
             "Input Validation" => vec!["A03:2021-Injection".to_string()],
-            "Session Management" => vec!["A07:2021-Identification and Authentication Failures".to_string()],
+            "Session Management" => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
             _ => vec!["A04:2021-Insecure Design".to_string()],
         }
     }
 
     fn map_scenario_to_owasp(&self, scenario_name: &str) -> Vec<String> {
         match scenario_name {
-            name if name.contains("authentication") => vec!["A07:2021-Identification and Authentication Failures".to_string()],
+            name if name.contains("authentication") => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
             name if name.contains("idor") => vec!["A01:2021-Broken Access Control".to_string()],
-            name if name.contains("mfa") => vec!["A07:2021-Identification and Authentication Failures".to_string()],
-            name if name.contains("oauth") => vec!["A07:2021-Identification and Authentication Failures".to_string()],
-            name if name.contains("session") => vec!["A07:2021-Identification and Authentication Failures".to_string()],
+            name if name.contains("mfa") => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
+            name if name.contains("oauth") => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
+            name if name.contains("session") => {
+                vec!["A07:2021-Identification and Authentication Failures".to_string()]
+            }
             name if name.contains("rate") => vec!["A04:2021-Insecure Design".to_string()],
             name if name.contains("token") => vec!["A02:2021-Cryptographic Failures".to_string()],
             _ => vec!["A04:2021-Insecure Design".to_string()],
@@ -527,7 +556,12 @@ impl RedTeamReport {
             SecurityPosture::Poor => "red",
             SecurityPosture::Critical => "red",
         };
-        println!("Security Posture: {}", format!("{:?}", self.executive_summary.overall_security_posture).color(posture_color).bold());
+        println!(
+            "Security Posture: {}",
+            format!("{:?}", self.executive_summary.overall_security_posture)
+                .color(posture_color)
+                .bold()
+        );
         println!("Attack Success Rate: {:.1}%", self.executive_summary.attack_success_rate * 100.0);
         println!("Detection Rate: {:.1}%", self.executive_summary.detection_rate * 100.0);
 
@@ -536,52 +570,70 @@ impl RedTeamReport {
         let mut table = Table::new("{:<} {:<} {:<}");
         table.add_row(Row::new().with_cell("Severity").with_cell("Count").with_cell("Status"));
         table.add_row(Row::new().with_cell("--------").with_cell("-----").with_cell("------"));
-        
+
         if self.executive_summary.critical_findings > 0 {
-            table.add_row(Row::new()
-                .with_cell("Critical")
-                .with_cell(self.executive_summary.critical_findings)
-                .with_cell("🚨 IMMEDIATE ACTION REQUIRED"));
+            table.add_row(
+                Row::new()
+                    .with_cell("Critical")
+                    .with_cell(self.executive_summary.critical_findings)
+                    .with_cell("🚨 IMMEDIATE ACTION REQUIRED"),
+            );
         }
         if self.executive_summary.high_findings > 0 {
-            table.add_row(Row::new()
-                .with_cell("High")
-                .with_cell(self.executive_summary.high_findings)
-                .with_cell("⚠️  High Priority"));
+            table.add_row(
+                Row::new()
+                    .with_cell("High")
+                    .with_cell(self.executive_summary.high_findings)
+                    .with_cell("⚠️  High Priority"),
+            );
         }
         if self.executive_summary.medium_findings > 0 {
-            table.add_row(Row::new()
-                .with_cell("Medium")
-                .with_cell(self.executive_summary.medium_findings)
-                .with_cell("📋 Medium Priority"));
+            table.add_row(
+                Row::new()
+                    .with_cell("Medium")
+                    .with_cell(self.executive_summary.medium_findings)
+                    .with_cell("📋 Medium Priority"),
+            );
         }
         if self.executive_summary.low_findings > 0 {
-            table.add_row(Row::new()
-                .with_cell("Low")
-                .with_cell(self.executive_summary.low_findings)
-                .with_cell("ℹ️  Low Priority"));
+            table.add_row(
+                Row::new()
+                    .with_cell("Low")
+                    .with_cell(self.executive_summary.low_findings)
+                    .with_cell("ℹ️  Low Priority"),
+            );
         }
 
         print!("{}", table);
 
         // Security Controls
         println!("\n{}", "🛡️  Security Controls".yellow().bold());
-        println!("Controls Passing: {} ✅", self.executive_summary.controls_passing.to_string().green());
-        println!("Controls Failing: {} ❌", self.executive_summary.controls_failing.to_string().red());
+        println!(
+            "Controls Passing: {} ✅",
+            self.executive_summary.controls_passing.to_string().green()
+        );
+        println!(
+            "Controls Failing: {} ❌",
+            self.executive_summary.controls_failing.to_string().red()
+        );
 
         // Top Recommendations
         println!("\n{}", "💡 Top Recommendations".yellow().bold());
-        let critical_recommendations: Vec<_> = self.recommendations.iter()
+        let critical_recommendations: Vec<_> = self
+            .recommendations
+            .iter()
             .filter(|r| matches!(r.priority, Priority::Critical))
             .take(3)
             .collect();
 
         if critical_recommendations.is_empty() {
-            let high_recommendations: Vec<_> = self.recommendations.iter()
+            let high_recommendations: Vec<_> = self
+                .recommendations
+                .iter()
                 .filter(|r| matches!(r.priority, Priority::High))
                 .take(3)
                 .collect();
-            
+
             for (i, rec) in high_recommendations.iter().enumerate() {
                 println!("{}. {} - {}", i + 1, rec.title.yellow(), rec.category);
             }
@@ -598,7 +650,10 @@ impl RedTeamReport {
         println!("Controls Validated: {}", self.exercise_metadata.controls_validated);
         println!("Target: {}", self.exercise_metadata.target_url);
 
-        println!("\n{}", "📋 For detailed findings and remediation steps, see the full JSON report.".cyan());
+        println!(
+            "\n{}",
+            "📋 For detailed findings and remediation steps, see the full JSON report.".cyan()
+        );
     }
 }
 

@@ -78,7 +78,7 @@ pub async fn admin_auth_middleware(
                 ip_address: client_ip.clone(),
                 user_agent: extract_user_agent(&headers),
                 client_id: None, // Would be extracted from token in real implementation
-                user_id: None, // Would be extracted from token in real implementation
+                user_id: None,   // Would be extracted from token in real implementation
                 session_id: None,
                 request_id: extract_correlation_id(&headers),
                 details: std::collections::HashMap::new(),
@@ -103,7 +103,10 @@ pub async fn admin_auth_middleware(
                         event_type: SecurityEventType::SecurityViolation,
                         severity: SecuritySeverity::High,
                         source: "admin_middleware".to_string(),
-                        description: format!("Admin request signature validation failed: {}", redact_log(&e.to_string())),
+                        description: format!(
+                            "Admin request signature validation failed: {}",
+                            redact_log(&e.to_string())
+                        ),
                         actor: Some("admin_user".to_string()),
                         action: Some(format!("{} {}", method, path)),
                         target: Some(path.to_string()),
@@ -128,7 +131,11 @@ pub async fn admin_auth_middleware(
                     };
                     SecurityLogger::log_event(&event);
 
-                    return Err((StatusCode::BAD_REQUEST, format!("Request signature validation failed: {}", e)).into_response());
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        format!("Request signature validation failed: {}", e),
+                    )
+                        .into_response());
                 }
             }
 
@@ -146,7 +153,10 @@ pub async fn admin_auth_middleware(
 
             // Log failed authentication attempt
             let mut details = std::collections::HashMap::new();
-            details.insert("auth_error".to_string(), serde_json::json!(redact_log(&auth_error.to_string())));
+            details.insert(
+                "auth_error".to_string(),
+                serde_json::json!(redact_log(&auth_error.to_string())),
+            );
 
             let mut event = SecurityEvent {
                 event_id: uuid::Uuid::new_v4().to_string(),
@@ -185,39 +195,27 @@ pub async fn admin_auth_middleware(
 }
 
 /// Enhanced admin scope validation
-async fn require_admin_scope(
-    headers: &HeaderMap,
-    state: &AppState,
-) -> Result<(), AuthError> {
+async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<(), AuthError> {
     // Extract bearer token
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let auth =
+        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
 
-    let token = auth
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken {
-            reason: "Missing or malformed authorization header".to_string()
-        })?;
+    let token = auth.strip_prefix("Bearer ").ok_or_else(|| AuthError::InvalidToken {
+        reason: "Missing or malformed authorization header".to_string(),
+    })?;
 
     if token.is_empty() {
-        return Err(AuthError::InvalidToken {
-            reason: "Empty bearer token".to_string()
-        });
+        return Err(AuthError::InvalidToken { reason: "Empty bearer token".to_string() });
     }
 
     // Validate token and extract record
-    let record = state.token_store.get_record(token).await
-        .map_err(|_| AuthError::InvalidToken {
-            reason: "Token not found or invalid".to_string()
-        })?;
+    let record = state.token_store.get_record(token).await.map_err(|_| {
+        AuthError::InvalidToken { reason: "Token not found or invalid".to_string() }
+    })?;
 
     // Check if token is active
     if !record.active {
-        return Err(AuthError::InvalidToken {
-            reason: "Token is inactive".to_string()
-        });
+        return Err(AuthError::InvalidToken { reason: "Token is inactive".to_string() });
     }
 
     // Check for admin scope
@@ -225,9 +223,9 @@ async fn require_admin_scope(
         Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
             // Additional validation could be added here (e.g., token expiry, client validation)
             Ok(())
-        },
+        }
         _ => Err(AuthError::Forbidden {
-            reason: "Insufficient privileges: admin scope required".to_string()
+            reason: "Insufficient privileges: admin scope required".to_string(),
         }),
     }
 }
@@ -247,23 +245,19 @@ async fn validate_request_signature(
     };
 
     // Extract signature and timestamp headers
-    let signature = headers.get("x-signature")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
-            reason: "Missing x-signature header".to_string(),
-        })?;
+    let signature = headers.get("x-signature").and_then(|v| v.to_str().ok()).ok_or_else(|| {
+        AuthError::InvalidRequest { reason: "Missing x-signature header".to_string() }
+    })?;
 
-    let timestamp_str = headers.get("x-timestamp")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
-            reason: "Missing x-timestamp header".to_string(),
+    let timestamp_str =
+        headers.get("x-timestamp").and_then(|v| v.to_str().ok()).ok_or_else(|| {
+            AuthError::InvalidRequest { reason: "Missing x-timestamp header".to_string() }
         })?;
 
     // Parse and validate timestamp
-    let timestamp: u64 = timestamp_str.parse()
-        .map_err(|_| AuthError::InvalidRequest {
-            reason: "Invalid timestamp format".to_string(),
-        })?;
+    let timestamp: u64 = timestamp_str.parse().map_err(|_| AuthError::InvalidRequest {
+        reason: "Invalid timestamp format".to_string(),
+    })?;
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -286,9 +280,7 @@ async fn validate_request_signature(
 
     // Constant-time comparison to prevent timing attacks
     if !constant_time_compare(signature, &expected_signature) {
-        return Err(AuthError::InvalidRequest {
-            reason: "Invalid request signature".to_string(),
-        });
+        return Err(AuthError::InvalidRequest { reason: "Invalid request signature".to_string() });
     }
 
     Ok(())
@@ -301,11 +293,15 @@ fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, AuthErro
 
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .map_err(|_| AuthError::CryptographicError {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
+        AuthError::CryptographicError {
             operation: "hmac_initialization".to_string(),
-            source: Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid HMAC key")),
-        })?;
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid HMAC key",
+            )),
+        }
+    })?;
 
     mac.update(payload.as_bytes());
     let result = mac.finalize();
@@ -356,7 +352,8 @@ fn extract_client_ip(headers: &HeaderMap) -> Option<String> {
 
 /// Extract correlation ID from request headers
 fn extract_correlation_id(headers: &HeaderMap) -> Option<String> {
-    headers.get("x-correlation-id")
+    headers
+        .get("x-correlation-id")
         .or_else(|| headers.get("x-request-id"))
         .or_else(|| headers.get("traceparent"))
         .and_then(|v| v.to_str().ok())
@@ -365,9 +362,7 @@ fn extract_correlation_id(headers: &HeaderMap) -> Option<String> {
 
 /// Extract User-Agent from request headers
 fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
-    headers.get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from)
+    headers.get("user-agent").and_then(|v| v.to_str().ok()).map(String::from)
 }
 
 #[cfg(test)]

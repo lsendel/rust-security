@@ -226,7 +226,7 @@ impl WebAuthnMfa {
     pub async fn start_registration(&self, user_id: &str, user_name: &str, display_name: &str) -> MfaResult<PublicKeyCredentialCreationOptions> {
         let challenge = self.generate_challenge();
         let user_handle = self.generate_user_handle(user_id);
-        
+
         // Get existing credentials to exclude
         let existing_credentials = self.get_user_credentials(user_id).await?;
         let exclude_credentials: Vec<PublicKeyCredentialDescriptor> = existing_credentials
@@ -289,14 +289,14 @@ impl WebAuthnMfa {
     pub async fn finish_registration(&self, user_id: &str, credential: &PublicKeyCredential) -> MfaResult<StoredCredential> {
         // Validate challenge
         let challenge_data = self.get_and_remove_registration_challenge(user_id).await?;
-        
+
         // In a real implementation, you would:
         // 1. Verify the client data JSON
         // 2. Verify the attestation object
         // 3. Extract and validate the public key
         // 4. Verify the signature
         // 5. Check the origin matches
-        
+
         // For this simplified implementation, we'll create a mock stored credential
         let stored_credential = StoredCredential {
             credential_id: credential.id.clone(),
@@ -326,7 +326,7 @@ impl WebAuthnMfa {
 
     pub async fn start_authentication(&self, user_id: &str) -> MfaResult<PublicKeyCredentialRequestOptions> {
         let challenge = self.generate_challenge();
-        
+
         // Get user's credentials
         let credentials = self.get_user_credentials(user_id).await?;
         if credentials.is_empty() {
@@ -362,21 +362,21 @@ impl WebAuthnMfa {
     pub async fn finish_authentication(&self, user_id: &str, credential: &PublicKeyCredential) -> MfaResult<bool> {
         // Validate challenge
         let _challenge_data = self.get_and_remove_authentication_challenge(user_id).await?;
-        
+
         // Get stored credential
         let mut stored_credential = self.get_credential(&credential.id).await?;
-        
+
         // In a real implementation, you would:
         // 1. Verify the client data JSON
         // 2. Verify the authenticator data
         // 3. Verify the signature using the stored public key
         // 4. Check and update the sign count
         // 5. Verify the origin matches
-        
+
         // For this simplified implementation, we'll assume success
         stored_credential.sign_count += 1;
         stored_credential.last_used = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs());
-        
+
         // Update stored credential
         self.store_credential(&stored_credential).await?;
 
@@ -434,7 +434,7 @@ impl WebAuthnMfa {
         // Generate a stable user handle from user ID
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         user_id.hash(&mut hasher);
         let hash = hasher.finish();
@@ -495,7 +495,7 @@ impl WebAuthnMfa {
         match data {
             Some(serialized) => {
                 let challenge_data: RegistrationChallenge = serde_json::from_str(&serialized)?;
-                
+
                 // Check if expired
                 let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                 if current_time > challenge_data.expires_at {
@@ -526,7 +526,7 @@ impl WebAuthnMfa {
         match data {
             Some(serialized) => {
                 let challenge_data: AuthenticationChallenge = serde_json::from_str(&serialized)?;
-                
+
                 // Check if expired
                 let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                 if current_time > challenge_data.expires_at {
@@ -670,7 +670,7 @@ mod tests {
         ).await;
 
         let user_id = "test_user";
-        
+
         // First register a credential (mock)
         let stored_credential = StoredCredential {
             credential_id: "test_credential".to_string(),

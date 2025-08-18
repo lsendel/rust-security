@@ -1,5 +1,5 @@
 //! Red Team Tools Module
-//! 
+//!
 //! Contains automated tools for security testing and attack execution
 
 use anyhow::Result;
@@ -7,12 +7,12 @@ use std::collections::HashMap;
 use tracing::info;
 
 pub mod attack_simulator;
-pub mod performance_monitor;
 pub mod coverage_analyzer;
+pub mod performance_monitor;
 
 pub use attack_simulator::AttackSimulator;
-pub use performance_monitor::PerformanceMonitor;
 pub use coverage_analyzer::CoverageAnalyzer;
+pub use performance_monitor::PerformanceMonitor;
 
 /// Tool registry for managing red team tools
 pub struct ToolRegistry {
@@ -47,9 +47,7 @@ pub struct ToolResult {
 
 impl ToolRegistry {
     pub fn new() -> Self {
-        Self {
-            tools: HashMap::new(),
-        }
+        Self { tools: HashMap::new() }
     }
 
     pub fn register_tool(&mut self, tool: Box<dyn RedTeamTool>) {
@@ -57,7 +55,12 @@ impl ToolRegistry {
         self.tools.insert(name, tool);
     }
 
-    pub async fn execute_tool(&self, tool_name: &str, target: &str, config: &ToolConfig) -> Result<ToolResult> {
+    pub async fn execute_tool(
+        &self,
+        tool_name: &str,
+        target: &str,
+        config: &ToolConfig,
+    ) -> Result<ToolResult> {
         if let Some(tool) = self.tools.get(tool_name) {
             info!("Executing tool: {}", tool_name);
             tool.execute(target, config).await

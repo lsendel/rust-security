@@ -8,9 +8,10 @@ mod config;
 
 use auth_service::{
     app,
-    store::{redis_store, TokenStore},
     keys, // Add keys module import
-    ApiDoc, AppState,
+    store::{redis_store, TokenStore},
+    ApiDoc,
+    AppState,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,6 +31,9 @@ async fn main() -> anyhow::Result<()> {
         .with_file(true)
         .with_line_number(true)
         .init();
+
+    // Validate production secrets first
+    config::validate_production_secrets();
 
     // Load configuration
     let cfg = config::AppConfig::from_env()?;
@@ -72,7 +76,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize backpressure system
     let backpressure_config = auth_service::backpressure::BackpressureConfig::from_env();
-    let backpressure_state = Arc::new(auth_service::backpressure::BackpressureState::new(backpressure_config));
+    let backpressure_state =
+        Arc::new(auth_service::backpressure::BackpressureState::new(backpressure_config));
     tracing::info!("Backpressure system initialized");
 
     // Create application state
@@ -87,10 +92,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Build application with OpenAPI documentation
     let openapi = ApiDoc::openapi();
-    let app = app(app_state).route(
-        "/openapi.json",
-        axum::routing::get(|| async move { axum::Json(openapi) }),
-    );
+    let app = app(app_state)
+        .route("/openapi.json", axum::routing::get(|| async move { axum::Json(openapi) }));
 
     // Start background services
     tokio::spawn(async {
@@ -102,8 +105,10 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Start enhanced session cleanup scheduler with graceful shutdown
-    use auth_service::session_cleanup::{SessionCleanupConfig, create_and_start_session_cleanup, ShutdownSignal};
-    use auth_service::session_manager::{SessionManager, SessionConfig};
+    use auth_service::session_cleanup::{
+        create_and_start_session_cleanup, SessionCleanupConfig, ShutdownSignal,
+    };
+    use auth_service::session_manager::{SessionConfig, SessionManager};
 
     let session_cleanup_config = SessionCleanupConfig::default();
     let session_manager = Arc::new(SessionManager::new(SessionConfig::default()));
@@ -140,9 +145,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Graceful shutdown handling
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await?;
 
     tracing::info!("Auth service shutdown complete");
     Ok(())
@@ -151,9 +154,7 @@ async fn main() -> anyhow::Result<()> {
 /// Handle graceful shutdown signals
 async fn shutdown_signal() {
     let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        tokio::signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]

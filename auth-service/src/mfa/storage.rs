@@ -87,9 +87,9 @@ impl MfaStorage {
 
         let key = format!("mfa:user:{}", record.user_id);
         let serialized = serde_json::to_string(record)?;
-        
+
         conn.set(&key, serialized).await?;
-        
+
         // Set TTL if configured
         if let Ok(ttl_str) = std::env::var("MFA_USER_RECORD_TTL_SECS") {
             if let Ok(ttl) = ttl_str.parse::<u64>() {
@@ -108,7 +108,7 @@ impl MfaStorage {
 
         let key = format!("mfa:user:{}", user_id);
         let data: Option<String> = conn.get(&key).await?;
-        
+
         match data {
             Some(serialized) => {
                 let record: MfaUserRecord = serde_json::from_str(&serialized)?;
@@ -121,7 +121,7 @@ impl MfaStorage {
     pub async fn create_user_mfa(&self, user_id: &str, secret: &[u8], totp_config: Option<TotpConfiguration>) -> Result<MfaUserRecord, MfaStorageError> {
         let encrypted_secret = self.secret_manager.encrypt_secret(secret).await?;
         let now = Self::current_timestamp();
-        
+
         let record = MfaUserRecord {
             user_id: user_id.to_string(),
             encrypted_secret,
@@ -163,7 +163,7 @@ impl MfaStorage {
 
     pub async fn consume_backup_code(&self, user_id: &str, code_hash: &str) -> Result<bool, MfaStorageError> {
         let mut record = self.get_user_record(user_id).await?;
-        
+
         if record.backup_codes_hashed.remove(code_hash) {
             record.updated_at = Self::current_timestamp();
             self.store_user_record(&record).await?;
@@ -197,7 +197,7 @@ impl MfaStorage {
 
         let key = format!("mfa:user:{}", user_id);
         let deleted: u64 = conn.del(&key).await?;
-        
+
         // Also clean up related keys
         let patterns = vec![
             format!("mfa:totp:{}:*", user_id),
@@ -218,17 +218,17 @@ impl MfaStorage {
 
     pub async fn rotate_user_secret(&self, user_id: &str, new_secret: &[u8]) -> Result<(), MfaStorageError> {
         let mut record = self.get_user_record(user_id).await?;
-        
+
         // Encrypt new secret
         let new_encrypted_secret = self.secret_manager.encrypt_secret(new_secret).await?;
-        
+
         // Update record
         record.encrypted_secret = new_encrypted_secret;
         record.verified = false; // Require re-verification after rotation
         record.updated_at = Self::current_timestamp();
-        
+
         self.store_user_record(&record).await?;
-        
+
         tracing::info!("Rotated secret for user: {}", user_id);
         Ok(())
     }
@@ -240,7 +240,7 @@ impl MfaStorage {
 
         let pattern = "mfa:user:*";
         let keys: Vec<String> = conn.keys(&pattern).await?;
-        
+
         let user_ids: Vec<String> = keys
             .into_iter()
             .filter_map(|key| {
@@ -278,7 +278,7 @@ impl MfaStorage {
 
     pub async fn get_user_statistics(&self, user_id: &str) -> Result<MfaUserStatistics, MfaStorageError> {
         let record = self.get_user_record(user_id).await?;
-        
+
         Ok(MfaUserStatistics {
             user_id: user_id.to_string(),
             created_at: record.created_at,
@@ -294,17 +294,17 @@ impl MfaStorage {
 
     pub async fn health_check(&self) -> Result<MfaStorageHealth, MfaStorageError> {
         let redis_available = self.redis.is_some();
-        
+
         if let Some(mut conn) = self.redis.clone() {
             // Test Redis connectivity
             let ping_result: Result<String, RedisError> = redis::cmd("PING").query_async(&mut conn).await;
             let redis_responsive = ping_result.is_ok();
-            
+
             // Get basic statistics
             let user_pattern = "mfa:user:*";
             let user_keys: Vec<String> = conn.keys(&user_pattern).await.unwrap_or_default();
             let total_users = user_keys.len();
-            
+
             Ok(MfaStorageHealth {
                 redis_available,
                 redis_responsive,
@@ -387,9 +387,9 @@ mod tests {
         let mut codes = HashSet::new();
         codes.insert("hash1".to_string());
         codes.insert("hash2".to_string());
-        
+
         storage.update_backup_codes(user_id, codes.clone()).await.unwrap();
-        
+
         // Retrieve codes
         let retrieved_codes = storage.get_backup_codes(user_id).await.unwrap();
         assert_eq!(retrieved_codes, codes);
@@ -437,7 +437,7 @@ mod tests {
 
         // Create user
         let _record = storage.create_user_mfa(user_id, original_secret, None).await.unwrap();
-        
+
         // Mark as verified
         storage.mark_user_verified(user_id).await.unwrap();
         assert!(storage.is_user_verified(user_id).await.unwrap());

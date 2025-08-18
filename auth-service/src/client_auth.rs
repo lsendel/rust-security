@@ -1,11 +1,11 @@
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use crate::pii_protection::redact_log;
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::{internal_error, AuthError};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::time::Instant;
-use crate::{AuthError, internal_error};
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::pii_protection::redact_log;
-use once_cell::sync::Lazy;
 
 #[cfg(not(test))]
 const MIN_AUTH_DURATION_MS: u64 = 120;
@@ -58,7 +58,7 @@ impl ClientAuthenticator {
         &mut self,
         client_id: String,
         client_secret: String,
-        metadata: ClientMetadata
+        metadata: ClientMetadata,
     ) -> Result<(), AuthError> {
         // Validate client secret strength unless running in TEST_MODE to keep integration tests simple
         if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
@@ -67,7 +67,8 @@ impl ClientAuthenticator {
 
         // Hash the client secret
         let salt = SaltString::generate(&mut OsRng);
-        let password_hash = self.argon2
+        let password_hash = self
+            .argon2
             .hash_password(client_secret.as_bytes(), &salt)
             .map_err(|e| internal_error(&format!("Failed to hash client secret: {}", e)))?;
 
@@ -83,7 +84,7 @@ impl ClientAuthenticator {
         &self,
         client_id: &str,
         client_secret: &str,
-        ip_address: Option<&str>
+        ip_address: Option<&str>,
     ) -> Result<bool, AuthError> {
         let start_time = Instant::now();
 
@@ -102,15 +103,14 @@ impl ClientAuthenticator {
                     let parsed_hash = PasswordHash::new(hash)
                         .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
 
-                    let verification_result = self.argon2
-                        .verify_password(client_secret.as_bytes(), &parsed_hash)
-                        .is_ok();
+                    let verification_result =
+                        self.argon2.verify_password(client_secret.as_bytes(), &parsed_hash).is_ok();
 
                     self.log_auth_attempt(
                         client_id,
                         verification_result,
                         if verification_result { "success" } else { "invalid_credentials" },
-                        ip_address
+                        ip_address,
                     );
 
                     verification_result
@@ -133,7 +133,9 @@ impl ClientAuthenticator {
         // Ensure consistent timing (minimum duration to prevent timing attacks)
         let elapsed = start_time.elapsed();
         if elapsed.as_millis() < MIN_AUTH_DURATION_MS as u128 {
-            std::thread::sleep(std::time::Duration::from_millis(MIN_AUTH_DURATION_MS - elapsed.as_millis() as u64));
+            std::thread::sleep(std::time::Duration::from_millis(
+                MIN_AUTH_DURATION_MS - elapsed.as_millis() as u64,
+            ));
         }
 
         Ok(is_valid)
@@ -146,10 +148,7 @@ impl ClientAuthenticator {
 
     /// Check if client exists and is active
     pub fn is_client_active(&self, client_id: &str) -> bool {
-        self.client_metadata
-            .get(client_id)
-            .map(|m| m.is_active)
-            .unwrap_or(false)
+        self.client_metadata.get(client_id).map(|m| m.is_active).unwrap_or(false)
     }
 
     /// Validate client secret strength
@@ -157,20 +156,20 @@ impl ClientAuthenticator {
         // Minimum length requirement
         if secret.len() < 32 {
             return Err(AuthError::InvalidRequest {
-                reason: "Client secret must be at least 32 characters long".to_string()
+                reason: "Client secret must be at least 32 characters long".to_string(),
             });
         }
 
         // Check for common weak patterns
         if secret.chars().all(|c| c.is_ascii_digit()) {
             return Err(AuthError::InvalidRequest {
-                reason: "Client secret cannot be all digits".to_string()
+                reason: "Client secret cannot be all digits".to_string(),
             });
         }
 
         if secret.chars().all(|c| c.is_ascii_alphabetic()) {
             return Err(AuthError::InvalidRequest {
-                reason: "Client secret must contain mixed character types".to_string()
+                reason: "Client secret must contain mixed character types".to_string(),
             });
         }
 
@@ -183,7 +182,7 @@ impl ClientAuthenticator {
         let max_repeated = char_counts.values().max().unwrap_or(&0);
         if *max_repeated > secret.len() / 4 {
             return Err(AuthError::InvalidRequest {
-                reason: "Client secret has too many repeated characters".to_string()
+                reason: "Client secret has too many repeated characters".to_string(),
             });
         }
 
@@ -191,12 +190,14 @@ impl ClientAuthenticator {
     }
 
     /// Log authentication attempts for security monitoring
-    fn log_auth_attempt(&self, client_id: &str, success: bool, reason: &str, ip_address: Option<&str>) {
-        let severity = if success {
-            SecuritySeverity::Info
-        } else {
-            SecuritySeverity::Warning
-        };
+    fn log_auth_attempt(
+        &self,
+        client_id: &str,
+        success: bool,
+        reason: &str,
+        ip_address: Option<&str>,
+    ) {
+        let severity = if success { SecuritySeverity::Info } else { SecuritySeverity::Warning };
 
         let mut event = SecurityEvent::new(
             SecurityEventType::Authentication,
@@ -213,7 +214,7 @@ impl ClientAuthenticator {
             "invalid_credentials" => "Invalid client secret provided".to_string(),
             "inactive_client" => "Client account is inactive".to_string(),
             "unknown_client" => "Client ID not found in system".to_string(),
-            _ => format!("Authentication failed: {}", reason)
+            _ => format!("Authentication failed: {}", reason),
         })
         .with_detail("client_id".to_string(), client_id.to_string())
         .with_detail("reason".to_string(), reason.to_string());
@@ -233,7 +234,10 @@ impl ClientAuthenticator {
                     let metadata = ClientMetadata {
                         name: format!("Client {}", client_id),
                         redirect_uris: vec![], // Will be populated from REDIRECT_URIS env var
-                        grant_types: vec!["client_credentials".to_string(), "authorization_code".to_string()],
+                        grant_types: vec![
+                            "client_credentials".to_string(),
+                            "authorization_code".to_string(),
+                        ],
                         scopes: vec!["read".to_string(), "write".to_string()],
                         created_at: chrono::Utc::now(),
                         is_active: true,
@@ -243,16 +247,18 @@ impl ClientAuthenticator {
                     // Use relaxed path in TEST_MODE
                     if std::env::var("TEST_MODE").ok().as_deref() == Some("1") {
                         let salt = SaltString::generate(&mut OsRng);
-                        let password_hash = self.argon2
-                            .hash_password(client_secret.as_bytes(), &salt)
-                            .map_err(|e| internal_error(&format!("Failed to hash client secret: {}", e)))?;
-                        self.client_secrets.insert(client_id.to_string(), password_hash.to_string());
+                        let password_hash =
+                            self.argon2.hash_password(client_secret.as_bytes(), &salt).map_err(
+                                |e| internal_error(&format!("Failed to hash client secret: {}", e)),
+                            )?;
+                        self.client_secrets
+                            .insert(client_id.to_string(), password_hash.to_string());
                         self.client_metadata.insert(client_id.to_string(), metadata);
                     } else {
                         self.register_client(
                             client_id.to_string(),
                             client_secret.to_string(),
-                            metadata
+                            metadata,
                         )?;
                     }
                 }
@@ -284,35 +290,32 @@ static CLIENT_AUTHENTICATOR: once_cell::sync::Lazy<std::sync::Mutex<ClientAuthen
 
         // Load clients from environment
         if let Err(e) = auth.load_from_env() {
-            eprintln!("Warning: Failed to load clients from environment: {}", redact_log(&e.to_string()));
+            eprintln!(
+                "Warning: Failed to load clients from environment: {}",
+                redact_log(&e.to_string())
+            );
         }
 
         std::sync::Mutex::new(auth)
     });
 
 /// Convenience function for client authentication
-pub fn authenticate_client(client_id: &str, client_secret: &str, ip_address: Option<&str>) -> Result<bool, AuthError> {
-    CLIENT_AUTHENTICATOR
-        .lock()
-        .unwrap()
-        .authenticate_client(client_id, client_secret, ip_address)
+pub fn authenticate_client(
+    client_id: &str,
+    client_secret: &str,
+    ip_address: Option<&str>,
+) -> Result<bool, AuthError> {
+    CLIENT_AUTHENTICATOR.lock().unwrap().authenticate_client(client_id, client_secret, ip_address)
 }
 
 /// Convenience function to get client metadata
 pub fn get_client_metadata(client_id: &str) -> Option<ClientMetadata> {
-    CLIENT_AUTHENTICATOR
-        .lock()
-        .unwrap()
-        .get_client_metadata(client_id)
-        .cloned()
+    CLIENT_AUTHENTICATOR.lock().unwrap().get_client_metadata(client_id).cloned()
 }
 
 /// Convenience function to check if client is active
 pub fn is_client_active(client_id: &str) -> bool {
-    CLIENT_AUTHENTICATOR
-        .lock()
-        .unwrap()
-        .is_client_active(client_id)
+    CLIENT_AUTHENTICATOR.lock().unwrap().is_client_active(client_id)
 }
 
 #[cfg(test)]
@@ -328,7 +331,7 @@ mod tests {
         let result = auth.register_client(
             "test_client".to_string(),
             "very_strong_secret_with_mixed_chars_123!@#".to_string(),
-            metadata
+            metadata,
         );
         assert!(result.is_ok());
     }
@@ -339,25 +342,27 @@ mod tests {
         let metadata = ClientMetadata::default();
 
         // Too short
-        assert!(auth.register_client(
-            "test_client".to_string(),
-            "short".to_string(),
-            metadata.clone()
-        ).is_err());
+        assert!(auth
+            .register_client("test_client".to_string(), "short".to_string(), metadata.clone())
+            .is_err());
 
         // All digits
-        assert!(auth.register_client(
-            "test_client".to_string(),
-            "12345678901234567890123456789012".to_string(),
-            metadata.clone()
-        ).is_err());
+        assert!(auth
+            .register_client(
+                "test_client".to_string(),
+                "12345678901234567890123456789012".to_string(),
+                metadata.clone()
+            )
+            .is_err());
 
         // All letters
-        assert!(auth.register_client(
-            "test_client".to_string(),
-            "abcdefghijklmnopqrstuvwxyzabcdef".to_string(),
-            metadata
-        ).is_err());
+        assert!(auth
+            .register_client(
+                "test_client".to_string(),
+                "abcdefghijklmnopqrstuvwxyzabcdef".to_string(),
+                metadata
+            )
+            .is_err());
     }
 
     #[test]
@@ -366,11 +371,7 @@ mod tests {
         let metadata = ClientMetadata::default();
         let secret = "very_strong_secret_with_mixed_chars_123!@#";
 
-        auth.register_client(
-            "test_client".to_string(),
-            secret.to_string(),
-            metadata
-        ).unwrap();
+        auth.register_client("test_client".to_string(), secret.to_string(), metadata).unwrap();
 
         // Correct credentials
         assert!(auth.authenticate_client("test_client", secret, None).unwrap());
@@ -390,8 +391,9 @@ mod tests {
         auth.register_client(
             "test_client".to_string(),
             "very_strong_secret_with_mixed_chars_123!@#".to_string(),
-            metadata
-        ).unwrap();
+            metadata,
+        )
+        .unwrap();
 
         // Measure timing for valid client
         let start = Instant::now();
@@ -410,6 +412,10 @@ mod tests {
             invalid_client_time - valid_client_time
         };
 
-        assert!(time_diff.as_millis() < 50, "Timing difference too large: {}ms", time_diff.as_millis());
+        assert!(
+            time_diff.as_millis() < 50,
+            "Timing difference too large: {}ms",
+            time_diff.as_millis()
+        );
     }
 }

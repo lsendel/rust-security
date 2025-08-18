@@ -1,5 +1,5 @@
 //! Threat Feed Validator
-//! 
+//!
 //! A Rust-based replacement for the Python validate_threat_feeds.py
 //! Validates threat intelligence feeds configuration and accessibility
 
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 #[tokio::main]
@@ -91,8 +91,14 @@ async fn main() -> Result<()> {
     let report = ValidationReport {
         timestamp: Utc::now(),
         total_feeds: feeds_config.feeds.len() as u32,
-        successful_feeds: validation_results.iter().filter(|r| r.status == ValidationStatus::Success).count() as u32,
-        failed_feeds: validation_results.iter().filter(|r| r.status == ValidationStatus::Failed).count() as u32,
+        successful_feeds: validation_results
+            .iter()
+            .filter(|r| r.status == ValidationStatus::Success)
+            .count() as u32,
+        failed_feeds: validation_results
+            .iter()
+            .filter(|r| r.status == ValidationStatus::Failed)
+            .count() as u32,
         feeds: validation_results,
     };
 
@@ -114,13 +120,18 @@ async fn main() -> Result<()> {
 
     // Print summary
     let success_rate = (report.successful_feeds as f64 / report.total_feeds as f64) * 100.0;
-    
+
     if report.failed_feeds == 0 {
-        info!("✅ All {} threat feeds validated successfully ({:.1}%)", report.total_feeds, success_rate);
+        info!(
+            "✅ All {} threat feeds validated successfully ({:.1}%)",
+            report.total_feeds, success_rate
+        );
     } else {
-        warn!("⚠️  {}/{} threat feeds failed validation ({:.1}% success rate)", 
-              report.failed_feeds, report.total_feeds, success_rate);
-        
+        warn!(
+            "⚠️  {}/{} threat feeds failed validation ({:.1}% success rate)",
+            report.failed_feeds, report.total_feeds, success_rate
+        );
+
         // Show failed feeds
         for feed in &report.feeds {
             if feed.status == ValidationStatus::Failed {
@@ -148,13 +159,13 @@ async fn load_feeds_config(config_path: &str) -> Result<ThreatFeedsConfig> {
         if Path::new(&path).exists() {
             info!("Loading config from: {}", path);
             let content = tokio::fs::read_to_string(&path).await?;
-            
+
             let config: ThreatFeedsConfig = if path.ends_with(".yaml") || path.ends_with(".yml") {
                 serde_yaml::from_str(&content)?
             } else {
                 serde_json::from_str(&content)?
             };
-            
+
             return Ok(config);
         }
     }
@@ -186,12 +197,18 @@ fn output_table_report(report: &ValidationReport, verbose: bool) {
     println!("✅ Successful: {}", report.successful_feeds);
     println!("❌ Failed: {}", report.failed_feeds);
     println!("📅 Generated: {}", report.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
-    
+
     println!("\n📋 Feed Details:");
-    println!("┌─────────────────────────────────────┬──────────┬──────────────┬─────────────────────┐");
-    println!("│ Feed Name                           │ Status   │ Response Time│ Content Size        │");
-    println!("├─────────────────────────────────────┼──────────┼──────────────┼─────────────────────┤");
-    
+    println!(
+        "┌─────────────────────────────────────┬──────────┬──────────────┬─────────────────────┐"
+    );
+    println!(
+        "│ Feed Name                           │ Status   │ Response Time│ Content Size        │"
+    );
+    println!(
+        "├─────────────────────────────────────┼──────────┼──────────────┼─────────────────────┤"
+    );
+
     for feed in &report.feeds {
         let status_icon = match feed.status {
             ValidationStatus::Success => "✅",
@@ -199,34 +216,35 @@ fn output_table_report(report: &ValidationReport, verbose: bool) {
             ValidationStatus::Warning => "⚠️ ",
             ValidationStatus::Skipped => "⏭️ ",
         };
-        
+
         let response_time = if feed.response_time_ms > 0 {
             format!("{}ms", feed.response_time_ms)
         } else {
             "N/A".to_string()
         };
-        
-        let content_size = if feed.content_size > 0 {
-            format_bytes(feed.content_size)
-        } else {
-            "N/A".to_string()
-        };
-        
-        println!("│ {:<35} │ {} {:<6} │ {:<12} │ {:<19} │", 
-                 truncate_string(&feed.feed_name, 35),
-                 status_icon,
-                 format!("{:?}", feed.status),
-                 response_time,
-                 content_size);
-        
+
+        let content_size =
+            if feed.content_size > 0 { format_bytes(feed.content_size) } else { "N/A".to_string() };
+
+        println!(
+            "│ {:<35} │ {} {:<6} │ {:<12} │ {:<19} │",
+            truncate_string(&feed.feed_name, 35),
+            status_icon,
+            format!("{:?}", feed.status),
+            response_time,
+            content_size
+        );
+
         if verbose && !feed.errors.is_empty() {
             for error in &feed.errors {
                 println!("│   └─ ❌ {:<86} │", truncate_string(error, 86));
             }
         }
     }
-    
-    println!("└─────────────────────────────────────┴──────────┴──────────────┴─────────────────────┘");
+
+    println!(
+        "└─────────────────────────────────────┴──────────┴──────────────┴─────────────────────┘"
+    );
 }
 
 /// Format bytes in human readable format
@@ -234,12 +252,12 @@ fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
     let mut size = bytes as f64;
     let mut unit_index = 0;
-    
+
     while size >= 1024.0 && unit_index < UNITS.len() - 1 {
         size /= 1024.0;
         unit_index += 1;
     }
-    
+
     if unit_index == 0 {
         format!("{} {}", size as u64, UNITS[unit_index])
     } else {
@@ -289,24 +307,28 @@ impl ThreatFeedValidator {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self {
-            client,
-            timeout_duration: Duration::from_secs(timeout_secs),
-        }
+        Self { client, timeout_duration: Duration::from_secs(timeout_secs) }
     }
 
-    async fn validate_all_feeds(&self, config: &ThreatFeedsConfig) -> Result<Vec<FeedValidationResult>> {
+    async fn validate_all_feeds(
+        &self,
+        config: &ThreatFeedsConfig,
+    ) -> Result<Vec<FeedValidationResult>> {
         let mut results = Vec::new();
-        
+
         for (feed_name, feed_config) in &config.feeds {
             let result = self.validate_feed(feed_name, feed_config).await;
             results.push(result);
         }
-        
+
         Ok(results)
     }
 
-    async fn validate_feed(&self, feed_name: &str, config: &ThreatFeedConfig) -> FeedValidationResult {
+    async fn validate_feed(
+        &self,
+        feed_name: &str,
+        config: &ThreatFeedConfig,
+    ) -> FeedValidationResult {
         let mut result = FeedValidationResult {
             feed_name: feed_name.to_string(),
             url: config.url.clone().unwrap_or_else(|| "N/A".to_string()),
@@ -328,16 +350,14 @@ impl ThreatFeedValidator {
 
         // Validate URL
         let url = match &config.url {
-            Some(url_str) => {
-                match Url::parse(url_str) {
-                    Ok(url) => url,
-                    Err(e) => {
-                        result.status = ValidationStatus::Failed;
-                        result.errors.push(format!("Invalid URL: {}", e));
-                        return result;
-                    }
+            Some(url_str) => match Url::parse(url_str) {
+                Ok(url) => url,
+                Err(e) => {
+                    result.status = ValidationStatus::Failed;
+                    result.errors.push(format!("Invalid URL: {}", e));
+                    return result;
                 }
-            }
+            },
             None => {
                 result.status = ValidationStatus::Failed;
                 result.errors.push("No URL configured".to_string());
@@ -354,20 +374,20 @@ impl ThreatFeedValidator {
 
         // Test connectivity
         let start_time = Instant::now();
-        
+
         match self.test_feed_connectivity(&url, config).await {
             Ok(response_info) => {
                 result.response_time_ms = start_time.elapsed().as_millis() as u64;
                 result.content_size = response_info.content_size;
                 result.content_preview = response_info.content_preview;
                 result.status = ValidationStatus::Success;
-                
+
                 // Add warnings for slow responses
                 if result.response_time_ms > 10000 {
                     result.status = ValidationStatus::Warning;
                     result.errors.push("Slow response time (>10s)".to_string());
                 }
-                
+
                 // Add warnings for small content
                 if result.content_size < 100 {
                     if result.status == ValidationStatus::Success {
@@ -386,7 +406,11 @@ impl ThreatFeedValidator {
         result
     }
 
-    async fn test_feed_connectivity(&self, url: &Url, config: &ThreatFeedConfig) -> Result<ResponseInfo> {
+    async fn test_feed_connectivity(
+        &self,
+        url: &Url,
+        config: &ThreatFeedConfig,
+    ) -> Result<ResponseInfo> {
         let mut request = self.client.get(url.as_str());
 
         // Add API key if configured
@@ -415,17 +439,14 @@ impl ThreatFeedValidator {
         // Read a preview of the content
         let content_bytes = response.bytes().await?;
         let actual_size = content_bytes.len() as u64;
-        
+
         let content_preview = if content_bytes.len() > 200 {
             String::from_utf8_lossy(&content_bytes[..200]).to_string()
         } else {
             String::from_utf8_lossy(&content_bytes).to_string()
         };
 
-        Ok(ResponseInfo {
-            content_size: actual_size,
-            content_preview,
-        })
+        Ok(ResponseInfo { content_size: actual_size, content_preview })
     }
 }
 

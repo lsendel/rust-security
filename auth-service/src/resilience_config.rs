@@ -1,8 +1,8 @@
-use crate::circuit_breaker::{CircuitBreakerConfig, TimeoutConfig, RetryConfig};
-use crate::resilient_store::ResilientRedisConfig;
+use crate::circuit_breaker::{CircuitBreakerConfig, RetryConfig, TimeoutConfig};
 use crate::resilient_http::ResilientHttpConfig;
-use std::time::Duration;
+use crate::resilient_store::ResilientRedisConfig;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResilienceConfig {
@@ -200,7 +200,8 @@ impl ResilienceConfig {
         // Policy service configuration
         if let Ok(timeout) = std::env::var("POLICY_SERVICE_REQUEST_TIMEOUT_SECS") {
             if let Ok(t) = timeout.parse::<u64>() {
-                config.external_apis.policy_service.circuit_breaker.request_timeout = Duration::from_secs(t);
+                config.external_apis.policy_service.circuit_breaker.request_timeout =
+                    Duration::from_secs(t);
             }
         }
 
@@ -239,7 +240,7 @@ mod tests {
     #[test]
     fn test_default_resilience_config() {
         let config = ResilienceConfig::default();
-        
+
         // Test Redis defaults
         assert_eq!(config.redis.circuit_breaker.failure_threshold, 5);
         assert_eq!(config.redis.timeouts.connect_timeout, Duration::from_secs(5));
@@ -257,11 +258,11 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = ResilienceConfig::default();
-        
+
         // Test invalid Redis config
         config.redis.circuit_breaker.failure_threshold = 0;
         assert!(config.validate().is_err());
-        
+
         // Reset and test zero timeout
         config = ResilienceConfig::default();
         config.redis.circuit_breaker.request_timeout = Duration::from_secs(0);
@@ -271,7 +272,7 @@ mod tests {
     #[test]
     fn test_oidc_provider_configs() {
         let config = OidcProviderResilienceConfig::default();
-        
+
         assert!(config.google.user_agent.contains("OIDC-Google"));
         assert!(config.microsoft.user_agent.contains("OIDC-Microsoft"));
         assert!(config.github.user_agent.contains("OIDC-GitHub"));

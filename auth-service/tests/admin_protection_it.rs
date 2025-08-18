@@ -9,17 +9,31 @@ async fn spawn_app() -> String {
     let addr = listener.local_addr().unwrap();
 
     // Register a test client via env
-    std::env::set_var("CLIENT_CREDENTIALS", "test_client:very_strong_secret_with_mixed_chars_123!@#");
+    std::env::set_var(
+        "CLIENT_CREDENTIALS",
+        "test_client:very_strong_secret_with_mixed_chars_123!@#",
+    );
     // Keep signature validation ON for this test to verify helper signing
     std::env::set_var("TEST_MODE", "0");
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
-        allowed_scopes: vec!["read".to_string(), "write".to_string(), "openid".to_string(), "admin".to_string()],
+        allowed_scopes: vec![
+            "read".to_string(),
+            "write".to_string(),
+            "openid".to_string(),
+            "admin".to_string(),
+        ],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -77,5 +91,3 @@ async fn admin_stats_requires_admin_scope() {
     // proper request signing is required; here we just assert it is not inadvertently open.
     assert!(res_admin.status().is_success());
 }
-
-

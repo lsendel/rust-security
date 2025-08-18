@@ -52,14 +52,14 @@ impl OptimizedSecureKeyManager {
     async fn generate_key(&self) -> Result<OptimizedSecureKeyMaterial, Unspecified> {
         let keypair = RsaKeyPair::generate_pkcs1(&self.rng, 2048)?;
         let kid = format!("opt-key-{}", self.now_unix());
-        
+
         // Extract public key components for JWK
         let public_key = keypair.public_key();
         let public_key_der = public_key.as_ref();
-        
+
         // Parse DER to extract modulus and exponent
         let (n, e) = self.extract_rsa_components(public_key_der)?;
-        
+
         let public_jwk = serde_json::json!({
             "kty": "RSA",
             "use": "sig",
@@ -82,36 +82,36 @@ impl OptimizedSecureKeyManager {
     /// Non-blocking key generation with status tracking
     pub async fn ensure_key_available(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.keys.read().await;
-        let needs_new_key = keys.is_empty() || 
+        let needs_new_key = keys.is_empty() ||
             keys.iter().any(|k| self.now_unix() - k.created_at > 3600);
-        
+
         if !needs_new_key {
             return Ok(());
         }
-        
+
         drop(keys); // Release read lock
-        
+
         // Try to acquire generation semaphore without blocking
         if let Ok(permit) = self.generation_semaphore.try_acquire() {
             // Update status
             *self.status.write().await = KeyGenerationStatus::Generating;
-            
+
             // Generate key in background
             let result = self.generate_key().await;
-            
+
             match result {
                 Ok(new_key) => {
                     let mut keys = self.keys.write().await;
-                    
+
                     // Keep only recent keys for rotation
                     keys.retain(|k| self.now_unix() - k.created_at < 7200);
                     keys.push(new_key);
-                    
+
                     // Limit to 3 keys maximum
                     if keys.len() > 3 {
                         keys.remove(0);
                     }
-                    
+
                     *self.status.write().await = KeyGenerationStatus::Available;
                 }
                 Err(e) => {
@@ -119,11 +119,11 @@ impl OptimizedSecureKeyManager {
                     return Err(Box::new(e));
                 }
             }
-            
+
             drop(permit);
         }
         // If we can't acquire the semaphore, another task is generating
-        
+
         Ok(())
     }
 
@@ -131,7 +131,7 @@ impl OptimizedSecureKeyManager {
     pub async fn get_jwks(&self) -> Value {
         let keys = self.keys.read().await;
         let jwk_keys: Vec<Value> = keys.iter().map(|k| k.public_jwk.clone()).collect();
-        
+
         serde_json::json!({
             "keys": jwk_keys
         })
@@ -140,11 +140,11 @@ impl OptimizedSecureKeyManager {
     /// Sign JWT with usage tracking
     pub async fn sign_jwt(&self, payload: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.keys.read().await;
-        
+
         if let Some(key_material) = keys.first() {
             // Increment usage counter
             key_material.usage_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            
+
             let signature = key_material.keypair.sign(&RSA_PKCS1_SHA256, payload)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
             Ok(signature.as_ref().to_vec())
@@ -188,20 +188,20 @@ impl OptimizedSecureKeyManager {
     fn extract_rsa_components(&self, der: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Unspecified> {
         // Standard RSA exponent (65537)
         let e = vec![0x01, 0x00, 0x01];
-        
+
         if der.len() < 256 {
             return Err(Unspecified);
         }
-        
+
         // Extract the last 256 bytes as the modulus (simplified)
         let n = der[der.len() - 256..].to_vec();
-        
+
         Ok((n, e))
     }
 }
 
 // Global optimized key manager instance
-static OPTIMIZED_KEY_MANAGER: Lazy<OptimizedSecureKeyManager> = 
+static OPTIMIZED_KEY_MANAGER: Lazy<OptimizedSecureKeyManager> =
     Lazy::new(OptimizedSecureKeyManager::new);
 
 /// Public API functions
@@ -242,7 +242,7 @@ mod tests {
     async fn test_optimized_key_generation() {
         let manager = OptimizedSecureKeyManager::new();
         manager.ensure_key_available().await.unwrap();
-        
+
         let kid = manager.get_current_kid().await;
         assert!(kid.is_some());
         assert!(kid.unwrap().starts_with("opt-key-"));
@@ -252,7 +252,7 @@ mod tests {
     async fn test_optimized_jwt_signing() {
         let manager = OptimizedSecureKeyManager::new();
         manager.ensure_key_available().await.unwrap();
-        
+
         let payload = b"test payload";
         let signature = manager.sign_jwt(payload).await.unwrap();
         assert!(!signature.is_empty());
@@ -262,7 +262,7 @@ mod tests {
     async fn test_optimized_jwks_generation() {
         let manager = OptimizedSecureKeyManager::new();
         manager.ensure_key_available().await.unwrap();
-        
+
         let jwks = manager.get_jwks().await;
         let keys = jwks.get("keys").unwrap().as_array().unwrap();
         assert!(!keys.is_empty());
@@ -272,11 +272,11 @@ mod tests {
     async fn test_usage_tracking() {
         let manager = OptimizedSecureKeyManager::new();
         manager.ensure_key_available().await.unwrap();
-        
+
         let payload = b"test payload";
         manager.sign_jwt(payload).await.unwrap();
         manager.sign_jwt(payload).await.unwrap();
-        
+
         let stats = manager.get_key_stats().await;
         assert!(!stats.is_empty());
         assert_eq!(stats[0].2, 2); // Usage count should be 2
@@ -286,7 +286,7 @@ mod tests {
     async fn test_status_tracking() {
         let manager = OptimizedSecureKeyManager::new();
         let status = manager.get_status().await;
-        
+
         match status {
             KeyGenerationStatus::Available => assert!(true),
             _ => assert!(false, "Expected Available status"),

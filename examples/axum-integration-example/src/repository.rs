@@ -1,13 +1,13 @@
 use crate::{CreateUserRequest, UpdateUserRequest, User, UserRole};
 use async_trait::async_trait;
-use thiserror::Error;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use thiserror::Error;
 
-#[cfg(any(feature = "sqlite", feature = "postgres"))]
-use sqlx::Row;
 #[cfg(feature = "postgres")]
 use sqlx::PgPool;
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
+use sqlx::Row;
 #[cfg(feature = "sqlite")]
 use sqlx::SqlitePool;
 
@@ -70,10 +70,7 @@ pub struct InMemoryUserRepository {
 
 impl InMemoryUserRepository {
     pub fn new() -> Self {
-        Self {
-            users: Arc::new(Mutex::new(HashMap::new())),
-            next_id: Arc::new(Mutex::new(1)),
-        }
+        Self { users: Arc::new(Mutex::new(HashMap::new())), next_id: Arc::new(Mutex::new(1)) }
     }
 }
 
@@ -237,16 +234,24 @@ impl UserRepository for PostgresUserRepository {
             _ => UserRole::User,
         };
 
-        let created_str: String = row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
-        let updated_str: String = row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let created_str: String =
+            row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let updated_str: String =
+            row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
         Ok(User {
             id: row.try_get("id").map_err(|e| DbError::Query(e.to_string()))?,
             name: row.try_get("name").map_err(|e| DbError::Query(e.to_string()))?,
             email: row.try_get("email").map_err(|e| DbError::Query(e.to_string()))?,
-            password_hash: row.try_get("password_hash").map_err(|e| DbError::Query(e.to_string()))?,
+            password_hash: row
+                .try_get("password_hash")
+                .map_err(|e| DbError::Query(e.to_string()))?,
             role,
-            created_at: chrono::DateTime::parse_from_rfc3339(&created_str).map_err(|_| DbError::Internal)?.with_timezone(&chrono::Utc),
-            updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).map_err(|_| DbError::Internal)?.with_timezone(&chrono::Utc),
+            created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                .map_err(|_| DbError::Internal)?
+                .with_timezone(&chrono::Utc),
+            updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                .map_err(|_| DbError::Internal)?
+                .with_timezone(&chrono::Utc),
         })
     }
 
@@ -266,16 +271,22 @@ impl UserRepository for PostgresUserRepository {
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
             let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let created_str: String =
+                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String =
+                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
                 email: r.try_get("email").unwrap_or_default(),
                 password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
             }
         }))
     }
@@ -296,16 +307,22 @@ impl UserRepository for PostgresUserRepository {
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
             let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let created_str: String =
+                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String =
+                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
                 email: r.try_get("email").unwrap_or_default(),
                 password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
             }
         }))
     }
@@ -329,16 +346,22 @@ impl UserRepository for PostgresUserRepository {
             .map(|r| {
                 let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
                 let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-                let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-                let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let created_str: String =
+                    r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let updated_str: String =
+                    r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
                 User {
                     id: r.try_get("id").unwrap_or_default(),
                     name: r.try_get("name").unwrap_or_default(),
                     email: r.try_get("email").unwrap_or_default(),
                     password_hash: r.try_get("password_hash").unwrap_or_default(),
                     role,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                    updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                    created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                 }
             })
             .collect())
@@ -400,25 +423,29 @@ impl UserRepository for PostgresUserRepository {
         Ok(result.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
             let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let created_str: String =
+                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String =
+                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
                 email: r.try_get("email").unwrap_or_default(),
                 password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
             }
         }))
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let result = sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        let result =
+            sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&self.pool).await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -478,13 +505,17 @@ impl UserRepository for SqliteUserRepository {
             _ => UserRole::User,
         };
 
-        let created_str: String = row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
-        let updated_str: String = row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let created_str: String =
+            row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let updated_str: String =
+            row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
         Ok(User {
             id: row.try_get("id").map_err(|e| DbError::Query(e.to_string()))?,
             name: row.try_get("name").map_err(|e| DbError::Query(e.to_string()))?,
             email: row.try_get("email").map_err(|e| DbError::Query(e.to_string()))?,
-            password_hash: row.try_get("password_hash").map_err(|e| DbError::Query(e.to_string()))?,
+            password_hash: row
+                .try_get("password_hash")
+                .map_err(|e| DbError::Query(e.to_string()))?,
             role,
             created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
                 .map_err(|_| DbError::Internal)?
@@ -506,16 +537,22 @@ impl UserRepository for SqliteUserRepository {
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
             let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let created_str: String =
+                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String =
+                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
                 email: r.try_get("email").unwrap_or_default(),
                 password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
             }
         }))
     }
@@ -531,16 +568,22 @@ impl UserRepository for SqliteUserRepository {
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
             let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let created_str: String =
+                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String =
+                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
                 email: r.try_get("email").unwrap_or_default(),
                 password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
             }
         }))
     }
@@ -559,16 +602,22 @@ impl UserRepository for SqliteUserRepository {
             .map(|r| {
                 let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
                 let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-                let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-                let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let created_str: String =
+                    r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let updated_str: String =
+                    r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
                 User {
                     id: r.try_get("id").unwrap_or_default(),
                     name: r.try_get("name").unwrap_or_default(),
                     email: r.try_get("email").unwrap_or_default(),
                     password_hash: r.try_get("password_hash").unwrap_or_default(),
                     role,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                    updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                    created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                    updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                 }
             })
             .collect())
@@ -624,25 +673,29 @@ impl UserRepository for SqliteUserRepository {
         Ok(result.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
             let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String = r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String = r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let created_str: String =
+                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String =
+                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
                 email: r.try_get("email").unwrap_or_default(),
                 password_hash: r.try_get("password_hash").unwrap_or_default(),
                 role,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_str).unwrap().with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str).unwrap().with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
             }
         }))
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let result = sqlx::query("DELETE FROM users WHERE id = ?")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        let result =
+            sqlx::query("DELETE FROM users WHERE id = ?").bind(id).execute(&self.pool).await?;
 
         Ok(result.rows_affected() > 0)
     }

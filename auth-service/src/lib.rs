@@ -83,8 +83,8 @@ pub mod validation;
 pub mod client_auth;
 pub mod mfa;
 pub mod otp_provider;
-pub mod session_manager;
 pub mod session_cleanup;
+pub mod session_manager;
 pub mod token_store;
 pub mod webauthn;
 
@@ -98,18 +98,18 @@ pub mod scim;
 pub mod scim_rbac;
 
 // Security modules
+pub mod admin_middleware;
 pub mod auth_failure_logging;
+#[cfg(test)]
+pub mod pii_audit_tests;
+pub mod pii_protection;
 pub mod redirect_validation;
 pub mod secure_random;
 pub mod security;
 pub mod security_headers;
-pub mod admin_middleware;
 pub mod security_logging;
 pub mod security_metrics;
 pub mod security_monitoring;
-pub mod pii_protection;
-#[cfg(test)]
-pub mod pii_audit_tests;
 
 // Key management
 pub mod key_management;
@@ -128,52 +128,55 @@ pub mod resilience_config;
 pub mod resilient_http;
 pub mod resilient_store;
 
-pub use errors::{AuthError, ErrorResponse, internal_error, validation_error, token_store_error};
-pub use validation::{ValidatedDto, ValidationResult, middleware::{ValidatedJson, ValidatedQuery}};
+pub use errors::{internal_error, token_store_error, validation_error, AuthError, ErrorResponse};
+pub use validation::{
+    middleware::{ValidatedJson, ValidatedQuery},
+    ValidatedDto, ValidationResult,
+};
 
 // SOAR (Security Orchestration, Automation, and Response) Modules
 #[cfg(feature = "soar")]
+pub mod soar_case_management;
+#[cfg(feature = "soar")]
 pub mod soar_core;
-#[cfg(feature = "soar")]
-pub mod soar_workflow;
-#[cfg(feature = "soar")]
-pub mod soar_executors;
 #[cfg(feature = "soar")]
 pub mod soar_correlation;
 #[cfg(feature = "soar")]
-pub mod soar_case_management;
+pub mod soar_executors;
+#[cfg(feature = "soar")]
+pub mod soar_workflow;
 
 // Performance Optimization Modules (behind feature flag to avoid pulling heavy deps in default tests)
+#[cfg(feature = "optimizations")]
+pub mod async_optimized;
+#[cfg(feature = "optimizations")]
+pub mod connection_pool_optimized;
 #[cfg(feature = "optimizations")]
 pub mod crypto_optimized;
 #[cfg(feature = "optimizations")]
 pub mod database_optimized;
-#[cfg(feature = "optimizations")]
-pub mod connection_pool_optimized;
-#[cfg(feature = "optimizations")]
-pub mod async_optimized;
 
 // Threat Hunting Modules
 #[cfg(feature = "threat-hunting")]
-pub mod threat_types;
+pub mod threat_attack_patterns;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_behavioral_analyzer;
 #[cfg(feature = "threat-hunting")]
+pub mod threat_hunting_orchestrator;
+#[cfg(feature = "threat-hunting")]
 pub mod threat_intelligence;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_attack_patterns;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_user_profiler;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_response_orchestrator;
 #[cfg(feature = "threat-hunting")]
-pub mod threat_hunting_orchestrator;
+pub mod threat_types;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_user_profiler;
 
 // Import the new comprehensive MFA system
 // Deprecated re-exports removed (modules not present)
 
-use security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
-use security_monitoring::{SECURITY_MONITOR, MonitoringConfig};
+use security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use security_monitoring::{MonitoringConfig, SECURITY_MONITOR};
 
 fn audit(event: &str, payload: serde_json::Value) {
     tracing::info!(target: "audit", event, payload = %payload);
@@ -210,7 +213,6 @@ pub async fn jwks() -> Json<serde_json::Value> {
     Json(keys::jwks_document().await)
 }
 
-
 // Enhanced MFA v2 endpoints using the comprehensive system
 // Legacy MFA v2 scaffolding endpoints disabled (implementation not present in this repo)
 
@@ -223,12 +225,9 @@ pub async fn jwks() -> Json<serde_json::Value> {
 pub async fn get_security_alerts(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
-    let limit = params.get("limit")
-        .and_then(|l| l.parse::<usize>().ok());
+    let limit = params.get("limit").and_then(|l| l.parse::<usize>().ok());
 
-    let active_only = params.get("active_only")
-        .map(|v| v == "true")
-        .unwrap_or(false);
+    let active_only = params.get("active_only").map(|v| v == "true").unwrap_or(false);
 
     let alerts = if active_only {
         SECURITY_MONITOR.get_active_alerts().await
@@ -251,9 +250,8 @@ pub async fn resolve_security_alert(
     Path(alert_id): axum::extract::Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
-    let resolution_notes = body.get("resolution_notes")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    let resolution_notes =
+        body.get("resolution_notes").and_then(|v| v.as_str()).map(|s| s.to_string());
 
     let resolved = SECURITY_MONITOR.resolve_alert(&alert_id, resolution_notes).await;
 
@@ -338,8 +336,8 @@ pub async fn admin_force_rotation(
 }
 
 // Session management endpoint handlers
-use crate::session_manager::{SESSION_MANAGER, Session};
 use crate::redirect_validation::RedirectUriValidator;
+use crate::session_manager::{Session, SESSION_MANAGER};
 
 // Initialize redirect URI validator
 static REDIRECT_VALIDATOR: once_cell::sync::Lazy<std::sync::Mutex<RedirectUriValidator>> =
@@ -365,12 +363,11 @@ async fn extract_user_from_token(
     state: &AppState,
 ) -> Result<String, AuthError> {
     // Extract bearer token
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let auth =
+        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
 
-    let token = auth.strip_prefix("Bearer ")
+    let token = auth
+        .strip_prefix("Bearer ")
         .ok_or_else(|| AuthError::InvalidToken { reason: "Missing bearer token".to_string() })?;
 
     if token.is_empty() {
@@ -450,18 +447,12 @@ pub async fn create_session_endpoint(
         .unwrap_or("unknown")
         .to_string();
 
-    let user_agent = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let user_agent = headers.get("user-agent").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
 
-    let session = SESSION_MANAGER.create_session(
-        derived_user_id,
-        req.client_id,
-        ip_address,
-        user_agent,
-        req.duration,
-    ).await.map_err(|e| internal_error(&format!("Session creation failed: {}", e)))?;
+    let session = SESSION_MANAGER
+        .create_session(derived_user_id, req.client_id, ip_address, user_agent, req.duration)
+        .await
+        .map_err(|e| internal_error(&format!("Session creation failed: {}", e)))?;
 
     Ok(Json(CreateSessionResponse {
         session_id: session.id,
@@ -489,22 +480,26 @@ pub async fn get_session_endpoint(
             // Check session ownership
             if session.user_id != requesting_user_id {
                 // Log unauthorized access attempt
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::UnauthorizedAccess,
-                    SecuritySeverity::High,
-                    "auth-service".to_string(),
-                    "Unauthorized session access attempt".to_string(),
-                )
-                .with_actor(requesting_user_id.to_string())
-                .with_action("read".to_string())
-                .with_target(format!("session:{}", session_id))
-                .with_outcome("blocked".to_string())
-                .with_reason("User attempted to access another user's session".to_string())
-                .with_session_id(session_id.to_string())
-                .with_correlation_id(format!("session-access-{}", session_id))
-                .with_detail("target_user".to_string(), session.user_id.clone()));
+                SecurityLogger::log_event(
+                    &SecurityEvent::new(
+                        SecurityEventType::UnauthorizedAccess,
+                        SecuritySeverity::High,
+                        "auth-service".to_string(),
+                        "Unauthorized session access attempt".to_string(),
+                    )
+                    .with_actor(requesting_user_id.to_string())
+                    .with_action("read".to_string())
+                    .with_target(format!("session:{}", session_id))
+                    .with_outcome("blocked".to_string())
+                    .with_reason("User attempted to access another user's session".to_string())
+                    .with_session_id(session_id.to_string())
+                    .with_correlation_id(format!("session-access-{}", session_id))
+                    .with_detail("target_user".to_string(), session.user_id.clone()),
+                );
 
-                return Err(AuthError::UnauthorizedClient { client_id: "Access denied".to_string() });
+                return Err(AuthError::UnauthorizedClient {
+                    client_id: "Access denied".to_string(),
+                });
             }
 
             if session.is_expired(None) {
@@ -538,41 +533,49 @@ pub async fn delete_session_endpoint(
             // Check session ownership
             if session.user_id != requesting_user_id {
                 // Log unauthorized access attempt
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::UnauthorizedAccess,
-                    SecuritySeverity::High,
+                SecurityLogger::log_event(
+                    &SecurityEvent::new(
+                        SecurityEventType::UnauthorizedAccess,
+                        SecuritySeverity::High,
+                        "auth-service".to_string(),
+                        "Unauthorized session deletion attempt".to_string(),
+                    )
+                    .with_actor(requesting_user_id.to_string())
+                    .with_action("delete".to_string())
+                    .with_target(format!("session:{}", session_id))
+                    .with_outcome("blocked".to_string())
+                    .with_reason("User attempted to delete another user's session".to_string())
+                    .with_session_id(session_id.to_string())
+                    .with_correlation_id(format!("session-delete-{}", session_id))
+                    .with_detail("target_user".to_string(), session.user_id.clone()),
+                );
+
+                return Err(AuthError::UnauthorizedClient {
+                    client_id: "Access denied".to_string(),
+                });
+            }
+
+            // User owns the session, proceed with deletion
+            SESSION_MANAGER
+                .delete_session(&session_id)
+                .await
+                .map_err(|e| internal_error(&format!("Session deletion failed: {}", e)))?;
+
+            // Log successful session deletion
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::SessionEvent,
+                    SecuritySeverity::Low,
                     "auth-service".to_string(),
-                    "Unauthorized session deletion attempt".to_string(),
+                    "Session deleted successfully".to_string(),
                 )
                 .with_actor(requesting_user_id.to_string())
                 .with_action("delete".to_string())
                 .with_target(format!("session:{}", session_id))
-                .with_outcome("blocked".to_string())
-                .with_reason("User attempted to delete another user's session".to_string())
+                .with_outcome("success".to_string())
                 .with_session_id(session_id.to_string())
-                .with_correlation_id(format!("session-delete-{}", session_id))
-                .with_detail("target_user".to_string(), session.user_id.clone()));
-
-                return Err(AuthError::UnauthorizedClient { client_id: "Access denied".to_string() });
-            }
-
-            // User owns the session, proceed with deletion
-            SESSION_MANAGER.delete_session(&session_id).await
-                .map_err(|e| internal_error(&format!("Session deletion failed: {}", e)))?;
-
-            // Log successful session deletion
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::SessionEvent,
-                SecuritySeverity::Low,
-                "auth-service".to_string(),
-                "Session deleted successfully".to_string(),
-            )
-            .with_actor(requesting_user_id.to_string())
-            .with_action("delete".to_string())
-            .with_target(format!("session:{}", session_id))
-            .with_outcome("success".to_string())
-            .with_session_id(session_id.to_string())
-            .with_correlation_id(format!("session-delete-{}", session_id)));
+                .with_correlation_id(format!("session-delete-{}", session_id)),
+            );
 
             Ok(Json(serde_json::json!({
                 "success": true,
@@ -606,41 +609,49 @@ pub async fn refresh_session_endpoint(
             // Check session ownership
             if session.user_id != requesting_user_id {
                 // Log unauthorized access attempt
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::UnauthorizedAccess,
-                    SecuritySeverity::High,
-                    "auth-service".to_string(),
-                    "Unauthorized session refresh attempt".to_string(),
-                )
-                .with_actor(requesting_user_id.to_string())
-                .with_action("refresh".to_string())
-                .with_target(format!("session:{}", session_id))
-                .with_outcome("blocked".to_string())
-                .with_reason("User attempted to refresh another user's session".to_string())
-                .with_session_id(session_id.to_string())
-                .with_correlation_id(format!("session-refresh-{}", session_id))
-                .with_detail("target_user".to_string(), session.user_id.clone()));
+                SecurityLogger::log_event(
+                    &SecurityEvent::new(
+                        SecurityEventType::UnauthorizedAccess,
+                        SecuritySeverity::High,
+                        "auth-service".to_string(),
+                        "Unauthorized session refresh attempt".to_string(),
+                    )
+                    .with_actor(requesting_user_id.to_string())
+                    .with_action("refresh".to_string())
+                    .with_target(format!("session:{}", session_id))
+                    .with_outcome("blocked".to_string())
+                    .with_reason("User attempted to refresh another user's session".to_string())
+                    .with_session_id(session_id.to_string())
+                    .with_correlation_id(format!("session-refresh-{}", session_id))
+                    .with_detail("target_user".to_string(), session.user_id.clone()),
+                );
 
-                return Err(AuthError::UnauthorizedClient { client_id: "Access denied".to_string() });
+                return Err(AuthError::UnauthorizedClient {
+                    client_id: "Access denied".to_string(),
+                });
             }
 
             // User owns the session, proceed with refresh
             match SESSION_MANAGER.refresh_session(&session_id, req.duration).await {
                 Ok(Some(refreshed_session)) => {
                     // Log successful session refresh
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::SessionEvent,
-                        SecuritySeverity::Low,
-                        "auth-service".to_string(),
-                        "Session refreshed successfully".to_string(),
-                    )
-                    .with_user_id(requesting_user_id)
-                    .with_session_id(session_id)
-                    .with_outcome("success".to_string()));
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::SessionEvent,
+                            SecuritySeverity::Low,
+                            "auth-service".to_string(),
+                            "Session refreshed successfully".to_string(),
+                        )
+                        .with_user_id(requesting_user_id)
+                        .with_session_id(session_id)
+                        .with_outcome("success".to_string()),
+                    );
 
                     Ok(Json(refreshed_session))
                 }
-                Ok(None) => Err(AuthError::InvalidToken { reason: "Session not found after refresh".to_string() }),
+                Ok(None) => Err(AuthError::InvalidToken {
+                    reason: "Session not found after refresh".to_string(),
+                }),
                 Err(e) => Err(internal_error(&format!("Session operation failed: {}", e))),
             }
         }
@@ -658,7 +669,9 @@ pub async fn refresh_session_endpoint(
 pub async fn invalidate_user_sessions_endpoint(
     Path(user_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
-    let count = SESSION_MANAGER.invalidate_user_sessions(&user_id).await
+    let count = SESSION_MANAGER
+        .invalidate_user_sessions(&user_id)
+        .await
         .map_err(|e| internal_error(&format!("Session invalidation failed: {}", e)))?;
 
     Ok(Json(serde_json::json!({
@@ -762,17 +775,13 @@ pub async fn authorize_check(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(req): Json<AuthorizationCheckRequest>,
-)
-    -> Result<Json<AuthorizationCheckResponse>, AuthError>
-{
+) -> Result<Json<AuthorizationCheckResponse>, AuthError> {
     use crate::policy_cache::{normalize_policy_request, PolicyResponse};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // Extract bearer token and introspect locally
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let auth =
+        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
     let token = auth.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
         return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
@@ -783,10 +792,7 @@ pub async fn authorize_check(
     }
 
     // Compose principal from token record
-    let principal_id = rec
-        .sub
-        .clone()
-        .unwrap_or_else(|| "anonymous".to_string());
+    let principal_id = rec.sub.clone().unwrap_or_else(|| "anonymous".to_string());
     let principal = serde_json::json!({
         "type": "User",
         "id": principal_id,
@@ -831,9 +837,7 @@ pub async fn authorize_check(
             cached_at = cached_response.cached_at,
             "Policy decision served from cache"
         );
-        return Ok(Json(AuthorizationCheckResponse {
-            decision: cached_response.decision
-        }));
+        return Ok(Json(AuthorizationCheckResponse { decision: cached_response.decision }));
     }
 
     // Cache miss - evaluate policy via service
@@ -843,19 +847,17 @@ pub async fn authorize_check(
         req.action.clone(),
         req.resource.clone(),
         context,
-    ).await?;
+    )
+    .await?;
 
     // Store in cache with appropriate TTL based on decision
     let policy_response = PolicyResponse {
         decision: decision.clone(),
-        cached_at: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
+        cached_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
         ttl_seconds: match decision.as_str() {
-            "Allow" => 300,  // 5 minutes for allow decisions
-            "Deny" => 60,    // 1 minute for deny decisions
-            _ => 10,         // 10 seconds for unknown/error decisions
+            "Allow" => 300, // 5 minutes for allow decisions
+            "Deny" => 60,   // 1 minute for deny decisions
+            _ => 10,        // 10 seconds for unknown/error decisions
         },
     };
 
@@ -882,13 +884,7 @@ async fn evaluate_policy_remote(
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let payload = PolicyAuthorizeRequest {
-        request_id,
-        principal,
-        action,
-        resource,
-        context,
-    };
+    let payload = PolicyAuthorizeRequest { request_id, principal, action, resource, context };
 
     // Allow per-request override of policy URL to avoid env races in tests
     let policy_base = headers
@@ -944,7 +940,10 @@ async fn evaluate_policy_remote(
                     Err(err) => {
                         tracing::warn!(error = %redact_log(&err.to_string()), "Failed to parse policy response; falling back");
                         if strict {
-                            return Err(internal_error(&format!("Policy response parse error: {}", err)));
+                            return Err(internal_error(&format!(
+                                "Policy response parse error: {}",
+                                err
+                            )));
                         }
                         "Allow".to_string()
                     }
@@ -960,7 +959,10 @@ async fn evaluate_policy_remote(
             Err(err) => {
                 tracing::warn!(error = %redact_log(&err.to_string()), "Policy service unavailable; falling back");
                 if strict {
-                    return Err(internal_error(&format!("Policy service connection error: {}", err)));
+                    return Err(internal_error(&format!(
+                        "Policy service connection error: {}",
+                        err
+                    )));
                 }
                 "Allow".to_string()
             }
@@ -971,9 +973,7 @@ async fn evaluate_policy_remote(
 }
 
 pub async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok".to_string(),
-    })
+    Json(HealthResponse { status: "ok".to_string() })
 }
 
 /// Detailed admin health endpoint with comprehensive system status
@@ -982,7 +982,9 @@ pub async fn health() -> Json<HealthResponse> {
     path = "/admin/health",
     responses((status = 200, description = "Detailed system health status"))
 )]
-pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_json::Value>, AuthError> {
+pub async fn admin_health(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AuthError> {
     // Gather comprehensive health information
     let mut health_data = serde_json::json!({
         "status": "ok",
@@ -1003,7 +1005,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
         Err(e) => serde_json::json!({
             "status": "unhealthy",
             "error": redact_log(&e.to_string())
-        })
+        }),
     };
 
     // Check token store metrics
@@ -1020,7 +1022,7 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
         }),
         Err(e) => serde_json::json!({
             "error": redact_log(&e.to_string())
-        })
+        }),
     };
 
     // Check policy cache health
@@ -1060,11 +1062,12 @@ pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_js
     // Note: This would require a reference to the session manager from app state
 
     // Aggregate health status
-    let overall_status = if token_store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
-        "healthy"
-    } else {
-        "degraded"
-    };
+    let overall_status =
+        if token_store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
+            "healthy"
+        } else {
+            "degraded"
+        };
 
     health_data["status"] = serde_json::Value::String(overall_status.to_string());
     health_data["components"] = serde_json::json!({
@@ -1172,17 +1175,27 @@ pub async fn introspect(
     // In TEST_MODE, allow introspection without client authentication to simplify integration tests
     if std::env::var("TEST_MODE").is_err() {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) = if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+        let (cid_opt, csec_opt) = if let Some(auth_header) =
+            headers.get(axum::http::header::AUTHORIZATION)
+        {
             let header_val = auth_header.to_str().unwrap_or("");
             if let Some(b64) = header_val.strip_prefix("Basic ") {
                 if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
                     if let Ok(pair) = std::str::from_utf8(&decoded) {
                         let mut parts = pair.splitn(2, ':');
                         (parts.next().map(|s| s.to_string()), parts.next().map(|s| s.to_string()))
-                    } else { (None, None) }
-                } else { (None, None) }
-            } else { (None, None) }
-        } else { (None, None) };
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
         if state.client_credentials.get(&client_id) != Some(&client_secret) {
@@ -1197,10 +1210,7 @@ pub async fn introspect(
         .unwrap_or("unknown")
         .to_string();
 
-    let user_agent = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let user_agent = headers.get("user-agent").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
 
     let request_id = headers
         .get("x-request-id")
@@ -1295,21 +1305,23 @@ pub async fn oauth_authorize(
     }
 
     // CRITICAL SECURITY FIX: Validate redirect URI
-    if let Err(validation_error) = REDIRECT_VALIDATOR.lock().unwrap()
-        .validate_redirect_uri(&req.client_id, &req.redirect_uri) {
-
+    if let Err(validation_error) =
+        REDIRECT_VALIDATOR.lock().unwrap().validate_redirect_uri(&req.client_id, &req.redirect_uri)
+    {
         // Log security violation
-        SecurityLogger::log_event(&mut SecurityEvent::new(
-            SecurityEventType::SecurityViolation,
-            SecuritySeverity::Critical,
-            "auth-service".to_string(),
-            "Invalid redirect URI attempted".to_string(),
-        )
-        .with_action("oauth_authorize".to_string())
-        .with_detail("client_id".to_string(), req.client_id.clone())
-        .with_detail("attempted_redirect_uri".to_string(), req.redirect_uri.clone())
-        .with_detail("ip_address".to_string(), ip_address.clone())
-        .with_outcome("blocked".to_string()));
+        SecurityLogger::log_event(
+            &mut SecurityEvent::new(
+                SecurityEventType::SecurityViolation,
+                SecuritySeverity::Critical,
+                "auth-service".to_string(),
+                "Invalid redirect URI attempted".to_string(),
+            )
+            .with_action("oauth_authorize".to_string())
+            .with_detail("client_id".to_string(), req.client_id.clone())
+            .with_detail("attempted_redirect_uri".to_string(), req.redirect_uri.clone())
+            .with_detail("ip_address".to_string(), ip_address.clone())
+            .with_outcome("blocked".to_string()),
+        );
 
         return Err(validation_error);
     }
@@ -1320,27 +1332,35 @@ pub async fn oauth_authorize(
         if method != "S256" {
             if method == "plain" {
                 // Log potential downgrade attack attempt
-                SecurityLogger::log_event(&mut SecurityEvent::new(
-                    SecurityEventType::SecurityViolation,
-                    SecuritySeverity::High,
-                    "auth-service".to_string(),
-                    "PKCE downgrade attack attempt detected".to_string(),
-                )
-                .with_action("oauth_authorize".to_string())
-                .with_detail("client_id".to_string(), req.client_id.clone())
-                .with_detail("attack_type".to_string(), "pkce_downgrade")
-                .with_detail("requested_method".to_string(), method)
-                .with_outcome("blocked".to_string()));
+                SecurityLogger::log_event(
+                    &mut SecurityEvent::new(
+                        SecurityEventType::SecurityViolation,
+                        SecuritySeverity::High,
+                        "auth-service".to_string(),
+                        "PKCE downgrade attack attempt detected".to_string(),
+                    )
+                    .with_action("oauth_authorize".to_string())
+                    .with_detail("client_id".to_string(), req.client_id.clone())
+                    .with_detail("attack_type".to_string(), "pkce_downgrade")
+                    .with_detail("requested_method".to_string(), method)
+                    .with_outcome("blocked".to_string()),
+                );
 
-                return Err(AuthError::InvalidRequest { reason: "Plain PKCE method is not supported for security reasons".to_string() });
+                return Err(AuthError::InvalidRequest {
+                    reason: "Plain PKCE method is not supported for security reasons".to_string(),
+                });
             } else {
-                return Err(AuthError::InvalidRequest { reason: "Invalid code_challenge_method. Only S256 is supported".to_string() });
+                return Err(AuthError::InvalidRequest {
+                    reason: "Invalid code_challenge_method. Only S256 is supported".to_string(),
+                });
             }
         }
 
         // Validate challenge format
         if challenge.len() < 43 || challenge.len() > 128 {
-            return Err(AuthError::InvalidRequest { reason: "Invalid code_challenge length".to_string() });
+            return Err(AuthError::InvalidRequest {
+                reason: "Invalid code_challenge length".to_string(),
+            });
         }
     }
 
@@ -1371,8 +1391,7 @@ pub async fn oauth_authorize(
     let mut redirect_url = Url::parse(&req.redirect_uri)
         .map_err(|_| AuthError::InvalidRequest { reason: "Invalid redirect_uri".to_string() })?;
 
-    redirect_url.query_pairs_mut()
-        .append_pair("code", &auth_code.code);
+    redirect_url.query_pairs_mut().append_pair("code", &auth_code.code);
 
     if let Some(state_param) = &req.state {
         redirect_url.query_pairs_mut().append_pair("state", state_param);
@@ -1419,7 +1438,8 @@ pub async fn oauth_authorize(
         StatusCode::FOUND,
         [("Location", redirect_url.to_string())],
         "Redirecting to authorization endpoint",
-    ).into_response())
+    )
+        .into_response())
 }
 
 /// Generate a secure authorization code
@@ -1506,10 +1526,7 @@ pub async fn issue_token(
         .unwrap_or("unknown")
         .to_string();
 
-    let user_agent = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let user_agent = headers.get("user-agent").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
 
     let _request_id = headers
         .get("x-request-id")
@@ -1548,17 +1565,27 @@ pub async fn issue_token(
             let client_id = cid_opt.as_ref().ok_or(AuthError::MissingClientId)?;
             let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
 
-            if crate::client_auth::authenticate_client(client_id, client_secret, Some(&ip_address))? {
+            if crate::client_auth::authenticate_client(client_id, client_secret, Some(&ip_address))?
+            {
                 // Log successful authentication attempt
                 SecurityLogger::log_auth_attempt(
                     client_id,
                     &ip_address,
                     user_agent.as_deref(),
                     "success",
-                    Some([
-                        ("grant_type".to_string(), serde_json::Value::String("client_credentials".to_string())),
-                        ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
-                    ].into()),
+                    Some(
+                        [
+                            (
+                                "grant_type".to_string(),
+                                serde_json::Value::String("client_credentials".to_string()),
+                            ),
+                            (
+                                "has_scope".to_string(),
+                                serde_json::Value::Bool(form.scope.is_some()),
+                            ),
+                        ]
+                        .into(),
+                    ),
                 );
 
                 if let Some(scope_str) = form.scope.as_ref() {
@@ -1571,7 +1598,13 @@ pub async fn issue_token(
                             "invalid_scope",
                             Some(client_id),
                             &ip_address,
-                            Some([("requested_scope".to_string(), serde_json::Value::String(scope_str.clone()))].into()),
+                            Some(
+                                [(
+                                    "requested_scope".to_string(),
+                                    serde_json::Value::String(scope_str.clone()),
+                                )]
+                                .into(),
+                            ),
                         );
                         return Err(AuthError::InvalidScope { scope: scope_str.to_string() });
                     }
@@ -1598,11 +1631,20 @@ pub async fn issue_token(
                     client_id,
                     &ip_address,
                     "success",
-                    Some([
-                        ("grant_type".to_string(), serde_json::Value::String("client_credentials".to_string())),
-                        ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
-                        ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
-                    ].into()),
+                    Some(
+                        [
+                            (
+                                "grant_type".to_string(),
+                                serde_json::Value::String("client_credentials".to_string()),
+                            ),
+                            (
+                                "has_scope".to_string(),
+                                serde_json::Value::Bool(form.scope.is_some()),
+                            ),
+                            ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                        ]
+                        .into(),
+                    ),
                 );
 
                 audit(
@@ -1622,10 +1664,19 @@ pub async fn issue_token(
                     &ip_address,
                     user_agent.as_deref(),
                     "failure",
-                    Some([
-                        ("grant_type".to_string(), serde_json::Value::String("client_credentials".to_string())),
-                        ("reason".to_string(), serde_json::Value::String("invalid_client_credentials".to_string())),
-                    ].into()),
+                    Some(
+                        [
+                            (
+                                "grant_type".to_string(),
+                                serde_json::Value::String("client_credentials".to_string()),
+                            ),
+                            (
+                                "reason".to_string(),
+                                serde_json::Value::String("invalid_client_credentials".to_string()),
+                            ),
+                        ]
+                        .into(),
+                    ),
                 );
 
                 audit(
@@ -1640,10 +1691,7 @@ pub async fn issue_token(
             }
         }
         "refresh_token" => {
-            let rt = form
-                .refresh_token
-                .as_ref()
-                .ok_or(AuthError::MissingRefreshToken)?;
+            let rt = form.refresh_token.as_ref().ok_or(AuthError::MissingRefreshToken)?;
             // Detect refresh token reuse
             if state.token_store.is_refresh_reused(rt).await.unwrap_or(false) {
                 SecurityLogger::log_token_operation(
@@ -1652,9 +1700,13 @@ pub async fn issue_token(
                     "unknown",
                     &ip_address,
                     "failure",
-                    Some([
-                        ("reason".to_string(), serde_json::Value::String("refresh_token_reuse".to_string())),
-                    ].into()),
+                    Some(
+                        [(
+                            "reason".to_string(),
+                            serde_json::Value::String("refresh_token_reuse".to_string()),
+                        )]
+                        .into(),
+                    ),
                 );
                 return Err(AuthError::InvalidRefreshToken);
             }
@@ -1667,9 +1719,13 @@ pub async fn issue_token(
                     "unknown",
                     &ip_address,
                     "failure",
-                    Some([
-                        ("reason".to_string(), serde_json::Value::String("invalid_refresh_token".to_string())),
-                    ].into()),
+                    Some(
+                        [(
+                            "reason".to_string(),
+                            serde_json::Value::String("invalid_refresh_token".to_string()),
+                        )]
+                        .into(),
+                    ),
                 );
                 return Err(AuthError::InvalidRefreshToken);
             }
@@ -1683,7 +1739,13 @@ pub async fn issue_token(
                         "invalid_scope",
                         None,
                         &ip_address,
-                        Some([("requested_scope".to_string(), serde_json::Value::String(scope_str.clone()))].into()),
+                        Some(
+                            [(
+                                "requested_scope".to_string(),
+                                serde_json::Value::String(scope_str.clone()),
+                            )]
+                            .into(),
+                        ),
                     );
                     return Err(AuthError::InvalidScope { scope: scope_str.to_string() });
                 }
@@ -1704,11 +1766,17 @@ pub async fn issue_token(
                 "unknown",
                 &ip_address,
                 "success",
-                Some([
-                    ("grant_type".to_string(), serde_json::Value::String("refresh_token".to_string())),
-                    ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
-                    ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
-                ].into()),
+                Some(
+                    [
+                        (
+                            "grant_type".to_string(),
+                            serde_json::Value::String("refresh_token".to_string()),
+                        ),
+                        ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
+                        ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                    ]
+                    .into(),
+                ),
             );
 
             audit(
@@ -1722,27 +1790,39 @@ pub async fn issue_token(
             Ok(res)
         }
         "authorization_code" => {
-            let code = form.code.as_ref()
+            let code = form
+                .code
+                .as_ref()
                 .ok_or_else(|| AuthError::InvalidRequest { reason: "missing code".to_string() })?;
 
-            let redirect_uri = form.redirect_uri.as_ref()
-                .ok_or_else(|| AuthError::InvalidRequest { reason: "missing redirect_uri".to_string() })?;
+            let redirect_uri = form.redirect_uri.as_ref().ok_or_else(|| {
+                AuthError::InvalidRequest { reason: "missing redirect_uri".to_string() }
+            })?;
 
             // Consume authorization code
-            let auth_code_json = crate::store::consume_auth_code(code).await?
-                .ok_or_else(|| AuthError::InvalidToken { reason: "invalid or expired authorization code".to_string() })?;
+            let auth_code_json = crate::store::consume_auth_code(code).await?.ok_or_else(|| {
+                AuthError::InvalidToken {
+                    reason: "invalid or expired authorization code".to_string(),
+                }
+            })?;
 
-            let auth_code: AuthorizationCode = serde_json::from_str(&auth_code_json)
-                .map_err(|_| AuthError::InvalidToken { reason: "malformed authorization code".to_string() })?;
+            let auth_code: AuthorizationCode =
+                serde_json::from_str(&auth_code_json).map_err(|_| AuthError::InvalidToken {
+                    reason: "malformed authorization code".to_string(),
+                })?;
 
             // Validate authorization code hasn't expired
             if chrono::Utc::now().timestamp() > auth_code.expires_at {
-                return Err(AuthError::InvalidToken { reason: "authorization code expired".to_string() });
+                return Err(AuthError::InvalidToken {
+                    reason: "authorization code expired".to_string(),
+                });
             }
 
             // Validate redirect_uri matches
             if redirect_uri != &auth_code.redirect_uri {
-                return Err(AuthError::InvalidRequest { reason: "redirect_uri mismatch".to_string() });
+                return Err(AuthError::InvalidRequest {
+                    reason: "redirect_uri mismatch".to_string(),
+                });
             }
 
             // Validate client_id (if provided in form)
@@ -1754,24 +1834,38 @@ pub async fn issue_token(
 
             // Validate PKCE if code_challenge was used during authorization
             if let Some(stored_challenge) = &auth_code.code_challenge {
-                let code_verifier = form.code_verifier.as_ref()
-                    .ok_or_else(|| AuthError::InvalidRequest { reason: "missing code_verifier".to_string() })?;
+                let code_verifier = form.code_verifier.as_ref().ok_or_else(|| {
+                    AuthError::InvalidRequest { reason: "missing code_verifier".to_string() }
+                })?;
 
                 let method = auth_code.code_challenge_method.as_deref().unwrap_or("S256");
-                let challenge_method = method.parse::<crate::security::CodeChallengeMethod>()
-                    .map_err(|_| AuthError::InvalidRequest { reason: "invalid code_challenge_method".to_string() })?;
+                let challenge_method = method
+                    .parse::<crate::security::CodeChallengeMethod>()
+                    .map_err(|_| AuthError::InvalidRequest {
+                        reason: "invalid code_challenge_method".to_string(),
+                    })?;
 
-                if !crate::security::validate_pkce_params(code_verifier, stored_challenge, challenge_method) {
-                    return Err(AuthError::InvalidRequest { reason: "PKCE validation failed".to_string() });
+                if !crate::security::validate_pkce_params(
+                    code_verifier,
+                    stored_challenge,
+                    challenge_method,
+                ) {
+                    return Err(AuthError::InvalidRequest {
+                        reason: "PKCE validation failed".to_string(),
+                    });
                 }
             }
 
             // Issue tokens
-            let make_id_token = auth_code
-                .scope
-                .as_ref()
-                .is_some_and(|s| s.contains("openid"));
-            let res = issue_new_token(&state, auth_code.scope.clone(), Some(auth_code.client_id.clone()), make_id_token, None).await?;
+            let make_id_token = auth_code.scope.as_ref().is_some_and(|s| s.contains("openid"));
+            let res = issue_new_token(
+                &state,
+                auth_code.scope.clone(),
+                Some(auth_code.client_id.clone()),
+                make_id_token,
+                None,
+            )
+            .await?;
 
             // Log successful authorization code exchange
             SecurityLogger::log_token_operation(
@@ -1780,12 +1874,24 @@ pub async fn issue_token(
                 &auth_code.client_id,
                 &ip_address,
                 "success",
-                Some([
-                    ("grant_type".to_string(), serde_json::Value::String("authorization_code".to_string())),
-                    ("has_scope".to_string(), serde_json::Value::Bool(auth_code.scope.is_some())),
-                    ("had_pkce".to_string(), serde_json::Value::Bool(auth_code.code_challenge.is_some())),
-                    ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
-                ].into()),
+                Some(
+                    [
+                        (
+                            "grant_type".to_string(),
+                            serde_json::Value::String("authorization_code".to_string()),
+                        ),
+                        (
+                            "has_scope".to_string(),
+                            serde_json::Value::Bool(auth_code.scope.is_some()),
+                        ),
+                        (
+                            "had_pkce".to_string(),
+                            serde_json::Value::Bool(auth_code.code_challenge.is_some()),
+                        ),
+                        ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                    ]
+                    .into(),
+                ),
             );
 
             audit(
@@ -1823,10 +1929,8 @@ pub async fn userinfo(
         .to_string();
 
     // Extract bearer token
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    let auth =
+        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
     let token = auth.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
         SecurityLogger::log_validation_failure(
@@ -1853,7 +1957,9 @@ pub async fn userinfo(
     // Enforce required scopes (at least "openid")
     if let Some(scope) = &rec.scope {
         if !scope.split_whitespace().any(|s| s == "openid") {
-            return Err(AuthError::UnauthorizedClient { client_id: "insufficient_scope".to_string() });
+            return Err(AuthError::UnauthorizedClient {
+                client_id: "insufficient_scope".to_string(),
+            });
         }
     } else {
         return Err(AuthError::UnauthorizedClient { client_id: "insufficient_scope".to_string() });
@@ -1948,18 +2054,16 @@ async fn store_access_token_metadata(
 }
 
 /// Helper function to create ID token if requested
-async fn create_id_token(
-    subject: Option<String>,
-    now: i64,
-    exp: i64,
-) -> Option<String> {
+async fn create_id_token(subject: Option<String>, now: i64, exp: i64) -> Option<String> {
     subject.as_ref()?;
 
-    let (kid, encoding_key) = keys::current_signing_key().await
+    let (kid, encoding_key) = keys::current_signing_key()
+        .await
         .map_err(|e| {
             tracing::error!(error = %redact_log(&e.to_string()), "Failed to get signing key");
             e
-        }).ok()?;
+        })
+        .ok()?;
     let header = jsonwebtoken::Header {
         alg: jsonwebtoken::Algorithm::RS256,
         kid: Some(kid),
@@ -1975,16 +2079,10 @@ async fn create_id_token(
         iat: i64,
     }
 
-    let iss_val = std::env::var("EXTERNAL_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let iss_val =
+        std::env::var("EXTERNAL_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let sub_val = subject.as_deref().unwrap_or("service");
-    let claims = IdClaims {
-        iss: &iss_val,
-        sub: sub_val,
-        aud: None,
-        exp,
-        iat: now,
-    };
+    let claims = IdClaims { iss: &iss_val, sub: sub_val, aud: None, exp, iat: now };
 
     jsonwebtoken::encode(&header, &claims, &encoding_key).ok()
 }
@@ -2013,19 +2111,14 @@ async fn issue_new_token(
         now,
         exp,
         expiry_secs,
-    ).await?;
+    )
+    .await?;
 
     // Store refresh token
-    state
-        .token_store
-        .set_refresh(&refresh_token, REFRESH_TOKEN_EXPIRY_SECONDS)
-        .await?;
+    state.token_store.set_refresh(&refresh_token, REFRESH_TOKEN_EXPIRY_SECONDS).await?;
 
-    let id_token = if make_id_token {
-        create_id_token(subject.clone(), now, exp).await
-    } else {
-        None
-    };
+    let id_token =
+        if make_id_token { create_id_token(subject.clone(), now, exp).await } else { None };
 
     Ok(Json(TokenResponse {
         access_token,
@@ -2067,17 +2160,27 @@ pub async fn revoke_token(
     // In TEST_MODE, bypass client authentication to simplify integration tests
     if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) = if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+        let (cid_opt, csec_opt) = if let Some(auth_header) =
+            headers.get(axum::http::header::AUTHORIZATION)
+        {
             let header_val = auth_header.to_str().unwrap_or("");
             if let Some(b64) = header_val.strip_prefix("Basic ") {
                 if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
                     if let Ok(pair) = std::str::from_utf8(&decoded) {
                         let mut parts = pair.splitn(2, ':');
                         (parts.next().map(|s| s.to_string()), parts.next().map(|s| s.to_string()))
-                    } else { (None, None) }
-                } else { (None, None) }
-            } else { (None, None) }
-        } else { (None, None) };
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
         if state.client_credentials.get(&client_id) != Some(&client_secret) {
@@ -2102,11 +2205,15 @@ pub async fn revoke_token(
         "unknown",
         &ip_address,
         "success",
-        Some([
-            ("token_type_hint".to_string(), serde_json::Value::String(
-                form.token_type_hint.clone().unwrap_or_else(|| "access_token".to_string())
-            )),
-        ].into()),
+        Some(
+            [(
+                "token_type_hint".to_string(),
+                serde_json::Value::String(
+                    form.token_type_hint.clone().unwrap_or_else(|| "access_token".to_string()),
+                ),
+            )]
+            .into(),
+        ),
     );
 
     audit(
@@ -2134,7 +2241,7 @@ pub fn app(state: AppState) -> Router {
             // Default to no origins unless explicitly configured
             let layer = CorsLayer::new();
             layer
-        },
+        }
     };
 
     // Public routes (no authentication required)
@@ -2208,7 +2315,8 @@ pub fn app(state: AppState) -> Router {
         ));
 
     // Combine routers
-    let router = public_router.merge(admin_router)
+    let router = public_router
+        .merge(admin_router)
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -2217,11 +2325,15 @@ pub fn app(state: AppState) -> Router {
                 .layer(cors)
                 .layer(axum::middleware::from_fn_with_state(
                     state.backpressure_state.clone(),
-                    crate::backpressure::backpressure_middleware
+                    crate::backpressure::backpressure_middleware,
                 ))
-                .layer(axum::middleware::from_fn(crate::backpressure::adaptive_body_limit_middleware))
+                .layer(axum::middleware::from_fn(
+                    crate::backpressure::adaptive_body_limit_middleware,
+                ))
                 .layer(axum::middleware::from_fn(crate::security::validate_request_signature))
-                .layer(axum::middleware::from_fn(crate::per_ip_rate_limit::per_ip_rate_limit_middleware))
+                .layer(axum::middleware::from_fn(
+                    crate::per_ip_rate_limit::per_ip_rate_limit_middleware,
+                ))
                 .layer(axum::middleware::from_fn(crate::rate_limit_optimized::optimized_rate_limit))
                 .layer(axum::middleware::from_fn(crate::security_headers::add_security_headers))
                 .layer(crate::security::security_middleware()),
@@ -2241,15 +2353,7 @@ pub fn app(state: AppState) -> Router {
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(
-        introspect,
-        issue_token,
-        revoke_token,
-        userinfo,
-        oauth_metadata,
-        oidc_metadata,
-        jwks
-    ),
+    paths(introspect, issue_token, revoke_token, userinfo, oauth_metadata, oidc_metadata, jwks),
     components(schemas(
         HealthResponse,
         IntrospectRequest,
@@ -2276,13 +2380,13 @@ pub async fn mint_local_tokens_for_subject(
 #[cfg(feature = "post-quantum")]
 pub mod post_quantum_crypto;
 #[cfg(feature = "post-quantum")]
+pub mod pq_integration;
+#[cfg(feature = "post-quantum")]
 pub mod pq_jwt;
 #[cfg(feature = "post-quantum")]
 pub mod pq_key_management;
 #[cfg(feature = "post-quantum")]
 pub mod pq_migration;
-#[cfg(feature = "post-quantum")]
-pub mod pq_integration;
 
 #[cfg(feature = "post-quantum")]
 use pq_integration::{create_pq_admin_router, initialize_post_quantum_integration, pq_middleware};

@@ -1,6 +1,6 @@
-use getrandom::getrandom;
+use crate::{internal_error, AuthError};
 use data_encoding::BASE64URL_NOPAD;
-use crate::{AuthError, internal_error};
+use getrandom::getrandom;
 
 /// Cryptographically secure random number generator
 pub struct SecureRandomGenerator;
@@ -13,9 +13,8 @@ impl SecureRandomGenerator {
     /// Generate cryptographically secure random bytes
     pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, AuthError> {
         let mut bytes = vec![0u8; length];
-        getrandom(&mut bytes).map_err(|_| internal_error(
-            "Failed to generate secure random bytes"
-        ))?;
+        getrandom(&mut bytes)
+            .map_err(|_| internal_error("Failed to generate secure random bytes"))?;
         Ok(bytes)
     }
 
@@ -164,8 +163,8 @@ pub fn generate_secure_api_key() -> Result<String, AuthError> {
 
 /// Legacy function for backward compatibility - now uses secure generation
 pub fn generate_secure_code() -> String {
-    generate_secure_authorization_code()
-        .unwrap_or_else(|_| format!("ac_{}", uuid::Uuid::new_v4())) // Fallback to UUID
+    generate_secure_authorization_code().unwrap_or_else(|_| format!("ac_{}", uuid::Uuid::new_v4()))
+    // Fallback to UUID
 }
 
 #[cfg(test)]

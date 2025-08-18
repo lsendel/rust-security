@@ -1,14 +1,14 @@
 use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
+#[allow(unused_imports)]
+use base64::Engine as _;
 use once_cell::sync::Lazy;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
-#[allow(unused_imports)]
-use base64::Engine as _;
-use sha2::{Digest, Sha256};
 
 /// Generate a token binding value from client information
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
@@ -21,11 +21,7 @@ pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
 }
 
 /// Validate token binding to ensure token is used from the same client
-pub fn validate_token_binding(
-    stored_binding: &str,
-    client_ip: &str,
-    user_agent: &str,
-) -> bool {
+pub fn validate_token_binding(stored_binding: &str, client_ip: &str, user_agent: &str) -> bool {
     let current_binding = generate_token_binding(client_ip, user_agent);
     stored_binding == current_binding
 }
@@ -98,8 +94,8 @@ pub fn generate_request_signature(
 ) -> Result<String, &'static str> {
     let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .map_err(|_| "Invalid secret key")?;
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| "Invalid secret key")?;
 
     mac.update(message.as_bytes());
     let result = mac.finalize();
@@ -130,7 +126,9 @@ pub fn verify_request_signature(
 
     // Constant-time comparison between provided and expected signatures
     fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-        if a.len() != b.len() { return false; }
+        if a.len() != b.len() {
+            return false;
+        }
         let mut diff: u8 = 0;
         for i in 0..a.len() {
             diff |= a[i] ^ b[i];
@@ -159,9 +157,8 @@ pub async fn validate_request_signature(
     }
     // Only validate signatures for critical operations
     let path = request.uri().path().to_string();
-    let requires_signature = path.starts_with("/oauth/revoke")
-        || path.starts_with("/admin/")
-        || path.contains("delete");
+    let requires_signature =
+        path.starts_with("/oauth/revoke") || path.starts_with("/admin/") || path.contains("delete");
 
     if !requires_signature {
         return Ok(next.run(request).await);
@@ -181,9 +178,7 @@ pub async fn validate_request_signature(
         .and_then(|v| v.to_str().ok())
         .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
 
-    let timestamp: i64 = timestamp_str
-        .parse()
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    let timestamp: i64 = timestamp_str.parse().map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
 
     // Get signing secret from environment
     let secret = match std::env::var("REQUEST_SIGNING_SECRET") {
@@ -202,8 +197,8 @@ pub async fn validate_request_signature(
     let body_bytes = axum::body::to_bytes(body, usize::MAX)
         .await
         .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
-    let body_str = std::str::from_utf8(&body_bytes)
-        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    let body_str =
+        std::str::from_utf8(&body_bytes).map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
 
     match verify_request_signature(
         parts.method.as_str(),
@@ -235,11 +230,8 @@ pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) 
         .trim()
         .to_string();
 
-    let user_agent = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string();
+    let user_agent =
+        headers.get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("unknown").to_string();
 
     (client_ip, user_agent)
 }
@@ -260,18 +252,11 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
     );
     headers.insert(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-            .parse()
-            .unwrap(),
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'".parse().unwrap(),
     );
-    headers.insert(
-        "Referrer-Policy",
-        "strict-origin-when-cross-origin".parse().unwrap(),
-    );
-    headers.insert(
-        "Permissions-Policy",
-        "geolocation=(), microphone=(), camera=()".parse().unwrap(),
-    );
+    headers.insert("Referrer-Policy", "strict-origin-when-cross-origin".parse().unwrap());
+    headers
+        .insert("Permissions-Policy", "geolocation=(), microphone=(), camera=()".parse().unwrap());
 
     response
 }
@@ -316,10 +301,7 @@ pub fn validate_client_credentials(
     }
 
     // Basic format validation
-    if !client_id
-        .chars()
-        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
-    {
+    if !client_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
         return Err("Invalid client_id format");
     }
 
@@ -381,9 +363,7 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
         }
         let mut response =
             (axum::http::StatusCode::TOO_MANY_REQUESTS, "rate limited").into_response();
-        response
-            .headers_mut()
-            .insert("Retry-After", format!("{}", retry_after).parse().unwrap());
+        response.headers_mut().insert("Retry-After", format!("{}", retry_after).parse().unwrap());
         return response;
     }
     entry.0 += 1;
@@ -429,14 +409,8 @@ mod tests {
     #[test]
     fn test_sanitize_log_input() {
         assert_eq!(sanitize_log_input("normal text"), "normal text");
-        assert_eq!(
-            sanitize_log_input("text\nwith\nnewlines"),
-            "text\\nwith\\nnewlines"
-        );
-        assert_eq!(
-            sanitize_log_input("text\rwith\rcarriage"),
-            "text\\rwith\\rcarriage"
-        );
+        assert_eq!(sanitize_log_input("text\nwith\nnewlines"), "text\\nwith\\nnewlines");
+        assert_eq!(sanitize_log_input("text\rwith\rcarriage"), "text\\rwith\\rcarriage");
         assert_eq!(sanitize_log_input("text\twith\ttabs"), "text\\twith\\ttabs");
     }
 }

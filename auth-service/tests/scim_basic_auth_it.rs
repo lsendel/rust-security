@@ -17,8 +17,14 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec![],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     };
 
     let router = app(app_state);
@@ -32,9 +38,7 @@ async fn scim_requires_basic_auth() {
     let client = Client::new();
 
     // Missing auth
-    let resp = client
-        .get(format!("{}/scim/v2/Users", base))
-        .send().await.unwrap();
+    let resp = client.get(format!("{}/scim/v2/Users", base)).send().await.unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     // Valid auth
@@ -42,9 +46,9 @@ async fn scim_requires_basic_auth() {
     let resp2 = client
         .get(format!("{}/scim/v2/Users", base))
         .header("Authorization", format!("Basic {}", creds))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
     // List returns 200 with default empty list
     assert!(resp2.status().is_success());
 }
-
-

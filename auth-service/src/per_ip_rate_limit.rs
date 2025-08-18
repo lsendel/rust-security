@@ -1,11 +1,11 @@
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use axum::http::StatusCode;
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;
+use once_cell::sync::Lazy;
+use std::net::IpAddr;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use once_cell::sync::Lazy;
-use axum::http::StatusCode;
-use std::net::IpAddr;
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Per-IP rate limiting configuration with different tiers
 #[derive(Debug, Clone)]
@@ -37,10 +37,7 @@ impl Default for PerIpRateLimitConfig {
             window_duration_secs: 60,
             cleanup_interval_secs: 300,
             suspicious_threshold: 100,
-            whitelist: vec![
-                "127.0.0.1".parse().unwrap(),
-                "::1".parse().unwrap(),
-            ],
+            whitelist: vec!["127.0.0.1".parse().unwrap(), "::1".parse().unwrap()],
             blacklist: vec![],
         }
     }
@@ -69,10 +66,7 @@ pub struct IpRateLimitEntry {
 
 impl IpRateLimitEntry {
     fn new(initial_burst: u32) -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         Self {
             count: AtomicU32::new(0),
@@ -88,10 +82,7 @@ impl IpRateLimitEntry {
 
     /// Check if request should be allowed and update counters
     fn check_and_update(&self, config: &PerIpRateLimitConfig, ip: &IpAddr) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         // Update last access time
         self.last_access.store(now, Ordering::Relaxed);
@@ -186,10 +177,7 @@ impl PerIpRateLimiter {
             entries: DashMap::new(),
             config,
             last_cleanup: AtomicU64::new(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
             ),
         }
     }
@@ -247,12 +235,7 @@ impl PerIpRateLimiter {
             total_violations += stats.rate_limit_violations as u64;
         }
 
-        OverallStats {
-            total_ips,
-            suspicious_ips,
-            total_requests,
-            total_violations,
-        }
+        OverallStats { total_ips, suspicious_ips, total_requests, total_violations }
     }
 
     /// Add IP to blacklist
@@ -270,10 +253,7 @@ impl PerIpRateLimiter {
 
     /// Clean up old entries
     fn maybe_cleanup(&self) {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
         let last_cleanup = self.last_cleanup.load(Ordering::Relaxed);
 
@@ -282,19 +262,19 @@ impl PerIpRateLimiter {
 
             // Remove entries that haven't been accessed recently
             let cutoff = now - (self.config.cleanup_interval_secs * 2);
-            self.entries.retain(|_, entry| {
-                entry.last_access.load(Ordering::Relaxed) > cutoff
-            });
+            self.entries.retain(|_, entry| entry.last_access.load(Ordering::Relaxed) > cutoff);
         }
     }
 
     /// Log rate limiting events
-    fn log_rate_limit_event(&self, ip: &IpAddr, allowed: bool, reason: &str, user_agent: Option<&str>) {
-        let severity = if allowed {
-            SecuritySeverity::Info
-        } else {
-            SecuritySeverity::Warning
-        };
+    fn log_rate_limit_event(
+        &self,
+        ip: &IpAddr,
+        allowed: bool,
+        reason: &str,
+        user_agent: Option<&str>,
+    ) {
+        let severity = if allowed { SecuritySeverity::Info } else { SecuritySeverity::Warning };
 
         // Determine actor and action based on context
         let (actor, action, target, outcome) = match reason {
@@ -302,20 +282,20 @@ impl PerIpRateLimiter {
                 "system".to_string(),
                 "blacklist_check".to_string(),
                 ip.to_string(),
-                "blocked".to_string()
+                "blocked".to_string(),
             ),
             "rate_limited" => (
                 ip.to_string(),
                 "rate_limit_check".to_string(),
                 "auth_service".to_string(),
-                "blocked".to_string()
+                "blocked".to_string(),
             ),
             _ => (
                 ip.to_string(),
                 "rate_limit_check".to_string(),
                 "auth_service".to_string(),
-                if allowed { "allowed".to_string() } else { "blocked".to_string() }
-            )
+                if allowed { "allowed".to_string() } else { "blocked".to_string() },
+            ),
         };
 
         let mut event = SecurityEvent::new(
@@ -390,18 +370,14 @@ pub async fn per_ip_rate_limit_middleware(
     next: Next,
 ) -> Result<Response, StatusCode> {
     // Extract IP address with safer defaults: only trust proxy headers if explicitly enabled
-    let trust_proxy = std::env::var("TRUST_PROXY_HEADERS").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
-    let ip = if trust_proxy {
-        extract_ip_address(&request)
-    } else {
-        None
-    }.unwrap_or_else(|| "127.0.0.1".parse().unwrap());
+    let trust_proxy = std::env::var("TRUST_PROXY_HEADERS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let ip = if trust_proxy { extract_ip_address(&request) } else { None }
+        .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
 
     // Extract User-Agent for logging
-    let user_agent = request
-        .headers()
-        .get("user-agent")
-        .and_then(|ua| ua.to_str().ok());
+    let user_agent = request.headers().get("user-agent").and_then(|ua| ua.to_str().ok());
 
     // Check rate limit
     let allowed = PER_IP_RATE_LIMITER.check_rate_limit(&ip, user_agent);

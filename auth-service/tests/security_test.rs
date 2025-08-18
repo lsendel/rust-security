@@ -17,8 +17,14 @@ async fn spawn_app() -> String {
         client_credentials,
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -53,11 +59,7 @@ async fn test_invalid_client_credentials_returns_401() {
         .await
         .unwrap();
 
-    assert_eq!(
-        res.status(),
-        401,
-        "Should return 401 for invalid credentials"
-    );
+    assert_eq!(res.status(), 401, "Should return 401 for invalid credentials");
 }
 
 #[tokio::test]
@@ -73,11 +75,7 @@ async fn test_invalid_grant_type_returns_400() {
         .await
         .unwrap();
 
-    assert_eq!(
-        res.status(),
-        400,
-        "Should return 400 for invalid grant_type"
-    );
+    assert_eq!(res.status(), 400, "Should return 400 for invalid grant_type");
     let body = res.text().await.unwrap();
     assert!(body.contains("unsupported grant_type"));
 }
@@ -97,14 +95,8 @@ async fn test_valid_client_credentials_returns_token() {
 
     assert_eq!(res.status(), 200, "Should return 200 for valid credentials");
     let body: serde_json::Value = res.json().await.unwrap();
-    assert!(
-        body.get("access_token").is_some(),
-        "Should return access token"
-    );
-    assert!(
-        body.get("refresh_token").is_some(),
-        "Should return refresh token"
-    );
+    assert!(body.get("access_token").is_some(), "Should return access token");
+    assert!(body.get("refresh_token").is_some(), "Should return refresh token");
 }
 
 #[tokio::test]
@@ -123,12 +115,6 @@ async fn test_no_error_details_exposed() {
     assert_eq!(res.status(), 401);
     let body = res.text().await.unwrap();
     // Should not expose internal error details
-    assert!(
-        !body.contains("anyhow"),
-        "Should not expose internal error types"
-    );
-    assert!(
-        !body.contains("redis"),
-        "Should not expose implementation details"
-    );
+    assert!(!body.contains("anyhow"), "Should not expose internal error types");
+    assert!(!body.contains("redis"), "Should not expose implementation details");
 }

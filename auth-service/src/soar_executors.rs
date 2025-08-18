@@ -1,21 +1,24 @@
 //! SOAR Step Executors
-//! 
+//!
 //! This module provides concrete implementations of step executors for various
 //! security operations including IP blocking, account management, notifications,
 //! SIEM queries, and integration with external security tools.
 
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::soar_core::*;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity, SecurityLogger};
 use async_trait::async_trait;
-use lettre::{AsyncTransport, AsyncSmtpTransport, Tokio1Executor, Message, transport::smtp::authentication::Credentials};
-use reqwest::{Client, header::HeaderMap};
+use lettre::{
+    transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
+    Tokio1Executor,
+};
+use reqwest::{header::HeaderMap, Client};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
-use tracing::{debug, error, info, warn, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
 /// Registry for all step executors
@@ -26,48 +29,48 @@ pub struct StepExecutorRegistry {
 impl StepExecutorRegistry {
     /// Create a new registry with default executors
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let mut registry = Self {
-            executors: HashMap::new(),
-        };
-        
+        let mut registry = Self { executors: HashMap::new() };
+
         // Register default executors
         registry.register_default_executors().await?;
-        
+
         Ok(registry)
     }
-    
+
     /// Register all default step executors
-    async fn register_default_executors(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn register_default_executors(
+        &mut self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Security action executors
         self.register_executor(Arc::new(IpBlockExecutor::new())).await?;
         self.register_executor(Arc::new(AccountLockExecutor::new())).await?;
         self.register_executor(Arc::new(TokenRevokeExecutor::new())).await?;
-        
+
         // Notification executors
         self.register_executor(Arc::new(EmailNotificationExecutor::new().await?)).await?;
         self.register_executor(Arc::new(SlackNotificationExecutor::new())).await?;
         self.register_executor(Arc::new(WebhookNotificationExecutor::new())).await?;
-        
+
         // SIEM and query executors
         self.register_executor(Arc::new(SiemQueryExecutor::new())).await?;
         self.register_executor(Arc::new(DatabaseQueryExecutor::new())).await?;
-        
+
         // Ticketing and case management
         self.register_executor(Arc::new(TicketCreateExecutor::new())).await?;
         self.register_executor(Arc::new(CaseUpdateExecutor::new())).await?;
-        
+
         // Script and custom executors
         self.register_executor(Arc::new(ScriptExecutor::new())).await?;
         self.register_executor(Arc::new(HttpRequestExecutor::new())).await?;
-        
+
         // Control flow executors
         self.register_executor(Arc::new(DecisionExecutor::new())).await?;
         self.register_executor(Arc::new(WaitExecutor::new())).await?;
-        
+
         info!("Registered {} step executors", self.executors.len());
         Ok(())
     }
-    
+
     /// Register a step executor
     pub async fn register_executor(
         &mut self,
@@ -78,12 +81,12 @@ impl StepExecutorRegistry {
         debug!("Registered step executor: {}", step_type);
         Ok(())
     }
-    
+
     /// Get executor by step type
     pub fn get_executor(&self, step_type: &str) -> Option<Arc<dyn StepExecutor + Send + Sync>> {
         self.executors.get(step_type).cloned()
     }
-    
+
     /// Get all executor types
     pub fn get_executor_types(&self) -> Vec<String> {
         self.executors.keys().cloned().collect()
@@ -97,9 +100,7 @@ pub struct IpBlockExecutor {
 
 impl IpBlockExecutor {
     pub fn new() -> Self {
-        Self {
-            firewall_client: Arc::new(FirewallClient::new()),
-        }
+        Self { firewall_client: Arc::new(FirewallClient::new()) }
     }
 }
 
@@ -113,7 +114,7 @@ impl StepExecutor for IpBlockExecutor {
     ) -> Result<HashMap<String, Value>, StepError> {
         if let StepAction::BlockIp { ip_address, duration_minutes, reason } = &step.action {
             info!("Blocking IP address: {} for {} minutes", ip_address, duration_minutes);
-            
+
             // Validate IP address format
             if !self.validate_ip_address(ip_address) {
                 return Err(StepError {
@@ -123,51 +124,61 @@ impl StepExecutor for IpBlockExecutor {
                     retryable: false,
                 });
             }
-            
+
             // Execute IP block
             match self.firewall_client.block_ip(ip_address, *duration_minutes, reason).await {
                 Ok(block_id) => {
                     // Log security event
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::AdminAction,
-                        SecuritySeverity::Medium,
-                        "soar_executor".to_string(),
-                        format!("IP address {} blocked for {} minutes", ip_address, duration_minutes),
-                    )
-                    .with_actor("soar_system".to_string())
-                    .with_action("soar_execute".to_string())
-                    .with_target("soar_playbook".to_string())
-                    .with_outcome("success".to_string())
-                    .with_reason("IP blocking step executed successfully".to_string())
-                    .with_detail("ip_address".to_string(), ip_address.clone())
-                    .with_detail("duration_minutes".to_string(), *duration_minutes)
-                    .with_detail("reason".to_string(), reason.clone())
-                    .with_detail("block_id".to_string(), block_id.clone()));
-                    
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::AdminAction,
+                            SecuritySeverity::Medium,
+                            "soar_executor".to_string(),
+                            format!(
+                                "IP address {} blocked for {} minutes",
+                                ip_address, duration_minutes
+                            ),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("success".to_string())
+                        .with_reason("IP blocking step executed successfully".to_string())
+                        .with_detail("ip_address".to_string(), ip_address.clone())
+                        .with_detail("duration_minutes".to_string(), *duration_minutes)
+                        .with_detail("reason".to_string(), reason.clone())
+                        .with_detail("block_id".to_string(), block_id.clone()),
+                    );
+
                     let mut outputs = HashMap::new();
                     outputs.insert("block_id".to_string(), Value::String(block_id));
                     outputs.insert("blocked_ip".to_string(), Value::String(ip_address.clone()));
-                    outputs.insert("block_duration".to_string(), Value::Number((*duration_minutes).into()));
-                    
+                    outputs.insert(
+                        "block_duration".to_string(),
+                        Value::Number((*duration_minutes).into()),
+                    );
+
                     Ok(outputs)
                 }
                 Err(e) => {
                     error!("Failed to block IP address {}: {}", ip_address, e);
-                    
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::SystemError,
-                        SecuritySeverity::High,
-                        "soar_executor".to_string(),
-                        format!("Failed to block IP address {}", ip_address),
-                    )
-                    .with_actor("soar_system".to_string())
-                    .with_action("soar_execute".to_string())
-                    .with_target("soar_playbook".to_string())
-                    .with_outcome("failure".to_string())
-                    .with_reason(format!("IP blocking failed: {}", e.to_string()))
-                    .with_detail("ip_address".to_string(), ip_address.clone())
-                    .with_detail("error".to_string(), e.to_string()));
-                    
+
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::SystemError,
+                            SecuritySeverity::High,
+                            "soar_executor".to_string(),
+                            format!("Failed to block IP address {}", ip_address),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("failure".to_string())
+                        .with_reason(format!("IP blocking failed: {}", e.to_string()))
+                        .with_detail("ip_address".to_string(), ip_address.clone())
+                        .with_detail("error".to_string(), e.to_string()),
+                    );
+
                     Err(StepError {
                         code: "IP_BLOCK_FAILED".to_string(),
                         message: format!("Failed to block IP address: {}", e),
@@ -188,7 +199,7 @@ impl StepExecutor for IpBlockExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "block_ip".to_string()
     }
@@ -207,9 +218,7 @@ pub struct AccountLockExecutor {
 
 impl AccountLockExecutor {
     pub fn new() -> Self {
-        Self {
-            identity_client: Arc::new(IdentityProviderClient::new()),
-        }
+        Self { identity_client: Arc::new(IdentityProviderClient::new()) }
     }
 }
 
@@ -223,7 +232,7 @@ impl StepExecutor for AccountLockExecutor {
     ) -> Result<HashMap<String, Value>, StepError> {
         if let StepAction::LockAccount { user_id, duration_minutes, reason } = &step.action {
             info!("Locking account: {} for {} minutes", user_id, duration_minutes);
-            
+
             // Validate user ID
             if user_id.is_empty() {
                 return Err(StepError {
@@ -233,50 +242,57 @@ impl StepExecutor for AccountLockExecutor {
                     retryable: false,
                 });
             }
-            
+
             // Execute account lock
             match self.identity_client.lock_account(user_id, *duration_minutes, reason).await {
                 Ok(lock_id) => {
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::AdminAction,
-                        SecuritySeverity::High,
-                        "soar_executor".to_string(),
-                        format!("Account {} locked for {} minutes", user_id, duration_minutes),
-                    )
-                    .with_actor("soar_system".to_string())
-                    .with_action("soar_execute".to_string())
-                    .with_target("soar_playbook".to_string())
-                    .with_outcome("success".to_string())
-                    .with_reason("Account locking step executed successfully".to_string())
-                    .with_user_id(user_id.clone())
-                    .with_detail("duration_minutes".to_string(), *duration_minutes)
-                    .with_detail("reason".to_string(), reason.clone())
-                    .with_detail("lock_id".to_string(), lock_id.clone()));
-                    
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::AdminAction,
+                            SecuritySeverity::High,
+                            "soar_executor".to_string(),
+                            format!("Account {} locked for {} minutes", user_id, duration_minutes),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("success".to_string())
+                        .with_reason("Account locking step executed successfully".to_string())
+                        .with_user_id(user_id.clone())
+                        .with_detail("duration_minutes".to_string(), *duration_minutes)
+                        .with_detail("reason".to_string(), reason.clone())
+                        .with_detail("lock_id".to_string(), lock_id.clone()),
+                    );
+
                     let mut outputs = HashMap::new();
                     outputs.insert("lock_id".to_string(), Value::String(lock_id));
                     outputs.insert("locked_user".to_string(), Value::String(user_id.clone()));
-                    outputs.insert("lock_duration".to_string(), Value::Number((*duration_minutes).into()));
-                    
+                    outputs.insert(
+                        "lock_duration".to_string(),
+                        Value::Number((*duration_minutes).into()),
+                    );
+
                     Ok(outputs)
                 }
                 Err(e) => {
                     error!("Failed to lock account {}: {}", user_id, e);
-                    
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::SystemError,
-                        SecuritySeverity::High,
-                        "soar_executor".to_string(),
-                        format!("Failed to lock account {}", user_id),
-                    )
-                    .with_actor("soar_system".to_string())
-                    .with_action("soar_execute".to_string())
-                    .with_target("soar_playbook".to_string())
-                    .with_outcome("failure".to_string())
-                    .with_reason(format!("Account locking failed: {}", e.to_string()))
-                    .with_user_id(user_id.clone())
-                    .with_detail("error".to_string(), e.to_string()));
-                    
+
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::SystemError,
+                            SecuritySeverity::High,
+                            "soar_executor".to_string(),
+                            format!("Failed to lock account {}", user_id),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("failure".to_string())
+                        .with_reason(format!("Account locking failed: {}", e.to_string()))
+                        .with_user_id(user_id.clone())
+                        .with_detail("error".to_string(), e.to_string()),
+                    );
+
                     Err(StepError {
                         code: "ACCOUNT_LOCK_FAILED".to_string(),
                         message: format!("Failed to lock account: {}", e),
@@ -297,7 +313,7 @@ impl StepExecutor for AccountLockExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "lock_account".to_string()
     }
@@ -310,9 +326,7 @@ pub struct TokenRevokeExecutor {
 
 impl TokenRevokeExecutor {
     pub fn new() -> Self {
-        Self {
-            token_store: Arc::new(crate::store::TokenStore::new()),
-        }
+        Self { token_store: Arc::new(crate::store::TokenStore::new()) }
     }
 }
 
@@ -343,22 +357,27 @@ impl StepExecutor for TokenRevokeExecutor {
                     self.revoke_all_tokens().await?
                 }
             };
-            
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::TokenRevoked,
-                SecuritySeverity::Medium,
-                "soar_executor".to_string(),
-                format!("Revoked {} tokens", revoked_count),
-            )
-            .with_actor("soar_system".to_string())
-            .with_action("soar_execute".to_string())
-            .with_target("soar_playbook".to_string())
-            .with_outcome("success".to_string())
-            .with_reason("Token revocation step executed successfully".to_string())
-            .with_user_id(user_id.clone().unwrap_or_else(|| "all".to_string()))
-            .with_detail("token_type".to_string(), token_type.clone().unwrap_or_else(|| "all".to_string()))
-            .with_detail("revoked_count".to_string(), revoked_count));
-            
+
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::TokenRevoked,
+                    SecuritySeverity::Medium,
+                    "soar_executor".to_string(),
+                    format!("Revoked {} tokens", revoked_count),
+                )
+                .with_actor("soar_system".to_string())
+                .with_action("soar_execute".to_string())
+                .with_target("soar_playbook".to_string())
+                .with_outcome("success".to_string())
+                .with_reason("Token revocation step executed successfully".to_string())
+                .with_user_id(user_id.clone().unwrap_or_else(|| "all".to_string()))
+                .with_detail(
+                    "token_type".to_string(),
+                    token_type.clone().unwrap_or_else(|| "all".to_string()),
+                )
+                .with_detail("revoked_count".to_string(), revoked_count),
+            );
+
             let mut outputs = HashMap::new();
             outputs.insert("revoked_count".to_string(), Value::Number(revoked_count.into()));
             if let Some(uid) = user_id {
@@ -367,7 +386,7 @@ impl StepExecutor for TokenRevokeExecutor {
             if let Some(ttype) = token_type {
                 outputs.insert("token_type".to_string(), Value::String(ttype.clone()));
             }
-            
+
             Ok(outputs)
         } else {
             Err(StepError {
@@ -378,28 +397,32 @@ impl StepExecutor for TokenRevokeExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "revoke_tokens".to_string()
     }
 }
 
 impl TokenRevokeExecutor {
-    async fn revoke_user_tokens_by_type(&self, user_id: &str, token_type: &str) -> Result<u32, StepError> {
+    async fn revoke_user_tokens_by_type(
+        &self,
+        user_id: &str,
+        token_type: &str,
+    ) -> Result<u32, StepError> {
         // TODO: Implement user-specific token revocation by type
         Ok(1)
     }
-    
+
     async fn revoke_all_user_tokens(&self, user_id: &str) -> Result<u32, StepError> {
         // TODO: Implement all user token revocation
         Ok(5)
     }
-    
+
     async fn revoke_tokens_by_type(&self, token_type: &str) -> Result<u32, StepError> {
         // TODO: Implement token revocation by type
         Ok(10)
     }
-    
+
     async fn revoke_all_tokens(&self) -> Result<u32, StepError> {
         // TODO: Implement global token revocation (very dangerous!)
         Ok(100)
@@ -420,7 +443,7 @@ impl EmailNotificationExecutor {
         } else {
             None
         };
-        
+
         Ok(Self {
             smtp_transport,
             config: config.unwrap_or_else(|| EmailConfig {
@@ -433,7 +456,7 @@ impl EmailNotificationExecutor {
             }),
         })
     }
-    
+
     fn load_email_config() -> Option<EmailConfig> {
         // Try to load from environment variables
         let smtp_host = std::env::var("SMTP_HOST").ok()?;
@@ -441,23 +464,17 @@ impl EmailNotificationExecutor {
         let username = std::env::var("SMTP_USERNAME").ok()?;
         let password = std::env::var("SMTP_PASSWORD").ok()?;
         let from_address = std::env::var("SMTP_FROM_ADDRESS").ok()?;
-        let use_tls = std::env::var("SMTP_USE_TLS").unwrap_or_else(|_| "true".to_string()) == "true";
-        
-        Some(EmailConfig {
-            smtp_host,
-            smtp_port,
-            username,
-            password,
-            from_address,
-            use_tls,
-        })
+        let use_tls =
+            std::env::var("SMTP_USE_TLS").unwrap_or_else(|_| "true".to_string()) == "true";
+
+        Some(EmailConfig { smtp_host, smtp_port, username, password, from_address, use_tls })
     }
-    
+
     async fn create_smtp_transport(
         config: &EmailConfig,
     ) -> Result<AsyncSmtpTransport<Tokio1Executor>, Box<dyn std::error::Error + Send + Sync>> {
         let creds = Credentials::new(config.username.clone(), config.password.clone());
-        
+
         let transport = if config.use_tls {
             AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)?
                 .port(config.smtp_port)
@@ -469,7 +486,7 @@ impl EmailNotificationExecutor {
                 .credentials(creds)
                 .build()
         };
-        
+
         Ok(transport)
     }
 }
@@ -482,7 +499,14 @@ impl StepExecutor for EmailNotificationExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::SendNotification { notification_type, recipients, subject, message, priority } = &step.action {
+        if let StepAction::SendNotification {
+            notification_type,
+            recipients,
+            subject,
+            message,
+            priority,
+        } = &step.action
+        {
             if notification_type != "email" {
                 return Err(StepError {
                     code: "INVALID_NOTIFICATION_TYPE".to_string(),
@@ -491,11 +515,11 @@ impl StepExecutor for EmailNotificationExecutor {
                     retryable: false,
                 });
             }
-            
+
             if let Some(ref transport) = self.smtp_transport {
                 let mut sent_count = 0;
                 let mut failed_recipients = Vec::new();
-                
+
                 for recipient in recipients {
                     match self.send_single_email(transport, recipient, subject, message).await {
                         Ok(_) => {
@@ -508,30 +532,33 @@ impl StepExecutor for EmailNotificationExecutor {
                         }
                     }
                 }
-                
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::AdminAction,
-                    SecuritySeverity::Low,
-                    "soar_executor".to_string(),
-                    format!("Email notification sent to {} recipients", sent_count),
-                )
-                .with_actor("soar_system".to_string())
-                .with_action("soar_execute".to_string())
-                .with_target("soar_playbook".to_string())
-                .with_outcome("success".to_string())
-                .with_reason("Email notification step executed successfully".to_string())
-                .with_detail("recipients".to_string(), recipients.clone())
-                .with_detail("subject".to_string(), subject.clone())
-                .with_detail("priority".to_string(), priority.clone())
-                .with_detail("sent_count".to_string(), sent_count)
-                .with_detail("failed_count".to_string(), failed_recipients.len()));
-                
+
+                SecurityLogger::log_event(
+                    &SecurityEvent::new(
+                        SecurityEventType::AdminAction,
+                        SecuritySeverity::Low,
+                        "soar_executor".to_string(),
+                        format!("Email notification sent to {} recipients", sent_count),
+                    )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("success".to_string())
+                    .with_reason("Email notification step executed successfully".to_string())
+                    .with_detail("recipients".to_string(), recipients.clone())
+                    .with_detail("subject".to_string(), subject.clone())
+                    .with_detail("priority".to_string(), priority.clone())
+                    .with_detail("sent_count".to_string(), sent_count)
+                    .with_detail("failed_count".to_string(), failed_recipients.len()),
+                );
+
                 let mut outputs = HashMap::new();
                 outputs.insert("sent_count".to_string(), Value::Number(sent_count.into()));
-                outputs.insert("failed_recipients".to_string(), Value::Array(
-                    failed_recipients.into_iter().map(Value::String).collect()
-                ));
-                
+                outputs.insert(
+                    "failed_recipients".to_string(),
+                    Value::Array(failed_recipients.into_iter().map(Value::String).collect()),
+                );
+
                 Ok(outputs)
             } else {
                 Err(StepError {
@@ -550,7 +577,7 @@ impl StepExecutor for EmailNotificationExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "email_notification".to_string()
     }
@@ -569,7 +596,7 @@ impl EmailNotificationExecutor {
             .to(recipient.parse()?)
             .subject(subject)
             .body(message.to_string())?;
-        
+
         transport.send(email).await?;
         Ok(())
     }
@@ -582,9 +609,7 @@ pub struct SlackNotificationExecutor {
 
 impl SlackNotificationExecutor {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        Self { client: Client::new() }
     }
 }
 
@@ -596,7 +621,14 @@ impl StepExecutor for SlackNotificationExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::SendNotification { notification_type, recipients, subject, message, priority } = &step.action {
+        if let StepAction::SendNotification {
+            notification_type,
+            recipients,
+            subject,
+            message,
+            priority,
+        } = &step.action
+        {
             if notification_type != "slack" {
                 return Err(StepError {
                     code: "INVALID_NOTIFICATION_TYPE".to_string(),
@@ -605,21 +637,20 @@ impl StepExecutor for SlackNotificationExecutor {
                     retryable: false,
                 });
             }
-            
-            let webhook_url = std::env::var("SLACK_WEBHOOK_URL")
-                .map_err(|_| StepError {
-                    code: "SLACK_NOT_CONFIGURED".to_string(),
-                    message: "SLACK_WEBHOOK_URL environment variable not set".to_string(),
-                    details: None,
-                    retryable: false,
-                })?;
-            
+
+            let webhook_url = std::env::var("SLACK_WEBHOOK_URL").map_err(|_| StepError {
+                code: "SLACK_NOT_CONFIGURED".to_string(),
+                message: "SLACK_WEBHOOK_URL environment variable not set".to_string(),
+                details: None,
+                retryable: false,
+            })?;
+
             let color = match priority.as_str() {
                 "critical" | "high" => "danger",
                 "medium" => "warning",
                 _ => "good",
             };
-            
+
             let payload = serde_json::json!({
                 "text": subject,
                 "attachments": [{
@@ -633,8 +664,9 @@ impl StepExecutor for SlackNotificationExecutor {
                     "ts": chrono::Utc::now().timestamp()
                 }]
             });
-            
-            let response = self.client
+
+            let response = self
+                .client
                 .post(&webhook_url)
                 .json(&payload)
                 .timeout(Duration::from_secs(30))
@@ -649,26 +681,28 @@ impl StepExecutor for SlackNotificationExecutor {
                     })),
                     retryable: true,
                 })?;
-            
+
             if response.status().is_success() {
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::AdminAction,
-                    SecuritySeverity::Low,
-                    "soar_executor".to_string(),
-                    "Slack notification sent successfully".to_string(),
-                )
-                .with_actor("soar_system".to_string())
-                .with_action("soar_execute".to_string())
-                .with_target("soar_playbook".to_string())
-                .with_outcome("success".to_string())
-                .with_reason("Slack notification step executed successfully".to_string())
-                .with_detail("subject".to_string(), subject.clone())
-                .with_detail("priority".to_string(), priority.clone()));
-                
+                SecurityLogger::log_event(
+                    &SecurityEvent::new(
+                        SecurityEventType::AdminAction,
+                        SecuritySeverity::Low,
+                        "soar_executor".to_string(),
+                        "Slack notification sent successfully".to_string(),
+                    )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("success".to_string())
+                    .with_reason("Slack notification step executed successfully".to_string())
+                    .with_detail("subject".to_string(), subject.clone())
+                    .with_detail("priority".to_string(), priority.clone()),
+                );
+
                 let mut outputs = HashMap::new();
                 outputs.insert("notification_sent".to_string(), Value::Bool(true));
                 outputs.insert("notification_type".to_string(), Value::String("slack".to_string()));
-                
+
                 Ok(outputs)
             } else {
                 Err(StepError {
@@ -690,7 +724,7 @@ impl StepExecutor for SlackNotificationExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "slack_notification".to_string()
     }
@@ -703,9 +737,7 @@ pub struct WebhookNotificationExecutor {
 
 impl WebhookNotificationExecutor {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        Self { client: Client::new() }
     }
 }
 
@@ -717,7 +749,14 @@ impl StepExecutor for WebhookNotificationExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::SendNotification { notification_type, recipients, subject, message, priority } = &step.action {
+        if let StepAction::SendNotification {
+            notification_type,
+            recipients,
+            subject,
+            message,
+            priority,
+        } = &step.action
+        {
             if notification_type != "webhook" {
                 return Err(StepError {
                     code: "INVALID_NOTIFICATION_TYPE".to_string(),
@@ -726,10 +765,10 @@ impl StepExecutor for WebhookNotificationExecutor {
                     retryable: false,
                 });
             }
-            
+
             let mut sent_count = 0;
             let mut failed_webhooks = Vec::new();
-            
+
             for webhook_url in recipients {
                 let payload = serde_json::json!({
                     "subject": subject,
@@ -738,7 +777,7 @@ impl StepExecutor for WebhookNotificationExecutor {
                     "timestamp": chrono::Utc::now().to_rfc3339(),
                     "source": "soar_automation"
                 });
-                
+
                 match self.send_webhook(webhook_url, &payload).await {
                     Ok(_) => {
                         sent_count += 1;
@@ -750,13 +789,14 @@ impl StepExecutor for WebhookNotificationExecutor {
                     }
                 }
             }
-            
+
             let mut outputs = HashMap::new();
             outputs.insert("sent_count".to_string(), Value::Number(sent_count.into()));
-            outputs.insert("failed_webhooks".to_string(), Value::Array(
-                failed_webhooks.into_iter().map(Value::String).collect()
-            ));
-            
+            outputs.insert(
+                "failed_webhooks".to_string(),
+                Value::Array(failed_webhooks.into_iter().map(Value::String).collect()),
+            );
+
             Ok(outputs)
         } else {
             Err(StepError {
@@ -767,7 +807,7 @@ impl StepExecutor for WebhookNotificationExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "webhook_notification".to_string()
     }
@@ -779,13 +819,9 @@ impl WebhookNotificationExecutor {
         url: &str,
         payload: &Value,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let response = self.client
-            .post(url)
-            .json(payload)
-            .timeout(Duration::from_secs(30))
-            .send()
-            .await?;
-        
+        let response =
+            self.client.post(url).json(payload).timeout(Duration::from_secs(30)).send().await?;
+
         if response.status().is_success() {
             Ok(())
         } else {
@@ -801,9 +837,7 @@ pub struct SiemQueryExecutor {
 
 impl SiemQueryExecutor {
     pub fn new() -> Self {
-        Self {
-            siem_client: Arc::new(SiemClient::new()),
-        }
+        Self { siem_client: Arc::new(SiemClient::new()) }
     }
 }
 
@@ -816,42 +850,48 @@ impl StepExecutor for SiemQueryExecutor {
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
         if let StepAction::QuerySiem { query, time_range, max_results } = &step.action {
-            info!("Executing SIEM query: {} (time_range: {}, max_results: {})", query, time_range, max_results);
-            
+            info!(
+                "Executing SIEM query: {} (time_range: {}, max_results: {})",
+                query, time_range, max_results
+            );
+
             match self.siem_client.execute_query(query, time_range, *max_results).await {
                 Ok(results) => {
                     let mut outputs = HashMap::new();
                     outputs.insert("query_results".to_string(), results.clone());
-                    outputs.insert("result_count".to_string(), Value::Number(
-                        if let Value::Array(arr) = &results {
+                    outputs.insert(
+                        "result_count".to_string(),
+                        Value::Number(if let Value::Array(arr) = &results {
                             arr.len().into()
                         } else {
                             1.into()
-                        }
-                    ));
+                        }),
+                    );
                     outputs.insert("query".to_string(), Value::String(query.clone()));
                     outputs.insert("time_range".to_string(), Value::String(time_range.clone()));
-                    
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::DataAccess,
-                        SecuritySeverity::Low,
-                        "soar_executor".to_string(),
-                        "SIEM query executed successfully".to_string(),
-                    )
-                    .with_actor("soar_system".to_string())
-                    .with_action("soar_execute".to_string())
-                    .with_target("soar_playbook".to_string())
-                    .with_outcome("success".to_string())
-                    .with_reason("SIEM query step executed successfully".to_string())
-                    .with_detail("query".to_string(), query.clone())
-                    .with_detail("time_range".to_string(), time_range.clone())
-                    .with_detail("max_results".to_string(), *max_results));
-                    
+
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::DataAccess,
+                            SecuritySeverity::Low,
+                            "soar_executor".to_string(),
+                            "SIEM query executed successfully".to_string(),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("success".to_string())
+                        .with_reason("SIEM query step executed successfully".to_string())
+                        .with_detail("query".to_string(), query.clone())
+                        .with_detail("time_range".to_string(), time_range.clone())
+                        .with_detail("max_results".to_string(), *max_results),
+                    );
+
                     Ok(outputs)
                 }
                 Err(e) => {
                     error!("SIEM query failed: {}", e);
-                    
+
                     Err(StepError {
                         code: "SIEM_QUERY_FAILED".to_string(),
                         message: format!("SIEM query execution failed: {}", e),
@@ -873,7 +913,7 @@ impl StepExecutor for SiemQueryExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "siem_query".to_string()
     }
@@ -901,10 +941,10 @@ impl StepExecutor for DatabaseQueryExecutor {
         // TODO: Implement database query execution
         let mut outputs = HashMap::new();
         outputs.insert("query_executed".to_string(), Value::Bool(true));
-        
+
         Ok(outputs)
     }
-    
+
     fn get_step_type(&self) -> String {
         "database_query".to_string()
     }
@@ -917,9 +957,7 @@ pub struct TicketCreateExecutor {
 
 impl TicketCreateExecutor {
     pub fn new() -> Self {
-        Self {
-            ticketing_client: Arc::new(TicketingClient::new()),
-        }
+        Self { ticketing_client: Arc::new(TicketingClient::new()) }
     }
 }
 
@@ -933,34 +971,40 @@ impl StepExecutor for TicketCreateExecutor {
     ) -> Result<HashMap<String, Value>, StepError> {
         if let StepAction::CreateTicket { title, description, priority, assignee } = &step.action {
             info!("Creating ticket: {} (priority: {})", title, priority);
-            
-            match self.ticketing_client.create_ticket(title, description, priority, assignee.as_deref()).await {
+
+            match self
+                .ticketing_client
+                .create_ticket(title, description, priority, assignee.as_deref())
+                .await
+            {
                 Ok(ticket_id) => {
-                    SecurityLogger::log_event(&SecurityEvent::new(
-                        SecurityEventType::AdminAction,
-                        SecuritySeverity::Low,
-                        "soar_executor".to_string(),
-                        format!("Ticket created: {}", ticket_id),
-                    )
-                    .with_actor("soar_system".to_string())
-                    .with_action("soar_execute".to_string())
-                    .with_target("soar_playbook".to_string())
-                    .with_outcome("success".to_string())
-                    .with_reason("Ticket creation step executed successfully".to_string())
-                    .with_detail("ticket_id".to_string(), ticket_id.clone())
-                    .with_detail("title".to_string(), title.clone())
-                    .with_detail("priority".to_string(), priority.clone()));
-                    
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::AdminAction,
+                            SecuritySeverity::Low,
+                            "soar_executor".to_string(),
+                            format!("Ticket created: {}", ticket_id),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("success".to_string())
+                        .with_reason("Ticket creation step executed successfully".to_string())
+                        .with_detail("ticket_id".to_string(), ticket_id.clone())
+                        .with_detail("title".to_string(), title.clone())
+                        .with_detail("priority".to_string(), priority.clone()),
+                    );
+
                     let mut outputs = HashMap::new();
                     outputs.insert("ticket_id".to_string(), Value::String(ticket_id));
                     outputs.insert("ticket_title".to_string(), Value::String(title.clone()));
                     outputs.insert("ticket_priority".to_string(), Value::String(priority.clone()));
-                    
+
                     Ok(outputs)
                 }
                 Err(e) => {
                     error!("Failed to create ticket: {}", e);
-                    
+
                     Err(StepError {
                         code: "TICKET_CREATION_FAILED".to_string(),
                         message: format!("Failed to create ticket: {}", e),
@@ -982,7 +1026,7 @@ impl StepExecutor for TicketCreateExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "create_ticket".to_string()
     }
@@ -1010,10 +1054,10 @@ impl StepExecutor for CaseUpdateExecutor {
         // TODO: Implement case update logic
         let mut outputs = HashMap::new();
         outputs.insert("case_updated".to_string(), Value::Bool(true));
-        
+
         Ok(outputs)
     }
-    
+
     fn get_step_type(&self) -> String {
         "update_case".to_string()
     }
@@ -1034,7 +1078,7 @@ impl ScriptExecutor {
             ],
         }
     }
-    
+
     /// Validate script content for dangerous patterns
     fn validate_script_content(&self, content: &str) -> Result<(), StepError> {
         // List of dangerous patterns that should not be allowed
@@ -1051,20 +1095,24 @@ impl ScriptExecutor {
             "mkfs",
             "format c:",
         ];
-        
+
         for pattern in dangerous_patterns.iter() {
             if content.contains(pattern) {
                 return Err(StepError {
                     code: "DANGEROUS_SCRIPT_PATTERN".to_string(),
                     message: format!("Script contains dangerous pattern: {}", pattern),
-                    details: Some(format!("Scripts containing '{}' are not allowed for security reasons", pattern)),
+                    details: Some(format!(
+                        "Scripts containing '{}' are not allowed for security reasons",
+                        pattern
+                    )),
                     retryable: false,
                 });
             }
         }
-        
+
         // Check script length (prevent resource exhaustion)
-        if content.len() > 100_000 { // 100KB limit
+        if content.len() > 100_000 {
+            // 100KB limit
             return Err(StepError {
                 code: "SCRIPT_TOO_LARGE".to_string(),
                 message: "Script content exceeds maximum allowed size".to_string(),
@@ -1072,14 +1120,15 @@ impl ScriptExecutor {
                 retryable: false,
             });
         }
-        
+
         Ok(())
     }
-    
+
     /// Sanitize parameter values to prevent injection attacks
     fn sanitize_parameter(&self, value: &str) -> String {
         // Remove or escape potentially dangerous characters
-        value.chars()
+        value
+            .chars()
             .filter(|c| c.is_alphanumeric() || "-_./@: ".contains(*c))
             .collect::<String>()
             .replace('$', "\\$")
@@ -1097,7 +1146,8 @@ impl StepExecutor for ScriptExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::ExecuteScript { script_type, script_content, parameters } = &step.action {
+        if let StepAction::ExecuteScript { script_type, script_content, parameters } = &step.action
+        {
             if !self.allowed_script_types.contains(script_type) {
                 return Err(StepError {
                     code: "UNSUPPORTED_SCRIPT_TYPE".to_string(),
@@ -1106,41 +1156,51 @@ impl StepExecutor for ScriptExecutor {
                     retryable: false,
                 });
             }
-            
+
             info!("Executing {} script", script_type);
-            
+
             let execution_result = match script_type.as_str() {
                 "bash" => self.execute_bash_script(script_content, parameters).await?,
                 "rust" => self.execute_rust_script(script_content, parameters).await?,
                 "powershell" => self.execute_powershell_script(script_content, parameters).await?,
-                _ => return Err(StepError {
-                    code: "UNSUPPORTED_SCRIPT_TYPE".to_string(),
-                    message: format!("Script type '{}' is not implemented", script_type),
-                    details: None,
-                    retryable: false,
-                }),
+                _ => {
+                    return Err(StepError {
+                        code: "UNSUPPORTED_SCRIPT_TYPE".to_string(),
+                        message: format!("Script type '{}' is not implemented", script_type),
+                        details: None,
+                        retryable: false,
+                    })
+                }
             };
-            
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::AdminAction,
-                SecuritySeverity::Medium,
-                "soar_executor".to_string(),
-                format!("Script executed: {}", script_type),
-            )
-            .with_actor("soar_system".to_string())
-            .with_action("soar_execute".to_string())
-            .with_target("soar_playbook".to_string())
-            .with_outcome(if execution_result.exit_code == 0 { "success" } else { "failure" }.to_string())
-            .with_reason(format!("Script execution step completed with exit code {}", execution_result.exit_code))
-            .with_detail("script_type".to_string(), script_type.clone())
-            .with_detail("exit_code".to_string(), execution_result.exit_code));
-            
+
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::AdminAction,
+                    SecuritySeverity::Medium,
+                    "soar_executor".to_string(),
+                    format!("Script executed: {}", script_type),
+                )
+                .with_actor("soar_system".to_string())
+                .with_action("soar_execute".to_string())
+                .with_target("soar_playbook".to_string())
+                .with_outcome(
+                    if execution_result.exit_code == 0 { "success" } else { "failure" }.to_string(),
+                )
+                .with_reason(format!(
+                    "Script execution step completed with exit code {}",
+                    execution_result.exit_code
+                ))
+                .with_detail("script_type".to_string(), script_type.clone())
+                .with_detail("exit_code".to_string(), execution_result.exit_code),
+            );
+
             let mut outputs = HashMap::new();
-            outputs.insert("exit_code".to_string(), Value::Number(execution_result.exit_code.into()));
+            outputs
+                .insert("exit_code".to_string(), Value::Number(execution_result.exit_code.into()));
             outputs.insert("stdout".to_string(), Value::String(execution_result.stdout));
             outputs.insert("stderr".to_string(), Value::String(execution_result.stderr));
             outputs.insert("script_type".to_string(), Value::String(script_type.clone()));
-            
+
             Ok(outputs)
         } else {
             Err(StepError {
@@ -1151,7 +1211,7 @@ impl StepExecutor for ScriptExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "execute_script".to_string()
     }
@@ -1173,32 +1233,31 @@ impl ScriptExecutor {
     ) -> Result<ScriptExecutionResult, StepError> {
         // Validate script content for dangerous patterns
         self.validate_script_content(script_content)?;
-        
+
         // Create temporary script file
-        let script_file = tempfile::NamedTempFile::new()
-            .map_err(|e| StepError {
-                code: "SCRIPT_FILE_CREATION_FAILED".to_string(),
-                message: format!("Failed to create script file: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+        let script_file = tempfile::NamedTempFile::new().map_err(|e| StepError {
+            code: "SCRIPT_FILE_CREATION_FAILED".to_string(),
+            message: format!("Failed to create script file: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Write script content with secure parameter substitution
         let mut script_with_params = script_content.to_string();
         for (key, value) in parameters {
             // Sanitize parameter values to prevent injection
             let sanitized_value = self.sanitize_parameter(value);
-            script_with_params = script_with_params.replace(&format!("${{{}}}", key), &sanitized_value);
+            script_with_params =
+                script_with_params.replace(&format!("${{{}}}", key), &sanitized_value);
         }
-        
-        std::fs::write(script_file.path(), script_with_params)
-            .map_err(|e| StepError {
-                code: "SCRIPT_WRITE_FAILED".to_string(),
-                message: format!("Failed to write script: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+
+        std::fs::write(script_file.path(), script_with_params).map_err(|e| StepError {
+            code: "SCRIPT_WRITE_FAILED".to_string(),
+            message: format!("Failed to write script: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Execute script with timeout and restricted environment
         let output = timeout(
             Duration::from_secs(300), // 5 minute timeout
@@ -1211,8 +1270,9 @@ impl ScriptExecutor {
                 .arg(script_file.path())
                 .env_clear() // Clear all environment variables
                 .env("PATH", "/usr/bin:/bin") // Restricted PATH
-                .output()
-        ).await
+                .output(),
+        )
+        .await
         .map_err(|_| StepError {
             code: "SCRIPT_TIMEOUT".to_string(),
             message: "Script execution timed out after 5 minutes".to_string(),
@@ -1225,14 +1285,14 @@ impl ScriptExecutor {
             details: None,
             retryable: true,
         })?;
-        
+
         Ok(ScriptExecutionResult {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         })
     }
-    
+
     async fn execute_rust_script(
         &self,
         script_content: &str,
@@ -1240,26 +1300,24 @@ impl ScriptExecutor {
     ) -> Result<ScriptExecutionResult, StepError> {
         // Validate script content
         self.validate_rust_script_content(script_content)?;
-        
+
         // Create temporary directory for Rust project
-        let temp_dir = tempfile::tempdir()
-            .map_err(|e| StepError {
-                code: "TEMP_DIR_CREATION_FAILED".to_string(),
-                message: format!("Failed to create temp directory: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+        let temp_dir = tempfile::tempdir().map_err(|e| StepError {
+            code: "TEMP_DIR_CREATION_FAILED".to_string(),
+            message: format!("Failed to create temp directory: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         let project_path = temp_dir.path();
         let src_dir = project_path.join("src");
-        std::fs::create_dir(&src_dir)
-            .map_err(|e| StepError {
-                code: "SRC_DIR_CREATION_FAILED".to_string(),
-                message: format!("Failed to create src directory: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+        std::fs::create_dir(&src_dir).map_err(|e| StepError {
+            code: "SRC_DIR_CREATION_FAILED".to_string(),
+            message: format!("Failed to create src directory: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Create a minimal Cargo.toml
         let cargo_toml = r#"
 [package]
@@ -1271,37 +1329,42 @@ edition = "2021"
 serde = "1.0"
 serde_json = "1.0"
         "#;
-        
-        std::fs::write(project_path.join("Cargo.toml"), cargo_toml)
-            .map_err(|e| StepError {
-                code: "CARGO_TOML_WRITE_FAILED".to_string(),
-                message: format!("Failed to write Cargo.toml: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+
+        std::fs::write(project_path.join("Cargo.toml"), cargo_toml).map_err(|e| StepError {
+            code: "CARGO_TOML_WRITE_FAILED".to_string(),
+            message: format!("Failed to write Cargo.toml: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Write script content with secure parameter substitution
         let mut script_with_params = script_content.to_string();
-        
+
         // Inject parameters as constants at the beginning of the script
         let mut param_declarations = String::new();
         for (key, value) in parameters {
             let sanitized_value = self.sanitize_parameter(value);
-            param_declarations.push_str(&format!("const {}: &str = \"{}\";\n", key.to_uppercase(), sanitized_value));
+            param_declarations.push_str(&format!(
+                "const {}: &str = \"{}\";\n",
+                key.to_uppercase(),
+                sanitized_value
+            ));
         }
-        
-        let full_script = format!("{}
 
-fn main() {{\n{}\n}}", param_declarations, script_with_params);
-        
-        std::fs::write(src_dir.join("main.rs"), full_script)
-            .map_err(|e| StepError {
-                code: "SCRIPT_WRITE_FAILED".to_string(),
-                message: format!("Failed to write script: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+        let full_script = format!(
+            "{}
+
+fn main() {{\n{}\n}}",
+            param_declarations, script_with_params
+        );
+
+        std::fs::write(src_dir.join("main.rs"), full_script).map_err(|e| StepError {
+            code: "SCRIPT_WRITE_FAILED".to_string(),
+            message: format!("Failed to write script: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Compile and run the Rust script with restricted environment
         let output = timeout(
             Duration::from_secs(300),
@@ -1314,8 +1377,9 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
                 .env("PATH", "/usr/bin:/bin")
                 .env("CARGO_HOME", "/tmp/cargo")
                 .env("RUSTUP_HOME", "/tmp/rustup")
-                .output()
-        ).await
+                .output(),
+        )
+        .await
         .map_err(|_| StepError {
             code: "SCRIPT_TIMEOUT".to_string(),
             message: "Script execution timed out after 5 minutes".to_string(),
@@ -1328,14 +1392,14 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
             details: None,
             retryable: true,
         })?;
-        
+
         Ok(ScriptExecutionResult {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         })
     }
-    
+
     /// Validate Rust script content for dangerous patterns
     fn validate_rust_script_content(&self, content: &str) -> Result<(), StepError> {
         // Check for dangerous Rust patterns
@@ -1351,20 +1415,24 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
             "std::panic::set_hook",
             "#![no_std]",
         ];
-        
+
         for pattern in dangerous_patterns.iter() {
             if content.contains(pattern) {
                 return Err(StepError {
                     code: "DANGEROUS_RUST_PATTERN".to_string(),
                     message: format!("Script contains dangerous Rust pattern: {}", pattern),
-                    details: Some(format!("Scripts containing '{}' are not allowed for security reasons", pattern)),
+                    details: Some(format!(
+                        "Scripts containing '{}' are not allowed for security reasons",
+                        pattern
+                    )),
                     retryable: false,
                 });
             }
         }
-        
+
         // Check script length
-        if content.len() > 50_000 { // 50KB limit for Rust scripts
+        if content.len() > 50_000 {
+            // 50KB limit for Rust scripts
             return Err(StepError {
                 code: "SCRIPT_TOO_LARGE".to_string(),
                 message: "Script content exceeds maximum allowed size".to_string(),
@@ -1372,10 +1440,10 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
                 retryable: false,
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn execute_powershell_script(
         &self,
         script_content: &str,
@@ -1383,31 +1451,30 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
     ) -> Result<ScriptExecutionResult, StepError> {
         // Validate script content
         self.validate_script_content(script_content)?;
-        
+
         // Create temporary script file
-        let script_file = tempfile::NamedTempFile::new()
-            .map_err(|e| StepError {
-                code: "SCRIPT_FILE_CREATION_FAILED".to_string(),
-                message: format!("Failed to create script file: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+        let script_file = tempfile::NamedTempFile::new().map_err(|e| StepError {
+            code: "SCRIPT_FILE_CREATION_FAILED".to_string(),
+            message: format!("Failed to create script file: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Write script content with secure parameter substitution
         let mut script_with_params = script_content.to_string();
         for (key, value) in parameters {
             let sanitized_value = self.sanitize_parameter(value);
-            script_with_params = script_with_params.replace(&format!("${{{}}}", key), &sanitized_value);
+            script_with_params =
+                script_with_params.replace(&format!("${{{}}}", key), &sanitized_value);
         }
-        
-        std::fs::write(script_file.path(), script_with_params)
-            .map_err(|e| StepError {
-                code: "SCRIPT_WRITE_FAILED".to_string(),
-                message: format!("Failed to write script: {}", e),
-                details: None,
-                retryable: false,
-            })?;
-        
+
+        std::fs::write(script_file.path(), script_with_params).map_err(|e| StepError {
+            code: "SCRIPT_WRITE_FAILED".to_string(),
+            message: format!("Failed to write script: {}", e),
+            details: None,
+            retryable: false,
+        })?;
+
         // Execute PowerShell script with restricted execution policy
         let output = timeout(
             Duration::from_secs(300),
@@ -1421,8 +1488,9 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
                 .arg(script_file.path())
                 .env_clear()
                 .env("PATH", "C:\\Windows\\System32;C:\\Windows")
-                .output()
-        ).await
+                .output(),
+        )
+        .await
         .map_err(|_| StepError {
             code: "SCRIPT_TIMEOUT".to_string(),
             message: "Script execution timed out after 5 minutes".to_string(),
@@ -1435,7 +1503,7 @@ fn main() {{\n{}\n}}", param_declarations, script_with_params);
             details: None,
             retryable: true,
         })?;
-        
+
         Ok(ScriptExecutionResult {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
@@ -1451,9 +1519,7 @@ pub struct HttpRequestExecutor {
 
 impl HttpRequestExecutor {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        Self { client: Client::new() }
     }
 }
 
@@ -1467,21 +1533,23 @@ impl StepExecutor for HttpRequestExecutor {
     ) -> Result<HashMap<String, Value>, StepError> {
         if let StepAction::HttpRequest { method, url, headers, body } = &step.action {
             info!("Executing HTTP {} request to: {}", method, url);
-            
+
             let mut request_builder = match method.to_uppercase().as_str() {
                 "GET" => self.client.get(url),
                 "POST" => self.client.post(url),
                 "PUT" => self.client.put(url),
                 "DELETE" => self.client.delete(url),
                 "PATCH" => self.client.patch(url),
-                _ => return Err(StepError {
-                    code: "UNSUPPORTED_HTTP_METHOD".to_string(),
-                    message: format!("HTTP method '{}' is not supported", method),
-                    details: None,
-                    retryable: false,
-                }),
+                _ => {
+                    return Err(StepError {
+                        code: "UNSUPPORTED_HTTP_METHOD".to_string(),
+                        message: format!("HTTP method '{}' is not supported", method),
+                        details: None,
+                        retryable: false,
+                    })
+                }
             };
-            
+
             // Add headers
             let mut header_map = HeaderMap::new();
             for (key, value) in headers {
@@ -1501,64 +1569,70 @@ impl StepExecutor for HttpRequestExecutor {
                 );
             }
             request_builder = request_builder.headers(header_map);
-            
+
             // Add body if present
             if let Some(body_content) = body {
                 request_builder = request_builder.body(body_content.clone());
             }
-            
+
             // Execute request with timeout
-            let response = timeout(
-                Duration::from_secs(60),
-                request_builder.send()
-            ).await
-            .map_err(|_| StepError {
-                code: "HTTP_REQUEST_TIMEOUT".to_string(),
-                message: "HTTP request timed out after 60 seconds".to_string(),
-                details: None,
-                retryable: true,
-            })?
-            .map_err(|e| StepError {
-                code: "HTTP_REQUEST_FAILED".to_string(),
-                message: format!("HTTP request failed: {}", e),
-                details: Some(serde_json::json!({
-                    "method": method,
-                    "url": url,
-                    "error": e.to_string()
-                })),
-                retryable: true,
-            })?;
-            
+            let response = timeout(Duration::from_secs(60), request_builder.send())
+                .await
+                .map_err(|_| StepError {
+                    code: "HTTP_REQUEST_TIMEOUT".to_string(),
+                    message: "HTTP request timed out after 60 seconds".to_string(),
+                    details: None,
+                    retryable: true,
+                })?
+                .map_err(|e| StepError {
+                    code: "HTTP_REQUEST_FAILED".to_string(),
+                    message: format!("HTTP request failed: {}", e),
+                    details: Some(serde_json::json!({
+                        "method": method,
+                        "url": url,
+                        "error": e.to_string()
+                    })),
+                    retryable: true,
+                })?;
+
             let status_code = response.status().as_u16();
             let response_headers: HashMap<String, String> = response
                 .headers()
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
-            
+
             let response_body = response.text().await.unwrap_or_else(|_| String::new());
-            
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::AdminAction,
-                SecuritySeverity::Low,
-                "soar_executor".to_string(),
-                format!("HTTP {} request to {} completed", method, url),
-            )
-            .with_actor("soar_system".to_string())
-            .with_action("soar_execute".to_string())
-            .with_target("soar_playbook".to_string())
-            .with_outcome(if status_code < 400 { "success" } else { "failure" }.to_string())
-            .with_reason(format!("HTTP request step completed with status code {}", status_code))
-            .with_detail("method".to_string(), method.clone())
-            .with_detail("url".to_string(), url.clone())
-            .with_detail("status_code".to_string(), status_code));
-            
+
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::AdminAction,
+                    SecuritySeverity::Low,
+                    "soar_executor".to_string(),
+                    format!("HTTP {} request to {} completed", method, url),
+                )
+                .with_actor("soar_system".to_string())
+                .with_action("soar_execute".to_string())
+                .with_target("soar_playbook".to_string())
+                .with_outcome(if status_code < 400 { "success" } else { "failure" }.to_string())
+                .with_reason(format!(
+                    "HTTP request step completed with status code {}",
+                    status_code
+                ))
+                .with_detail("method".to_string(), method.clone())
+                .with_detail("url".to_string(), url.clone())
+                .with_detail("status_code".to_string(), status_code),
+            );
+
             let mut outputs = HashMap::new();
             outputs.insert("status_code".to_string(), Value::Number(status_code.into()));
             outputs.insert("response_body".to_string(), Value::String(response_body));
-            outputs.insert("response_headers".to_string(), serde_json::to_value(response_headers).unwrap());
+            outputs.insert(
+                "response_headers".to_string(),
+                serde_json::to_value(response_headers).unwrap(),
+            );
             outputs.insert("success".to_string(), Value::Bool(status_code < 400));
-            
+
             Ok(outputs)
         } else {
             Err(StepError {
@@ -1569,7 +1643,7 @@ impl StepExecutor for HttpRequestExecutor {
             })
         }
     }
-    
+
     fn get_step_type(&self) -> String {
         "http_request".to_string()
     }
@@ -1595,10 +1669,10 @@ impl StepExecutor for DecisionExecutor {
         // TODO: Implement decision logic based on step conditions
         let mut outputs = HashMap::new();
         outputs.insert("decision_made".to_string(), Value::Bool(true));
-        
+
         Ok(outputs)
     }
-    
+
     fn get_step_type(&self) -> String {
         "decision".to_string()
     }
@@ -1622,22 +1696,20 @@ impl StepExecutor for WaitExecutor {
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
         // Extract wait duration from step inputs
-        let wait_seconds = step.inputs
-            .get("duration_seconds")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1);
-        
+        let wait_seconds =
+            step.inputs.get("duration_seconds").and_then(|v| v.as_u64()).unwrap_or(1);
+
         info!("Waiting for {} seconds", wait_seconds);
-        
+
         tokio::time::sleep(Duration::from_secs(wait_seconds)).await;
-        
+
         let mut outputs = HashMap::new();
         outputs.insert("waited_seconds".to_string(), Value::Number(wait_seconds.into()));
         outputs.insert("wait_completed".to_string(), Value::Bool(true));
-        
+
         Ok(outputs)
     }
-    
+
     fn get_step_type(&self) -> String {
         "wait".to_string()
     }
@@ -1653,7 +1725,7 @@ impl FirewallClient {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub async fn block_ip(
         &self,
         ip_address: &str,
@@ -1661,7 +1733,10 @@ impl FirewallClient {
         reason: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement actual firewall integration
-        info!("Mock: Blocking IP {} for {} minutes (reason: {})", ip_address, duration_minutes, reason);
+        info!(
+            "Mock: Blocking IP {} for {} minutes (reason: {})",
+            ip_address, duration_minutes, reason
+        );
         Ok(format!("block_{}", Uuid::new_v4()))
     }
 }
@@ -1670,7 +1745,7 @@ impl IdentityProviderClient {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub async fn lock_account(
         &self,
         user_id: &str,
@@ -1678,7 +1753,10 @@ impl IdentityProviderClient {
         reason: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement actual identity provider integration
-        info!("Mock: Locking account {} for {} minutes (reason: {})", user_id, duration_minutes, reason);
+        info!(
+            "Mock: Locking account {} for {} minutes (reason: {})",
+            user_id, duration_minutes, reason
+        );
         Ok(format!("lock_{}", Uuid::new_v4()))
     }
 }
@@ -1687,7 +1765,7 @@ impl SiemClient {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub async fn execute_query(
         &self,
         query: &str,
@@ -1695,8 +1773,11 @@ impl SiemClient {
         max_results: u32,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement actual SIEM integration
-        info!("Mock: Executing SIEM query: {} (time_range: {}, max_results: {})", query, time_range, max_results);
-        
+        info!(
+            "Mock: Executing SIEM query: {} (time_range: {}, max_results: {})",
+            query, time_range, max_results
+        );
+
         // Return mock results
         Ok(serde_json::json!([
             {
@@ -1719,7 +1800,7 @@ impl TicketingClient {
     pub fn new() -> Self {
         Self
     }
-    
+
     pub async fn create_ticket(
         &self,
         title: &str,
@@ -1728,7 +1809,13 @@ impl TicketingClient {
         assignee: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Implement actual ticketing system integration
-        info!("Mock: Creating ticket '{}' with priority {} (assignee: {:?})", title, priority, assignee);
-        Ok(format!("TICKET-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()))
+        info!(
+            "Mock: Creating ticket '{}' with priority {} (assignee: {:?})",
+            title, priority, assignee
+        );
+        Ok(format!(
+            "TICKET-{}",
+            Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()
+        ))
     }
 }

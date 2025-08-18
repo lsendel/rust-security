@@ -1,7 +1,9 @@
 #[cfg(feature = "threat-hunting")]
 mod threat_hunting_tests {
+    use auth_service::threat_hunting_orchestrator::{
+        ThreatHuntingConfig, ThreatHuntingOrchestrator,
+    };
     use auth_service::threat_types::*;
-    use auth_service::threat_hunting_orchestrator::{ThreatHuntingOrchestrator, ThreatHuntingConfig};
     use chrono::Utc;
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
@@ -35,9 +37,17 @@ mod threat_hunting_tests {
             session_id: Some("sess_001".to_string()),
             description: "Failed authentication attempt from suspicious source".to_string(),
             details: [
-                ("reason".to_string(), serde_json::Value::String("invalid_credentials".to_string())),
-                ("attempts_count".to_string(), serde_json::Value::Number(serde_json::Number::from(15))),
-            ].into_iter().collect(),
+                (
+                    "reason".to_string(),
+                    serde_json::Value::String("invalid_credentials".to_string()),
+                ),
+                (
+                    "attempts_count".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(15)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
             outcome: EventOutcome::Failure,
             resource: Some("/oauth/token".to_string()),
             action: Some("authenticate".to_string()),
@@ -72,8 +82,13 @@ mod threat_hunting_tests {
                 if !result.threats_detected.is_empty() {
                     println!("Detected threats:");
                     for (i, threat) in result.threats_detected.iter().enumerate() {
-                        println!("  {}. Type: {:?}, Severity: {:?}, Confidence: {:.2}",
-                                i + 1, threat.threat_type, threat.severity, threat.confidence);
+                        println!(
+                            "  {}. Type: {:?}, Severity: {:?}, Confidence: {:.2}",
+                            i + 1,
+                            threat.threat_type,
+                            threat.severity,
+                            threat.confidence
+                        );
                     }
                 }
 
@@ -127,9 +142,12 @@ mod threat_hunting_tests {
                 request_id: Some(format!("req_{}", i)),
                 session_id: Some(format!("sess_{}", i)),
                 description: "Failed authentication attempt".to_string(),
-                details: [
-                    ("reason".to_string(), serde_json::Value::String("invalid_credentials".to_string())),
-                ].into_iter().collect(),
+                details: [(
+                    "reason".to_string(),
+                    serde_json::Value::String("invalid_credentials".to_string()),
+                )]
+                .into_iter()
+                .collect(),
                 outcome: EventOutcome::Failure,
                 resource: Some("/oauth/token".to_string()),
                 action: Some("authenticate".to_string()),
@@ -153,7 +171,9 @@ mod threat_hunting_tests {
                     println!("Detected potential credential stuffing after {} attempts", i);
 
                     // Check if credential stuffing was detected
-                    let has_credential_stuffing = result.threats_detected.iter()
+                    let has_credential_stuffing = result
+                        .threats_detected
+                        .iter()
                         .any(|t| matches!(t.threat_type, ThreatType::CredentialStuffing));
 
                     if has_credential_stuffing {
@@ -191,7 +211,9 @@ mod threat_hunting_tests {
                 client_id: Some("client_001".to_string()),
                 user_id: Some(user_id.to_string()),
                 ip_address: Some(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100))),
-                user_agent: Some("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string()),
+                user_agent: Some(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string(),
+                ),
                 request_id: Some(format!("req_normal_{}", i)),
                 session_id: Some(format!("sess_normal_{}", i)),
                 description: "Normal authentication".to_string(),
@@ -227,7 +249,7 @@ mod threat_hunting_tests {
             client_id: Some("client_001".to_string()),
             user_id: Some(user_id.to_string()),
             ip_address: Some(IpAddr::V4(Ipv4Addr::new(185, 220, 100, 252))), // Different IP
-            user_agent: Some("curl/7.68.0".to_string()), // Different user agent
+            user_agent: Some("curl/7.68.0".to_string()),                     // Different user agent
             request_id: Some("req_ato_001".to_string()),
             session_id: Some("sess_ato_001".to_string()),
             description: "Suspicious authentication from new location".to_string(),
@@ -246,7 +268,7 @@ mod threat_hunting_tests {
                 isp: Some("Suspicious ISP".to_string()),
             }),
             device_fingerprint: Some("unknown_device_fingerprint".to_string()), // Different device
-            mfa_used: false, // No MFA used
+            mfa_used: false,                                                    // No MFA used
             token_binding_info: None,
         };
 
@@ -260,10 +282,15 @@ mod threat_hunting_tests {
                     println!("- Risk level: {:?}", risk_assessment.risk_level);
 
                     // High risk events should trigger elevated risk scores
-                    assert!(risk_assessment.risk_score > 0.5, "High risk event should increase user risk score");
+                    assert!(
+                        risk_assessment.risk_score > 0.5,
+                        "High risk event should increase user risk score"
+                    );
                 }
 
-                let has_account_takeover = result.threats_detected.iter()
+                let has_account_takeover = result
+                    .threats_detected
+                    .iter()
                     .any(|t| matches!(t.threat_type, ThreatType::AccountTakeover));
 
                 if has_account_takeover {
@@ -306,7 +333,9 @@ mod threat_hunting_tests {
                     client_id: Some("client_001".to_string()),
                     user_id: Some(user_id.to_string()),
                     ip_address: Some(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100))),
-                    user_agent: Some("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string()),
+                    user_agent: Some(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string(),
+                    ),
                     request_id: Some(format!("req_profile_{}", hour)),
                     session_id: Some(format!("sess_profile_{}", hour)),
                     description: "Normal work hours authentication".to_string(),
@@ -343,7 +372,9 @@ mod threat_hunting_tests {
             client_id: Some("client_001".to_string()),
             user_id: Some(user_id.to_string()),
             ip_address: Some(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 100))),
-            user_agent: Some("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string()),
+            user_agent: Some(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string(),
+            ),
             request_id: Some("req_anomalous_001".to_string()),
             session_id: Some("sess_anomalous_001".to_string()),
             description: "Unusual time authentication".to_string(),
@@ -368,10 +399,14 @@ mod threat_hunting_tests {
 
         // Set the timestamp to 3 AM
         let mut anomalous_event = anomalous_event;
-        anomalous_event.timestamp = anomalous_event.timestamp
-            .with_hour(3).unwrap()
-            .with_minute(0).unwrap()
-            .with_second(0).unwrap();
+        anomalous_event.timestamp = anomalous_event
+            .timestamp
+            .with_hour(3)
+            .unwrap()
+            .with_minute(0)
+            .unwrap()
+            .with_second(0)
+            .unwrap();
 
         match orchestrator.process_event(anomalous_event).await {
             Ok(result) => {
@@ -379,7 +414,10 @@ mod threat_hunting_tests {
 
                 if let Some(risk_assessment) = &result.user_risk_assessment {
                     println!("- User risk score: {:.2}", risk_assessment.risk_score);
-                    println!("- Behavioral anomalies detected: {}", risk_assessment.behavioral_anomalies.len());
+                    println!(
+                        "- Behavioral anomalies detected: {}",
+                        risk_assessment.behavioral_anomalies.len()
+                    );
 
                     if !risk_assessment.behavioral_anomalies.is_empty() {
                         println!("✓ Temporal anomaly successfully detected in user behavior");
@@ -433,7 +471,7 @@ mod threat_hunting_tests {
                         (i % 255) as u8 + 1,
                         168,
                         1,
-                        (i % 254) as u8 + 1
+                        (i % 254) as u8 + 1,
                     ))),
                     user_agent: Some("PerfTestAgent/1.0".to_string()),
                     request_id: Some(format!("perf_req_{}", i)),
@@ -476,11 +514,8 @@ mod threat_hunting_tests {
         }
 
         let total_duration = start_time.elapsed();
-        let average_processing_time = if successful_analyses > 0 {
-            total_processing_time / successful_analyses
-        } else {
-            0
-        };
+        let average_processing_time =
+            if successful_analyses > 0 { total_processing_time / successful_analyses } else { 0 };
 
         println!("Performance test results:");
         println!("- Total events: {}", event_count);
@@ -522,11 +557,7 @@ async fn test_security_event_creation() {
 #[cfg(feature = "threat-hunting")]
 #[tokio::test]
 async fn test_threat_signature_creation() {
-    let threat = ThreatSignature::new(
-        ThreatType::CredentialStuffing,
-        ThreatSeverity::High,
-        0.85,
-    );
+    let threat = ThreatSignature::new(ThreatType::CredentialStuffing, ThreatSeverity::High, 0.85);
 
     assert_eq!(threat.threat_type, ThreatType::CredentialStuffing);
     assert_eq!(threat.severity, ThreatSeverity::High);

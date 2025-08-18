@@ -29,9 +29,9 @@ impl ReplayProtection {
     }
 
     pub async fn check_and_mark_used(
-        &self, 
-        user_id: &str, 
-        code: &str, 
+        &self,
+        user_id: &str,
+        code: &str,
         window_secs: u64
     ) -> Result<bool, ReplayProtectionError> {
         let Some(mut conn) = self.redis.clone() else {
@@ -45,11 +45,11 @@ impl ReplayProtection {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| ReplayProtectionError::InvalidTimeWindow)?
             .as_secs();
-        
+
         // Round down to the nearest window to ensure consistency across the window
         let window_start = (current_time / window_secs) * window_secs;
         let key = format!("mfa:totp:used:{}:{}:{}", user_id, code, window_start);
-        
+
         // Use SET with NX (only set if not exists) and EX (expiration)
         let ttl = window_secs + 60; // TTL slightly longer than window for safety
         let result: Option<String> = conn
@@ -98,7 +98,7 @@ impl ReplayProtection {
 
         let pattern = format!("mfa:totp:used:{}:*", user_id);
         let keys: Vec<String> = conn.keys(&pattern).await?;
-        
+
         if keys.is_empty() {
             return Ok(0);
         }
@@ -180,7 +180,7 @@ mod tests {
         // Same code, different users should both succeed
         let result1 = rp.check_and_mark_used("user1", "123456", window).await;
         let result2 = rp.check_and_mark_used("user2", "123456", window).await;
-        
+
         assert!(result1.is_ok());
         assert!(result2.is_ok());
 

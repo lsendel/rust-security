@@ -35,7 +35,10 @@ impl Validator {
         if path.exists() && path.is_dir() {
             Ok(())
         } else {
-            Err(ComplianceError::Validation(format!("Directory path does not exist: {}", path.display())))
+            Err(ComplianceError::Validation(format!(
+                "Directory path does not exist: {}",
+                path.display()
+            )))
         }
     }
 
@@ -53,7 +56,10 @@ impl Validator {
         if (0.0..=100.0).contains(&value) {
             Ok(())
         } else {
-            Err(ComplianceError::Validation(format!("Percentage must be between 0 and 100: {}", value)))
+            Err(ComplianceError::Validation(format!(
+                "Percentage must be between 0 and 100: {}",
+                value
+            )))
         }
     }
 }

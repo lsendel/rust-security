@@ -1,5 +1,5 @@
 //! Secure SOAR Configuration Loader
-//! 
+//!
 //! This module provides secure configuration loading for SOAR with:
 //! - Environment variable validation for secrets
 //! - Prevention of hardcoded credentials
@@ -18,19 +18,19 @@ use tracing::{error, info, warn};
 pub enum ConfigError {
     #[error("Configuration file not found: {0}")]
     FileNotFound(String),
-    
+
     #[error("Failed to read configuration file: {0}")]
     ReadError(String),
-    
+
     #[error("Failed to parse TOML configuration: {0}")]
     ParseError(String),
-    
+
     #[error("Secret found in configuration file: {field}")]
     HardcodedSecret { field: String },
-    
+
     #[error("Required environment variable not set: {0}")]
     MissingEnvVar(String),
-    
+
     #[error("Configuration validation failed: {0}")]
     ValidationError(String),
 }
@@ -69,7 +69,7 @@ pub struct SecureSoarConfig {
     pub notifications: NotificationSettings,
     pub integrations: IntegrationSettings,
     pub evidence_management: EvidenceSettings,
-    
+
     #[serde(skip)]
     secrets: HashMap<String, String>,
 }
@@ -160,66 +160,66 @@ impl SecureSoarConfig {
     /// Load configuration from file with secure secret handling
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let path = path.as_ref();
-        
+
         if !path.exists() {
             return Err(ConfigError::FileNotFound(path.display().to_string()));
         }
-        
+
         // Read the configuration file
         let content = fs::read_to_string(path)
             .map_err(|e| ConfigError::ReadError(e.to_string()))?;
-        
+
         // Check for hardcoded secrets in the configuration
         Self::validate_no_hardcoded_secrets(&content)?;
-        
+
         // Parse the TOML configuration
         let mut config: toml::Value = toml::from_str(&content)
             .map_err(|e| ConfigError::ParseError(e.to_string()))?;
-        
+
         // Load secrets from environment variables
         let secrets = Self::load_secrets_from_env()?;
-        
+
         // Inject secrets into configuration
         Self::inject_secrets(&mut config, &secrets)?;
-        
+
         // Parse into strongly typed configuration
         let mut soar_config: SecureSoarConfig = config.try_into()
             .map_err(|e| ConfigError::ParseError(format!("Failed to parse config: {}", e)))?;
-        
+
         // Store secrets separately
         soar_config.secrets = secrets;
-        
+
         // Validate the configuration
         soar_config.validate()?;
-        
+
         info!("SOAR configuration loaded successfully (secrets loaded from environment)");
-        
+
         Ok(soar_config)
     }
-    
+
     /// Validate that no secrets are hardcoded in the configuration file
     fn validate_no_hardcoded_secrets(content: &str) -> Result<(), ConfigError> {
         let lines: Vec<&str> = content.lines().collect();
-        
+
         for (line_num, line) in lines.iter().enumerate() {
             // Skip comments and empty lines
             if line.trim().starts_with('#') || line.trim().is_empty() {
                 continue;
             }
-            
+
             // Check for secret patterns with non-empty values
             for pattern in SECRET_PATTERNS {
                 if line.to_lowercase().contains(pattern) {
                     // Check if the line has a non-empty value (not "", not a comment)
                     if let Some(eq_pos) = line.find('=') {
                         let value_part = line[eq_pos + 1..].trim();
-                        
+
                         // Check if value is not empty and not a placeholder
-                        if !value_part.is_empty() 
+                        if !value_part.is_empty()
                             && value_part != "\"\""
                             && !value_part.starts_with('#')
                             && !value_part.contains("Set via environment") {
-                            
+
                             return Err(ConfigError::HardcodedSecret {
                                 field: format!("Line {}: {}", line_num + 1, line.trim()),
                             });
@@ -228,14 +228,14 @@ impl SecureSoarConfig {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Load secrets from environment variables
     fn load_secrets_from_env() -> Result<HashMap<String, String>, ConfigError> {
         let mut secrets = HashMap::new();
-        
+
         for (field, env_var) in SECRET_FIELDS {
             match env::var(env_var) {
                 Ok(value) if !value.is_empty() => {
@@ -251,10 +251,10 @@ impl SecureSoarConfig {
                 }
             }
         }
-        
+
         Ok(secrets)
     }
-    
+
     /// Inject secrets from environment into configuration
     fn inject_secrets(config: &mut toml::Value, secrets: &HashMap<String, String>) -> Result<(), ConfigError> {
         if let toml::Value::Table(table) = config {
@@ -262,10 +262,10 @@ impl SecureSoarConfig {
                 Self::set_nested_value(table, path, value.clone())?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Set a nested value in the configuration table
     fn set_nested_value(
         table: &mut toml::map::Map<String, toml::Value>,
@@ -273,13 +273,13 @@ impl SecureSoarConfig {
         value: String,
     ) -> Result<(), ConfigError> {
         let parts: Vec<&str> = path.split('.').collect();
-        
+
         if parts.is_empty() {
             return Ok(());
         }
-        
+
         let mut current = table;
-        
+
         for (i, part) in parts.iter().enumerate() {
             if i == parts.len() - 1 {
                 // Last part - set the value
@@ -295,10 +295,10 @@ impl SecureSoarConfig {
                     ))?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Validate the loaded configuration
     fn validate(&self) -> Result<(), ConfigError> {
         // Validate SOAR settings
@@ -307,20 +307,20 @@ impl SecureSoarConfig {
                 "max_concurrent_workflows must be greater than 0".to_string()
             ));
         }
-        
+
         if self.soar.workflow_timeout_minutes == 0 {
             return Err(ConfigError::ValidationError(
                 "workflow_timeout_minutes must be greater than 0".to_string()
             ));
         }
-        
+
         // Validate notification settings
         if self.notifications.email.smtp_port == 0 {
             return Err(ConfigError::ValidationError(
                 "SMTP port must be greater than 0".to_string()
             ));
         }
-        
+
         // Validate evidence management
         if self.evidence_management.encryption_enabled {
             if self.evidence_management.encryption_algorithm.is_empty() {
@@ -329,27 +329,27 @@ impl SecureSoarConfig {
                 ));
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Get a secret value by key
     pub fn get_secret(&self, key: &str) -> Option<&str> {
         self.secrets.get(key).map(|s| s.as_str())
     }
-    
+
     /// Redact secrets for logging
     pub fn redacted_config(&self) -> String {
         let mut config = serde_json::to_value(self).unwrap_or_default();
-        
+
         // Redact all secret fields
         if let serde_json::Value::Object(ref mut map) = config {
             Self::redact_secrets_recursive(map);
         }
-        
+
         serde_json::to_string_pretty(&config).unwrap_or_else(|_| "{}".to_string())
     }
-    
+
     /// Recursively redact secret values in JSON
     fn redact_secrets_recursive(map: &mut serde_json::Map<String, serde_json::Value>) {
         for (key, value) in map.iter_mut() {
@@ -357,7 +357,7 @@ impl SecureSoarConfig {
             let is_secret = SECRET_PATTERNS.iter().any(|pattern| {
                 key.to_lowercase().contains(pattern)
             });
-            
+
             if is_secret {
                 *value = serde_json::Value::String("***REDACTED***".to_string());
             } else if let serde_json::Value::Object(ref mut nested_map) = value {
@@ -371,26 +371,26 @@ impl SecureSoarConfig {
 mod tests {
     use super::*;
     use std::env;
-    
+
     #[test]
     fn test_no_hardcoded_secrets_validation() {
         let config_with_secret = r#"
 [notifications.email]
 password = "actual_password_here"
 "#;
-        
+
         let result = SecureSoarConfig::validate_no_hardcoded_secrets(config_with_secret);
         assert!(result.is_err());
-        
+
         let config_without_secret = r#"
 [notifications.email]
 password = ""  # Set via environment variable SMTP_PASSWORD
 "#;
-        
+
         let result = SecureSoarConfig::validate_no_hardcoded_secrets(config_without_secret);
         assert!(result.is_ok());
     }
-    
+
     #[test]
     fn test_secret_redaction() {
         let config = SecureSoarConfig {
@@ -445,9 +445,9 @@ password = ""  # Set via environment variable SMTP_PASSWORD
             },
             secrets: HashMap::new(),
         };
-        
+
         let redacted = config.redacted_config();
-        
+
         // Verify secrets are redacted
         assert!(!redacted.contains("secret_password"));
         assert!(!redacted.contains("secret_key"));

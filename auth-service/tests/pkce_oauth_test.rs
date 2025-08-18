@@ -32,8 +32,14 @@ async fn spawn_app() -> String {
             "profile".to_string(),
         ],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -42,10 +48,8 @@ async fn spawn_app() -> String {
 #[tokio::test]
 async fn test_pkce_authorization_code_flow() {
     let base = spawn_app().await;
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap();
+    let client =
+        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
 
     // Step 1: Generate PKCE parameters (normally done by client)
     let code_verifier = auth_service::security::generate_code_verifier();
@@ -108,7 +112,9 @@ async fn test_pkce_authorization_code_flow() {
     if token_json.get("id_token").is_some() {
         println!("ID token present: {}", token_json.get("id_token").unwrap().as_str().unwrap());
     } else {
-        println!("No ID token generated - this is expected for client credentials without user context");
+        println!(
+            "No ID token generated - this is expected for client credentials without user context"
+        );
     }
 
     let access_token = token_json.get("access_token").unwrap().as_str().unwrap();
@@ -130,10 +136,8 @@ async fn test_pkce_authorization_code_flow() {
 #[tokio::test]
 async fn test_pkce_validation_failure() {
     let base = spawn_app().await;
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap();
+    let client =
+        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
 
     // Step 1: Generate PKCE parameters
     let code_verifier = auth_service::security::generate_code_verifier();
@@ -152,7 +156,8 @@ async fn test_pkce_validation_failure() {
     let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
 
     let redirect_url = Url::parse(location).unwrap();
-    let auth_code = redirect_url.query_pairs()
+    let auth_code = redirect_url
+        .query_pairs()
         .find(|(key, _)| key == "code")
         .map(|(_, value)| value.to_string())
         .expect("Authorization code should be present");
@@ -182,10 +187,8 @@ async fn test_pkce_validation_failure() {
 #[tokio::test]
 async fn test_authorization_without_pkce() {
     let base = spawn_app().await;
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap();
+    let client =
+        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
 
     // Authorization request without PKCE (should still work for backward compatibility)
     let auth_url = format!(
@@ -199,7 +202,8 @@ async fn test_authorization_without_pkce() {
 
     let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
     let redirect_url = Url::parse(location).unwrap();
-    let auth_code = redirect_url.query_pairs()
+    let auth_code = redirect_url
+        .query_pairs()
         .find(|(key, _)| key == "code")
         .map(|(_, value)| value.to_string())
         .expect("Authorization code should be present");

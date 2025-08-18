@@ -1,0 +1,108 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install -D @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Build services
+        run: cargo build --release --workspace
+
+      - name: Start services
+        run: |
+          # Start auth service
+          ./target/release/auth-service &
+          AUTH_PID=$!
+          echo "AUTH_PID=$AUTH_PID" >> $GITHUB_ENV
+          
+          # Start policy service  
+          ./target/release/policy-service &
+          POLICY_PID=$!
+          echo "POLICY_PID=$POLICY_PID" >> $GITHUB_ENV
+          
+          # Wait for services to start
+          sleep 10
+          
+          # Verify services are running
+          curl -f http://localhost:8080/health || exit 1
+          curl -f http://localhost:8081/health || exit 1
+
+      - name: Run existing E2E scripts
+        run: |
+          chmod +x scripts/testing/quick_e2e_validation.sh
+          chmod +x scripts/testing/end_to_end_integration_test.sh
+          ./scripts/testing/quick_e2e_validation.sh
+          ./scripts/testing/end_to_end_integration_test.sh
+
+      - name: Run Playwright tests
+        run: |
+          # Create basic Playwright test if none exist
+          if [ ! -d "tests/e2e" ]; then
+            mkdir -p tests/e2e
+            cat > tests/e2e/health-check.spec.js << 'EOF'
+          const { test, expect } = require('@playwright/test');
+          
+          test('auth service health check', async ({ page }) => {
+            const response = await page.goto('http://localhost:8080/health');
+            expect(response.status()).toBe(200);
+          });
+          
+          test('policy service health check', async ({ page }) => {
+            const response = await page.goto('http://localhost:8081/health');  
+            expect(response.status()).toBe(200);
+          });
+          EOF
+          fi
+          
+          npx playwright test tests/e2e/
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: test-results/
+          retention-days: 7
+
+      - name: Cleanup services
+        if: always()
+        run: |
+          if [ ! -z "$AUTH_PID" ]; then
+            kill $AUTH_PID || true
+          fi
+          if [ ! -z "$POLICY_PID" ]; then  
+            kill $POLICY_PID || true
+          fi
+          pkill -f "auth-service|policy-service" || true

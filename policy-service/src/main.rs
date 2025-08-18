@@ -16,10 +16,8 @@ async fn main() -> anyhow::Result<()> {
     let state = load_policies_and_entities()?;
     let openapi = ApiDoc::openapi();
 
-    let app = app(state).route(
-        "/openapi.json",
-        axum::routing::get(move || async { axum::Json(openapi) }),
-    );
+    let app = app(state)
+        .route("/openapi.json", axum::routing::get(move || async { axum::Json(openapi) }));
 
     let cfg = config::AppConfig::from_env()?;
     let listener = TcpListener::bind(cfg.bind_addr).await?;

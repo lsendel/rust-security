@@ -1,7 +1,7 @@
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::AuthError;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use crate::AuthError;
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// SCIM permissions for role-based access control
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -81,23 +81,25 @@ impl ScimRole {
                     ScimPermission::UserActivate,
                     ScimPermission::UserDeactivate,
                     ScimPermission::GroupOwnershipTransfer,
-                ].into_iter().collect()
-            },
-            ScimRole::UserManager => {
-                vec![
-                    ScimPermission::UserRead,
-                    ScimPermission::UserCreate,
-                    ScimPermission::UserUpdate,
-                    ScimPermission::UserDelete,
-                    ScimPermission::UserList,
-                    ScimPermission::UserPasswordReset,
-                    ScimPermission::UserActivate,
-                    ScimPermission::UserDeactivate,
-                    ScimPermission::SchemaRead,
-                    ScimPermission::ResourceTypeRead,
-                    ScimPermission::ServiceProviderConfigRead,
-                ].into_iter().collect()
-            },
+                ]
+                .into_iter()
+                .collect()
+            }
+            ScimRole::UserManager => vec![
+                ScimPermission::UserRead,
+                ScimPermission::UserCreate,
+                ScimPermission::UserUpdate,
+                ScimPermission::UserDelete,
+                ScimPermission::UserList,
+                ScimPermission::UserPasswordReset,
+                ScimPermission::UserActivate,
+                ScimPermission::UserDeactivate,
+                ScimPermission::SchemaRead,
+                ScimPermission::ResourceTypeRead,
+                ScimPermission::ServiceProviderConfigRead,
+            ]
+            .into_iter()
+            .collect(),
             ScimRole::GroupManager => {
                 vec![
                     ScimPermission::GroupRead,
@@ -112,27 +114,31 @@ impl ScimRole {
                     ScimPermission::SchemaRead,
                     ScimPermission::ResourceTypeRead,
                     ScimPermission::ServiceProviderConfigRead,
-                ].into_iter().collect()
-            },
-            ScimRole::ReadOnly => {
-                vec![
-                    ScimPermission::UserRead,
-                    ScimPermission::UserList,
-                    ScimPermission::GroupRead,
-                    ScimPermission::GroupList,
-                    ScimPermission::SchemaRead,
-                    ScimPermission::ResourceTypeRead,
-                    ScimPermission::ServiceProviderConfigRead,
-                ].into_iter().collect()
-            },
+                ]
+                .into_iter()
+                .collect()
+            }
+            ScimRole::ReadOnly => vec![
+                ScimPermission::UserRead,
+                ScimPermission::UserList,
+                ScimPermission::GroupRead,
+                ScimPermission::GroupList,
+                ScimPermission::SchemaRead,
+                ScimPermission::ResourceTypeRead,
+                ScimPermission::ServiceProviderConfigRead,
+            ]
+            .into_iter()
+            .collect(),
             ScimRole::SelfService => {
                 vec![
-                    ScimPermission::UserRead, // Can read own profile
+                    ScimPermission::UserRead,   // Can read own profile
                     ScimPermission::UserUpdate, // Can update own profile
                     ScimPermission::SchemaRead,
                     ScimPermission::ResourceTypeRead,
-                ].into_iter().collect()
-            },
+                ]
+                .into_iter()
+                .collect()
+            }
             ScimRole::Custom(permissions) => permissions.iter().cloned().collect(),
         }
     }
@@ -199,10 +205,7 @@ pub struct ScimAuthorizationManager {
 
 impl ScimAuthorizationManager {
     pub fn new() -> Self {
-        Self {
-            user_roles: HashMap::new(),
-            client_roles: HashMap::new(),
-        }
+        Self { user_roles: HashMap::new(), client_roles: HashMap::new() }
     }
 
     /// Assign roles to a user
@@ -254,39 +257,43 @@ impl ScimAuthorizationManager {
         if !context.has_permission(&required_permission) {
             self.log_authorization_failure(context, operation, "insufficient_permissions");
             return Err(AuthError::Forbidden {
-                reason: format!("Insufficient permissions for operation: {:?}", operation)
+                reason: format!("Insufficient permissions for operation: {:?}", operation),
             });
         }
 
         // Additional checks for specific operations
         match operation {
-            ScimOperation::UserRead { user_id } |
-            ScimOperation::UserUpdate { user_id } |
-            ScimOperation::UserDelete { user_id } => {
+            ScimOperation::UserRead { user_id }
+            | ScimOperation::UserUpdate { user_id }
+            | ScimOperation::UserDelete { user_id } => {
                 if !context.can_access_user(user_id, &required_permission) {
                     self.log_authorization_failure(context, operation, "user_access_denied");
                     return Err(AuthError::Forbidden {
-                        reason: "Cannot access the specified user".to_string()
+                        reason: "Cannot access the specified user".to_string(),
                     });
                 }
-            },
+            }
             ScimOperation::UserPasswordReset { user_id } => {
                 // Password reset requires special handling
                 if !context.has_permission(&ScimPermission::UserPasswordReset) {
                     self.log_authorization_failure(context, operation, "password_reset_denied");
                     return Err(AuthError::Forbidden {
-                        reason: "Password reset permission required".to_string()
+                        reason: "Password reset permission required".to_string(),
                     });
                 }
 
                 // Self-service users cannot reset their own password via SCIM
                 if context.roles.contains(&ScimRole::SelfService) {
-                    self.log_authorization_failure(context, operation, "self_service_password_reset_denied");
+                    self.log_authorization_failure(
+                        context,
+                        operation,
+                        "self_service_password_reset_denied",
+                    );
                     return Err(AuthError::Forbidden {
-                        reason: "Self-service users cannot reset passwords via SCIM".to_string()
+                        reason: "Self-service users cannot reset passwords via SCIM".to_string(),
                     });
                 }
-            },
+            }
             _ => {
                 // Other operations already checked above
             }
@@ -317,7 +324,12 @@ impl ScimAuthorizationManager {
     }
 
     /// Log failed authorization
-    fn log_authorization_failure(&self, context: &ScimUserContext, operation: &ScimOperation, reason: &str) {
+    fn log_authorization_failure(
+        &self,
+        context: &ScimUserContext,
+        operation: &ScimOperation,
+        reason: &str,
+    ) {
         let mut event = SecurityEvent::new(
             SecurityEventType::Authorization,
             SecuritySeverity::Warning,
@@ -395,22 +407,22 @@ impl ScimOperation {
     /// Get the resource type for this operation
     pub fn get_resource_type(&self) -> &'static str {
         match self {
-            ScimOperation::UserList | 
-            ScimOperation::UserRead { .. } |
-            ScimOperation::UserCreate |
-            ScimOperation::UserUpdate { .. } |
-            ScimOperation::UserDelete { .. } |
-            ScimOperation::UserPasswordReset { .. } |
-            ScimOperation::UserActivate { .. } |
-            ScimOperation::UserDeactivate { .. } => "user",
+            ScimOperation::UserList
+            | ScimOperation::UserRead { .. }
+            | ScimOperation::UserCreate
+            | ScimOperation::UserUpdate { .. }
+            | ScimOperation::UserDelete { .. }
+            | ScimOperation::UserPasswordReset { .. }
+            | ScimOperation::UserActivate { .. }
+            | ScimOperation::UserDeactivate { .. } => "user",
 
-            ScimOperation::GroupList |
-            ScimOperation::GroupRead { .. } |
-            ScimOperation::GroupCreate |
-            ScimOperation::GroupUpdate { .. } |
-            ScimOperation::GroupDelete { .. } |
-            ScimOperation::GroupMemberAdd { .. } |
-            ScimOperation::GroupMemberRemove { .. } => "group",
+            ScimOperation::GroupList
+            | ScimOperation::GroupRead { .. }
+            | ScimOperation::GroupCreate
+            | ScimOperation::GroupUpdate { .. }
+            | ScimOperation::GroupDelete { .. }
+            | ScimOperation::GroupMemberAdd { .. }
+            | ScimOperation::GroupMemberRemove { .. } => "group",
 
             ScimOperation::SchemaRead => "schema",
             ScimOperation::ResourceTypeRead => "resource_type",
@@ -427,14 +439,11 @@ static SCIM_AUTHZ_MANAGER: once_cell::sync::Lazy<std::sync::Mutex<ScimAuthorizat
 
         // Set up default roles from environment or configuration
         // For now, we'll set up some basic roles
-        manager.assign_user_roles(
-            "admin".to_string(),
-            vec![ScimRole::Administrator]
-        );
+        manager.assign_user_roles("admin".to_string(), vec![ScimRole::Administrator]);
 
         manager.assign_client_roles(
             "scim_client".to_string(),
-            vec![ScimRole::UserManager, ScimRole::GroupManager]
+            vec![ScimRole::UserManager, ScimRole::GroupManager],
         );
 
         std::sync::Mutex::new(manager)
@@ -455,18 +464,12 @@ pub fn authorize_scim_operation(
 
 /// Assign roles to a user
 pub fn assign_user_scim_roles(user_id: String, roles: Vec<ScimRole>) {
-    SCIM_AUTHZ_MANAGER
-        .lock()
-        .unwrap()
-        .assign_user_roles(user_id, roles);
+    SCIM_AUTHZ_MANAGER.lock().unwrap().assign_user_roles(user_id, roles);
 }
 
 /// Assign roles to a client
 pub fn assign_client_scim_roles(client_id: String, roles: Vec<ScimRole>) {
-    SCIM_AUTHZ_MANAGER
-        .lock()
-        .unwrap()
-        .assign_client_roles(client_id, roles);
+    SCIM_AUTHZ_MANAGER.lock().unwrap().assign_client_roles(client_id, roles);
 }
 
 #[cfg(test)]

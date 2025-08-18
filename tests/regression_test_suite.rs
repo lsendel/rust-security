@@ -37,7 +37,7 @@ impl RegressionTestSuite {
         println!("🚀 Starting Comprehensive Regression Test Suite");
         println!("Auth Service: {}", self.auth_base_url);
         println!("Policy Service: {}", self.policy_base_url);
-        println!("=" .repeat(80));
+        println!("{}", "=".repeat(80));
 
         // Phase 1 Tests - Critical Security Features
         self.test_health_endpoints().await;
@@ -78,14 +78,14 @@ impl RegressionTestSuite {
         Ok(self.generate_summary())
     }
 
-    async fn run_test<F, Fut>(&mut self, test_name: &str, test_fn: F) 
+    async fn run_test<F, Fut>(&mut self, test_name: &str, test_fn: F)
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<Option<Value>, Box<dyn std::error::Error + Send + Sync>>>,
     {
         let start_time = std::time::Instant::now();
         print!("  {} ... ", test_name);
-        
+
         match timeout(Duration::from_secs(30), test_fn()).await {
             Ok(Ok(details)) => {
                 let duration = start_time.elapsed();
@@ -127,7 +127,7 @@ impl RegressionTestSuite {
         let total_tests = self.test_results.len();
         let passed_tests = self.test_results.values().filter(|r| r.passed).count();
         let failed_tests = total_tests - passed_tests;
-        
+
         let total_duration: Duration = self.test_results.values()
             .map(|r| r.duration)
             .sum();
@@ -160,29 +160,29 @@ pub struct TestSummary {
 
 impl TestSummary {
     pub fn print_summary(&self) {
-        println!("\n" + &"=".repeat(80));
+        println!("\n{}", "=".repeat(80));
         println!("🧪 REGRESSION TEST SUMMARY");
-        println!("=" .repeat(80));
+        println!("{}", "=".repeat(80));
         println!("Total Tests:    {}", self.total_tests);
         println!("Passed:         {} ✅", self.passed_tests);
         println!("Failed:         {} ❌", self.failed_tests);
         println!("Success Rate:   {:.1}%", self.success_rate);
         println!("Total Duration: {:.2}s", self.total_duration.as_secs_f64());
-        
+
         if !self.failed_test_names.is_empty() {
             println!("\n❌ Failed Tests:");
             for test_name in &self.failed_test_names {
                 println!("  - {}", test_name);
             }
         }
-        
-        println!("\n🎯 Overall Status: {}", 
+
+        println!("\n🎯 Overall Status: {}",
             if self.success_rate >= 95.0 { "✅ EXCELLENT" }
             else if self.success_rate >= 90.0 { "⚠️  GOOD" }
             else if self.success_rate >= 80.0 { "⚠️  NEEDS ATTENTION" }
             else { "❌ CRITICAL ISSUES" }
         );
-        println!("=" .repeat(80));
+        println!("{}", "=".repeat(80));
     }
 }
 
@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn test_summary_calculation() {
         let mut suite = RegressionTestSuite::new("http://localhost:8080", "http://localhost:8081");
-        
+
         // Add some mock test results
         suite.test_results.insert("test1".to_string(), TestResult {
             name: "test1".to_string(),
@@ -210,7 +210,7 @@ mod tests {
             error: None,
             details: None,
         });
-        
+
         suite.test_results.insert("test2".to_string(), TestResult {
             name: "test2".to_string(),
             passed: false,
@@ -218,7 +218,7 @@ mod tests {
             error: Some("Test failed".to_string()),
             details: None,
         });
-        
+
         let summary = suite.generate_summary();
         assert_eq!(summary.total_tests, 2);
         assert_eq!(summary.passed_tests, 1);

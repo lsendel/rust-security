@@ -19,29 +19,44 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec![],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct TotpRegisterRequest { user_id: String }
+struct TotpRegisterRequest {
+    user_id: String,
+}
 #[derive(Serialize, Deserialize, Debug)]
-struct TotpRegisterResponse { secret_base32: String, otpauth_url: String }
+struct TotpRegisterResponse {
+    secret_base32: String,
+    otpauth_url: String,
+}
 #[derive(Serialize, Deserialize, Debug)]
-struct TotpVerifyRequest { user_id: String, code: String }
+struct TotpVerifyRequest {
+    user_id: String,
+    code: String,
+}
 #[derive(Serialize, Deserialize, Debug)]
-struct TotpVerifyResponse { verified: bool }
+struct TotpVerifyResponse {
+    verified: bool,
+}
 #[derive(Serialize, Deserialize, Debug)]
-struct BackupCodesResponse { codes: Vec<String> }
+struct BackupCodesResponse {
+    codes: Vec<String>,
+}
 
 fn now_unix() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn hotp(secret: &[u8], counter: u64) -> u32 {
@@ -87,9 +102,7 @@ async fn totp_register_and_verify() {
 
     assert!(!reg.secret_base32.is_empty());
     assert!(reg.otpauth_url.starts_with("otpauth://totp/"));
-    let secret = BASE32
-        .decode(reg.secret_base32.as_bytes())
-        .expect("decode base32");
+    let secret = BASE32.decode(reg.secret_base32.as_bytes()).expect("decode base32");
 
     let code = totp(&secret, now_unix(), 30, 6);
     let verified: TotpVerifyResponse = client
@@ -155,5 +168,3 @@ async fn totp_backup_codes_flow() {
         .unwrap();
     assert!(!res2.verified);
 }
-
-

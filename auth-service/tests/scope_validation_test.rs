@@ -23,8 +23,14 @@ async fn spawn_app() -> String {
         client_credentials,
         allowed_scopes: vec!["read".to_string(), "write".to_string(), "admin".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -116,8 +122,5 @@ async fn test_all_allowed_scopes() {
     assert_eq!(res.status(), 200, "Should accept all allowed scopes");
     let body: serde_json::Value = res.json().await.unwrap();
     assert!(body.get("access_token").is_some());
-    assert_eq!(
-        body.get("scope").unwrap().as_str().unwrap(),
-        "read write admin"
-    );
+    assert_eq!(body.get("scope").unwrap().as_str().unwrap(), "read write admin");
 }

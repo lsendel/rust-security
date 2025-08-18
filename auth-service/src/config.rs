@@ -1,11 +1,11 @@
+use anyhow::{Context, Result};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 use url::Url;
 use validator::Validate;
-use anyhow::{Context, Result};
-use base64::Engine;
 
 // Raw configuration structure for legacy env loading
 #[derive(Debug, Deserialize)]
@@ -23,38 +23,38 @@ struct RawConfig {
 pub struct AppConfig {
     // Server configuration
     pub bind_addr: String,
-    
+
     // External dependencies
     pub redis_url: Option<String>,
-    
+
     // Authentication providers
     pub oidc_providers: OidcProviders,
-    
+
     // Security settings
     pub security: SecurityConfig,
-    
+
     // Rate limiting
     pub rate_limiting: RateLimitConfig,
-    
+
     // Monitoring
     pub monitoring: MonitoringConfig,
-    
+
     // Feature flags
     pub features: FeatureFlags,
-    
+
     // OAuth configuration
     pub oauth: OAuthConfig,
-    
+
     // SCIM configuration
     pub scim: ScimConfig,
-    
+
     // Client credentials
     pub client_credentials: HashMap<String, String>,
-    
+
     // Allowed scopes
     #[validate(length(min = 1))]
     pub allowed_scopes: Vec<String>,
-    
+
     // Legacy fields for backward compatibility
     #[allow(dead_code)]
     pub jwt_secret: String,
@@ -73,13 +73,13 @@ pub struct OidcProviders {
 pub struct OidcProvider {
     #[validate(length(min = 1))]
     pub client_id: String,
-    
+
     #[validate(length(min = 1))]
     pub client_secret: String,
-    
+
     #[validate(url)]
     pub redirect_uri: String,
-    
+
     #[validate(url)]
     pub discovery_url: Option<String>,
 }
@@ -89,26 +89,26 @@ pub struct SecurityConfig {
     // JWT settings
     #[validate(range(min = 300, max = 86400))] // 5 minutes to 24 hours
     pub jwt_access_token_ttl_seconds: u64,
-    
+
     #[validate(range(min = 3600, max = 2592000))] // 1 hour to 30 days
     pub jwt_refresh_token_ttl_seconds: u64,
-    
+
     #[validate(range(min = 2048, max = 8192))] // RSA key size
     pub rsa_key_size: u32,
-    
+
     // Request signing
     pub request_signing_secret: Option<String>,
-    
+
     #[validate(range(min = 60, max = 3600))] // 1 minute to 1 hour
     pub request_timestamp_window_seconds: i64,
-    
+
     // Session management
     #[validate(range(min = 1800, max = 86400))] // 30 minutes to 24 hours
     pub session_ttl_seconds: u64,
-    
+
     // CORS settings
     pub allowed_origins: Vec<String>,
-    
+
     // Content security
     #[validate(range(min = 1024, max = 104857600))] // 1KB to 100MB
     pub max_request_body_size: usize,
@@ -118,19 +118,19 @@ pub struct SecurityConfig {
 pub struct RateLimitConfig {
     #[validate(range(min = 1, max = 10000))]
     pub requests_per_minute_global: u32,
-    
+
     #[validate(range(min = 1, max = 1000))]
     pub requests_per_minute_per_ip: u32,
-    
+
     #[validate(range(min = 1, max = 100))]
     pub oauth_requests_per_minute: u32,
-    
+
     #[validate(range(min = 1, max = 500))]
     pub admin_requests_per_minute: u32,
-    
+
     pub enable_banlist: bool,
     pub enable_allowlist: bool,
-    
+
     pub banlist_ips: Vec<String>,
     pub allowlist_ips: Vec<String>,
 }
@@ -140,10 +140,10 @@ pub struct MonitoringConfig {
     pub prometheus_metrics_enabled: bool,
     pub opentelemetry_enabled: bool,
     pub jaeger_endpoint: Option<String>,
-    
+
     #[validate(range(min = 10, max = 3600))]
     pub metrics_scrape_interval_seconds: u64,
-    
+
     pub security_monitoring_enabled: bool,
     pub audit_logging_enabled: bool,
 }
@@ -165,13 +165,13 @@ pub struct FeatureFlags {
 pub struct OAuthConfig {
     #[validate(range(min = 60, max = 3600))] // 1 minute to 1 hour
     pub authorization_code_ttl_seconds: u64,
-    
+
     #[validate(range(min = 1, max = 100))]
     pub max_authorization_codes_per_client: usize,
-    
+
     pub enforce_pkce: bool,
     pub require_state_parameter: bool,
-    
+
     // Redirect URI validation
     pub strict_redirect_validation: bool,
     pub allowed_redirect_schemes: Vec<String>,
@@ -180,13 +180,13 @@ pub struct OAuthConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct ScimConfig {
     pub enabled: bool,
-    
+
     #[validate(range(min = 1, max = 10000))]
     pub max_filter_length: usize,
-    
+
     #[validate(range(min = 1, max = 1000))]
     pub max_results_per_page: usize,
-    
+
     #[validate(range(min = 1, max = 100))]
     pub default_results_per_page: usize,
 }
@@ -215,23 +215,19 @@ impl Default for AppConfig {
 
 impl Default for OidcProviders {
     fn default() -> Self {
-        Self {
-            google: None,
-            microsoft: None,
-            github: None,
-        }
+        Self { google: None, microsoft: None, github: None }
     }
 }
 
 impl Default for SecurityConfig {
     fn default() -> Self {
         Self {
-            jwt_access_token_ttl_seconds: 3600, // 1 hour
+            jwt_access_token_ttl_seconds: 3600,   // 1 hour
             jwt_refresh_token_ttl_seconds: 86400, // 24 hours
             rsa_key_size: 2048,
             request_signing_secret: None,
             request_timestamp_window_seconds: 300, // 5 minutes
-            session_ttl_seconds: 7200, // 2 hours
+            session_ttl_seconds: 7200,             // 2 hours
             allowed_origins: Vec::new(),
             max_request_body_size: 10 * 1024 * 1024, // 10MB
         }
@@ -313,71 +309,69 @@ impl AppConfig {
     /// Load configuration from environment variables with validation
     pub fn from_env() -> Result<Self, anyhow::Error> {
         let mut config = Self::default();
-        
+
         // Server configuration
         if let Ok(bind_addr) = env::var("BIND_ADDR") {
             config.bind_addr = bind_addr;
         }
-        
+
         // Redis configuration
         config.redis_url = env::var("REDIS_URL").ok();
-        
+
         // Legacy environment loading (backward compatibility)
         if config.redis_url.is_none() {
             config.redis_url = env::var("redis_url").ok();
         }
-        
+
         // OIDC Providers
         config.oidc_providers = OidcProviders::default();
-        
+
         // Security settings
         config.security = SecurityConfig::default();
-        
+
         // Rate limiting
         config.rate_limiting = RateLimitConfig::default();
-        
+
         // Monitoring
         config.monitoring = MonitoringConfig::default();
-        
+
         // Feature flags
         config.features = FeatureFlags::default();
-        
+
         // OAuth configuration
         config.oauth = OAuthConfig::default();
-        
+
         // SCIM configuration
         config.scim = ScimConfig::default();
-        
+
         // Client credentials (required)
         config.client_credentials = if let Ok(creds) = env::var("CLIENT_CREDENTIALS") {
             parse_client_credentials(&creds)?
         } else {
             HashMap::new()
         };
-        
+
         // Allowed scopes
         if let Ok(scopes) = env::var("ALLOWED_SCOPES") {
             config.allowed_scopes = scopes.split(',').map(|s| s.trim().to_string()).collect();
         } else if let Ok(scopes) = env::var("allowed_scopes") {
             config.allowed_scopes = scopes.split(',').map(|s| s.trim().to_string()).collect();
         }
-        
+
         // Legacy fields for backward compatibility
         config.jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "legacy".to_string());
-        config.token_expiry_seconds = env::var("TOKEN_EXPIRY_SECONDS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(3600);
+        config.token_expiry_seconds =
+            env::var("TOKEN_EXPIRY_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(3600);
         config.rate_limit_requests_per_minute = env::var("RATE_LIMIT_REQUESTS_PER_MINUTE")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(60);
-        
+
         // Configuration loaded successfully
-        
+
         Ok(config)
     }
-    
+
     /// Legacy method for backward compatibility
     pub fn from_env_legacy() -> Result<Self> {
         dotenvy::dotenv().ok(); // Load .env file if present
@@ -385,9 +379,7 @@ impl AppConfig {
         let raw = envy::from_env::<RawConfig>()
             .context("Failed to parse configuration from environment")?;
 
-        let bind_addr = raw
-            .bind_addr
-            .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+        let bind_addr = raw.bind_addr.unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
         // Validate bind address format
         if bind_addr.parse::<std::net::SocketAddr>().is_err() {
@@ -395,9 +387,7 @@ impl AppConfig {
         }
 
         let client_credentials = parse_client_credentials(
-            raw.client_credentials
-                .as_deref()
-                .unwrap_or("test_client:test_secret"),
+            raw.client_credentials.as_deref().unwrap_or("test_client:test_secret"),
         )?;
 
         // Validate client credentials
@@ -487,22 +477,15 @@ fn generate_default_secret() -> String {
     use std::env;
 
     // Check if we're in production environment
-    let is_production = env::var("ENVIRONMENT")
-        .unwrap_or_else(|_| "development".to_string())
-        .to_lowercase() == "production";
+    let is_production =
+        env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()).to_lowercase()
+            == "production";
 
     match env::var("JWT_SECRET") {
         Ok(secret) => {
             // Validate secret strength in production
             if is_production {
-                if secret.len() < 32 {
-                    panic!("JWT_SECRET must be at least 32 characters long in production");
-                }
-                if secret == "default_jwt_secret_change_in_production"
-                    || secret.contains("default")
-                    || secret.contains("change") {
-                    panic!("Default JWT_SECRET detected in production. Set a strong, unique JWT_SECRET environment variable.");
-                }
+                validate_secret_strength(&secret, "JWT_SECRET");
             }
             secret
         }
@@ -541,4 +524,79 @@ mod tests {
         let result = parse_client_credentials("invalid_format");
         assert!(result.is_err());
     }
+}
+
+/// Validates secret strength for production environments
+fn validate_secret_strength(secret: &str, secret_name: &str) {
+    // Check minimum length
+    if secret.len() < 32 {
+        panic!("{} must be at least 32 characters long in production", secret_name);
+    }
+
+    // Check for weak patterns
+    let weak_patterns = [
+        "default", "change", "test", "dev", "admin", "password", "secret", "key", "123456",
+        "qwerty", "abc",
+    ];
+
+    let lower_secret = secret.to_lowercase();
+    for pattern in &weak_patterns {
+        if lower_secret.contains(pattern) {
+            panic!("{} contains weak pattern '{}' in production. Use a cryptographically strong secret.", secret_name, pattern);
+        }
+    }
+
+    // Check character diversity (must have at least 3 different character types)
+    let has_lower = secret.chars().any(|c| c.is_ascii_lowercase());
+    let has_upper = secret.chars().any(|c| c.is_ascii_uppercase());
+    let has_digit = secret.chars().any(|c| c.is_ascii_digit());
+    let has_special = secret.chars().any(|c| !c.is_ascii_alphanumeric());
+
+    let char_types = [has_lower, has_upper, has_digit, has_special].iter().filter(|&&x| x).count();
+
+    if char_types < 3 {
+        panic!("{} must contain at least 3 different character types (lowercase, uppercase, digits, special characters) in production", secret_name);
+    }
+
+    // Check for repeated patterns (simple check for repeating substrings)
+    if secret.len() >= 8 {
+        for window_size in 2..=4 {
+            if secret.len() >= window_size * 3 {
+                for i in 0..=(secret.len() - window_size * 3) {
+                    let pattern = &secret[i..i + window_size];
+                    let remaining = &secret[i + window_size..];
+                    if remaining.starts_with(pattern)
+                        && remaining[window_size..].starts_with(pattern)
+                    {
+                        panic!("{} contains repeated patterns in production. Use a more random secret.", secret_name);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Validates all secrets at startup
+pub fn validate_production_secrets() {
+    let is_production =
+        env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()).to_lowercase()
+            == "production";
+
+    if !is_production {
+        return;
+    }
+
+    // Validate REQUEST_SIGNING_SECRET
+    match env::var("REQUEST_SIGNING_SECRET") {
+        Ok(secret) => {
+            validate_secret_strength(&secret, "REQUEST_SIGNING_SECRET");
+        }
+        Err(_) => {
+            panic!("REQUEST_SIGNING_SECRET environment variable is required in production");
+        }
+    }
+
+    // JWT_SECRET is already validated in get_jwt_secret()
+
+    tracing::info!("All production secrets validated successfully");
 }

@@ -1,13 +1,15 @@
 use crate::IntrospectionRecord;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use once_cell::sync::Lazy;
 
 // Simple in-memory auth code store (JSON-encoded records), with optional Redis fallback
-static AUTH_CODES_MEM: Lazy<RwLock<HashMap<String, String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static AUTH_CODES_MEM: Lazy<RwLock<HashMap<String, String>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 // Ephemeral in-memory MFA flags per access token
-static MFA_FLAGS_MEM: Lazy<RwLock<HashMap<String, bool>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static MFA_FLAGS_MEM: Lazy<RwLock<HashMap<String, bool>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
     let url = std::env::var("REDIS_URL").ok()?;
@@ -116,7 +118,6 @@ impl TokenStore {
                     sub,
                     token_binding,
                     // Attach mfa flag in responses where relevant
-
                 })
             }
         }
@@ -158,7 +159,6 @@ impl TokenStore {
                     iat: None,
                     sub: None,
                     token_binding: None,
-
                 };
                 guard.insert(token.to_string(), Arc::new(RwLock::new(record)));
                 Ok(())
@@ -199,9 +199,8 @@ impl TokenStore {
                 let key = format!("token:{}:scope", token);
                 if let Some(sc) = scope {
                     if let Some(ttl) = ttl_secs {
-                        let _: () = redis::Cmd::set_ex(&key, sc, ttl)
-                            .query_async(&mut conn)
-                            .await?;
+                        let _: () =
+                            redis::Cmd::set_ex(&key, sc, ttl).query_async(&mut conn).await?;
                     } else {
                         let _: () = redis::Cmd::set(&key, sc).query_async(&mut conn).await?;
                     }
@@ -231,13 +230,10 @@ impl TokenStore {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:client_id", token);
                 if let Some(ttl) = ttl_secs {
-                    let _: () = redis::Cmd::set_ex(&key, client_id, ttl)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () =
+                        redis::Cmd::set_ex(&key, client_id, ttl).query_async(&mut conn).await?;
                 } else {
-                    let _: () = redis::Cmd::set(&key, client_id)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () = redis::Cmd::set(&key, client_id).query_async(&mut conn).await?;
                 }
                 Ok(())
             }
@@ -266,9 +262,7 @@ impl TokenStore {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:exp", token);
                 if let Some(ttl) = ttl_secs {
-                    let _: () = redis::Cmd::set_ex(&key, exp, ttl)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () = redis::Cmd::set_ex(&key, exp, ttl).query_async(&mut conn).await?;
                 } else {
                     let _: () = redis::Cmd::set(&key, exp).query_async(&mut conn).await?;
                 }
@@ -295,13 +289,10 @@ impl TokenStore {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:sub", token);
                 if let Some(ttl) = ttl_secs {
-                    let _: () = redis::Cmd::set_ex(&key, subject, ttl)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () =
+                        redis::Cmd::set_ex(&key, subject, ttl).query_async(&mut conn).await?;
                 } else {
-                    let _: () = redis::Cmd::set(&key, subject)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () = redis::Cmd::set(&key, subject).query_async(&mut conn).await?;
                 }
                 Ok(())
             }
@@ -326,9 +317,7 @@ impl TokenStore {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:iat", token);
                 if let Some(ttl) = ttl_secs {
-                    let _: () = redis::Cmd::set_ex(&key, iat, ttl)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () = redis::Cmd::set_ex(&key, iat, ttl).query_async(&mut conn).await?;
                 } else {
                     let _: () = redis::Cmd::set(&key, iat).query_async(&mut conn).await?;
                 }
@@ -349,7 +338,6 @@ impl TokenStore {
                     iat: None,
                     sub: None,
                     token_binding: None,
-
                 };
                 guard.insert(format!("rt:{}", refresh), Arc::new(RwLock::new(record)));
                 Ok(())
@@ -357,9 +345,7 @@ impl TokenStore {
             TokenStore::Redis(conn) => {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:refresh", refresh);
-                let _: () = redis::Cmd::set_ex(&key, 1, ttl_secs)
-                    .query_async(&mut conn)
-                    .await?;
+                let _: () = redis::Cmd::set_ex(&key, 1, ttl_secs).query_async(&mut conn).await?;
                 Ok(())
             }
         }
@@ -404,7 +390,8 @@ impl TokenStore {
             TokenStore::Redis(conn) => {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:mfa_verified", token);
-                let val: Option<i64> = redis::Cmd::get(&key).query_async(&mut conn).await.unwrap_or(None);
+                let val: Option<i64> =
+                    redis::Cmd::get(&key).query_async(&mut conn).await.unwrap_or(None);
                 Ok(val.unwrap_or(0) == 1)
             }
         }
@@ -428,13 +415,10 @@ impl TokenStore {
                 let mut conn = conn.clone();
                 let key = format!("token:{}:token_binding", token);
                 if let Some(ttl) = ttl_secs {
-                    let _: () = redis::Cmd::set_ex(&key, token_binding, ttl)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () =
+                        redis::Cmd::set_ex(&key, token_binding, ttl).query_async(&mut conn).await?;
                 } else {
-                    let _: () = redis::Cmd::set(&key, token_binding)
-                        .query_async(&mut conn)
-                        .await?;
+                    let _: () = redis::Cmd::set(&key, token_binding).query_async(&mut conn).await?;
                 }
                 Ok(())
             }
@@ -518,9 +502,7 @@ impl TokenStore {
             TokenStore::Redis(conn) => {
                 // Try to ping Redis
                 let mut conn = conn.clone();
-                let result: Result<String, _> = redis::cmd("PING")
-                    .query_async(&mut conn)
-                    .await;
+                let result: Result<String, _> = redis::cmd("PING").query_async(&mut conn).await;
                 Ok(result.is_ok())
             }
         }
@@ -533,7 +515,7 @@ impl TokenStore {
                 let total_tokens = guard.len();
                 let mut active_tokens = 0;
                 let mut expired_tokens = 0;
-                
+
                 let now = chrono::Utc::now().timestamp();
                 for record in guard.values() {
                     let record = record.read().await;
@@ -546,7 +528,7 @@ impl TokenStore {
                         }
                     }
                 }
-                
+
                 Ok(TokenStoreMetrics {
                     total_tokens,
                     active_tokens,
@@ -554,42 +536,41 @@ impl TokenStore {
                     expired_tokens,
                     operations_per_second: 0.0, // Would need tracking to calculate
                     avg_response_time_ms: 0.0,  // Would need tracking to calculate
-                    error_rate: 0.0,             // Would need tracking to calculate
-                    cache_hit_ratio: 1.0,        // Always 1.0 for in-memory
+                    error_rate: 0.0,            // Would need tracking to calculate
+                    cache_hit_ratio: 1.0,       // Always 1.0 for in-memory
                 })
             }
             TokenStore::Redis(conn) => {
                 let mut conn = conn.clone();
-                
+
                 // Get Redis INFO stats
                 let info: String = redis::cmd("INFO")
                     .arg("stats")
                     .query_async(&mut conn)
                     .await
                     .unwrap_or_default();
-                
+
                 // Parse some basic metrics from INFO output
-                let ops_per_sec = info.lines()
+                let ops_per_sec = info
+                    .lines()
                     .find(|line| line.starts_with("instantaneous_ops_per_sec:"))
                     .and_then(|line| line.split(':').nth(1))
                     .and_then(|v| v.trim().parse::<f64>().ok())
                     .unwrap_or(0.0);
-                
+
                 // Get approximate token count using DBSIZE
-                let total_tokens: usize = redis::cmd("DBSIZE")
-                    .query_async(&mut conn)
-                    .await
-                    .unwrap_or(0);
-                
+                let total_tokens: usize =
+                    redis::cmd("DBSIZE").query_async(&mut conn).await.unwrap_or(0);
+
                 Ok(TokenStoreMetrics {
                     total_tokens,
                     active_tokens: 0,  // Would need to scan keys to calculate
                     revoked_tokens: 0, // Would need to scan keys to calculate
                     expired_tokens: 0, // Would need to scan keys to calculate
                     operations_per_second: ops_per_sec,
-                    avg_response_time_ms: 0.0,  // Would need tracking to calculate
-                    error_rate: 0.0,             // Would need tracking to calculate
-                    cache_hit_ratio: 0.0,        // Would need tracking to calculate
+                    avg_response_time_ms: 0.0, // Would need tracking to calculate
+                    error_rate: 0.0,           // Would need tracking to calculate
+                    cache_hit_ratio: 0.0,      // Would need tracking to calculate
                 })
             }
         }

@@ -1,9 +1,9 @@
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use dashmap::DashMap;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use dashmap::DashMap;
-use serde_json::Value;
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Enhanced authentication failure tracking and logging
 pub struct AuthFailureTracker {
@@ -59,11 +59,8 @@ pub struct FailureStats {
 
 impl FailureStats {
     fn new() -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
         Self {
             count: AtomicU64::new(0),
             first_failure: AtomicU64::new(now),
@@ -73,13 +70,10 @@ impl FailureStats {
     }
 
     fn increment(&self, max_failures: u32, window_secs: u64) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+
         self.last_failure.store(now, Ordering::Relaxed);
-        
+
         // Check if we're in a new window
         let first_failure = self.first_failure.load(Ordering::Relaxed);
         if now > first_failure + window_secs {
@@ -89,15 +83,15 @@ impl FailureStats {
             self.is_suspicious.store(false, Ordering::Relaxed);
             return false;
         }
-        
+
         let count = self.count.fetch_add(1, Ordering::Relaxed) + 1;
-        
+
         // Check if should be marked suspicious
         if count >= max_failures as u64 {
             self.is_suspicious.store(true, Ordering::Relaxed);
             return true;
         }
-        
+
         false
     }
 
@@ -149,8 +143,10 @@ impl AuthFailureTracker {
 
         // Track client-based failures
         if let Some(client) = client_id {
-            let entry = self.client_failures.entry(client.to_string()).or_insert_with(FailureStats::new);
-            if entry.increment(self.config.max_failures_per_client, self.config.failure_window_secs) {
+            let entry =
+                self.client_failures.entry(client.to_string()).or_insert_with(FailureStats::new);
+            if entry.increment(self.config.max_failures_per_client, self.config.failure_window_secs)
+            {
                 is_suspicious = true;
                 suspicious_reasons.push(format!("Client {} exceeded failure threshold", client));
             }
@@ -160,7 +156,10 @@ impl AuthFailureTracker {
         if let Some(ua) = user_agent {
             // Only track suspicious user agents
             if self.is_suspicious_user_agent(ua) {
-                let entry = self.user_agent_failures.entry(ua.to_string()).or_insert_with(FailureStats::new);
+                let entry = self
+                    .user_agent_failures
+                    .entry(ua.to_string())
+                    .or_insert_with(FailureStats::new);
                 entry.increment(50, self.config.failure_window_secs); // Higher threshold for UA
                 suspicious_reasons.push("Suspicious user agent detected".to_string());
                 is_suspicious = true;
@@ -170,8 +169,12 @@ impl AuthFailureTracker {
         // Determine severity based on failure type and suspicion level
         let severity = match failure_type {
             AuthFailureType::InvalidCredentials => {
-                if is_suspicious { SecuritySeverity::High } else { SecuritySeverity::Medium }
-            },
+                if is_suspicious {
+                    SecuritySeverity::High
+                } else {
+                    SecuritySeverity::Medium
+                }
+            }
             AuthFailureType::AccountLocked => SecuritySeverity::High,
             AuthFailureType::AccountDisabled => SecuritySeverity::Medium,
             AuthFailureType::InvalidClient => SecuritySeverity::High,
@@ -200,11 +203,11 @@ impl AuthFailureTracker {
         if let Some(client) = client_id {
             event = event.with_detail("client_id".to_string(), client.to_string());
         }
-        
+
         if let Some(ip) = ip_address {
             event = event.with_detail("ip_address".to_string(), ip.to_string());
         }
-        
+
         if let Some(ua) = user_agent {
             event = event.with_detail("user_agent".to_string(), ua.to_string());
         }
@@ -212,7 +215,8 @@ impl AuthFailureTracker {
         // Add suspicious activity indicators
         if is_suspicious {
             event = event.with_detail("is_suspicious".to_string(), "true".to_string());
-            event = event.with_detail("suspicious_reasons".to_string(), suspicious_reasons.join(", "));
+            event =
+                event.with_detail("suspicious_reasons".to_string(), suspicious_reasons.join(", "));
         }
 
         // Add additional context
@@ -229,7 +233,8 @@ impl AuthFailureTracker {
                     let (count, first, last, suspicious) = ip_stats.get_stats();
                     event = event.with_detail("ip_failure_count".to_string(), count.to_string());
                     event = event.with_detail("ip_first_failure".to_string(), first.to_string());
-                    event = event.with_detail("ip_is_suspicious".to_string(), suspicious.to_string());
+                    event =
+                        event.with_detail("ip_is_suspicious".to_string(), suspicious.to_string());
                 }
             }
         }
@@ -241,25 +246,28 @@ impl AuthFailureTracker {
             .with_target("auth_service".to_string())
             .with_outcome("failure".to_string())
             .with_reason(failure_reason.to_string());
-        
+
         SecurityLogger::log_event(&mut event);
 
         // Log additional alert for suspicious activity
         if is_suspicious {
-            self.log_suspicious_activity_alert(client_id, ip_address, user_agent, &suspicious_reasons);
+            self.log_suspicious_activity_alert(
+                client_id,
+                ip_address,
+                user_agent,
+                &suspicious_reasons,
+            );
         }
     }
 
     /// Check if user agent appears suspicious
     fn is_suspicious_user_agent(&self, user_agent: &str) -> bool {
         let ua_lower = user_agent.to_lowercase();
-        
+
         // Common bot/scanner patterns
         let suspicious_patterns = [
-            "bot", "crawler", "spider", "scraper", "scanner",
-            "curl", "wget", "python", "go-http", "java",
-            "postman", "insomnia", "httpie",
-            "nmap", "nikto", "sqlmap", "burp", "zap",
+            "bot", "crawler", "spider", "scraper", "scanner", "curl", "wget", "python", "go-http",
+            "java", "postman", "insomnia", "httpie", "nmap", "nikto", "sqlmap", "burp", "zap",
         ];
 
         suspicious_patterns.iter().any(|pattern| ua_lower.contains(pattern))
@@ -286,11 +294,11 @@ impl AuthFailureTracker {
         if let Some(client) = client_id {
             event = event.with_detail("client_id".to_string(), client.to_string());
         }
-        
+
         if let Some(ip) = ip_address {
             event = event.with_detail("ip_address".to_string(), ip.to_string());
         }
-        
+
         if let Some(ua) = user_agent {
             event = event.with_detail("user_agent".to_string(), ua.to_string());
         }
@@ -301,7 +309,7 @@ impl AuthFailureTracker {
             .with_target("user_account".to_string())
             .with_outcome("detected".to_string())
             .with_reason("Suspicious authentication patterns detected".to_string());
-        
+
         SecurityLogger::log_event(&mut event);
     }
 
@@ -311,10 +319,14 @@ impl AuthFailureTracker {
             global_failures: self.global_failures.load(Ordering::Relaxed),
             unique_failing_ips: self.ip_failures.len(),
             unique_failing_clients: self.client_failures.len(),
-            suspicious_ips: self.ip_failures.iter()
+            suspicious_ips: self
+                .ip_failures
+                .iter()
                 .filter(|entry| entry.value().is_suspicious.load(Ordering::Relaxed))
                 .count(),
-            suspicious_clients: self.client_failures.iter()
+            suspicious_clients: self
+                .client_failures
+                .iter()
                 .filter(|entry| entry.value().is_suspicious.load(Ordering::Relaxed))
                 .count(),
         }
@@ -322,14 +334,16 @@ impl AuthFailureTracker {
 
     /// Check if IP is marked as suspicious
     pub fn is_ip_suspicious(&self, ip: &str) -> bool {
-        self.ip_failures.get(ip)
+        self.ip_failures
+            .get(ip)
             .map(|entry| entry.is_suspicious.load(Ordering::Relaxed))
             .unwrap_or(false)
     }
 
     /// Check if client is marked as suspicious
     pub fn is_client_suspicious(&self, client_id: &str) -> bool {
-        self.client_failures.get(client_id)
+        self.client_failures
+            .get(client_id)
             .map(|entry| entry.is_suspicious.load(Ordering::Relaxed))
             .unwrap_or(false)
     }
@@ -361,10 +375,8 @@ pub struct FailureStatsSummary {
 }
 
 /// Global authentication failure tracker
-static AUTH_FAILURE_TRACKER: once_cell::sync::Lazy<AuthFailureTracker> = 
-    once_cell::sync::Lazy::new(|| {
-        AuthFailureTracker::new(AuthFailureConfig::default())
-    });
+static AUTH_FAILURE_TRACKER: once_cell::sync::Lazy<AuthFailureTracker> =
+    once_cell::sync::Lazy::new(|| AuthFailureTracker::new(AuthFailureConfig::default()));
 
 /// Convenience function to log authentication failures
 pub fn log_auth_failure(
@@ -413,9 +425,9 @@ mod tests {
             log_all_failures: true,
             include_request_details: true,
         };
-        
+
         let tracker = AuthFailureTracker::new(config);
-        
+
         // Simulate failures from same IP
         for i in 0..5 {
             tracker.log_auth_failure(
@@ -427,10 +439,10 @@ mod tests {
                 None,
             );
         }
-        
+
         // IP should be marked as suspicious after 3 failures
         assert!(tracker.is_ip_suspicious("192.168.1.1"));
-        
+
         let stats = tracker.get_failure_stats();
         assert_eq!(stats.global_failures, 5);
         assert_eq!(stats.unique_failing_ips, 1);
@@ -440,11 +452,13 @@ mod tests {
     #[test]
     fn test_suspicious_user_agent_detection() {
         let tracker = AuthFailureTracker::new(AuthFailureConfig::default());
-        
+
         assert!(tracker.is_suspicious_user_agent("curl/7.68.0"));
         assert!(tracker.is_suspicious_user_agent("python-requests/2.25.1"));
         assert!(tracker.is_suspicious_user_agent("Googlebot/2.1"));
-        assert!(!tracker.is_suspicious_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"));
+        assert!(!tracker.is_suspicious_user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        ));
     }
 
     #[test]
@@ -454,9 +468,9 @@ mod tests {
             failure_window_secs: 1, // 1 second window
             ..Default::default()
         };
-        
+
         let tracker = AuthFailureTracker::new(config);
-        
+
         // First failure
         tracker.log_auth_failure(
             AuthFailureType::InvalidCredentials,
@@ -466,10 +480,10 @@ mod tests {
             "Test failure",
             None,
         );
-        
+
         // Wait for window to expire
         std::thread::sleep(std::time::Duration::from_secs(2));
-        
+
         // Second failure should start new window
         tracker.log_auth_failure(
             AuthFailureType::InvalidCredentials,
@@ -479,7 +493,7 @@ mod tests {
             "Test failure",
             None,
         );
-        
+
         // Should not be suspicious yet (new window)
         assert!(!tracker.is_ip_suspicious("192.168.1.2"));
     }

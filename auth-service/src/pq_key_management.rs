@@ -1,8 +1,8 @@
 //! # Post-Quantum Key Management
-//! 
+//!
 //! This module handles the lifecycle management of post-quantum cryptographic keys,
 //! including generation, rotation, storage, and secure destruction.
-//! 
+//!
 //! ## Key Management Features
 //! - Automated key rotation based on time and usage policies
 //! - Secure key storage with proper zeroization
@@ -17,16 +17,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Instant};
 use tracing::{debug, error, info, warn};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::post_quantum_crypto::{
-    PQKeyMaterial, PQAlgorithm, SecurityLevel, PQConfig, 
-    get_pq_manager, PQKeyData, ClassicalKeyData
+    get_pq_manager, ClassicalKeyData, PQAlgorithm, PQConfig, PQKeyData, PQKeyMaterial,
+    SecurityLevel,
 };
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 
 /// Key rotation policy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,7 +214,12 @@ impl SecureKeyStorage {
     }
 
     /// Update key usage statistics
-    pub async fn update_usage(&self, kid: &str, operation: KeyOperation, duration_ms: u64) -> Result<()> {
+    pub async fn update_usage(
+        &self,
+        kid: &str,
+        operation: KeyOperation,
+        duration_ms: u64,
+    ) -> Result<()> {
         let mut metadata = self.metadata.write().await;
         if let Some(meta) = metadata.get_mut(kid) {
             meta.last_used = current_timestamp();
@@ -224,16 +229,16 @@ impl SecureKeyStorage {
                 KeyOperation::Sign => {
                     meta.performance_metrics.sign_operations += 1;
                     meta.performance_metrics.total_sign_time_ms += duration_ms;
-                    meta.performance_metrics.avg_sign_time_ms = 
-                        meta.performance_metrics.total_sign_time_ms as f64 / 
-                        meta.performance_metrics.sign_operations as f64;
+                    meta.performance_metrics.avg_sign_time_ms =
+                        meta.performance_metrics.total_sign_time_ms as f64
+                            / meta.performance_metrics.sign_operations as f64;
                 }
                 KeyOperation::Verify => {
                     meta.performance_metrics.verify_operations += 1;
                     meta.performance_metrics.total_verify_time_ms += duration_ms;
-                    meta.performance_metrics.avg_verify_time_ms = 
-                        meta.performance_metrics.total_verify_time_ms as f64 / 
-                        meta.performance_metrics.verify_operations as f64;
+                    meta.performance_metrics.avg_verify_time_ms =
+                        meta.performance_metrics.total_verify_time_ms as f64
+                            / meta.performance_metrics.verify_operations as f64;
                 }
                 KeyOperation::Error => {
                     meta.performance_metrics.error_count += 1;
@@ -249,22 +254,24 @@ impl SecureKeyStorage {
         if let Some(meta) = metadata.get_mut(kid) {
             meta.status = KeyStatus::Rotating;
             meta.rotation_reason = Some(reason.clone());
-            
+
             info!("Marked key for rotation: {} (reason: {:?})", kid, reason);
-            
+
             // Log rotation event
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::KeyManagement,
-                SecuritySeverity::Medium,
-                "pq-key-management".to_string(),
-                "Post-quantum key marked for rotation".to_string(),
-            )
-            .with_actor("pq_system".to_string())
-            .with_action("pq_mark_rotation".to_string())
-            .with_target("pq_keys".to_string())
-            .with_outcome("initiated".to_string())
-            .with_reason(format!("Key marked for rotation due to: {:?}", reason))
-            .with_detail("kid".to_string(), kid.to_string()));
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::KeyManagement,
+                    SecuritySeverity::Medium,
+                    "pq-key-management".to_string(),
+                    "Post-quantum key marked for rotation".to_string(),
+                )
+                .with_actor("pq_system".to_string())
+                .with_action("pq_mark_rotation".to_string())
+                .with_target("pq_keys".to_string())
+                .with_outcome("initiated".to_string())
+                .with_reason(format!("Key marked for rotation due to: {:?}", reason))
+                .with_detail("kid".to_string(), kid.to_string()),
+            );
         }
         Ok(())
     }
@@ -274,22 +281,24 @@ impl SecureKeyStorage {
         let mut metadata = self.metadata.write().await;
         if let Some(meta) = metadata.get_mut(kid) {
             meta.status = KeyStatus::Revoked;
-            
+
             warn!("Revoked post-quantum key: {} (reason: {})", kid, reason);
-            
+
             // Log revocation event
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::KeyManagement,
-                SecuritySeverity::High,
-                "pq-key-management".to_string(),
-                "Post-quantum key revoked".to_string(),
-            )
-            .with_actor("pq_system".to_string())
-            .with_action("pq_revoke_key".to_string())
-            .with_target("pq_keys".to_string())
-            .with_outcome("revoked".to_string())
-            .with_reason(format!("Key revoked: {}", reason))
-            .with_detail("kid".to_string(), kid.to_string()));
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::KeyManagement,
+                    SecuritySeverity::High,
+                    "pq-key-management".to_string(),
+                    "Post-quantum key revoked".to_string(),
+                )
+                .with_actor("pq_system".to_string())
+                .with_action("pq_revoke_key".to_string())
+                .with_target("pq_keys".to_string())
+                .with_outcome("revoked".to_string())
+                .with_reason(format!("Key revoked: {}", reason))
+                .with_detail("kid".to_string(), kid.to_string()),
+            );
         }
         Ok(())
     }
@@ -333,20 +342,22 @@ impl SecureKeyStorage {
         }
 
         warn!("Destroyed post-quantum key: {}", kid);
-        
+
         // Log destruction event
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::KeyManagement,
-            SecuritySeverity::High,
-            "pq-key-management".to_string(),
-            "Post-quantum key destroyed".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_destroy_key".to_string())
-        .with_target("pq_keys".to_string())
-        .with_outcome("destroyed".to_string())
-        .with_reason("Key securely destroyed and zeroized from memory".to_string())
-        .with_detail("kid".to_string(), kid.to_string()));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::KeyManagement,
+                SecuritySeverity::High,
+                "pq-key-management".to_string(),
+                "Post-quantum key destroyed".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_destroy_key".to_string())
+            .with_target("pq_keys".to_string())
+            .with_outcome("destroyed".to_string())
+            .with_reason("Key securely destroyed and zeroized from memory".to_string())
+            .with_detail("kid".to_string(), kid.to_string()),
+        );
 
         Ok(())
     }
@@ -354,7 +365,8 @@ impl SecureKeyStorage {
     /// Get all active keys
     pub async fn get_active_keys(&self) -> Vec<String> {
         let metadata = self.metadata.read().await;
-        metadata.values()
+        metadata
+            .values()
             .filter(|meta| meta.status == KeyStatus::Active)
             .map(|meta| meta.kid.clone())
             .collect()
@@ -364,19 +376,27 @@ impl SecureKeyStorage {
     pub async fn get_keys_needing_rotation(&self, policy: &KeyRotationPolicy) -> Vec<String> {
         let metadata = self.metadata.read().await;
         let current_time = current_timestamp();
-        
-        metadata.values()
+
+        metadata
+            .values()
             .filter(|meta| {
-                meta.status == KeyStatus::Active &&
-                (current_time - meta.created_at > policy.max_age_hours * 3600 ||
-                 meta.usage_count > policy.max_operations)
+                meta.status == KeyStatus::Active
+                    && (current_time - meta.created_at > policy.max_age_hours * 3600
+                        || meta.usage_count > policy.max_operations)
             })
             .map(|meta| meta.kid.clone())
             .collect()
     }
 
     /// Record rotation event
-    pub async fn record_rotation(&self, old_kid: String, new_kid: String, reason: RotationReason, success: bool, error: Option<String>) {
+    pub async fn record_rotation(
+        &self,
+        old_kid: String,
+        new_kid: String,
+        reason: RotationReason,
+        success: bool,
+        error: Option<String>,
+    ) {
         let record = RotationRecord {
             timestamp: current_timestamp(),
             old_kid,
@@ -388,7 +408,7 @@ impl SecureKeyStorage {
 
         let mut history = self.rotation_history.write().await;
         history.push_back(record);
-        
+
         // Keep only last 1000 records
         while history.len() > 1000 {
             history.pop_front();
@@ -419,11 +439,7 @@ pub struct PQKeyManager {
 
 impl PQKeyManager {
     pub fn new(policy: KeyRotationPolicy) -> Self {
-        Self {
-            storage: SecureKeyStorage::new(),
-            policy,
-            rotation_task: Arc::new(Mutex::new(None)),
-        }
+        Self { storage: SecureKeyStorage::new(), policy, rotation_task: Arc::new(Mutex::new(None)) }
     }
 
     pub fn default() -> Self {
@@ -447,19 +463,21 @@ impl PQKeyManager {
         }
 
         // Log initialization
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SystemEvent,
-            SecuritySeverity::Medium,
-            "pq-key-management".to_string(),
-            "Post-quantum key manager initialized".to_string(),
-        )
-        .with_actor("system".to_string())
-        .with_action("pq_keymanager_init".to_string())
-        .with_target("key_manager".to_string())
-        .with_outcome("success".to_string())
-        .with_reason("Post-quantum key management system started".to_string())
-        .with_detail("active_keys".to_string(), active_keys.len())
-        .with_detail("proactive_rotation".to_string(), self.policy.proactive_rotation));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::SystemEvent,
+                SecuritySeverity::Medium,
+                "pq-key-management".to_string(),
+                "Post-quantum key manager initialized".to_string(),
+            )
+            .with_actor("system".to_string())
+            .with_action("pq_keymanager_init".to_string())
+            .with_target("key_manager".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Post-quantum key management system started".to_string())
+            .with_detail("active_keys".to_string(), active_keys.len())
+            .with_detail("proactive_rotation".to_string(), self.policy.proactive_rotation),
+        );
 
         Ok(())
     }
@@ -468,7 +486,7 @@ impl PQKeyManager {
     pub async fn generate_new_key(&self, algorithm: Option<PQAlgorithm>) -> Result<String> {
         let manager = get_pq_manager();
         let kid = manager.generate_signing_key_pair(algorithm).await?;
-        
+
         info!("Generated new post-quantum key: {}", kid);
         Ok(kid)
     }
@@ -486,30 +504,46 @@ impl PQKeyManager {
             match self.rotate_single_key(&old_kid, reason.clone()).await {
                 Ok(new_kid) => {
                     rotated_keys.push(new_kid.clone());
-                    self.storage.record_rotation(old_kid.clone(), new_kid, reason.clone(), true, None).await;
-                    
-                    info!("Successfully rotated key: {} -> {}", old_kid, rotated_keys.last().unwrap());
+                    self.storage
+                        .record_rotation(old_kid.clone(), new_kid, reason.clone(), true, None)
+                        .await;
+
+                    info!(
+                        "Successfully rotated key: {} -> {}",
+                        old_kid,
+                        rotated_keys.last().unwrap()
+                    );
                 }
                 Err(e) => {
                     error!("Failed to rotate key {}: {}", old_kid, e);
-                    self.storage.record_rotation(old_kid.clone(), String::new(), reason.clone(), false, Some(e.to_string())).await;
+                    self.storage
+                        .record_rotation(
+                            old_kid.clone(),
+                            String::new(),
+                            reason.clone(),
+                            false,
+                            Some(e.to_string()),
+                        )
+                        .await;
                 }
             }
         }
 
         // Log rotation completion
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::KeyManagement,
-            SecuritySeverity::Medium,
-            "pq-key-management".to_string(),
-            "Key rotation completed".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_rotate_keys".to_string())
-        .with_target("pq_keys".to_string())
-        .with_outcome("success".to_string())
-        .with_reason(format!("Key rotation batch completed: {:?}", reason))
-        .with_detail("rotated_count".to_string(), rotated_keys.len()));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::KeyManagement,
+                SecuritySeverity::Medium,
+                "pq-key-management".to_string(),
+                "Key rotation completed".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_rotate_keys".to_string())
+            .with_target("pq_keys".to_string())
+            .with_outcome("success".to_string())
+            .with_reason(format!("Key rotation batch completed: {:?}", reason))
+            .with_detail("rotated_count".to_string(), rotated_keys.len()),
+        );
 
         Ok(rotated_keys)
     }
@@ -528,16 +562,16 @@ impl PQKeyManager {
                 let storage = self.storage.clone();
                 let old_kid = old_kid.to_string();
                 let overlap_hours = self.policy.overlap_period_hours;
-                
+
                 async move {
                     tokio::time::sleep(Duration::from_secs(overlap_hours * 3600)).await;
-                    
+
                     // Deprecate old key
                     let mut metadata = storage.metadata.write().await;
                     if let Some(meta) = metadata.get_mut(&old_kid) {
                         meta.status = KeyStatus::Deprecated;
                     }
-                    
+
                     info!("Deprecated old key after overlap period: {}", old_kid);
                 }
             });
@@ -549,20 +583,22 @@ impl PQKeyManager {
     /// Emergency key rotation
     pub async fn emergency_rotation(&self, trigger: EmergencyTrigger) -> Result<Vec<String>> {
         warn!("Emergency key rotation triggered: {:?}", trigger);
-        
+
         // Log emergency rotation
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SecurityViolation,
-            SecuritySeverity::Critical,
-            "pq-key-management".to_string(),
-            "Emergency key rotation initiated".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_emergency_rotate".to_string())
-        .with_target("pq_keys".to_string())
-        .with_outcome("initiated".to_string())
-        .with_reason(format!("Emergency key rotation triggered by: {:?}", trigger))
-        .with_detail("trigger".to_string(), format!("{:?}", trigger)));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::SecurityViolation,
+                SecuritySeverity::Critical,
+                "pq-key-management".to_string(),
+                "Emergency key rotation initiated".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_emergency_rotate".to_string())
+            .with_target("pq_keys".to_string())
+            .with_outcome("initiated".to_string())
+            .with_reason(format!("Emergency key rotation triggered by: {:?}", trigger))
+            .with_detail("trigger".to_string(), format!("{:?}", trigger)),
+        );
 
         self.rotate_keys(RotationReason::Emergency(trigger)).await
     }
@@ -570,7 +606,7 @@ impl PQKeyManager {
     /// Start automated rotation task
     async fn start_rotation_task(&self) {
         let mut task_handle = self.rotation_task.lock().await;
-        
+
         if task_handle.is_some() {
             warn!("Rotation task already running");
             return;
@@ -578,17 +614,17 @@ impl PQKeyManager {
 
         let storage = self.storage.clone();
         let policy = self.policy.clone();
-        
+
         let handle = tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(3600)); // Check every hour
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let keys_needing_rotation = storage.get_keys_needing_rotation(&policy).await;
                 if !keys_needing_rotation.is_empty() {
                     info!("Found {} keys needing rotation", keys_needing_rotation.len());
-                    
+
                     for kid in keys_needing_rotation {
                         if let Err(e) = storage.rotate_key(&kid, RotationReason::Scheduled).await {
                             error!("Failed to initiate rotation for key {}: {}", kid, e);
@@ -597,7 +633,7 @@ impl PQKeyManager {
                 }
             }
         });
-        
+
         *task_handle = Some(handle);
         info!("Started automated key rotation task");
     }
@@ -605,7 +641,7 @@ impl PQKeyManager {
     /// Stop automated rotation task
     pub async fn stop_rotation_task(&self) {
         let mut task_handle = self.rotation_task.lock().await;
-        
+
         if let Some(handle) = task_handle.take() {
             handle.abort();
             info!("Stopped automated key rotation task");
@@ -616,7 +652,7 @@ impl PQKeyManager {
     pub async fn get_statistics(&self) -> KeyManagementStats {
         let metadata = self.storage.metadata.read().await;
         let history = self.storage.rotation_history.read().await;
-        
+
         let mut stats = KeyManagementStats {
             total_keys: metadata.len(),
             active_keys: 0,
@@ -628,10 +664,10 @@ impl PQKeyManager {
             avg_key_age_hours: 0.0,
             performance_summary: HashMap::new(),
         };
-        
+
         let current_time = current_timestamp();
         let mut total_age = 0u64;
-        
+
         for meta in metadata.values() {
             match meta.status {
                 KeyStatus::Active => stats.active_keys += 1,
@@ -640,31 +676,35 @@ impl PQKeyManager {
                 KeyStatus::Revoked => stats.revoked_keys += 1,
                 KeyStatus::Destroyed => {} // Not counted in total
             }
-            
+
             stats.total_operations += meta.usage_count;
             total_age += current_time - meta.created_at;
-            
+
             let alg_name = format!("{:?}", meta.algorithm);
-            let perf_entry = stats.performance_summary.entry(alg_name).or_insert_with(|| AlgorithmPerformance {
-                total_operations: 0,
-                avg_sign_time_ms: 0.0,
-                avg_verify_time_ms: 0.0,
-                error_rate: 0.0,
-            });
-            
+            let perf_entry =
+                stats.performance_summary.entry(alg_name).or_insert_with(|| AlgorithmPerformance {
+                    total_operations: 0,
+                    avg_sign_time_ms: 0.0,
+                    avg_verify_time_ms: 0.0,
+                    error_rate: 0.0,
+                });
+
             perf_entry.total_operations += meta.usage_count;
-            perf_entry.avg_sign_time_ms = (perf_entry.avg_sign_time_ms + meta.performance_metrics.avg_sign_time_ms) / 2.0;
-            perf_entry.avg_verify_time_ms = (perf_entry.avg_verify_time_ms + meta.performance_metrics.avg_verify_time_ms) / 2.0;
-            
+            perf_entry.avg_sign_time_ms =
+                (perf_entry.avg_sign_time_ms + meta.performance_metrics.avg_sign_time_ms) / 2.0;
+            perf_entry.avg_verify_time_ms =
+                (perf_entry.avg_verify_time_ms + meta.performance_metrics.avg_verify_time_ms) / 2.0;
+
             if meta.usage_count > 0 {
-                perf_entry.error_rate = meta.performance_metrics.error_count as f64 / meta.usage_count as f64;
+                perf_entry.error_rate =
+                    meta.performance_metrics.error_count as f64 / meta.usage_count as f64;
             }
         }
-        
+
         if !metadata.is_empty() {
             stats.avg_key_age_hours = (total_age / metadata.len() as u64) as f64 / 3600.0;
         }
-        
+
         stats
     }
 
@@ -674,7 +714,12 @@ impl PQKeyManager {
     }
 
     /// Update key usage statistics
-    pub async fn record_operation(&self, kid: &str, operation: KeyOperation, duration_ms: u64) -> Result<()> {
+    pub async fn record_operation(
+        &self,
+        kid: &str,
+        operation: KeyOperation,
+        duration_ms: u64,
+    ) -> Result<()> {
         self.storage.update_usage(kid, operation, duration_ms).await
     }
 
@@ -687,18 +732,15 @@ impl PQKeyManager {
                 PQKeyData::Dilithium { public_key, private_key } => {
                     // Check key lengths and basic structure
                     match key.security_level {
-                        SecurityLevel::Level1 => {
-                            Ok(public_key.len() == pqcrypto_dilithium::dilithium2::PUBLICKEYBYTES &&
-                               private_key.len() == pqcrypto_dilithium::dilithium2::SECRETKEYBYTES)
-                        }
-                        SecurityLevel::Level3 => {
-                            Ok(public_key.len() == pqcrypto_dilithium::dilithium3::PUBLICKEYBYTES &&
-                               private_key.len() == pqcrypto_dilithium::dilithium3::SECRETKEYBYTES)
-                        }
-                        SecurityLevel::Level5 => {
-                            Ok(public_key.len() == pqcrypto_dilithium::dilithium5::PUBLICKEYBYTES &&
-                               private_key.len() == pqcrypto_dilithium::dilithium5::SECRETKEYBYTES)
-                        }
+                        SecurityLevel::Level1 => Ok(public_key.len()
+                            == pqcrypto_dilithium::dilithium2::PUBLICKEYBYTES
+                            && private_key.len() == pqcrypto_dilithium::dilithium2::SECRETKEYBYTES),
+                        SecurityLevel::Level3 => Ok(public_key.len()
+                            == pqcrypto_dilithium::dilithium3::PUBLICKEYBYTES
+                            && private_key.len() == pqcrypto_dilithium::dilithium3::SECRETKEYBYTES),
+                        SecurityLevel::Level5 => Ok(public_key.len()
+                            == pqcrypto_dilithium::dilithium5::PUBLICKEYBYTES
+                            && private_key.len() == pqcrypto_dilithium::dilithium5::SECRETKEYBYTES),
                     }
                 }
                 _ => Ok(true), // For other key types or when features are disabled
@@ -731,7 +773,7 @@ pub struct AlgorithmPerformance {
 }
 
 /// Global key manager instance
-static PQ_KEY_MANAGER: once_cell::sync::Lazy<PQKeyManager> = 
+static PQ_KEY_MANAGER: once_cell::sync::Lazy<PQKeyManager> =
     once_cell::sync::Lazy::new(|| PQKeyManager::default());
 
 /// Get the global post-quantum key manager
@@ -746,10 +788,7 @@ pub async fn initialize_pq_key_management() -> Result<()> {
 
 /// Helper function to get current timestamp
 fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
 #[cfg(test)]
@@ -767,7 +806,7 @@ mod tests {
     #[tokio::test]
     async fn test_secure_key_storage() {
         let storage = SecureKeyStorage::new();
-        
+
         // Test that storage is initially empty
         let active_keys = storage.get_active_keys().await;
         assert!(active_keys.is_empty());
@@ -776,7 +815,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_manager_initialization() {
         let manager = PQKeyManager::default();
-        
+
         // Test initialization without errors
         // Note: This may fail if post-quantum features are not available
         let result = manager.initialize().await;
@@ -796,7 +835,7 @@ mod tests {
             rotation_reason: None,
             performance_metrics: KeyPerformanceMetrics::default(),
         };
-        
+
         assert_eq!(metadata.status, KeyStatus::Active);
         assert_eq!(metadata.usage_count, 0);
     }
@@ -808,7 +847,7 @@ mod tests {
             EmergencyTrigger::KeyCompromise,
             EmergencyTrigger::QuantumThreatEscalation,
         ];
-        
+
         assert_eq!(triggers.len(), 3);
     }
 }

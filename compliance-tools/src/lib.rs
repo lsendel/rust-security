@@ -1,15 +1,15 @@
 //! Rust-based compliance reporting and validation tools
-//! 
+//!
 //! This library provides comprehensive compliance reporting capabilities
 //! for security frameworks including SOC 2, ISO 27001, GDPR, and custom
 //! security controls.
 
 pub mod compliance;
 pub mod metrics;
-pub mod reporting;
-pub mod validation;
 pub mod prometheus_client;
+pub mod reporting;
 pub mod templates;
+pub mod validation;
 
 pub use compliance::*;
 pub use metrics::*;
@@ -27,25 +27,25 @@ use uuid::Uuid;
 pub enum ComplianceError {
     #[error("Configuration error: {0}")]
     Configuration(String),
-    
+
     #[error("Data collection error: {0}")]
     DataCollection(String),
-    
+
     #[error("Report generation error: {0}")]
     ReportGeneration(String),
-    
+
     #[error("Validation error: {0}")]
     Validation(String),
-    
+
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("Template error: {0}")]
     Template(String),
-    
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }

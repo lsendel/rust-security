@@ -159,9 +159,7 @@ pub struct SbomGenerator {
 
 impl SbomGenerator {
     pub fn new(project_root: impl AsRef<Path>) -> Self {
-        Self {
-            project_root: project_root.as_ref().to_path_buf(),
-        }
+        Self { project_root: project_root.as_ref().to_path_buf() }
     }
 
     pub fn generate_spdx_sbom(&self) -> Result<SpdxDocument> {
@@ -235,9 +233,7 @@ impl SbomGenerator {
 
                 if package.license_concluded != "NOASSERTION" {
                     component.licenses = Some(vec![CycloneDxLicense {
-                        license: CycloneDxLicenseInfo {
-                            id: package.license_concluded.clone(),
-                        },
+                        license: CycloneDxLicenseInfo { id: package.license_concluded.clone() },
                     }]);
                 }
 
@@ -337,11 +333,7 @@ impl SbomGenerator {
         let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)
             .map_err(|e| anyhow!("Failed to parse cargo metadata: {}", e))?;
 
-        Ok(metadata
-            .packages
-            .into_iter()
-            .filter(|pkg| pkg.source.is_some())
-            .collect())
+        Ok(metadata.packages.into_iter().filter(|pkg| pkg.source.is_some()).collect())
     }
 
     fn create_dependency_package(&self, dep: &CargoPackage) -> SpdxPackage {
@@ -349,10 +341,7 @@ impl SbomGenerator {
         let license_declared = license_concluded.clone();
 
         let checksums = dep.checksum.as_ref().map(|checksum| {
-            vec![Checksum {
-                algorithm: "SHA256".to_string(),
-                checksum_value: checksum.clone(),
-            }]
+            vec![Checksum { algorithm: "SHA256".to_string(), checksum_value: checksum.clone() }]
         });
 
         SpdxPackage {
@@ -392,10 +381,7 @@ impl SbomGenerator {
         let mut hasher = Sha256::new();
 
         // Hash Rust source files
-        for entry in walkdir::WalkDir::new(&self.project_root)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in walkdir::WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs")
                 && !path.components().any(|c| {

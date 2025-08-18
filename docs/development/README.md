@@ -31,6 +31,38 @@ cargo install cargo-deny       # License and dependency checking
 cargo install cargo-edit       # Cargo.toml editing helpers
 cargo install cargo-machete    # Remove unused dependencies
 cargo install cargo-outdated   # Check for outdated dependencies
+cargo install cargo-llvm-cov   # Code coverage
+cargo install just             # Task runner (recommended)
+
+# Install pre-commit for automated quality checks
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type commit-msg
+```
+
+#### Quick Start with Just
+We provide a `justfile` for common development tasks:
+
+```bash
+# List all available commands
+just
+
+# Run all quality checks (same as CI)
+just ci
+
+# Build the project
+just build
+
+# Run tests
+just test
+
+# Start development environment
+just dev-env
+just run-auth    # In another terminal
+just run-policy  # In another terminal
+
+# Clean up
+just dev-env-down
 ```
 
 ### Repository Structure

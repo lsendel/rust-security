@@ -1,13 +1,17 @@
-use axum::{extract::{Path, Query}, routing::{get, post}, Router};
-use axum::{extract::Request, middleware::Next, response::Response};
+use crate::pii_protection::redact_log;
 use axum::extract::Extension;
-use axum::{Json, http::StatusCode};
-use base64::{Engine, engine::general_purpose::STANDARD};
+use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{
+    extract::{Path, Query},
+    routing::{get, post},
+    Router,
+};
+use axum::{http::StatusCode, Json};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use thiserror::Error;
-use crate::pii_protection::redact_log;
+use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScimUser {
@@ -30,16 +34,16 @@ pub struct ScimGroup {
 // SCIM Filter parsing structures
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ScimOperator {
-    Eq,  // equals
-    Ne,  // not equals
-    Co,  // contains
-    Sw,  // starts with
-    Ew,  // ends with
-    Pr,  // present (has value)
-    Gt,  // greater than
-    Ge,  // greater than or equal
-    Lt,  // less than
-    Le,  // less than or equal
+    Eq, // equals
+    Ne, // not equals
+    Co, // contains
+    Sw, // starts with
+    Ew, // ends with
+    Pr, // present (has value)
+    Gt, // greater than
+    Ge, // greater than or equal
+    Lt, // less than
+    Le, // less than or equal
 }
 
 #[derive(Debug, Clone)]
@@ -167,7 +171,9 @@ async fn scim_basic_auth(request: Request, next: Next) -> Result<Response, axum:
         return Ok(next.run(request).await);
     }
     let (parts, body) = request.into_parts();
-    let auth = parts.headers.get(axum::http::header::AUTHORIZATION)
+    let auth = parts
+        .headers
+        .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
@@ -199,8 +205,13 @@ async fn scim_basic_auth(request: Request, next: Next) -> Result<Response, axum:
     Err(axum::http::StatusCode::UNAUTHORIZED)
 }
 
-async fn create_user(Extension(store): Extension<std::sync::Arc<ScimStore>>, Json(mut u): Json<ScimUser>) -> Json<ScimUser> {
-    if u.id.is_empty() { u.id = uuid::Uuid::new_v4().to_string(); }
+async fn create_user(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Json(mut u): Json<ScimUser>,
+) -> Json<ScimUser> {
+    if u.id.is_empty() {
+        u.id = uuid::Uuid::new_v4().to_string();
+    }
     store.users.write().await.insert(u.id.clone(), u.clone());
     Json(u)
 }
@@ -276,23 +287,15 @@ fn parse_scim_filter(filter: &str) -> Result<ScimFilter, ScimFilterError> {
     };
 
     // Parse value (remove quotes if present)
-    let value = value_str.map(|v| {
-        v.trim()
-            .trim_start_matches('"')
-            .trim_end_matches('"')
-            .to_string()
-    });
+    let value =
+        value_str.map(|v| v.trim().trim_start_matches('"').trim_end_matches('"').to_string());
 
     // Validate that operators requiring values have them
     if operator != ScimOperator::Pr && value.is_none() {
         return Err(ScimFilterError::InvalidSyntax);
     }
 
-    Ok(ScimFilter {
-        attribute: attribute.to_string(),
-        operator,
-        value,
-    })
+    Ok(ScimFilter { attribute: attribute.to_string(), operator, value })
 }
 
 fn apply_filter_users(mut v: Vec<ScimUser>, filter: &str) -> Vec<ScimUser> {
@@ -303,41 +306,41 @@ fn apply_filter_users(mut v: Vec<ScimUser>, filter: &str) -> Vec<ScimUser> {
                     if let Some(val) = parsed.value {
                         v.retain(|u| u.user_name == val);
                     }
-                },
+                }
                 ("userName", ScimOperator::Ne) => {
                     if let Some(val) = parsed.value {
                         v.retain(|u| u.user_name != val);
                     }
-                },
+                }
                 ("userName", ScimOperator::Co) => {
                     if let Some(val) = parsed.value {
                         v.retain(|u| u.user_name.contains(&val));
                     }
-                },
+                }
                 ("userName", ScimOperator::Sw) => {
                     if let Some(val) = parsed.value {
                         v.retain(|u| u.user_name.starts_with(&val));
                     }
-                },
+                }
                 ("userName", ScimOperator::Ew) => {
                     if let Some(val) = parsed.value {
                         v.retain(|u| u.user_name.ends_with(&val));
                     }
-                },
+                }
                 ("userName", ScimOperator::Pr) => {
                     v.retain(|u| !u.user_name.is_empty());
-                },
+                }
                 ("active", ScimOperator::Eq) => {
                     if let Some(val) = parsed.value {
                         let bool_val = val == "true";
                         v.retain(|u| u.active == bool_val);
                     }
-                },
+                }
                 ("id", ScimOperator::Eq) => {
                     if let Some(val) = parsed.value {
                         v.retain(|u| u.id == val);
                     }
-                },
+                }
                 _ => {
                     // Unsupported filter combination, return unfiltered
                     let op = parsed.operator; // copy
@@ -349,9 +352,13 @@ fn apply_filter_users(mut v: Vec<ScimUser>, filter: &str) -> Vec<ScimUser> {
                     );
                 }
             }
-        },
+        }
         Err(e) => {
-            tracing::warn!("Failed to parse SCIM filter '{}': {}", redact_log(filter), redact_log(&e.to_string()));
+            tracing::warn!(
+                "Failed to parse SCIM filter '{}': {}",
+                redact_log(filter),
+                redact_log(&e.to_string())
+            );
             // Return unfiltered on parse error
         }
     }
@@ -373,10 +380,15 @@ fn operator_str(op: &ScimOperator) -> &str {
     }
 }
 
-async fn list_users(Extension(store): Extension<std::sync::Arc<ScimStore>>, Query(p): Query<ListParams>) -> Json<ListResponse<ScimUser>> {
+async fn list_users(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Query(p): Query<ListParams>,
+) -> Json<ListResponse<ScimUser>> {
     let mut users: Vec<ScimUser> = store.users.read().await.values().cloned().collect();
-    if let Some(f) = p.filter.as_deref() { users = apply_filter_users(users, f); }
-    users.sort_by(|a,b| a.id.cmp(&b.id));
+    if let Some(f) = p.filter.as_deref() {
+        users = apply_filter_users(users, f);
+    }
+    users.sort_by(|a, b| a.id.cmp(&b.id));
     let total = users.len();
     let start = p.start_index.unwrap_or(1).saturating_sub(1);
     let count = p.count.unwrap_or(50);
@@ -390,12 +402,20 @@ async fn list_users(Extension(store): Extension<std::sync::Arc<ScimStore>>, Quer
     })
 }
 
-async fn get_user(Extension(store): Extension<std::sync::Arc<ScimStore>>, Path(id): Path<String>) -> Json<Option<ScimUser>> {
+async fn get_user(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Path(id): Path<String>,
+) -> Json<Option<ScimUser>> {
     Json(store.users.read().await.get(&id).cloned())
 }
 
-async fn create_group(Extension(store): Extension<std::sync::Arc<ScimStore>>, Json(mut g): Json<ScimGroup>) -> Json<ScimGroup> {
-    if g.id.is_empty() { g.id = uuid::Uuid::new_v4().to_string(); }
+async fn create_group(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Json(mut g): Json<ScimGroup>,
+) -> Json<ScimGroup> {
+    if g.id.is_empty() {
+        g.id = uuid::Uuid::new_v4().to_string();
+    }
     store.groups.write().await.insert(g.id.clone(), g.clone());
     Json(g)
 }
@@ -408,35 +428,35 @@ fn apply_filter_groups(mut v: Vec<ScimGroup>, filter: &str) -> Vec<ScimGroup> {
                     if let Some(val) = parsed.value {
                         v.retain(|g| g.display_name == val);
                     }
-                },
+                }
                 ("displayName", ScimOperator::Ne) => {
                     if let Some(val) = parsed.value {
                         v.retain(|g| g.display_name != val);
                     }
-                },
+                }
                 ("displayName", ScimOperator::Co) => {
                     if let Some(val) = parsed.value {
                         v.retain(|g| g.display_name.contains(&val));
                     }
-                },
+                }
                 ("displayName", ScimOperator::Sw) => {
                     if let Some(val) = parsed.value {
                         v.retain(|g| g.display_name.starts_with(&val));
                     }
-                },
+                }
                 ("displayName", ScimOperator::Ew) => {
                     if let Some(val) = parsed.value {
                         v.retain(|g| g.display_name.ends_with(&val));
                     }
-                },
+                }
                 ("displayName", ScimOperator::Pr) => {
                     v.retain(|g| !g.display_name.is_empty());
-                },
+                }
                 ("id", ScimOperator::Eq) => {
                     if let Some(val) = parsed.value {
                         v.retain(|g| g.id == val);
                     }
-                },
+                }
                 _ => {
                     // Unsupported filter combination, return unfiltered
                     let op = parsed.operator; // copy
@@ -448,21 +468,28 @@ fn apply_filter_groups(mut v: Vec<ScimGroup>, filter: &str) -> Vec<ScimGroup> {
                     );
                 }
             }
-        },
+        }
         Err(e) => {
-            tracing::warn!("Failed to parse SCIM group filter '{}': {}", redact_log(filter), redact_log(&e.to_string()));
+            tracing::warn!(
+                "Failed to parse SCIM group filter '{}': {}",
+                redact_log(filter),
+                redact_log(&e.to_string())
+            );
             // Return unfiltered on parse error
         }
     }
     v
 }
 
-async fn list_groups(Extension(store): Extension<std::sync::Arc<ScimStore>>, Query(p): Query<ListParams>) -> Json<ListResponse<ScimGroup>> {
+async fn list_groups(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Query(p): Query<ListParams>,
+) -> Json<ListResponse<ScimGroup>> {
     let mut groups: Vec<ScimGroup> = store.groups.read().await.values().cloned().collect();
     if let Some(f) = p.filter.as_deref() {
         groups = apply_filter_groups(groups, f);
     }
-    groups.sort_by(|a,b| a.id.cmp(&b.id));
+    groups.sort_by(|a, b| a.id.cmp(&b.id));
     let total = groups.len();
     let start = p.start_index.unwrap_or(1).saturating_sub(1);
     let count = p.count.unwrap_or(50);
@@ -476,7 +503,10 @@ async fn list_groups(Extension(store): Extension<std::sync::Arc<ScimStore>>, Que
     })
 }
 
-async fn get_group(Extension(store): Extension<std::sync::Arc<ScimStore>>, Path(id): Path<String>) -> Json<Option<ScimGroup>> {
+async fn get_group(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Path(id): Path<String>,
+) -> Json<Option<ScimGroup>> {
     Json(store.groups.read().await.get(&id).cloned())
 }
 
@@ -495,7 +525,10 @@ const ERROR_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:Error";
 ///
 /// Implements RFC 7644 Section 3.7 for bulk operations
 /// Supports creating, updating, and deleting multiple Users and Groups in a single request
-async fn bulk_operations(Extension(store): Extension<std::sync::Arc<ScimStore>>, Json(request): Json<BulkRequest>) -> Result<Json<BulkResponse>, (StatusCode, Json<ScimError>)> {
+async fn bulk_operations(
+    Extension(store): Extension<std::sync::Arc<ScimStore>>,
+    Json(request): Json<BulkRequest>,
+) -> Result<Json<BulkResponse>, (StatusCode, Json<ScimError>)> {
     // Validate request schemas
     if !request.schemas.contains(&BULK_SCHEMA.to_string()) {
         return Err(create_scim_error(
@@ -594,9 +627,15 @@ async fn process_single_operation(
     let resolved_path = resolve_bulk_id_references(&operation.path, bulk_id_mappings)?;
 
     match operation.method {
-        BulkOperationMethod::Post => process_post_operation(store, &resolved_path, &operation.data).await,
-        BulkOperationMethod::Put => process_put_operation(store, &resolved_path, &operation.data).await,
-        BulkOperationMethod::Patch => process_patch_operation(store, &resolved_path, &operation.data).await,
+        BulkOperationMethod::Post => {
+            process_post_operation(store, &resolved_path, &operation.data).await
+        }
+        BulkOperationMethod::Put => {
+            process_put_operation(store, &resolved_path, &operation.data).await
+        }
+        BulkOperationMethod::Patch => {
+            process_patch_operation(store, &resolved_path, &operation.data).await
+        }
         BulkOperationMethod::Delete => process_delete_operation(store, &resolved_path).await,
     }
 }
@@ -608,69 +647,57 @@ async fn process_post_operation(
     data: &Option<serde_json::Value>,
 ) -> Result<BulkOperationResponse, BulkOperationResponse> {
     let data = data.as_ref().ok_or_else(|| {
-        create_error_response(
-            BulkOperationMethod::Post,
-            "400",
-            "Data required for POST operation",
-        )
+        create_error_response(BulkOperationMethod::Post, "400", "Data required for POST operation")
     })?;
 
     match path {
-        "/Users" | "/scim/v2/Users" => {
-            match serde_json::from_value::<ScimUser>(data.clone()) {
-                Ok(mut user) => {
-                    if user.id.is_empty() {
-                        user.id = uuid::Uuid::new_v4().to_string();
-                    }
-
-                    store.users.write().await.insert(user.id.clone(), user.clone());
-
-                    Ok(BulkOperationResponse {
-                        method: BulkOperationMethod::Post,
-                        bulk_id: None,
-                        version: None,
-                        location: Some(format!("/scim/v2/Users/{}", user.id)),
-                        response: Some(serde_json::to_value(&user).unwrap()),
-                        status: "201".to_string(),
-                    })
+        "/Users" | "/scim/v2/Users" => match serde_json::from_value::<ScimUser>(data.clone()) {
+            Ok(mut user) => {
+                if user.id.is_empty() {
+                    user.id = uuid::Uuid::new_v4().to_string();
                 }
-                Err(_) => Err(create_error_response(
-                    BulkOperationMethod::Post,
-                    "400",
-                    "Invalid user data",
-                ))
+
+                store.users.write().await.insert(user.id.clone(), user.clone());
+
+                Ok(BulkOperationResponse {
+                    method: BulkOperationMethod::Post,
+                    bulk_id: None,
+                    version: None,
+                    location: Some(format!("/scim/v2/Users/{}", user.id)),
+                    response: Some(serde_json::to_value(&user).unwrap()),
+                    status: "201".to_string(),
+                })
             }
-        }
-        "/Groups" | "/scim/v2/Groups" => {
-            match serde_json::from_value::<ScimGroup>(data.clone()) {
-                Ok(mut group) => {
-                    if group.id.is_empty() {
-                        group.id = uuid::Uuid::new_v4().to_string();
-                    }
-
-                    store.groups.write().await.insert(group.id.clone(), group.clone());
-
-                    Ok(BulkOperationResponse {
-                        method: BulkOperationMethod::Post,
-                        bulk_id: None,
-                        version: None,
-                        location: Some(format!("/scim/v2/Groups/{}", group.id)),
-                        response: Some(serde_json::to_value(&group).unwrap()),
-                        status: "201".to_string(),
-                    })
+            Err(_) => {
+                Err(create_error_response(BulkOperationMethod::Post, "400", "Invalid user data"))
+            }
+        },
+        "/Groups" | "/scim/v2/Groups" => match serde_json::from_value::<ScimGroup>(data.clone()) {
+            Ok(mut group) => {
+                if group.id.is_empty() {
+                    group.id = uuid::Uuid::new_v4().to_string();
                 }
-                Err(_) => Err(create_error_response(
-                    BulkOperationMethod::Post,
-                    "400",
-                    "Invalid group data",
-                ))
+
+                store.groups.write().await.insert(group.id.clone(), group.clone());
+
+                Ok(BulkOperationResponse {
+                    method: BulkOperationMethod::Post,
+                    bulk_id: None,
+                    version: None,
+                    location: Some(format!("/scim/v2/Groups/{}", group.id)),
+                    response: Some(serde_json::to_value(&group).unwrap()),
+                    status: "201".to_string(),
+                })
             }
-        }
+            Err(_) => {
+                Err(create_error_response(BulkOperationMethod::Post, "400", "Invalid group data"))
+            }
+        },
         _ => Err(create_error_response(
             BulkOperationMethod::Post,
             "404",
             &format!("Invalid resource path: {}", path),
-        ))
+        )),
     }
 }
 
@@ -681,11 +708,7 @@ async fn process_put_operation(
     data: &Option<serde_json::Value>,
 ) -> Result<BulkOperationResponse, BulkOperationResponse> {
     let data = data.as_ref().ok_or_else(|| {
-        create_error_response(
-            BulkOperationMethod::Put,
-            "400",
-            "Data required for PUT operation",
-        )
+        create_error_response(BulkOperationMethod::Put, "400", "Data required for PUT operation")
     })?;
 
     let user_regex = regex::Regex::new(r"^/(?:scim/v2/)?Users/([^/]+)$").unwrap();
@@ -717,11 +740,9 @@ async fn process_put_operation(
                     ))
                 }
             }
-            Err(_) => Err(create_error_response(
-                BulkOperationMethod::Put,
-                "400",
-                "Invalid user data",
-            ))
+            Err(_) => {
+                Err(create_error_response(BulkOperationMethod::Put, "400", "Invalid user data"))
+            }
         }
     } else if let Some(captures) = group_regex.captures(path) {
         let group_id = captures.get(1).unwrap().as_str();
@@ -749,11 +770,9 @@ async fn process_put_operation(
                     ))
                 }
             }
-            Err(_) => Err(create_error_response(
-                BulkOperationMethod::Put,
-                "400",
-                "Invalid group data",
-            ))
+            Err(_) => {
+                Err(create_error_response(BulkOperationMethod::Put, "400", "Invalid group data"))
+            }
         }
     } else {
         Err(create_error_response(
@@ -824,9 +843,8 @@ async fn process_patch_operation(
                     group.display_name = display_name.to_string();
                 }
                 if let Some(members) = data_obj.get("members").and_then(|v| v.as_array()) {
-                    group.members = members.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                        .collect();
+                    group.members =
+                        members.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
                 }
             }
 
@@ -999,17 +1017,14 @@ fn audit_bulk_operations(
     responses: &[BulkOperationResponse],
     error_count: usize,
 ) {
-    let operation_counts = request.operations.iter().fold(
-        std::collections::HashMap::new(),
-        |mut acc, op| {
+    let operation_counts =
+        request.operations.iter().fold(std::collections::HashMap::new(), |mut acc, op| {
             *acc.entry(format!("{:?}", op.method)).or_insert(0) += 1;
             acc
-        }
-    );
+        });
 
-    let success_count = responses.iter().filter(|r| {
-        matches!(r.status.as_str(), "200" | "201" | "204")
-    }).count();
+    let success_count =
+        responses.iter().filter(|r| matches!(r.status.as_str(), "200" | "201" | "204")).count();
 
     tracing::info!(
         target: "audit",
@@ -1021,5 +1036,3 @@ fn audit_bulk_operations(
         fail_on_errors = request.fail_on_errors,
     );
 }
-
-

@@ -182,7 +182,7 @@ impl RiskAssessmentEngine {
         let location_risk = self.assess_location_risk(context).await?;
         factors.insert(RiskFactor::UnknownLocation, location_risk);
 
-        // Device-based risk assessment  
+        // Device-based risk assessment
         let device_risk = self.assess_device_risk(context);
         factors.insert(RiskFactor::NewDevice, device_risk);
 
@@ -249,7 +249,7 @@ impl RiskAssessmentEngine {
         // 1. Check against user's historical locations
         // 2. Assess country/region risk levels
         // 3. Check for impossible travel scenarios
-        
+
         if let Some(geo) = &context.geolocation {
             // Example: certain countries might have higher risk
             let country_risk = match geo.country.as_deref() {
@@ -307,10 +307,10 @@ impl RiskAssessmentEngine {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         // Get current hour in UTC
         let current_hour = ((current_time / 3600) % 24) as u8;
-        
+
         // Higher risk during unusual hours (2 AM - 6 AM UTC)
         match current_hour {
             2..=6 => 0.3,
@@ -555,7 +555,7 @@ mod tests {
         let config = AdaptiveSecurityConfig::default();
         let engine = RiskAssessmentEngine::new(config);
         let mut context = create_test_context();
-        
+
         // Increase risk factors
         context.is_new_device = true;
         context.failed_attempts_last_hour = 5;

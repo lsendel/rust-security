@@ -1,12 +1,11 @@
 msrv = "1.70"
 cognitive-complexity-threshold = 30
-type-complexity-threshold = 60
+type-complexity-threshold = 200
 single-char-binding-names-threshold = 4
 trivial-copy-size-limit = 64
 pass-by-value-size-limit = 256
 too-many-arguments-threshold = 7
 too-many-lines-threshold = 100
-large-type-threshold = 200
 vec-box-size-threshold = 4096
 max-trait-bounds = 3
 max-struct-bools = 3

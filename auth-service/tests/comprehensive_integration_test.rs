@@ -1,11 +1,11 @@
 use auth_service::{app, store::TokenStore, AppState, IntrospectRequest};
+use base64::Engine as _;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use base64::Engine as _;
 
 async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -41,8 +41,14 @@ async fn spawn_app() -> String {
             "profile".to_string(),
         ],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(auth_service::policy_cache::PolicyCacheConfig::default())),
-        backpressure_state: std::sync::Arc::new(auth_service::backpressure::BackpressureState::new(auth_service::backpressure::BackpressureConfig::default())),
+        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
+            auth_service::policy_cache::PolicyCacheConfig::default(),
+        )),
+        backpressure_state: std::sync::Arc::new(
+            auth_service::backpressure::BackpressureState::new(
+                auth_service::backpressure::BackpressureConfig::default(),
+            ),
+        ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -54,11 +60,7 @@ async fn test_complete_oauth_flow() {
     let client = reqwest::Client::new();
 
     // Test 1: Health check
-    let response = client
-        .get(format!("{}/health", base))
-        .send()
-        .await
-        .unwrap();
+    let response = client.get(format!("{}/health", base)).send().await.unwrap();
     assert_eq!(response.status(), 200);
 
     // Test 2: OAuth metadata endpoints
@@ -72,11 +74,7 @@ async fn test_complete_oauth_flow() {
     assert!(metadata.get("token_endpoint").is_some());
 
     // Test 3: JWKS endpoint
-    let response = client
-        .get(format!("{}/jwks.json", base))
-        .send()
-        .await
-        .unwrap();
+    let response = client.get(format!("{}/jwks.json", base)).send().await.unwrap();
     assert_eq!(response.status(), 200);
     let jwks: Value = response.json().await.unwrap();
     assert!(jwks.get("keys").is_some());
@@ -206,8 +204,8 @@ async fn test_security_features() {
     assert_eq!(response.status(), 400);
 
     // Test 5: HTTP Basic Authentication
-    let credentials = base64::engine::general_purpose::STANDARD
-        .encode("test_client:test_secret_12345");
+    let credentials =
+        base64::engine::general_purpose::STANDARD.encode("test_client:test_secret_12345");
 
     let response = client
         .post(format!("{}/oauth/token", base))
@@ -356,11 +354,7 @@ async fn test_security_headers() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let response = client
-        .get(format!("{}/health", base))
-        .send()
-        .await
-        .unwrap();
+    let response = client.get(format!("{}/health", base)).send().await.unwrap();
 
     let headers = response.headers();
 

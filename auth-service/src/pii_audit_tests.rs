@@ -1,8 +1,8 @@
+use crate::errors::{internal_error, AuthError};
 /// Automated tests to ensure no secrets or tokens are logged at any level
 /// This module provides comprehensive testing for PII/SPI redaction compliance
-use crate::pii_protection::{PiiSpiRedactor, SensitiveDataType, DataClassification};
+use crate::pii_protection::{DataClassification, PiiSpiRedactor, SensitiveDataType};
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
-use crate::errors::{AuthError, internal_error};
 use regex::Regex;
 use std::collections::HashSet;
 
@@ -93,9 +93,10 @@ impl RedactionAudit {
     pub fn new(original: &str, redacted: &str, redactor: &PiiSpiRedactor) -> Self {
         let sensitive_types = redactor.contains_sensitive_data(original);
         let redaction_count = if original != redacted { 1 } else { 0 };
-        
+
         // Determine the highest classification level found
-        let classification_level = sensitive_types.iter()
+        let classification_level = sensitive_types
+            .iter()
             .map(|t| t.classification())
             .max()
             .unwrap_or(DataClassification::Public);
@@ -108,7 +109,7 @@ impl RedactionAudit {
             classification_level,
         }
     }
-    
+
     /// Check if redaction was applied when it should have been
     pub fn is_compliant(&self) -> bool {
         if self.sensitive_types_found.is_empty() {
@@ -116,17 +117,17 @@ impl RedactionAudit {
             self.original_content == self.redacted_content
         } else {
             // Sensitive data found, redaction should have occurred
-            self.original_content != self.redacted_content && 
-            !self.contains_original_sensitive_data()
+            self.original_content != self.redacted_content
+                && !self.contains_original_sensitive_data()
         }
     }
-    
+
     /// Check if the redacted content still contains original sensitive data
     pub fn contains_original_sensitive_data(&self) -> bool {
         let redactor = PiiSpiRedactor::new();
         !redactor.contains_sensitive_data(&self.redacted_content).is_empty()
     }
-    
+
     /// Get compliance score (0.0 to 1.0)
     pub fn compliance_score(&self) -> f64 {
         if self.is_compliant() {
@@ -134,7 +135,7 @@ impl RedactionAudit {
         } else {
             let remaining_sensitive = redactor().contains_sensitive_data(&self.redacted_content);
             let original_sensitive = &self.sensitive_types_found;
-            
+
             if original_sensitive.is_empty() {
                 1.0 // No sensitive data, fully compliant
             } else {
@@ -159,21 +160,21 @@ mod tests {
     fn test_error_message_redaction_compliance() {
         let test_data = SensitiveTestData::new();
         let mut audit_results = Vec::new();
-        
+
         for sensitive_item in test_data.all_sensitive_data() {
             let error_message = format!("Authentication failed for user: {}", sensitive_item);
             let error = AuthError::InvalidRequest { reason: error_message.clone() };
-            
+
             // Convert error to string representation (this would be logged)
             let error_string = format!("{}", error);
-            
+
             let redactor = PiiSpiRedactor::new();
             let redacted = redactor.redact_error_message(&error_string);
-            
+
             let audit = RedactionAudit::new(&error_string, &redacted, &redactor);
             audit_results.push(audit);
         }
-        
+
         // Check compliance for all audit results
         let mut failed_audits = Vec::new();
         for audit in &audit_results {
@@ -181,7 +182,7 @@ mod tests {
                 failed_audits.push(audit);
             }
         }
-        
+
         if !failed_audits.is_empty() {
             println!("\n=== PII REDACTION COMPLIANCE FAILURES ===");
             for failure in &failed_audits {
@@ -192,19 +193,19 @@ mod tests {
                 println!("---");
             }
         }
-        
+
         assert!(
-            failed_audits.is_empty(), 
+            failed_audits.is_empty(),
             "{} error messages failed PII redaction compliance",
             failed_audits.len()
         );
     }
-    
+
     #[test]
     fn test_security_event_redaction_compliance() {
         let test_data = SensitiveTestData::new();
         let mut audit_results = Vec::new();
-        
+
         for sensitive_item in test_data.all_sensitive_data() {
             let mut event = SecurityEvent::new(
                 SecurityEventType::AuthenticationFailure,
@@ -212,63 +213,62 @@ mod tests {
                 "auth-service".to_string(),
                 format!("Login attempt with data: {}", sensitive_item),
             );
-            
+
             // Apply PII protection (this simulates what SecurityLogger does)
             event.apply_pii_protection();
-            
+
             // Serialize to JSON (this is what gets logged)
             let event_json = serde_json::to_string(&event).unwrap();
-            
+
             let redactor = PiiSpiRedactor::new();
             let original = format!("Login attempt with data: {}", sensitive_item);
-            
+
             let audit = RedactionAudit::new(&original, &event.description, &redactor);
             audit_results.push(audit);
         }
-        
+
         // Check compliance
-        let failed_count = audit_results.iter()
-            .filter(|audit| !audit.is_compliant())
-            .count();
-            
+        let failed_count = audit_results.iter().filter(|audit| !audit.is_compliant()).count();
+
         assert_eq!(
-            failed_count, 0, 
-            "{} security events failed PII redaction compliance", 
+            failed_count, 0,
+            "{} security events failed PII redaction compliance",
             failed_count
         );
     }
-    
+
     #[test]
     fn test_log_message_redaction_compliance() {
         let test_data = SensitiveTestData::new();
-        
+
         for sensitive_item in test_data.all_sensitive_data() {
             let log_message = format!("Processing request for {}", sensitive_item);
             let redacted = crate::pii_protection::redact_log(&log_message);
-            
+
             let redactor = PiiSpiRedactor::new();
             let audit = RedactionAudit::new(&log_message, &redacted, &redactor);
-            
+
             assert!(
                 audit.is_compliant(),
                 "Log message redaction failed for: {} -> {}",
-                log_message, redacted
+                log_message,
+                redacted
             );
         }
     }
-    
-    #[test] 
+
+    #[test]
     fn test_no_false_positives_in_redaction() {
         let safe_content = vec![
             "normal log message",
-            "user logged in successfully", 
+            "user logged in successfully",
             "processing payment for order 12345",
             "database connection established",
             "API endpoint /users/profile accessed",
         ];
-        
+
         let redactor = PiiSpiRedactor::new();
-        
+
         for content in safe_content {
             let redacted = redactor.redact_log_message(content);
             assert_eq!(
@@ -278,7 +278,7 @@ mod tests {
             );
         }
     }
-    
+
     #[test]
     fn test_mixed_content_redaction() {
         let mixed_content = vec![
@@ -286,19 +286,21 @@ mod tests {
             "Payment failed for card 4111-1111-1111-1111 at IP 192.168.1.100",
             "JWT token eyJhbGciOiJIUzI1NiJ9.payload.signature expired for session abc123",
         ];
-        
+
         let redactor = PiiSpiRedactor::new();
-        
+
         for content in mixed_content {
             let redacted = redactor.redact_error_message(content);
             let audit = RedactionAudit::new(content, &redacted, &redactor);
-            
+
             assert!(
                 audit.is_compliant(),
                 "Mixed content redaction failed:\nOriginal: {}\nRedacted: {}\nScore: {:.2}",
-                content, redacted, audit.compliance_score()
+                content,
+                redacted,
+                audit.compliance_score()
             );
-            
+
             // Ensure redaction occurred if sensitive data was present
             if !audit.sensitive_types_found.is_empty() {
                 assert_ne!(
@@ -309,7 +311,7 @@ mod tests {
             }
         }
     }
-    
+
     #[test]
     fn test_classification_levels() {
         let test_cases = vec![
@@ -318,13 +320,13 @@ mod tests {
             ("eyJhbGciOiJIUzI1NiJ9.payload.sig", DataClassification::Confidential),
             ("normal text", DataClassification::Public),
         ];
-        
+
         let redactor = PiiSpiRedactor::new();
-        
+
         for (content, expected_classification) in test_cases {
             let redacted = redactor.redact_text(content, expected_classification.clone());
             let audit = RedactionAudit::new(content, &redacted, &redactor);
-            
+
             if expected_classification != DataClassification::Public {
                 assert!(
                     audit.classification_level as u8 >= expected_classification as u8,
@@ -339,11 +341,11 @@ mod tests {
     fn test_comprehensive_pattern_coverage() {
         let redactor = PiiSpiRedactor::new();
         let test_data = SensitiveTestData::new();
-        
+
         // Test each category of sensitive data
         let categories = vec![
             ("emails", test_data.emails),
-            ("phones", test_data.phone_numbers), 
+            ("phones", test_data.phone_numbers),
             ("jwt_tokens", test_data.jwt_tokens),
             ("api_keys", test_data.api_keys),
             ("ssns", test_data.ssns),
@@ -351,16 +353,17 @@ mod tests {
             ("ip_addresses", test_data.ip_addresses),
             ("uuids", test_data.uuids),
         ];
-        
+
         for (category_name, test_items) in categories {
             for item in test_items {
                 let sensitive_types = redactor.contains_sensitive_data(item);
                 assert!(
                     !sensitive_types.is_empty(),
                     "Failed to detect sensitive data in category '{}': {}",
-                    category_name, item
+                    category_name,
+                    item
                 );
-                
+
                 let redacted = redactor.redact_error_message(item);
                 assert_ne!(
                     item, redacted,
@@ -377,23 +380,18 @@ mod tests {
         let test_data = SensitiveTestData::new();
         let redactor = PiiSpiRedactor::new();
         let mut report = ComplianceReport::new();
-        
+
         // Test all sensitive data types
         for item in test_data.all_sensitive_data() {
             let redacted_error = redactor.redact_error_message(item);
             let redacted_log = redactor.redact_log_message(item);
-            
-            report.add_test_result(
-                item, 
-                &redacted_error,
-                &redacted_log,
-                &redactor
-            );
+
+            report.add_test_result(item, &redacted_error, &redacted_log, &redactor);
         }
-        
+
         // Print report for visibility
         println!("\n{}", report.generate_report());
-        
+
         // Ensure overall compliance
         assert!(
             report.overall_compliance() >= 0.95,
@@ -417,17 +415,22 @@ pub struct ComplianceTestResult {
 
 impl ComplianceReport {
     pub fn new() -> Self {
-        Self {
-            test_results: Vec::new(),
-        }
+        Self { test_results: Vec::new() }
     }
-    
-    pub fn add_test_result(&mut self, input: &str, error_redacted: &str, log_redacted: &str, redactor: &PiiSpiRedactor) {
+
+    pub fn add_test_result(
+        &mut self,
+        input: &str,
+        error_redacted: &str,
+        log_redacted: &str,
+        redactor: &PiiSpiRedactor,
+    ) {
         let error_audit = RedactionAudit::new(input, error_redacted, redactor);
         let log_audit = RedactionAudit::new(input, log_redacted, redactor);
-        
-        let overall_compliance = (error_audit.compliance_score() + log_audit.compliance_score()) / 2.0;
-        
+
+        let overall_compliance =
+            (error_audit.compliance_score() + log_audit.compliance_score()) / 2.0;
+
         self.test_results.push(ComplianceTestResult {
             test_input: input.to_string(),
             error_redaction: error_audit,
@@ -435,30 +438,30 @@ impl ComplianceReport {
             overall_compliance,
         });
     }
-    
+
     pub fn overall_compliance(&self) -> f64 {
         if self.test_results.is_empty() {
             return 1.0;
         }
-        
-        let total_compliance: f64 = self.test_results.iter()
-            .map(|r| r.overall_compliance)
-            .sum();
-            
+
+        let total_compliance: f64 = self.test_results.iter().map(|r| r.overall_compliance).sum();
+
         total_compliance / self.test_results.len() as f64
     }
-    
+
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
-        
+
         report.push_str("=== PII/SPI REDACTION COMPLIANCE REPORT ===\n\n");
         report.push_str(&format!("Total Tests: {}\n", self.test_results.len()));
-        report.push_str(&format!("Overall Compliance: {:.2}%\n\n", self.overall_compliance() * 100.0));
-        
-        let failed_tests: Vec<_> = self.test_results.iter()
-            .filter(|r| r.overall_compliance < 1.0)
-            .collect();
-            
+        report.push_str(&format!(
+            "Overall Compliance: {:.2}%\n\n",
+            self.overall_compliance() * 100.0
+        ));
+
+        let failed_tests: Vec<_> =
+            self.test_results.iter().filter(|r| r.overall_compliance < 1.0).collect();
+
         if !failed_tests.is_empty() {
             report.push_str("FAILED TESTS:\n");
             for test in failed_tests {
@@ -472,7 +475,7 @@ impl ComplianceReport {
         } else {
             report.push_str("✅ ALL TESTS PASSED - 100% COMPLIANCE\n\n");
         }
-        
+
         // Classification breakdown
         let mut classification_counts = std::collections::HashMap::new();
         for result in &self.test_results {
@@ -481,12 +484,12 @@ impl ComplianceReport {
                 *classification_counts.entry(classification).or_insert(0) += 1;
             }
         }
-        
+
         report.push_str("DATA CLASSIFICATION BREAKDOWN:\n");
         for (classification, count) in classification_counts {
             report.push_str(&format!("- {:?}: {} items\n", classification, count));
         }
-        
+
         report
     }
 }

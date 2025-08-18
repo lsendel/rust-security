@@ -1,16 +1,16 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use serde_json::json;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use std::sync::Arc;
-use serde_json::json;
 
 // Import the actual auth service modules for realistic benchmarks
 use auth_service::{
-    crypto_optimized::{get_crypto_engine, CryptoOptimized},
-    rate_limit_optimized::{ShardedRateLimiter, RateLimitConfig},
+    async_optimized::{AsyncConfig, AsyncError, AsyncSecurityExecutor},
     cache::{Cache, CacheConfig},
-    async_optimized::{AsyncSecurityExecutor, AsyncConfig, AsyncError},
-    connection_pool_optimized::{OptimizedConnectionPool, ConnectionPoolConfig},
+    connection_pool_optimized::{ConnectionPoolConfig, OptimizedConnectionPool},
+    crypto_optimized::{get_crypto_engine, CryptoOptimized},
+    rate_limit_optimized::{RateLimitConfig, ShardedRateLimiter},
 };
 
 /// Comprehensive security performance benchmarks
@@ -24,7 +24,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
     // Test different payload sizes for encryption
     for payload_size in [64, 256, 1024, 4096, 16384].iter() {
         let payload = vec![0u8; *payload_size];
-        
+
         group.throughput(Throughput::Bytes(*payload_size as u64));
         group.bench_with_input(
             BenchmarkId::new("encrypt_aes_gcm", payload_size),
@@ -86,9 +86,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
     // Test SIMD token validation if available
     #[cfg(feature = "simd")]
     {
-        let tokens: Vec<String> = (0..1000)
-            .map(|i| format!("tk_valid_token_{}", i))
-            .collect();
+        let tokens: Vec<String> = (0..1000).map(|i| format!("tk_valid_token_{}", i)).collect();
 
         group.bench_function("simd_token_validation", |b| {
             b.iter(|| {
@@ -104,7 +102,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
 fn bench_rate_limiting(c: &mut Criterion) {
     let mut group = c.benchmark_group("rate_limiting");
-    
+
     // Test different concurrency levels
     for concurrent_clients in [1, 10, 50, 100, 500].iter() {
         let rate_limiter = ShardedRateLimiter::new(RateLimitConfig {
@@ -124,17 +122,12 @@ fn bench_rate_limiting(c: &mut Criterion) {
                         .map(|i| {
                             let client_key = format!("client_{}", i);
                             let limiter = &rate_limiter;
-                            std::thread::spawn(move || {
-                                limiter.check_rate_limit(&client_key)
-                            })
+                            std::thread::spawn(move || limiter.check_rate_limit(&client_key))
                         })
                         .collect();
 
-                    let results: Vec<_> = handles
-                        .into_iter()
-                        .map(|h| h.join().unwrap())
-                        .collect();
-                    
+                    let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+
                     black_box(results)
                 });
             },
@@ -144,7 +137,7 @@ fn bench_rate_limiting(c: &mut Criterion) {
     // Test cleanup performance
     group.bench_function("cleanup_stale_entries", |b| {
         let rate_limiter = ShardedRateLimiter::new(RateLimitConfig::default());
-        
+
         // Pre-populate with entries
         for i in 0..10000 {
             rate_limiter.check_rate_limit(&format!("client_{}", i));
@@ -219,20 +212,20 @@ fn bench_caching_operations(c: &mut Criterion) {
             |b, &concurrent_ops| {
                 b.to_async(&rt).iter(|| async {
                     let mut handles = Vec::new();
-                    
+
                     for i in 0..concurrent_ops {
                         let cache = &cache;
                         let handle = tokio::spawn(async move {
                             let key = format!("concurrent_key_{}", i);
                             let value = json!({"operation": i, "timestamp": chrono::Utc::now().timestamp()});
                             cache.set(&key, &value, None).await.unwrap();
-                            
+
                             let retrieved: Option<serde_json::Value> = cache.get(&key).await;
                             retrieved
                         });
                         handles.push(handle);
                     }
-                    
+
                     let results: Vec<_> = futures::future::join_all(handles).await;
                     black_box(results)
                 });
@@ -261,11 +254,13 @@ fn bench_async_security_operations(c: &mut Criterion) {
     // Test single async operation
     group.bench_function("single_security_operation", |b| {
         b.to_async(&rt).iter(|| async {
-            let result = executor.execute_operation(async {
-                // Simulate security validation
-                tokio::time::sleep(Duration::from_millis(1)).await;
-                Ok::<String, AsyncError>("validation_success".to_string())
-            }).await;
+            let result = executor
+                .execute_operation(async {
+                    // Simulate security validation
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    Ok::<String, AsyncError>("validation_success".to_string())
+                })
+                .await;
             black_box(result)
         });
     });
@@ -301,8 +296,8 @@ fn bench_async_security_operations(c: &mut Criterion) {
                 .map(|i| async move {
                     if i % 10 == 0 {
                         // Simulate failures for 10% of operations
-                        Err(AsyncError::OperationFailed { 
-                            message: "Simulated failure".to_string() 
+                        Err(AsyncError::OperationFailed {
+                            message: "Simulated failure".to_string(),
                         })
                     } else {
                         tokio::time::sleep(Duration::from_millis(1)).await;
@@ -322,9 +317,9 @@ fn bench_async_security_operations(c: &mut Criterion) {
 fn bench_token_operations_e2e(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
     let mut group = c.benchmark_group("token_operations_e2e");
-    
+
     // End-to-end token operation benchmarks that combine multiple components
-    
+
     // Setup
     let rate_limiter = Arc::new(ShardedRateLimiter::new(RateLimitConfig::default()));
     let cache = rt.block_on(async {
@@ -336,17 +331,19 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
     group.bench_function("token_generation_pipeline", |b| {
         b.to_async(&rt).iter(|| async {
             let client_id = "bench_client";
-            
+
             // 1. Check rate limit
             let rate_result = rate_limiter.check_rate_limit(client_id);
-            if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } = rate_result {
+            if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } =
+                rate_result
+            {
                 return black_box(Err("Rate limited"));
             }
-            
+
             // 2. Generate secure token
             let crypto = get_crypto_engine();
             let token = crypto.generate_secure_token("tk").unwrap();
-            
+
             // 3. Create token metadata
             let metadata = json!({
                 "client_id": client_id,
@@ -354,11 +351,11 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
                 "iat": chrono::Utc::now().timestamp(),
                 "exp": chrono::Utc::now().timestamp() + 3600
             });
-            
+
             // 4. Cache token
             let cache_key = format!("token:{}", token);
             cache.set(&cache_key, &metadata, Some(Duration::from_secs(3600))).await.unwrap();
-            
+
             black_box(Ok(token))
         });
     });
@@ -371,14 +368,14 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
             for i in 0..100 {
                 let crypto = get_crypto_engine();
                 let token = crypto.generate_secure_token("tk").unwrap();
-                
+
                 let metadata = json!({
                     "client_id": format!("client_{}", i),
                     "scope": "read write",
                     "active": true,
                     "exp": chrono::Utc::now().timestamp() + 3600
                 });
-                
+
                 let cache_key = format!("token:{}", token);
                 cache.set(&cache_key, &metadata, Some(Duration::from_secs(3600))).await.unwrap();
                 tokens.push(token);
@@ -388,26 +385,28 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
 
         b.to_async(&rt).iter(|| async {
             let token = &tokens[rand::random::<usize>() % tokens.len()];
-            
+
             // 1. Check rate limit
             let rate_result = rate_limiter.check_rate_limit("introspect_client");
-            if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } = rate_result {
+            if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } =
+                rate_result
+            {
                 return black_box(Err("Rate limited"));
             }
-            
+
             // 2. Lookup token in cache
             let cache_key = format!("token:{}", token);
             let metadata: Option<serde_json::Value> = cache.get(&cache_key).await;
-            
+
             // 3. Validate token format
             let crypto = get_crypto_engine();
             let is_valid_format = token.starts_with("tk_") && token.len() > 10;
-            
+
             let result = match (metadata, is_valid_format) {
                 (Some(meta), true) => Ok(meta),
                 _ => Err("Invalid token"),
             };
-            
+
             black_box(result)
         });
     });
@@ -421,18 +420,18 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
             |b, &concurrent_ops| {
                 b.to_async(&rt).iter(|| async {
                     let mut handles = Vec::new();
-                    
+
                     for i in 0..concurrent_ops {
                         let rate_limiter = rate_limiter.clone();
                         let cache = cache.clone();
-                        
+
                         let handle = tokio::spawn(async move {
                             // Mix of operations: 70% introspection, 30% generation
                             if i % 10 < 7 {
                                 // Token introspection
                                 let client_id = format!("client_{}", i);
                                 rate_limiter.check_rate_limit(&client_id);
-                                
+
                                 let cache_key = format!("token:sample_{}", i);
                                 let result: Option<serde_json::Value> = cache.get(&cache_key).await;
                                 black_box(result)
@@ -440,16 +439,16 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
                                 // Token generation
                                 let client_id = format!("gen_client_{}", i);
                                 rate_limiter.check_rate_limit(&client_id);
-                                
+
                                 let crypto = get_crypto_engine();
                                 let token = crypto.generate_secure_token("tk").unwrap();
-                                
+
                                 let metadata = json!({
                                     "client_id": client_id,
                                     "scope": "read",
                                     "iat": chrono::Utc::now().timestamp()
                                 });
-                                
+
                                 let cache_key = format!("token:{}", token);
                                 cache.set(&cache_key, &metadata, None).await.unwrap();
                                 black_box(token)
@@ -457,7 +456,7 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
                         });
                         handles.push(handle);
                     }
-                    
+
                     let results: Vec<_> = futures::future::join_all(handles).await;
                     black_box(results)
                 });
@@ -470,26 +469,26 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
 
 fn bench_memory_usage(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_usage");
-    
+
     // Test memory efficiency of different data structures
     group.bench_function("dashmap_vs_hashmap", |b| {
         b.iter(|| {
             let dashmap = dashmap::DashMap::new();
             let mut hashmap = std::collections::HashMap::new();
-            
+
             // Insert 10000 entries
             for i in 0..10000 {
                 dashmap.insert(format!("key_{}", i), format!("value_{}", i));
                 hashmap.insert(format!("key_{}", i), format!("value_{}", i));
             }
-            
+
             // Read operations
             for i in 0..1000 {
                 let key = format!("key_{}", i);
                 let _dashmap_result = dashmap.get(&key);
                 let _hashmap_result = hashmap.get(&key);
             }
-            
+
             black_box((dashmap.len(), hashmap.len()))
         });
     });
@@ -498,16 +497,16 @@ fn bench_memory_usage(c: &mut Criterion) {
     group.bench_function("arc_vs_rc_cloning", |b| {
         let arc_data = Arc::new(vec![0u8; 1024]);
         let rc_data = std::rc::Rc::new(vec![0u8; 1024]);
-        
+
         b.iter(|| {
             let mut arc_clones = Vec::new();
             let mut rc_clones = Vec::new();
-            
+
             for _ in 0..1000 {
                 arc_clones.push(arc_data.clone());
                 rc_clones.push(rc_data.clone());
             }
-            
+
             black_box((arc_clones.len(), rc_clones.len()))
         });
     });
@@ -523,7 +522,7 @@ criterion_group!(
         .sample_size(200)
         .warm_up_time(Duration::from_secs(5))
         .with_plots();
-    targets = 
+    targets =
         bench_crypto_operations,
         bench_rate_limiting,
         bench_caching_operations,

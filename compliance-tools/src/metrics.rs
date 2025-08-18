@@ -1,10 +1,10 @@
 //! Security metrics collection and analysis
 
 use crate::{
-    ComplianceConfig, ComplianceResult, SecurityMetric, MetricStatus,
-    prometheus_client::PrometheusClient, AuditLogEntry, AuditResult,
+    prometheus_client::PrometheusClient, AuditLogEntry, AuditResult, ComplianceConfig,
+    ComplianceResult, MetricStatus, SecurityMetric,
 };
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::path::Path;
 use tokio::fs;
@@ -21,7 +21,7 @@ impl MetricsCollector {
     pub async fn new(config: &ComplianceConfig) -> ComplianceResult<Self> {
         let prometheus_client = if let Some(url) = &config.data_sources.prometheus_url {
             let client = PrometheusClient::new(url.clone());
-            
+
             // Test connectivity
             match client.health_check().await {
                 Ok(true) => {
@@ -42,10 +42,7 @@ impl MetricsCollector {
             None
         };
 
-        Ok(Self {
-            config: config.clone(),
-            prometheus_client,
-        })
+        Ok(Self { config: config.clone(), prometheus_client })
     }
 
     /// Collect all available security metrics
@@ -115,18 +112,21 @@ impl MetricsCollector {
         }
 
         // Add summary metrics
-        let total_events = metrics.iter()
+        let total_events = metrics
+            .iter()
             .find(|m| m.name == "audit_total_events")
             .map(|m| m.value as u64)
             .unwrap_or(0);
 
-        let failed_events = metrics.iter()
+        let failed_events = metrics
+            .iter()
             .find(|m| m.name == "audit_failed_events")
             .map(|m| m.value as u64)
             .unwrap_or(0);
 
         if total_events > 0 {
-            let success_rate = ((total_events - failed_events) as f64 / total_events as f64) * 100.0;
+            let success_rate =
+                ((total_events - failed_events) as f64 / total_events as f64) * 100.0;
             metrics.push(SecurityMetric {
                 name: "audit_success_rate".to_string(),
                 value: success_rate,
@@ -142,7 +142,11 @@ impl MetricsCollector {
     }
 
     /// Analyze a single audit log file
-    async fn analyze_audit_log(&self, log_path: &str, since: DateTime<Utc>) -> ComplianceResult<Vec<SecurityMetric>> {
+    async fn analyze_audit_log(
+        &self,
+        log_path: &str,
+        since: DateTime<Utc>,
+    ) -> ComplianceResult<Vec<SecurityMetric>> {
         let content = fs::read_to_string(log_path).await?;
         let mut total_events = 0u64;
         let mut successful_events = 0u64;
@@ -219,7 +223,11 @@ impl MetricsCollector {
                 name: "audit_blocked_events".to_string(),
                 value: blocked_events as f64,
                 threshold: 50.0, // Warn if more than 50 blocked events
-                status: if blocked_events <= 50 { MetricStatus::Pass } else { MetricStatus::Warning },
+                status: if blocked_events <= 50 {
+                    MetricStatus::Pass
+                } else {
+                    MetricStatus::Warning
+                },
                 description: format!("Blocked audit events in {}", log_path),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
@@ -237,7 +245,11 @@ impl MetricsCollector {
                 name: "audit_unique_ips".to_string(),
                 value: unique_ips.len() as f64,
                 threshold: 1000.0, // Warn if more than 1000 unique IPs
-                status: if unique_ips.len() <= 1000 { MetricStatus::Pass } else { MetricStatus::Warning },
+                status: if unique_ips.len() <= 1000 {
+                    MetricStatus::Pass
+                } else {
+                    MetricStatus::Warning
+                },
                 description: format!("Unique IP addresses in audit events from {}", log_path),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
@@ -277,10 +289,7 @@ impl MetricsCollector {
 
         // This is a simplified implementation
         // In practice, you would check actual certificates
-        let cert_paths = vec![
-            "/etc/ssl/certs/auth-service.crt",
-            "/etc/ssl/certs/api-gateway.crt",
-        ];
+        let cert_paths = vec!["/etc/ssl/certs/auth-service.crt", "/etc/ssl/certs/api-gateway.crt"];
 
         for cert_path in cert_paths {
             let days_until_expiry = if Path::new(cert_path).exists() {
@@ -299,8 +308,10 @@ impl MetricsCollector {
             };
 
             metrics.push(SecurityMetric {
-                name: format!("certificate_expiry_days_{}", 
-                    Path::new(cert_path).file_stem().unwrap().to_string_lossy()),
+                name: format!(
+                    "certificate_expiry_days_{}",
+                    Path::new(cert_path).file_stem().unwrap().to_string_lossy()
+                ),
                 value: days_until_expiry,
                 threshold: 30.0,
                 status,
@@ -355,9 +366,8 @@ impl MetricsCollector {
             ("threat-hunting", "http://localhost:8082/health"),
         ];
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()?;
+        let client =
+            reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build()?;
 
         for (service_name, health_url) in services {
             let is_healthy = match client.get(health_url).send().await {
@@ -386,13 +396,13 @@ impl MetricsCollector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_audit_log_analysis() {
         let mut temp_file = NamedTempFile::new().unwrap();
-        
+
         // Write sample audit log entries
         let sample_logs = vec![
             serde_json::json!({
@@ -408,7 +418,7 @@ mod tests {
                 "timestamp": "2024-01-01T12:01:00Z",
                 "user_id": "user2",
                 "action": "login",
-                "resource": "/auth", 
+                "resource": "/auth",
                 "result": "failure",
                 "ip_address": "192.168.1.2",
                 "details": {}
@@ -454,16 +464,12 @@ mod tests {
         let metrics = collector.collect_audit_metrics().await.unwrap();
 
         assert!(!metrics.is_empty());
-        
+
         // Check that we have the expected metrics
-        let total_events = metrics.iter()
-            .find(|m| m.name == "audit_total_events")
-            .unwrap();
+        let total_events = metrics.iter().find(|m| m.name == "audit_total_events").unwrap();
         assert_eq!(total_events.value, 2.0);
 
-        let failed_events = metrics.iter()
-            .find(|m| m.name == "audit_failed_events")
-            .unwrap();
+        let failed_events = metrics.iter().find(|m| m.name == "audit_failed_events").unwrap();
         assert_eq!(failed_events.value, 1.0);
     }
 }

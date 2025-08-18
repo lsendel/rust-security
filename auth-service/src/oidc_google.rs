@@ -1,14 +1,14 @@
-use axum::{extract::Query, response::IntoResponse, Json};
-use crate::{mint_local_tokens_for_subject, AppState};
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
-use crate::resilient_http::OidcHttpClient;
 use crate::pii_protection::redact_log;
+use crate::resilient_http::OidcHttpClient;
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::{mint_local_tokens_for_subject, AppState};
 use axum::extract::State;
+use axum::{extract::Query, response::IntoResponse, Json};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use once_cell::sync::Lazy;
-use tokio::sync::RwLock;
 use std::collections::HashMap;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackQuery {
@@ -17,11 +17,14 @@ pub struct OAuthCallbackQuery {
 }
 
 #[derive(Debug, Serialize)]
-pub struct OAuthLoginUrl { pub url: String }
+pub struct OAuthLoginUrl {
+    pub url: String,
+}
 
 pub async fn google_login() -> impl IntoResponse {
     let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
-    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").unwrap_or_else(|_| "http://localhost:8080/oauth/google/callback".to_string());
+    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:8080/oauth/google/callback".to_string());
     let state = uuid::Uuid::new_v4().to_string();
     let nonce = uuid::Uuid::new_v4().to_string();
     // Store state->(nonce, timestamp) for CSRF and replay protection
@@ -33,28 +36,34 @@ pub async fn google_login() -> impl IntoResponse {
     );
 
     // Log OAuth initiation
-    SecurityLogger::log_event(&mut SecurityEvent::new(
-        SecurityEventType::AuthenticationAttempt,
-        SecuritySeverity::Low,
-        "auth-service".to_string(),
-        "Google OAuth login initiated".to_string(),
-    )
-    .with_actor(client_id.clone())
-    .with_action("oauth_initiate".to_string())
-    .with_target("google_oauth".to_string())
-    .with_outcome("initiated".to_string())
-    .with_reason("User redirected to Google OAuth authorization endpoint".to_string())
-    .with_detail("provider".to_string(), "google")
-    .with_detail("client_id".to_string(), client_id.clone())
-    .with_detail("scope".to_string(), scope));
+    SecurityLogger::log_event(
+        &mut SecurityEvent::new(
+            SecurityEventType::AuthenticationAttempt,
+            SecuritySeverity::Low,
+            "auth-service".to_string(),
+            "Google OAuth login initiated".to_string(),
+        )
+        .with_actor(client_id.clone())
+        .with_action("oauth_initiate".to_string())
+        .with_target("google_oauth".to_string())
+        .with_outcome("initiated".to_string())
+        .with_reason("User redirected to Google OAuth authorization endpoint".to_string())
+        .with_detail("provider".to_string(), "google")
+        .with_detail("client_id".to_string(), client_id.clone())
+        .with_detail("scope".to_string(), scope),
+    );
 
     Json(OAuthLoginUrl { url: auth_url })
 }
 
-pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAuthCallbackQuery>) -> impl IntoResponse {
+pub async fn google_callback(
+    State(state): State<AppState>,
+    Query(q): Query<OAuthCallbackQuery>,
+) -> impl IntoResponse {
     let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();
     let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_default();
-    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI").unwrap_or_else(|_| "http://localhost:8080/oauth/google/callback".to_string());
+    let redirect_uri = std::env::var("GOOGLE_REDIRECT_URI")
+        .unwrap_or_else(|_| "http://localhost:8080/oauth/google/callback".to_string());
 
     // Validate state parameter
     let (valid_state, expected_nonce) = match q.state.as_ref() {
@@ -68,46 +77,55 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
         return Json(serde_json::json!({
             "error": "invalid_state",
             "error_description": "Missing or unknown state",
-        })).into_response();
+        }))
+        .into_response();
     }
 
     // Log OAuth callback attempt
-    SecurityLogger::log_event(&mut SecurityEvent::new(
-        SecurityEventType::AuthenticationAttempt,
-        SecuritySeverity::Low,
-        "auth-service".to_string(),
-        "Google OAuth callback received".to_string(),
-    )
-    .with_actor("google_oauth".to_string())
-    .with_action("oauth_callback".to_string())
-    .with_target("auth_service".to_string())
-    .with_outcome("received".to_string())
-    .with_reason("OAuth authorization code callback from Google".to_string())
-    .with_detail("provider".to_string(), "google")
-    .with_detail("has_code".to_string(), !q.code.is_empty())
-    .with_detail("has_state".to_string(), q.state.is_some()));
+    SecurityLogger::log_event(
+        &mut SecurityEvent::new(
+            SecurityEventType::AuthenticationAttempt,
+            SecuritySeverity::Low,
+            "auth-service".to_string(),
+            "Google OAuth callback received".to_string(),
+        )
+        .with_actor("google_oauth".to_string())
+        .with_action("oauth_callback".to_string())
+        .with_target("auth_service".to_string())
+        .with_outcome("received".to_string())
+        .with_reason("OAuth authorization code callback from Google".to_string())
+        .with_detail("provider".to_string(), "google")
+        .with_detail("has_code".to_string(), !q.code.is_empty())
+        .with_detail("has_state".to_string(), q.state.is_some()),
+    );
 
     // Use resilient HTTP client for Google OAuth token exchange
     let http_client = match OidcHttpClient::new("google") {
         Ok(client) => client,
         Err(e) => {
-            SecurityLogger::log_event(&mut SecurityEvent::new(
-                SecurityEventType::AuthenticationFailure,
-                SecuritySeverity::High,
-                "auth-service".to_string(),
-                "Failed to create Google OIDC HTTP client".to_string(),
-            )
-            .with_actor("system".to_string())
-            .with_action("http_client_creation".to_string())
-            .with_target("oidc_client".to_string())
-            .with_outcome("failure".to_string())
-            .with_reason("Unable to initialize resilient HTTP client for Google OIDC communication".to_string())
-            .with_detail("error".to_string(), e.to_string()));
-            
+            SecurityLogger::log_event(
+                &mut SecurityEvent::new(
+                    SecurityEventType::AuthenticationFailure,
+                    SecuritySeverity::High,
+                    "auth-service".to_string(),
+                    "Failed to create Google OIDC HTTP client".to_string(),
+                )
+                .with_actor("system".to_string())
+                .with_action("http_client_creation".to_string())
+                .with_target("oidc_client".to_string())
+                .with_outcome("failure".to_string())
+                .with_reason(
+                    "Unable to initialize resilient HTTP client for Google OIDC communication"
+                        .to_string(),
+                )
+                .with_detail("error".to_string(), e.to_string()),
+            );
+
             return Json(serde_json::json!({
                 "error": "server_error",
                 "error_description": "Internal server error",
-            })).into_response();
+            }))
+            .into_response();
         }
     };
 
@@ -129,31 +147,46 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                 Ok(response) => response,
                 Err(e) => {
                     // Log token exchange failure
-                    SecurityLogger::log_event(&mut SecurityEvent::new(
-                        SecurityEventType::AuthenticationFailure,
-                        SecuritySeverity::Medium,
-                        "auth-service".to_string(),
-                        "Google OAuth token exchange failed".to_string(),
-                    )
-                    .with_actor("google_oauth".to_string())
-                    .with_action("oauth_token_exchange".to_string())
-                    .with_target("oauth_token".to_string())
-                    .with_outcome("failure".to_string())
-                    .with_reason("Google OAuth server returned HTTP error during token exchange".to_string())
-                    .with_detail("provider".to_string(), "google")
-                    .with_detail("error".to_string(), redact_log(&e.to_string())));
+                    SecurityLogger::log_event(
+                        &mut SecurityEvent::new(
+                            SecurityEventType::AuthenticationFailure,
+                            SecuritySeverity::Medium,
+                            "auth-service".to_string(),
+                            "Google OAuth token exchange failed".to_string(),
+                        )
+                        .with_actor("google_oauth".to_string())
+                        .with_action("oauth_token_exchange".to_string())
+                        .with_target("oauth_token".to_string())
+                        .with_outcome("failure".to_string())
+                        .with_reason(
+                            "Google OAuth server returned HTTP error during token exchange"
+                                .to_string(),
+                        )
+                        .with_detail("provider".to_string(), "google")
+                        .with_detail("error".to_string(), redact_log(&e.to_string())),
+                    );
 
-                    return Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response();
+                    return Json(serde_json::json!({ "error": redact_log(&e.to_string()) }))
+                        .into_response();
                 }
             };
             match rsp.json::<Value>().await {
                 Ok(v) => {
                     // Validate id_token if present
                     let mut result = serde_json::json!({ "token": v, "state": q.state });
-                    if let Some(id_token) = result.get("token").and_then(|t| t.get("id_token")).and_then(|x| x.as_str()) {
-                        let verified = validate_google_id_token(id_token, &client_id, expected_nonce.as_deref()).await;
+                    if let Some(id_token) =
+                        result.get("token").and_then(|t| t.get("id_token")).and_then(|x| x.as_str())
+                    {
+                        let verified = validate_google_id_token(
+                            id_token,
+                            &client_id,
+                            expected_nonce.as_deref(),
+                        )
+                        .await;
                         result["id_token_verified"] = serde_json::json!(verified.0);
-                        if let Some(claims) = verified.1.clone() { result["claims"] = claims.clone(); }
+                        if let Some(claims) = verified.1.clone() {
+                            result["claims"] = claims.clone();
+                        }
                         if verified.0 {
                             // derive subject
                             let sub = result
@@ -163,8 +196,11 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                                 .unwrap_or("unknown")
                                 .to_string();
                             let scope = Some("openid profile email".to_string());
-                            if let Ok(local) = mint_local_tokens_for_subject(&state, sub.clone(), scope).await {
-                                result["local_tokens"] = serde_json::to_value(local).unwrap_or_else(|_| serde_json::json!({}));
+                            if let Ok(local) =
+                                mint_local_tokens_for_subject(&state, sub.clone(), scope).await
+                            {
+                                result["local_tokens"] = serde_json::to_value(local)
+                                    .unwrap_or_else(|_| serde_json::json!({}));
 
                                 // Log successful authentication
                                 SecurityLogger::log_event(&mut SecurityEvent::new(
@@ -200,7 +236,9 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                     }
                     Json(result).into_response()
                 }
-                Err(e) => Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response(),
+                Err(e) => {
+                    Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response()
+                }
             }
         }
         Err(e) => Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response(),
@@ -209,14 +247,22 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-struct Jwk { kid: String, n: String, e: String, kty: String, alg: Option<String> }
+struct Jwk {
+    kid: String,
+    n: String,
+    e: String,
+    kty: String,
+    alg: Option<String>,
+}
 
 type JwksMap = HashMap<String, (String, String)>;
 #[allow(clippy::type_complexity)]
-static GOOGLE_JWKS_CACHE: Lazy<RwLock<(u64, JwksMap)>> = Lazy::new(|| RwLock::new((0, HashMap::new())));
+static GOOGLE_JWKS_CACHE: Lazy<RwLock<(u64, JwksMap)>> =
+    Lazy::new(|| RwLock::new((0, HashMap::new())));
 
 // OAuth state storage with Redis fallback for multi-instance safety
-static GOOGLE_STATE_CACHE: Lazy<RwLock<HashMap<String, (String, u64)>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static GOOGLE_STATE_CACHE: Lazy<RwLock<HashMap<String, (String, u64)>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
     let url = std::env::var("REDIS_URL").ok()?;
@@ -228,10 +274,7 @@ async fn store_oauth_state(state: &str, nonce: &str) {
     let now = current_unix();
     if let Some(mut conn) = redis_conn().await {
         let key = format!("oidc:google:state:{}", state);
-        let _: () = redis::Cmd::set_ex(&key, nonce, 600)
-            .query_async(&mut conn)
-            .await
-            .unwrap_or(());
+        let _: () = redis::Cmd::set_ex(&key, nonce, 600).query_async(&mut conn).await.unwrap_or(());
         return;
     }
     let mut guard = GOOGLE_STATE_CACHE.write().await;
@@ -243,11 +286,15 @@ async fn consume_oauth_state(state: &str) -> Option<(String, u64)> {
         let key = format!("oidc:google:state:{}", state);
         let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
         let _: () = redis::Cmd::del(&key).query_async(&mut conn).await.unwrap_or(());
-        if let Some(nonce) = val { return Some((nonce, current_unix() + 1)); }
+        if let Some(nonce) = val {
+            return Some((nonce, current_unix() + 1));
+        }
     }
     let mut guard = GOOGLE_STATE_CACHE.write().await;
     if let Some((nonce, exp)) = guard.remove(state) {
-        if current_unix() <= exp { return Some((nonce, exp)); }
+        if current_unix() <= exp {
+            return Some((nonce, exp));
+        }
     }
     None
 }
@@ -290,11 +337,16 @@ async fn fetch_google_jwks() -> HashMap<String, (String, String)> {
     map
 }
 
-fn current_unix() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() }
+fn current_unix() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-enum AudField { One(String), Many(Vec<String>) }
+enum AudField {
+    One(String),
+    Many(Vec<String>),
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct GoogleClaims {
@@ -311,12 +363,28 @@ struct GoogleClaims {
     nonce: Option<String>,
 }
 
-async fn validate_google_id_token(id_token: &str, client_id: &str, expected_nonce: Option<&str>) -> (bool, Option<Value>) {
-    let header = match jsonwebtoken::decode_header(id_token) { Ok(h) => h, Err(_) => return (false, None) };
-    let kid = match header.kid { Some(k) => k, None => return (false, None) };
+async fn validate_google_id_token(
+    id_token: &str,
+    client_id: &str,
+    expected_nonce: Option<&str>,
+) -> (bool, Option<Value>) {
+    let header = match jsonwebtoken::decode_header(id_token) {
+        Ok(h) => h,
+        Err(_) => return (false, None),
+    };
+    let kid = match header.kid {
+        Some(k) => k,
+        None => return (false, None),
+    };
     let jwks = fetch_google_jwks().await;
-    let (n, e) = match jwks.get(&kid) { Some(ne) => ne.clone(), None => return (false, None) };
-    let key = match jsonwebtoken::DecodingKey::from_rsa_components(&n, &e) { Ok(k) => k, Err(_) => return (false, None) };
+    let (n, e) = match jwks.get(&kid) {
+        Some(ne) => ne.clone(),
+        None => return (false, None),
+    };
+    let key = match jsonwebtoken::DecodingKey::from_rsa_components(&n, &e) {
+        Ok(k) => k,
+        Err(_) => return (false, None),
+    };
     let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
     validation.set_audience(&[client_id]);
     validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
@@ -326,16 +394,16 @@ async fn validate_google_id_token(id_token: &str, client_id: &str, expected_nonc
             if let Some(exp_nonce) = expected_nonce {
                 if let Some(claims) = serde_json::to_value(&data.claims).ok() {
                     if let Some(nonce_claim) = claims.get("nonce").and_then(|v| v.as_str()) {
-                        if nonce_claim != exp_nonce { return (false, None); }
+                        if nonce_claim != exp_nonce {
+                            return (false, None);
+                        }
                     } else {
                         return (false, None);
                     }
                 }
             }
             (true, serde_json::to_value(data.claims).ok())
-        },
+        }
         Err(_) => (false, None),
     }
 }
-
-

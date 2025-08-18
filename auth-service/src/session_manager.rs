@@ -1,7 +1,7 @@
 // Secure session management with Redis backend and security features
+use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::security_metrics::SECURITY_METRICS;
-use crate::pii_protection::redact_log;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -182,11 +182,7 @@ impl SessionManager {
             None
         };
 
-        Self {
-            config,
-            redis_client,
-            memory_store: Arc::new(RwLock::new(HashMap::new())),
-        }
+        Self { config, redis_client, memory_store: Arc::new(RwLock::new(HashMap::new())) }
     }
 
     /// Create a new session
@@ -206,7 +202,13 @@ impl SessionManager {
         // Check concurrent session limit
         self.enforce_concurrent_session_limit(&user_id).await?;
 
-        let session = Session::new(user_id.clone(), client_id.clone(), ip_address.clone(), user_agent.clone(), duration);
+        let session = Session::new(
+            user_id.clone(),
+            client_id.clone(),
+            ip_address.clone(),
+            user_agent.clone(),
+            duration,
+        );
 
         // Store session
         self.store_session(&session).await?;
@@ -286,7 +288,11 @@ impl SessionManager {
     }
 
     /// Refresh a session's expiration
-    pub async fn refresh_session(&self, session_id: &str, duration: Option<u64>) -> Result<Option<Session>, SessionError> {
+    pub async fn refresh_session(
+        &self,
+        session_id: &str,
+        duration: Option<u64>,
+    ) -> Result<Option<Session>, SessionError> {
         if let Some(mut session) = self.get_session(session_id).await? {
             let duration = duration.unwrap_or(self.config.default_duration);
             let duration = std::cmp::min(duration, self.config.max_duration);
@@ -295,21 +301,23 @@ impl SessionManager {
             self.store_session(&session).await?;
 
             // Log session refresh
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::DataAccess,
-                SecuritySeverity::Low,
-                "auth-service".to_string(),
-                "Session refreshed".to_string(),
-            )
-            .with_actor(session.user_id.clone())
-            .with_action("refresh".to_string())
-            .with_target(format!("session:{}", session.id))
-            .with_outcome("success".to_string())
-            .with_reason("Session lifetime extended successfully".to_string())
-            .with_session_id(session.id.clone())
-            .with_user_id(session.user_id.clone())
-            .with_ip_address(session.ip_address.clone())
-            .with_detail("new_expires_at".to_string(), session.expires_at));
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::DataAccess,
+                    SecuritySeverity::Low,
+                    "auth-service".to_string(),
+                    "Session refreshed".to_string(),
+                )
+                .with_actor(session.user_id.clone())
+                .with_action("refresh".to_string())
+                .with_target(format!("session:{}", session.id))
+                .with_outcome("success".to_string())
+                .with_reason("Session lifetime extended successfully".to_string())
+                .with_session_id(session.id.clone())
+                .with_user_id(session.user_id.clone())
+                .with_ip_address(session.ip_address.clone())
+                .with_detail("new_expires_at".to_string(), session.expires_at),
+            );
 
             Ok(Some(session))
         } else {
@@ -326,21 +334,23 @@ impl SessionManager {
             self.delete_session(&session.id).await?;
 
             // Log session invalidation
-            SecurityLogger::log_event(&SecurityEvent::new(
-                SecurityEventType::AuthenticationFailure,
-                SecuritySeverity::Medium,
-                "auth-service".to_string(),
-                "Session invalidated".to_string(),
-            )
-            .with_actor("system".to_string())
-            .with_action("invalidate".to_string())
-            .with_target(format!("session:{}", session.id))
-            .with_outcome("success".to_string())
-            .with_reason("All user sessions invalidated on request".to_string())
-            .with_session_id(session.id.clone())
-            .with_user_id(session.user_id.clone())
-            .with_ip_address(session.ip_address.clone())
-            .with_detail("reason".to_string(), "user_session_invalidation"));
+            SecurityLogger::log_event(
+                &SecurityEvent::new(
+                    SecurityEventType::AuthenticationFailure,
+                    SecuritySeverity::Medium,
+                    "auth-service".to_string(),
+                    "Session invalidated".to_string(),
+                )
+                .with_actor("system".to_string())
+                .with_action("invalidate".to_string())
+                .with_target(format!("session:{}", session.id))
+                .with_outcome("success".to_string())
+                .with_reason("All user sessions invalidated on request".to_string())
+                .with_session_id(session.id.clone())
+                .with_user_id(session.user_id.clone())
+                .with_ip_address(session.ip_address.clone())
+                .with_detail("reason".to_string(), "user_session_invalidation"),
+            );
         }
 
         Ok(count)
@@ -356,7 +366,8 @@ impl SessionManager {
             let mut store = self.memory_store.write().await;
             let before_count = store.len();
             store.retain(|_id, session| {
-                !session.is_expired(Some(now)) && !session.is_inactive(self.config.inactivity_timeout, Some(now))
+                !session.is_expired(Some(now))
+                    && !session.is_inactive(self.config.inactivity_timeout, Some(now))
             });
             let after_count = store.len();
             cleaned_count += (before_count - after_count) as u32;
@@ -391,13 +402,15 @@ impl SessionManager {
         Ok(())
     }
 
-    async fn get_session_from_redis(&self, client: &redis::Client, session_id: &str) -> Result<Option<Session>, redis::RedisError> {
+    async fn get_session_from_redis(
+        &self,
+        client: &redis::Client,
+        session_id: &str,
+    ) -> Result<Option<Session>, redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
         let key = format!("session:{}", session_id);
-        let session_data: Option<String> = redis::cmd("GET")
-            .arg(&key)
-            .query_async(&mut conn)
-            .await?;
+        let session_data: Option<String> =
+            redis::cmd("GET").arg(&key).query_async(&mut conn).await?;
 
         if let Some(data) = session_data {
             match serde_json::from_str::<Session>(&data) {
@@ -412,14 +425,22 @@ impl SessionManager {
         }
     }
 
-    async fn store_session_to_redis(&self, client: &redis::Client, session: &Session) -> Result<(), redis::RedisError> {
+    async fn store_session_to_redis(
+        &self,
+        client: &redis::Client,
+        session: &Session,
+    ) -> Result<(), redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
         let key = format!("session:{}", session.id);
         let user_key = format!("user_sessions:{}", session.user_id);
         let ttl = session.expires_at - current_timestamp();
 
         let session_data = serde_json::to_string(session).map_err(|e| {
-            redis::RedisError::from((redis::ErrorKind::TypeError, "Serialization error", e.to_string()))
+            redis::RedisError::from((
+                redis::ErrorKind::TypeError,
+                "Serialization error",
+                e.to_string(),
+            ))
         })?;
 
         // Store session with TTL
@@ -431,40 +452,29 @@ impl SessionManager {
             .await?;
 
         // Add to user sessions set
-        redis::cmd("SADD")
-            .arg(&user_key)
-            .arg(&session.id)
-            .query_async::<()>(&mut conn)
-            .await?;
+        redis::cmd("SADD").arg(&user_key).arg(&session.id).query_async::<()>(&mut conn).await?;
 
         // Set TTL on user sessions set
-        redis::cmd("EXPIRE")
-            .arg(&user_key)
-            .arg(ttl)
-            .query_async::<()>(&mut conn)
-            .await?;
+        redis::cmd("EXPIRE").arg(&user_key).arg(ttl).query_async::<()>(&mut conn).await?;
 
         Ok(())
     }
 
-    async fn delete_session_from_redis(&self, client: &redis::Client, session_id: &str) -> Result<(), redis::RedisError> {
+    async fn delete_session_from_redis(
+        &self,
+        client: &redis::Client,
+        session_id: &str,
+    ) -> Result<(), redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
 
         // Get session to find user_id
         if let Some(session) = self.get_session_from_redis(client, session_id).await? {
             let user_key = format!("user_sessions:{}", session.user_id);
-            redis::cmd("SREM")
-                .arg(&user_key)
-                .arg(session_id)
-                .query_async::<()>(&mut conn)
-                .await?;
+            redis::cmd("SREM").arg(&user_key).arg(session_id).query_async::<()>(&mut conn).await?;
         }
 
         let key = format!("session:{}", session_id);
-        redis::cmd("DEL")
-            .arg(&key)
-            .query_async::<()>(&mut conn)
-            .await?;
+        redis::cmd("DEL").arg(&key).query_async::<()>(&mut conn).await?;
 
         Ok(())
     }
@@ -493,14 +503,16 @@ impl SessionManager {
         Ok(sessions)
     }
 
-    async fn get_user_sessions_from_redis(&self, client: &redis::Client, user_id: &str) -> Result<Vec<Session>, redis::RedisError> {
+    async fn get_user_sessions_from_redis(
+        &self,
+        client: &redis::Client,
+        user_id: &str,
+    ) -> Result<Vec<Session>, redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
         let user_key = format!("user_sessions:{}", user_id);
 
-        let session_ids: Vec<String> = redis::cmd("SMEMBERS")
-            .arg(&user_key)
-            .query_async(&mut conn)
-            .await?;
+        let session_ids: Vec<String> =
+            redis::cmd("SMEMBERS").arg(&user_key).query_async(&mut conn).await?;
 
         let mut sessions = Vec::new();
         for session_id in session_ids {
@@ -520,26 +532,29 @@ impl SessionManager {
             let mut sessions = sessions;
             sessions.sort_by(|a, b| a.created_at.cmp(&b.created_at));
 
-            let sessions_to_remove = sessions.len() - (self.config.max_concurrent_sessions as usize - 1);
+            let sessions_to_remove =
+                sessions.len() - (self.config.max_concurrent_sessions as usize - 1);
             for session in sessions.iter().take(sessions_to_remove) {
                 self.delete_session(&session.id).await?;
 
                 // Log session eviction
-                SecurityLogger::log_event(&SecurityEvent::new(
-                    SecurityEventType::AuthenticationFailure,
-                    SecuritySeverity::Low,
-                    "auth-service".to_string(),
-                    "Session evicted due to concurrent limit".to_string(),
-                )
-                .with_actor("system".to_string())
-                .with_action("evict".to_string())
-                .with_target(format!("session:{}", session.id))
-                .with_outcome("success".to_string())
-                .with_reason("Session removed to enforce concurrent session limit".to_string())
-                .with_session_id(session.id.clone())
-                .with_user_id(session.user_id.clone())
-                .with_ip_address(session.ip_address.clone())
-                .with_detail("reason".to_string(), "concurrent_session_limit"));
+                SecurityLogger::log_event(
+                    &SecurityEvent::new(
+                        SecurityEventType::AuthenticationFailure,
+                        SecuritySeverity::Low,
+                        "auth-service".to_string(),
+                        "Session evicted due to concurrent limit".to_string(),
+                    )
+                    .with_actor("system".to_string())
+                    .with_action("evict".to_string())
+                    .with_target(format!("session:{}", session.id))
+                    .with_outcome("success".to_string())
+                    .with_reason("Session removed to enforce concurrent session limit".to_string())
+                    .with_session_id(session.id.clone())
+                    .with_user_id(session.user_id.clone())
+                    .with_ip_address(session.ip_address.clone())
+                    .with_detail("reason".to_string(), "concurrent_session_limit"),
+                );
             }
         }
 
@@ -570,10 +585,7 @@ pub static SESSION_MANAGER: Lazy<SessionManager> = Lazy::new(|| {
 
 /// Helper functions
 fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn generate_session_id() -> String {
@@ -613,13 +625,16 @@ mod tests {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
 
-        let session = manager.create_session(
-            "test_user".to_string(),
-            Some("test_client".to_string()),
-            "192.168.1.1".to_string(),
-            Some("TestAgent/1.0".to_string()),
-            Some(3600),
-        ).await.unwrap();
+        let session = manager
+            .create_session(
+                "test_user".to_string(),
+                Some("test_client".to_string()),
+                "192.168.1.1".to_string(),
+                Some("TestAgent/1.0".to_string()),
+                Some(3600),
+            )
+            .await
+            .unwrap();
 
         assert_eq!(session.user_id, "test_user");
         assert_eq!(session.client_id, Some("test_client".to_string()));
@@ -633,13 +648,16 @@ mod tests {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
 
-        let session = manager.create_session(
-            "test_user".to_string(),
-            None,
-            "192.168.1.1".to_string(),
-            None,
-            Some(3600),
-        ).await.unwrap();
+        let session = manager
+            .create_session(
+                "test_user".to_string(),
+                None,
+                "192.168.1.1".to_string(),
+                None,
+                Some(3600),
+            )
+            .await
+            .unwrap();
 
         let retrieved = manager.get_session(&session.id).await.unwrap();
         assert!(retrieved.is_some());
@@ -651,13 +669,16 @@ mod tests {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
 
-        let session = manager.create_session(
-            "test_user".to_string(),
-            None,
-            "192.168.1.1".to_string(),
-            None,
-            Some(3600),
-        ).await.unwrap();
+        let session = manager
+            .create_session(
+                "test_user".to_string(),
+                None,
+                "192.168.1.1".to_string(),
+                None,
+                Some(3600),
+            )
+            .await
+            .unwrap();
 
         let original_expires = session.expires_at;
 
@@ -673,13 +694,16 @@ mod tests {
         let config = SessionConfig::default();
         let manager = SessionManager::new(config);
 
-        let session = manager.create_session(
-            "test_user".to_string(),
-            None,
-            "192.168.1.1".to_string(),
-            None,
-            Some(3600),
-        ).await.unwrap();
+        let session = manager
+            .create_session(
+                "test_user".to_string(),
+                None,
+                "192.168.1.1".to_string(),
+                None,
+                Some(3600),
+            )
+            .await
+            .unwrap();
 
         manager.delete_session(&session.id).await.unwrap();
 
@@ -689,13 +713,8 @@ mod tests {
 
     #[test]
     fn test_session_expiration() {
-        let mut session = Session::new(
-            "test_user".to_string(),
-            None,
-            "192.168.1.1".to_string(),
-            None,
-            3600,
-        );
+        let mut session =
+            Session::new("test_user".to_string(), None, "192.168.1.1".to_string(), None, 3600);
 
         assert!(!session.is_expired(None));
 
@@ -706,13 +725,8 @@ mod tests {
 
     #[test]
     fn test_session_inactivity() {
-        let mut session = Session::new(
-            "test_user".to_string(),
-            None,
-            "192.168.1.1".to_string(),
-            None,
-            3600,
-        );
+        let mut session =
+            Session::new("test_user".to_string(), None, "192.168.1.1".to_string(), None, 3600);
 
         assert!(!session.is_inactive(1800, None)); // 30 min timeout
 

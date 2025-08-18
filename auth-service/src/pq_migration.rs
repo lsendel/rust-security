@@ -1,11 +1,11 @@
 //! # Post-Quantum Migration and Performance Assessment
-//! 
+//!
 //! This module provides tools for migrating from classical to post-quantum cryptography,
 //! performance benchmarking, compliance reporting, and rollback procedures.
-//! 
+//!
 //! ## Migration Features
 //! - Phased migration strategies
-//! - Performance impact assessment  
+//! - Performance impact assessment
 //! - Compatibility testing
 //! - Rollback and recovery procedures
 //! - Compliance reporting for NIST standards
@@ -20,11 +20,10 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
 use crate::post_quantum_crypto::{
-    SecurityLevel, PQAlgorithm, MigrationMode, get_pq_manager, 
-    PQFeatures, MigrationStatus
+    get_pq_manager, MigrationMode, MigrationStatus, PQAlgorithm, PQFeatures, SecurityLevel,
 };
 use crate::pq_key_management::{get_pq_key_manager, KeyOperation};
-use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 
 /// Migration phase configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -205,7 +204,8 @@ impl MigrationManager {
             MigrationPhase {
                 phase_id: "phase-1".to_string(),
                 name: "Assessment and Planning".to_string(),
-                description: "Inventory current cryptographic implementations and plan migration".to_string(),
+                description: "Inventory current cryptographic implementations and plan migration"
+                    .to_string(),
                 start_date: None,
                 target_completion: None,
                 prerequisites: vec![],
@@ -228,14 +228,12 @@ impl MigrationManager {
                     },
                 ],
                 rollback_plan: vec![],
-                success_criteria: vec![
-                    SuccessCriteria {
-                        metric: "inventory_completeness".to_string(),
-                        target_value: 100.0,
-                        measurement_method: "Manual review".to_string(),
-                        validation_period: Duration::from_secs(24 * 3600),
-                    },
-                ],
+                success_criteria: vec![SuccessCriteria {
+                    metric: "inventory_completeness".to_string(),
+                    target_value: 100.0,
+                    measurement_method: "Manual review".to_string(),
+                    validation_period: Duration::from_secs(24 * 3600),
+                }],
                 risk_assessment: RiskAssessment {
                     overall_risk: RiskLevel::Low,
                     performance_risk: RiskLevel::Low,
@@ -269,22 +267,18 @@ impl MigrationManager {
                         automation_level: AutomationLevel::FullyAutomated,
                     },
                 ],
-                rollback_plan: vec![
-                    RollbackAction {
-                        trigger: RollbackTrigger::PerformanceDegradation(20.0),
-                        procedure: "Disable hybrid algorithms and fallback to classical".to_string(),
-                        estimated_time: Duration::from_secs(3600), // 1 hour
-                        data_preservation: true,
-                    },
-                ],
-                success_criteria: vec![
-                    SuccessCriteria {
-                        metric: "performance_degradation".to_string(),
-                        target_value: 15.0, // Max 15% performance degradation
-                        measurement_method: "Automated benchmarking".to_string(),
-                        validation_period: Duration::from_secs(7 * 24 * 3600),
-                    },
-                ],
+                rollback_plan: vec![RollbackAction {
+                    trigger: RollbackTrigger::PerformanceDegradation(20.0),
+                    procedure: "Disable hybrid algorithms and fallback to classical".to_string(),
+                    estimated_time: Duration::from_secs(3600), // 1 hour
+                    data_preservation: true,
+                }],
+                success_criteria: vec![SuccessCriteria {
+                    metric: "performance_degradation".to_string(),
+                    target_value: 15.0, // Max 15% performance degradation
+                    measurement_method: "Automated benchmarking".to_string(),
+                    validation_period: Duration::from_secs(7 * 24 * 3600),
+                }],
                 risk_assessment: RiskAssessment {
                     overall_risk: RiskLevel::Medium,
                     performance_risk: RiskLevel::Medium,
@@ -300,36 +294,31 @@ impl MigrationManager {
             MigrationPhase {
                 phase_id: "phase-3".to_string(),
                 name: "Client Migration".to_string(),
-                description: "Update client applications to support post-quantum algorithms".to_string(),
+                description: "Update client applications to support post-quantum algorithms"
+                    .to_string(),
                 start_date: None,
                 target_completion: None,
                 prerequisites: vec!["phase-2".to_string()],
-                actions: vec![
-                    MigrationAction {
-                        action_id: "client-updates".to_string(),
-                        action_type: ActionType::UpdateClients,
-                        description: "Update client applications for post-quantum support".to_string(),
-                        estimated_duration: Duration::from_secs(60 * 24 * 3600), // 2 months
-                        impact_level: ImpactLevel::High,
-                        automation_level: AutomationLevel::Manual,
-                    },
-                ],
-                rollback_plan: vec![
-                    RollbackAction {
-                        trigger: RollbackTrigger::ClientFailures(1000),
-                        procedure: "Maintain classical algorithm support".to_string(),
-                        estimated_time: Duration::from_secs(24 * 3600), // 24 hours
-                        data_preservation: true,
-                    },
-                ],
-                success_criteria: vec![
-                    SuccessCriteria {
-                        metric: "client_compatibility".to_string(),
-                        target_value: 95.0, // 95% client compatibility
-                        measurement_method: "Automated testing and monitoring".to_string(),
-                        validation_period: Duration::from_secs(14 * 24 * 3600),
-                    },
-                ],
+                actions: vec![MigrationAction {
+                    action_id: "client-updates".to_string(),
+                    action_type: ActionType::UpdateClients,
+                    description: "Update client applications for post-quantum support".to_string(),
+                    estimated_duration: Duration::from_secs(60 * 24 * 3600), // 2 months
+                    impact_level: ImpactLevel::High,
+                    automation_level: AutomationLevel::Manual,
+                }],
+                rollback_plan: vec![RollbackAction {
+                    trigger: RollbackTrigger::ClientFailures(1000),
+                    procedure: "Maintain classical algorithm support".to_string(),
+                    estimated_time: Duration::from_secs(24 * 3600), // 24 hours
+                    data_preservation: true,
+                }],
+                success_criteria: vec![SuccessCriteria {
+                    metric: "client_compatibility".to_string(),
+                    target_value: 95.0, // 95% client compatibility
+                    measurement_method: "Automated testing and monitoring".to_string(),
+                    validation_period: Duration::from_secs(14 * 24 * 3600),
+                }],
                 risk_assessment: RiskAssessment {
                     overall_risk: RiskLevel::High,
                     performance_risk: RiskLevel::Medium,
@@ -367,22 +356,18 @@ impl MigrationManager {
                         automation_level: AutomationLevel::Manual,
                     },
                 ],
-                rollback_plan: vec![
-                    RollbackAction {
-                        trigger: RollbackTrigger::SecurityIncident,
-                        procedure: "Re-enable hybrid algorithms immediately".to_string(),
-                        estimated_time: Duration::from_secs(1800), // 30 minutes
-                        data_preservation: true,
-                    },
-                ],
-                success_criteria: vec![
-                    SuccessCriteria {
-                        metric: "post_quantum_adoption".to_string(),
-                        target_value: 100.0,
-                        measurement_method: "System configuration audit".to_string(),
-                        validation_period: Duration::from_secs(30 * 24 * 3600),
-                    },
-                ],
+                rollback_plan: vec![RollbackAction {
+                    trigger: RollbackTrigger::SecurityIncident,
+                    procedure: "Re-enable hybrid algorithms immediately".to_string(),
+                    estimated_time: Duration::from_secs(1800), // 30 minutes
+                    data_preservation: true,
+                }],
+                success_criteria: vec![SuccessCriteria {
+                    metric: "post_quantum_adoption".to_string(),
+                    target_value: 100.0,
+                    measurement_method: "System configuration audit".to_string(),
+                    validation_period: Duration::from_secs(30 * 24 * 3600),
+                }],
                 risk_assessment: RiskAssessment {
                     overall_risk: RiskLevel::Critical,
                     performance_risk: RiskLevel::Medium,
@@ -401,7 +386,8 @@ impl MigrationManager {
     /// Start a migration phase
     pub async fn start_phase(&self, phase_id: &str) -> Result<()> {
         let mut phases = self.phases.write().await;
-        let phase = phases.iter_mut()
+        let phase = phases
+            .iter_mut()
             .find(|p| p.phase_id == phase_id)
             .ok_or_else(|| anyhow!("Phase not found: {}", phase_id))?;
 
@@ -412,32 +398,41 @@ impl MigrationManager {
         }
 
         phase.start_date = Some(current_timestamp());
-        
+
         let mut current_phase = self.current_phase.write().await;
         *current_phase = Some(phase_id.to_string());
 
         info!("Started migration phase: {} - {}", phase_id, phase.name);
 
         // Log phase start
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SystemEvent,
-            SecuritySeverity::Medium,
-            "pq-migration".to_string(),
-            format!("Migration phase started: {}", phase.name),
-        )
-        .with_actor("system".to_string())
-        .with_action("pq_start_phase".to_string())
-        .with_target("migration_phase".to_string())
-        .with_outcome("started".to_string())
-        .with_reason(format!("Starting migration phase: {}", phase.description))
-        .with_detail("phase_id".to_string(), phase_id.to_string())
-        .with_detail("risk_level".to_string(), format!("{:?}", phase.risk_assessment.overall_risk)));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::SystemEvent,
+                SecuritySeverity::Medium,
+                "pq-migration".to_string(),
+                format!("Migration phase started: {}", phase.name),
+            )
+            .with_actor("system".to_string())
+            .with_action("pq_start_phase".to_string())
+            .with_target("migration_phase".to_string())
+            .with_outcome("started".to_string())
+            .with_reason(format!("Starting migration phase: {}", phase.description))
+            .with_detail("phase_id".to_string(), phase_id.to_string())
+            .with_detail(
+                "risk_level".to_string(),
+                format!("{:?}", phase.risk_assessment.overall_risk),
+            ),
+        );
 
         Ok(())
     }
 
     /// Run performance benchmarks
-    pub async fn run_performance_benchmark(&self, algorithm: PQAlgorithm, iterations: usize) -> Result<PerformanceBenchmark> {
+    pub async fn run_performance_benchmark(
+        &self,
+        algorithm: PQAlgorithm,
+        iterations: usize,
+    ) -> Result<PerformanceBenchmark> {
         info!("Running performance benchmark for {:?} with {} iterations", algorithm, iterations);
 
         let start_time = Instant::now();
@@ -453,21 +448,23 @@ impl MigrationManager {
         // Benchmark signing operations
         for i in 0..iterations {
             let operation_start = Instant::now();
-            
+
             match manager.sign(test_data, None).await {
                 Ok(_signature) => {
                     let duration = operation_start.elapsed();
                     durations.push(duration.as_millis() as f64);
-                    
+
                     // Record operation in key manager
                     if let Some(kid) = manager.current_signing_key_id().await {
-                        let _ = key_manager.record_operation(&kid, KeyOperation::Sign, duration.as_millis() as u64).await;
+                        let _ = key_manager
+                            .record_operation(&kid, KeyOperation::Sign, duration.as_millis() as u64)
+                            .await;
                     }
                 }
                 Err(e) => {
                     errors += 1;
                     error!("Benchmark iteration {} failed: {}", i, e);
-                    
+
                     if let Some(kid) = manager.current_signing_key_id().await {
                         let _ = key_manager.record_operation(&kid, KeyOperation::Error, 0).await;
                     }
@@ -511,29 +508,33 @@ impl MigrationManager {
             history.remove(0);
         }
 
-        info!("Benchmark completed: avg={:.2}ms, throughput={:.2} ops/sec, errors={}",
-            benchmark.metrics.avg_duration_ms,
-            benchmark.metrics.throughput_ops_per_sec,
-            errors
+        info!(
+            "Benchmark completed: avg={:.2}ms, throughput={:.2} ops/sec, errors={}",
+            benchmark.metrics.avg_duration_ms, benchmark.metrics.throughput_ops_per_sec, errors
         );
 
         // Log benchmark completion
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SystemEvent,
-            SecuritySeverity::Low,
-            "pq-migration".to_string(),
-            "Performance benchmark completed".to_string(),
-        )
-        .with_actor("pq_system".to_string())
-        .with_action("pq_benchmark".to_string())
-        .with_target("crypto_performance".to_string())
-        .with_outcome("completed".to_string())
-        .with_reason("Post-quantum cryptography performance assessment completed".to_string())
-        .with_detail("algorithm".to_string(), benchmark.algorithm.clone())
-        .with_detail("iterations".to_string(), iterations)
-        .with_detail("avg_duration_ms".to_string(), benchmark.metrics.avg_duration_ms)
-        .with_detail("throughput_ops_per_sec".to_string(), benchmark.metrics.throughput_ops_per_sec)
-        .with_detail("error_rate_percent".to_string(), benchmark.metrics.error_rate_percent));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::SystemEvent,
+                SecuritySeverity::Low,
+                "pq-migration".to_string(),
+                "Performance benchmark completed".to_string(),
+            )
+            .with_actor("pq_system".to_string())
+            .with_action("pq_benchmark".to_string())
+            .with_target("crypto_performance".to_string())
+            .with_outcome("completed".to_string())
+            .with_reason("Post-quantum cryptography performance assessment completed".to_string())
+            .with_detail("algorithm".to_string(), benchmark.algorithm.clone())
+            .with_detail("iterations".to_string(), iterations)
+            .with_detail("avg_duration_ms".to_string(), benchmark.metrics.avg_duration_ms)
+            .with_detail(
+                "throughput_ops_per_sec".to_string(),
+                benchmark.metrics.throughput_ops_per_sec,
+            )
+            .with_detail("error_rate_percent".to_string(), benchmark.metrics.error_rate_percent),
+        );
 
         Ok(benchmark)
     }
@@ -546,9 +547,7 @@ impl MigrationManager {
         let performance_history = self.performance_history.read().await;
         let compatibility = self.compatibility_status.read().await;
 
-        let completed_phases = phases.iter()
-            .filter(|p| p.start_date.is_some())
-            .count();
+        let completed_phases = phases.iter().filter(|p| p.start_date.is_some()).count();
 
         let nist_compliance = NISTCompliance {
             fips_203_ml_kem: migration_status.features_available.kyber,
@@ -576,11 +575,17 @@ impl MigrationManager {
                 Some(PerformanceSummary {
                     total_benchmarks: performance_history.len(),
                     latest_benchmark_date: performance_history.last().map(|b| b.timestamp),
-                    avg_performance_degradation: calculate_performance_degradation(&performance_history),
+                    avg_performance_degradation: calculate_performance_degradation(
+                        &performance_history,
+                    ),
                 })
             },
             compatibility_status: compatibility.clone(),
-            recommendations: generate_recommendations(&migration_status, &phases, &performance_history),
+            recommendations: generate_recommendations(
+                &migration_status,
+                &phases,
+                &performance_history,
+            ),
         }
     }
 
@@ -588,17 +593,20 @@ impl MigrationManager {
     pub async fn check_rollback_triggers(&self) -> Vec<RollbackTrigger> {
         let mut triggers = Vec::new();
         let performance_history = self.performance_history.read().await;
-        
+
         // Check performance degradation
         if let Some(degradation) = calculate_performance_degradation(&performance_history) {
-            if degradation > 25.0 { // 25% degradation threshold
+            if degradation > 25.0 {
+                // 25% degradation threshold
                 triggers.push(RollbackTrigger::PerformanceDegradation(degradation));
             }
         }
 
         // Check compatibility issues
         let compatibility = self.compatibility_status.read().await;
-        let failed_clients = compatibility.client_compatibility.values()
+        let failed_clients = compatibility
+            .client_compatibility
+            .values()
             .filter(|c| !c.supports_hybrid && !c.supports_post_quantum)
             .count();
 
@@ -614,18 +622,20 @@ impl MigrationManager {
         warn!("Executing rollback due to trigger: {:?}", trigger);
 
         // Log rollback initiation
-        SecurityLogger::log_event(&SecurityEvent::new(
-            SecurityEventType::SystemEvent,
-            SecuritySeverity::Critical,
-            "pq-migration".to_string(),
-            "Migration rollback initiated".to_string(),
-        )
-        .with_actor("system".to_string())
-        .with_action("pq_rollback".to_string())
-        .with_target("crypto_system".to_string())
-        .with_outcome("initiated".to_string())
-        .with_reason("Migration rollback triggered due to detected issues".to_string())
-        .with_detail("trigger".to_string(), format!("{:?}", trigger)));
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::SystemEvent,
+                SecuritySeverity::Critical,
+                "pq-migration".to_string(),
+                "Migration rollback initiated".to_string(),
+            )
+            .with_actor("system".to_string())
+            .with_action("pq_rollback".to_string())
+            .with_target("crypto_system".to_string())
+            .with_outcome("initiated".to_string())
+            .with_reason("Migration rollback triggered due to detected issues".to_string())
+            .with_detail("trigger".to_string(), format!("{:?}", trigger)),
+        );
 
         // Implementation would depend on the current migration state
         // For now, we'll just log the action
@@ -658,13 +668,10 @@ impl MigrationManager {
         MigrationTimeline {
             phases: phases.clone(),
             current_phase: current_phase.clone(),
-            estimated_completion: phases.iter()
-                .filter_map(|p| p.target_completion)
-                .max(),
-            total_estimated_duration: phases.iter()
-                .map(|p| p.actions.iter()
-                    .map(|a| a.estimated_duration.as_secs())
-                    .sum::<u64>())
+            estimated_completion: phases.iter().filter_map(|p| p.target_completion).max(),
+            total_estimated_duration: phases
+                .iter()
+                .map(|p| p.actions.iter().map(|a| a.estimated_duration.as_secs()).sum::<u64>())
                 .sum(),
         }
     }
@@ -691,8 +698,8 @@ pub struct PhaseCompletion {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NISTCompliance {
-    pub fips_203_ml_kem: bool,    // CRYSTALS-Kyber support
-    pub fips_204_ml_dsa: bool,    // CRYSTALS-Dilithium support
+    pub fips_203_ml_kem: bool,          // CRYSTALS-Kyber support
+    pub fips_204_ml_dsa: bool,          // CRYSTALS-Dilithium support
     pub sp_800_208_stateful_hash: bool, // Stateful hash-based signatures
     pub hybrid_support: bool,
     pub migration_timeline_documented: bool,
@@ -764,10 +771,10 @@ fn calculate_performance_degradation(history: &[PerformanceBenchmark]) -> Option
     if history.len() < 2 {
         return None;
     }
-    
+
     let baseline = history.first()?.metrics.avg_duration_ms;
     let current = history.last()?.metrics.avg_duration_ms;
-    
+
     Some(((current - baseline) / baseline) * 100.0)
 }
 
@@ -798,14 +805,11 @@ fn generate_recommendations(
 }
 
 fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
 /// Global migration manager
-static MIGRATION_MANAGER: once_cell::sync::Lazy<MigrationManager> = 
+static MIGRATION_MANAGER: once_cell::sync::Lazy<MigrationManager> =
     once_cell::sync::Lazy::new(|| MigrationManager::new());
 
 /// Get the global migration manager
@@ -820,7 +824,10 @@ pub async fn initialize_migration_management() -> Result<()> {
 }
 
 /// Convenience function to run a performance benchmark
-pub async fn run_benchmark(algorithm: PQAlgorithm, iterations: usize) -> Result<PerformanceBenchmark> {
+pub async fn run_benchmark(
+    algorithm: PQAlgorithm,
+    iterations: usize,
+) -> Result<PerformanceBenchmark> {
     get_migration_manager().run_performance_benchmark(algorithm, iterations).await
 }
 
