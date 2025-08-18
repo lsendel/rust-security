@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = "1.0"
@@ -24,10 +24,10 @@ redis = "0.23"
 futures = "0.3"
 prometheus = "0.13"
 hyper = "0.14"
-hyper-tls = "0.5"
+# hyper-tls removed to avoid native-tls dependency
 trust-dns-resolver = "0.23"
 pem = "3.0"
-rsa = "0.9"
+# rsa crate removed due to RUSTSEC-2023-0071 vulnerability
 x509-parser = "0.15"
 pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
 criterion = { version = "0.5", features = ["html_reports"] }

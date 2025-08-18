@@ -19,7 +19,7 @@ cedar-policy-core = "4.5.1"
 thiserror = "2.0.14"
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 [lib]
 name = "policy_service"

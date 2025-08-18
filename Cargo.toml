@@ -6,3 +6,34 @@ members = [
     "compliance-tools",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+# Core runtime dependencies
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4.22", features = ["serde"] }  # Version >= 0.4.20 to avoid RUSTSEC-2020-0159
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# HTTP client with secure TLS
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Web framework dependencies
+axum = { version = "0.7", features = ["macros"] }
+hyper = { version = "1.0", features = ["full"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["trace", "request-id", "cors"] }
+
+# Security and crypto (using latest secure versions)
+rand = "0.8.5"  # Version >= 0.8 to avoid security issues
+argon2 = "0.5"
+jsonwebtoken = "9.0"
+ring = "0.17"
+aes-gcm = "0.10"
+
+# Redis with secure TLS
+redis = { version = "0.32", features = ["tokio-comp", "aio", "connection-manager"] }
