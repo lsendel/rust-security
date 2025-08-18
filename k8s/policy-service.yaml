@@ -15,9 +15,16 @@ spec:
       labels:
         app: policy-service
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: policy-service
-        image: policy-service:latest
+        image: policy-service:1.0.0
         ports:
         - containerPort: 8080
         envFrom:
@@ -44,12 +51,17 @@ spec:
           periodSeconds: 5
         securityContext:
           runAsNonRoot: true
-          runAsUser: 65532
+          runAsUser: 10001
+          runAsGroup: 10001
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - ALL
+            add:
+            - NET_BIND_SERVICE
+          seccompProfile:
+            type: RuntimeDefault
 ---
 apiVersion: v1
 kind: Service
