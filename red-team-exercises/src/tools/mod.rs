@@ -3,6 +3,7 @@
 //! Contains automated tools for security testing and attack execution
 
 use anyhow::Result;
+use async_trait::async_trait;
 use std::collections::HashMap;
 use tracing::info;
 
@@ -20,6 +21,7 @@ pub struct ToolRegistry {
 }
 
 /// Trait for all red team tools
+#[async_trait]
 pub trait RedTeamTool {
     fn name(&self) -> &str;
     fn description(&self) -> &str;

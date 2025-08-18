@@ -1,9 +1,262 @@
 use axum::{extract::Request, middleware::Next, response::Response};
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Security level configuration for different environments
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SecurityLevel {
+    /// Development - Relaxed security for development
+    Development,
+    /// Production - Strict security for production
+    Production,
+    /// Custom - User-defined security configuration
+    Custom(SecurityHeadersConfig),
+}
+
+/// Configuration for security headers
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityHeadersConfig {
+    /// Content Security Policy directive
+    pub csp: String,
+    /// HTTP Strict Transport Security max-age
+    pub hsts_max_age: u32,
+    /// Whether to include subdomains in HSTS
+    pub hsts_include_subdomains: bool,
+    /// Whether to enable HSTS preload
+    pub hsts_preload: bool,
+    /// X-Frame-Options value
+    pub frame_options: String,
+    /// Whether to enable X-Content-Type-Options
+    pub content_type_options: bool,
+    /// X-XSS-Protection value
+    pub xss_protection: String,
+    /// Referrer-Policy value
+    pub referrer_policy: String,
+    /// Permissions-Policy directive
+    pub permissions_policy: String,
+    /// Cross-Origin-Embedder-Policy value
+    pub coep: String,
+    /// Cross-Origin-Opener-Policy value
+    pub coop: String,
+    /// Cross-Origin-Resource-Policy value
+    pub corp: String,
+    /// Whether to add security monitoring headers
+    pub monitoring_headers: bool,
+    /// Whether to add cache control headers
+    pub cache_control: bool,
+}
+
+impl Default for SecurityLevel {
+    fn default() -> Self {
+        let env = std::env::var("ENVIRONMENT")
+            .unwrap_or_else(|_| "development".to_string())
+            .to_lowercase();
+        
+        match env.as_str() {
+            "production" | "prod" => SecurityLevel::Production,
+            _ => SecurityLevel::Development,
+        }
+    }
+}
+
+impl SecurityLevel {
+    /// Get the security headers configuration for this level
+    pub fn get_config(&self) -> SecurityHeadersConfig {
+        match self {
+            SecurityLevel::Development => SecurityHeadersConfig::development(),
+            SecurityLevel::Production => SecurityHeadersConfig::production(),
+            SecurityLevel::Custom(config) => config.clone(),
+        }
+    }
+}
+
+impl SecurityHeadersConfig {
+    /// Development configuration with relaxed security
+    pub fn development() -> Self {
+        Self {
+            csp: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; \
+                  connect-src 'self' ws: wss:; \
+                  img-src 'self' data: blob:; \
+                  frame-ancestors 'self'"
+                .to_string(),
+            hsts_max_age: 86400, // 1 day
+            hsts_include_subdomains: false,
+            hsts_preload: false,
+            frame_options: "SAMEORIGIN".to_string(),
+            content_type_options: true,
+            xss_protection: "1; mode=block".to_string(),
+            referrer_policy: "strict-origin-when-cross-origin".to_string(),
+            permissions_policy: "camera=(), microphone=(), geolocation=()".to_string(),
+            coep: "unsafe-none".to_string(),
+            coop: "same-origin-allow-popups".to_string(),
+            corp: "same-origin".to_string(),
+            monitoring_headers: true,
+            cache_control: false,
+        }
+    }
+
+    /// Production configuration with strict security
+    pub fn production() -> Self {
+        Self {
+            csp: "default-src 'none'; \
+                  script-src 'self' 'strict-dynamic'; \
+                  style-src 'self' 'unsafe-inline'; \
+                  img-src 'self' data:; \
+                  connect-src 'self'; \
+                  font-src 'self'; \
+                  object-src 'none'; \
+                  media-src 'self'; \
+                  frame-src 'none'; \
+                  worker-src 'self'; \
+                  base-uri 'none'; \
+                  form-action 'self'; \
+                  frame-ancestors 'none'"
+                .to_string(),
+            hsts_max_age: 31536000, // 1 year
+            hsts_include_subdomains: true,
+            hsts_preload: true,
+            frame_options: "DENY".to_string(),
+            content_type_options: true,
+            xss_protection: "1; mode=block".to_string(),
+            referrer_policy: "strict-origin-when-cross-origin".to_string(),
+            permissions_policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), \
+                                magnetometer=(), gyroscope=(), accelerometer=(), ambient-light-sensor=(), \
+                                autoplay=(), encrypted-media=(), fullscreen=(), picture-in-picture=()"
+                .to_string(),
+            coep: "require-corp".to_string(),
+            coop: "same-origin".to_string(),
+            corp: "same-origin".to_string(),
+            monitoring_headers: true,
+            cache_control: true,
+        }
+    }
+
+    /// Load configuration from environment variables
+    pub fn from_env() -> Self {
+        let base_config = if std::env::var("ENVIRONMENT")
+            .unwrap_or_default()
+            .to_lowercase() == "production"
+        {
+            Self::production()
+        } else {
+            Self::development()
+        };
+
+        Self {
+            csp: std::env::var("SECURITY_CSP").unwrap_or(base_config.csp),
+            hsts_max_age: std::env::var("SECURITY_HSTS_MAX_AGE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(base_config.hsts_max_age),
+            hsts_include_subdomains: std::env::var("SECURITY_HSTS_INCLUDE_SUBDOMAINS")
+                .map(|s| s.to_lowercase() == "true")
+                .unwrap_or(base_config.hsts_include_subdomains),
+            hsts_preload: std::env::var("SECURITY_HSTS_PRELOAD")
+                .map(|s| s.to_lowercase() == "true")
+                .unwrap_or(base_config.hsts_preload),
+            frame_options: std::env::var("SECURITY_FRAME_OPTIONS")
+                .unwrap_or(base_config.frame_options),
+            content_type_options: std::env::var("SECURITY_CONTENT_TYPE_OPTIONS")
+                .map(|s| s.to_lowercase() == "true")
+                .unwrap_or(base_config.content_type_options),
+            xss_protection: std::env::var("SECURITY_XSS_PROTECTION")
+                .unwrap_or(base_config.xss_protection),
+            referrer_policy: std::env::var("SECURITY_REFERRER_POLICY")
+                .unwrap_or(base_config.referrer_policy),
+            permissions_policy: std::env::var("SECURITY_PERMISSIONS_POLICY")
+                .unwrap_or(base_config.permissions_policy),
+            coep: std::env::var("SECURITY_COEP").unwrap_or(base_config.coep),
+            coop: std::env::var("SECURITY_COOP").unwrap_or(base_config.coop),
+            corp: std::env::var("SECURITY_CORP").unwrap_or(base_config.corp),
+            monitoring_headers: std::env::var("SECURITY_MONITORING_HEADERS")
+                .map(|s| s.to_lowercase() == "true")
+                .unwrap_or(base_config.monitoring_headers),
+            cache_control: std::env::var("SECURITY_CACHE_CONTROL")
+                .map(|s| s.to_lowercase() == "true")
+                .unwrap_or(base_config.cache_control),
+        }
+    }
+}
+
+/// Enhanced security headers middleware with configurable security levels
+pub async fn add_configurable_security_headers(
+    config: SecurityHeadersConfig,
+    request: Request,
+    next: Next,
+) -> Response {
+    let mut response = next.run(request).await;
+    let headers_present = response.headers().contains_key("content-type");
+    let headers = response.headers_mut();
+
+    // Content Security Policy
+    headers.insert("Content-Security-Policy", config.csp.parse().unwrap());
+
+    // HTTP Strict Transport Security
+    let hsts_value = if config.hsts_include_subdomains && config.hsts_preload {
+        format!("max-age={}; includeSubDomains; preload", config.hsts_max_age)
+    } else if config.hsts_include_subdomains {
+        format!("max-age={}; includeSubDomains", config.hsts_max_age)
+    } else {
+        format!("max-age={}", config.hsts_max_age)
+    };
+    headers.insert("Strict-Transport-Security", hsts_value.parse().unwrap());
+
+    // X-Frame-Options
+    headers.insert("X-Frame-Options", config.frame_options.parse().unwrap());
+
+    // X-Content-Type-Options
+    if config.content_type_options {
+        headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+    }
+
+    // X-XSS-Protection
+    headers.insert("X-XSS-Protection", config.xss_protection.parse().unwrap());
+
+    // Referrer-Policy
+    headers.insert("Referrer-Policy", config.referrer_policy.parse().unwrap());
+
+    // Permissions-Policy
+    headers.insert("Permissions-Policy", config.permissions_policy.parse().unwrap());
+
+    // Cross-Origin policies
+    headers.insert("Cross-Origin-Embedder-Policy", config.coep.parse().unwrap());
+    headers.insert("Cross-Origin-Opener-Policy", config.coop.parse().unwrap());
+    headers.insert("Cross-Origin-Resource-Policy", config.corp.parse().unwrap());
+
+    // Server identification (minimal information disclosure)
+    headers.insert("Server", "Rust-Security-Service".parse().unwrap());
+
+    // Cache control for sensitive endpoints
+    if config.cache_control && headers_present {
+        headers.insert(
+            "Cache-Control",
+            "no-store, no-cache, must-revalidate, private".parse().unwrap(),
+        );
+        headers.insert("Pragma", "no-cache".parse().unwrap());
+        headers.insert("Expires", "0".parse().unwrap());
+    }
+
+    // Add monitoring headers
+    if config.monitoring_headers {
+        if let Ok(timestamp) = SystemTime::now().duration_since(UNIX_EPOCH) {
+            headers.insert("X-Response-Time", timestamp.as_secs().to_string().parse().unwrap());
+        }
+        headers.insert("X-Request-ID", uuid::Uuid::new_v4().to_string().parse().unwrap());
+    }
+
+    response
+}
 
 /// Enhanced security headers middleware
 /// Implements comprehensive security headers following OWASP recommendations
+/// Uses environment-based configuration
 pub async fn add_security_headers(request: Request, next: Next) -> Response {
+    let config = SecurityHeadersConfig::from_env();
+    add_configurable_security_headers(config, request, next).await
+}
+
+/// Legacy security headers middleware for backward compatibility
+pub async fn add_legacy_security_headers(request: Request, next: Next) -> Response {
     let mut response = next.run(request).await;
 
     let headers_present = response.headers().contains_key("content-type");

@@ -33,7 +33,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Validate production secrets first
-    config::validate_production_secrets();
+    if let Err(e) = config::validate_production_secrets() {
+        tracing::error!("Production secrets validation failed: {}", e);
+        return Err(e);
+    }
 
     // Load configuration
     let cfg = config::AppConfig::from_env()?;

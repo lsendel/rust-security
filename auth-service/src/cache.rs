@@ -2,9 +2,11 @@ use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
+
+use crate::metrics::{MetricsHelper, METRICS};
 
 /// Cache configuration
 #[derive(Debug, Clone)]
@@ -107,6 +109,7 @@ impl Cache {
     where
         T: for<'de> Deserialize<'de>,
     {
+        let start_time = Instant::now();
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
         // Try Redis first if available
@@ -114,6 +117,8 @@ impl Cache {
             match self.get_from_redis(&full_key).await {
                 Ok(Some(data)) => {
                     debug!(key = %key, "Cache hit (Redis)");
+                    let duration = start_time.elapsed();
+                    MetricsHelper::record_cache_operation("redis", "get", "hit", duration);
                     return Some(data);
                 }
                 Ok(None) => {
@@ -121,6 +126,8 @@ impl Cache {
                 }
                 Err(e) => {
                     warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
+                    let duration = start_time.elapsed();
+                    MetricsHelper::record_cache_operation("redis", "get", "error", duration);
                 }
             }
         }
@@ -129,10 +136,14 @@ impl Cache {
         match self.get_from_memory(&full_key).await {
             Some(data) => {
                 debug!(key = %key, "Cache hit (Memory)");
+                let duration = start_time.elapsed();
+                MetricsHelper::record_cache_operation("memory", "get", "hit", duration);
                 Some(data)
             }
             None => {
                 debug!(key = %key, "Cache miss (Memory)");
+                let duration = start_time.elapsed();
+                MetricsHelper::record_cache_operation("memory", "get", "miss", duration);
                 None
             }
         }
@@ -143,6 +154,7 @@ impl Cache {
     where
         T: Serialize,
     {
+        let start_time = Instant::now();
         let full_key = format!("{}{}", self.config.key_prefix, key);
         let ttl_seconds = ttl.unwrap_or(Duration::from_secs(self.config.default_ttl)).as_secs();
 
@@ -160,6 +172,10 @@ impl Cache {
         // Always set in memory cache as fallback
         self.set_in_memory(&full_key, serialized, ttl_seconds).await;
         debug!(key = %key, ttl = ttl_seconds, "Set in memory cache");
+        
+        // Record cache set operation
+        let duration = start_time.elapsed();
+        MetricsHelper::record_cache_operation("memory", "set", "success", duration);
 
         Ok(())
     }

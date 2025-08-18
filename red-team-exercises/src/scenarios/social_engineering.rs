@@ -1,23 +1,79 @@
 //! Social Engineering Attack Simulation Scenarios
+//!
+//! Comprehensive social engineering attack simulation framework for defensive testing.
+//! This module provides sophisticated attack scenarios designed to test organizational
+//! security awareness and technical controls in an ethical, controlled manner.
 
 use crate::attack_framework::{AttackSession, RedTeamFramework};
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
+use rand::{thread_rng, Rng};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
-use tracing::{info, warn};
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tracing::{debug, info, warn};
+use url::Url;
+use uuid::Uuid;
+
+/// Configuration for social engineering attack scenarios
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SocialEngineeringConfig {
+    pub company_name: String,
+    pub domain: String,
+    pub target_emails: Vec<String>,
+    pub linkedin_company_id: Option<String>,
+    pub phone_numbers: Vec<String>,
+    pub physical_locations: Vec<String>,
+    pub known_technologies: Vec<String>,
+    pub breach_databases: Vec<String>,
+}
+
+impl Default for SocialEngineeringConfig {
+    fn default() -> Self {
+        Self {
+            company_name: "Acme Corp".to_string(),
+            domain: "acme-corp.com".to_string(),
+            target_emails: vec![
+                "admin@acme-corp.com".to_string(),
+                "support@acme-corp.com".to_string(),
+                "hr@acme-corp.com".to_string(),
+            ],
+            linkedin_company_id: None,
+            phone_numbers: vec!["+1-555-0123".to_string()],
+            physical_locations: vec!["San Francisco, CA".to_string()],
+            known_technologies: vec![
+                "OAuth 2.0".to_string(),
+                "Rust".to_string(),
+                "PostgreSQL".to_string(),
+            ],
+            breach_databases: vec![],
+        }
+    }
+}
 
 pub async fn run_social_engineering_scenarios(
     framework: &mut RedTeamFramework,
     reporter: &mut RedTeamReporter,
     intensity: &str,
 ) -> Result<()> {
-    info!("🔐 Starting Social Engineering Simulation Scenarios");
+    info!("🔐 Starting Enhanced Social Engineering Simulation Scenarios");
 
+    let config = SocialEngineeringConfig::default();
+
+    // Original scenarios (enhanced)
     phishing_simulation(framework, reporter).await?;
     pretexting_attacks(framework, reporter).await?;
     information_disclosure_tests(framework, reporter).await?;
     user_enumeration_attacks(framework, reporter, intensity).await?;
+
+    // New sophisticated scenarios
+    automated_phishing_campaigns(framework, reporter, &config, intensity).await?;
+    voice_phone_social_engineering(framework, reporter, &config).await?;
+    physical_social_engineering(framework, reporter, &config).await?;
+    digital_pretexting_advanced(framework, reporter, &config).await?;
+    osint_intelligence_gathering(framework, reporter, &config, intensity).await?;
 
     Ok(())
 }
@@ -46,7 +102,7 @@ async fn phishing_simulation(
         ),
     ];
 
-    for (attack_type, endpoint, payload) in phishing_attempts {
+    for (attack_type, endpoint, payload) in &phishing_attempts {
         let result = framework
             .execute_attack(
                 "phishing_simulation",
@@ -109,12 +165,12 @@ async fn pretexting_attacks(
         ("developer_access", vec![("X-Developer", "true"), ("X-Internal-Tool", "enabled")]),
     ];
 
-    for (scenario_name, headers) in pretexting_scenarios {
+    for (scenario_name, headers) in &pretexting_scenarios {
         let mut request_headers = reqwest::header::HeaderMap::new();
 
         for (header_name, header_value) in headers {
             request_headers
-                .insert(header_name, reqwest::header::HeaderValue::from_str(header_value)?);
+                .insert(*header_name, reqwest::header::HeaderValue::from_str(header_value)?);
         }
 
         // Test on admin endpoints
@@ -191,7 +247,7 @@ async fn information_disclosure_tests(
         ("/version", "Version information"),
     ];
 
-    for (endpoint, description) in test_endpoints {
+    for (endpoint, description) in &test_endpoints {
         let result = framework
             .execute_attack("information_disclosure", "GET", endpoint, None, None, Some(&session))
             .await?;
@@ -252,7 +308,7 @@ async fn information_disclosure_tests(
         ("/oauth/authorize", "response_type=invalid&client_id='; DROP TABLE", ""),
     ];
 
-    for (endpoint, body, content_type) in error_inducing_requests {
+    for (endpoint, body, content_type) in &error_inducing_requests {
         let mut headers = reqwest::header::HeaderMap::new();
         if !content_type.is_empty() {
             headers.insert("Content-Type", reqwest::header::HeaderValue::from_str(content_type)?);
@@ -317,35 +373,35 @@ async fn user_enumeration_attacks(
     };
 
     // Common usernames to test
-    let mut test_usernames = vec![
-        "admin",
-        "administrator",
-        "root",
-        "user",
-        "test",
-        "demo",
-        "guest",
-        "service",
-        "system",
-        "api",
-        "oauth",
-        "auth",
-        "support",
-        "help",
-        "info",
-        "contact",
-        "sales",
-        "marketing",
-        "hr",
-        "it",
+    let mut test_usernames: Vec<String> = vec![
+        "admin".to_string(),
+        "administrator".to_string(),
+        "root".to_string(),
+        "user".to_string(),
+        "test".to_string(),
+        "demo".to_string(),
+        "guest".to_string(),
+        "service".to_string(),
+        "system".to_string(),
+        "api".to_string(),
+        "oauth".to_string(),
+        "auth".to_string(),
+        "support".to_string(),
+        "help".to_string(),
+        "info".to_string(),
+        "contact".to_string(),
+        "sales".to_string(),
+        "marketing".to_string(),
+        "hr".to_string(),
+        "it".to_string(),
     ];
 
     // Add numbered variations for higher intensity
     if user_count > 20 {
         for i in 1..=(user_count - 20) {
-            test_usernames.push(&format!("user{}", i));
-            test_usernames.push(&format!("admin{}", i));
-            test_usernames.push(&format!("test{}", i));
+            test_usernames.push(format!("user{}", i));
+            test_usernames.push(format!("admin{}", i));
+            test_usernames.push(format!("test{}", i));
         }
     }
 
@@ -356,13 +412,13 @@ async fn user_enumeration_attacks(
         ("/session/create", "session_creation"),
     ];
 
-    for (endpoint, test_type) in enumeration_endpoints {
+    for (endpoint, test_type) in &enumeration_endpoints {
         let mut timing_differences = Vec::new();
 
         for username in &test_usernames[..user_count.min(test_usernames.len())] {
             let start_time = std::time::Instant::now();
 
-            let (body, description) = match test_type {
+            let (body, description) = match *test_type {
                 "client_credentials" => (
                     format!(
                         "grant_type=client_credentials&client_id={}&client_secret=test",

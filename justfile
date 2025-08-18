@@ -23,7 +23,40 @@ test:
 test-coverage:
     #!/usr/bin/env bash
     export TEST_MODE=1
-    cargo llvm-cov --workspace --all-features --html
+    cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html
+
+# Run tests with coverage and open results
+test-coverage-open:
+    #!/usr/bin/env bash
+    export TEST_MODE=1
+    cargo llvm-cov --workspace --all-features --html --output-dir target/llvm-cov/html --open
+
+# Generate coverage report in multiple formats
+coverage-report:
+    #!/usr/bin/env bash
+    export TEST_MODE=1
+    echo "📊 Generating comprehensive coverage report..."
+    mkdir -p target/coverage-reports
+    cargo llvm-cov --workspace --all-features --html --output-dir target/coverage-reports/html
+    cargo llvm-cov --workspace --all-features --lcov --output-path target/coverage-reports/lcov.info
+    cargo llvm-cov --workspace --all-features --json --output-path target/coverage-reports/coverage.json
+    cargo llvm-cov --workspace --all-features --summary-only > target/coverage-reports/summary.txt
+    echo "✅ Coverage reports generated in target/coverage-reports/"
+
+# Run coverage with baseline threshold
+coverage-check:
+    #!/usr/bin/env bash
+    export TEST_MODE=1
+    BASELINE_COVERAGE=70
+    echo "🎯 Checking coverage against baseline: ${BASELINE_COVERAGE}%"
+    COVERAGE=$(cargo llvm-cov --workspace --all-features --summary-only | grep -E "^TOTAL" | awk '{print $10}' | sed 's/%//')
+    echo "Current coverage: ${COVERAGE}%"
+    if (( $(echo "$COVERAGE >= $BASELINE_COVERAGE" | bc -l) )); then
+        echo "✅ Coverage meets baseline requirement"
+    else
+        echo "❌ Coverage below baseline: ${COVERAGE}% < ${BASELINE_COVERAGE}%"
+        exit 1
+    fi
 
 # Run only unit tests
 test-unit:

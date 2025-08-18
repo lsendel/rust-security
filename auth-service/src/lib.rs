@@ -66,12 +66,23 @@ async fn metrics_handler() -> Response {
     let encoder = TextEncoder::new();
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
+    
+    if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
+        tracing::error!("Failed to encode metrics: {}", e);
+        return Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(axum::body::Body::from("Failed to encode metrics"))
+            .unwrap_or_else(|_| Response::new(axum::body::Body::empty()));
+    }
+    
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, encoder.format_type())
         .body(axum::body::Body::from(buffer))
-        .unwrap()
+        .unwrap_or_else(|e| {
+            tracing::error!("Failed to build metrics response: {}", e);
+            Response::new(axum::body::Body::empty())
+        })
 }
 
 // Core modules
@@ -100,6 +111,7 @@ pub mod scim_rbac;
 // Security modules
 pub mod admin_middleware;
 pub mod auth_failure_logging;
+pub mod metrics;
 #[cfg(test)]
 pub mod pii_audit_tests;
 pub mod pii_protection;
@@ -1172,6 +1184,8 @@ pub async fn introspect(
     State(state): State<AppState>,
     Json(body): Json<IntrospectRequest>,
 ) -> Result<Json<IntrospectResponse>, AuthError> {
+    use crate::metrics::METRICS;
+    let start_time = std::time::Instant::now();
     // In TEST_MODE, allow introspection without client authentication to simplify integration tests
     if std::env::var("TEST_MODE").is_err() {
         // Require client authentication via HTTP Basic
@@ -1269,6 +1283,18 @@ pub async fn introspect(
         }),
     );
 
+    // Record successful token introspection
+    let duration = start_time.elapsed();
+    let client_id = rec.client_id.as_deref().unwrap_or("unknown");
+    let token_active = if rec.active { "true" } else { "false" };
+    
+    METRICS.token_introspection_total
+        .with_label_values(&[client_id, "success", token_active])
+        .inc();
+    METRICS.token_operation_duration
+        .with_label_values(&["introspect", "success"])
+        .observe(duration.as_secs_f64());
+
     Ok(Json(IntrospectResponse {
         active: rec.active,
         scope: rec.scope,
@@ -1305,8 +1331,18 @@ pub async fn oauth_authorize(
     }
 
     // CRITICAL SECURITY FIX: Validate redirect URI
-    if let Err(validation_error) =
-        REDIRECT_VALIDATOR.lock().unwrap().validate_redirect_uri(&req.client_id, &req.redirect_uri)
+    let validation_result = match REDIRECT_VALIDATOR.lock() {
+        Ok(validator) => validator.validate_redirect_uri(&req.client_id, &req.redirect_uri),
+        Err(e) => {
+            tracing::error!("Failed to acquire redirect validator lock: {}", e);
+            return Err(AuthError::InternalError { 
+                error_id: uuid::Uuid::new_v4(),
+                context: "Security validation unavailable".to_string() 
+            });
+        }
+    };
+    
+    if let Err(validation_error) = validation_result
     {
         // Log security violation
         SecurityLogger::log_event(
@@ -1518,6 +1554,11 @@ pub async fn issue_token(
     State(state): State<AppState>,
     Form(form): Form<TokenRequest>,
 ) -> Result<Json<TokenResponse>, AuthError> {
+    use crate::metrics::{MetricsHelper, METRICS};
+    
+    // Start timing token issuance
+    let start_time = std::time::Instant::now();
+    
     // Extract client information for security logging
     let ip_address = headers
         .get("x-forwarded-for")
@@ -1656,6 +1697,16 @@ pub async fn issue_token(
                         "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
                     }),
                 );
+                
+                // Record successful client_credentials token issuance
+                let duration = start_time.elapsed();
+                METRICS.token_issuance_total
+                    .with_label_values(&["access_token", "client_credentials", client_id, "success"])
+                    .inc();
+                METRICS.token_operation_duration
+                    .with_label_values(&["issue", "success"])
+                    .observe(duration.as_secs_f64());
+                
                 Ok(res)
             } else {
                 // Log failed authentication attempt
@@ -1687,6 +1738,16 @@ pub async fn issue_token(
                         "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
                     }),
                 );
+                
+                // Record failed client_credentials token issuance
+                let duration = start_time.elapsed();
+                METRICS.token_issuance_total
+                    .with_label_values(&["access_token", "client_credentials", "unknown", "error"])
+                    .inc();
+                METRICS.token_operation_duration
+                    .with_label_values(&["issue", "error"])
+                    .observe(duration.as_secs_f64());
+                
                 Err(AuthError::InvalidClientCredentials)
             }
         }
@@ -1905,9 +1966,30 @@ pub async fn issue_token(
             );
 
             TOKENS_ISSUED.inc();
+            
+            // Record successful token issuance metrics
+            let duration = start_time.elapsed();
+            METRICS.token_issuance_total
+                .with_label_values(&["access_token", &form.grant_type, &auth_code.client_id, "success"])
+                .inc();
+            METRICS.token_operation_duration
+                .with_label_values(&["issue", "success"])
+                .observe(duration.as_secs_f64());
+            
             Ok(res)
         }
-        _ => Err(AuthError::UnsupportedGrantType { grant_type: form.grant_type }),
+        _ => {
+            // Record unsupported grant type error
+            let duration = start_time.elapsed();
+            METRICS.token_issuance_total
+                .with_label_values(&["access_token", &form.grant_type, "unknown", "error"])
+                .inc();
+            METRICS.token_operation_duration
+                .with_label_values(&["issue", "error"])
+                .observe(duration.as_secs_f64());
+            
+            Err(AuthError::UnsupportedGrantType { grant_type: form.grant_type })
+        }
     }
 }
 
@@ -2157,6 +2239,8 @@ pub async fn revoke_token(
     State(state): State<AppState>,
     Form(form): Form<RevokeRequest>,
 ) -> Result<Json<RevokeResponse>, AuthError> {
+    use crate::metrics::METRICS;
+    let start_time = std::time::Instant::now();
     // In TEST_MODE, bypass client authentication to simplify integration tests
     if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
         // Require client authentication via HTTP Basic
@@ -2223,6 +2307,16 @@ pub async fn revoke_token(
             "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
         }),
     );
+    
+    // Record successful token revocation
+    let duration = start_time.elapsed();
+    METRICS.token_revocation_total
+        .with_label_values(&["access_token", "requested", "unknown", "success"])
+        .inc();
+    METRICS.token_operation_duration
+        .with_label_values(&["revoke", "success"])
+        .observe(duration.as_secs_f64());
+    
     Ok(Json(RevokeResponse { revoked: true }))
 }
 
@@ -2298,7 +2392,7 @@ pub fn app(state: AppState) -> Router {
 
     // Admin-protected routes (require admin authentication and authorization)
     let admin_router = Router::new()
-        .route("/metrics", get(metrics_handler))
+        .route("/metrics", get(crate::metrics::metrics_handler))
         .route("/admin/health", get(admin_health))
         // Key rotation admin endpoints
         .route("/admin/keys/rotation/status", get(admin_get_rotation_status))
@@ -2322,6 +2416,7 @@ pub fn app(state: AppState) -> Router {
                 .layer(TraceLayer::new_for_http())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
                 .layer(PropagateRequestIdLayer::x_request_id())
+                .layer(axum::middleware::from_fn(crate::metrics::metrics_middleware))
                 .layer(cors)
                 .layer(axum::middleware::from_fn_with_state(
                     state.backpressure_state.clone(),

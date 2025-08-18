@@ -1,0 +1,55 @@
+# Dependency Review Configuration
+# Used by the dependency-review-action to assess new dependencies
+
+fail_on_severity: 'moderate'
+
+allow_licenses:
+  - 'MIT'
+  - 'Apache-2.0'
+  - 'Apache-2.0 WITH LLVM-exception'
+  - 'BSD-2-Clause'
+  - 'BSD-3-Clause'
+  - 'ISC'
+  - 'Unicode-DFS-2016'
+  - 'CC0-1.0'
+  - '0BSD'
+  - 'Zlib'
+  - 'MPL-2.0'
+
+deny_licenses:
+  - 'GPL-2.0'
+  - 'GPL-3.0'
+  - 'AGPL-1.0'
+  - 'AGPL-3.0'
+  - 'LGPL-2.0'
+  - 'LGPL-2.1'
+  - 'LGPL-3.0'
+  - 'CDDL-1.0'
+  - 'CDDL-1.1'
+  - 'EPL-1.0'
+  - 'EPL-2.0'
+  - 'SSPL-1.0'
+  - 'BUSL-1.1'
+
+allow_dependencies_licenses:
+  - 'pkg:cargo/ring@*'  # Allow OpenSSL license for ring crate
+
+deny_packages:
+  # Known vulnerable packages
+  - 'pkg:cargo/openssl@*'          # Use rustls instead
+  - 'pkg:cargo/native-tls@*'       # Use rustls-tls
+  - 'pkg:cargo/time@<0.2.23'       # RUSTSEC-2020-0071
+  - 'pkg:cargo/chrono@<0.4.20'     # RUSTSEC-2020-0159
+  - 'pkg:cargo/rand@<0.8'          # Use secure RNG
+  - 'pkg:cargo/uuid@<1.0'          # Older versions have issues
+
+allow_ghsas:
+  # Allow specific GitHub Security Advisories if justified
+  # Example: - 'GHSA-xxxx-yyyy-zzzz'
+
+comment_summary_in_pr: 'always'
+warn_only: false
+
+# Custom vulnerability database
+vulnerability_check: true
+license_check: true

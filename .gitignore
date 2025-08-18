@@ -6,3 +6,67 @@ coverage/
 /.idea/
 /.vscode/
 /target
+
+# Runtime artifacts and logs
+*.log
+logs/
+log/
+performance_results/
+test_results/
+reports/
+benchmarks/
+profiling/
+metrics/
+traces/
+dumps/
+tmp/
+temp/
+
+# Certificate and key files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Local configuration overrides
+.env.local
+.env.test
+.env.production
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Rust generated files
+Cargo.lock
+**/*.rs.bk
+**/*.pdb
+
+# Testing artifacts
+/.nyc_output
+/coverage
+coverage.lcov
+junit.xml
+test-results.xml
+
+# Performance and monitoring
+flamegraph.svg
+perf.data
+perf.data.old
+*.prof
+*.trace

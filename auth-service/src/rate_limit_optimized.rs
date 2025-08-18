@@ -11,6 +11,8 @@ use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::metrics::{MetricsHelper, METRICS};
+
 /// Configuration for rate limiting
 #[derive(Debug, Clone)]
 pub struct RateLimitConfig {
@@ -369,8 +371,16 @@ pub async fn optimized_rate_limit(request: Request, next: Next) -> Response {
 
     // Check rate limit
     match GLOBAL_RATE_LIMITER.check_rate_limit(&client_key) {
-        RateLimitResult::Allowed => next.run(request).await,
+        RateLimitResult::Allowed => {
+            // Record allowed request
+            let path = request.uri().path();
+            MetricsHelper::record_rate_limit_enforcement(path, &client_key, "allowed", "request");
+            next.run(request).await
+        }
         RateLimitResult::RateLimited { retry_after } => {
+            // Record rate limit hit
+            let path = request.uri().path();
+            MetricsHelper::record_rate_limit_enforcement(path, &client_key, "blocked", "request");
             let mut response =
                 (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded").into_response();
 

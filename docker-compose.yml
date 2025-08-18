@@ -25,8 +25,8 @@ services:
     environment:
       - RUST_LOG=debug,auth_service=trace
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=development-jwt-secret-change-in-production-this-is-not-secure-enough
-      - CLIENT_CREDENTIALS=dev_client:dev_secret_123456789;admin_client:admin_secret_987654321
+      - JWT_SECRET=DEV_ONLY_NOT_FOR_PRODUCTION_INSECURE_JWT_SECRET_CHANGE_IMMEDIATELY
+      - CLIENT_CREDENTIALS=dev_client:DEV_ONLY_NOT_SECURE;admin_client:DEV_ONLY_NOT_SECURE
       - ALLOWED_SCOPES=read,write,admin
       - RATE_LIMIT_REQUESTS_PER_MINUTE=120
     depends_on:

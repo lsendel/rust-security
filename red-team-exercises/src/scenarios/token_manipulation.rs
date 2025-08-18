@@ -1,11 +1,65 @@
 //! Token Manipulation Attack Scenarios
+//!
+//! This module implements comprehensive token manipulation attack scenarios designed to test
+//! the security posture of authentication systems. The scenarios cover:
+//!
+//! ## Attack Categories
+//! 
+//! ### JWT Manipulation Attacks
+//! - Algorithm confusion attacks (none, weak secret)
+//! - Payload modification attacks  
+//! - Key confusion attacks (RS256 -> HS256)
+//! - Signature bypass attempts
+//!
+//! ### JWT Timing Attacks
+//! - Signature validation timing analysis
+//! - Detection of cryptographic timing leaks
+//! - Statistical analysis of response times
+//!
+//! ### Token Substitution Attacks  
+//! - Common token pattern testing
+//! - Authorization header type confusion
+//! - Hardcoded token enumeration
+//!
+//! ### Token Replay Attacks
+//! - Immediate token replay
+//! - Cross-session replay attempts
+//! - Expired token acceptance testing
+//!
+//! ### Token Enumeration Attacks
+//! - Sequential token pattern discovery
+//! - UUID-based token guessing
+//! - Rate-limited enumeration with evasion
+//!
+//! ### Token Binding Bypass
+//! - IP address binding bypass
+//! - User-Agent binding bypass  
+//! - Session fingerprint evasion
+//!
+//! ### Token Validation Bypass
+//! - SQL injection in token validation
+//! - NoSQL injection attacks
+//! - Path traversal attempts
+//!
+//! ## Usage
+//! 
+//! The scenarios are designed to run against a live authentication service and will
+//! attempt various attack patterns while monitoring for detection and blocking.
+//! Results are reported with detailed metrics for security assessment.
+//!
+//! ## Security Notice
+//! 
+//! These scenarios are for defensive security testing only. They should only be run
+//! against systems you own or have explicit permission to test.
 
 use crate::attack_framework::{AttackSession, RedTeamFramework};
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
 use serde_json::json;
 use std::collections::HashMap;
-use tracing::{info, warn};
+use std::time::{Duration, Instant};
+use tracing::{info, warn, debug};
+use base64::{Engine, engine::general_purpose};
 
 pub async fn run_token_scenarios(
     framework: &mut RedTeamFramework,
@@ -15,9 +69,12 @@ pub async fn run_token_scenarios(
     info!("🔐 Starting Token Manipulation Scenarios");
 
     jwt_manipulation_attacks(framework, reporter).await?;
+    jwt_timing_attacks(framework, reporter).await?;
     token_substitution_attacks(framework, reporter).await?;
     token_replay_attacks(framework, reporter).await?;
     token_enumeration_attacks(framework, reporter, intensity).await?;
+    token_binding_attacks(framework, reporter).await?;
+    token_validation_bypass(framework, reporter).await?;
 
     Ok(())
 }
@@ -39,7 +96,7 @@ async fn jwt_manipulation_attacks(
         ("key_confusion", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNjMwMDAwMDAwLCJleHAiOjE5MzAwMDAwMDB9.fake_hmac_signature"),
     ];
 
-    for (attack_type, malicious_jwt) in jwt_attacks {
+    for (attack_type, malicious_jwt) in &jwt_attacks {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "Authorization",
@@ -276,7 +333,7 @@ async fn token_enumeration_attacks(
     // Test sequential token patterns
     let token_patterns = vec!["tk_{}", "token_{}", "access_{}", "session_{}", "auth_{}"];
 
-    for pattern in token_patterns {
+    for pattern in &token_patterns {
         let mut valid_tokens = Vec::new();
 
         for i in 0..(range / token_patterns.len()) {
@@ -288,7 +345,7 @@ async fn token_enumeration_attacks(
 
             // Use basic auth for introspection
             let mut headers = reqwest::header::HeaderMap::new();
-            let auth = base64::encode("test:test");
+            let auth = general_purpose::STANDARD.encode("test:test");
             headers.insert(
                 "Authorization",
                 reqwest::header::HeaderValue::from_str(&format!("Basic {}", auth))?,
@@ -340,9 +397,9 @@ async fn token_enumeration_attacks(
         "aaaaaaaa-aaaa-aaaa-aaaa-{:012}",
     ];
 
-    for pattern in uuid_patterns {
+    for pattern in &uuid_patterns {
         for i in 0..10 {
-            let token = format!(pattern, i);
+            let token = pattern.replace("{:012}", &format!("{:012}", i));
 
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert(
@@ -376,6 +433,315 @@ async fn token_enumeration_attacks(
     reporter.add_scenario_result(
         "token_enumeration_attacks",
         enumeration_results.is_empty(),
+        scenario_data,
+    );
+    Ok(())
+}
+
+async fn jwt_timing_attacks(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing JWT timing attacks for signature validation");
+
+    let session = framework.create_attack_session().await?;
+    let mut timing_results: Vec<String> = Vec::new();
+
+    // Test signature validation timing
+    let jwt_header = general_purpose::STANDARD_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+    let jwt_payload = general_purpose::STANDARD_NO_PAD.encode(r#"{"sub":"admin","role":"admin","exp":9999999999}"#);
+    
+    let timing_samples = vec![
+        ("valid_length_sig", "a".repeat(43)), // Valid base64 length
+        ("short_sig", "abc".to_string()),                 // Short signature  
+        ("long_sig", "a".repeat(100)),        // Long signature
+        ("invalid_chars", "invalid_sig!@#".to_string()),  // Invalid base64 chars
+        ("empty_sig", "".to_string()),                    // Empty signature
+    ];
+
+    for (test_name, signature) in timing_samples {
+        let mut response_times = Vec::new();
+        
+        // Take multiple timing measurements
+        for _ in 0..10 {
+            let malicious_jwt = format!("{}.{}.{}", jwt_header, jwt_payload, signature);
+            
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                "Authorization",
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", malicious_jwt))?,
+            );
+
+            let start = Instant::now();
+            let result = framework
+                .execute_attack(
+                    "jwt_timing_attack",
+                    "GET",
+                    "/admin/keys/rotation/status",
+                    Some(headers),
+                    None,
+                    Some(&session),
+                )
+                .await?;
+            let elapsed = start.elapsed();
+            
+            response_times.push(elapsed.as_nanos() as f64);
+            
+            // Small delay between requests
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        let avg_time = response_times.iter().sum::<f64>() / response_times.len() as f64;
+        debug!("Average response time for {}: {:.2}ns", test_name, avg_time);
+        
+        // Look for significant timing differences (>10% variance from baseline)
+        if test_name != "valid_length_sig" {
+            if let Some(baseline) = timing_results.first() {
+                let baseline_time = baseline.parse::<f64>().unwrap_or(avg_time);
+                let variance = ((avg_time - baseline_time) / baseline_time).abs();
+                if variance > 0.1 {
+                    timing_results.push(format!(
+                        "Timing leak detected in {}: {:.1}% variance", 
+                        test_name, variance * 100.0
+                    ));
+                    warn!("🚨 JWT timing vulnerability detected: {}", test_name);
+                }
+            }
+        } else {
+            timing_results.insert(0, avg_time.to_string()); // Store baseline
+        }
+    }
+
+    // Remove baseline from results for reporting
+    if !timing_results.is_empty() && timing_results[0].parse::<f64>().is_ok() {
+        timing_results.remove(0);
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("timing_results".to_string(), json!(timing_results));
+    
+    reporter.add_scenario_result(
+        "jwt_timing_attacks",
+        timing_results.is_empty(),
+        scenario_data,
+    );
+    Ok(())
+}
+
+async fn token_binding_attacks(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing token binding bypass attacks");
+
+    let session = framework.create_attack_session().await?;
+    let mut binding_results = Vec::new();
+
+    // First, try to get a valid token
+    if let Ok((valid_token, _)) = framework.attempt_client_credentials_flow("test", "test").await {
+        // Test using token from different IP
+        let spoofed_ips = vec![
+            "192.168.1.100",
+            "10.0.0.50", 
+            "172.16.0.25",
+            "127.0.0.1",
+            "203.0.113.10", // RFC 5737 test IP
+        ];
+
+        for spoofed_ip in spoofed_ips {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                "Authorization",
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", valid_token))?,
+            );
+            headers.insert(
+                "X-Forwarded-For",
+                reqwest::header::HeaderValue::from_str(spoofed_ip)?,
+            );
+            headers.insert(
+                "X-Real-IP",
+                reqwest::header::HeaderValue::from_str(spoofed_ip)?,
+            );
+
+            let result = framework
+                .execute_attack(
+                    "token_ip_binding_bypass",
+                    "GET",
+                    "/admin/keys/rotation/status",
+                    Some(headers),
+                    None,
+                    Some(&session),
+                )
+                .await?;
+
+            if result.success {
+                binding_results.push(format!("Token accepted from different IP: {}", spoofed_ip));
+                warn!("🚨 Token binding bypass from IP: {}", spoofed_ip);
+            }
+        }
+
+        // Test using token with different User-Agent
+        let user_agents = vec![
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "curl/7.68.0",
+            "PostmanRuntime/7.28.0",
+            "python-requests/2.25.1",
+        ];
+
+        for user_agent in user_agents {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                "Authorization",
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", valid_token))?,
+            );
+            headers.insert(
+                "User-Agent",
+                reqwest::header::HeaderValue::from_str(user_agent)?,
+            );
+
+            let result = framework
+                .execute_attack(
+                    "token_useragent_binding_bypass",
+                    "GET",
+                    "/admin/keys/rotation/status",
+                    Some(headers),
+                    None,
+                    Some(&session),
+                )
+                .await?;
+
+            if result.success {
+                binding_results.push(format!("Token accepted with different User-Agent: {}", user_agent));
+            }
+        }
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("binding_results".to_string(), json!(binding_results));
+
+    reporter.add_scenario_result(
+        "token_binding_attacks", 
+        binding_results.is_empty(),
+        scenario_data,
+    );
+    Ok(())
+}
+
+async fn token_validation_bypass(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing token validation bypass techniques");
+
+    let session = framework.create_attack_session().await?;
+    let mut bypass_results = Vec::new();
+
+    // Test SQL injection in token validation
+    let sql_injection_tokens = vec![
+        "' OR '1'='1",
+        "'; DROP TABLE tokens; --",
+        "1' UNION SELECT 'admin' --",
+        "token' OR 1=1 --",
+    ];
+
+    for malicious_token in sql_injection_tokens {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "Authorization",
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", malicious_token))?,
+        );
+
+        let result = framework
+            .execute_attack(
+                "token_sql_injection",
+                "GET",
+                "/admin/keys/rotation/status",
+                Some(headers),
+                None,
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            bypass_results.push(format!("SQL injection successful with: {}", malicious_token));
+            warn!("🚨 SQL injection in token validation: {}", malicious_token);
+        }
+    }
+
+    // Test NoSQL injection
+    let nosql_injection_tokens = vec![
+        r#"{"$ne": null}"#,
+        r#"{"$gt": ""}"#,
+        r#"{"$regex": ".*"}"#,
+        r#"{"$where": "1==1"}"#,
+    ];
+
+    for malicious_token in nosql_injection_tokens {
+        let encoded_token = general_purpose::STANDARD.encode(malicious_token);
+        
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "Authorization",
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", encoded_token))?,
+        );
+
+        let result = framework
+            .execute_attack(
+                "token_nosql_injection",
+                "GET",
+                "/admin/keys/rotation/status",
+                Some(headers),
+                None,
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            bypass_results.push(format!("NoSQL injection successful with: {}", malicious_token));
+        }
+    }
+
+    // Test path traversal in token storage
+    let path_traversal_tokens = vec![
+        "../../../etc/passwd",
+        "..\\..\\..\\windows\\system32\\config\\sam",
+        "/var/log/auth.log",
+        "../../../../proc/version",
+    ];
+
+    for traversal_token in path_traversal_tokens {
+        let encoded_token = general_purpose::STANDARD.encode(traversal_token);
+        
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "Authorization", 
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", encoded_token))?,
+        );
+
+        let result = framework
+            .execute_attack(
+                "token_path_traversal",
+                "GET",
+                "/admin/keys/rotation/status",
+                Some(headers),
+                None,
+                Some(&session),
+            )
+            .await?;
+
+        if result.success || result.response_body.contains("root:") || result.response_body.contains("Linux version") {
+            bypass_results.push(format!("Path traversal successful: {}", traversal_token));
+            warn!("🚨 Path traversal vulnerability in token validation");
+        }
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("bypass_results".to_string(), json!(bypass_results));
+
+    reporter.add_scenario_result(
+        "token_validation_bypass",
+        bypass_results.is_empty(), 
         scenario_data,
     );
     Ok(())

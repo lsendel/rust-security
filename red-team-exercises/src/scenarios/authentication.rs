@@ -10,6 +10,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
+use base64::{Engine, engine::general_purpose};
 
 pub async fn run_authentication_scenarios(
     framework: &mut RedTeamFramework,
@@ -57,7 +58,7 @@ async fn credential_stuffing_attack(
     let mut blocked_attempts = 0;
     let mut rate_limited = 0;
 
-    for (client_id, client_secret) in credential_list {
+    for (client_id, client_secret) in &credential_list {
         // Test OAuth2 client credentials flow
         let body = format!(
             "grant_type=client_credentials&client_id={}&client_secret={}",
@@ -136,7 +137,7 @@ async fn brute_force_attack(
     let mut successful = false;
     let mut first_block_attempt = None;
 
-    for password in password_list {
+    for password in &password_list {
         attempts += 1;
 
         let body = format!(
@@ -211,7 +212,7 @@ async fn client_credentials_manipulation(
         "admin'--",
     ];
 
-    for payload in sql_payloads {
+    for payload in &sql_payloads {
         let body = format!(
             "grant_type=client_credentials&client_id={}&client_secret=test",
             urlencoding::encode(payload)
@@ -237,7 +238,7 @@ async fn client_credentials_manipulation(
     // Test 2: NoSQL Injection
     let nosql_payloads = vec![r#"{"$ne": null}"#, r#"{"$gt": ""}"#, r#"{"$regex": ".*"}"#];
 
-    for payload in nosql_payloads {
+    for payload in &nosql_payloads {
         let body = format!(
             "grant_type=client_credentials&client_id={}&client_secret=test",
             urlencoding::encode(payload)
@@ -263,7 +264,7 @@ async fn client_credentials_manipulation(
     // Test 3: LDAP Injection
     let ldap_payloads = vec!["*)(cn=*", "*)(|(cn=*", "*)(&(cn=*"];
 
-    for payload in ldap_payloads {
+    for payload in &ldap_payloads {
         let body = format!(
             "grant_type=client_credentials&client_id={}&client_secret=test",
             urlencoding::encode(payload)
@@ -317,7 +318,7 @@ async fn authorization_header_manipulation(
         ("OAuth", "oauth_consumer_key=\"key\", oauth_token=\"token\", oauth_signature_method=\"HMAC-SHA1\", oauth_signature=\"signature\""),
     ];
 
-    for (auth_type, auth_value) in auth_headers {
+    for (auth_type, auth_value) in &auth_headers {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
@@ -348,7 +349,7 @@ async fn authorization_header_manipulation(
         "Bearer token%0d%0aX-Privilege: elevated",
     ];
 
-    for injected_header in injection_headers {
+    for injected_header in &injection_headers {
         let mut headers = HeaderMap::new();
         if let Ok(header_value) = HeaderValue::from_str(injected_header) {
             headers.insert(AUTHORIZATION, header_value);
@@ -405,8 +406,8 @@ async fn http_basic_auth_bypass(
         ("admin\x00admin", "password"), // Null byte in username
     ];
 
-    for (username, password) in basic_tests {
-        let credentials = base64::encode(format!("{}:{}", username, password));
+    for (username, password) in &basic_tests {
+        let credentials = general_purpose::STANDARD.encode(format!("{}:{}", username, password));
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Basic {}", credentials))?);
 
@@ -433,8 +434,8 @@ async fn http_basic_auth_bypass(
         "Bearer",
     ];
 
-    for scheme in case_tests {
-        let credentials = base64::encode("admin:admin");
+    for scheme in &case_tests {
+        let credentials = general_purpose::STANDARD.encode("admin:admin");
         let mut headers = HeaderMap::new();
         headers
             .insert(AUTHORIZATION, HeaderValue::from_str(&format!("{} {}", scheme, credentials))?);
@@ -500,7 +501,7 @@ async fn default_credentials_testing(
         ("", "admin"), // Empty username
     ];
 
-    for (client_id, client_secret) in default_creds {
+    for (client_id, client_secret) in &default_creds {
         let body = format!(
             "grant_type=client_credentials&client_id={}&client_secret={}",
             client_id, client_secret
@@ -578,7 +579,7 @@ async fn authentication_state_confusion(
         ("X-Debug-Mode", "enabled"),
     ];
 
-    for (header_name, header_value) in state_manipulation_tests {
+    for (header_name, header_value) in &state_manipulation_tests {
         let mut headers = HeaderMap::new();
         headers.insert(header_name, HeaderValue::from_str(header_value)?);
 
@@ -635,76 +636,76 @@ async fn authentication_state_confusion(
 }
 
 fn get_credential_stuffing_list(intensity: &str) -> Vec<(String, String)> {
-    let base_list = vec![
-        ("admin", "password"),
-        ("admin", "123456"),
-        ("admin", "admin"),
-        ("test", "test"),
-        ("user", "password"),
-        ("guest", "guest"),
-        ("demo", "demo"),
-        ("service", "service"),
+    let mut base_list = vec![
+        ("admin".to_string(), "password".to_string()),
+        ("admin".to_string(), "123456".to_string()),
+        ("admin".to_string(), "admin".to_string()),
+        ("test".to_string(), "test".to_string()),
+        ("user".to_string(), "password".to_string()),
+        ("guest".to_string(), "guest".to_string()),
+        ("demo".to_string(), "demo".to_string()),
+        ("service".to_string(), "service".to_string()),
     ];
 
     match intensity {
         "high" => {
-            let mut extended_list = base_list;
             // Add more sophisticated combinations
             for i in 0..100 {
-                extended_list.push((format!("user{}", i), "password123".to_string()));
-                extended_list.push((format!("client{}", i), format!("secret{}", i)));
+                base_list.push((format!("user{}", i), "password123".to_string()));
+                base_list.push((format!("client{}", i), format!("secret{}", i)));
             }
-            extended_list
+            base_list
         }
         "medium" => {
-            let mut medium_list = base_list;
             for i in 0..20 {
-                medium_list.push((format!("test{}", i), "password".to_string()));
+                base_list.push((format!("test{}", i), "password".to_string()));
             }
-            medium_list
+            base_list
         }
         _ => base_list,
     }
 }
 
 fn get_password_list(intensity: &str) -> Vec<String> {
-    let base_passwords = vec![
-        "password",
-        "123456",
-        "password123",
-        "admin",
-        "letmein",
-        "welcome",
-        "monkey",
-        "dragon",
-        "qwerty",
-        "123456789",
+    let mut base_passwords = vec![
+        "password".to_string(),
+        "123456".to_string(),
+        "password123".to_string(),
+        "admin".to_string(),
+        "letmein".to_string(),
+        "welcome".to_string(),
+        "monkey".to_string(),
+        "dragon".to_string(),
+        "qwerty".to_string(),
+        "123456789".to_string(),
     ];
 
     match intensity {
         "high" => {
-            let mut extended = base_passwords;
             // Add common password variations
-            extended.extend(vec![
-                "Password1",
-                "Password!",
-                "password1",
-                "admin123",
-                "welcome123",
-                "letmein123",
-                "qwerty123",
-                "abc123",
-                "password2023",
-                "summer2023",
-                "spring2023",
-                "winter2023",
+            base_passwords.extend(vec![
+                "Password1".to_string(),
+                "Password!".to_string(),
+                "password1".to_string(),
+                "admin123".to_string(),
+                "welcome123".to_string(),
+                "letmein123".to_string(),
+                "qwerty123".to_string(),
+                "abc123".to_string(),
+                "password2023".to_string(),
+                "summer2023".to_string(),
+                "spring2023".to_string(),
+                "winter2023".to_string(),
             ]);
-            extended
+            base_passwords
         }
         "medium" => {
-            let mut medium = base_passwords;
-            medium.extend(vec!["Password1", "admin123", "welcome123"]);
-            medium
+            base_passwords.extend(vec![
+                "Password1".to_string(), 
+                "admin123".to_string(), 
+                "welcome123".to_string()
+            ]);
+            base_passwords
         }
         _ => base_passwords,
     }

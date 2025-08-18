@@ -2,10 +2,10 @@
 //!
 //! Tests the MFA implementation for replay attacks, bypass techniques, and weaknesses
 
-use crate::attack_framework::{AttackSession, RedTeamFramework};
+use crate::attack_framework::RedTeamFramework;
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -41,6 +41,18 @@ pub async fn run_mfa_scenarios(
 
     // Scenario 8: WebAuthn Bypass Attempts
     webauthn_bypass_attempts(framework, reporter).await?;
+
+    // Scenario 9: Biometric Authentication Bypass
+    biometric_bypass_attacks(framework, reporter).await?;
+
+    // Scenario 10: Push Notification MFA Bypass
+    push_notification_bypass(framework, reporter).await?;
+
+    // Scenario 11: Hardware Token Emulation
+    hardware_token_emulation(framework, reporter).await?;
+
+    // Scenario 12: Voice Recognition Bypass
+    voice_recognition_bypass(framework, reporter).await?;
 
     Ok(())
 }
@@ -300,7 +312,7 @@ async fn backup_code_enumeration(
     let mut valid_codes = Vec::new();
     let mut attempts = 0;
 
-    for pattern in backup_code_patterns {
+    for pattern in &backup_code_patterns {
         attempts += 1;
 
         let verify_body = json!({
@@ -357,7 +369,7 @@ async fn time_window_exploitation(
     let base_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let time_offsets = vec![-90, -60, -30, 0, 30, 60, 90]; // seconds
 
-    for offset in time_offsets {
+    for offset in &time_offsets {
         let adjusted_time = (base_time as i64 + offset) as u64;
         let totp_code = generate_totp_for_time(adjusted_time);
 
@@ -392,7 +404,7 @@ async fn time_window_exploitation(
         current_window + 2,
     ];
 
-    for window in windows_to_test {
+    for window in &windows_to_test {
         let window_time = window * 30;
         let totp_code = generate_totp_for_time(window_time);
 
@@ -454,7 +466,7 @@ async fn mfa_header_bypass(
         ("X-MFA-Status", "verified"),
     ];
 
-    for (header_name, header_value) in bypass_headers {
+    for (header_name, header_value) in &bypass_headers {
         let mut headers = HeaderMap::new();
         headers.insert(header_name, HeaderValue::from_str(header_value)?);
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -493,7 +505,7 @@ async fn mfa_header_bypass(
         ("X-Factor-Count", "2"),
     ];
 
-    for (header_name, header_value) in session_verify_headers {
+    for (header_name, header_value) in &session_verify_headers {
         let mut headers = HeaderMap::new();
         headers.insert(header_name, HeaderValue::from_str(header_value)?);
 
@@ -657,7 +669,7 @@ async fn mfa_state_confusion(
     // Send multiple simultaneous verification requests
     let mut handles = Vec::new();
     for i in 0..5 {
-        let framework_clone = framework.clone(); // This won't work, we need Arc
+        // Simplified race condition test - in practice we'd need Arc<> for framework
         let session_clone = session.clone();
         let body_clone = verify_body.to_string();
 
@@ -848,6 +860,583 @@ fn generate_totp_for_time(timestamp: u64) -> String {
     // In a real implementation, this would use HMAC-SHA1 with the secret
     let time_step = timestamp / 30;
     format!("{:06}", (time_step % 1000000) as u32)
+}
+
+async fn biometric_bypass_attacks(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing biometric authentication bypass attacks");
+
+    let session = framework.create_attack_session().await?;
+    let mut biometric_bypasses = Vec::new();
+
+    // Test 1: Fingerprint template injection
+    let fingerprint_templates = vec![
+        "template_admin_001",
+        "biometric_bypass_001", 
+        "fingerprint_fake_template",
+        "admin_fingerprint_data",
+        "template_injection_test",
+    ];
+
+    for template in &fingerprint_templates {
+        let register_body = json!({
+            "user_id": "biometric_test_user",
+            "biometric_type": "fingerprint",
+            "template_data": template,
+            "device_id": "test_device_001"
+        });
+
+        let register_result = framework
+            .execute_attack(
+                "biometric_template_injection",
+                "POST",
+                "/mfa/biometric/register",
+                None,
+                Some(register_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if register_result.success {
+            // Try to authenticate with the injected template
+            let auth_body = json!({
+                "user_id": "biometric_test_user",
+                "biometric_type": "fingerprint",
+                "template_data": template
+            });
+
+            let auth_result = framework
+                .execute_attack(
+                    "biometric_template_auth",
+                    "POST",
+                    "/mfa/biometric/verify",
+                    None,
+                    Some(auth_body.to_string()),
+                    Some(&session),
+                )
+                .await?;
+
+            if auth_result.success {
+                biometric_bypasses.push(format!("Fingerprint template injection successful: {}", template));
+                warn!("🚨 Biometric template injection bypass: {}", template);
+            }
+        }
+    }
+
+    // Test 2: Face recognition spoofing
+    let face_spoofing_attacks = vec![
+        ("photo_attack", "base64_photo_data_fake"),
+        ("video_replay", "base64_video_replay_data"),
+        ("3d_model", "base64_3d_face_model"),
+        ("deepfake", "base64_deepfake_data"),
+        ("mask_attack", "base64_silicone_mask"),
+    ];
+
+    for (attack_type, spoofed_data) in &face_spoofing_attacks {
+        let face_auth_body = json!({
+            "user_id": "face_recognition_user",
+            "biometric_type": "face",
+            "image_data": spoofed_data,
+            "liveness_check": false
+        });
+
+        let result = framework
+            .execute_attack(
+                "face_spoofing_attack",
+                "POST",
+                "/mfa/biometric/verify",
+                None,
+                Some(face_auth_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            biometric_bypasses.push(format!("Face spoofing successful: {}", attack_type));
+        }
+    }
+
+    // Test 3: Iris recognition bypass
+    let iris_bypass_techniques = vec![
+        "contact_lens_pattern",
+        "printed_iris_photo",
+        "infrared_led_blinding",
+        "iris_template_replay",
+        "synthetic_iris_generation",
+    ];
+
+    for technique in &iris_bypass_techniques {
+        let iris_body = json!({
+            "user_id": "iris_test_user",
+            "biometric_type": "iris",
+            "iris_data": format!("fake_iris_data_{}", technique),
+            "eye": "both"
+        });
+
+        let result = framework
+            .execute_attack(
+                "iris_bypass_attack",
+                "POST",
+                "/mfa/biometric/verify",
+                None,
+                Some(iris_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            biometric_bypasses.push(format!("Iris bypass successful: {}", technique));
+        }
+    }
+
+    // Test 4: Voice recognition attacks
+    let voice_attacks = vec![
+        ("voice_synthesis", "synthesized_voice_sample"),
+        ("voice_conversion", "converted_voice_sample"),
+        ("replay_attack", "recorded_voice_sample"),
+        ("voice_cloning", "cloned_voice_sample"),
+        ("text_to_speech", "tts_generated_sample"),
+    ];
+
+    for (attack_type, voice_data) in &voice_attacks {
+        let voice_body = json!({
+            "user_id": "voice_test_user",
+            "biometric_type": "voice",
+            "audio_data": voice_data,
+            "phrase": "my voice is my password"
+        });
+
+        let result = framework
+            .execute_attack(
+                "voice_bypass_attack",
+                "POST",
+                "/mfa/biometric/verify",
+                None,
+                Some(voice_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            biometric_bypasses.push(format!("Voice bypass successful: {}", attack_type));
+        }
+    }
+
+    // Test 5: Behavioral biometrics bypass
+    let behavioral_attacks = vec![
+        "keystroke_pattern_replay",
+        "mouse_movement_simulation",
+        "gait_pattern_mimicry",
+        "touch_pressure_spoofing",
+        "typing_rhythm_emulation",
+    ];
+
+    for attack in &behavioral_attacks {
+        let behavioral_body = json!({
+            "user_id": "behavioral_test_user",
+            "biometric_type": "behavioral",
+            "pattern_data": format!("fake_pattern_{}", attack),
+            "session_duration": 3600
+        });
+
+        let result = framework
+            .execute_attack(
+                "behavioral_bypass_attack",
+                "POST",
+                "/mfa/biometric/verify",
+                None,
+                Some(behavioral_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            biometric_bypasses.push(format!("Behavioral biometric bypass: {}", attack));
+        }
+    }
+
+    // Test 6: Multimodal biometric confusion
+    let multimodal_attacks = vec![
+        ("face_voice_mismatch", "user_a_face", "user_b_voice"),
+        ("fingerprint_face_swap", "admin_fingerprint", "user_face"),
+        ("cross_modal_injection", "fingerprint_as_face", "voice_as_iris"),
+    ];
+
+    for (attack_name, biometric1, biometric2) in &multimodal_attacks {
+        let multimodal_body = json!({
+            "user_id": "multimodal_test_user",
+            "primary_biometric": {
+                "type": "face",
+                "data": biometric1
+            },
+            "secondary_biometric": {
+                "type": "voice", 
+                "data": biometric2
+            }
+        });
+
+        let result = framework
+            .execute_attack(
+                "multimodal_confusion_attack",
+                "POST",
+                "/mfa/biometric/multimodal/verify",
+                None,
+                Some(multimodal_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            biometric_bypasses.push(format!("Multimodal confusion attack: {}", attack_name));
+        }
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("biometric_bypasses".to_string(), json!(biometric_bypasses));
+
+    reporter.add_scenario_result("biometric_bypass_attacks", biometric_bypasses.is_empty(), scenario_data);
+    Ok(())
+}
+
+async fn push_notification_bypass(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing push notification MFA bypass");
+
+    let session = framework.create_attack_session().await?;
+    let mut push_bypasses = Vec::new();
+
+    // Test 1: Push notification interception
+    let interception_techniques = vec![
+        "device_cloning",
+        "push_token_hijacking",
+        "notification_relay",
+        "push_service_mitm",
+        "fcm_token_theft",
+    ];
+
+    for technique in &interception_techniques {
+        let push_body = json!({
+            "user_id": "push_test_user",
+            "device_token": format!("fake_token_{}", technique),
+            "push_service": "fcm"
+        });
+
+        let result = framework
+            .execute_attack(
+                "push_interception",
+                "POST",
+                "/mfa/push/send",
+                None,
+                Some(push_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            // Try to approve the notification
+            let approve_body = json!({
+                "user_id": "push_test_user",
+                "notification_id": "fake_notification_123",
+                "action": "approve",
+                "device_fingerprint": format!("spoofed_{}", technique)
+            });
+
+            let approve_result = framework
+                .execute_attack(
+                    "push_approval_bypass",
+                    "POST",
+                    "/mfa/push/approve",
+                    None,
+                    Some(approve_body.to_string()),
+                    Some(&session),
+                )
+                .await?;
+
+            if approve_result.success {
+                push_bypasses.push(format!("Push notification bypass: {}", technique));
+            }
+        }
+    }
+
+    // Test 2: Auto-approval attacks
+    let auto_approval_attacks = vec![
+        "rapid_multiple_requests",
+        "notification_flooding",
+        "timing_attack",
+        "default_approval_exploit",
+        "silent_approval",
+    ];
+
+    for attack in &auto_approval_attacks {
+        for i in 0..5 {
+            let flood_body = json!({
+                "user_id": "auto_approval_user",
+                "request_id": format!("{}_{}", attack, i),
+                "auto_approve": true
+            });
+
+            let result = framework
+                .execute_attack(
+                    "auto_approval_attack",
+                    "POST",
+                    "/mfa/push/send",
+                    None,
+                    Some(flood_body.to_string()),
+                    Some(&session),
+                )
+                .await?;
+
+            if result.success && result.response_body.contains("approved") {
+                push_bypasses.push(format!("Auto-approval attack successful: {}", attack));
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("push_bypasses".to_string(), json!(push_bypasses));
+
+    reporter.add_scenario_result("push_notification_bypass", push_bypasses.is_empty(), scenario_data);
+    Ok(())
+}
+
+async fn hardware_token_emulation(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing hardware token emulation attacks");
+
+    let session = framework.create_attack_session().await?;
+    let mut token_emulation_results = Vec::new();
+
+    // Test 1: YubiKey emulation
+    let yubikey_attacks = vec![
+        ("static_otp_replay", "cccjgjgkhcbbgeglhijkllgkidhgretjlbfk"),
+        ("hotp_prediction", "010203040506070809101112"),
+        ("challenge_response_bypass", "a1b2c3d4e5f6"),
+        ("piv_certificate_injection", "fake_piv_cert_data"),
+        ("fido_u2f_cloning", "fake_u2f_response"),
+    ];
+
+    for (attack_type, token_data) in &yubikey_attacks {
+        let yubikey_body = json!({
+            "user_id": "yubikey_test_user",
+            "token_type": "yubikey",
+            "otp_value": token_data,
+            "serial_number": "123456789"
+        });
+
+        let result = framework
+            .execute_attack(
+                "yubikey_emulation",
+                "POST",
+                "/mfa/hardware/verify",
+                None,
+                Some(yubikey_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            token_emulation_results.push(format!("YubiKey emulation successful: {}", attack_type));
+        }
+    }
+
+    // Test 2: RSA SecurID emulation
+    let securid_attacks = vec![
+        "time_sync_manipulation",
+        "seed_extraction_replay",
+        "token_cloning",
+        "algorithm_prediction",
+        "drift_compensation_abuse",
+    ];
+
+    for attack in &securid_attacks {
+        let securid_body = json!({
+            "user_id": "securid_test_user",
+            "token_type": "rsa_securid",
+            "token_code": format!("fake_code_{}", attack),
+            "serial_number": "000123456789"
+        });
+
+        let result = framework
+            .execute_attack(
+                "securid_emulation",
+                "POST",
+                "/mfa/hardware/verify",
+                None,
+                Some(securid_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            token_emulation_results.push(format!("RSA SecurID emulation: {}", attack));
+        }
+    }
+
+    // Test 3: Smart card attacks
+    let smartcard_attacks = vec![
+        "certificate_injection",
+        "pin_bypass",
+        "side_channel_extraction",
+        "card_cloning",
+        "middleware_bypass",
+    ];
+
+    for attack in &smartcard_attacks {
+        let smartcard_body = json!({
+            "user_id": "smartcard_test_user",
+            "card_type": "piv",
+            "certificate_data": format!("fake_cert_{}", attack),
+            "pin": "123456"
+        });
+
+        let result = framework
+            .execute_attack(
+                "smartcard_attack",
+                "POST",
+                "/mfa/smartcard/verify",
+                None,
+                Some(smartcard_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            token_emulation_results.push(format!("Smart card attack: {}", attack));
+        }
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("token_emulation_results".to_string(), json!(token_emulation_results));
+
+    reporter.add_scenario_result("hardware_token_emulation", token_emulation_results.is_empty(), scenario_data);
+    Ok(())
+}
+
+async fn voice_recognition_bypass(
+    framework: &mut RedTeamFramework,
+    reporter: &mut RedTeamReporter,
+) -> Result<()> {
+    info!("🎯 Testing advanced voice recognition bypass");
+
+    let session = framework.create_attack_session().await?;
+    let mut voice_bypasses = Vec::new();
+
+    // Test 1: AI voice synthesis attacks
+    let ai_synthesis_attacks = vec![
+        ("wavenet_synthesis", "wavenet_generated_voice.wav"),
+        ("tacotron_synthesis", "tacotron_voice_clone.wav"),
+        ("real_time_voice_conversion", "rtvc_output.wav"),
+        ("zero_shot_voice_cloning", "zero_shot_clone.wav"),
+        ("neural_vocoder_attack", "vocoder_synthesis.wav"),
+    ];
+
+    for (attack_type, audio_file) in &ai_synthesis_attacks {
+        let synthesis_body = json!({
+            "user_id": "voice_synthesis_user",
+            "audio_data": format!("base64_encoded_{}", audio_file),
+            "passphrase": "my voice is my passport verify me",
+            "synthesis_method": attack_type
+        });
+
+        let result = framework
+            .execute_attack(
+                "ai_voice_synthesis",
+                "POST",
+                "/mfa/voice/verify",
+                None,
+                Some(synthesis_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            voice_bypasses.push(format!("AI voice synthesis bypass: {}", attack_type));
+            warn!("🚨 AI voice synthesis attack successful: {}", attack_type);
+        }
+    }
+
+    // Test 2: Audio manipulation attacks
+    let audio_manipulation = vec![
+        "pitch_shifting",
+        "formant_modification", 
+        "speed_adjustment",
+        "noise_injection",
+        "echo_removal",
+        "spectral_filtering",
+    ];
+
+    for manipulation in &audio_manipulation {
+        let manipulated_body = json!({
+            "user_id": "voice_manipulation_user",
+            "audio_data": format!("manipulated_audio_{}", manipulation),
+            "passphrase": "security through voice verification",
+            "preprocessing": manipulation
+        });
+
+        let result = framework
+            .execute_attack(
+                "voice_manipulation",
+                "POST",
+                "/mfa/voice/verify",
+                None,
+                Some(manipulated_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            voice_bypasses.push(format!("Voice manipulation bypass: {}", manipulation));
+        }
+    }
+
+    // Test 3: Cross-lingual voice attacks
+    let cross_lingual_attacks = vec![
+        "accent_neutralization",
+        "language_model_transfer",
+        "phoneme_mapping",
+        "prosody_adaptation",
+        "cross_speaker_adaptation",
+    ];
+
+    for attack in &cross_lingual_attacks {
+        let cross_lingual_body = json!({
+            "user_id": "cross_lingual_user",
+            "audio_data": format!("cross_lingual_{}", attack),
+            "source_language": "en",
+            "target_language": "es",
+            "passphrase": "voice authentication test"
+        });
+
+        let result = framework
+            .execute_attack(
+                "cross_lingual_voice_attack",
+                "POST",
+                "/mfa/voice/verify",
+                None,
+                Some(cross_lingual_body.to_string()),
+                Some(&session),
+            )
+            .await?;
+
+        if result.success {
+            voice_bypasses.push(format!("Cross-lingual voice attack: {}", attack));
+        }
+    }
+
+    let mut scenario_data = HashMap::new();
+    scenario_data.insert("voice_bypasses".to_string(), json!(voice_bypasses));
+
+    reporter.add_scenario_result("voice_recognition_bypass", voice_bypasses.is_empty(), scenario_data);
+    Ok(())
 }
 
 fn get_backup_code_patterns(intensity: &str) -> Vec<String> {

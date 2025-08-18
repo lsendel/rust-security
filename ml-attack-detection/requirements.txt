@@ -1,0 +1,67 @@
+# Core ML and Data Science
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# Deep Learning
+torch>=2.0.0
+tensorflow>=2.13.0
+transformers>=4.30.0
+
+# Anomaly Detection
+pyod>=1.1.0
+isolation-forest>=0.1.0
+
+# Time Series Analysis
+statsmodels>=0.14.0
+prophet>=1.1.0
+tslearn>=0.6.0
+
+# Network Analysis
+networkx>=3.1.0
+scapy>=2.5.0
+
+# Feature Engineering
+feature-engine>=1.6.0
+category-encoders>=2.6.0
+
+# Model Serving and API
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+
+# Data Processing
+joblib>=1.3.0
+dask>=2023.7.0
+
+# Configuration and Logging
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+structlog>=23.1.0
+rich>=13.4.0
+
+# Redis for caching
+redis>=4.6.0
+hiredis>=2.2.0
+
+# Monitoring and Metrics
+prometheus-client>=0.17.0
+psutil>=5.9.0
+
+# Security and Crypto
+cryptography>=41.0.0
+bcrypt>=4.0.0
+
+# HTTP Client
+httpx>=0.24.0
+aiohttp>=3.8.0
+
+# CLI Tools
+click>=8.1.0
+typer>=0.9.0
+
+# Utilities
+more-itertools>=10.0.0
+python-dateutil>=2.8.0
+tqdm>=4.65.0

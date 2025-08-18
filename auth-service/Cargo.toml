@@ -94,6 +94,8 @@ rmp-serde = { workspace = true }
 bincode = { workspace = true }
 # Metrics and profiling
 pprof = { workspace = true, optional = true }
+metrics = { workspace = true }
+metrics-prometheus = { workspace = true }
 
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
@@ -136,8 +138,8 @@ probabilistic-collections = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 
 # Post-Quantum Cryptography dependencies
-pqcrypto-kyber = { workspace = true, optional = true }
-pqcrypto-dilithium = { workspace = true, optional = true }
+pqcrypto-mlkem = { workspace = true, optional = true }
+pqcrypto-mldsa = { workspace = true, optional = true }
 # Hybrid cryptography support
 p256 = { workspace = true, optional = true }
 p384 = { workspace = true, optional = true }
@@ -188,7 +190,8 @@ arbitrary = { workspace = true }
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-default = []
+default = ["fast-build"]  # Development-optimized defaults
+fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
@@ -200,7 +203,7 @@ jemalloc = ["dep:jemalloc"]
 performance = ["dep:simd", "mimalloc"]
 profiling = ["pprof"]
 # Post-quantum cryptography feature flags
-post-quantum = ["pqcrypto-kyber", "pqcrypto-dilithium", "x509-cert", "pkcs8", "der"]
+post-quantum = ["pqcrypto-mlkem", "pqcrypto-mldsa", "x509-cert", "pkcs8", "der"]
 hybrid-crypto = ["post-quantum", "p256", "p384", "ed25519-dalek", "x25519-dalek"]
 # Threat hunting feature flags
 threat-hunting = ["smartcore", "petgraph", "ndarray", "nalgebra", "geo", "statrs", "indexmap", "flume", "crossbeam"]

@@ -2,6 +2,7 @@
 
 use super::{RedTeamTool, ToolConfig, ToolResult};
 use anyhow::Result;
+use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::json;
 use std::collections::HashMap;
@@ -346,6 +347,7 @@ impl AttackSimulator {
     }
 }
 
+#[async_trait]
 impl RedTeamTool for AttackSimulator {
     fn name(&self) -> &str {
         "attack_simulator"

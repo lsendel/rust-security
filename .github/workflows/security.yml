@@ -1,0 +1,204 @@
+name: Security Audit
+
+on:
+  schedule:
+    # Run security audit daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  push:
+    branches: [ main ]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '**/Cargo.toml'
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '**/Cargo.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-security-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install security tools
+        run: |
+          cargo install cargo-audit
+          cargo install cargo-deny
+          cargo install cargo-outdated
+          cargo install --locked cargo-geiger
+
+      - name: Run cargo audit (vulnerability scan)
+        run: |
+          echo "::group::Cargo Audit - Vulnerability Scan"
+          cargo audit --format json --output-file audit-report.json
+          cargo audit --format human
+          echo "::endgroup::"
+
+      - name: Run cargo deny (comprehensive dependency check)
+        run: |
+          echo "::group::Cargo Deny - License and Source Check"
+          cargo deny check --format human
+          cargo deny check advisories --format json --output advisories.json
+          cargo deny check licenses --format json --output licenses.json
+          cargo deny check sources --format json --output sources.json
+          echo "::endgroup::"
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "::group::Outdated Dependencies"
+          cargo outdated --workspace --format json --output outdated.json
+          cargo outdated --workspace
+          echo "::endgroup::"
+
+      - name: Security-focused clippy lints
+        run: |
+          echo "::group::Security Lints"
+          cargo clippy --workspace --all-targets --all-features -- \
+            -D clippy::unwrap_used \
+            -D clippy::expect_used \
+            -D clippy::panic \
+            -D clippy::integer_overflow \
+            -D clippy::indexing_slicing \
+            -W clippy::todo \
+            -D clippy::unimplemented \
+            -W clippy::float_cmp \
+            -W clippy::float_cmp_const \
+            -W clippy::suspicious \
+            -W clippy::perf
+          echo "::endgroup::"
+
+      - name: Unsafe code audit with cargo-geiger
+        run: |
+          echo "::group::Unsafe Code Audit"
+          cargo geiger --format human
+          cargo geiger --format json --output-file geiger-report.json
+          echo "::endgroup::"
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "::group::Hardcoded Secrets Check"
+          # Basic regex patterns for common secrets
+          if grep -r -i -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}['\"]" --include="*.rs" src/ || true; then
+            echo "⚠️ Potential hardcoded secrets found - please review"
+          fi
+          
+          # Check for common API key patterns
+          if grep -r -E "(sk_|pk_|ak_|AIza)[A-Za-z0-9]{20,}" --include="*.rs" src/ || true; then
+            echo "⚠️ Potential API keys found - please review"
+          fi
+          echo "::endgroup::"
+
+      - name: Generate security summary
+        run: |
+          echo "::group::Security Summary"
+          echo "# Security Audit Summary" > security-summary.md
+          echo "Generated on: $(date)" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "## Vulnerability Scan" >> security-summary.md
+          if [ -f audit-report.json ]; then
+            echo "- Audit report generated" >> security-summary.md
+          fi
+          
+          echo "## Unsafe Code Analysis" >> security-summary.md
+          if [ -f geiger-report.json ]; then
+            echo "- Geiger report generated" >> security-summary.md
+          fi
+          
+          echo "## Dependencies" >> security-summary.md
+          echo "- License compliance checked" >> security-summary.md
+          echo "- Source repositories verified" >> security-summary.md
+          echo "- Outdated dependencies identified" >> security-summary.md
+          
+          cat security-summary.md
+          echo "::endgroup::"
+
+      - name: Upload security reports as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports-${{ github.run_number }}
+          path: |
+            audit-report.json
+            advisories.json
+            licenses.json
+            sources.json
+            outdated.json
+            geiger-report.json
+            security-summary.md
+          retention-days: 30
+
+      - name: Create issue for vulnerabilities
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🚨 Security Audit Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Security Audit Failure
+            
+            The automated security audit has detected issues that require attention.
+            
+            **Workflow Run:** ${{ github.run_id }}
+            **Commit:** ${{ github.sha }}
+            
+            Please check the workflow logs and security reports for details.
+            
+            ### Next Steps
+            1. Review the security reports in the workflow artifacts
+            2. Address any vulnerabilities or policy violations
+            3. Update dependencies if needed
+            4. Re-run the security audit
+            
+            This issue was automatically created by the security audit workflow.
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'automated']
+            });
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          config-file: '.github/dependency-review-config.yml'
+          fail-on-severity: moderate
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, CC0-1.0

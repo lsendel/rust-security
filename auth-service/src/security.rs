@@ -242,21 +242,28 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
 
     let headers = response.headers_mut();
 
-    // Security headers
-    headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
-    headers.insert("X-Frame-Options", "DENY".parse().unwrap());
-    headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
-    headers.insert(
-        "Strict-Transport-Security",
-        "max-age=31536000; includeSubDomains".parse().unwrap(),
-    );
-    headers.insert(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'".parse().unwrap(),
-    );
-    headers.insert("Referrer-Policy", "strict-origin-when-cross-origin".parse().unwrap());
-    headers
-        .insert("Permissions-Policy", "geolocation=(), microphone=(), camera=()".parse().unwrap());
+    // Security headers with proper error handling
+    if let Ok(value) = "nosniff".parse() {
+        headers.insert("X-Content-Type-Options", value);
+    }
+    if let Ok(value) = "DENY".parse() {
+        headers.insert("X-Frame-Options", value);
+    }
+    if let Ok(value) = "1; mode=block".parse() {
+        headers.insert("X-XSS-Protection", value);
+    }
+    if let Ok(value) = "max-age=31536000; includeSubDomains".parse() {
+        headers.insert("Strict-Transport-Security", value);
+    }
+    if let Ok(value) = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'".parse() {
+        headers.insert("Content-Security-Policy", value);
+    }
+    if let Ok(value) = "strict-origin-when-cross-origin".parse() {
+        headers.insert("Referrer-Policy", value);
+    }
+    if let Ok(value) = "geolocation=(), microphone=(), camera=()".parse() {
+        headers.insert("Permissions-Policy", value);
+    }
 
     response
 }

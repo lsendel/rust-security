@@ -629,3 +629,46 @@ async fn test_bulk_large_operation_count() {
     assert_eq!(error_response.status, "413");
     assert!(error_response.detail.contains("Too many operations"));
 }
+
+#[tokio::test]
+async fn scim_security_headers_present() {
+    let base = spawn_app().await;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
+
+    // Ensure at least one user exists so list returns JSON with content-type
+    let _ = client
+        .post(format!("{}/scim/v2/Users", base))
+        .json(&ScimUser { id: String::new(), user_name: "sec.user".into(), active: true })
+        .send()
+        .await
+        .unwrap();
+
+    let resp = client
+        .get(format!("{}/scim/v2/Users?startIndex=1&count=1", base))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let headers = resp.headers();
+
+    // Core security headers added by middleware
+    assert!(headers.contains_key("Content-Security-Policy"));
+    assert_eq!(
+        headers.get("X-Frame-Options").and_then(|v| v.to_str().ok()),
+        Some("SAMEORIGIN").or(Some("DENY"))
+    );
+    assert_eq!(
+        headers.get("X-Content-Type-Options").and_then(|v| v.to_str().ok()),
+        Some("nosniff")
+    );
+    assert!(headers.contains_key("Referrer-Policy"));
+    assert!(headers.contains_key("Permissions-Policy"));
+    assert!(headers.contains_key("Cross-Origin-Embedder-Policy"));
+    assert!(headers.contains_key("Cross-Origin-Opener-Policy"));
+    assert!(headers.contains_key("Cross-Origin-Resource-Policy"));
+    assert_eq!(headers.get("Server").and_then(|v| v.to_str().ok()), Some("Rust-Security-Service"));
+}

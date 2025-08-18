@@ -39,50 +39,43 @@ pub struct SecurityMetrics {
 }
 
 impl SecurityMetrics {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, prometheus::Error> {
         let registry = Registry::new();
 
         let auth_attempts_total = IntCounterVec::new(
             Opts::new("auth_attempts_total", "Total authentication attempts"),
             &["client_id", "method", "result"],
-        )
-        .unwrap();
+        )?;
 
         let auth_failures_total = IntCounterVec::new(
             Opts::new("auth_failures_total", "Total authentication failures"),
             &["client_id", "reason", "ip_address"],
-        )
-        .unwrap();
+        )?;
 
         let auth_success_total = IntCounterVec::new(
             Opts::new("auth_success_total", "Total successful authentications"),
             &["client_id", "method", "scope"],
-        )
-        .unwrap();
+        )?;
 
         let tokens_issued_total = IntCounterVec::new(
             Opts::new("tokens_issued_total", "Total tokens issued"),
             &["token_type", "client_id", "grant_type"],
-        )
-        .unwrap();
+        )?;
 
         let tokens_revoked_total = IntCounterVec::new(
             Opts::new("tokens_revoked_total", "Total tokens revoked"),
             &["token_type", "reason", "client_id"],
-        )
-        .unwrap();
+        )?;
 
         let token_binding_violations_total = IntCounter::new(
             "token_binding_violations_total",
             "Total token binding violations detected",
-        )
-        .unwrap();
+        )?;
 
         let token_introspection_total = IntCounterVec::new(
             Opts::new("token_introspection_total", "Total token introspection requests"),
             &["result", "client_id"],
-        )
-        .unwrap();
+        )?;
 
         let security_events_total = IntCounterVec::new(
             Opts::new("security_events_total", "Total security events"),
@@ -178,7 +171,7 @@ impl SecurityMetrics {
         registry.register(Box::new(auth_duration_seconds.clone())).unwrap();
         registry.register(Box::new(token_validation_duration_seconds.clone())).unwrap();
 
-        Self {
+        Ok(Self {
             registry,
             auth_attempts_total,
             auth_failures_total,
@@ -199,7 +192,7 @@ impl SecurityMetrics {
             security_headers_applied_total,
             auth_duration_seconds,
             token_validation_duration_seconds,
-        }
+        })
     }
 
     /// Record an authentication attempt
@@ -268,12 +261,14 @@ impl SecurityMetrics {
 
 impl Default for SecurityMetrics {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create default SecurityMetrics")
     }
 }
 
 /// Global security metrics instance
-pub static SECURITY_METRICS: Lazy<SecurityMetrics> = Lazy::new(SecurityMetrics::new);
+pub static SECURITY_METRICS: Lazy<SecurityMetrics> = Lazy::new(|| {
+    SecurityMetrics::new().expect("Failed to initialize security metrics")
+});
 
 /// Helper macro for recording security events
 #[macro_export]

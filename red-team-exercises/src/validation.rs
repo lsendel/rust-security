@@ -116,12 +116,14 @@ impl SecurityControlValidator {
             .await?;
 
         let mut test = test;
+        let status = response.status();
+        let response_text = response.text().await.unwrap_or_default();
         test.actual_behavior = format!(
             "HTTP Status: {}, Response: {}",
-            response.status(),
-            response.text().await.unwrap_or_default().chars().take(100).collect::<String>()
+            status,
+            response_text.chars().take(100).collect::<String>()
         );
-        test.passed = response.status().as_u16() == 401 || response.status().as_u16() == 403;
+        test.passed = status.as_u16() == 401 || status.as_u16() == 403;
 
         if !test.passed {
             test.evidence.push("Session endpoint may be vulnerable to IDOR attacks".to_string());
@@ -209,15 +211,16 @@ impl SecurityControlValidator {
             .send()
             .await?;
 
+        let second_status = second_response.status();
         let second_body = second_response.text().await.unwrap_or_default();
         test.actual_behavior = format!(
             "Second attempt status: {}, Response: {}",
-            second_response.status(),
+            second_status,
             second_body.chars().take(100).collect::<String>()
         );
 
         // TOTP replay prevention is working if second attempt fails or mentions replay
-        test.passed = second_response.status().as_u16() != 200
+        test.passed = second_status.as_u16() != 200
             || second_body.to_lowercase().contains("already used")
             || second_body.to_lowercase().contains("replay")
             || second_body.contains("false");
@@ -258,15 +261,16 @@ impl SecurityControlValidator {
 
         let response = self.client.get(&authorize_url).send().await?;
 
+        let status = response.status();
         let response_body = response.text().await.unwrap_or_default();
         test.actual_behavior = format!(
             "HTTP Status: {}, Response: {}",
-            response.status(),
+            status,
             response_body.chars().take(200).collect::<String>()
         );
 
         // PKCE downgrade protection is working if plain method is rejected
-        test.passed = response.status().as_u16() != 200
+        test.passed = status.as_u16() != 200
             || response_body.to_lowercase().contains("plain")
                 && response_body.to_lowercase().contains("not supported");
 
@@ -571,9 +575,9 @@ impl SecurityControlValidator {
 
         let malicious_inputs = vec![
             ("Long Token", "x".repeat(2000)),
-            ("Null Bytes", "token\x00admin"),
-            ("Control Characters", "token\r\n\t"),
-            ("SQL Injection", "'; DROP TABLE tokens; --"),
+            ("Null Bytes", "token\x00admin".to_string()),
+            ("Control Characters", "token\r\n\t".to_string()),
+            ("SQL Injection", "'; DROP TABLE tokens; --".to_string()),
         ];
 
         let mut rejected_inputs = 0;

@@ -2,6 +2,7 @@
 
 use super::{RedTeamTool, ToolConfig, ToolResult};
 use anyhow::Result;
+use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::json;
 use std::collections::HashMap;
@@ -252,6 +253,7 @@ impl PerformanceMonitor {
     }
 }
 
+#[async_trait]
 impl RedTeamTool for PerformanceMonitor {
     fn name(&self) -> &str {
         "performance_monitor"

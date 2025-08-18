@@ -32,13 +32,13 @@ impl SensitiveTestData {
                 "(555) 987-6543",
             ],
             jwt_tokens: vec![
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
-                "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJhdXRoLXNlcnZpY2UiLCJzdWIiOiJ1c2VyMTIzIn0.signature",
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJURVNUIiwibmFtZSI6IkZBS0UiLCJpYXQiOjB9.TEST_SIGNATURE_NOT_REAL",
+                "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJURVNUIiwic3ViIjoiRkFLRSJ9.MOCK_SIGNATURE_FOR_TESTING",
             ],
             api_keys: vec![
-                "sk_test_123456789012345678901234567890abcdef",
-                "pk_live_abcdef123456789012345678901234567890",
-                "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
+                "sk_test_FAKE_KEY_FOR_TESTING_ONLY_NOT_REAL",
+                "pk_live_MOCK_KEY_FOR_REDACTION_TESTS_ONLY",
+                "api_key_TEST_DATA_NOT_A_REAL_SECRET_KEY",
             ],
             ssns: vec![
                 "123-45-6789",

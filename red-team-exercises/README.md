@@ -1,507 +1,313 @@
-# Comprehensive Cloud Security Infrastructure for Rust Authentication Service
+# Red Team Security Exercises
 
-This repository provides a complete cloud security hardening implementation for a Rust-based authentication service, featuring enterprise-grade security controls, monitoring, and compliance frameworks across multiple cloud providers.
+A comprehensive suite of defensive security testing scenarios designed to validate authentication system security posture through controlled red team exercises.
 
-## 🏗️ Architecture Overview
+## 🛡️ Purpose
 
-The security infrastructure implements a **Zero-Trust Architecture** with defense-in-depth principles:
+This framework provides security professionals with realistic attack scenarios to:
+- Test authentication system resilience 
+- Identify security gaps before adversaries do
+- Validate security controls effectiveness
+- Generate actionable security reports
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Internet / External Users                   │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────────┐
-│  WAF + DDoS Protection + Rate Limiting                          │
-│  ├── AWS WAF / CloudFlare / Azure Front Door                    │
-│  └── Geographic IP filtering & Bot protection                   │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────────┐
-│                 Load Balancer (mTLS)                            │
-│  ├── SSL/TLS Termination (TLS 1.3)                             │
-│  ├── Health Checks & Circuit Breakers                          │
-│  └── Request routing & Sticky sessions                         │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────────┐
-│              Kubernetes Ingress Controller                      │
-│  ├── Nginx/Istio Gateway with security headers                 │
-│  ├── Certificate management (cert-manager)                     │
-│  └── Rate limiting & authentication                            │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────────┐
-│                 Service Mesh (Istio)                           │
-│  ├── mTLS between all services                                 │
-│  ├── Authorization policies (RBAC)                             │
-│  ├── Traffic encryption & observability                       │
-│  └── Circuit breakers & fault injection                       │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────────┐
-│             Auth Service Pods (Hardened)                       │
-│  ├── Pod Security Standards (Restricted)                       │
-│  ├── Read-only root filesystem                                 │
-│  ├── Non-root user (UID 10001)                                │
-│  ├── Dropped capabilities (ALL)                               │
-│  ├── Seccomp & AppArmor profiles                              │
-│  └── Resource limits & network policies                       │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────────┐
-│                  Data Layer                                     │
-│  ├── PostgreSQL (encrypted at rest & in transit)              │
-│  ├── Redis (auth tokens, encrypted)                           │
-│  ├── KMS for key management                                   │
-│  └── Secrets management (External Secrets Operator)          │
-└─────────────────────────────────────────────────────────────────┘
-```
+## ⚠️ Security Notice
 
-## 🛡️ Security Features
+**These tools are for defensive security testing only.** Only run against systems you own or have explicit written permission to test. Unauthorized testing is illegal and unethical.
 
-### 1. **Kubernetes Security Hardening**
-- **Pod Security Standards**: Restricted profile enforcement
-- **Network Policies**: Micro-segmentation with deny-all default
-- **RBAC**: Least privilege access controls
-- **Admission Controllers**: OPA Gatekeeper policy enforcement
-- **Runtime Security**: Falco behavioral monitoring
-- **Container Security**: gVisor/Kata Containers support
+## 🎯 Attack Scenarios
 
-### 2. **Service Mesh Security (Istio)**
-- **mTLS**: Automatic mutual TLS between all services
-- **Authorization Policies**: Fine-grained access controls
-- **Traffic Encryption**: End-to-end encryption
-- **Security Headers**: Comprehensive HTTP security headers
-- **Rate Limiting**: Per-service and global rate limits
+### Token Manipulation Attacks
+- **JWT Manipulation**: Algorithm confusion, payload modification, signature bypass
+- **JWT Timing Attacks**: Cryptographic timing leak detection and analysis
+- **Token Substitution**: Common pattern testing and authorization header confusion  
+- **Token Replay**: Immediate and cross-session replay detection
+- **Token Enumeration**: Sequential pattern discovery with rate limit evasion
+- **Token Binding Bypass**: IP and User-Agent binding circumvention
+- **Token Validation Bypass**: SQL/NoSQL injection and path traversal testing
 
-### 3. **Zero-Trust Architecture**
-- **Identity Verification**: Continuous authentication
-- **Least Privilege**: Minimal required permissions
-- **Micro-segmentation**: Network isolation between services
-- **Encrypted Communication**: All traffic encrypted in transit
-- **Audit Logging**: Complete audit trail
+### OAuth2/OIDC Flow Attacks
+- **Authorization Flow Manipulation**: Response type and parameter injection
+- **PKCE Bypass**: Downgrade attacks and code challenge manipulation
+- **Redirect URI Validation**: Bypass techniques and injection attacks
+- **State Parameter CSRF**: Missing and predictable state testing
+- **Scope Elevation**: Privilege escalation through scope manipulation
+- **Client Authentication Bypass**: Weak secret and JWT none algorithm testing
+- **Token Exchange Attacks**: Elevation and substitution via token exchange
+- **OIDC-Specific**: Nonce manipulation and userinfo endpoint attacks
+- **Authorization Code Injection**: Code injection and replay attacks
 
-### 4. **Cloud Security (Multi-Cloud)**
-- **AWS**: GuardDuty, Config, CloudTrail, WAF, KMS
-- **GCP**: Security Command Center, Cloud KMS, VPC Security
-- **Azure**: Security Center, Key Vault, Network Security Groups
-- **Infrastructure as Code**: Terraform with security best practices
+### Session Management Attacks  
+- **Session Fixation**: Pre-set session ID acceptance testing
+- **Session Hijacking**: Pattern-based session ID prediction
+- **Session Enumeration**: Brute force session discovery
+- **Concurrent Session Abuse**: Multiple session creation testing
+- **Session Timeout Bypass**: Keep-alive mechanism abuse
+- **Cross-Subdomain Attacks**: Session sharing and cookie injection
+- **Session Token Manipulation**: Encoding/decoding bypass techniques
 
-### 5. **Compliance & Governance**
-- **CIS Kubernetes Benchmark**: Automated compliance checking
-- **SOC 2 Type II**: Control framework implementation
-- **PCI DSS**: Payment data protection
-- **GDPR/CCPA**: Data privacy compliance
-- **HIPAA**: Healthcare data protection
+### MFA Bypass Attacks
+- **TOTP Replay**: Time-based one-time password replay detection
+- **TOTP Brute Force**: Statistical attack pattern testing
+- **Backup Code Enumeration**: Recovery code weakness analysis
+- **Time Window Exploitation**: Timing attack opportunities
+- **Header Manipulation**: MFA bypass via request modification
+- **OTP Interception**: SMS/Email interception simulation
+- **MFA State Confusion**: Authentication state manipulation
+- **WebAuthn Bypass**: Hardware token bypass attempts
 
-## 📁 Repository Structure
+### Rate Limiting Bypass
+- **IP Rotation**: Distributed request source simulation
+- **Header Manipulation**: X-Forwarded-For and proxy header abuse
+- **Request Distribution**: Timing and volume evasion techniques
+- **Endpoint Variation**: Alternative endpoint discovery
+- **Token Bucket Overflow**: Rate limit algorithm testing
 
-```
-red-team-exercises/
-├── README.md                          # This file
-├── k8s/                              # Kubernetes manifests
-│   └── security/
-│       ├── pod-security-standards.yaml    # Pod security policies
-│       ├── network-policies.yaml          # Network segmentation
-│       ├── admission-controllers.yaml     # OPA Gatekeeper policies
-│       └── service-mesh.yaml             # Istio security configuration
-├── terraform/                        # Infrastructure as Code
-│   ├── aws/
-│   │   ├── main.tf                       # AWS infrastructure
-│   │   ├── iam.tf                        # IAM roles and policies
-│   │   └── variables.tf                  # Configuration variables
-│   ├── gcp/                             # Google Cloud Platform
-│   └── azure/                           # Microsoft Azure
-├── helm/                             # Helm charts
-│   └── auth-service/
-│       ├── Chart.yaml                    # Helm chart metadata
-│       ├── values.yaml                   # Default configuration
-│       └── templates/                    # Kubernetes templates
-├── monitoring/                       # Observability stack
-│   ├── prometheus/
-│   │   └── rules.yaml                    # Security monitoring rules
-│   └── grafana/
-│       └── auth-service-dashboard.json   # Security dashboard
-├── gitops/                          # GitOps configuration
-│   └── argocd/
-│       └── auth-service-app.yaml         # ArgoCD application
-├── compliance/                      # Compliance frameworks
-│   └── cis-benchmark.yaml               # CIS Kubernetes Benchmark
-├── disaster-recovery/               # Backup and DR
-│   └── backup-strategy.yaml             # Comprehensive backup strategy
-└── scripts/                        # Automation scripts
-    └── deploy-security-infrastructure.sh # Main deployment script
+### IDOR (Insecure Direct Object Reference)
+- **Resource Enumeration**: Sequential ID testing
+- **Authorization Bypass**: Resource access validation
+- **Parameter Injection**: ID parameter manipulation
+- **Privilege Escalation**: Cross-user resource access
+
+### Social Engineering Simulation
+- **Phishing Simulation**: Credential harvesting detection
+- **Pretexting**: Authority impersonation testing
+- **Information Gathering**: OSINT simulation
+- **Baiting**: Malicious link and attachment testing
+
+### Authentication Flow Analysis
+- **Multi-Step Authentication**: Flow bypass opportunities
+- **Password Reset**: Token validation and hijacking
+- **Account Registration**: Duplicate account creation
+- **Login Attempt Analysis**: Brute force pattern detection
+
+## 🚀 Usage
+
+### Basic Usage
+
+```rust
+use red_team_exercises::{RedTeamFramework, RedTeamReporter};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Initialize framework
+    let mut framework = RedTeamFramework::new("http://localhost:8080".to_string()).await?;
+    let mut reporter = RedTeamReporter::new("security_assessment".to_string());
+
+    // Run token manipulation scenarios
+    red_team_exercises::scenarios::run_token_scenarios(&mut framework, &mut reporter, "medium").await?;
+    
+    // Generate comprehensive report
+    let report = reporter.generate_report().await;
+    println!("Security Assessment Complete: {} scenarios tested", report.scenario_results.len());
+    
+    Ok(())
+}
 ```
 
-## 🚀 Quick Start
+### Intensity Levels
 
-### Prerequisites
+- **Low**: Basic testing with minimal requests (suitable for CI/CD)
+- **Medium**: Moderate testing with realistic attack patterns  
+- **High**: Comprehensive testing with extensive enumeration
 
-Ensure you have the following tools installed:
+### Command Line Interface
 
 ```bash
-# Required tools
-kubectl >= 1.24
-helm >= 3.8
-terraform >= 1.0
-aws-cli >= 2.0  # or gcloud/az cli
-jq >= 1.6
-yq >= 4.0
+# Run all scenarios
+cargo run --bin red-team-exercises -- --target http://localhost:8080 --intensity medium
 
-# Optional but recommended
-istioctl >= 1.18
-velero >= 1.11
-argocd >= 2.7
+# Run specific scenario categories
+cargo run --bin red-team-exercises -- --target http://localhost:8080 --scenarios token,oauth,session
+
+# Generate detailed report
+cargo run --bin red-team-exercises -- --target http://localhost:8080 --output-format json --report-file security_report.json
 ```
 
-### 1. Clone and Configure
+## 📊 Reporting
 
-```bash
-git clone <repository-url>
-cd red-team-exercises
+The framework generates comprehensive reports including:
 
-# Create configuration file
-cat > deployment.config << EOF
-ENVIRONMENT=production
-CLOUD_PROVIDER=aws
-REGION=us-west-2
-CLUSTER_NAME=auth-service-production
-DOMAIN_NAME=auth.yourcompany.com
-ENABLE_ISTIO=true
-ENABLE_GATEKEEPER=true
-ENABLE_FALCO=true
-ENABLE_MONITORING=true
-ENABLE_BACKUP=true
-ENABLE_GITOPS=true
-EOF
-```
+- **Executive Summary**: High-level security posture assessment
+- **Vulnerability Details**: Specific findings with evidence
+- **Risk Assessment**: CVSS scoring and impact analysis  
+- **Remediation Guidance**: Actionable security recommendations
+- **Timeline Analysis**: Attack pattern progression
+- **Statistical Metrics**: Success rates and response times
 
-### 2. Deploy Infrastructure
+### Report Formats
 
-```bash
-# Deploy complete security infrastructure
-./scripts/deploy-security-infrastructure.sh
-
-# Or deploy with specific options
-./scripts/deploy-security-infrastructure.sh \
-  --environment production \
-  --cloud-provider aws \
-  --region us-west-2 \
-  --domain auth.yourcompany.com
-```
-
-### 3. Verify Deployment
-
-```bash
-# Check cluster status
-kubectl get nodes
-kubectl get pods -A
-
-# Verify security policies
-kubectl get constraints -A
-kubectl get networkpolicies -A
-
-# Check service mesh
-istioctl proxy-status
-istioctl analyze -A
-
-# Test application
-kubectl run test-curl --rm -i --restart=Never \
-  --image=curlimages/curl:latest \
-  -- curl -f http://auth-service.auth-service.svc.cluster.local/health
-```
+- **JSON**: Machine-readable for integration with SIEM/SOAR
+- **HTML**: Human-readable dashboard with visualizations
+- **SARIF**: Compatible with GitHub Security and code analysis tools
+- **CSV**: Spreadsheet-compatible for analysis and tracking
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Framework Configuration
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ENVIRONMENT` | Deployment environment | `production` |
-| `CLOUD_PROVIDER` | Cloud provider (aws/gcp/azure) | `aws` |
-| `REGION` | Cloud region | `us-west-2` |
-| `CLUSTER_NAME` | Kubernetes cluster name | `auth-service-${ENVIRONMENT}` |
-| `DOMAIN_NAME` | Service domain name | `auth.example.com` |
-| `ENABLE_ISTIO` | Install Istio service mesh | `true` |
-| `ENABLE_GATEKEEPER` | Install OPA Gatekeeper | `true` |
-| `ENABLE_FALCO` | Install Falco runtime security | `true` |
-| `ENABLE_MONITORING` | Install monitoring stack | `true` |
-| `ENABLE_BACKUP` | Setup backup system | `true` |
-| `ENABLE_GITOPS` | Install ArgoCD | `true` |
+```rust
+let mut framework = RedTeamFramework::new("http://localhost:8080".to_string()).await?;
 
-### Security Configuration
+// Enable detection evasion techniques
+framework.detection_evasion = true;
 
-#### Pod Security Standards
+// Enable rate limit bypass methods  
+framework.rate_limit_bypass = true;
+
+// Configure request timeouts
+framework.client = Client::builder()
+    .timeout(Duration::from_secs(30))
+    .build()?;
+```
+
+### Scenario Customization
+
+```rust
+// Custom attack patterns
+let custom_patterns = vec![
+    "custom_token_pattern_{}",
+    "organization_specific_{}",
+];
+
+// Custom endpoints
+let custom_endpoints = vec![
+    "/api/v2/auth/validate",
+    "/internal/session/verify",
+];
+```
+
+## 🧪 Testing
+
+### Unit Tests
+
+```bash
+# Run scenario unit tests
+cargo test --lib
+
+# Run integration tests
+cargo test --test '*'
+
+# Run with coverage
+cargo llvm-cov --html
+```
+
+### Validation Tests
+
+```bash
+# Validate against test environment
+cargo run --example validate_scenarios
+
+# Benchmark performance
+cargo bench
+
+# Memory leak detection
+cargo run --example memory_test
+```
+
+## 🔒 Security Considerations
+
+### Safe Testing Practices
+
+1. **Isolated Environments**: Always test in dedicated security testing environments
+2. **Rate Limiting**: Built-in delays prevent overwhelming target systems
+3. **Audit Logging**: All activities are logged for compliance and review
+4. **Cleanup Procedures**: Automatic cleanup of test artifacts
+5. **Permission Validation**: Explicit consent checking before execution
+
+### Compliance Features
+
+- **SOC 2 Compatible**: Audit trail and access controls
+- **GDPR Compliant**: No PII storage or processing
+- **HIPAA Friendly**: Healthcare-safe testing procedures
+- **PCI DSS**: Payment system security validation
+
+## 📈 Integration
+
+### CI/CD Integration
+
 ```yaml
-# Restricted profile enforcement
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: auth-service
-  labels:
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/warn: restricted
+name: Security Testing
+on: [push, pull_request]
+
+jobs:
+  red-team-exercises:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Security Tests
+        run: |
+          cargo run --bin red-team-exercises \
+            --target http://localhost:8080 \
+            --intensity low \
+            --output-format sarif \
+            --report-file security.sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: security.sarif
 ```
 
-#### Network Policies
-```yaml
-# Default deny all traffic
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-all
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
+### SIEM Integration
+
+```rust
+// Send results to SIEM
+let siem_client = SiemClient::new("https://siem.company.com");
+siem_client.send_security_events(report.to_events()).await?;
+
+// Webhook notifications
+let webhook = WebhookClient::new("https://alerts.company.com/security");
+webhook.send_alert(report.to_alert()).await?;
 ```
 
-#### OPA Gatekeeper Constraints
-```yaml
-# Require non-root containers
-apiVersion: config.gatekeeper.sh/v1alpha1
-kind: K8sRequiredNonRoot
-metadata:
-  name: must-run-as-non-root
-spec:
-  match:
-    kinds:
-      - apiGroups: [""]
-        kinds: ["Pod"]
+## 🏗️ Architecture
+
 ```
-
-## 📊 Monitoring & Observability
-
-### Prometheus Metrics
-
-The system exposes comprehensive security metrics:
-
-```promql
-# Authentication metrics
-auth_login_attempts_total{status="failed"}
-auth_mfa_attempts_total{status="success"}
-auth_rate_limit_triggered_total
-auth_idor_attempts_total
-auth_token_replay_attempts_total
-
-# Infrastructure metrics
-container_memory_working_set_bytes
-container_cpu_usage_seconds_total
-kube_pod_security_policy_violations_total
-```
-
-### Grafana Dashboards
-
-Pre-configured dashboards include:
-- **Security Overview**: Authentication metrics, security events
-- **Infrastructure Health**: Resource usage, pod status
-- **Compliance Status**: Policy violations, audit events
-- **Threat Detection**: Anomaly detection, attack patterns
-
-### Alerting Rules
-
-Critical security alerts:
-- Failed login rate > 10%
-- IDOR attempts detected
-- Token replay attacks
-- Policy violations
-- Service downtime
-- Certificate expiration
-
-## 🔐 Security Controls
-
-### Authentication & Authorization
-- **Multi-Factor Authentication**: TOTP, SMS, hardware tokens
-- **OAuth 2.0 / OpenID Connect**: Standards-compliant flows
-- **JWT**: Secure token handling with rotation
-- **Session Management**: Secure session handling
-- **RBAC**: Role-based access control
-
-### Data Protection
-- **Encryption at Rest**: AES-256 encryption for all data
-- **Encryption in Transit**: TLS 1.3 for all communications
-- **Key Management**: Hardware Security Modules (HSM)
-- **Secrets Management**: External secrets with rotation
-- **Data Classification**: Automated PII detection
-
-### Network Security
-- **Zero Trust**: No implicit trust, verify everything
-- **Micro-segmentation**: Isolated network zones
-- **DDoS Protection**: Multi-layer DDoS mitigation
-- **WAF**: Web Application Firewall with custom rules
-- **VPN**: Secure remote access
-
-### Runtime Security
-- **Behavioral Analysis**: Falco runtime monitoring
-- **Anomaly Detection**: ML-based threat detection
-- **Container Scanning**: Vulnerability assessment
-- **SIEM Integration**: Security information and event management
-- **Incident Response**: Automated response playbooks
-
-## 🌍 Multi-Cloud Support
-
-### AWS Security Services
-- **GuardDuty**: Threat detection
-- **Config**: Compliance monitoring
-- **CloudTrail**: Audit logging
-- **WAF**: Web application firewall
-- **KMS**: Key management
-- **Secrets Manager**: Secrets storage
-
-### Google Cloud Security
-- **Security Command Center**: Centralized security
-- **Cloud KMS**: Key management
-- **Cloud Armor**: DDoS protection
-- **VPC Security**: Network security
-- **Cloud IAM**: Identity management
-
-### Azure Security Services
-- **Security Center**: Security posture management
-- **Key Vault**: Secrets and key management
-- **Application Gateway**: WAF and load balancing
-- **Network Security Groups**: Network filtering
-- **Azure AD**: Identity management
-
-## 📋 Compliance Frameworks
-
-### CIS Kubernetes Benchmark
-Automated compliance checking for:
-- Control plane security
-- Worker node security
-- Pod security policies
-- Network policies
-- Logging and monitoring
-
-### SOC 2 Type II
-Implementation of controls for:
-- Security
-- Availability
-- Processing integrity
-- Confidentiality
-- Privacy
-
-### Industry-Specific Compliance
-- **PCI DSS**: Payment card industry
-- **HIPAA**: Healthcare data
-- **GDPR**: European data protection
-- **CCPA**: California privacy rights
-- **ISO 27001**: Information security management
-
-## 🔄 Disaster Recovery
-
-### Backup Strategy
-- **Daily Backups**: Application data and configurations
-- **Weekly Backups**: Full system snapshots
-- **Monthly Backups**: Long-term retention
-- **Cross-Region Replication**: Geographic redundancy
-- **Automated Testing**: DR procedure validation
-
-### Recovery Procedures
-- **RTO**: Recovery Time Objective < 4 hours
-- **RPO**: Recovery Point Objective < 1 hour
-- **Automated Failover**: Multi-region deployment
-- **Data Consistency**: ACID compliance
-- **Business Continuity**: Minimal service disruption
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### Pod Security Policy Violations
-```bash
-# Check pod security constraints
-kubectl get constraints
-kubectl describe constraint <constraint-name>
-
-# View violation details
-kubectl get events --field-selector reason=FailedCreate
-```
-
-#### Network Policy Issues
-```bash
-# Test network connectivity
-kubectl run debug --image=nicolaka/netshoot -it --rm
-nslookup auth-service.auth-service.svc.cluster.local
-
-# Check network policies
-kubectl get networkpolicies -A
-kubectl describe networkpolicy <policy-name>
-```
-
-#### Istio Configuration Problems
-```bash
-# Check Istio proxy status
-istioctl proxy-status
-
-# Analyze configuration
-istioctl analyze -A
-
-# Check mTLS status
-istioctl authn tls-check auth-service.auth-service.svc.cluster.local
-```
-
-### Debug Commands
-
-```bash
-# Security policy debugging
-kubectl get constraintviolations -A
-kubectl get falcoalerts -A
-
-# Application debugging
-kubectl logs -f deployment/auth-service -n auth-service
-kubectl describe pod <pod-name> -n auth-service
-
-# Network debugging
-kubectl exec -it <pod-name> -n auth-service -- netstat -tlnp
-kubectl exec -it <pod-name> -n auth-service -- nslookup kubernetes.default
+red-team-exercises/
+├── src/
+│   ├── attack_framework.rs      # Core attack execution engine
+│   ├── reporting.rs             # Report generation and analysis
+│   ├── scenarios/               # Attack scenario implementations
+│   │   ├── token_manipulation.rs
+│   │   ├── oauth_manipulation.rs
+│   │   ├── session_attacks.rs
+│   │   ├── mfa_bypass.rs
+│   │   ├── rate_limit_bypass.rs
+│   │   ├── idor_attacks.rs
+│   │   └── social_engineering.rs
+│   └── lib.rs                   # Public API
+├── tests/                       # Integration tests
+├── examples/                    # Usage examples
+├── benches/                     # Performance benchmarks
+└── docs/                        # Additional documentation
 ```
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/security-enhancement`)
-3. Commit your changes (`git commit -am 'Add new security control'`)
-4. Push to the branch (`git push origin feature/security-enhancement`)
-5. Create a Pull Request
+We welcome contributions from security professionals:
 
-### Security Guidelines
-- All security controls must be tested
-- Follow principle of least privilege
+1. **Security Scenarios**: New attack patterns and techniques
+2. **Detection Methods**: Improved evasion and discovery algorithms  
+3. **Reporting Features**: Enhanced analysis and visualization
+4. **Integration Support**: New SIEM/SOAR connectors
+
+### Development Guidelines
+
+- All scenarios must be defensive in nature
+- Include comprehensive test coverage
+- Follow responsible disclosure practices
 - Document security implications
-- Include threat model updates
-- Add monitoring and alerting
 
-## 📞 Support
+## 📜 License
 
-### Security Team
-- **Email**: security@company.com
-- **Slack**: #security-team
-- **On-call**: security-oncall@company.com
+Licensed under the Apache License, Version 2.0. See LICENSE file for details.
 
-### Platform Team
-- **Email**: platform@company.com
-- **Slack**: #platform-team
-- **Documentation**: https://wiki.company.com/platform
+## 🆘 Support
 
-### Emergency Contacts
-- **Security Incident**: +1-555-SECURITY
-- **Platform Issues**: +1-555-PLATFORM
-- **After Hours**: +1-555-ONCALL
+- **Documentation**: [docs.rs/red-team-exercises](https://docs.rs/red-team-exercises)
+- **Issues**: [GitHub Issues](https://github.com/company/rust-security/issues)
+- **Security**: security@company.com
+- **Community**: [Security Slack Channel](https://company.slack.com/channels/security)
 
-## 📝 License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## ⚠️ Security Notice
-
-This infrastructure implements enterprise-grade security controls. Ensure proper:
-- Access controls and authentication
-- Network segmentation and monitoring
-- Regular security assessments
-- Incident response procedures
-- Compliance validation
-
-For security vulnerabilities, please email security@company.com instead of creating public issues.
+**Remember**: These tools are designed to improve security through controlled testing. Always obtain proper authorization before conducting security assessments.

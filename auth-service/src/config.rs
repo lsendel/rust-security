@@ -485,13 +485,17 @@ fn generate_default_secret() -> String {
         Ok(secret) => {
             // Validate secret strength in production
             if is_production {
-                validate_secret_strength(&secret, "JWT_SECRET");
+                if let Err(e) = validate_secret_strength(&secret, "JWT_SECRET") {
+                    tracing::error!("JWT_SECRET validation failed: {}", e);
+                    std::process::exit(1);
+                }
             }
             secret
         }
         Err(_) => {
             if is_production {
-                panic!("JWT_SECRET environment variable is required in production");
+                tracing::error!("JWT_SECRET environment variable is required in production");
+                std::process::exit(1);
             }
 
             tracing::warn!(
@@ -527,10 +531,10 @@ mod tests {
 }
 
 /// Validates secret strength for production environments
-fn validate_secret_strength(secret: &str, secret_name: &str) {
+fn validate_secret_strength(secret: &str, secret_name: &str) -> Result<()> {
     // Check minimum length
     if secret.len() < 32 {
-        panic!("{} must be at least 32 characters long in production", secret_name);
+        return Err(anyhow::anyhow!("{} must be at least 32 characters long in production", secret_name));
     }
 
     // Check for weak patterns
@@ -542,7 +546,7 @@ fn validate_secret_strength(secret: &str, secret_name: &str) {
     let lower_secret = secret.to_lowercase();
     for pattern in &weak_patterns {
         if lower_secret.contains(pattern) {
-            panic!("{} contains weak pattern '{}' in production. Use a cryptographically strong secret.", secret_name, pattern);
+            return Err(anyhow::anyhow!("{} contains weak pattern '{}' in production. Use a cryptographically strong secret.", secret_name, pattern));
         }
     }
 
@@ -555,7 +559,7 @@ fn validate_secret_strength(secret: &str, secret_name: &str) {
     let char_types = [has_lower, has_upper, has_digit, has_special].iter().filter(|&&x| x).count();
 
     if char_types < 3 {
-        panic!("{} must contain at least 3 different character types (lowercase, uppercase, digits, special characters) in production", secret_name);
+        return Err(anyhow::anyhow!("{} must contain at least 3 different character types (lowercase, uppercase, digits, special characters) in production", secret_name));
     }
 
     // Check for repeated patterns (simple check for repeating substrings)
@@ -568,35 +572,38 @@ fn validate_secret_strength(secret: &str, secret_name: &str) {
                     if remaining.starts_with(pattern)
                         && remaining[window_size..].starts_with(pattern)
                     {
-                        panic!("{} contains repeated patterns in production. Use a more random secret.", secret_name);
+                        return Err(anyhow::anyhow!("{} contains repeated patterns in production. Use a more random secret.", secret_name));
                     }
                 }
             }
         }
     }
+    
+    Ok(())
 }
 
 /// Validates all secrets at startup
-pub fn validate_production_secrets() {
+pub fn validate_production_secrets() -> Result<()> {
     let is_production =
         env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()).to_lowercase()
             == "production";
 
     if !is_production {
-        return;
+        return Ok(());
     }
 
     // Validate REQUEST_SIGNING_SECRET
     match env::var("REQUEST_SIGNING_SECRET") {
         Ok(secret) => {
-            validate_secret_strength(&secret, "REQUEST_SIGNING_SECRET");
+            validate_secret_strength(&secret, "REQUEST_SIGNING_SECRET")?;
         }
         Err(_) => {
-            panic!("REQUEST_SIGNING_SECRET environment variable is required in production");
+            return Err(anyhow::anyhow!("REQUEST_SIGNING_SECRET environment variable is required in production"));
         }
     }
 
     // JWT_SECRET is already validated in get_jwt_secret()
 
     tracing::info!("All production secrets validated successfully");
+    Ok(())
 }

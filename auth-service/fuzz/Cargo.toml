@@ -1,0 +1,61 @@
+[package]
+name = "auth-service-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.3", features = ["derive"] }
+
+[dependencies.auth-service]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_token_validation"
+path = "fuzz_targets/fuzz_token_validation.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_client_credentials"
+path = "fuzz_targets/fuzz_client_credentials.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_pkce_operations"
+path = "fuzz_targets/fuzz_pkce_operations.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_request_signature"
+path = "fuzz_targets/fuzz_request_signature.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_oauth_parsing"
+path = "fuzz_targets/fuzz_oauth_parsing.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_jwt_parsing"
+path = "fuzz_targets/fuzz_jwt_parsing.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_pii_redaction"
+path = "fuzz_targets/fuzz_pii_redaction.rs"
+test = false
+doc = false
