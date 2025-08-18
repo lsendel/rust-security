@@ -1244,9 +1244,7 @@ pub async fn introspect(
         event = event.with_user_agent(ua);
     }
 
-    if let Some(req_id) = request_id {
-        event = event.with_request_id(req_id);
-    }
+    event = event.with_request_id(request_id);
 
     SecurityLogger::log_event(&mut event);
 
@@ -1709,7 +1707,7 @@ pub async fn issue_token(
                 Some([
                     ("grant_type".to_string(), serde_json::Value::String("refresh_token".to_string())),
                     ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
-                    ("has_id_token".to_string, serde_json::Value::Bool(make_id_token)),
+                    ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
                 ].into()),
             );
 

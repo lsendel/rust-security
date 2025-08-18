@@ -541,7 +541,7 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
     };
     if send_res.is_err() {
         tracing::warn!(target = "mfa", channel = %redact_log(&req.channel), destination = %redact_log("masked"), "OTP send failed");
-        let event = SecurityEvent::new(
+        let mut event = SecurityEvent::new(
             SecurityEventType::MfaFailure,
             SecuritySeverity::Medium,
             "auth-service".to_string(),

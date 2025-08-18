@@ -4,9 +4,6 @@ version = "2.0.0"
 edition = "2021"
 description = "Comprehensive regression test suite for Rust Security Workspace"
 
-[workspace]
-# Empty workspace to exclude from parent workspace
-
 [[bin]]
 name = "regression-tests"
 path = "main.rs"

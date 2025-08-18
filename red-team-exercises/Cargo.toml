@@ -25,7 +25,7 @@ futures = "0.3"
 prometheus = "0.13"
 hyper = "1.0"
 # hyper-tls removed to avoid native-tls dependency
-trust-dns-resolver = "0.24"
+trust-dns-resolver = "0.23"
 pem = "3.0"
 # rsa crate removed due to RUSTSEC-2023-0071 vulnerability
 x509-parser = "0.15"
@@ -35,4 +35,3 @@ pretty_assertions = "1.4"
 colored = "2.0"
 indicatif = "0.17"
 tabular = "0.2"
-[workspace]
