@@ -4,7 +4,6 @@ use std::time::Duration;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
 use bytes::Bytes;
-use http::header::IntoHeaderName;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ResilientHttpConfig {

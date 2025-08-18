@@ -684,7 +684,7 @@ impl ValidatedDto for RateLimitConfig {}
 /// Validation middleware for Axum extractors
 pub mod middleware {
     use super::*;
-    use axum::{extract::FromRequest, http::Request, response::IntoResponse};
+    use axum::{extract::FromRequest, http::Request};
     use crate::errors::{AuthError, validation_error};
 
     /// Validated JSON extractor that automatically validates DTOs

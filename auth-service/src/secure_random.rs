@@ -1,6 +1,5 @@
 use getrandom::getrandom;
 use data_encoding::BASE64URL_NOPAD;
-use anyhow;
 use crate::{AuthError, internal_error};
 
 /// Cryptographically secure random number generator

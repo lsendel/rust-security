@@ -1,13 +1,15 @@
+use tokio::net::TcpListener;
 mod config;
 
-use std::{collections::HashMap, sync::Arc};
-
 use auth_service::{
-    app, keys, // Key management module
+    app,
     store::{redis_store, TokenStore},
+    keys, // Add keys module import
     ApiDoc, AppState,
 };
-use tokio::{net::TcpListener, sync::RwLock};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use utoipa::OpenApi;
 
 #[tokio::main]
@@ -94,8 +96,33 @@ async fn main() -> anyhow::Result<()> {
         auth_service::security_monitoring::init_security_monitoring().await;
     });
 
-    tokio::spawn(async {
-        auth_service::session_manager::start_session_cleanup_task().await;
+    // Start enhanced session cleanup scheduler with graceful shutdown
+    use auth_service::session_cleanup::{SessionCleanupConfig, create_and_start_session_cleanup, ShutdownSignal};
+    use auth_service::session_manager::{SessionManager, SessionConfig};
+    
+    let session_cleanup_config = SessionCleanupConfig::default();
+    let session_manager = Arc::new(SessionManager::new(SessionConfig::default()));
+    
+    tokio::spawn(async move {
+        match create_and_start_session_cleanup(session_cleanup_config, session_manager).await {
+            Ok(scheduler) => {
+                tracing::info!("Session cleanup scheduler started successfully");
+                
+                // Store scheduler reference for graceful shutdown
+                // In a real application, you'd want to store this in the app state
+                // for proper shutdown coordination
+                
+                // Keep the scheduler running until shutdown
+                tokio::signal::ctrl_c().await.ok();
+                
+                if let Err(e) = scheduler.shutdown(ShutdownSignal::Graceful).await {
+                    tracing::warn!(error = %e, "Failed to shutdown session cleanup gracefully");
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to start session cleanup scheduler");
+            }
+        }
     });
 
     // Start server

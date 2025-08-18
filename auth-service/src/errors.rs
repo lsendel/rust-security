@@ -52,6 +52,16 @@ pub enum AuthError {
     TokenStoreError { operation: String, source: Box<dyn std::error::Error + Send + Sync> },
     #[error("Serialization error")]
     SerializationError { source: serde_json::Error },
+    
+    // Atomic operation errors
+    #[error("Transaction failed: {reason}")]
+    TransactionFailed { reason: String },
+    #[error("Concurrent modification detected")]
+    ConcurrentModification,
+    #[error("Token family revocation failed: {reason}")]
+    TokenFamilyRevocationFailed { reason: String },
+    #[error("Refresh token reuse detected")]
+    RefreshTokenReuse,
 
     // Cryptographic errors
     #[error("Key generation failed")]
@@ -389,6 +399,37 @@ impl IntoResponse for AuthError {
                         .with_error_id(error_id)
                 )
             },
+            AuthError::TransactionFailed { reason } => {
+                let error_id = Uuid::new_v4();
+                tracing::error!(error_id = %error_id, reason = %reason, "Transaction failed");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    ErrorResponse::new("internal_error", "transaction failed")
+                        .with_error_id(error_id)
+                )
+            },
+            AuthError::ConcurrentModification => {
+                let error_id = Uuid::new_v4();
+                tracing::error!(error_id = %error_id, "Concurrent modification detected");
+                (
+                    StatusCode::CONFLICT,
+                    ErrorResponse::new("conflict", "concurrent modification detected")
+                        .with_error_id(error_id)
+                )
+            },
+            AuthError::TokenFamilyRevocationFailed { reason } => {
+                let error_id = Uuid::new_v4();
+                tracing::error!(error_id = %error_id, reason = %reason, "Token family revocation failed");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    ErrorResponse::new("internal_error", "token revocation failed")
+                        .with_error_id(error_id)
+                )
+            },
+            AuthError::RefreshTokenReuse => (
+                StatusCode::BAD_REQUEST,
+                ErrorResponse::new("invalid_grant", "refresh token reuse detected")
+            ),
             AuthError::InternalError { error_id, context } => {
                 tracing::error!(error_id = %error_id, context = %context, "Internal error");
                 (

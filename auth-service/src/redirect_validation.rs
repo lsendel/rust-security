@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use url::Url;
 use crate::AuthError;
-use std::net::IpAddr;
 use regex::Regex;
 use once_cell::sync::Lazy;
 

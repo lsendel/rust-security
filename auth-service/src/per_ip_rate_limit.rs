@@ -1,12 +1,9 @@
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use once_cell::sync::Lazy;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use std::net::IpAddr;
 use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
 

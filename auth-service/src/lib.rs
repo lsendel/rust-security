@@ -766,7 +766,7 @@ pub async fn authorize_check(
 {
     use crate::policy_cache::{normalize_policy_request, PolicyResponse};
     use std::time::{SystemTime, UNIX_EPOCH};
-    
+
     // Extract bearer token and introspect locally
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
@@ -780,7 +780,7 @@ pub async fn authorize_check(
     if !rec.active {
         return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
     }
-    
+
     // Compose principal from token record
     let principal_id = rec
         .sub
@@ -792,12 +792,12 @@ pub async fn authorize_check(
         // Attach simple attrs if needed later (tenant/brand/location)
         "attrs": {}
     });
-    
+
     // Context: merge provided context or default empty object
     let mut context = req.context.unwrap_or_else(|| serde_json::json!({}));
     // Surface mfa flags for policy step-up decisions
-    if let Some(required) = req.mfa_required { 
-        context["mfa_required"] = serde_json::json!(required); 
+    if let Some(required) = req.mfa_required {
+        context["mfa_required"] = serde_json::json!(required);
     }
     if let Some(verified) = req.mfa_verified {
         context["mfa_verified"] = serde_json::json!(verified);
@@ -814,7 +814,7 @@ pub async fn authorize_check(
             }
         }
     }
-    
+
     // Normalize policy request for caching
     let cache_request = normalize_policy_request(
         principal.clone(),
@@ -822,7 +822,7 @@ pub async fn authorize_check(
         req.resource.clone(),
         context.clone(),
     );
-    
+
     // Check cache first
     if let Some(cached_response) = state.policy_cache.get(&cache_request).await {
         tracing::info!(
@@ -830,11 +830,11 @@ pub async fn authorize_check(
             cached_at = cached_response.cached_at,
             "Policy decision served from cache"
         );
-        return Ok(Json(AuthorizationCheckResponse { 
-            decision: cached_response.decision 
+        return Ok(Json(AuthorizationCheckResponse {
+            decision: cached_response.decision
         }));
     }
-    
+
     // Cache miss - evaluate policy via service
     let decision = evaluate_policy_remote(
         &headers,
@@ -843,7 +843,7 @@ pub async fn authorize_check(
         req.resource.clone(),
         context,
     ).await?;
-    
+
     // Store in cache with appropriate TTL based on decision
     let policy_response = PolicyResponse {
         decision: decision.clone(),
@@ -857,12 +857,12 @@ pub async fn authorize_check(
             _ => 10,         // 10 seconds for unknown/error decisions
         },
     };
-    
+
     // Cache the response (ignore errors to not affect main flow)
     if let Err(e) = state.policy_cache.put(&cache_request, policy_response).await {
         tracing::warn!(error = %e, "Failed to cache policy response");
     }
-    
+
     Ok(Json(AuthorizationCheckResponse { decision }))
 }
 
@@ -880,7 +880,7 @@ async fn evaluate_policy_remote(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    
+
     let payload = PolicyAuthorizeRequest {
         request_id,
         principal,
@@ -888,7 +888,7 @@ async fn evaluate_policy_remote(
         resource,
         context,
     };
-    
+
     // Allow per-request override of policy URL to avoid env races in tests
     let policy_base = headers
         .get("x-policy-url")
@@ -904,22 +904,22 @@ async fn evaluate_policy_remote(
                 }
             }
         });
-    
-    let url = if policy_base.is_empty() { 
-        String::new() 
-    } else { 
-        format!("{}/v1/authorize", policy_base) 
+
+    let url = if policy_base.is_empty() {
+        String::new()
+    } else {
+        format!("{}/v1/authorize", policy_base)
     };
-    
+
     // Permissive fallback unless strict mode is enabled
     let strict = headers
         .get("x-policy-enforcement")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.eq_ignore_ascii_case("strict"))
         .unwrap_or(false);
-    
+
     let client = reqwest::Client::new();
-    
+
     // Deterministic behavior for explicit invalid test URL
     if policy_base.contains("invalid.invalid") {
         if strict {
@@ -928,44 +928,44 @@ async fn evaluate_policy_remote(
             return Ok("Allow".to_string());
         }
     }
-    
+
     // Additional strict guard: if strict and policy URL is clearly invalid, error early
     let decision = if url.is_empty() {
-        if strict { 
-            return Err(internal_error("Policy service URL not configured")); 
+        if strict {
+            return Err(internal_error("Policy service URL not configured"));
         }
         "Allow".to_string()
-    } else { 
+    } else {
         match client.post(url).json(&payload).send().await {
             Ok(resp) => match resp.error_for_status() {
                 Ok(ok) => match ok.json::<PolicyAuthorizeResponse>().await {
                     Ok(r) => r.decision,
                     Err(err) => {
                         tracing::warn!(error = %err, "Failed to parse policy response; falling back");
-                        if strict { 
-                            return Err(internal_error(&format!("Policy response parse error: {}", err))); 
+                        if strict {
+                            return Err(internal_error(&format!("Policy response parse error: {}", err)));
                         }
                         "Allow".to_string()
                     }
                 },
                 Err(err) => {
                     tracing::warn!(error = %err, "Policy service returned error status; falling back");
-                    if strict { 
-                        return Err(internal_error(&format!("Policy service HTTP error: {}", err))); 
+                    if strict {
+                        return Err(internal_error(&format!("Policy service HTTP error: {}", err)));
                     }
                     "Allow".to_string()
                 }
             },
             Err(err) => {
                 tracing::warn!(error = %err, "Policy service unavailable; falling back");
-                if strict { 
-                    return Err(internal_error(&format!("Policy service connection error: {}", err))); 
+                if strict {
+                    return Err(internal_error(&format!("Policy service connection error: {}", err)));
                 }
                 "Allow".to_string()
             }
         }
     };
-    
+
     Ok(decision)
 }
 
@@ -985,13 +985,13 @@ pub async fn get_policy_cache_stats(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
     let stats = state.policy_cache.get_stats().await;
-    
+
     let hit_ratio = if stats.hits + stats.misses > 0 {
         stats.hits as f64 / (stats.hits + stats.misses) as f64 * 100.0
     } else {
         0.0
     };
-    
+
     Ok(Json(serde_json::json!({
         "hits": stats.hits,
         "misses": stats.misses,
@@ -1014,9 +1014,9 @@ pub async fn clear_policy_cache(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
     let cleared = state.policy_cache.clear().await;
-    
+
     tracing::info!(cleared = cleared, "Policy cache manually cleared");
-    
+
     Ok(Json(serde_json::json!({
         "cleared": cleared,
         "message": "Policy cache cleared successfully"
@@ -1041,13 +1041,13 @@ pub async fn invalidate_policy_cache(
     Json(req): Json<PolicyCacheInvalidateRequest>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
     let removed = state.policy_cache.invalidate(&req.pattern).await;
-    
+
     tracing::info!(
         pattern = %req.pattern,
         removed = removed,
         "Policy cache entries invalidated by pattern"
     );
-    
+
     Ok(Json(serde_json::json!({
         "pattern": req.pattern,
         "removed": removed,

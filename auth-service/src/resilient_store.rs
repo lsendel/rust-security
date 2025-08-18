@@ -1,7 +1,6 @@
 use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, TimeoutConfig, RetryConfig, RetryBackoff};
 use crate::errors::AuthError;
 use std::time::Duration;
-use std::sync::Arc;
 use tokio::time::timeout;
 use redis::{aio::ConnectionManager, AsyncCommands};
 

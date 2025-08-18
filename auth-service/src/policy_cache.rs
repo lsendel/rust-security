@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
@@ -7,7 +6,7 @@ use serde_json::Value;
 use tracing::{info, warn, error, instrument};
 use dashmap::DashMap;
 
-use crate::errors::{AuthError, internal_error};
+use crate::errors::AuthError;
 
 /// Configuration for policy caching
 #[derive(Debug, Clone)]
