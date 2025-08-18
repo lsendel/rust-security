@@ -12,6 +12,12 @@ async fn spawn_app() -> String {
     let mut client_credentials = HashMap::new();
     client_credentials.insert("test_client".to_string(), "test_secret".to_string());
 
+    // Enable test mode to relax client secret strength and bypass signature/rate limits
+    std::env::set_var("TEST_MODE", "1");
+    std::env::set_var("DISABLE_RATE_LIMIT", "1");
+    // Ensure global client authenticator can find this client
+    std::env::set_var("CLIENT_CREDENTIALS", "test_client:test_secret");
+
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials,

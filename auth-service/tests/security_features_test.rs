@@ -16,6 +16,7 @@ async fn spawn_app() -> String {
 
     std::env::set_var("TEST_MODE", "1");
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
+    std::env::set_var("CLIENT_CREDENTIALS", "test_client:test_secret_12345");
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),

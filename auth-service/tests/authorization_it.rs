@@ -114,6 +114,7 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
     let res = reqwest::Client::new()
         .post(format!("{}/v1/authorize", base))
         .bearer_auth(token)
+        .header("x-policy-url", "http://invalid.invalid")
         .json(&AuthorizeReq {
             action: "orders:read".to_string(),
             resource: serde_json::json!({ "type": "Order", "id": "o1" }),
@@ -157,6 +158,7 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
         .post(format!("{}/v1/authorize", base))
         .bearer_auth(token)
         .header("x-policy-enforcement", "strict")
+        .header("x-policy-url", "http://invalid.invalid")
         .json(&AuthorizeReq {
             action: "orders:read".to_string(),
             resource: serde_json::json!({ "type": "Order", "id": "o1" }),

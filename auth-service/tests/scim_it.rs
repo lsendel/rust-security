@@ -9,6 +9,9 @@ use tokio::sync::RwLock;
 async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
+    // Bypass SCIM basic auth and rate limiting in tests
+    std::env::set_var("TEST_MODE", "1");
+    std::env::set_var("DISABLE_RATE_LIMIT", "1");
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
@@ -234,7 +237,7 @@ async fn test_bulk_create_users() {
     assert_eq!(bulk_response.operations[0].bulk_id, Some("user1".to_string()));
     assert_eq!(bulk_response.operations[0].status, "201");
     assert!(bulk_response.operations[0].location.is_some());
-    
+
     // Check second user creation
     assert_eq!(bulk_response.operations[1].method, BulkOperationMethod::Post);
     assert_eq!(bulk_response.operations[1].bulk_id, Some("user2".to_string()));

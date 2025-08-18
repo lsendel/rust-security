@@ -1,0 +1,656 @@
+# Comprehensive Disaster Recovery and Backup Strategy
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backup-system
+  labels:
+    name: backup-system
+    purpose: disaster-recovery
+---
+# Velero Backup Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-backup-config
+  namespace: backup-system
+data:
+  backup-schedule.yaml: |
+    # Daily backup schedule
+    apiVersion: velero.io/v1
+    kind: Schedule
+    metadata:
+      name: auth-service-daily-backup
+      namespace: backup-system
+    spec:
+      schedule: "0 2 * * *"  # Daily at 2 AM UTC
+      template:
+        metadata:
+          labels:
+            backup-type: daily
+            service: auth-service
+        spec:
+          includedNamespaces:
+          - auth-service
+          - monitoring
+          - cert-manager
+          - external-secrets-system
+          storageLocation: primary
+          defaultVolumesToRestic: true
+          ttl: 720h  # 30 days
+          hooks:
+            resources:
+            - name: postgres-backup-hook
+              includedNamespaces:
+              - auth-service
+              labelSelector:
+                matchLabels:
+                  app: postgresql
+              pre:
+              - exec:
+                  container: postgresql
+                  command:
+                  - /bin/bash
+                  - -c
+                  - pg_dump $DATABASE_NAME > /tmp/backup.sql
+                  timeout: 300s
+              post:
+              - exec:
+                  container: postgresql
+                  command:
+                  - /bin/bash
+                  - -c
+                  - rm -f /tmp/backup.sql
+    ---
+    # Weekly backup schedule
+    apiVersion: velero.io/v1
+    kind: Schedule
+    metadata:
+      name: auth-service-weekly-backup
+      namespace: backup-system
+    spec:
+      schedule: "0 3 * * 0"  # Weekly on Sunday at 3 AM UTC
+      template:
+        metadata:
+          labels:
+            backup-type: weekly
+            service: auth-service
+        spec:
+          includedNamespaces:
+          - auth-service
+          - monitoring
+          - cert-manager
+          - external-secrets-system
+          - istio-system
+          - gatekeeper-system
+          storageLocation: secondary
+          defaultVolumesToRestic: true
+          ttl: 2160h  # 90 days
+    ---
+    # Monthly backup schedule
+    apiVersion: velero.io/v1
+    kind: Schedule
+    metadata:
+      name: auth-service-monthly-backup
+      namespace: backup-system
+    spec:
+      schedule: "0 4 1 * *"  # Monthly on 1st at 4 AM UTC
+      template:
+        metadata:
+          labels:
+            backup-type: monthly
+            service: auth-service
+        spec:
+          includedNamespaces:
+          - auth-service
+          - monitoring
+          - cert-manager
+          - external-secrets-system
+          - istio-system
+          - gatekeeper-system
+          - kube-system
+          storageLocation: archive
+          defaultVolumesToRestic: true
+          ttl: 8760h  # 1 year
+
+  backup-storage-locations.yaml: |
+    # Primary backup storage location
+    apiVersion: velero.io/v1
+    kind: BackupStorageLocation
+    metadata:
+      name: primary
+      namespace: backup-system
+    spec:
+      provider: aws
+      objectStorage:
+        bucket: auth-service-backups-primary
+        prefix: velero
+      config:
+        region: us-west-2
+        kmsKeyId: arn:aws:kms:us-west-2:123456789012:key/backup-key-id
+        serverSideEncryption: AES256
+    ---
+    # Secondary backup storage location (different region)
+    apiVersion: velero.io/v1
+    kind: BackupStorageLocation
+    metadata:
+      name: secondary
+      namespace: backup-system
+    spec:
+      provider: aws
+      objectStorage:
+        bucket: auth-service-backups-secondary
+        prefix: velero
+      config:
+        region: us-east-1
+        kmsKeyId: arn:aws:kms:us-east-1:123456789012:key/backup-key-id
+        serverSideEncryption: AES256
+    ---
+    # Archive storage location (for long-term retention)
+    apiVersion: velero.io/v1
+    kind: BackupStorageLocation
+    metadata:
+      name: archive
+      namespace: backup-system
+    spec:
+      provider: aws
+      objectStorage:
+        bucket: auth-service-backups-archive
+        prefix: velero
+      config:
+        region: us-west-2
+        kmsKeyId: arn:aws:kms:us-west-2:123456789012:key/backup-key-id
+        serverSideEncryption: AES256
+        s3Url: https://s3.us-west-2.amazonaws.com
+        storageClass: GLACIER
+
+  volume-snapshot-locations.yaml: |
+    # Primary volume snapshot location
+    apiVersion: velero.io/v1
+    kind: VolumeSnapshotLocation
+    metadata:
+      name: primary-snapshots
+      namespace: backup-system
+    spec:
+      provider: aws
+      config:
+        region: us-west-2
+        kmsKeyId: arn:aws:kms:us-west-2:123456789012:key/backup-key-id
+    ---
+    # Secondary volume snapshot location
+    apiVersion: velero.io/v1
+    kind: VolumeSnapshotLocation
+    metadata:
+      name: secondary-snapshots
+      namespace: backup-system
+    spec:
+      provider: aws
+      config:
+        region: us-east-1
+        kmsKeyId: arn:aws:kms:us-east-1:123456789012:key/backup-key-id
+
+---
+# Database Backup Strategy
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-logical-backup
+  namespace: backup-system
+spec:
+  schedule: "0 1 * * *"  # Daily at 1 AM UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+            backup-type: logical
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-service-account
+          containers:
+          - name: postgres-backup
+            image: postgres:15-alpine
+            env:
+            - name: PGHOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: host
+            - name: PGPORT
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: port
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: database
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-backup-credentials
+                  key: password
+            - name: S3_BUCKET
+              value: "auth-service-database-backups"
+            - name: AWS_REGION
+              value: "us-west-2"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              # Create backup filename with timestamp
+              BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="auth_service_backup_${BACKUP_DATE}.sql"
+              COMPRESSED_FILE="${BACKUP_FILE}.gz"
+              
+              echo "Starting database backup: ${BACKUP_FILE}"
+              
+              # Create logical backup
+              pg_dump \
+                --verbose \
+                --clean \
+                --no-acl \
+                --no-owner \
+                --format=plain \
+                --file=/tmp/${BACKUP_FILE} \
+                ${PGDATABASE}
+              
+              # Compress backup
+              gzip /tmp/${BACKUP_FILE}
+              
+              # Upload to S3 with encryption
+              aws s3 cp /tmp/${COMPRESSED_FILE} \
+                s3://${S3_BUCKET}/logical-backups/${COMPRESSED_FILE} \
+                --server-side-encryption AES256 \
+                --metadata backup-date=${BACKUP_DATE},backup-type=logical
+              
+              # Verify upload
+              aws s3 ls s3://${S3_BUCKET}/logical-backups/${COMPRESSED_FILE}
+              
+              # Cleanup local files
+              rm -f /tmp/${COMPRESSED_FILE}
+              
+              echo "Backup completed successfully: ${COMPRESSED_FILE}"
+            volumeMounts:
+            - name: tmp-storage
+              mountPath: /tmp
+          volumes:
+          - name: tmp-storage
+            emptyDir:
+              sizeLimit: 10Gi
+---
+# Redis Backup Strategy
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: backup-system
+spec:
+  schedule: "30 1 * * *"  # Daily at 1:30 AM UTC
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: redis-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-service-account
+          containers:
+          - name: redis-backup
+            image: redis:7-alpine
+            env:
+            - name: REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-credentials
+                  key: host
+            - name: REDIS_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-credentials
+                  key: port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-backup-credentials
+                  key: password
+            - name: S3_BUCKET
+              value: "auth-service-redis-backups"
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="redis_backup_${BACKUP_DATE}.rdb"
+              
+              echo "Starting Redis backup: ${BACKUP_FILE}"
+              
+              # Create Redis backup using BGSAVE
+              redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -a ${REDIS_PASSWORD} BGSAVE
+              
+              # Wait for backup to complete
+              while [ "$(redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -a ${REDIS_PASSWORD} LASTSAVE)" = "$(redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -a ${REDIS_PASSWORD} LASTSAVE)" ]; do
+                sleep 1
+              done
+              
+              # Copy RDB file
+              redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -a ${REDIS_PASSWORD} --rdb /tmp/${BACKUP_FILE}
+              
+              # Upload to S3
+              aws s3 cp /tmp/${BACKUP_FILE} \
+                s3://${S3_BUCKET}/redis-backups/${BACKUP_FILE} \
+                --server-side-encryption AES256
+              
+              rm -f /tmp/${BACKUP_FILE}
+              echo "Redis backup completed: ${BACKUP_FILE}"
+---
+# Backup Monitoring and Alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backup-monitoring
+  namespace: backup-system
+  labels:
+    app: backup-monitoring
+spec:
+  groups:
+  - name: backup.alerts
+    rules:
+    - alert: BackupJobFailed
+      expr: |
+        increase(kube_job_status_failed{namespace="backup-system"}[1h]) > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: backup
+      annotations:
+        summary: "Backup job failed"
+        description: "Backup job {{ $labels.job_name }} in namespace {{ $labels.namespace }} has failed"
+        runbook_url: "https://wiki.company.com/runbooks/backup/job-failed"
+    
+    - alert: BackupJobNotRun
+      expr: |
+        time() - kube_job_status_completion_time{namespace="backup-system"} > 25*3600
+      for: 1h
+      labels:
+        severity: warning
+        service: backup
+      annotations:
+        summary: "Backup job hasn't run recently"
+        description: "Backup job {{ $labels.job_name }} hasn't completed successfully in the last 25 hours"
+        runbook_url: "https://wiki.company.com/runbooks/backup/job-not-run"
+    
+    - alert: VeleroBackupFailed
+      expr: |
+        increase(velero_backup_failure_total[1h]) > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: velero
+      annotations:
+        summary: "Velero backup failed"
+        description: "Velero backup has failed in schedule {{ $labels.schedule }}"
+        runbook_url: "https://wiki.company.com/runbooks/velero/backup-failed"
+    
+    - alert: VeleroBackupPartialFailure
+      expr: |
+        increase(velero_backup_partial_failure_total[1h]) > 0
+      for: 0m
+      labels:
+        severity: warning
+        service: velero
+      annotations:
+        summary: "Velero backup partially failed"
+        description: "Velero backup partially failed in schedule {{ $labels.schedule }}"
+        runbook_url: "https://wiki.company.com/runbooks/velero/backup-partial-failure"
+
+---
+# Disaster Recovery Testing
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: disaster-recovery-test
+  namespace: backup-system
+spec:
+  schedule: "0 6 * * 0"  # Weekly on Sunday at 6 AM UTC
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: dr-test
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: dr-test-service-account
+          containers:
+          - name: dr-test
+            image: bitnami/kubectl:latest
+            env:
+            - name: DR_NAMESPACE
+              value: "auth-service-dr-test"
+            - name: WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: dr-test-config
+                  key: webhook-url
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              echo "Starting disaster recovery test"
+              
+              # Create test namespace
+              kubectl create namespace ${DR_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+              
+              # Get latest backup
+              LATEST_BACKUP=$(kubectl get backups -n backup-system \
+                --sort-by=.metadata.creationTimestamp \
+                -o jsonpath='{.items[-1].metadata.name}')
+              
+              echo "Testing restore from backup: ${LATEST_BACKUP}"
+              
+              # Create restore from latest backup
+              cat <<EOF | kubectl apply -f -
+              apiVersion: velero.io/v1
+              kind: Restore
+              metadata:
+                name: dr-test-$(date +%Y%m%d-%H%M%S)
+                namespace: backup-system
+              spec:
+                backupName: ${LATEST_BACKUP}
+                includedNamespaces:
+                - auth-service
+                namespaceMapping:
+                  auth-service: ${DR_NAMESPACE}
+                restorePVs: true
+              EOF
+              
+              # Wait for restore to complete
+              echo "Waiting for restore to complete..."
+              sleep 300
+              
+              # Verify restore
+              RESTORE_STATUS=$(kubectl get restore -n backup-system \
+                --sort-by=.metadata.creationTimestamp \
+                -o jsonpath='{.items[-1].status.phase}')
+              
+              if [ "${RESTORE_STATUS}" = "Completed" ]; then
+                echo "Disaster recovery test PASSED"
+                STATUS="SUCCESS"
+                
+                # Verify application is running
+                kubectl wait --for=condition=ready pod \
+                  -l app=auth-service \
+                  -n ${DR_NAMESPACE} \
+                  --timeout=300s
+                
+                # Basic functionality test
+                kubectl run dr-test-curl --rm -i --restart=Never \
+                  --image=curlimages/curl:latest \
+                  --namespace=${DR_NAMESPACE} \
+                  -- curl -f http://auth-service.${DR_NAMESPACE}.svc.cluster.local/health
+                
+              else
+                echo "Disaster recovery test FAILED"
+                STATUS="FAILED"
+              fi
+              
+              # Cleanup test namespace
+              kubectl delete namespace ${DR_NAMESPACE} --ignore-not-found=true
+              
+              # Send notification
+              curl -X POST ${WEBHOOK_URL} \
+                -H "Content-Type: application/json" \
+                -d "{
+                  \"test_type\": \"disaster_recovery\",
+                  \"status\": \"${STATUS}\",
+                  \"backup_name\": \"${LATEST_BACKUP}\",
+                  \"restore_status\": \"${RESTORE_STATUS}\",
+                  \"timestamp\": \"$(date -Iseconds)\"
+                }"
+              
+              if [ "${STATUS}" = "FAILED" ]; then
+                exit 1
+              fi
+
+---
+# Cross-Region Backup Replication
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cross-region-backup-sync
+  namespace: backup-system
+spec:
+  schedule: "0 4 * * *"  # Daily at 4 AM UTC
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: cross-region-sync
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-service-account
+          containers:
+          - name: sync
+            image: amazon/aws-cli:latest
+            env:
+            - name: SOURCE_BUCKET
+              value: "auth-service-backups-primary"
+            - name: DEST_BUCKET
+              value: "auth-service-backups-dr"
+            - name: SOURCE_REGION
+              value: "us-west-2"
+            - name: DEST_REGION
+              value: "us-east-1"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              echo "Starting cross-region backup synchronization"
+              
+              # Sync backups to disaster recovery region
+              aws s3 sync \
+                s3://${SOURCE_BUCKET}/velero \
+                s3://${DEST_BUCKET}/velero \
+                --source-region ${SOURCE_REGION} \
+                --region ${DEST_REGION} \
+                --exclude "*" \
+                --include "*.tar.gz" \
+                --storage-class STANDARD_IA \
+                --server-side-encryption AES256
+              
+              # Sync database backups
+              aws s3 sync \
+                s3://${SOURCE_BUCKET}/logical-backups \
+                s3://${DEST_BUCKET}/logical-backups \
+                --source-region ${SOURCE_REGION} \
+                --region ${DEST_REGION} \
+                --storage-class STANDARD_IA \
+                --server-side-encryption AES256
+              
+              echo "Cross-region synchronization completed"
+
+---
+# Backup Retention Policy Enforcement
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-retention-cleanup
+  namespace: backup-system
+spec:
+  schedule: "0 5 * * *"  # Daily at 5 AM UTC
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: backup-cleanup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-service-account
+          containers:
+          - name: cleanup
+            image: amazon/aws-cli:latest
+            env:
+            - name: BACKUP_BUCKET
+              value: "auth-service-backups-primary"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              echo "Starting backup retention cleanup"
+              
+              # Delete database backups older than 90 days
+              aws s3api list-objects-v2 \
+                --bucket ${BACKUP_BUCKET} \
+                --prefix logical-backups/ \
+                --query "Contents[?LastModified<='$(date -d '90 days ago' -Iseconds)'].Key" \
+                --output text | \
+              while read key; do
+                if [ ! -z "$key" ]; then
+                  echo "Deleting old backup: $key"
+                  aws s3 rm s3://${BACKUP_BUCKET}/$key
+                fi
+              done
+              
+              # Move backups older than 30 days to Glacier
+              aws s3api list-objects-v2 \
+                --bucket ${BACKUP_BUCKET} \
+                --prefix velero/ \
+                --query "Contents[?LastModified<='$(date -d '30 days ago' -Iseconds)' && StorageClass!='GLACIER'].Key" \
+                --output text | \
+              while read key; do
+                if [ ! -z "$key" ]; then
+                  echo "Moving to Glacier: $key"
+                  aws s3 cp s3://${BACKUP_BUCKET}/$key s3://${BACKUP_BUCKET}/$key \
+                    --storage-class GLACIER \
+                    --metadata-directive REPLACE
+                fi
+              done
+              
+              echo "Backup retention cleanup completed"

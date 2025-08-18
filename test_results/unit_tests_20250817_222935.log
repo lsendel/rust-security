@@ -1,0 +1,91 @@
+warning: unused import: `std::sync::Arc`
+ --> auth-service/src/keys.rs:6:5
+  |
+6 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `response::Response`
+   --> auth-service/src/security_headers.rs:202:9
+    |
+202 |         response::Response,
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::hash_map::DefaultHasher`
+ --> auth-service/src/per_ip_rate_limit.rs:3:5
+  |
+3 | use std::collections::hash_map::DefaultHasher;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Hash` and `Hasher`
+ --> auth-service/src/per_ip_rate_limit.rs:4:17
+  |
+4 | use std::hash::{Hash, Hasher};
+  |                 ^^^^  ^^^^^^
+
+warning: unused import: `Duration`
+ --> auth-service/src/per_ip_rate_limit.rs:6:17
+  |
+6 | use std::time::{Duration, SystemTime, UNIX_EPOCH};
+  |                 ^^^^^^^^
+
+warning: unused import: `axum::response::IntoResponse`
+ --> auth-service/src/per_ip_rate_limit.rs:9:5
+  |
+9 | use axum::response::IntoResponse;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::thread`
+   --> auth-service/src/per_ip_rate_limit.rs:421:9
+    |
+421 |     use std::thread;
+    |         ^^^^^^^^^^^
+
+warning: unused import: `std::time::Duration`
+   --> auth-service/src/per_ip_rate_limit.rs:422:9
+    |
+422 |     use std::time::Duration;
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `ip`
+  --> auth-service/src/per_ip_rate_limit.rs:93:63
+   |
+93 |     fn check_and_update(&self, config: &PerIpRateLimitConfig, ip: &IpAddr) -> bool {
+   |                                                               ^^ help: if this is intentional, prefix it with an underscore: `_ip`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `user_id`
+   --> auth-service/src/scim_rbac.rs:273:48
+    |
+273 |             ScimOperation::UserPasswordReset { user_id } => {
+    |                                                ^^^^^^^ help: try ignoring the field: `user_id: _`
+
+warning: unused variable: `last`
+   --> auth-service/src/auth_failure_logging.rs:229:40
+    |
+229 |                     let (count, first, last, suspicious) = ip_stats.get_stats();
+    |                                        ^^^^ help: if this is intentional, prefix it with an underscore: `_last`
+
+warning: unused variable: `i`
+   --> auth-service/src/auth_failure_logging.rs:406:13
+    |
+406 |         for i in 0..5 {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: field `allowed_schemes` is never read
+  --> auth-service/src/redirect_validation.rs:12:5
+   |
+6  | pub struct RedirectUriValidator {
+   |            -------------------- field in this struct
+...
+12 |     allowed_schemes: HashSet<String>,
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+
+running 61 tests
+.............................................................
+test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.23s

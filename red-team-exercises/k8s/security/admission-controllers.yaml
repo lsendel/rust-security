@@ -1,0 +1,277 @@
+# OPA Gatekeeper Constraints and Templates
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredsecuritycontext
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredSecurityContext
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            runAsNonRoot:
+              type: boolean
+            readOnlyRootFilesystem:
+              type: boolean
+            allowPrivilegeEscalation:
+              type: boolean
+            requiredDropCapabilities:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredsecuritycontext
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container.securityContext.runAsNonRoot
+          msg := sprintf("Container %v must run as non-root user", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not container.securityContext.readOnlyRootFilesystem
+          msg := sprintf("Container %v must have read-only root filesystem", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          container.securityContext.allowPrivilegeEscalation
+          msg := sprintf("Container %v must not allow privilege escalation", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          required := input.parameters.requiredDropCapabilities[_]
+          not required in container.securityContext.capabilities.drop
+          msg := sprintf("Container %v must drop capability %v", [container.name, required])
+        }
+---
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: K8sRequiredSecurityContext
+metadata:
+  name: must-have-security-context
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces: ["auth-service"]
+  parameters:
+    runAsNonRoot: true
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    requiredDropCapabilities: ["ALL"]
+---
+# Image security constraint
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8sallowedrepos
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sAllowedRepos
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            repos:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sallowedrepos
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          not starts_with(container.image, input.parameters.repos[_])
+          msg := sprintf("Container image %v is not from an allowed repository", [container.image])
+        }
+---
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: K8sAllowedRepos
+metadata:
+  name: allowed-image-repos
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces: ["auth-service"]
+  parameters:
+    repos:
+      - "gcr.io/trusted-registry/"
+      - "your-company.azurecr.io/"
+      - "123456789012.dkr.ecr.us-west-2.amazonaws.com/"
+---
+# Resource limits constraint
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredresources
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredResources
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            limits:
+              type: array
+              items:
+                type: string
+            requests:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredresources
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          required := input.parameters.limits[_]
+          not container.resources.limits[required]
+          msg := sprintf("Container %v is missing required limit %v", [container.name, required])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          required := input.parameters.requests[_]
+          not container.resources.requests[required]
+          msg := sprintf("Container %v is missing required request %v", [container.name, required])
+        }
+---
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: K8sRequiredResources
+metadata:
+  name: must-have-resources
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces: ["auth-service"]
+  parameters:
+    limits: ["memory", "cpu"]
+    requests: ["memory", "cpu"]
+---
+# ValidatingAdmissionWebhook for custom validation
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionWebhook
+metadata:
+  name: auth-service-security-validator
+webhooks:
+- name: security.auth-service.io
+  clientConfig:
+    service:
+      name: auth-service-admission-webhook
+      namespace: auth-service
+      path: "/validate"
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["apps"]
+    apiVersions: ["v1"]
+    resources: ["deployments"]
+  namespaceSelector:
+    matchLabels:
+      name: auth-service
+  admissionReviewVersions: ["v1", "v1beta1"]
+  sideEffects: None
+  failurePolicy: Fail
+---
+# Falco Security Rules
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-rules
+  namespace: falco-system
+data:
+  auth_service_rules.yaml: |
+    - rule: Unauthorized Process in Auth Service Container
+      desc: Detect unexpected processes in auth service containers
+      condition: >
+        spawned_process and
+        k8s_ns = "auth-service" and
+        k8s_pod_label_app = "auth-service" and
+        not proc.name in (auth-service, sh, bash)
+      output: >
+        Unauthorized process in auth service container
+        (user=%user.name command=%proc.cmdline container=%container.name
+        pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: WARNING
+      tags: [container, process, auth-service]
+
+    - rule: Sensitive File Access in Auth Service
+      desc: Detect access to sensitive files in auth service
+      condition: >
+        open_read and
+        k8s_ns = "auth-service" and
+        k8s_pod_label_app = "auth-service" and
+        (fd.name contains "/etc/passwd" or
+         fd.name contains "/etc/shadow" or
+         fd.name contains "/proc/")
+      output: >
+        Sensitive file access in auth service
+        (user=%user.name file=%fd.name container=%container.name
+        pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: HIGH
+      tags: [filesystem, auth-service]
+
+    - rule: Network Connection from Auth Service
+      desc: Monitor network connections from auth service
+      condition: >
+        outbound and
+        k8s_ns = "auth-service" and
+        k8s_pod_label_app = "auth-service" and
+        not fd.rip in (allowed_external_ips) and
+        not fd.sport in (5432, 6379, 443, 53)
+      output: >
+        Unexpected network connection from auth service
+        (user=%user.name dest=%fd.rip:%fd.rport container=%container.name
+        pod=%k8s.pod.name ns=%k8s.ns.name)
+      priority: NOTICE
+      tags: [network, auth-service]
+
+    - macro: allowed_external_ips
+      condition: >
+        (fd.rip = "10.0.0.0/8" or
+         fd.rip = "172.16.0.0/12" or
+         fd.rip = "192.168.0.0/16")
+---
+# Kustomization for security policies
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: auth-service-security
+resources:
+- pod-security-standards.yaml
+- network-policies.yaml
+- admission-controllers.yaml
+
+patchesStrategicMerge:
+- security-context-patch.yaml
+
+configMapGenerator:
+- name: security-config
+  files:
+  - security.conf
+
+secretGenerator:
+- name: security-keys
+  files:
+  - tls.crt
+  - tls.key
+  type: kubernetes.io/tls

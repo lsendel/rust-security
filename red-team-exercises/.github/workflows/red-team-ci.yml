@@ -1,0 +1,67 @@
+name: Red Team Security Testing
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday 2 AM
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target service URL'
+        required: true
+        default: 'http://localhost:8080'
+      intensity:
+        description: 'Test intensity'
+        required: true
+        default: 'medium'
+        type: choice
+        options:
+        - low
+        - medium
+        - high
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  red-team-testing:
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build auth service
+        run: |
+          cd auth-service
+          cargo build --release
+
+      - name: Start auth service
+        run: |
+          cd auth-service
+          REDIS_URL=redis://localhost:6379 ./target/release/auth-service &
+          timeout 30 bash -c 'until curl -f http://localhost:8080/health; do sleep 1; done'
+
+      - name: Run red team exercises
+        run: |
+          cd red-team-exercises
+          cargo run -- \
+            --target http://localhost:8080 \
+            --scenario all \
+            --intensity medium \
+            --duration 300 \
+            --output red_team_report.json
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: red-team-report
+          path: red-team-exercises/red_team_report.json

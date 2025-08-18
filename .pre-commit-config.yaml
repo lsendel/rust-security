@@ -1,0 +1,210 @@
+# Supply Chain Security Pre-commit Hooks
+# Comprehensive security checks before code is committed
+
+repos:
+  # Security scanning for secrets
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock
+
+  # Git secrets scanning
+  - repo: https://github.com/awslabs/git-secrets
+    rev: master
+    hooks:
+      - id: git-secrets
+        entry: 'git-secrets --scan'
+        language: system
+        types: [text]
+
+  # Rust security and quality checks
+  - repo: local
+    hooks:
+      # Cargo format check
+      - id: cargo-fmt
+        name: Cargo Format
+        entry: cargo fmt --all -- --check
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      # Cargo clippy with security lints
+      - id: cargo-clippy
+        name: Cargo Clippy (Security Focus)
+        entry: cargo clippy --all-targets --all-features -- -D warnings -D clippy::suspicious -D clippy::perf -W clippy::nursery
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      # Cargo security audit
+      - id: cargo-audit
+        name: Cargo Security Audit
+        entry: cargo audit --deny warnings
+        language: system
+        files: Cargo\.(toml|lock)$
+        pass_filenames: false
+
+      # Dependency policy check
+      - id: cargo-deny
+        name: Cargo Deny Check
+        entry: cargo deny check
+        language: system
+        files: Cargo\.(toml|lock)$
+        pass_filenames: false
+
+      # Generate SBOM on dependency changes
+      - id: sbom-generation
+        name: SBOM Generation
+        entry: python3 scripts/security/sbom-generator.py --project-root . --output sbom.spdx.json --verify
+        language: system
+        files: Cargo\.(toml|lock)$
+        pass_filenames: false
+
+      # Check for unsafe code blocks
+      - id: unsafe-code-check
+        name: Unsafe Code Detection
+        entry: bash -c 'if grep -rn "unsafe" --include="*.rs" src/; then echo "⚠️  Unsafe code detected. Please review security implications."; exit 1; fi'
+        language: system
+        files: \.rs$
+
+      # License headers check
+      - id: license-headers
+        name: License Headers
+        entry: bash -c 'find src/ -name "*.rs" -exec grep -L "Licensed under" {} \; | if read; then echo "❌ Missing license headers in Rust files"; exit 1; fi'
+        language: system
+        files: \.rs$
+
+  # YAML/JSON security
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.32.0
+    hooks:
+      - id: yamllint
+        args: [--format, parsable, --strict]
+        exclude: \.github/workflows/.*\.yml$
+
+  # Docker security
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: [--ignore, DL3008, --ignore, DL3009]
+
+  # Infrastructure as Code security
+  - repo: https://github.com/bridgecrewio/checkov.git
+    rev: 2.4.9
+    hooks:
+      - id: checkov
+        args: [--framework, dockerfile, --framework, kubernetes]
+
+  # General security patterns
+  - repo: https://github.com/returntocorp/semgrep
+    rev: v1.35.0
+    hooks:
+      - id: semgrep
+        args: ['--config=auto', '--error', '--exclude=target/']
+
+  # File security checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      # Prevent large files
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      
+      # Check for private keys
+      - id: detect-private-key
+      
+      # Check for AWS credentials
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+      
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        exclude: \.bin$
+      
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        exclude: \.md$
+      
+      # Check YAML validity
+      - id: check-yaml
+        exclude: \.github/workflows/.*\.yml$
+      
+      # Check JSON validity
+      - id: check-json
+      
+      # Check for merge conflicts
+      - id: check-merge-conflict
+
+  # Custom security hooks
+  - repo: local
+    hooks:
+      # Check for hardcoded secrets patterns
+      - id: hardcoded-secrets
+        name: Hardcoded Secrets Check
+        entry: bash -c 'if grep -rE "(password|secret|key|token|credential)\s*[:=]\s*[\"'\''][^\"\']*[\"'\'']" --include="*.rs" --include="*.toml" --include="*.yml" --include="*.yaml" --include="*.json" .; then echo "❌ Potential hardcoded secrets found"; exit 1; fi'
+        language: system
+        
+      # Verify dependencies are pinned
+      - id: dependency-pinning
+        name: Dependency Pinning Check
+        entry: bash -c 'if grep -E "^\s*[a-zA-Z0-9_-]+\s*=\s*[\"'\''][^\"'\'']*\*[^\"'\'']*[\"'\'']" Cargo.toml; then echo "❌ Unpinned dependencies found (wildcards)"; exit 1; fi'
+        language: system
+        files: Cargo\.toml$
+
+      # Check for debug/development artifacts
+      - id: debug-artifacts
+        name: Debug Artifacts Check
+        entry: bash -c 'if grep -rE "(println!|dbg!|eprintln!)" --include="*.rs" src/; then echo "⚠️  Debug statements found. Consider removing for production."; exit 1; fi'
+        language: system
+        files: \.rs$
+
+      # Verify TLS/security configurations
+      - id: security-config-check
+        name: Security Configuration Check
+        entry: bash -c 'if grep -rE "(http://|insecure|verify.*false)" --include="*.rs" --include="*.toml" --include="*.yml" .; then echo "⚠️  Insecure configuration detected"; exit 1; fi'
+        language: system
+
+      # License compliance check
+      - id: license-compliance
+        name: License Compliance
+        entry: python3 -c "
+import toml
+import sys
+
+# Read Cargo.toml
+with open('Cargo.toml', 'r') as f:
+    cargo = toml.load(f)
+
+# Check for required license
+if 'package' not in cargo or 'license' not in cargo['package']:
+    print('❌ Missing license in Cargo.toml')
+    sys.exit(1)
+
+# Allowed licenses for supply chain compliance
+allowed_licenses = ['MIT', 'Apache-2.0', 'BSD-3-Clause']
+license = cargo['package']['license']
+
+if license not in allowed_licenses:
+    print(f'❌ License {license} not in approved list: {allowed_licenses}')
+    sys.exit(1)
+
+print(f'✅ License {license} is compliant')
+"
+        language: system
+        files: Cargo\.toml$
+
+# Pre-commit CI configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [cargo-audit, cargo-deny, sbom-generation]  # Skip tools not available in CI
+  submodules: false

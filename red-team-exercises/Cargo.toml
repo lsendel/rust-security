@@ -1,0 +1,38 @@
+[package]
+name = "red-team-exercises"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+base64 = "0.21"
+jsonwebtoken = "8.0"
+sha2 = "0.10"
+hmac = "0.12"
+url = "2.3"
+redis = "0.23"
+futures = "0.3"
+prometheus = "0.13"
+hyper = "0.14"
+hyper-tls = "0.5"
+trust-dns-resolver = "0.23"
+pem = "3.0"
+rsa = "0.9"
+x509-parser = "0.15"
+pprof = { version = "0.11", features = ["criterion", "flamegraph"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+pretty_assertions = "1.4"
+colored = "2.0"
+indicatif = "0.17"
+tabular = "0.2"
+[workspace]

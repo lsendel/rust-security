@@ -1,0 +1,356 @@
+# Supply Chain Security Monitoring Dashboard Configuration
+# Comprehensive metrics collection and alerting for supply chain security
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supply-chain-security-dashboard
+  namespace: monitoring
+data:
+  dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Supply Chain Security Dashboard",
+        "tags": ["security", "supply-chain", "compliance"],
+        "style": "dark",
+        "timezone": "UTC",
+        "editable": true,
+        "hideControls": false,
+        "graphTooltip": 1,
+        "panels": [
+          {
+            "id": 1,
+            "title": "Vulnerability Summary",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(supply_chain_vulnerabilities_total) by (severity)",
+                "legendFormat": "{{severity}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 1},
+                    {"color": "red", "value": 5}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Dependency Freshness",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "avg(supply_chain_dependency_age_days)",
+                "legendFormat": "Average Age (days)"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "min": 0,
+                "max": 365,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 90},
+                    {"color": "red", "value": 180}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Build Security Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "supply_chain_build_security_score",
+                "legendFormat": "Security Score"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 70},
+                    {"color": "green", "value": 90}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "SLSA Compliance Level",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "supply_chain_slsa_level",
+                "legendFormat": "SLSA Level"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "min": 0,
+                "max": 4,
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 2},
+                    {"color": "green", "value": 3}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+          },
+          {
+            "id": 5,
+            "title": "Vulnerability Trend",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(supply_chain_vulnerabilities_total) by (severity)",
+                "legendFormat": "{{severity}}"
+              }
+            ],
+            "yAxes": [
+              {"label": "Count", "min": 0},
+              {"show": false}
+            ],
+            "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 6,
+            "title": "License Compliance",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "sum(supply_chain_license_compliance) by (license_type)",
+                "legendFormat": "{{license_type}}"
+              }
+            ],
+            "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 7,
+            "title": "Security Scan Results",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "supply_chain_scan_results",
+                "format": "table"
+              }
+            ],
+            "transformations": [
+              {
+                "id": "organize",
+                "options": {
+                  "excludeByName": {},
+                  "indexByName": {},
+                  "renameByName": {
+                    "scan_type": "Scan Type",
+                    "status": "Status",
+                    "timestamp": "Last Scan",
+                    "issues_found": "Issues"
+                  }
+                }
+              }
+            ],
+            "gridPos": {"h": 9, "w": 24, "x": 0, "y": 17}
+          }
+        ],
+        "time": {
+          "from": "now-24h",
+          "to": "now"
+        },
+        "timepicker": {
+          "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+        },
+        "refresh": "30s"
+      }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supply-chain-alerts
+  namespace: monitoring
+data:
+  alerts.yml: |
+    groups:
+      - name: supply_chain_security
+        rules:
+          # Critical vulnerability detected
+          - alert: CriticalVulnerabilityDetected
+            expr: sum(supply_chain_vulnerabilities_total{severity="critical"}) > 0
+            for: 0m
+            labels:
+              severity: critical
+              team: security
+            annotations:
+              summary: "Critical vulnerability detected in supply chain"
+              description: "{{ $value }} critical vulnerabilities found in dependencies"
+              runbook_url: "https://wiki.company.com/security/vulnerability-response"
+
+          # High number of vulnerabilities
+          - alert: HighVulnerabilityCount
+            expr: sum(supply_chain_vulnerabilities_total) > 10
+            for: 5m
+            labels:
+              severity: warning
+              team: security
+            annotations:
+              summary: "High number of vulnerabilities in supply chain"
+              description: "{{ $value }} total vulnerabilities found across all dependencies"
+
+          # Dependencies are outdated
+          - alert: OutdatedDependencies
+            expr: avg(supply_chain_dependency_age_days) > 180
+            for: 15m
+            labels:
+              severity: warning
+              team: development
+            annotations:
+              summary: "Dependencies are significantly outdated"
+              description: "Average dependency age is {{ $value }} days"
+
+          # SLSA compliance level dropped
+          - alert: SLSAComplianceDown
+            expr: supply_chain_slsa_level < 3
+            for: 5m
+            labels:
+              severity: warning
+              team: security
+            annotations:
+              summary: "SLSA compliance level below target"
+              description: "Current SLSA level is {{ $value }}, target is 3+"
+
+          # Build security score low
+          - alert: LowBuildSecurityScore
+            expr: supply_chain_build_security_score < 80
+            for: 10m
+            labels:
+              severity: warning
+              team: devops
+            annotations:
+              summary: "Build security score below threshold"
+              description: "Current build security score is {{ $value }}%"
+
+          # License compliance violation
+          - alert: LicenseComplianceViolation
+            expr: sum(supply_chain_license_compliance{status="non_compliant"}) > 0
+            for: 0m
+            labels:
+              severity: warning
+              team: legal
+            annotations:
+              summary: "License compliance violation detected"
+              description: "{{ $value }} dependencies with non-compliant licenses"
+
+          # Security scan failed
+          - alert: SecurityScanFailed
+            expr: supply_chain_scan_results{status="failed"} == 1
+            for: 5m
+            labels:
+              severity: warning
+              team: security
+            annotations:
+              summary: "Security scan failed"
+              description: "{{ $labels.scan_type }} security scan failed"
+
+          # Artifact signing missing
+          - alert: UnsignedArtifacts
+            expr: supply_chain_signed_artifacts_ratio < 1.0
+            for: 0m
+            labels:
+              severity: critical
+              team: security
+            annotations:
+              summary: "Unsigned artifacts detected"
+              description: "{{ $value }}% of artifacts are properly signed"
+
+          # SBOM generation failed
+          - alert: SBOMGenerationFailed
+            expr: supply_chain_sbom_generation_success == 0
+            for: 5m
+            labels:
+              severity: warning
+              team: security
+            annotations:
+              summary: "SBOM generation failed"
+              description: "Software Bill of Materials generation has failed"
+
+          # Supply chain anomaly detected
+          - alert: SupplyChainAnomaly
+            expr: increase(supply_chain_anomaly_score[1h]) > 50
+            for: 0m
+            labels:
+              severity: critical
+              team: security
+            annotations:
+              summary: "Supply chain anomaly detected"
+              description: "Unusual activity detected in supply chain (score: {{ $value }})"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supply-chain-metrics
+  namespace: monitoring
+data:
+  recording_rules.yml: |
+    groups:
+      - name: supply_chain_metrics
+        interval: 30s
+        rules:
+          # Total vulnerability count
+          - record: supply_chain:vulnerabilities:total
+            expr: sum(supply_chain_vulnerabilities_total)
+
+          # Vulnerability rate
+          - record: supply_chain:vulnerabilities:rate
+            expr: rate(supply_chain_vulnerabilities_total[5m])
+
+          # Average dependency age
+          - record: supply_chain:dependency_age:avg
+            expr: avg(supply_chain_dependency_age_days)
+
+          # Security posture score
+          - record: supply_chain:security_posture:score
+            expr: |
+              (
+                (supply_chain_build_security_score / 100) * 0.3 +
+                (supply_chain_slsa_level / 4) * 0.3 +
+                (1 - (clamp_max(supply_chain:vulnerabilities:total, 10) / 10)) * 0.4
+              ) * 100
+
+          # Compliance percentage
+          - record: supply_chain:compliance:percentage
+            expr: |
+              sum(supply_chain_license_compliance{status="compliant"}) /
+              sum(supply_chain_license_compliance) * 100
+
+          # Scan success rate
+          - record: supply_chain:scan_success:rate
+            expr: |
+              sum(rate(supply_chain_scan_results{status="success"}[5m])) /
+              sum(rate(supply_chain_scan_results[5m])) * 100

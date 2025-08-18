@@ -1,0 +1,435 @@
+# ArgoCD Application for Auth Service GitOps Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth-service
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: security-platform
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: security-team
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: security-team
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: security-team
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: security
+  
+  source:
+    repoURL: https://github.com/company/auth-service-helm
+    targetRevision: HEAD
+    path: helm/auth-service
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-production.yaml
+      parameters:
+        - name: image.tag
+          value: "1.0.0"
+        - name: replicaCount
+          value: "3"
+        - name: environment
+          value: "production"
+      
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: auth-service
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  revisionHistoryLimit: 10
+  
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      managedFieldsManagers:
+        - kube-controller-manager
+    - group: ""
+      kind: Secret
+      name: auth-service-secrets
+      jsonPointers:
+        - /data
+    - group: external-secrets.io
+      kind: ExternalSecret
+      jsonPointers:
+        - /spec/refreshInterval
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: security
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: security-project
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  description: Security services project
+  
+  sourceRepos:
+    - 'https://github.com/company/auth-service-helm'
+    - 'https://github.com/company/security-platform'
+    - 'https://charts.bitnami.com/bitnami'
+    - 'https://charts.jetstack.io'
+    - 'https://charts.external-secrets.io'
+  
+  destinations:
+    - namespace: auth-service
+      server: https://kubernetes.default.svc
+    - namespace: security-system
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: security.istio.io
+      kind: PeerAuthentication
+    - group: security.istio.io
+      kind: AuthorizationPolicy
+    - group: networking.istio.io
+      kind: Gateway
+    - group: networking.istio.io
+      kind: VirtualService
+    - group: networking.istio.io
+      kind: DestinationRule
+    - group: config.gatekeeper.sh
+      kind: Config
+    - group: templates.gatekeeper.sh
+      kind: ConstraintTemplate
+    - group: admissionregistration.k8s.io
+      kind: ValidatingAdmissionWebhook
+    - group: admissionregistration.k8s.io
+      kind: MutatingAdmissionWebhook
+  
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: ReplicaSet
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: external-secrets.io
+      kind: ExternalSecret
+    - group: external-secrets.io
+      kind: SecretStore
+    - group: cert-manager.io
+      kind: Certificate
+    - group: cert-manager.io
+      kind: Issuer
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+    - group: monitoring.coreos.com
+      kind: PrometheusRule
+  
+  roles:
+    - name: security-admin
+      description: Full access to security project
+      policies:
+        - p, proj:security:security-admin, applications, *, security/*, allow
+        - p, proj:security:security-admin, repositories, *, *, allow
+        - p, proj:security:security-admin, clusters, *, *, allow
+      groups:
+        - security-team
+        - platform-team
+    
+    - name: security-readonly
+      description: Read-only access to security project
+      policies:
+        - p, proj:security:security-readonly, applications, get, security/*, allow
+        - p, proj:security:security-readonly, applications, sync, security/*, deny
+        - p, proj:security:security-readonly, repositories, get, *, allow
+      groups:
+        - developers
+        - security-auditors
+  
+  orphanedResources:
+    warn: true
+    ignore:
+      - group: ''
+        kind: Secret
+        name: auth-service-secrets
+      - group: external-secrets.io
+        kind: ExternalSecret
+  
+  signatureKeys:
+    - keyID: security-project-key
+  
+  sourceNamespaces:
+    - auth-service
+    - security-system
+---
+# ArgoCD Application Set for multi-environment deployment
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: auth-service-environments
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: auth-service-appset
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/company/auth-service-config
+        revision: HEAD
+        directories:
+          - path: environments/*
+        requeueAfterSeconds: 180
+  
+  template:
+    metadata:
+      name: 'auth-service-{{path.basename}}'
+      labels:
+        environment: '{{path.basename}}'
+      annotations:
+        argocd.argoproj.io/sync-wave: "10"
+    spec:
+      project: security
+      source:
+        repoURL: https://github.com/company/auth-service-helm
+        targetRevision: HEAD
+        path: helm/auth-service
+        helm:
+          valueFiles:
+            - values.yaml
+            - 'values-{{path.basename}}.yaml'
+          parameters:
+            - name: environment
+              value: '{{path.basename}}'
+            - name: image.tag
+              value: '{{path.basename}}-latest'
+      destination:
+        server: '{{server}}'
+        namespace: 'auth-service-{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+---
+# ArgoCD Repository for source code
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-service-repo
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: https://github.com/company/auth-service-helm
+  password: ""
+  username: ""
+  insecure: "false"
+  enableLfs: "false"
+---
+# ArgoCD Repository Credentials Template
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-creds
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repo-creds
+type: Opaque
+stringData:
+  type: git
+  url: https://github.com/company
+  password: ""
+  username: ""
+---
+# ArgoCD Notification Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  config.yaml: |
+    templates:
+      template.security-alert: |
+        message: |
+          {{if eq .serviceType "slack"}}:warning:{{end}} Security Application {{.app.metadata.name}} health is {{.app.status.health.status}}.
+          
+          {{if ne .serviceType "slack"}}
+          Application details:
+          {{end}}
+          - Name: {{.app.metadata.name}}
+          - Environment: {{.app.metadata.labels.environment}}
+          - Health Status: {{.app.status.health.status}}
+          - Sync Status: {{.app.status.sync.status}}
+          - Repository: {{.app.spec.source.repoURL}}
+          - Path: {{.app.spec.source.path}}
+          
+          {{if .app.status.conditions}}
+          Conditions:
+          {{range $index, $condition := .app.status.conditions}}
+          - {{$condition.message}}
+          {{end}}
+          {{end}}
+          
+          View in ArgoCD: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}
+        title: "Security Application Health Alert"
+    
+    services:
+      service.slack: |
+        token: $slack-token
+        username: argocd
+        channel: security-alerts
+        iconEmoji: ":robot_face:"
+      
+      service.webhook.security: |
+        url: https://security-monitoring.company.com/webhook/argocd
+        headers:
+        - name: Authorization
+          value: Bearer $webhook-token
+    
+    subscriptions: |
+      - recipients:
+        - slack:security-alerts
+        - webhook:security
+        triggers:
+        - on-health-degraded
+        - on-sync-failed
+        - on-sync-status-unknown
+        template: security-alert
+    
+    triggers: |
+      trigger.on-health-degraded: |
+        - when: app.status.health.status == 'Degraded'
+          send: [security-alert]
+      
+      trigger.on-sync-failed: |
+        - when: app.status.operationState.phase in ['Error', 'Failed']
+          send: [security-alert]
+      
+      trigger.on-sync-status-unknown: |
+        - when: app.status.sync.status == 'Unknown'
+          send: [security-alert]
+---
+# ArgoCD RBAC Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  policy.default: role:readonly
+  policy.csv: |
+    # Security team has full access
+    p, role:security-admin, applications, *, */*, allow
+    p, role:security-admin, clusters, *, *, allow
+    p, role:security-admin, repositories, *, *, allow
+    p, role:security-admin, certificates, *, *, allow
+    p, role:security-admin, gpgkeys, *, *, allow
+    p, role:security-admin, logs, get, */*, allow
+    p, role:security-admin, exec, create, */*, allow
+    
+    # Platform team has admin access to security project
+    p, role:platform-admin, applications, *, security/*, allow
+    p, role:platform-admin, repositories, *, *, allow
+    p, role:platform-admin, clusters, get, *, allow
+    p, role:platform-admin, logs, get, security/*, allow
+    
+    # Developers have read-only access
+    p, role:developer, applications, get, security/*, allow
+    p, role:developer, applications, sync, security/auth-service-dev, allow
+    p, role:developer, logs, get, security/auth-service-dev, allow
+    
+    # Group mappings
+    g, security-team, role:security-admin
+    g, platform-team, role:platform-admin
+    g, developers, role:developer
+    g, security-auditors, role:readonly
+  
+  scopes: '[groups, email]'
+---
+# ArgoCD Server Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-server-config
+  namespace: argocd
+data:
+  url: https://argocd.company.com
+  insecure: "false"
+  
+  # OIDC configuration
+  oidc.config: |
+    name: Company SSO
+    issuer: https://auth.company.com
+    clientId: argocd
+    clientSecret: $oidc.clientSecret
+    requestedScopes: ["openid", "profile", "email", "groups"]
+    requestedIDTokenClaims: {"groups": {"essential": true}}
+  
+  # Additional security headers
+  server.additional.headers: |
+    X-Content-Type-Options: nosniff
+    X-Frame-Options: DENY
+    X-XSS-Protection: 1; mode=block
+    Strict-Transport-Security: max-age=31536000; includeSubDomains
+    Referrer-Policy: strict-origin-when-cross-origin
+    Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
+  
+  # Enable audit logging
+  server.audit.log.enabled: "true"
+  server.audit.log.format: json
+  
+  # TLS configuration
+  tls.config: |
+    minVersion: "1.2"
+    maxVersion: "1.3"
+    cipherSuites:
+      - "TLS_AES_128_GCM_SHA256"
+      - "TLS_AES_256_GCM_SHA384"
+      - "TLS_CHACHA20_POLY1305_SHA256"
+      - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"

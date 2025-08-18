@@ -1,14 +1,34 @@
+## Feature Flags and Test Modes
+
+The `auth-service` crate exposes several optional features and a test mode environment flag to control behavior:
+
+- Feature `optimizations`: Enables optional, heavier optimized modules (e.g., advanced async, crypto, and database pooling). This feature is off by default to keep the default build/test surface smaller. Enable via:
+  - `cargo build -p auth-service --features optimizations`
+  - `cargo test -p auth-service --features optimizations`
+
+- Feature `threat-hunting`: Enables ML/threat-hunting related dependencies and tests. Off by default. Enable via:
+  - `cargo test -p auth-service --features threat-hunting`
+
+- Env `TEST_MODE`: Controls certain middleware behaviors for tests.
+  - `TEST_MODE=1` bypasses request-signature validation middleware for convenience in broad integration tests.
+  - `TEST_MODE=0` keeps signature validation enabled. When testing admin routes, you can sign requests by computing an `x-signature` over `method\npath\nbody\ntimestamp` using HMAC-SHA256 with `REQUEST_SIGNING_SECRET` and including `x-timestamp` (unix seconds).
+
+Policy service behavior for authorization tests:
+- If `POLICY_SERVICE_URL` is unreachable and not in strict mode, the service returns `Allow` (permissive fallback).
+- Strict mode can be enabled via request header `x-policy-enforcement: strict` or env `POLICY_ENFORCEMENT=strict` and will return 500 when the policy service is unavailable or invalid.
+
 # Rust Security Workspace
 
 Production-ready, enterprise-grade authentication and authorization workspace built with Rust.
 
 ## Project Overview
 
-This is a comprehensive Rust-based monorepo for security-focused applications. It consists of three main services: an `auth-service`, a `policy-service`, and an `axum-integration-example`. The services are built using the Axum web framework and the Tokio runtime with extensive security features and production-ready capabilities.
+This is a comprehensive Rust-based monorepo for security-focused applications. It consists of three main services and compliance tools: an `auth-service`, a `policy-service`, an `axum-integration-example`, and `compliance-tools`. The services are built using the Axum web framework and the Tokio runtime with extensive security features and production-ready capabilities.
 
 - **`auth-service`**: OAuth2/OIDC-compatible authentication service with advanced security features
 - **`policy-service`**: Authorization service using Cedar policy engine for fine-grained access control
 - **`axum-integration-example`**: Demonstration application showing integration patterns
+- **`compliance-tools`**: Pure Rust compliance reporting and validation tools (replaces previous Python scripts)
 
 ## 🚀 Key Features
 

@@ -1,0 +1,653 @@
+# Default values for auth-service Helm chart
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  # Image registry settings
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  
+  # Security context for all containers
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+
+# Application configuration
+image:
+  registry: ""
+  repository: auth-service
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+  digest: ""
+
+# Replica configuration
+replicaCount: 3
+
+# Update strategy
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 1
+
+# Pod configuration
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+# Pod annotations for security scanning
+podAnnotations:
+  container.apparmor.security.beta.kubernetes.io/auth-service: runtime/default
+  cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+# Pod labels
+podLabels:
+  app.kubernetes.io/component: authentication
+  app.kubernetes.io/part-of: security-platform
+  security.policy/level: high
+
+# Service account
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: ""  # Set via values override
+  name: auth-service
+  automountServiceAccountToken: false
+
+# Container configuration
+container:
+  name: auth-service
+  ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+  
+  # Environment variables
+  env:
+    - name: RUST_LOG
+      value: "info"
+    - name: BIND_ADDRESS
+      value: "0.0.0.0:8080"
+    - name: ENVIRONMENT
+      value: "production"
+  
+  # Environment from secrets/configmaps
+  envFrom:
+    - secretRef:
+        name: auth-service-secrets
+    - configMapRef:
+        name: auth-service-config
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+      ephemeral-storage: 100Mi
+
+  # Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+      scheme: HTTP
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+
+  # Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+      scheme: HTTP
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+    successThreshold: 1
+
+  # Startup probe
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+      scheme: HTTP
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+    successThreshold: 1
+
+  # Volume mounts
+  volumeMounts:
+    - name: tmp
+      mountPath: /tmp
+    - name: var-run
+      mountPath: /var/run
+    - name: cache
+      mountPath: /app/cache
+
+# Volumes
+volumes:
+  - name: tmp
+    emptyDir:
+      sizeLimit: 100Mi
+  - name: var-run
+    emptyDir:
+      sizeLimit: 100Mi
+  - name: cache
+    emptyDir:
+      sizeLimit: 200Mi
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "https"
+    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "60"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Content-Type-Options nosniff;
+      add_header X-Frame-Options DENY;
+      add_header X-XSS-Protection "1; mode=block";
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains";
+      add_header Referrer-Policy strict-origin-when-cross-origin;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'";
+  hosts:
+    - host: auth.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: auth-service-tls
+      hosts:
+        - auth.example.com
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+
+# Vertical Pod Autoscaler
+verticalPodAutoscaler:
+  enabled: false
+  updateMode: "Off"  # Set to "Auto" for automatic updates
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  # maxUnavailable: 1
+
+# Network Policy
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      - namespaceSelector:
+          matchLabels:
+            name: istio-system
+      ports:
+      - protocol: TCP
+        port: 8080
+  egress:
+    # Allow DNS
+    - to: []
+      ports:
+      - protocol: UDP
+        port: 53
+      - protocol: TCP
+        port: 53
+    # Allow HTTPS to external services
+    - to: []
+      ports:
+      - protocol: TCP
+        port: 443
+    # Allow database connection
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: database
+      ports:
+      - protocol: TCP
+        port: 5432
+    # Allow Redis connection
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: redis
+      ports:
+      - protocol: TCP
+        port: 6379
+
+# Pod Security Policy
+podSecurityPolicy:
+  enabled: true
+  allowPrivilegeEscalation: false
+  allowPrivilegedContainer: false
+  allowedCapabilities: []
+  requiredDropCapabilities:
+    - ALL
+  allowedHostPaths: []
+  allowHostNetwork: false
+  allowHostPID: false
+  allowHostIPC: false
+  readOnlyRootFilesystem: true
+  runAsUser:
+    rule: MustRunAsNonRoot
+  fsGroup:
+    rule: RunAsAny
+  seLinux:
+    rule: RunAsAny
+  volumes:
+    - configMap
+    - emptyDir
+    - projected
+    - secret
+    - downwardAPI
+    - persistentVolumeClaim
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  labels:
+    app: auth-service
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  honorLabels: true
+  jobLabel: auth-service
+
+# ConfigMap for application configuration
+configMap:
+  create: true
+  data:
+    # Database configuration
+    DB_POOL_MAX_SIZE: "10"
+    DB_POOL_MIN_SIZE: "2"
+    DB_CONNECTION_TIMEOUT: "30"
+    
+    # Redis configuration
+    REDIS_POOL_MAX_SIZE: "10"
+    REDIS_CONNECTION_TIMEOUT: "5"
+    
+    # JWT configuration
+    JWT_ALGORITHM: "RS256"
+    JWT_EXPIRATION_TIME: "3600"
+    JWT_REFRESH_EXPIRATION_TIME: "86400"
+    
+    # Rate limiting
+    RATE_LIMIT_REQUESTS_PER_MINUTE: "60"
+    RATE_LIMIT_BURST_SIZE: "10"
+    
+    # Security settings
+    BCRYPT_COST: "12"
+    SESSION_TIMEOUT: "1800"
+    MAX_LOGIN_ATTEMPTS: "5"
+    LOCKOUT_DURATION: "900"
+    
+    # Logging
+    LOG_LEVEL: "info"
+    LOG_FORMAT: "json"
+    
+    # Monitoring
+    METRICS_ENABLED: "true"
+    TRACING_ENABLED: "true"
+    HEALTH_CHECK_INTERVAL: "30"
+
+# Secrets (managed externally)
+secrets:
+  create: false
+  externalSecrets:
+    enabled: true
+    secretStore: aws-secrets-manager
+    refreshInterval: 1h
+    data:
+      - secretKey: database-url
+        remoteRef:
+          key: auth-service/production/database-url
+      - secretKey: redis-url
+        remoteRef:
+          key: auth-service/production/redis-url
+      - secretKey: jwt-secret
+        remoteRef:
+          key: auth-service/production/jwt-secret
+      - secretKey: jwt-private-key
+        remoteRef:
+          key: auth-service/production/jwt-private-key
+      - secretKey: jwt-public-key
+        remoteRef:
+          key: auth-service/production/jwt-public-key
+
+# Certificate management
+certificates:
+  enabled: true
+  issuer: letsencrypt-prod
+  dnsNames:
+    - auth.example.com
+  secretName: auth-service-tls
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 3 * * *"  # Daily at 3 AM
+  retention: "30d"
+  storageClass: "standard"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# Dependencies configuration
+postgresql:
+  enabled: false  # Use external PostgreSQL
+  auth:
+    database: authservice
+    username: authservice
+
+redis:
+  enabled: false  # Use external Redis
+  auth:
+    enabled: true
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# External Secrets Operator
+externalSecrets:
+  enabled: true
+  secretStore:
+    name: aws-secrets-manager
+    kind: SecretStore
+    spec:
+      provider:
+        aws:
+          service: SecretsManager
+          region: us-west-2
+          auth:
+            jwt:
+              serviceAccountRef:
+                name: external-secrets
+
+# Cert Manager
+certManager:
+  enabled: true
+  installCRDs: true
+
+# Istio configuration
+istio:
+  enabled: true
+  gateway:
+    enabled: true
+    hosts:
+      - auth.example.com
+    tls:
+      mode: SIMPLE
+      credentialName: auth-service-tls
+  virtualService:
+    enabled: true
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  destinationRule:
+    enabled: true
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+  authorizationPolicy:
+    enabled: true
+    action: ALLOW
+    rules:
+      - from:
+        - source:
+            principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+        to:
+        - operation:
+            methods: ["GET", "POST"]
+
+# Kiali configuration
+kiali:
+  enabled: false
+  namespace: istio-system
+
+# Jaeger configuration
+jaeger:
+  enabled: false
+  namespace: istio-system
+
+# Grafana dashboards
+grafana:
+  enabled: true
+  dashboards:
+    auth-service: |
+      {
+        "dashboard": {
+          "title": "Auth Service Metrics",
+          "panels": [
+            {
+              "title": "Request Rate",
+              "targets": [
+                {
+                  "expr": "sum(rate(http_requests_total{service=\"auth-service\"}[5m])) by (status)"
+                }
+              ]
+            },
+            {
+              "title": "Response Time",
+              "targets": [
+                {
+                  "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"auth-service\"}[5m])) by (le))"
+                }
+              ]
+            },
+            {
+              "title": "Error Rate",
+              "targets": [
+                {
+                  "expr": "sum(rate(http_requests_total{service=\"auth-service\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"auth-service\"}[5m]))"
+                }
+              ]
+            }
+          ]
+        }
+      }
+
+# Falco rules
+falco:
+  enabled: true
+  rules:
+    auth-service: |
+      - rule: Unauthorized Process in Auth Service Container
+        desc: Detect unexpected processes in auth service containers
+        condition: >
+          spawned_process and
+          k8s_ns = "auth-service" and
+          k8s_pod_label_app = "auth-service" and
+          not proc.name in (auth-service, sh, bash)
+        output: >
+          Unauthorized process in auth service container
+          (user=%user.name command=%proc.cmdline container=%container.name
+          pod=%k8s.pod.name ns=%k8s.ns.name)
+        priority: WARNING
+        tags: [container, process, auth-service]
+
+# Node affinity and pod anti-affinity
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: node.kubernetes.io/instance-type
+          operator: NotIn
+          values: ["spot", "preemptible"]
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values: [auth-service]
+      topologyKey: kubernetes.io/hostname
+
+# Tolerations
+tolerations: []
+
+# Node selector
+nodeSelector: {}
+
+# Topology spread constraints
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: auth-service
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: auth-service
+
+# Priority class
+priorityClassName: system-cluster-critical
+
+# Runtime class (for gVisor/Kata Containers)
+runtimeClassName: ""
+
+# Additional init containers
+initContainers: []
+
+# Additional sidecar containers
+sidecars: []
+
+# Additional volumes
+additionalVolumes: []
+
+# Additional volume mounts
+additionalVolumeMounts: []
+
+# Lifecycle hooks
+lifecycle: {}
+
+# Extra environment variables
+extraEnvVars: []
+
+# Extra environment variables from configmaps/secrets
+extraEnvVarsCM: []
+extraEnvVarsSecret: []
+
+# Command and args override
+command: []
+args: []
+
+# Host aliases
+hostAliases: []
+
+# DNS configuration
+dnsPolicy: ClusterFirst
+dnsConfig: {}
+
+# Share process namespace
+shareProcessNamespace: false
+
+# Termination grace period
+terminationGracePeriodSeconds: 30
+
+# Image pull secrets
+imagePullSecrets: []
+
+# Additional labels
+labels: {}
+
+# Additional annotations
+annotations: {}
+
+# Test configuration
+tests:
+  enabled: true
+  image:
+    repository: curlimages/curl
+    tag: latest
+    pullPolicy: IfNotPresent

@@ -10,7 +10,8 @@ async fn spawn_app() -> String {
 
     // Register a test client via env
     std::env::set_var("CLIENT_CREDENTIALS", "test_client:very_strong_secret_with_mixed_chars_123!@#");
-    std::env::set_var("TEST_MODE", "1");
+    // Keep signature validation ON for this test to verify helper signing
+    std::env::set_var("TEST_MODE", "0");
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
@@ -35,34 +36,44 @@ async fn mint_token(base: &str, scope: &str) -> String {
     v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string()
 }
 
+mod common;
+use common::sign_request;
+
 #[tokio::test]
 async fn admin_stats_requires_admin_scope() {
     let base = spawn_app().await;
 
-    // Token without admin scope
+    // Ensure signing secret for the test
+    std::env::set_var("REQUEST_SIGNING_SECRET", "test_secret");
+
+    // Token without admin scope (signed request)
     let token_user = mint_token(&base, "read write").await;
+    let path = "/admin/rate-limit/stats";
+    let (sig_user, ts_user) = sign_request("GET", path, "");
     let res_user = reqwest::Client::new()
-        .get(format!("{}/admin/rate-limit/stats", base))
+        .get(format!("{}{}", base, path))
         .bearer_auth(&token_user)
+        .header("x-signature", sig_user)
+        .header("x-timestamp", ts_user)
         .send()
         .await
         .unwrap();
-    // Admin endpoints also require request signatures; without them the middleware returns 400 (bad request).
-    // Treat both 401 (insufficient scope) and 400 (missing signature) as protected in this test context.
-    assert!(res_user.status() == reqwest::StatusCode::UNAUTHORIZED || res_user.status() == reqwest::StatusCode::BAD_REQUEST,
-        "expected 401 or 400, got {}", res_user.status());
+    assert_eq!(res_user.status(), reqwest::StatusCode::UNAUTHORIZED);
 
-    // Token with admin scope
+    // Token with admin scope (signed request)
     let token_admin = mint_token(&base, "read write admin").await;
+    let (sig_admin, ts_admin) = sign_request("GET", path, "");
     let res_admin = reqwest::Client::new()
-        .get(format!("{}/admin/rate-limit/stats", base))
+        .get(format!("{}{}", base, path))
         .bearer_auth(&token_admin)
+        .header("x-signature", sig_admin)
+        .header("x-timestamp", ts_admin)
         .send()
         .await
         .unwrap();
     // Without signature headers, even admin-scoped requests may be rejected (400). For success,
     // proper request signing is required; here we just assert it is not inadvertently open.
-    assert!(res_admin.status() == reqwest::StatusCode::BAD_REQUEST || res_admin.status().is_success());
+    assert!(res_admin.status().is_success());
 }
 
 

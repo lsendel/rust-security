@@ -17,8 +17,14 @@ async fn spawn_app() -> String {
 
     // Set test mode envs
     std::env::set_var("TEST_MODE", "1");
+    std::env::remove_var("POLICY_ENFORCEMENT");
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
     std::env::set_var("EXTERNAL_BASE_URL", "http://localhost:8080");
+    // Ensure global client authenticator loads these clients from env
+    std::env::set_var(
+        "CLIENT_CREDENTIALS",
+        "test_client:test_secret_12345;admin_client:admin_secret_67890",
+    );
     // Set Google envs to satisfy id_token flow where needed
     std::env::set_var("GOOGLE_CLIENT_ID", "test-client-id");
     std::env::set_var("GOOGLE_CLIENT_SECRET", "test-client-secret");

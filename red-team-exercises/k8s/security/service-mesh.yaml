@@ -1,0 +1,361 @@
+# Istio Service Mesh Security Configuration
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: auth-service
+spec:
+  mtls:
+    mode: STRICT
+---
+# Mutual TLS for auth service
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: auth-service-mtls
+  namespace: auth-service
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8080:
+      mode: STRICT
+---
+# Request Authentication with JWT
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: auth-service-jwt
+  namespace: auth-service
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  jwtRules:
+  - issuer: "https://auth-service.company.com"
+    jwksUri: "https://auth-service.company.com/.well-known/jwks.json"
+    audiences:
+    - "auth-service"
+    forwardOriginalToken: true
+  - issuer: "https://accounts.google.com"
+    jwksUri: "https://www.googleapis.com/oauth2/v3/certs"
+    audiences:
+    - "auth-service-google"
+---
+# Authorization Policy with detailed rules
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: auth-service-detailed-authz
+  namespace: auth-service
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  rules:
+  # Allow health checks from ingress
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/health", "/ready"]
+  
+  # Allow authenticated requests to auth endpoints
+  - from:
+    - source:
+        requestPrincipals: ["*"]
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/auth/login", "/auth/refresh"]
+    when:
+    - key: request.headers[content-type]
+      values: ["application/json"]
+  
+  # Allow public access to OIDC metadata
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/.well-known/*"]
+  
+  # Allow admin operations with specific claims
+  - from:
+    - source:
+        requestPrincipals: ["*"]
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/admin/*"]
+    when:
+    - key: request.auth.claims[role]
+      values: ["admin"]
+    - key: request.auth.claims[iss]
+      values: ["https://auth-service.company.com"]
+  
+  # Allow monitoring from Prometheus
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics"]
+---
+# Destination Rule with TLS settings
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: auth-service-dr
+  namespace: auth-service
+spec:
+  host: auth-service.auth-service.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+      http:
+        http1MaxPendingRequests: 10
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+    outlierDetection:
+      consecutiveGatewayErrors: 5
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  portLevelSettings:
+  - port:
+      number: 8080
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# Virtual Service with security headers
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: auth-service-vs
+  namespace: auth-service
+spec:
+  hosts:
+  - auth-service.company.com
+  gateways:
+  - auth-service-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/health"
+    - uri:
+        prefix: "/ready"
+    route:
+    - destination:
+        host: auth-service.auth-service.svc.cluster.local
+        port:
+          number: 8080
+    headers:
+      response:
+        add:
+          X-Content-Type-Options: nosniff
+          X-Frame-Options: DENY
+          X-XSS-Protection: "1; mode=block"
+          Strict-Transport-Security: max-age=31536000; includeSubDomains
+          Referrer-Policy: strict-origin-when-cross-origin
+  - match:
+    - uri:
+        prefix: "/auth"
+    - uri:
+        prefix: "/token"
+    - uri:
+        prefix: "/.well-known"
+    route:
+    - destination:
+        host: auth-service.auth-service.svc.cluster.local
+        port:
+          number: 8080
+    headers:
+      request:
+        add:
+          X-Forwarded-Proto: https
+          X-Request-ID: "%REQ(X-REQUEST-ID)%"
+      response:
+        add:
+          X-Content-Type-Options: nosniff
+          X-Frame-Options: DENY
+          X-XSS-Protection: "1; mode=block"
+          Strict-Transport-Security: max-age=31536000; includeSubDomains
+          Referrer-Policy: strict-origin-when-cross-origin
+          Cache-Control: no-store, no-cache, must-revalidate
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+  - match:
+    - uri:
+        prefix: "/admin"
+    route:
+    - destination:
+        host: auth-service.auth-service.svc.cluster.local
+        port:
+          number: 8080
+    headers:
+      request:
+        add:
+          X-Admin-Request: "true"
+      response:
+        add:
+          X-Content-Type-Options: nosniff
+          X-Frame-Options: DENY
+          Cache-Control: no-store, no-cache, must-revalidate
+    timeout: 60s
+---
+# Gateway with TLS termination
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: auth-service-gateway
+  namespace: auth-service
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: auth-service-tls-secret
+      minProtocolVersion: TLSV1_2
+      maxProtocolVersion: TLSV1_3
+      cipherSuites:
+      - ECDHE-RSA-AES256-GCM-SHA384
+      - ECDHE-RSA-CHACHA20-POLY1305
+      - ECDHE-RSA-AES128-GCM-SHA256
+    hosts:
+    - auth-service.company.com
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - auth-service.company.com
+    tls:
+      httpsRedirect: true
+---
+# Linkerd Service Profile (Alternative to Istio)
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: auth-service.auth-service.svc.cluster.local
+  namespace: auth-service
+spec:
+  routes:
+  - name: health
+    condition:
+      method: GET
+      pathRegex: /health
+    timeout: 10s
+    retryBudget:
+      retryRatio: 0.2
+      minRetriesPerSecond: 10
+      ttl: 10s
+  - name: auth_endpoints
+    condition:
+      method: POST
+      pathRegex: /auth/.*
+    timeout: 30s
+    retryBudget:
+      retryRatio: 0.1
+      minRetriesPerSecond: 5
+      ttl: 10s
+  - name: admin_endpoints
+    condition:
+      pathRegex: /admin/.*
+    timeout: 60s
+    retryBudget:
+      retryRatio: 0.0
+      minRetriesPerSecond: 0
+      ttl: 10s
+---
+# Envoy Filter for additional security
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: auth-service-security-headers
+  namespace: auth-service
+spec:
+  workloadSelector:
+    labels:
+      app: auth-service
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: auth_service_rate_limit
+            token_bucket:
+              max_tokens: 100
+              tokens_per_fill: 10
+              fill_interval: 1s
+            filter_enabled:
+              runtime_key: auth_service_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: auth_service_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+---
+# Telemetry v2 configuration
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: auth-service-metrics
+  namespace: auth-service
+spec:
+  workloadSelector:
+    matchLabels:
+      app: auth-service
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        request_protocol:
+          value: "%{PROTOCOL}"
+        response_code:
+          value: "%{RESPONSE_CODE}"
+        source_app:
+          value: "%{SOURCE_APP}"
+        destination_service_name:
+          value: "%{DESTINATION_SERVICE_NAME}"

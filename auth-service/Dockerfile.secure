@@ -1,0 +1,85 @@
+# Multi-stage secure Docker build for supply chain security
+# This Dockerfile implements security best practices and minimal attack surface
+
+# ==============================================================================
+# Build Stage - Secure Build Environment
+# ==============================================================================
+FROM rust:1.75-slim as builder
+
+# Install security tools and dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for build
+RUN useradd -m -u 1001 builder
+USER builder
+WORKDIR /home/builder
+
+# Copy dependency files first for better caching
+COPY --chown=builder:builder Cargo.toml Cargo.lock ./
+COPY --chown=builder:builder auth-service/Cargo.toml ./auth-service/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p auth-service/src && \
+    echo "fn main() {}" > auth-service/src/main.rs && \
+    echo "// dummy" > auth-service/src/lib.rs
+
+# Build dependencies only (for caching)
+RUN cd auth-service && \
+    cargo build --release && \
+    rm -rf src/
+
+# Copy actual source code
+COPY --chown=builder:builder auth-service/src ./auth-service/src
+
+# Build the application with security flags
+RUN cd auth-service && \
+    RUSTFLAGS="-C target-cpu=generic -C link-arg=-s" \
+    cargo build --release --locked
+
+# Verify the binary
+RUN file auth-service/target/release/auth-service && \
+    ldd auth-service/target/release/auth-service
+
+# ==============================================================================
+# Runtime Stage - Minimal Distroless Image
+# ==============================================================================
+FROM gcr.io/distroless/cc-debian12:nonroot
+
+# Security labels and metadata
+LABEL org.opencontainers.image.title="Rust Auth Service" \
+      org.opencontainers.image.description="Secure Rust authentication service" \
+      org.opencontainers.image.vendor="Security Team" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+      org.opencontainers.image.source="https://github.com/company/auth-service" \
+      security.scan.enabled="true" \
+      security.tls.required="true" \
+      security.network.isolated="true"
+
+# Use non-root user (distroless nonroot user: 65532)
+USER 65532:65532
+
+# Copy CA certificates for TLS
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Copy the binary from builder stage
+COPY --from=builder --chown=65532:65532 \
+    /home/builder/auth-service/target/release/auth-service /usr/local/bin/auth-service
+
+# Verify binary permissions
+# Note: distroless doesn't have shell, so verification is done in builder stage
+
+# Health check (if supported by base image)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/usr/local/bin/auth-service", "health"] || exit 1
+
+# Security: no shell, no package manager, minimal attack surface
+# Network: only necessary ports
+EXPOSE 8080
+
+# Run as non-root with minimal privileges
+ENTRYPOINT ["/usr/local/bin/auth-service"]

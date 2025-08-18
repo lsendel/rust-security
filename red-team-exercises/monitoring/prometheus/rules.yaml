@@ -1,0 +1,391 @@
+# Prometheus Rules for Auth Service Security Monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: auth-service-security-rules
+  namespace: monitoring
+  labels:
+    app: auth-service
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: auth-service.security
+    interval: 30s
+    rules:
+    
+    # Authentication Security Alerts
+    - alert: AuthServiceHighFailedLoginRate
+      expr: |
+        (
+          sum(rate(auth_login_attempts_total{status="failed"}[5m])) by (instance) /
+          sum(rate(auth_login_attempts_total[5m])) by (instance)
+        ) > 0.1
+      for: 2m
+      labels:
+        severity: warning
+        service: auth-service
+        category: security
+      annotations:
+        summary: "High failed login rate detected"
+        description: "Auth service instance {{ $labels.instance }} has a failed login rate of {{ $value | humanizePercentage }} over the last 5 minutes"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/high-failed-login-rate"
+    
+    - alert: AuthServiceSuspiciousLoginPattern
+      expr: |
+        sum(rate(auth_login_attempts_total{status="failed"}[1m])) by (source_ip) > 10
+      for: 1m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Suspicious login pattern detected"
+        description: "More than 10 failed login attempts per minute from IP {{ $labels.source_ip }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/suspicious-login-pattern"
+    
+    - alert: AuthServiceBruteForceAttack
+      expr: |
+        sum(rate(auth_login_attempts_total{status="failed"}[5m])) by (username) > 5
+      for: 2m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Potential brute force attack detected"
+        description: "User {{ $labels.username }} has more than 5 failed login attempts per minute over 5 minutes"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/brute-force-attack"
+    
+    # Rate Limiting Alerts
+    - alert: AuthServiceRateLimitTriggered
+      expr: |
+        sum(rate(auth_rate_limit_triggered_total[5m])) by (instance) > 10
+      for: 1m
+      labels:
+        severity: warning
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Rate limiting frequently triggered"
+        description: "Auth service instance {{ $labels.instance }} is triggering rate limits {{ $value }} times per second"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/rate-limit-triggered"
+    
+    - alert: AuthServiceRateLimitBypass
+      expr: |
+        auth_rate_limit_bypass_attempts_total > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Rate limit bypass attempt detected"
+        description: "Potential rate limit bypass attempt detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/rate-limit-bypass"
+    
+    # Token Security Alerts
+    - alert: AuthServiceJWTValidationFailure
+      expr: |
+        sum(rate(auth_jwt_validation_failures_total[5m])) > 5
+      for: 2m
+      labels:
+        severity: warning
+        service: auth-service
+        category: security
+      annotations:
+        summary: "High JWT validation failure rate"
+        description: "JWT validation failures are occurring at {{ $value }} per second"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/jwt-validation-failure"
+    
+    - alert: AuthServiceTokenReplayDetected
+      expr: |
+        auth_token_replay_attempts_total > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Token replay attack detected"
+        description: "Token replay attempt detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/token-replay"
+    
+    - alert: AuthServiceTOTPReplayDetected
+      expr: |
+        auth_totp_replay_attempts_total > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "TOTP replay attack detected"
+        description: "TOTP replay attempt detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/totp-replay"
+    
+    # IDOR Protection Alerts
+    - alert: AuthServiceIDORAttempt
+      expr: |
+        auth_idor_attempts_total > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "IDOR attack attempt detected"
+        description: "Insecure Direct Object Reference attempt detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/idor-attempt"
+    
+    # PKCE Security Alerts
+    - alert: AuthServicePKCEDowngradeAttempt
+      expr: |
+        auth_pkce_downgrade_attempts_total > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "PKCE downgrade attack detected"
+        description: "PKCE downgrade attempt detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/pkce-downgrade"
+    
+    # Performance and Availability Alerts
+    - alert: AuthServiceHighLatency
+      expr: |
+        histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="auth-service"}[5m])) by (le, instance)) > 1
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: performance
+      annotations:
+        summary: "High latency detected"
+        description: "95th percentile latency is {{ $value }}s on instance {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/high-latency"
+    
+    - alert: AuthServiceHighErrorRate
+      expr: |
+        (
+          sum(rate(http_requests_total{service="auth-service",status=~"5.."}[5m])) /
+          sum(rate(http_requests_total{service="auth-service"}[5m]))
+        ) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+        service: auth-service
+        category: availability
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/high-error-rate"
+    
+    - alert: AuthServiceDown
+      expr: |
+        up{job="auth-service"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: auth-service
+        category: availability
+      annotations:
+        summary: "Auth service is down"
+        description: "Auth service instance {{ $labels.instance }} is down"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/service-down"
+    
+    # Database Connection Alerts
+    - alert: AuthServiceDatabaseConnectionFailure
+      expr: |
+        auth_database_connection_failures_total > 0
+      for: 1m
+      labels:
+        severity: critical
+        service: auth-service
+        category: infrastructure
+      annotations:
+        summary: "Database connection failures"
+        description: "Database connection failures detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/database-connection-failure"
+    
+    - alert: AuthServiceDatabaseHighLatency
+      expr: |
+        histogram_quantile(0.95, sum(rate(auth_database_query_duration_seconds_bucket[5m])) by (le, instance)) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: performance
+      annotations:
+        summary: "High database query latency"
+        description: "95th percentile database query latency is {{ $value }}s on instance {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/database-high-latency"
+    
+    # Redis Connection Alerts
+    - alert: AuthServiceRedisConnectionFailure
+      expr: |
+        auth_redis_connection_failures_total > 0
+      for: 1m
+      labels:
+        severity: warning
+        service: auth-service
+        category: infrastructure
+      annotations:
+        summary: "Redis connection failures"
+        description: "Redis connection failures detected on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/redis-connection-failure"
+    
+    # Memory and Resource Alerts
+    - alert: AuthServiceHighMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{container="auth-service"} /
+          container_spec_memory_limit_bytes{container="auth-service"}
+        ) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: resources
+      annotations:
+        summary: "High memory usage"
+        description: "Memory usage is {{ $value | humanizePercentage }} on pod {{ $labels.pod }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/high-memory-usage"
+    
+    - alert: AuthServiceHighCPUUsage
+      expr: |
+        (
+          rate(container_cpu_usage_seconds_total{container="auth-service"}[5m]) /
+          container_spec_cpu_quota{container="auth-service"} * container_spec_cpu_period{container="auth-service"}
+        ) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: resources
+      annotations:
+        summary: "High CPU usage"
+        description: "CPU usage is {{ $value | humanizePercentage }} on pod {{ $labels.pod }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/high-cpu-usage"
+    
+    # TLS/Certificate Alerts
+    - alert: AuthServiceTLSCertificateExpiry
+      expr: |
+        (auth_tls_certificate_expiry_seconds - time()) / 86400 < 30
+      for: 1h
+      labels:
+        severity: warning
+        service: auth-service
+        category: security
+      annotations:
+        summary: "TLS certificate expiring soon"
+        description: "TLS certificate will expire in {{ $value }} days"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/tls-certificate-expiry"
+    
+    # Compliance and Audit Alerts
+    - alert: AuthServiceUnauthorizedAccess
+      expr: |
+        sum(rate(http_requests_total{service="auth-service",status="403"}[5m])) > 1
+      for: 2m
+      labels:
+        severity: warning
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Unauthorized access attempts"
+        description: "{{ $value }} unauthorized access attempts per second"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/unauthorized-access"
+    
+    - alert: AuthServiceAdminActionWithoutMFA
+      expr: |
+        auth_admin_actions_without_mfa_total > 0
+      for: 0m
+      labels:
+        severity: critical
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Admin action without MFA"
+        description: "Admin action performed without MFA on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/admin-without-mfa"
+    
+    # Circuit Breaker Alerts
+    - alert: AuthServiceCircuitBreakerOpen
+      expr: |
+        auth_circuit_breaker_state{state="open"} > 0
+      for: 1m
+      labels:
+        severity: warning
+        service: auth-service
+        category: reliability
+      annotations:
+        summary: "Circuit breaker is open"
+        description: "Circuit breaker for {{ $labels.service }} is open on {{ $labels.instance }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/circuit-breaker-open"
+    
+    # Anomaly Detection Alerts
+    - alert: AuthServiceAnomalousTraffic
+      expr: |
+        (
+          sum(rate(http_requests_total{service="auth-service"}[5m])) >
+          (avg_over_time(sum(rate(http_requests_total{service="auth-service"}[5m]))[1h:5m]) * 2)
+        )
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: security
+      annotations:
+        summary: "Anomalous traffic pattern detected"
+        description: "Traffic is {{ $value }}% higher than normal"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/anomalous-traffic"
+
+  - name: auth-service.sla
+    interval: 1m
+    rules:
+    
+    # SLA Recording Rules
+    - record: auth_service:sli_errors:rate5m
+      expr: |
+        sum(rate(http_requests_total{service="auth-service",status=~"(5..|4..)"}[5m])) /
+        sum(rate(http_requests_total{service="auth-service"}[5m]))
+    
+    - record: auth_service:sli_latency:quantile95_5m
+      expr: |
+        histogram_quantile(0.95, 
+          sum(rate(http_request_duration_seconds_bucket{service="auth-service"}[5m])) by (le)
+        )
+    
+    - record: auth_service:sli_availability:rate5m
+      expr: |
+        sum(rate(http_requests_total{service="auth-service"}[5m])) /
+        (sum(rate(http_requests_total{service="auth-service"}[5m])) + 
+         sum(rate(auth_service_requests_failed_total[5m])))
+    
+    # SLO Alerts
+    - alert: AuthServiceSLOErrorRateHigh
+      expr: |
+        auth_service:sli_errors:rate5m > 0.01
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: slo
+      annotations:
+        summary: "SLO error rate exceeded"
+        description: "Error rate SLO exceeded: {{ $value | humanizePercentage }}"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/slo-error-rate"
+    
+    - alert: AuthServiceSLOLatencyHigh
+      expr: |
+        auth_service:sli_latency:quantile95_5m > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+        category: slo
+      annotations:
+        summary: "SLO latency exceeded"
+        description: "Latency SLO exceeded: {{ $value }}s"
+        runbook_url: "https://wiki.company.com/runbooks/auth-service/slo-latency"

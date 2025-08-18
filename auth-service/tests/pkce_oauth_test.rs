@@ -18,6 +18,9 @@ async fn spawn_app() -> String {
     std::env::set_var("TEST_MODE", "1");
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
     std::env::set_var("EXTERNAL_BASE_URL", "http://localhost:8080");
+    // Ensure client is registered and redirect URI is allowed for authorization flow
+    std::env::set_var("CLIENT_CREDENTIALS", "test_client:any_secret_ok_in_test");
+    std::env::set_var("CLIENT_REDIRECT_URIS", "test_client:http://localhost:3000/callback");
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
@@ -55,16 +58,16 @@ async fn test_pkce_authorization_code_flow() {
     );
 
     let response = client.get(&auth_url).send().await.unwrap();
-    
+
     // Should get a redirect with authorization code
     assert_eq!(response.status(), 302);
     let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
-    
+
     // Parse the authorization code from redirect
     let redirect_url = Url::parse(location).unwrap();
     let mut auth_code = None;
     let mut state = None;
-    
+
     for (key, value) in redirect_url.query_pairs() {
         match key.as_ref() {
             "code" => auth_code = Some(value.to_string()),
@@ -72,7 +75,7 @@ async fn test_pkce_authorization_code_flow() {
             _ => {}
         }
     }
-    
+
     let auth_code = auth_code.expect("Authorization code should be present");
     assert_eq!(state.as_deref(), Some("test_state"));
     assert!(auth_code.starts_with("ac_"));
@@ -93,19 +96,19 @@ async fn test_pkce_authorization_code_flow() {
 
     assert_eq!(token_response.status(), 200);
     let token_json: Value = token_response.json().await.unwrap();
-    
+
     // Verify token response
     assert!(token_json.get("access_token").is_some());
     assert!(token_json.get("refresh_token").is_some());
     assert_eq!(token_json.get("token_type").unwrap().as_str().unwrap(), "Bearer");
-    
+
     // Check if ID token is present (may not be if subject is not set)
     if token_json.get("id_token").is_some() {
         println!("ID token present: {}", token_json.get("id_token").unwrap().as_str().unwrap());
     } else {
         println!("No ID token generated - this is expected for client credentials without user context");
     }
-    
+
     let access_token = token_json.get("access_token").unwrap().as_str().unwrap();
     assert!(access_token.starts_with("tk_"));
 
@@ -145,7 +148,7 @@ async fn test_pkce_validation_failure() {
     let response = client.get(&auth_url).send().await.unwrap();
     assert_eq!(response.status(), 302);
     let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
-    
+
     let redirect_url = Url::parse(location).unwrap();
     let auth_code = redirect_url.query_pairs()
         .find(|(key, _)| key == "code")
@@ -154,7 +157,7 @@ async fn test_pkce_validation_failure() {
 
     // Step 3: Try to exchange with wrong code verifier
     let wrong_verifier = auth_service::security::generate_code_verifier();
-    
+
     let token_response = client
         .post(format!("{}/oauth/token", base))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
@@ -191,7 +194,7 @@ async fn test_authorization_without_pkce() {
 
     let response = client.get(&auth_url).send().await.unwrap();
     assert_eq!(response.status(), 302);
-    
+
     let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
     let redirect_url = Url::parse(location).unwrap();
     let auth_code = redirect_url.query_pairs()

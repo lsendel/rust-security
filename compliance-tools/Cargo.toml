@@ -1,0 +1,83 @@
+[package]
+name = "compliance-tools"
+version = "0.1.0"
+edition = "2021"
+description = "Rust-based compliance reporting and validation tools"
+authors = ["Rust Security Team"]
+license = "MIT"
+
+[[bin]]
+name = "compliance-report-generator"
+path = "src/bin/compliance_report_generator.rs"
+
+[[bin]]
+name = "threat-feed-validator"
+path = "src/bin/threat_feed_validator.rs"
+
+
+[dependencies]
+# Core dependencies
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+clap = { version = "4.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# HTTP and API clients
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+url = "2.0"
+
+# Template engine for reports
+tera = "1.20"
+handlebars = "6.1"
+
+# Data processing
+csv = "1.3"
+polars = { version = "0.44", features = ["lazy", "temporal", "json"] }
+
+# Configuration and environment
+config = "0.14"
+dotenv = "0.15"
+
+# Prometheus metrics
+prometheus = "0.14"
+
+# PDF generation for reports
+printpdf = { version = "0.7", optional = true }
+
+# Excel export
+calamine = "0.25"
+rust_xlsxwriter = { version = "0.76", optional = true }
+
+# Markdown processing
+pulldown-cmark = "0.12"
+
+# Caching
+moka = { version = "0.12", features = ["future"] }
+
+# Redis for caching
+redis = { version = "0.26", features = ["tokio-comp", "connection-manager"], optional = true }
+
+# File system operations
+walkdir = "2.5"
+tempfile = "3.10"
+
+# Date/time parsing
+regex = "1.10"
+
+[dev-dependencies]
+tokio-test = "0.4"
+wiremock = "0.6"
+
+[features]
+default = ["prometheus-metrics", "pdf-reports"]
+prometheus-metrics = []
+pdf-reports = ["printpdf"]
+excel-reports = ["dep:rust_xlsxwriter"]
+redis-cache = ["redis"]

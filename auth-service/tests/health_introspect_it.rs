@@ -10,6 +10,10 @@ async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
 
+    // Enable test mode to bypass client auth for introspection
+    std::env::set_var("TEST_MODE", "1");
+    std::env::set_var("DISABLE_RATE_LIMIT", "1");
+
     let mut token_store_map: HashMap<String, Arc<RwLock<IntrospectionRecord>>> = HashMap::new();
     token_store_map.insert(
         "valid_token".to_string(),

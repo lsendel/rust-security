@@ -1,0 +1,881 @@
+# CIS Kubernetes Benchmark Implementation
+# This file implements security controls based on CIS Kubernetes Benchmark v1.23
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cis-benchmark-policies
+  namespace: gatekeeper-system
+  labels:
+    app: gatekeeper
+    compliance: cis-kubernetes
+data:
+  # CIS 5.1.1 - Minimize the admission of privileged containers
+  privileged-containers.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredpodprivileged
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredPodPrivileged
+          validation:
+            openAPIV3Schema:
+              type: object
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredpodprivileged
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              container.securityContext.privileged
+              msg := sprintf("Privileged container is not allowed: %v", [container.name])
+            }
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.initContainers[_]
+              container.securityContext.privileged
+              msg := sprintf("Privileged init container is not allowed: %v", [container.name])
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredPodPrivileged
+    metadata:
+      name: must-not-be-privileged
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+        excludedNamespaces: ["kube-system", "kube-public"]
+
+  # CIS 5.1.2 - Minimize the admission of containers with allowPrivilegeEscalation
+  privilege-escalation.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredprivilegeescalation
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredPrivilegeEscalation
+          validation:
+            openAPIV3Schema:
+              type: object
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredprivilegeescalation
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              container.securityContext.allowPrivilegeEscalation == true
+              msg := sprintf("Container %v must not allow privilege escalation", [container.name])
+            }
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              not has_key(container.securityContext, "allowPrivilegeEscalation")
+              msg := sprintf("Container %v must explicitly set allowPrivilegeEscalation to false", [container.name])
+            }
+            
+            has_key(x, k) {
+              _ = x[k]
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredPrivilegeEscalation
+    metadata:
+      name: must-deny-privilege-escalation
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+
+  # CIS 5.1.3 - Minimize the admission of root containers
+  root-containers.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequirednonroot
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredNonRoot
+          validation:
+            openAPIV3Schema:
+              type: object
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequirednonroot
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              container.securityContext.runAsUser == 0
+              msg := sprintf("Container %v must not run as root (UID 0)", [container.name])
+            }
+            
+            violation[{"msg": msg}] {
+              input.review.object.spec.securityContext.runAsUser == 0
+              msg := "Pod must not run as root (UID 0)"
+            }
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              container.securityContext.runAsNonRoot == false
+              msg := sprintf("Container %v must set runAsNonRoot to true", [container.name])
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredNonRoot
+    metadata:
+      name: must-run-as-non-root
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+
+  # CIS 5.1.4 - Minimize the admission of containers with NET_RAW capability
+  net-raw-capability.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredcapabilities
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredCapabilities
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                allowedCapabilities:
+                  type: array
+                  items:
+                    type: string
+                requiredDropCapabilities:
+                  type: array
+                  items:
+                    type: string
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredcapabilities
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              has_disallowed_capability(container)
+              msg := sprintf("Container %v has disallowed capabilities", [container.name])
+            }
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              missing_required_drop(container)
+              msg := sprintf("Container %v must drop all capabilities", [container.name])
+            }
+            
+            has_disallowed_capability(container) {
+              capability := container.securityContext.capabilities.add[_]
+              capability == "NET_RAW"
+            }
+            
+            missing_required_drop(container) {
+              required := input.parameters.requiredDropCapabilities[_]
+              not required in container.securityContext.capabilities.drop
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredCapabilities
+    metadata:
+      name: must-drop-all-capabilities
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        requiredDropCapabilities: ["ALL"]
+
+  # CIS 5.1.5 - Minimize the admission of containers with allowedHostNetwork
+  host-network.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredhostnetwork
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredHostNetwork
+          validation:
+            openAPIV3Schema:
+              type: object
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredhostnetwork
+            
+            violation[{"msg": msg}] {
+              input.review.object.spec.hostNetwork == true
+              msg := "Pod must not use host network"
+            }
+            
+            violation[{"msg": msg}] {
+              input.review.object.spec.hostPID == true
+              msg := "Pod must not use host PID"
+            }
+            
+            violation[{"msg": msg}] {
+              input.review.object.spec.hostIPC == true
+              msg := "Pod must not use host IPC"
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredHostNetwork
+    metadata:
+      name: must-not-use-host-namespace
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+
+  # CIS 5.1.6 - Minimize the admission of containers with allowedHostPorts
+  host-ports.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredhostports
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredHostPorts
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                allowedHostPorts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      min:
+                        type: integer
+                      max:
+                        type: integer
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredhostports
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              port := container.ports[_]
+              port.hostPort
+              not allowed_host_port(port.hostPort)
+              msg := sprintf("Container %v uses disallowed host port %v", [container.name, port.hostPort])
+            }
+            
+            allowed_host_port(port) {
+              allowed := input.parameters.allowedHostPorts[_]
+              port >= allowed.min
+              port <= allowed.max
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredHostPorts
+    metadata:
+      name: must-not-use-host-ports
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        allowedHostPorts: []  # No host ports allowed
+
+  # CIS 5.2.1 - Minimize the admission of containers with runAsUser of 0
+  run-as-user.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredrunasuser
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredRunAsUser
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                runAsUser:
+                  type: object
+                  properties:
+                    rule:
+                      type: string
+                    ranges:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          min:
+                            type: integer
+                          max:
+                            type: integer
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredrunasuser
+            
+            violation[{"msg": msg}] {
+              input.parameters.runAsUser.rule == "MustRunAsNonRoot"
+              input.review.object.spec.securityContext.runAsUser == 0
+              msg := "Pod must not run as root user (UID 0)"
+            }
+            
+            violation[{"msg": msg}] {
+              input.parameters.runAsUser.rule == "MustRunAs"
+              provided := input.review.object.spec.securityContext.runAsUser
+              not allowed_runasuser(provided)
+              msg := sprintf("Pod runAsUser must be within allowed ranges: %v", [input.parameters.runAsUser.ranges])
+            }
+            
+            allowed_runasuser(runAsUser) {
+              range := input.parameters.runAsUser.ranges[_]
+              runAsUser >= range.min
+              runAsUser <= range.max
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredRunAsUser
+    metadata:
+      name: must-run-as-non-root-user
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        runAsUser:
+          rule: "MustRunAsNonRoot"
+
+  # CIS 5.2.2 - Minimize the admission of containers with runAsGroup of 0
+  run-as-group.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredrunasgroup
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredRunAsGroup
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                runAsGroup:
+                  type: object
+                  properties:
+                    rule:
+                      type: string
+                    ranges:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          min:
+                            type: integer
+                          max:
+                            type: integer
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredrunasgroup
+            
+            violation[{"msg": msg}] {
+              input.parameters.runAsGroup.rule == "MustRunAs"
+              provided := input.review.object.spec.securityContext.runAsGroup
+              provided == 0
+              msg := "Pod must not run as root group (GID 0)"
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredRunAsGroup
+    metadata:
+      name: must-not-run-as-root-group
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        runAsGroup:
+          rule: "MustRunAs"
+          ranges:
+            - min: 1000
+              max: 65535
+
+  # CIS 5.2.3 - Minimize the admission of containers with readOnlyRootFilesystem false
+  readonly-root-filesystem.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredreadonlyroot
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredReadOnlyRoot
+          validation:
+            openAPIV3Schema:
+              type: object
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredreadonlyroot
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              not container.securityContext.readOnlyRootFilesystem
+              msg := sprintf("Container %v must have readOnlyRootFilesystem set to true", [container.name])
+            }
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              container.securityContext.readOnlyRootFilesystem == false
+              msg := sprintf("Container %v must have readOnlyRootFilesystem set to true", [container.name])
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredReadOnlyRoot
+    metadata:
+      name: must-have-readonly-root-filesystem
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+
+  # CIS 5.2.4 - Minimize the admission of containers with volume mounts
+  volume-mounts.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredvolumemounts
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredVolumeMounts
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                allowedVolumes:
+                  type: array
+                  items:
+                    type: string
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredvolumemounts
+            
+            violation[{"msg": msg}] {
+              volume := input.review.object.spec.volumes[_]
+              not allowed_volume_type(volume)
+              msg := sprintf("Volume type %v is not allowed", [get_volume_type(volume)])
+            }
+            
+            allowed_volume_type(volume) {
+              volume_type := get_volume_type(volume)
+              volume_type in input.parameters.allowedVolumes
+            }
+            
+            get_volume_type(volume) = "configMap" {
+              volume.configMap
+            }
+            
+            get_volume_type(volume) = "secret" {
+              volume.secret
+            }
+            
+            get_volume_type(volume) = "emptyDir" {
+              volume.emptyDir
+            }
+            
+            get_volume_type(volume) = "persistentVolumeClaim" {
+              volume.persistentVolumeClaim
+            }
+            
+            get_volume_type(volume) = "projected" {
+              volume.projected
+            }
+            
+            get_volume_type(volume) = "downwardAPI" {
+              volume.downwardAPI
+            }
+            
+            get_volume_type(volume) = "hostPath" {
+              volume.hostPath
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredVolumeMounts
+    metadata:
+      name: allowed-volume-types
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        allowedVolumes:
+          - configMap
+          - secret
+          - emptyDir
+          - persistentVolumeClaim
+          - projected
+          - downwardAPI
+
+  # CIS 5.2.5 - Minimize the admission of containers with SELinux options
+  selinux-options.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredselinux
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredSELinux
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                allowedSELinuxOptions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      level:
+                        type: string
+                      role:
+                        type: string
+                      type:
+                        type: string
+                      user:
+                        type: string
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredselinux
+            
+            violation[{"msg": msg}] {
+              seLinuxOptions := input.review.object.spec.securityContext.seLinuxOptions
+              seLinuxOptions
+              not allowed_selinux_options(seLinuxOptions)
+              msg := "SELinux options are not allowed or not in allowed list"
+            }
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              seLinuxOptions := container.securityContext.seLinuxOptions
+              seLinuxOptions
+              not allowed_selinux_options(seLinuxOptions)
+              msg := sprintf("Container %v has disallowed SELinux options", [container.name])
+            }
+            
+            allowed_selinux_options(options) {
+              options in input.parameters.allowedSELinuxOptions
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredSELinux
+    metadata:
+      name: restrict-selinux-options
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        allowedSELinuxOptions: []  # No custom SELinux options allowed
+
+  # CIS 5.2.6 - Minimize the admission of containers with proc mount types
+  proc-mount.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredprocmount
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredProcMount
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                allowedProcMountTypes:
+                  type: array
+                  items:
+                    type: string
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredprocmount
+            
+            violation[{"msg": msg}] {
+              container := input.review.object.spec.containers[_]
+              procMountType := container.securityContext.procMount
+              procMountType
+              not procMountType in input.parameters.allowedProcMountTypes
+              msg := sprintf("Container %v has disallowed proc mount type: %v", [container.name, procMountType])
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredProcMount
+    metadata:
+      name: restrict-proc-mount
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        allowedProcMountTypes: ["Default"]
+
+  # CIS 5.2.7 - Minimize the admission of containers with seccomp profiles
+  seccomp-profiles.yaml: |
+    apiVersion: templates.gatekeeper.sh/v1beta1
+    kind: ConstraintTemplate
+    metadata:
+      name: k8srequiredseccomp
+    spec:
+      crd:
+        spec:
+          names:
+            kind: K8sRequiredSeccomp
+          validation:
+            openAPIV3Schema:
+              type: object
+              properties:
+                allowedProfiles:
+                  type: array
+                  items:
+                    type: string
+      targets:
+        - target: admission.k8s.gatekeeper.sh
+          rego: |
+            package k8srequiredseccomp
+            
+            violation[{"msg": msg}] {
+              not has_allowed_seccomp_profile
+              msg := "Seccomp profile must be set to an allowed value"
+            }
+            
+            has_allowed_seccomp_profile {
+              profile := input.review.object.spec.securityContext.seccompProfile.type
+              profile in input.parameters.allowedProfiles
+            }
+            
+            has_allowed_seccomp_profile {
+              container := input.review.object.spec.containers[_]
+              profile := container.securityContext.seccompProfile.type
+              profile in input.parameters.allowedProfiles
+            }
+    ---
+    apiVersion: config.gatekeeper.sh/v1alpha1
+    kind: K8sRequiredSeccomp
+    metadata:
+      name: require-seccomp-profile
+    spec:
+      match:
+        kinds:
+          - apiGroups: [""]
+            kinds: ["Pod"]
+      parameters:
+        allowedProfiles:
+          - "RuntimeDefault"
+          - "Localhost"
+
+  # Network Policy for CIS compliance
+  network-policy-cis.yaml: |
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: default-deny-all
+      namespace: auth-service
+    spec:
+      podSelector: {}
+      policyTypes:
+      - Ingress
+      - Egress
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: auth-service-network-policy
+      namespace: auth-service
+    spec:
+      podSelector:
+        matchLabels:
+          app: auth-service
+      policyTypes:
+      - Ingress
+      - Egress
+      ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        ports:
+        - protocol: TCP
+          port: 8080
+      egress:
+      - to: []
+        ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+      - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database
+        ports:
+        - protocol: TCP
+          port: 5432
+      - to:
+        - namespaceSelector:
+            matchLabels:
+              name: redis
+        ports:
+        - protocol: TCP
+          port: 6379
+      - to: []
+        ports:
+        - protocol: TCP
+          port: 443
+
+---
+# CIS Benchmark Compliance Report Generator
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cis-compliance-report
+  namespace: compliance
+spec:
+  schedule: "0 6 * * *"  # Daily at 6 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cis-compliance-scanner
+          containers:
+          - name: kube-bench
+            image: aquasec/kube-bench:v0.6.15
+            command: ["kube-bench"]
+            args: 
+              - "--json"
+              - "--outputfile"
+              - "/tmp/report.json"
+            volumeMounts:
+            - name: var-lib-etcd
+              mountPath: /var/lib/etcd
+              readOnly: true
+            - name: var-lib-kubelet
+              mountPath: /var/lib/kubelet
+              readOnly: true
+            - name: var-lib-kube-scheduler
+              mountPath: /var/lib/kube-scheduler
+              readOnly: true
+            - name: var-lib-kube-controller-manager
+              mountPath: /var/lib/kube-controller-manager
+              readOnly: true
+            - name: etc-systemd
+              mountPath: /etc/systemd
+              readOnly: true
+            - name: lib-systemd
+              mountPath: /lib/systemd/
+              readOnly: true
+            - name: etc-kubernetes
+              mountPath: /etc/kubernetes
+              readOnly: true
+            - name: etc-cni-netd
+              mountPath: /etc/cni/net.d/
+              readOnly: true
+            - name: report-volume
+              mountPath: /tmp
+          - name: report-uploader
+            image: curlimages/curl:latest
+            command: ["sh", "-c"]
+            args:
+            - |
+              sleep 60
+              curl -X POST \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $WEBHOOK_TOKEN" \
+                -d @/tmp/report.json \
+                https://compliance-dashboard.company.com/api/cis-reports
+            env:
+            - name: WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: compliance-webhook
+                  key: token
+            volumeMounts:
+            - name: report-volume
+              mountPath: /tmp
+          volumes:
+          - name: var-lib-etcd
+            hostPath:
+              path: "/var/lib/etcd"
+          - name: var-lib-kubelet
+            hostPath:
+              path: "/var/lib/kubelet"
+          - name: var-lib-kube-scheduler
+            hostPath:
+              path: "/var/lib/kube-scheduler"
+          - name: var-lib-kube-controller-manager
+            hostPath:
+              path: "/var/lib/kube-controller-manager"
+          - name: etc-systemd
+            hostPath:
+              path: "/etc/systemd"
+          - name: lib-systemd
+            hostPath:
+              path: "/lib/systemd"
+          - name: etc-kubernetes
+            hostPath:
+              path: "/etc/kubernetes"
+          - name: etc-cni-netd
+            hostPath:
+              path: "/etc/cni/net.d/"
+          - name: report-volume
+            emptyDir: {}
+          restartPolicy: OnFailure
+          hostPID: true
+          hostIPC: true
+          hostNetwork: true
+          nodeSelector:
+            node-role.kubernetes.io/control-plane: ""
+          tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule

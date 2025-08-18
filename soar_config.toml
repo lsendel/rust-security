@@ -1,0 +1,552 @@
+# SOAR (Security Orchestration, Automation, and Response) Configuration
+
+[soar]
+# Enable/disable SOAR system
+enabled = true
+
+# Maximum concurrent workflows
+max_concurrent_workflows = 50
+
+# Default workflow timeout (minutes)
+default_workflow_timeout_minutes = 60
+
+# Default step timeout (minutes)
+default_step_timeout_minutes = 30
+
+# Enable parallel execution
+parallel_execution_enabled = true
+
+[auto_response]
+# Enable automatic response to alerts
+enabled = false
+
+# Severity threshold for auto-response
+severity_threshold = "Medium"
+
+# Confidence threshold (0-100)
+confidence_threshold = 80
+
+# Maximum actions per auto-response
+max_actions_per_response = 5
+
+# Cooldown period between auto-responses (minutes)
+cooldown_minutes = 30
+
+# Allowed threat types for auto-response
+allowed_threat_types = [
+    "AuthenticationFailure",
+    "RateLimitExceeded",
+    "InputValidationFailure"
+]
+
+[correlation]
+# Time window for alert correlation (minutes)
+correlation_window_minutes = 60
+
+# Minimum events required for correlation
+min_events_for_correlation = 3
+
+# Maximum correlation cache size
+max_correlation_cache_size = 10000
+
+# Enable pattern matching
+pattern_matching_enabled = true
+
+# Enable statistical correlation
+statistical_correlation_enabled = true
+
+# Enable ML-enhanced correlation (requires ml-enhanced feature)
+ml_correlation_enabled = false
+
+[case_management]
+# Automatically create cases from alerts
+auto_create_cases = true
+
+# Severity threshold for automatic case creation
+case_creation_threshold = "Medium"
+
+# Default assignee for new cases
+default_assignee = "security-team"
+
+# Case retention period (days)
+retention_days = 365
+
+# Enable SLA tracking
+sla_tracking_enabled = true
+
+[case_management.sla]
+# Response time SLAs by severity (minutes)
+critical_response_minutes = 15
+high_response_minutes = 30
+medium_response_minutes = 60
+low_response_minutes = 240
+
+# Resolution time SLAs by severity (hours)
+critical_resolution_hours = 4
+high_resolution_hours = 8
+medium_resolution_hours = 24
+low_resolution_hours = 72
+
+# Escalation thresholds (percentage of SLA)
+critical_escalation_threshold = 80
+high_escalation_threshold = 75
+medium_escalation_threshold = 75
+low_escalation_threshold = 70
+
+[workflow]
+# Enable workflow persistence
+persistence_enabled = true
+
+# Persistence backend (redis, database, filesystem)
+persistence_backend = "redis"
+
+# Checkpoint frequency
+checkpoint_frequency = "after_each_step"
+
+# Enable circuit breaker
+circuit_breaker_enabled = true
+
+# Circuit breaker failure threshold
+circuit_breaker_failure_threshold = 5
+
+# Circuit breaker time window (minutes)
+circuit_breaker_time_window_minutes = 10
+
+# Circuit breaker recovery timeout (minutes)
+circuit_breaker_recovery_timeout_minutes = 5
+
+[notifications]
+# Enable notifications
+enabled = true
+
+# Default notification channels
+default_channels = ["email", "slack"]
+
+# Maximum notifications per hour
+max_notifications_per_hour = 100
+
+# Maximum notifications per day
+max_notifications_per_day = 1000
+
+# Enable notification aggregation
+aggregation_enabled = true
+
+# Aggregation window (minutes)
+aggregation_window_minutes = 15
+
+# Maximum notifications in aggregate
+max_notifications_per_aggregate = 10
+
+[notifications.email]
+# SMTP configuration
+smtp_host = "smtp.company.com"
+smtp_port = 587
+username = "noreply@company.com"
+password = ""  # Set via environment variable SMTP_PASSWORD
+from_address = "security@company.com"
+use_tls = true
+
+# Default recipients
+security_team_addresses = [
+    "security-team@company.com",
+    "incident-response@company.com"
+]
+
+[notifications.slack]
+# Slack webhook URL (set via environment variable SLACK_WEBHOOK_URL)
+webhook_url = ""
+channel = "#security-alerts"
+username = "SOAR Bot"
+icon_emoji = ":robot_face:"
+
+[notifications.pagerduty]
+# PagerDuty integration key (set via environment variable PAGERDUTY_INTEGRATION_KEY)
+integration_key = ""
+api_url = "https://events.pagerduty.com/v2/enqueue"
+service_id = ""
+
+[notifications.sms]
+# SMS provider configuration
+provider = "twilio"
+api_key = ""  # Set via environment variable SMS_API_KEY
+from_number = "+1234567890"
+
+[integrations.siem]
+# SIEM integration type (splunk, elasticsearch, qradar, sentinel)
+type = "elasticsearch"
+api_url = "https://elasticsearch.company.com:9200"
+api_key = ""  # Set via environment variable SIEM_API_KEY
+index_name = "security-logs"
+username = "soar_user"
+password = ""  # Set via environment variable SIEM_PASSWORD
+
+# Health check configuration
+health_check_enabled = true
+health_check_interval_minutes = 5
+health_check_timeout_seconds = 30
+
+[integrations.firewall]
+# Firewall integration type (palo_alto, fortinet, cisco, checkpoint, cloudflare, aws_waf)
+type = "palo_alto"
+api_url = "https://firewall.company.com/api"
+api_key = ""  # Set via environment variable FIREWALL_API_KEY
+default_block_duration_hours = 1
+rule_group_name = "SOAR_Auto_Block"
+
+# Health check configuration
+health_check_enabled = true
+health_check_interval_minutes = 5
+health_check_timeout_seconds = 30
+
+[integrations.identity_provider]
+# Identity provider type (azure_ad, okta, auth0, keycloak)
+type = "azure_ad"
+api_url = "https://graph.microsoft.com/v1.0"
+api_key = ""  # Set via environment variable IDP_API_KEY
+tenant_id = ""  # Set via environment variable AZURE_TENANT_ID
+
+[integrations.ticketing]
+# Ticketing system type (jira, servicenow, github, gitlab)
+type = "jira"
+api_url = "https://company.atlassian.net"
+api_key = ""  # Set via environment variable TICKETING_API_KEY
+project_id = "SEC"
+default_assignee = "security-team"
+
+[integrations.threat_intelligence]
+# Threat intelligence feeds
+type = "multiple"
+feeds = [
+    {
+        name = "abuse_ch",
+        url = "https://feodotracker.abuse.ch/downloads/ipblocklist.csv",
+        format = "csv",
+        update_frequency_hours = 1
+    },
+    {
+        name = "emergingthreats",
+        url = "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt",
+        format = "text",
+        update_frequency_hours = 6
+    }
+]
+
+[evidence_management]
+# Enable evidence management
+enabled = true
+
+# Primary storage backend (filesystem, s3, azure_blob)
+primary_storage = "filesystem"
+
+# Backup storage backends
+backup_storage = ["s3"]
+
+# Base storage path
+storage_path = "/var/lib/soar/evidence"
+
+# Enable encryption at rest
+encryption_enabled = true
+
+# Encryption algorithm (aes256_gcm, chacha20poly1305)
+encryption_algorithm = "aes256_gcm"
+
+# Key rotation frequency (never, daily, weekly, monthly, quarterly, yearly)
+key_rotation_frequency = "monthly"
+
+# Automatic key rotation
+auto_key_rotation = true
+
+# Evidence retention policy
+retention_policy = "compliance_based"
+
+# Default retention period (days)
+default_retention_days = 2555  # 7 years
+
+# Enable integrity verification
+integrity_verification_enabled = true
+
+# Integrity verification method (sha256, sha3_256, blake3)
+integrity_method = "sha256"
+
+# Verification schedule (immediate, daily, weekly)
+verification_schedule = "daily"
+
+[evidence_management.access_control]
+# Default access level (none, view, download, modify, delete, full)
+default_access = "none"
+
+# Enable access logging
+access_logging_enabled = true
+
+# Log all access attempts
+log_all_attempts = true
+
+# Audit trail retention (days)
+audit_retention_days = 2555  # 7 years
+
+[collaboration]
+# Enable collaboration features
+enabled = true
+
+# Enable real-time updates
+real_time_updates_enabled = true
+
+# Update delivery methods (websocket, server_sent_events, polling)
+delivery_methods = ["websocket", "server_sent_events"]
+
+# Maximum concurrent connections
+max_concurrent_connections = 1000
+
+# Connection timeout (seconds)
+connection_timeout_seconds = 300
+
+# Heartbeat interval (seconds)
+heartbeat_interval_seconds = 30
+
+[collaboration.document_sharing]
+# Enable document sharing
+enabled = true
+
+# Enable version control
+version_control_enabled = true
+
+# Versioning strategy (linear, branching, snapshot, delta)
+versioning_strategy = "linear"
+
+# Maximum versions to keep
+max_versions = 50
+
+# Version retention duration (days)
+version_retention_days = 365
+
+# Enable conflict detection
+conflict_detection_enabled = true
+
+# Conflict resolution mode (real_time, deferred, manual, automatic)
+conflict_resolution_mode = "manual"
+
+[metrics]
+# Enable metrics collection
+enabled = true
+
+# Metrics collection interval (seconds)
+collection_interval_seconds = 60
+
+# Metrics retention period (days)
+retention_days = 90
+
+# Enable performance profiling
+profiling_enabled = false
+
+# Profiling sample rate (0.0 - 1.0)
+profiling_sample_rate = 0.01
+
+[logging]
+# Log level (trace, debug, info, warn, error)
+level = "info"
+
+# Enable structured logging
+structured_logging = true
+
+# Log format (json, text)
+format = "json"
+
+# Enable audit logging
+audit_logging_enabled = true
+
+# Audit log retention (days)
+audit_retention_days = 2555  # 7 years
+
+# Log file rotation
+rotation_enabled = true
+
+# Maximum log file size (MB)
+max_file_size_mb = 100
+
+# Maximum number of log files
+max_files = 10
+
+[security]
+# Enable security headers
+security_headers_enabled = true
+
+# API rate limiting
+api_rate_limiting_enabled = true
+
+# API rate limit (requests per minute)
+api_rate_limit_per_minute = 1000
+
+# Enable IP allowlisting
+ip_allowlisting_enabled = false
+
+# Allowed IP ranges (CIDR notation)
+allowed_ip_ranges = [
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16"
+]
+
+# Session timeout (minutes)
+session_timeout_minutes = 480  # 8 hours
+
+# Enable MFA for SOAR access
+mfa_required = true
+
+# Password policy
+password_min_length = 12
+password_require_special_chars = true
+password_require_numbers = true
+password_require_uppercase = true
+password_require_lowercase = true
+
+[database]
+# Database connection pool settings
+max_connections = 50
+min_connections = 5
+connection_timeout_seconds = 30
+idle_timeout_minutes = 10
+max_lifetime_minutes = 60
+
+# Enable connection encryption
+ssl_enabled = true
+
+# SSL mode (require, verify-ca, verify-full)
+ssl_mode = "verify-full"
+
+[redis]
+# Redis connection settings
+max_connections = 100
+connection_timeout_seconds = 5
+idle_timeout_minutes = 5
+
+# Enable Redis clustering
+cluster_enabled = false
+
+# Redis key prefix
+key_prefix = "soar:"
+
+# Default TTL for cached data (seconds)
+default_ttl_seconds = 3600
+
+[performance]
+# Enable performance optimizations
+optimizations_enabled = true
+
+# Use SIMD instructions
+simd_enabled = true
+
+# Memory allocator (system, mimalloc, jemalloc)
+allocator = "mimalloc"
+
+# Enable async optimizations
+async_optimizations_enabled = true
+
+# Connection pool optimizations
+connection_pool_optimizations_enabled = true
+
+# Crypto optimizations
+crypto_optimizations_enabled = true
+
+[monitoring]
+# Enable health checks
+health_checks_enabled = true
+
+# Health check interval (seconds)
+health_check_interval_seconds = 30
+
+# Health check timeout (seconds)
+health_check_timeout_seconds = 10
+
+# Enable metrics export
+metrics_export_enabled = true
+
+# Metrics export format (prometheus, json)
+metrics_export_format = "prometheus"
+
+# Metrics export endpoint
+metrics_export_endpoint = "/metrics"
+
+# Enable distributed tracing
+tracing_enabled = false
+
+# Tracing sample rate (0.0 - 1.0)
+tracing_sample_rate = 0.1
+
+# Jaeger endpoint
+jaeger_endpoint = "http://localhost:14268/api/traces"
+
+[playbooks]
+# Playbook directory
+directory = "/etc/soar/playbooks"
+
+# Auto-reload playbooks on change
+auto_reload = true
+
+# Reload check interval (seconds)
+reload_check_interval_seconds = 60
+
+# Enable playbook validation
+validation_enabled = true
+
+# Strict validation mode
+strict_validation = false
+
+# Default playbook timeout (minutes)
+default_timeout_minutes = 60
+
+# Maximum playbook size (MB)
+max_playbook_size_mb = 10
+
+[escalation]
+# Enable escalation
+enabled = true
+
+# Default escalation delay (minutes)
+default_delay_minutes = 15
+
+# Maximum escalation levels
+max_escalation_levels = 3
+
+# Escalation notification methods
+notification_methods = ["email", "slack", "pagerduty"]
+
+# Enable automatic escalation
+automatic_escalation_enabled = true
+
+# Business hours for escalation
+business_hours_enabled = true
+business_start_hour = 9
+business_end_hour = 17
+business_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+business_timezone = "UTC"
+
+# After-hours escalation multiplier
+after_hours_multiplier = 0.5
+
+[compliance]
+# Enable compliance features
+enabled = true
+
+# Compliance frameworks
+frameworks = ["SOC2", "ISO27001", "NIST", "PCI-DSS"]
+
+# Enable compliance reporting
+reporting_enabled = true
+
+# Report generation frequency (daily, weekly, monthly, quarterly)
+report_frequency = "monthly"
+
+# Report retention period (months)
+report_retention_months = 36
+
+# Enable compliance alerts
+alerts_enabled = true
+
+# Compliance violation notification
+violation_notification_enabled = true
+
+# Violation notification recipients
+violation_notification_recipients = [
+    "compliance@company.com",
+    "security-management@company.com"
+]

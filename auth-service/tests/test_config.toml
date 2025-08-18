@@ -1,0 +1,81 @@
+# Test configuration for comprehensive auth-service testing
+
+[general]
+# Global test settings
+test_mode = true
+rust_backtrace = "1"
+rust_log = "debug"
+request_signing_secret = "test_secret_for_comprehensive_testing"
+disable_rate_limit = true
+parallel_jobs = 4
+
+[timeouts]
+# Test timeout settings (in seconds)
+unit_tests = 300
+integration_tests = 600
+security_tests = 900
+performance_tests = 1800
+property_tests = 600
+mfa_tests = 600
+
+[coverage]
+# Code coverage settings
+target_line_coverage = 90.0
+target_branch_coverage = 85.0
+exclude_patterns = [
+    "tests/*",
+    "benches/*", 
+    "examples/*",
+    "scripts/*"
+]
+
+[security]
+# Security testing configuration
+enable_attack_simulation = true
+enable_timing_analysis = true
+enable_injection_tests = true
+enable_boundary_testing = true
+max_malicious_payloads = 100
+
+[performance]
+# Performance testing thresholds
+max_token_latency_ms = 100
+min_throughput_ops_sec = 50
+max_memory_per_token_bytes = 1024
+concurrent_users = 50
+operations_per_user = 10
+
+[property_based]
+# Property-based testing settings
+proptest_cases = 1000
+quickcheck_tests = 1000
+max_shrink_iterations = 1000
+enable_fuzzing = true
+
+[mfa]
+# MFA testing configuration
+test_totp_windows = 3
+test_backup_codes = 8
+enable_replay_protection = true
+enable_rate_limiting = true
+
+[integration]
+# Integration test settings
+spawn_test_servers = true
+test_all_endpoints = true
+test_error_scenarios = true
+test_concurrent_operations = true
+
+[unit]
+# Unit test settings
+test_all_modules = true
+test_error_paths = true
+test_edge_cases = true
+enable_mock_dependencies = true
+
+[benchmarks]
+# Benchmark configuration
+enable_criterion = false
+enable_flamegraph = false
+benchmark_duration_seconds = 30
+warmup_iterations = 5

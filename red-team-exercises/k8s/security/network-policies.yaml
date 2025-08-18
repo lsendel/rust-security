@@ -1,0 +1,240 @@
+# Network Policies for Micro-segmentation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-deny-all
+  namespace: auth-service
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Allow ingress from ingress controller
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-ingress
+  namespace: auth-service
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+      podSelector:
+        matchLabels:
+          app: istio-proxy
+    ports:
+    - protocol: TCP
+      port: 8080
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+      podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+# Allow egress to database and Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-egress
+  namespace: auth-service
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS to external services (OIDC providers)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow connection to Redis
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: redis
+      podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow connection to PostgreSQL
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: database
+      podSelector:
+        matchLabels:
+          app: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow connection to vault for secrets
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: vault
+      podSelector:
+        matchLabels:
+          app: vault
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow connection to monitoring services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 3000
+---
+# Cilium Network Policy for L7 filtering
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: auth-service-l7-policy
+  namespace: auth-service
+spec:
+  endpointSelector:
+    matchLabels:
+      app: auth-service
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: ingress-nginx
+    toPorts:
+    - ports:
+      - port: "8080"
+        protocol: TCP
+      rules:
+        http:
+        - method: "GET"
+          path: "/health"
+        - method: "GET"
+          path: "/ready"
+        - method: "POST"
+          path: "/auth/.*"
+        - method: "GET"
+          path: "/auth/.*"
+        - method: "POST"
+          path: "/token"
+        - method: "GET"
+          path: "/.well-known/.*"
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: database
+    toPorts:
+    - ports:
+      - port: "5432"
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: redis
+    toPorts:
+    - ports:
+      - port: "6379"
+        protocol: TCP
+  - toFQDNs:
+    - matchName: "github.com"
+    - matchName: "login.microsoftonline.com"
+    - matchName: "accounts.google.com"
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+      rules:
+        http:
+        - method: "GET"
+        - method: "POST"
+---
+# Istio Authorization Policy
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: auth-service-authz
+  namespace: auth-service
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/ingress-nginx/sa/ingress-nginx"]
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/auth/*", "/token", "/.well-known/*", "/health", "/ready"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/monitoring/sa/prometheus"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/metrics", "/health"]
+---
+# Calico Global Network Policy
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-node-local-access
+spec:
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  egress:
+  - action: Deny
+    protocol: TCP
+    destination:
+      nets:
+      - 169.254.169.254/32  # AWS metadata service
+      - 169.254.170.2/32    # ECS task metadata
+      ports:
+      - 80
+      - 443
+  - action: Deny
+    protocol: TCP
+    destination:
+      nets:
+      - 10.0.0.0/8     # Private networks
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      ports:
+      - 22    # SSH
+      - 3389  # RDP
+      - 5985  # WinRM
+      - 5986  # WinRM over HTTPS
