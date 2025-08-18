@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 use uuid::Uuid;
+use crate::pii_protection::{redact_log, PiiSpiRedactor, DataClassification};
 
 /// Security event severity levels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -42,6 +43,7 @@ pub enum SecurityEventType {
     PrivilegeEscalation,
     DataAccess,
     AdminAction,
+    AdminAccess,
     UnauthorizedAccess,
     SessionEvent,
     SecurityViolation,
@@ -291,6 +293,38 @@ impl SecurityEvent {
         self.user_agent = Some(PiiRedactor::redact_user_agent(&user_agent));
         self
     }
+    
+    /// Apply comprehensive PII/SPI protection to the entire event
+    pub fn apply_pii_protection(&mut self) {
+        let redactor = PiiSpiRedactor::new();
+        
+        // Protect description field
+        self.description = redactor.redact_log_message(&self.description);
+        
+        // Protect reason field if present
+        if let Some(ref reason) = self.reason {
+            self.reason = Some(redactor.redact_log_message(reason));
+        }
+        
+        // Protect request path if present
+        if let Some(ref path) = self.request_path {
+            self.request_path = Some(PiiRedactor::redact_path(path));
+        }
+        
+        // Protect details map values
+        for (key, value) in self.details.iter_mut() {
+            if let Value::String(ref s) = value {
+                let redacted = redactor.redact_log_message(s);
+                *value = Value::String(redacted);
+            }
+        }
+        
+        // Additional protection for location data if present
+        if let Some(ref location) = self.location {
+            // Redact precise location data but keep general region
+            self.location = Some(redactor.redact_text(location, DataClassification::Internal));
+        }
+    }
 }
 
 /// PII redaction utility for security logging
@@ -514,15 +548,28 @@ mod tests {
 pub struct SecurityLogger;
 
 impl SecurityLogger {
-    /// Log a security event with appropriate level
+    /// Create a new security logger instance
+    pub fn new() -> Self {
+        Self
+    }
+    
+    /// Log a security event with appropriate level and PII protection
     pub fn log_event(event: &SecurityEvent) {
-        let event_json = match serde_json::to_string(event) {
+        let event = &event;
+        // Apply PII redaction to the entire event before logging
+        let mut sanitized_event = event.clone();
+        sanitized_event.apply_pii_protection();
+        
+        let event_json = match serde_json::to_string(&sanitized_event) {
             Ok(json) => json,
             Err(e) => {
                 error!("Failed to serialize security event: {}", e);
                 return;
             }
         };
+        
+        // Additional protection for the JSON string itself
+        let protected_json = redact_log(&event_json);
         
         match event.severity {
             SecuritySeverity::Critical => {
@@ -534,7 +581,7 @@ impl SecurityLogger {
                     client_id = ?event.client_id,
                     ip_address = ?event.ip_address,
                     "SECURITY_EVENT: {}",
-                    event_json
+                    protected_json
                 );
             }
             SecuritySeverity::High => {
@@ -546,7 +593,7 @@ impl SecurityLogger {
                     client_id = ?event.client_id,
                     ip_address = ?event.ip_address,
                     "SECURITY_EVENT: {}",
-                    event_json
+                    protected_json
                 );
             }
             SecuritySeverity::Medium => {
@@ -558,7 +605,7 @@ impl SecurityLogger {
                     client_id = ?event.client_id,
                     ip_address = ?event.ip_address,
                     "SECURITY_EVENT: {}",
-                    event_json
+                    protected_json
                 );
             }
             SecuritySeverity::Low => {
@@ -570,7 +617,7 @@ impl SecurityLogger {
                     client_id = ?event.client_id,
                     ip_address = ?event.ip_address,
                     "SECURITY_EVENT: {}",
-                    event_json
+                    protected_json
                 );
             }
             SecuritySeverity::Info => {
@@ -582,7 +629,7 @@ impl SecurityLogger {
                     client_id = ?event.client_id,
                     ip_address = ?event.ip_address,
                     "SECURITY_EVENT: {}",
-                    event_json
+                    protected_json
                 );
             }
             SecuritySeverity::Warning => {
@@ -594,7 +641,7 @@ impl SecurityLogger {
                     client_id = ?event.client_id,
                     ip_address = ?event.ip_address,
                     "SECURITY_EVENT: {}",
-                    event_json
+                    protected_json
                 );
             }
         }
@@ -632,7 +679,7 @@ impl SecurityLogger {
             }
         }
         
-        Self::log_event(&event);
+        SecurityLogger::log_event(&event);
     }
     
     /// Log token operation
@@ -668,7 +715,7 @@ impl SecurityLogger {
             }
         }
         
-        Self::log_event(&event);
+        SecurityLogger::log_event(&event);
     }
     
     /// Log security violation
@@ -706,7 +753,7 @@ impl SecurityLogger {
             }
         }
         
-        Self::log_event(&event);
+        SecurityLogger::log_event(&event);
     }
     
     /// Log input validation failure
@@ -738,7 +785,7 @@ impl SecurityLogger {
             }
         }
         
-        Self::log_event(&event);
+        SecurityLogger::log_event(&event);
     }
     
     /// Log rate limit exceeded
@@ -762,7 +809,7 @@ impl SecurityLogger {
         .with_detail("current_rate".to_string(), current_rate)
         .with_detail("rate_limit".to_string(), limit);
         
-        Self::log_event(&event);
+        SecurityLogger::log_event(&event);
     }
 }
 

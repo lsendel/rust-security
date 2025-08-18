@@ -1,6 +1,7 @@
 // Secure session management with Redis backend and security features
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::security_metrics::SECURITY_METRICS;
+use crate::pii_protection::redact_log;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -246,7 +247,7 @@ impl SessionManager {
             match self.get_session_from_redis(client, session_id).await {
                 Ok(session) => return Ok(session),
                 Err(e) => {
-                    warn!(error = %e, session_id = %session_id, "Failed to get session from Redis, falling back to memory");
+                    warn!(error = %redact_log(&e.to_string()), session_id = %redact_log(session_id), "Failed to get session from Redis, falling back to memory");
                 }
             }
         }
@@ -271,7 +272,7 @@ impl SessionManager {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!(error = %e, session_id = %session_id, "Failed to delete session from Redis, falling back to memory");
+                    warn!(error = %redact_log(&e.to_string()), session_id = %redact_log(session_id), "Failed to delete session from Redis, falling back to memory");
                 }
             }
         }
@@ -379,7 +380,7 @@ impl SessionManager {
             match self.store_session_to_redis(client, session).await {
                 Ok(_) => return Ok(()),
                 Err(e) => {
-                    warn!(error = %e, session_id = %session.id, "Failed to store session to Redis, falling back to memory");
+                    warn!(error = %redact_log(&e.to_string()), session_id = %redact_log(&session.id), "Failed to store session to Redis, falling back to memory");
                 }
             }
         }
@@ -402,7 +403,7 @@ impl SessionManager {
             match serde_json::from_str::<Session>(&data) {
                 Ok(session) => Ok(Some(session)),
                 Err(e) => {
-                    error!(error = %e, session_id = %session_id, "Failed to deserialize session");
+                    error!(error = %redact_log(&e.to_string()), session_id = %redact_log(session_id), "Failed to deserialize session");
                     Ok(None)
                 }
             }
@@ -476,7 +477,7 @@ impl SessionManager {
             match self.get_user_sessions_from_redis(client, user_id).await {
                 Ok(redis_sessions) => return Ok(redis_sessions),
                 Err(e) => {
-                    warn!(error = %e, user_id = %user_id, "Failed to get user sessions from Redis, falling back to memory");
+                    warn!(error = %redact_log(&e.to_string()), user_id = %redact_log(user_id), "Failed to get user sessions from Redis, falling back to memory");
                 }
             }
         }
@@ -597,7 +598,7 @@ pub async fn start_session_cleanup_task() {
                 }
             }
             Err(e) => {
-                error!(error = %e, "Session cleanup failed");
+                error!(error = %redact_log(&e.to_string()), "Session cleanup failed");
             }
         }
     }

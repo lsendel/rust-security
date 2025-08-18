@@ -304,11 +304,14 @@ impl ScimAuthorizationManager {
             "scim-service".to_string(),
             "SCIM operation authorized".to_string(),
         )
-        .with_action("scim_authorization".to_string())
+        .with_actor(if context.client_id.is_some() { "admin" } else { "user" }.to_string())
+        .with_action("rbac_check".to_string())
+        .with_target(format!("scim_{}", operation.get_resource_type()))
+        .with_outcome("allowed".to_string())
+        .with_reason("User has sufficient permissions for SCIM operation".to_string())
         .with_detail("user_id".to_string(), context.user_id.clone())
         .with_detail("operation".to_string(), format!("{:?}", operation))
-        .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default())
-        .with_outcome("authorized".to_string());
+        .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default());
 
         SecurityLogger::log_event(&event);
     }
@@ -321,12 +324,15 @@ impl ScimAuthorizationManager {
             "scim-service".to_string(),
             "SCIM operation denied".to_string(),
         )
-        .with_action("scim_authorization".to_string())
+        .with_actor(if context.client_id.is_some() { "admin" } else { "user" }.to_string())
+        .with_action("rbac_check".to_string())
+        .with_target(format!("scim_{}", operation.get_resource_type()))
+        .with_outcome("denied".to_string())
+        .with_reason(format!("SCIM operation denied: {}", reason))
         .with_detail("user_id".to_string(), context.user_id.clone())
         .with_detail("operation".to_string(), format!("{:?}", operation))
         .with_detail("reason".to_string(), reason.to_string())
-        .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default())
-        .with_outcome("denied".to_string());
+        .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default());
 
         SecurityLogger::log_event(&event);
     }
@@ -383,6 +389,33 @@ impl ScimOperation {
             ScimOperation::ResourceTypeRead => ScimPermission::ResourceTypeRead,
             ScimOperation::ServiceProviderConfigRead => ScimPermission::ServiceProviderConfigRead,
             ScimOperation::BulkOperations => ScimPermission::BulkOperations,
+        }
+    }
+
+    /// Get the resource type for this operation
+    pub fn get_resource_type(&self) -> &'static str {
+        match self {
+            ScimOperation::UserList | 
+            ScimOperation::UserRead { .. } |
+            ScimOperation::UserCreate |
+            ScimOperation::UserUpdate { .. } |
+            ScimOperation::UserDelete { .. } |
+            ScimOperation::UserPasswordReset { .. } |
+            ScimOperation::UserActivate { .. } |
+            ScimOperation::UserDeactivate { .. } => "user",
+
+            ScimOperation::GroupList |
+            ScimOperation::GroupRead { .. } |
+            ScimOperation::GroupCreate |
+            ScimOperation::GroupUpdate { .. } |
+            ScimOperation::GroupDelete { .. } |
+            ScimOperation::GroupMemberAdd { .. } |
+            ScimOperation::GroupMemberRemove { .. } => "group",
+
+            ScimOperation::SchemaRead => "schema",
+            ScimOperation::ResourceTypeRead => "resource_type",
+            ScimOperation::ServiceProviderConfigRead => "service_provider_config",
+            ScimOperation::BulkOperations => "bulk",
         }
     }
 }

@@ -12,6 +12,7 @@ use hex;
 
 use crate::errors::{AuthError, internal_error};
 use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::pii_protection::redact_log;
 
 /// Key lifecycle states
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -375,9 +376,9 @@ impl KeyManagementService {
         .with_action("key_revoke".to_string())
         .with_target("signing_key".to_string())
         .with_outcome(if needs_emergency_rotation { "revoked_with_emergency_rotation".to_string() } else { "revoked".to_string() })
-        .with_reason(format!("Key revocation required: {}", reason))
+        .with_reason(format!("Key revocation required: {}", redact_log(reason)))
         .with_resource(kid.to_string())
-        .with_detail("revocation_reason".to_string(), reason)
+        .with_detail("revocation_reason".to_string(), redact_log(reason))
         .with_detail("emergency_rotation_needed".to_string(), needs_emergency_rotation);
         
         SecurityLogger::log_event(&event);
@@ -523,7 +524,7 @@ impl KeyManagementService {
             };
             
             if !should_retain {
-                info!(kid = %kid, state = ?key.state, age_hours = (now - key.created_at) / 3600, "Cleaning up expired key");
+                info!(kid = %redact_log(kid), state = ?key.state, age_hours = (now - key.created_at) / 3600, "Cleaning up expired key");
             }
             
             should_retain
@@ -538,15 +539,15 @@ impl KeyManagementService {
         let private_key_pem = include_str!("../keys/rsa_private_key.pem");
         
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| internal_error(&format!("Failed to create encoding key: {}", e)))?;
+            .map_err(|e| internal_error(&format!("Failed to create encoding key: {}", redact_log(&e.to_string()))))?;
         
         let decoding_key = DecodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| internal_error(&format!("Failed to create decoding key: {}", e)))?;
+            .map_err(|e| internal_error(&format!("Failed to create decoding key: {}", redact_log(&e.to_string()))))?;
         
         // Create JWK (using hardcoded values for now)
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex)
-            .map_err(|e| internal_error(&format!("Failed to decode modulus: {}", e)))?;
+            .map_err(|e| internal_error(&format!("Failed to decode modulus: {}", redact_log(&e.to_string()))))?;
         
         let n = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&modulus_bytes);
         let e = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&[0x01, 0x00, 0x01]);

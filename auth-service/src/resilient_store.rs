@@ -1,5 +1,6 @@
 use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, TimeoutConfig, RetryConfig, RetryBackoff};
 use crate::errors::AuthError;
+use crate::pii_protection::redact_log;
 use std::time::Duration;
 use tokio::time::timeout;
 use redis::{aio::ConnectionManager, AsyncCommands};
@@ -195,7 +196,7 @@ impl ResilientRedisClient {
                 }
                 Err(CircuitBreakerError::OperationFailed(msg)) => {
                     tracing::warn!(
-                        error = %msg,
+                        error = %redact_log(&msg),
                         attempt = backoff.attempt(),
                         "Redis operation failed"
                     );
@@ -302,7 +303,7 @@ impl ResilientPipeline {
                 }
                 Err(CircuitBreakerError::OperationFailed(msg)) => {
                     tracing::warn!(
-                        error = %msg,
+                        error = %redact_log(&msg),
                         attempt = backoff.attempt(),
                         "Redis pipeline failed"
                     );

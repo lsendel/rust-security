@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
+use crate::pii_protection::{redact_error, redact_pii_spi, PiiSpiRedactor, DataClassification, redact_log};
 
 /// Comprehensive error type for the auth service
 #[derive(Debug, Error)]
@@ -201,34 +202,34 @@ impl IntoResponse for AuthError {
             AuthError::InvalidScope { scope } => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new("invalid_scope", &format!("invalid scope: {}", 
-                    sanitize_user_input(&scope)))
+                    redact_error(&scope)))
             ),
             AuthError::InvalidToken { reason } => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("invalid_token", &sanitize_user_input(&reason))
+                ErrorResponse::new("invalid_token", &redact_error(&reason))
             ),
             AuthError::UnsupportedGrantType { grant_type } => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new("unsupported_grant_type", &format!("unsupported grant type: {}", 
-                    sanitize_user_input(&grant_type)))
+                    redact_error(&grant_type)))
             ),
             AuthError::UnsupportedResponseType { response_type } => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new("unsupported_response_type", &format!("unsupported response type: {}", 
-                    sanitize_user_input(&response_type)))
+                    redact_error(&response_type)))
             ),
             AuthError::UnauthorizedClient { client_id } => (
                 StatusCode::UNAUTHORIZED,
                 ErrorResponse::new("unauthorized_client", "unauthorized client")
-                    .with_detail("client_id", serde_json::Value::String(sanitize_client_id(&client_id)))
+                    .with_detail("client_id", serde_json::Value::String(redact_client_id(&client_id)))
             ),
             AuthError::InvalidRequest { reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_request", &sanitize_user_input(&reason))
+                ErrorResponse::new("invalid_request", &redact_error(&reason))
             ),
             AuthError::Forbidden { reason } => (
                 StatusCode::FORBIDDEN,
-                ErrorResponse::new("access_denied", &sanitize_user_input(&reason))
+                ErrorResponse::new("access_denied", &redact_error(&reason))
             ),
             AuthError::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -245,16 +246,16 @@ impl IntoResponse for AuthError {
             AuthError::ValidationError { field, reason } => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new("invalid_request", &format!("validation failed for field: {}", 
-                    sanitize_user_input(&field)))
-                    .with_detail("validation_error", serde_json::Value::String(sanitize_user_input(&reason)))
+                    redact_error(&field)))
+                    .with_detail("validation_error", serde_json::Value::String(redact_error(&reason)))
             ),
             AuthError::ScimFilterError { filter: _, reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_filter", &sanitize_user_input(&reason))
+                ErrorResponse::new("invalid_filter", &redact_error(&reason))
             ),
             AuthError::RedirectUriError { uri: _, reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("invalid_redirect_uri", &sanitize_user_input(&reason))
+                ErrorResponse::new("invalid_redirect_uri", &redact_error(&reason))
             ),
             AuthError::SessionExpired => (
                 StatusCode::UNAUTHORIZED,
@@ -266,7 +267,7 @@ impl IntoResponse for AuthError {
             ),
             AuthError::SessionError { reason } => (
                 StatusCode::BAD_REQUEST,
-                ErrorResponse::new("session_error", &sanitize_user_input(&reason))
+                ErrorResponse::new("session_error", &redact_error(&reason))
             ),
             AuthError::MfaChallengeRequired { challenge_id } => (
                 StatusCode::UNAUTHORIZED,
@@ -275,7 +276,7 @@ impl IntoResponse for AuthError {
             ),
             AuthError::MfaVerificationFailed { reason } => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("mfa_failed", &sanitize_user_input(&reason))
+                ErrorResponse::new("mfa_failed", &redact_error(&reason))
             ),
             AuthError::OAuthStateMismatch => (
                 StatusCode::BAD_REQUEST,
@@ -289,7 +290,7 @@ impl IntoResponse for AuthError {
             // Server errors (5xx) - log but don't expose details
             AuthError::RedisConnectionError { source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, error = %source, "Redis connection error");
+                tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "Redis connection error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "temporary service unavailability")
@@ -298,7 +299,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::TokenStoreError { operation, source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, operation = %operation, error = %source, "Token store error");
+                tracing::error!(error_id = %error_id, operation = %redact_log(&operation), error = %redact_log(&source.to_string()), "Token store error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "temporary service unavailability")
@@ -307,7 +308,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::SerializationError { source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, error = %source, "Serialization error");
+                tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "Serialization error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "internal service error")
@@ -316,7 +317,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::KeyGenerationError { source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, error = %source, "Key generation error");
+                tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "Key generation error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "cryptographic service unavailable")
@@ -325,7 +326,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::JwtSigningError { source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, error = %source, "JWT signing error");
+                tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "JWT signing error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "token service unavailable")
@@ -334,11 +335,11 @@ impl IntoResponse for AuthError {
             },
             AuthError::JwtVerificationError { reason } => (
                 StatusCode::UNAUTHORIZED,
-                ErrorResponse::new("invalid_token", &sanitize_user_input(&reason))
+                ErrorResponse::new("invalid_token", &redact_error(&reason))
             ),
             AuthError::CryptographicError { operation, source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, operation = %operation, error = %source, "Cryptographic error");
+                tracing::error!(error_id = %error_id, operation = %redact_log(&operation), error = %redact_log(&source.to_string()), "Cryptographic error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "cryptographic service error")
@@ -347,7 +348,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::HttpClientError { source } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, error = %source, "HTTP client error");
+                tracing::error!(error_id = %error_id, error = %redact_log(&source.to_string()), "HTTP client error");
                 (
                     StatusCode::BAD_GATEWAY,
                     ErrorResponse::new("service_unavailable", "external service unavailable")
@@ -356,11 +357,11 @@ impl IntoResponse for AuthError {
             },
             AuthError::ServiceUnavailable { reason } => (
                 StatusCode::SERVICE_UNAVAILABLE,
-                ErrorResponse::new("service_unavailable", &sanitize_user_input(&reason))
+                ErrorResponse::new("service_unavailable", &redact_error(&reason))
             ),
             AuthError::TimeoutError { operation } => {
                 let error_id = Uuid::new_v4();
-                tracing::warn!(error_id = %error_id, operation = %operation, "Operation timeout");
+                tracing::warn!(error_id = %error_id, operation = %redact_log(&operation), "Operation timeout");
                 (
                     StatusCode::GATEWAY_TIMEOUT,
                     ErrorResponse::new("timeout", "operation timed out")
@@ -370,11 +371,11 @@ impl IntoResponse for AuthError {
             AuthError::CircuitBreakerOpen { service } => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 ErrorResponse::new("service_unavailable", &format!("service temporarily unavailable: {}", 
-                    sanitize_user_input(&service)))
+                    redact_error(&service)))
             ),
             AuthError::ConfigurationError { field, reason } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, field = %field, reason = %reason, "Configuration error");
+                tracing::error!(error_id = %error_id, field = %redact_log(&field), reason = %redact_log(&reason), "Configuration error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "service configuration error")
@@ -383,7 +384,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::MissingEnvironmentVariable { variable } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, variable = %variable, "Missing environment variable");
+                tracing::error!(error_id = %error_id, variable = %redact_log(&variable), "Missing environment variable");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "service configuration error")
@@ -392,7 +393,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::OidcProviderError { provider, reason } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, provider = %provider, reason = %reason, "OIDC provider error");
+                tracing::error!(error_id = %error_id, provider = %redact_log(&provider), reason = %redact_log(&reason), "OIDC provider error");
                 (
                     StatusCode::BAD_GATEWAY,
                     ErrorResponse::new("external_service_error", "authentication provider unavailable")
@@ -401,7 +402,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::TransactionFailed { reason } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, reason = %reason, "Transaction failed");
+                tracing::error!(error_id = %error_id, reason = %redact_log(&reason), "Transaction failed");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "transaction failed")
@@ -419,7 +420,7 @@ impl IntoResponse for AuthError {
             },
             AuthError::TokenFamilyRevocationFailed { reason } => {
                 let error_id = Uuid::new_v4();
-                tracing::error!(error_id = %error_id, reason = %reason, "Token family revocation failed");
+                tracing::error!(error_id = %error_id, reason = %redact_log(&reason), "Token family revocation failed");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "token revocation failed")
@@ -431,7 +432,7 @@ impl IntoResponse for AuthError {
                 ErrorResponse::new("invalid_grant", "refresh token reuse detected")
             ),
             AuthError::InternalError { error_id, context } => {
-                tracing::error!(error_id = %error_id, context = %context, "Internal error");
+                tracing::error!(error_id = %error_id, context = %redact_log(&context), "Internal error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     ErrorResponse::new("internal_error", "internal service error")
@@ -486,7 +487,7 @@ impl From<jsonwebtoken::errors::Error> for AuthError {
 impl From<anyhow::Error> for AuthError {
     fn from(err: anyhow::Error) -> Self {
         let error_id = uuid::Uuid::new_v4();
-        tracing::error!(error_id = %error_id, error = %err, "Converting anyhow error to AuthError");
+        tracing::error!(error_id = %error_id, error = %redact_log(&err.to_string()), "Converting anyhow error to AuthError");
         AuthError::InternalError {
             error_id,
             context: format!("Internal error: {}", err),
@@ -494,35 +495,12 @@ impl From<anyhow::Error> for AuthError {
     }
 }
 
-// Utility functions for PII sanitization
+// Utility functions for PII/SPI protection
 
-/// Sanitize user input to prevent sensitive information leakage
-fn sanitize_user_input(input: &str) -> String {
-    // Remove potential PII patterns
-    let mut sanitized = input.to_string();
-    
-    // Email pattern
-    let email_re = regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
-    sanitized = email_re.replace_all(&sanitized, "[EMAIL_REDACTED]").to_string();
-    
-    // Phone pattern (basic)
-    let phone_re = regex::Regex::new(r"\b\d{3}-?\d{3}-?\d{4}\b").unwrap();
-    sanitized = phone_re.replace_all(&sanitized, "[PHONE_REDACTED]").to_string();
-    
-    // Token-like patterns (32+ hex chars)
-    let token_re = regex::Regex::new(r"\b[a-fA-F0-9]{32,}\b").unwrap();
-    sanitized = token_re.replace_all(&sanitized, "[TOKEN_REDACTED]").to_string();
-    
-    // Limit length and escape for safety
-    if sanitized.len() > 200 {
-        sanitized = format!("{}...", &sanitized[..197]);
-    }
-    
-    sanitized
-}
-
-/// Sanitize client ID to prevent information leakage while preserving some utility
-fn sanitize_client_id(client_id: &str) -> String {
+/// Redact client ID to prevent information leakage while preserving some utility
+fn redact_client_id(client_id: &str) -> String {
+    let redactor = PiiSpiRedactor::new();
+    // Use partial redaction for client IDs to maintain some utility for debugging
     if client_id.len() <= 8 {
         client_id.to_string()
     } else {
@@ -530,10 +508,28 @@ fn sanitize_client_id(client_id: &str) -> String {
     }
 }
 
+/// Enhanced PII/SPI redaction for error contexts
+fn redact_error_with_context(input: &str, context: &str) -> String {
+    let redactor = PiiSpiRedactor::new();
+    let redacted = redactor.redact_error_message(input);
+    
+    // Log for audit purposes (without the sensitive data)
+    if redacted != input {
+        tracing::warn!(
+            context = context,
+            original_length = input.len(),
+            redacted_length = redacted.len(),
+            "Sensitive data redacted from error message"
+        );
+    }
+    
+    redacted
+}
+
 /// Create an internal error with proper context
 pub fn internal_error(context: &str) -> AuthError {
     let error_id = Uuid::new_v4();
-    tracing::error!(error_id = %error_id, context = %context, "Internal error created");
+    tracing::error!(error_id = %error_id, context = %redact_log(context), "Internal error created");
     AuthError::InternalError {
         error_id,
         context: context.to_string(),
@@ -561,17 +557,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sanitize_user_input() {
-        assert_eq!(sanitize_user_input("user@example.com"), "[EMAIL_REDACTED]");
-        assert_eq!(sanitize_user_input("123-456-7890"), "[PHONE_REDACTED]");
-        assert_eq!(sanitize_user_input("abcdef123456789012345678901234567890"), "[TOKEN_REDACTED]");
-        assert_eq!(sanitize_user_input("normal text"), "normal text");
+    fn test_redact_error() {
+        assert!(redact_error("user@example.com").contains("u****@example.com"));
+        assert!(redact_error("555-123-4567").contains("****4567"));
+        assert!(redact_error("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED"));
+        assert_eq!(redact_error("normal text"), "normal text");
     }
 
     #[test]
-    fn test_sanitize_client_id() {
-        assert_eq!(sanitize_client_id("short"), "short");
-        assert_eq!(sanitize_client_id("longerClientId"), "long****");
+    fn test_redact_client_id() {
+        assert_eq!(redact_client_id("short"), "short");
+        assert_eq!(redact_client_id("longerClientId"), "long****");
     }
 
     #[test]

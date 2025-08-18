@@ -134,11 +134,15 @@ impl StepExecutor for IpBlockExecutor {
                         "soar_executor".to_string(),
                         format!("IP address {} blocked for {} minutes", ip_address, duration_minutes),
                     )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("success".to_string())
+                    .with_reason("IP blocking step executed successfully".to_string())
                     .with_detail("ip_address".to_string(), ip_address.clone())
                     .with_detail("duration_minutes".to_string(), *duration_minutes)
                     .with_detail("reason".to_string(), reason.clone())
-                    .with_detail("block_id".to_string(), block_id.clone())
-                    .with_outcome("success".to_string()));
+                    .with_detail("block_id".to_string(), block_id.clone()));
                     
                     let mut outputs = HashMap::new();
                     outputs.insert("block_id".to_string(), Value::String(block_id));
@@ -156,9 +160,13 @@ impl StepExecutor for IpBlockExecutor {
                         "soar_executor".to_string(),
                         format!("Failed to block IP address {}", ip_address),
                     )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("failure".to_string())
+                    .with_reason(format!("IP blocking failed: {}", e.to_string()))
                     .with_detail("ip_address".to_string(), ip_address.clone())
-                    .with_detail("error".to_string(), e.to_string())
-                    .with_outcome("failure".to_string()));
+                    .with_detail("error".to_string(), e.to_string()));
                     
                     Err(StepError {
                         code: "IP_BLOCK_FAILED".to_string(),
@@ -235,11 +243,15 @@ impl StepExecutor for AccountLockExecutor {
                         "soar_executor".to_string(),
                         format!("Account {} locked for {} minutes", user_id, duration_minutes),
                     )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("success".to_string())
+                    .with_reason("Account locking step executed successfully".to_string())
                     .with_user_id(user_id.clone())
                     .with_detail("duration_minutes".to_string(), *duration_minutes)
                     .with_detail("reason".to_string(), reason.clone())
-                    .with_detail("lock_id".to_string(), lock_id.clone())
-                    .with_outcome("success".to_string()));
+                    .with_detail("lock_id".to_string(), lock_id.clone()));
                     
                     let mut outputs = HashMap::new();
                     outputs.insert("lock_id".to_string(), Value::String(lock_id));
@@ -257,9 +269,13 @@ impl StepExecutor for AccountLockExecutor {
                         "soar_executor".to_string(),
                         format!("Failed to lock account {}", user_id),
                     )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("failure".to_string())
+                    .with_reason(format!("Account locking failed: {}", e.to_string()))
                     .with_user_id(user_id.clone())
-                    .with_detail("error".to_string(), e.to_string())
-                    .with_outcome("failure".to_string()));
+                    .with_detail("error".to_string(), e.to_string()));
                     
                     Err(StepError {
                         code: "ACCOUNT_LOCK_FAILED".to_string(),
@@ -334,10 +350,14 @@ impl StepExecutor for TokenRevokeExecutor {
                 "soar_executor".to_string(),
                 format!("Revoked {} tokens", revoked_count),
             )
+            .with_actor("soar_system".to_string())
+            .with_action("soar_execute".to_string())
+            .with_target("soar_playbook".to_string())
+            .with_outcome("success".to_string())
+            .with_reason("Token revocation step executed successfully".to_string())
             .with_user_id(user_id.clone().unwrap_or_else(|| "all".to_string()))
             .with_detail("token_type".to_string(), token_type.clone().unwrap_or_else(|| "all".to_string()))
-            .with_detail("revoked_count".to_string(), revoked_count)
-            .with_outcome("success".to_string()));
+            .with_detail("revoked_count".to_string(), revoked_count));
             
             let mut outputs = HashMap::new();
             outputs.insert("revoked_count".to_string(), Value::Number(revoked_count.into()));
@@ -495,12 +515,16 @@ impl StepExecutor for EmailNotificationExecutor {
                     "soar_executor".to_string(),
                     format!("Email notification sent to {} recipients", sent_count),
                 )
+                .with_actor("soar_system".to_string())
+                .with_action("soar_execute".to_string())
+                .with_target("soar_playbook".to_string())
+                .with_outcome("success".to_string())
+                .with_reason("Email notification step executed successfully".to_string())
                 .with_detail("recipients".to_string(), recipients.clone())
                 .with_detail("subject".to_string(), subject.clone())
                 .with_detail("priority".to_string(), priority.clone())
                 .with_detail("sent_count".to_string(), sent_count)
-                .with_detail("failed_count".to_string(), failed_recipients.len())
-                .with_outcome("success".to_string()));
+                .with_detail("failed_count".to_string(), failed_recipients.len()));
                 
                 let mut outputs = HashMap::new();
                 outputs.insert("sent_count".to_string(), Value::Number(sent_count.into()));
@@ -633,9 +657,13 @@ impl StepExecutor for SlackNotificationExecutor {
                     "soar_executor".to_string(),
                     "Slack notification sent successfully".to_string(),
                 )
+                .with_actor("soar_system".to_string())
+                .with_action("soar_execute".to_string())
+                .with_target("soar_playbook".to_string())
+                .with_outcome("success".to_string())
+                .with_reason("Slack notification step executed successfully".to_string())
                 .with_detail("subject".to_string(), subject.clone())
-                .with_detail("priority".to_string(), priority.clone())
-                .with_outcome("success".to_string()));
+                .with_detail("priority".to_string(), priority.clone()));
                 
                 let mut outputs = HashMap::new();
                 outputs.insert("notification_sent".to_string(), Value::Bool(true));
@@ -810,10 +838,14 @@ impl StepExecutor for SiemQueryExecutor {
                         "soar_executor".to_string(),
                         "SIEM query executed successfully".to_string(),
                     )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("success".to_string())
+                    .with_reason("SIEM query step executed successfully".to_string())
                     .with_detail("query".to_string(), query.clone())
                     .with_detail("time_range".to_string(), time_range.clone())
-                    .with_detail("max_results".to_string(), *max_results)
-                    .with_outcome("success".to_string()));
+                    .with_detail("max_results".to_string(), *max_results));
                     
                     Ok(outputs)
                 }
@@ -910,10 +942,14 @@ impl StepExecutor for TicketCreateExecutor {
                         "soar_executor".to_string(),
                         format!("Ticket created: {}", ticket_id),
                     )
+                    .with_actor("soar_system".to_string())
+                    .with_action("soar_execute".to_string())
+                    .with_target("soar_playbook".to_string())
+                    .with_outcome("success".to_string())
+                    .with_reason("Ticket creation step executed successfully".to_string())
                     .with_detail("ticket_id".to_string(), ticket_id.clone())
                     .with_detail("title".to_string(), title.clone())
-                    .with_detail("priority".to_string(), priority.clone())
-                    .with_outcome("success".to_string()));
+                    .with_detail("priority".to_string(), priority.clone()));
                     
                     let mut outputs = HashMap::new();
                     outputs.insert("ticket_id".to_string(), Value::String(ticket_id));
@@ -1091,9 +1127,13 @@ impl StepExecutor for ScriptExecutor {
                 "soar_executor".to_string(),
                 format!("Script executed: {}", script_type),
             )
+            .with_actor("soar_system".to_string())
+            .with_action("soar_execute".to_string())
+            .with_target("soar_playbook".to_string())
+            .with_outcome(if execution_result.exit_code == 0 { "success" } else { "failure" }.to_string())
+            .with_reason(format!("Script execution step completed with exit code {}", execution_result.exit_code))
             .with_detail("script_type".to_string(), script_type.clone())
-            .with_detail("exit_code".to_string(), execution_result.exit_code)
-            .with_outcome(if execution_result.exit_code == 0 { "success" } else { "failure" }.to_string()));
+            .with_detail("exit_code".to_string(), execution_result.exit_code));
             
             let mut outputs = HashMap::new();
             outputs.insert("exit_code".to_string(), Value::Number(execution_result.exit_code.into()));
@@ -1504,10 +1544,14 @@ impl StepExecutor for HttpRequestExecutor {
                 "soar_executor".to_string(),
                 format!("HTTP {} request to {} completed", method, url),
             )
+            .with_actor("soar_system".to_string())
+            .with_action("soar_execute".to_string())
+            .with_target("soar_playbook".to_string())
+            .with_outcome(if status_code < 400 { "success" } else { "failure" }.to_string())
+            .with_reason(format!("HTTP request step completed with status code {}", status_code))
             .with_detail("method".to_string(), method.clone())
             .with_detail("url".to_string(), url.clone())
-            .with_detail("status_code".to_string(), status_code)
-            .with_outcome(if status_code < 400 { "success" } else { "failure" }.to_string()));
+            .with_detail("status_code".to_string(), status_code));
             
             let mut outputs = HashMap::new();
             outputs.insert("status_code".to_string(), Value::Number(status_code.into()));

@@ -2,6 +2,7 @@ use axum::{extract::Query, response::IntoResponse, Json};
 use crate::{mint_local_tokens_for_subject, AppState};
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::resilient_http::OidcHttpClient;
+use crate::pii_protection::redact_log;
 use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -140,9 +141,9 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                     .with_outcome("failure".to_string())
                     .with_reason("Google OAuth server returned HTTP error during token exchange".to_string())
                     .with_detail("provider".to_string(), "google")
-                    .with_detail("error".to_string(), e.to_string()));
+                    .with_detail("error".to_string(), redact_log(&e.to_string())));
 
-                    return Json(serde_json::json!({ "error": e.to_string() })).into_response();
+                    return Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response();
                 }
             };
             match rsp.json::<Value>().await {
@@ -199,10 +200,10 @@ pub async fn google_callback(State(state): State<AppState>, Query(q): Query<OAut
                     }
                     Json(result).into_response()
                 }
-                Err(e) => Json(serde_json::json!({ "error": e.to_string() })).into_response(),
+                Err(e) => Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response(),
             }
         }
-        Err(e) => Json(serde_json::json!({ "error": e.to_string() })).into_response(),
+        Err(e) => Json(serde_json::json!({ "error": redact_log(&e.to_string()) })).into_response(),
     }
 }
 

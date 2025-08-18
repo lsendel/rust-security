@@ -235,12 +235,14 @@ impl AuthFailureTracker {
         }
 
         // Log the event
-        SecurityLogger::log_event(&event)
-            .with_actor(if is_suspicious { "attacker" } else { "user" })
-            .with_action("authenticate")
-            .with_target("auth_service")
-            .with_outcome("failure")
-            .with_reason(failure_reason);
+        let event = event
+            .with_actor(if is_suspicious { "attacker" } else { "user" }.to_string())
+            .with_action("authenticate".to_string())
+            .with_target("auth_service".to_string())
+            .with_outcome("failure".to_string())
+            .with_reason(failure_reason.to_string());
+        
+        SecurityLogger::log_event(&event);
 
         // Log additional alert for suspicious activity
         if is_suspicious {
@@ -293,12 +295,14 @@ impl AuthFailureTracker {
             event = event.with_detail("user_agent".to_string(), ua.to_string());
         }
 
-        SecurityLogger::log_event(&event)
-            .with_actor("system")
-            .with_action("detect_attack")
-            .with_target("user_account")
-            .with_outcome("detected")
-            .with_reason("Suspicious authentication patterns detected");
+        let event = event
+            .with_actor("system".to_string())
+            .with_action("detect_attack".to_string())
+            .with_target("user_account".to_string())
+            .with_outcome("detected".to_string())
+            .with_reason("Suspicious authentication patterns detected".to_string());
+        
+        SecurityLogger::log_event(&event);
     }
 
     /// Get failure statistics

@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use crate::pii_protection::redact_log;
+
 use axum::{
     extract::{Form, Path, Query, State},
     http::StatusCode,
@@ -96,9 +98,13 @@ pub mod redirect_validation;
 pub mod secure_random;
 pub mod security;
 pub mod security_headers;
+pub mod admin_middleware;
 pub mod security_logging;
 pub mod security_metrics;
 pub mod security_monitoring;
+pub mod pii_protection;
+#[cfg(test)]
+pub mod pii_audit_tests;
 
 // Key management
 pub mod key_management;
@@ -290,10 +296,9 @@ pub async fn update_security_config(
     responses((status = 200, description = "Rate limiting statistics"))
 )]
 pub async fn get_rate_limit_stats_endpoint(
-    headers: axum::http::HeaderMap,
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
-    require_admin_scope(&headers, &state).await?;
+    // Admin authentication is handled by middleware
     let stats = crate::rate_limit_optimized::get_rate_limit_stats();
     Ok(Json(serde_json::json!({
         "total_entries": stats.total_entries,
@@ -310,21 +315,20 @@ pub async fn get_rate_limit_stats_endpoint(
 
 /// Admin-protected wrapper around key rotation status
 pub async fn admin_get_rotation_status(
-    headers: axum::http::HeaderMap,
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<axum::Json<serde_json::Value>, AuthError> {
-    require_admin_scope(&headers, &state).await?;
+    // Admin authentication is handled by middleware
     Ok(crate::key_rotation::get_rotation_status().await)
 }
 
 /// Admin-protected wrapper around forcing key rotation
 pub async fn admin_force_rotation(
-    headers: axum::http::HeaderMap,
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
-    match require_admin_scope(&headers, &state).await {
-        Ok(_) => crate::key_rotation::force_rotation().await,
-        Err(_) => Err(axum::http::StatusCode::UNAUTHORIZED),
+    // Admin authentication is handled by middleware
+    match crate::key_rotation::force_rotation().await {
+        Ok(result) => Ok(result),
+        Err(_) => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
@@ -400,31 +404,6 @@ async fn extract_user_from_token(
 }
 
 /// Require that the caller has an access token with the "admin" scope
-async fn require_admin_scope(
-    headers: &axum::http::HeaderMap,
-    state: &AppState,
-) -> Result<(), AuthError> {
-    // Extract bearer token
-    let auth = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    let token = auth
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Missing bearer token".to_string() })?;
-    if token.is_empty() {
-        return Err(AuthError::InvalidToken { reason: "Empty bearer token".to_string() });
-    }
-
-    let record = state.token_store.get_record(token).await?;
-    if !record.active {
-        return Err(AuthError::InvalidToken { reason: "Inactive token".to_string() });
-    }
-    match record.scope {
-        Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => Ok(()),
-        _ => Err(AuthError::UnauthorizedClient { client_id: "insufficient_scope".to_string() }),
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateSessionRequest {
@@ -877,7 +856,7 @@ pub async fn authorize_check(
 
     // Cache the response (ignore errors to not affect main flow)
     if let Err(e) = state.policy_cache.put(&cache_request, policy_response).await {
-        tracing::warn!(error = %e, "Failed to cache policy response");
+        tracing::warn!(error = %redact_log(&e.to_string()), "Failed to cache policy response");
     }
 
     Ok(Json(AuthorizationCheckResponse { decision }))
@@ -958,7 +937,7 @@ async fn evaluate_policy_remote(
                 Ok(ok) => match ok.json::<PolicyAuthorizeResponse>().await {
                     Ok(r) => r.decision,
                     Err(err) => {
-                        tracing::warn!(error = %err, "Failed to parse policy response; falling back");
+                        tracing::warn!(error = %redact_log(&err.to_string()), "Failed to parse policy response; falling back");
                         if strict {
                             return Err(internal_error(&format!("Policy response parse error: {}", err)));
                         }
@@ -966,7 +945,7 @@ async fn evaluate_policy_remote(
                     }
                 },
                 Err(err) => {
-                    tracing::warn!(error = %err, "Policy service returned error status; falling back");
+                    tracing::warn!(error = %redact_log(&err.to_string()), "Policy service returned error status; falling back");
                     if strict {
                         return Err(internal_error(&format!("Policy service HTTP error: {}", err)));
                     }
@@ -974,7 +953,7 @@ async fn evaluate_policy_remote(
                 }
             },
             Err(err) => {
-                tracing::warn!(error = %err, "Policy service unavailable; falling back");
+                tracing::warn!(error = %redact_log(&err.to_string()), "Policy service unavailable; falling back");
                 if strict {
                     return Err(internal_error(&format!("Policy service connection error: {}", err)));
                 }
@@ -990,6 +969,107 @@ pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
     })
+}
+
+/// Detailed admin health endpoint with comprehensive system status
+#[utoipa::path(
+    get,
+    path = "/admin/health",
+    responses((status = 200, description = "Detailed system health status"))
+)]
+pub async fn admin_health(State(state): State<AppState>) -> Result<Json<serde_json::Value>, AuthError> {
+    // Gather comprehensive health information
+    let mut health_data = serde_json::json!({
+        "status": "ok",
+        "timestamp": chrono::Utc::now(),
+        "service": "auth-service",
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+    
+    // Check token store health
+    let token_store_health = match state.token_store.health_check().await {
+        Ok(healthy) => serde_json::json!({
+            "status": if healthy { "healthy" } else { "degraded" },
+            "type": match state.token_store {
+                crate::store::TokenStore::Redis(_) => "redis",
+                crate::store::TokenStore::InMemory(_) => "in_memory",
+            }
+        }),
+        Err(e) => serde_json::json!({
+            "status": "unhealthy",
+            "error": redact_log(&e.to_string())
+        })
+    };
+    
+    // Check token store metrics
+    let token_metrics = match state.token_store.get_metrics().await {
+        Ok(metrics) => serde_json::json!({
+            "total_tokens": metrics.total_tokens,
+            "active_tokens": metrics.active_tokens,
+            "revoked_tokens": metrics.revoked_tokens,
+            "expired_tokens": metrics.expired_tokens,
+            "operations_per_second": metrics.operations_per_second,
+            "avg_response_time_ms": metrics.avg_response_time_ms,
+            "error_rate": metrics.error_rate,
+            "cache_hit_ratio": metrics.cache_hit_ratio,
+        }),
+        Err(e) => serde_json::json!({
+            "error": redact_log(&e.to_string())
+        })
+    };
+    
+    // Check policy cache health
+    let policy_cache_stats = state.policy_cache.get_stats().await;
+    let policy_cache_health = serde_json::json!({
+        "status": "healthy",
+        "stats": {
+            "total_entries": policy_cache_stats.total_entries,
+            "hits": policy_cache_stats.hits,
+            "misses": policy_cache_stats.misses,
+            "hit_ratio": policy_cache_stats.hit_ratio(),
+            "evictions": policy_cache_stats.evictions,
+            "size_bytes": policy_cache_stats.size_bytes,
+        }
+    });
+    
+    // Check key rotation status
+    let key_status = crate::key_rotation::get_rotation_status().await;
+    
+    // Check rate limiting stats
+    let rate_limit_stats = crate::rate_limit_optimized::get_rate_limit_stats();
+    let rate_limit_health = serde_json::json!({
+        "status": "healthy",
+        "stats": {
+            "total_entries": rate_limit_stats.total_entries,
+            "shard_count": rate_limit_stats.shard_count,
+            "config": {
+                "requests_per_window": rate_limit_stats.config.requests_per_window,
+                "window_duration_secs": rate_limit_stats.config.window_duration_secs,
+                "burst_allowance": rate_limit_stats.config.burst_allowance,
+            }
+        }
+    });
+    
+    // Check session manager health (if available)
+    // Note: This would require a reference to the session manager from app state
+    
+    // Aggregate health status
+    let overall_status = if token_store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
+        "healthy"
+    } else {
+        "degraded"
+    };
+    
+    health_data["status"] = serde_json::Value::String(overall_status.to_string());
+    health_data["components"] = serde_json::json!({
+        "token_store": token_store_health,
+        "token_metrics": token_metrics,
+        "policy_cache": policy_cache_health,
+        "key_rotation": key_status,
+        "rate_limiting": rate_limit_health,
+    });
+    
+    Ok(Json(health_data))
 }
 
 /// Get policy cache statistics
@@ -1872,7 +1952,7 @@ async fn create_id_token(
 
     let (kid, encoding_key) = keys::current_signing_key().await
         .map_err(|e| {
-            tracing::error!(error = %e, "Failed to get signing key");
+            tracing::error!(error = %redact_log(&e.to_string()), "Failed to get signing key");
             e
         }).ok()?;
     let header = jsonwebtoken::Header {
@@ -2052,7 +2132,8 @@ pub fn app(state: AppState) -> Router {
         },
     };
 
-    let router = Router::new()
+    // Public routes (no authentication required)
+    let public_router = Router::new()
         .route("/health", get(health))
         .route(
             "/.well-known/oauth-authorization-server",
@@ -2060,7 +2141,6 @@ pub fn app(state: AppState) -> Router {
         )
         .route("/.well-known/openid-configuration", get(oidc_metadata))
         .route("/jwks.json", get(jwks))
-        .route("/metrics", get(metrics_handler))
         .route("/v1/authorize", post(authorize_check))
         .route("/oauth/authorize", get(oauth_authorize))
         .route("/oauth/introspect", post(introspect))
@@ -2091,28 +2171,39 @@ pub fn app(state: AppState) -> Router {
         .route("/mfa/otp/send", post(crate::mfa::otp_send))
         .route("/mfa/otp/verify", post(crate::mfa::otp_verify))
         .route("/mfa/session/verify", post(crate::mfa::mfa_session_verify))
-        // Key rotation admin endpoints (protected)
-        .route("/admin/keys/rotation/status", get(admin_get_rotation_status))
-        .route("/admin/keys/rotation/force", post(admin_force_rotation))
-        // Rate limiting admin endpoints (protected)
-        .route("/admin/rate-limit/stats", get(get_rate_limit_stats_endpoint))
-        // Policy cache admin endpoints (protected)
-        .route("/admin/policy-cache/stats", get(get_policy_cache_stats))
-        .route("/admin/policy-cache/clear", post(clear_policy_cache))
-        .route("/admin/policy-cache/invalidate", post(invalidate_policy_cache))
         // Session management endpoints
         .route("/session/create", post(create_session_endpoint))
         .route("/session/:id", get(get_session_endpoint))
         .route("/session/:id", delete(delete_session_endpoint))
         .route("/session/:id/refresh", post(refresh_session_endpoint))
         .route("/session/invalidate-user/:user_id", post(invalidate_user_sessions_endpoint))
-        // Enhanced MFA v2 endpoints disabled
+        // Enhanced MFA v2 endpoints
         .route("/mfa/webauthn/register/challenge", post(crate::webauthn::begin_register))
         .route("/mfa/webauthn/register/finish", post(crate::webauthn::finish_register))
         .route("/mfa/webauthn/assert/challenge", post(crate::webauthn::begin_assert))
         .route("/mfa/webauthn/assert/finish", post(crate::webauthn::finish_assert))
-        // Security monitoring admin endpoints disabled by default
-        .merge(crate::scim::router().with_state(()))
+        .merge(crate::scim::router().with_state(()));
+
+    // Admin-protected routes (require admin authentication and authorization)
+    let admin_router = Router::new()
+        .route("/metrics", get(metrics_handler))
+        .route("/admin/health", get(admin_health))
+        // Key rotation admin endpoints
+        .route("/admin/keys/rotation/status", get(admin_get_rotation_status))
+        .route("/admin/keys/rotation/force", post(admin_force_rotation))
+        // Rate limiting admin endpoints
+        .route("/admin/rate-limit/stats", get(get_rate_limit_stats_endpoint))
+        // Policy cache admin endpoints
+        .route("/admin/policy-cache/stats", get(get_policy_cache_stats))
+        .route("/admin/policy-cache/clear", post(clear_policy_cache))
+        .route("/admin/policy-cache/invalidate", post(invalidate_policy_cache))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            crate::admin_middleware::admin_auth_middleware,
+        ));
+
+    // Combine routers
+    let router = public_router.merge(admin_router)
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

@@ -174,10 +174,14 @@ impl PQJwtManager {
             "pq-jwt".to_string(),
             "Post-quantum JWT token created".to_string(),
         )
+        .with_actor("pq_system".to_string())
+        .with_action("pq_sign".to_string())
+        .with_target("jwt_token".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("Pure post-quantum JWT token signed with Dilithium".to_string())
         .with_detail("algorithm".to_string(), "DILITHIUM3")
         .with_detail("hybrid".to_string(), false)
-        .with_detail("kid".to_string(), kid)
-        .with_outcome("success".to_string()));
+        .with_detail("kid".to_string(), kid));
 
         Ok(token)
     }
@@ -226,11 +230,15 @@ impl PQJwtManager {
             "pq-jwt".to_string(),
             "Hybrid JWT token created".to_string(),
         )
+        .with_actor("pq_system".to_string())
+        .with_action("pq_sign".to_string())
+        .with_target("jwt_token".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("Hybrid JWT token signed with both classical and post-quantum algorithms".to_string())
         .with_detail("algorithm".to_string(), "HYBRID-DILITHIUM3-ED25519")
         .with_detail("hybrid".to_string(), true)
         .with_detail("kid".to_string(), kid)
-        .with_detail("pq_available".to_string(), manager.is_available())
-        .with_outcome("success".to_string()));
+        .with_detail("pq_available".to_string(), manager.is_available()));
 
         Ok(token)
     }
@@ -256,10 +264,14 @@ impl PQJwtManager {
             "pq-jwt".to_string(),
             "Classical JWT token created".to_string(),
         )
+        .with_actor("system".to_string())
+        .with_action("jwt_sign".to_string())
+        .with_target("jwt_token".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("Classical JWT token for backward compatibility".to_string())
         .with_detail("algorithm".to_string(), "RS256")
         .with_detail("hybrid".to_string(), false)
-        .with_detail("kid".to_string(), kid)
-        .with_outcome("success".to_string()));
+        .with_detail("kid".to_string(), kid));
 
         Ok(token)
     }
@@ -343,10 +355,14 @@ impl PQJwtManager {
             "pq-jwt".to_string(),
             "Post-quantum JWT token verified".to_string(),
         )
+        .with_actor("pq_system".to_string())
+        .with_action("pq_verify".to_string())
+        .with_target("jwt_token".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("Post-quantum JWT token signature verification successful".to_string())
         .with_detail("algorithm".to_string(), header.pq_alg.clone().unwrap_or_default())
         .with_detail("hybrid".to_string(), header.hybrid.unwrap_or(false))
-        .with_detail("kid".to_string(), kid.clone())
-        .with_outcome("success".to_string()));
+        .with_detail("kid".to_string(), kid.clone()));
 
         Ok((header.clone(), payload))
     }
@@ -386,10 +402,14 @@ impl PQJwtManager {
             "pq-jwt".to_string(),
             "Classical JWT token verified".to_string(),
         )
+        .with_actor("system".to_string())
+        .with_action("jwt_verify".to_string())
+        .with_target("jwt_token".to_string())
+        .with_outcome("success".to_string())
+        .with_reason("Classical JWT token verification for backward compatibility".to_string())
         .with_detail("algorithm".to_string(), format!("{:?}", header.alg))
         .with_detail("hybrid".to_string(), false)
-        .with_detail("kid".to_string(), header.kid.unwrap_or_default())
-        .with_outcome("success".to_string()));
+        .with_detail("kid".to_string(), header.kid.unwrap_or_default()));
 
         Ok((pq_header, payload))
     }

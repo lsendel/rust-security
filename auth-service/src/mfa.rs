@@ -14,6 +14,7 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use crate::AppState;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::otp_provider::{MockSender, OtpSender, TwilioSender};
+use crate::pii_protection::redact_log;
 
 // Declare the crypto module
 pub mod crypto;
@@ -358,7 +359,7 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
         // First check if this code has already been used (replay attack detection)
         if is_totp_code_used(&req.user_id, &req.code).await {
             // Log potential replay attack
-            SecurityLogger::log_event(&SecurityEvent::new(
+            let event = SecurityEvent::new(
                 SecurityEventType::MfaFailure,
                 SecuritySeverity::High,
                 "auth-service".to_string(),
@@ -371,7 +372,8 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
             .with_reason("TOTP code already used - replay attack detected".to_string())
             .with_user_id(req.user_id.clone())
             .with_detail("code".to_string(), "REDACTED")
-            .with_detail("attack_type".to_string(), "replay"));
+            .with_detail("attack_type".to_string(), "replay");
+            SecurityLogger::log_event(&event);
 
             return Json(TotpVerifyResponse { verified: false });
         }
@@ -404,7 +406,7 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 set_last_verified(&req.user_id).await;
 
                 // Log successful TOTP verification
-                SecurityLogger::log_event(&SecurityEvent::new(
+                let event = SecurityEvent::new(
                     SecurityEventType::MfaAttempt,
                     SecuritySeverity::Low,
                     "auth-service".to_string(),
@@ -415,13 +417,14 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 .with_target("mfa_token".to_string())
                 .with_outcome("success".to_string())
                 .with_reason("TOTP code validated successfully".to_string())
-                .with_user_id(req.user_id));
+                .with_user_id(req.user_id);
+                SecurityLogger::log_event(&event);
 
                 return Json(TotpVerifyResponse { verified: true });
             } else {
                 // Failed to track nonce (Redis issue or code already used)
                 // Log this as a potential issue
-                SecurityLogger::log_event(&SecurityEvent::new(
+                let event = SecurityEvent::new(
                     SecurityEventType::MfaFailure,
                     SecuritySeverity::Medium,
                     "auth-service".to_string(),
@@ -433,7 +436,8 @@ pub async fn totp_verify(State(_state): State<AppState>, Json(req): Json<TotpVer
                 .with_outcome("error".to_string())
                 .with_reason("Redis nonce tracking failed - unable to prevent replay attacks".to_string())
                 .with_user_id(req.user_id)
-                .with_detail("reason".to_string(), "nonce_tracking_failed"));
+                .with_detail("reason".to_string(), "nonce_tracking_failed");
+                SecurityLogger::log_event(&event);
 
                 return Json(TotpVerifyResponse { verified: false });
             }
@@ -501,7 +505,7 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
                 let _ : Result<i64, _> = redis::cmd("EXPIRE").arg(&rl_key).arg(3600).query_async(&mut conn).await;
             }
             if count > sends_per_hour {
-                tracing::warn!(target = "mfa", user = %req.user_id, "OTP rate limit exceeded");
+                tracing::warn!(target = "mfa", user = %redact_log(&req.user_id), "OTP rate limit exceeded");
                 return Json(OtpSendResponse { sent: false });
             }
         }
@@ -536,7 +540,7 @@ pub async fn otp_send(State(_state): State<AppState>, Json(req): Json<OtpSendReq
         provider.send_email(&req.destination, "Your verification code", &format!("Code: {}", code)).await
     };
     if send_res.is_err() {
-        tracing::warn!(target = "mfa", channel = %req.channel, destination = %req.destination, "OTP send failed");
+        tracing::warn!(target = "mfa", channel = %redact_log(&req.channel), destination = %redact_log("masked"), "OTP send failed");
         let event = SecurityEvent::new(
             SecurityEventType::MfaFailure,
             SecuritySeverity::Medium,

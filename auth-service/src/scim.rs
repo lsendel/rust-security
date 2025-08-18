@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use thiserror::Error;
+use crate::pii_protection::redact_log;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScimUser {
@@ -342,15 +343,15 @@ fn apply_filter_users(mut v: Vec<ScimUser>, filter: &str) -> Vec<ScimUser> {
                     let op = parsed.operator; // copy
                     tracing::warn!(
                         "Unsupported SCIM filter: {} {} {:?}",
-                        parsed.attribute,
+                        redact_log(&parsed.attribute),
                         operator_str(&op),
-                        parsed.value
+                        redact_log(&format!("{:?}", parsed.value))
                     );
                 }
             }
         },
         Err(e) => {
-            tracing::warn!("Failed to parse SCIM filter '{}': {}", filter, e);
+            tracing::warn!("Failed to parse SCIM filter '{}': {}", redact_log(filter), redact_log(&e.to_string()));
             // Return unfiltered on parse error
         }
     }
@@ -441,15 +442,15 @@ fn apply_filter_groups(mut v: Vec<ScimGroup>, filter: &str) -> Vec<ScimGroup> {
                     let op = parsed.operator; // copy
                     tracing::warn!(
                         "Unsupported SCIM group filter: {} {} {:?}",
-                        parsed.attribute,
+                        redact_log(&parsed.attribute),
                         operator_str(&op),
-                        parsed.value
+                        redact_log(&format!("{:?}", parsed.value))
                     );
                 }
             }
         },
         Err(e) => {
-            tracing::warn!("Failed to parse SCIM group filter '{}': {}", filter, e);
+            tracing::warn!("Failed to parse SCIM group filter '{}': {}", redact_log(filter), redact_log(&e.to_string()));
             // Return unfiltered on parse error
         }
     }

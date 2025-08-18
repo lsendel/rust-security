@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 use crate::{AuthError, internal_error};
 use crate::security_logging::{SecurityLogger, SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::pii_protection::redact_log;
 use once_cell::sync::Lazy;
 
 #[cfg(not(test))]
@@ -283,7 +284,7 @@ static CLIENT_AUTHENTICATOR: once_cell::sync::Lazy<std::sync::Mutex<ClientAuthen
 
         // Load clients from environment
         if let Err(e) = auth.load_from_env() {
-            eprintln!("Warning: Failed to load clients from environment: {}", e);
+            eprintln!("Warning: Failed to load clients from environment: {}", redact_log(&e.to_string()));
         }
 
         std::sync::Mutex::new(auth)
