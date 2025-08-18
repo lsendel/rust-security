@@ -15,14 +15,14 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
-      
+
     - name: Cache dependencies
       uses: actions/cache@v3
       with:
@@ -33,31 +33,31 @@ jobs:
           ~/.cargo/git/db/
           target/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        
+
     - name: Install cargo-audit
       run: cargo install --force cargo-audit
-      
+
     - name: Install cargo-deny
       run: cargo install --force cargo-deny
-      
+
     - name: Run security audit
       run: |
         echo "=== Cargo Audit Results ==="
         cargo audit --deny warnings --json > audit-results.json || true
         cargo audit --deny warnings
-        
+
     - name: Run dependency policy check
       run: |
         echo "=== Cargo Deny Results ==="
         cargo deny check --all-features
-        
+
     - name: Upload audit results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-audit-results
         path: audit-results.json
-        
+
     - name: Security summary
       run: |
         echo "## Security Audit Summary" >> $GITHUB_STEP_SUMMARY
