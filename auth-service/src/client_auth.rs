@@ -283,29 +283,47 @@ impl Default for ClientMetadata {
     }
 }
 
-/// Global client authenticator instance
-static CLIENT_AUTHENTICATOR: once_cell::sync::Lazy<std::sync::Mutex<ClientAuthenticator>> =
-    once_cell::sync::Lazy::new(|| {
-        let mut auth = ClientAuthenticator::new();
+use crate::api_key_store::ApiKeyStore;
 
-        // Load clients from environment
-        if let Err(e) = auth.load_from_env() {
-            eprintln!(
-                "Warning: Failed to load clients from environment: {}",
-                redact_log(&e.to_string())
-            );
-        }
+// ... (keep ClientAuthenticator and ClientMetadata structs)
 
-        std::sync::Mutex::new(auth)
-    });
-
-/// Convenience function for client authentication
-pub fn authenticate_client(
+/// Authenticate a client using either the new API key store or the legacy client authenticator.
+pub async fn authenticate_client(
+    api_key_store: &ApiKeyStore,
+    legacy_authenticator: &ClientAuthenticator,
     client_id: &str,
     client_secret: &str,
     ip_address: Option<&str>,
 ) -> Result<bool, AuthError> {
-    CLIENT_AUTHENTICATOR.lock().unwrap().authenticate_client(client_id, client_secret, ip_address)
+    // Try the new API key store first
+    let parts: Vec<&str> = client_secret.split('_').collect();
+    if parts.len() >= 2 {
+        let prefix = format!("{}_{}_", parts[0], parts[1]);
+        if let Ok(Some(api_key)) = api_key_store.get_api_key_by_prefix(&prefix).await {
+            let argon2 = Argon2::default();
+            let parsed_hash = PasswordHash::new(&api_key.hashed_key)
+                .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
+
+            if argon2.verify_password(client_secret.as_bytes(), &parsed_hash).is_ok() {
+                if api_key.status != "active" {
+                    return Ok(false); // Key is not active
+                }
+                if let Some(expires_at) = api_key.expires_at {
+                    if chrono::Utc::now() > expires_at {
+                        return Ok(false); // Key has expired
+                    }
+                }
+                // Update last used timestamp
+                if let Err(e) = api_key_store.update_last_used(api_key.id).await {
+                    tracing::warn!("Failed to update last used timestamp for key {}: {}", api_key.id, e);
+                }
+                return Ok(true);
+            }
+        }
+    }
+
+    // Fallback to legacy authenticator
+    legacy_authenticator.authenticate_client(client_id, client_secret, ip_address)
 }
 
 /// Convenience function to get client metadata
