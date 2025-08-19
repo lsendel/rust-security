@@ -2,13 +2,33 @@
 
 The Rust Authentication Service provides a comprehensive REST API implementing OAuth2, OpenID Connect, SCIM 2.0, and proprietary security features.
 
+## Quick Start
+
+The following `curl` commands demonstrate a basic client credentials flow:
+
+1.  **Get a token:**
+
+    ```bash
+    curl -X POST http://localhost:8080/oauth/token \
+      -u "client1:secret1" \
+      -d "grant_type=client_credentials"
+    ```
+
+2.  **Introspect the token:**
+
+    ```bash
+    curl -X POST http://localhost:8080/oauth/introspect \
+      -u "client1:secret1" \
+      -d "token=<your-token>"
+    ```
+
 ## Base URLs
 
-| Environment | URL |
-|-------------|-----|
-| Production | `https://auth.yourcompany.com` |
-| Staging | `https://auth-staging.yourcompany.com` |
-| Development | `http://localhost:8080` |
+| Environment | URL                                    |
+|-------------|----------------------------------------|
+| Production  | `https://auth.yourcompany.com`         |
+| Staging     | `https://auth-staging.yourcompany.com` |
+| Development | `http://localhost:8080`                |
 
 ## API Versioning
 

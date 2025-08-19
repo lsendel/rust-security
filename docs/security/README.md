@@ -2,6 +2,35 @@
 
 This guide covers the comprehensive security features and best practices for the Rust Authentication Service.
 
+## Table of Contents
+
+- [Security Architecture Overview](#security-architecture-overview)
+- [Core Security Features](#core-security-features)
+  - [Authentication Security](#1-authentication-security)
+  - [Multi-Factor Authentication (MFA)](#2-multi-factor-authentication-mfa)
+  - [Authorization Security](#3-authorization-security)
+  - [Rate Limiting and DDoS Protection](#4-rate-limiting-and-ddos-protection)
+  - [Security Monitoring and Logging](#5-security-monitoring-and-logging)
+  - [SOAR (Security Orchestration, Automation, and Response)](#6-soar-security-orchestration-automation-and-response)
+  - [Threat Hunting and Behavioral Analysis](#7-threat-hunting-and-behavioral-analysis)
+  - [Cryptographic Security](#8-cryptographic-security)
+  - [Secure Configuration](#9-secure-configuration)
+  - [Input Validation and Sanitization](#10-input-validation-and-sanitization)
+- [Security Best Practices](#security-best-practices)
+  - [Deployment Security](#1-deployment-security)
+  - [Client Security](#2-client-security)
+  - [Security Monitoring](#3-security-monitoring)
+  - [Incident Response](#4-incident-response)
+  - [Compliance and Auditing](#5-compliance-and-auditing)
+- [Security Testing](#security-testing)
+  - [Automated Security Testing](#1-automated-security-testing)
+  - [Red Team Exercises](#2-red-team-exercises)
+  - [Vulnerability Management](#3-vulnerability-management)
+- [Security Contacts](#security-contacts)
+  - [Reporting Security Issues](#reporting-security-issues)
+  - [Security Team Structure](#security-team-structure)
+- [Conclusion](#conclusion)
+
 ## Security Architecture Overview
 
 The authentication service implements defense-in-depth with multiple security layers:
