@@ -650,7 +650,10 @@ pub async fn mfa_session_verify(
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(300);
-        let _ = state.token_store.set_mfa_verified(token, true, Some(window)).await;
+        if let Ok(Some(mut record)) = state.store.get_token_record(token).await {
+            record.mfa_verified = true;
+            let _ = state.store.set_token_record(token, &record, Some(window)).await;
+        }
     }
     set_last_verified(&body.user_id).await;
     let mut event = SecurityEvent::new(

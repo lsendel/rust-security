@@ -8,14 +8,14 @@ mod config;
 
 use auth_service::{
     app,
-    keys, // Add keys module import
-    store::{redis_store, TokenStore},
-    ApiDoc,
-    AppState,
+    config::{self, StoreBackend},
+    keys,
+    sql_store::SqlStore,
+    store::HybridStore,
+    ApiDoc, AppState,
 };
-use std::collections::HashMap;
+use common::Store;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use utoipa::OpenApi;
 
 #[tokio::main]
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     let cfg = config::AppConfig::from_env()?;
     tracing::info!("Starting auth-service with configuration loaded");
 
-    // Initialize secure keys (fixes RSA vulnerability RUSTSEC-2023-0071)
+    // Initialize secure keys
     tracing::info!("Initializing secure key management...");
     if let Err(e) = keys::initialize_keys().await {
         tracing::error!(error = %e, "Failed to initialize secure keys");
@@ -50,21 +50,23 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing::info!("Secure key management initialized successfully");
 
-    // Initialize token store
-    let token_store = if let Some(url) = &cfg.redis_url {
-        match redis_store(url).await {
-            Ok(s) => {
-                tracing::info!("Connected to Redis token store");
-                s
-            }
-            Err(err) => {
-                tracing::warn!(error = %err, "Redis unavailable, using in-memory store");
-                TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new())))
-            }
+    // Initialize the unified store based on config
+    let store: Arc<dyn Store> = match cfg.store.backend {
+        StoreBackend::Sql => {
+            let db_url = cfg
+                .store
+                .database_url
+                .as_ref()
+                .expect("DATABASE_URL is checked in config");
+            let sql_store = SqlStore::new(db_url).await?;
+            sql_store.run_migrations().await?;
+            tracing::info!("Using SQL store backend.");
+            Arc::new(sql_store)
         }
-    } else {
-        tracing::info!("Using in-memory token store");
-        TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new())))
+        StoreBackend::Hybrid => {
+            tracing::info!("Using Hybrid (in-memory/Redis) store backend.");
+            Arc::new(HybridStore::new().await)
+        }
     };
 
     // Initialize policy cache
@@ -85,17 +87,16 @@ async fn main() -> anyhow::Result<()> {
 
     // Create application state
     let app_state = AppState {
-        token_store,
+        store,
         client_credentials: cfg.client_credentials.clone(),
         allowed_scopes: cfg.allowed_scopes.clone(),
-        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
         policy_cache,
         backpressure_state,
     };
 
     // Build application with OpenAPI documentation
     let openapi = ApiDoc::openapi();
-    let app = app(app_state)
+    let app = app(app_state.clone())
         .route("/openapi.json", axum::routing::get(|| async move { axum::Json(openapi) }));
 
     // Start background services
@@ -120,14 +121,7 @@ async fn main() -> anyhow::Result<()> {
         match create_and_start_session_cleanup(session_cleanup_config, session_manager).await {
             Ok(scheduler) => {
                 tracing::info!("Session cleanup scheduler started successfully");
-
-                // Store scheduler reference for graceful shutdown
-                // In a real application, you'd want to store this in the app state
-                // for proper shutdown coordination
-
-                // Keep the scheduler running until shutdown
                 tokio::signal::ctrl_c().await.ok();
-
                 if let Err(e) = scheduler.shutdown(ShutdownSignal::Graceful).await {
                     tracing::warn!(error = %e, "Failed to shutdown session cleanup gracefully");
                 }

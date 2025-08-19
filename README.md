@@ -52,6 +52,7 @@ This is a comprehensive Rust-based monorepo for security-focused applications. I
 - ✅ **Google OAuth**: OAuth2 integration with Google Identity Platform
 
 ### Production Features
+- ✅ **Pluggable Storage**: Choose between the default in-memory/Redis hybrid store or a persistent SQL backend.
 - ✅ **High Availability**: Redis clustering support with in-memory fallback
 - ✅ **Kubernetes Ready**: Complete K8s manifests with security policies
 - ✅ **Monitoring**: Prometheus metrics and health checks
@@ -197,7 +198,11 @@ EXTERNAL_BASE_URL=https://auth.example.com
 # Rate Limiting
 RATE_LIMIT_REQUESTS_PER_MINUTE=120
 
-# Redis Configuration
+# Storage Configuration
+# STORE_BACKEND=hybrid # Use 'hybrid' (default) or 'sql'
+# DATABASE_URL=postgres://user:password@host/database # Required if STORE_BACKEND=sql
+
+# Redis Configuration (used by hybrid store)
 REDIS_URL=redis://redis:6379
 
 # CORS Configuration
