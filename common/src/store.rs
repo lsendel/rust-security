@@ -41,4 +41,7 @@ pub trait Store: Send + Sync {
 
     // === Health Check ===
     async fn health_check(&self) -> Result<bool, Box<dyn Error + Send + Sync>>;
+
+    // Metrics
+    async fn get_metrics(&self) -> Result<crate::types::StoreMetrics, Box<dyn Error + Send + Sync>>;
 }

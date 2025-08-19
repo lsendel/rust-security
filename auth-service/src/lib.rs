@@ -107,6 +107,7 @@ pub mod oidc_microsoft;
 
 // SCIM support
 pub mod scim;
+pub mod scim_filter;
 pub mod scim_rbac;
 
 // Security modules
@@ -1007,11 +1008,19 @@ pub async fn admin_health(
         }),
     };
 
-    // TODO: Re-implement metrics for the new Store trait
-    let token_metrics = serde_json::json!({
-        "status": "disabled",
-        "reason": "Metrics need to be re-implemented for the new generic Store trait."
-    });
+    // Check token store metrics
+    let token_metrics = match state.store.get_metrics().await {
+        Ok(metrics) => serde_json::json!({
+            "users_total": metrics.users_total,
+            "groups_total": metrics.groups_total,
+            "tokens_total": metrics.tokens_total,
+            "active_tokens": metrics.active_tokens,
+            "auth_codes_total": metrics.auth_codes_total,
+        }),
+        Err(e) => serde_json::json!({
+            "error": redact_log(&e.to_string())
+        }),
+    };
 
     // Check policy cache health
     let policy_cache_stats = state.policy_cache.get_stats().await;

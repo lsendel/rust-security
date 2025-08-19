@@ -191,3 +191,13 @@ pub struct AuthCodeRecord {
     pub user_id: Option<String>,
     pub exp: i64,
 }
+
+/// Represents a collection of metrics for a `Store` implementation.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StoreMetrics {
+    pub users_total: u64,
+    pub groups_total: u64,
+    pub tokens_total: u64,
+    pub active_tokens: u64,
+    pub auth_codes_total: u64,
+}

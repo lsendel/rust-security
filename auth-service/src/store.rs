@@ -243,4 +243,47 @@ impl Store for HybridStore {
             Ok(true)
         }
     }
+
+    async fn get_metrics(&self) -> Result<common::StoreMetrics> {
+        use redis::AsyncCommands;
+
+        let users_total = self.users.read().await.len() as u64;
+        let groups_total = self.groups.read().await.len() as u64;
+
+        let (tokens_total, active_tokens, auth_codes_total) = if let Some(mut conn) = self.redis_conn() {
+            // Use SCAN for a more accurate count without blocking the server.
+            let mut token_iter: redis::AsyncIter<String> = conn.scan_match("token_record:*").await?;
+            let mut tokens_count = 0;
+            while let Some(_) = token_iter.next_item().await {
+                tokens_count += 1;
+            }
+
+            let mut auth_code_iter: redis::AsyncIter<String> = conn.scan_match("authcode:*").await?;
+            let mut auth_codes_count = 0;
+            while let Some(_) = auth_code_iter.next_item().await {
+                auth_codes_count += 1;
+            }
+
+            // TODO: A full implementation for active_tokens would require scanning and decoding each token,
+            // which is inefficient. A better approach is to use dedicated counters in Redis.
+            // For now, we fall back to the in-memory count as a proxy.
+            let active_in_mem = self.tokens.read().await.values().filter(|r| r.active).count() as u64;
+
+            (tokens_count, active_in_mem, auth_codes_count)
+        } else {
+            let tokens = self.tokens.read().await;
+            let total = tokens.len() as u64;
+            let active = tokens.values().filter(|r| r.active).count() as u64;
+            let auth_codes = self.auth_codes.read().await.len() as u64;
+            (total, active, auth_codes)
+        };
+
+        Ok(common::StoreMetrics {
+            users_total,
+            groups_total,
+            tokens_total,
+            active_tokens,
+            auth_codes_total,
+        })
+    }
 }
