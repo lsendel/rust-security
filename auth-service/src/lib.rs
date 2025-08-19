@@ -87,6 +87,7 @@ async fn metrics_handler() -> Response {
 
 // Core modules
 pub mod errors;
+pub mod sql_store;
 pub mod store;
 pub mod validation;
 
@@ -98,7 +99,7 @@ pub mod mfa;
 pub mod otp_provider;
 pub mod session_cleanup;
 pub mod session_manager;
-pub mod token_store;
+// pub mod token_store; // Replaced by store
 pub mod webauthn;
 
 // OIDC providers
@@ -108,6 +109,7 @@ pub mod oidc_microsoft;
 
 // SCIM support
 pub mod scim;
+pub mod scim_filter;
 pub mod scim_rbac;
 
 // Security modules
@@ -389,7 +391,8 @@ async fn extract_user_from_token(
     }
 
     // Get token record and validate
-    let record = state.token_store.get_record(token).await?;
+    let record = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let record = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
 
     if !record.active {
         return Err(AuthError::InvalidToken { reason: "Token is not active".to_string() });
@@ -695,33 +698,21 @@ pub async fn invalidate_user_sessions_endpoint(
     })))
 }
 
+
+use common::Store;
 use crate::api_key_store::ApiKeyStore;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub token_store: crate::store::TokenStore,
+    pub store: Arc<dyn Store>,
     pub client_credentials: HashMap<String, String>,
     pub allowed_scopes: Vec<String>,
-    pub authorization_codes: Arc<RwLock<HashMap<String, AuthorizationCode>>>,
     pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<crate::backpressure::BackpressureState>,
     pub api_key_store: ApiKeyStore,
 }
 
-// TokenStore moved to store.rs
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
-pub struct IntrospectionRecord {
-    pub active: bool,
-    pub scope: Option<String>,
-    pub client_id: Option<String>,
-    pub exp: Option<i64>,
-    pub iat: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sub: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub token_binding: Option<String>,
-}
+// IntrospectionRecord is now common::TokenRecord, used by the Store trait.
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct HealthResponse {
@@ -800,6 +791,16 @@ pub async fn authorize_check(
     let auth_header =
         headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
 
+    let token = auth.strip_prefix("Bearer ").unwrap_or("");
+    if token.is_empty() {
+        return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
+    }
+    let rec = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    if !rec.active {
+        return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
+    }
+
+
     let (principal, mut context) = if auth_header.starts_with("Bearer ") {
         // JWT-based authentication
         let token = auth_header.strip_prefix("Bearer ").unwrap();
@@ -863,8 +864,8 @@ pub async fn authorize_check(
             .unwrap_or("");
         let token = auth.strip_prefix("Bearer ").unwrap_or("");
         if !token.is_empty() {
-            if let Ok(flag) = state.token_store.get_mfa_verified(token).await {
-                context["mfa_verified"] = serde_json::json!(flag);
+            if let Ok(Some(record)) = state.store.get_token_record(token).await {
+                context["mfa_verified"] = serde_json::json!(record.mfa_verified);
             }
         }
     }
@@ -1041,13 +1042,10 @@ pub async fn admin_health(
     });
 
     // Check token store health
-    let token_store_health = match state.token_store.health_check().await {
+    let store_health = match state.store.health_check().await {
         Ok(healthy) => serde_json::json!({
             "status": if healthy { "healthy" } else { "degraded" },
-            "type": match state.token_store {
-                crate::store::TokenStore::Redis(_) => "redis",
-                crate::store::TokenStore::InMemory(_) => "in_memory",
-            }
+            "type": "hybrid" // The refactored store is a hybrid
         }),
         Err(e) => serde_json::json!({
             "status": "unhealthy",
@@ -1056,16 +1054,13 @@ pub async fn admin_health(
     };
 
     // Check token store metrics
-    let token_metrics = match state.token_store.get_metrics().await {
+    let token_metrics = match state.store.get_metrics().await {
         Ok(metrics) => serde_json::json!({
-            "total_tokens": metrics.total_tokens,
+            "users_total": metrics.users_total,
+            "groups_total": metrics.groups_total,
+            "tokens_total": metrics.tokens_total,
             "active_tokens": metrics.active_tokens,
-            "revoked_tokens": metrics.revoked_tokens,
-            "expired_tokens": metrics.expired_tokens,
-            "operations_per_second": metrics.operations_per_second,
-            "avg_response_time_ms": metrics.avg_response_time_ms,
-            "error_rate": metrics.error_rate,
-            "cache_hit_ratio": metrics.cache_hit_ratio,
+            "auth_codes_total": metrics.auth_codes_total,
         }),
         Err(e) => serde_json::json!({
             "error": redact_log(&e.to_string())
@@ -1110,7 +1105,7 @@ pub async fn admin_health(
 
     // Aggregate health status
     let overall_status =
-        if token_store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
+        if store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
             "healthy"
         } else {
             "degraded"
@@ -1118,7 +1113,7 @@ pub async fn admin_health(
 
     health_data["status"] = serde_json::Value::String(overall_status.to_string());
     health_data["components"] = serde_json::json!({
-        "token_store": token_store_health,
+        "store": store_health,
         "token_metrics": token_metrics,
         "policy_cache": policy_cache_health,
         "key_rotation": key_status.0,
@@ -1279,7 +1274,7 @@ pub async fn introspect(
         return Err(AuthError::InvalidToken { reason: e.to_string() });
     }
 
-    let rec = state.token_store.get_record(&body.token).await?;
+    let rec = state.store.get_token_record(&body.token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
 
     // Log token introspection event
     let mut event = SecurityEvent::new(
@@ -1454,9 +1449,17 @@ pub async fn oauth_authorize(
     };
 
     // Store authorization code (using the new store functions)
-    let auth_code_json = serde_json::to_string(&auth_code)
-        .map_err(|e| internal_error(&format!("Authorization code serialization failed: {}", e)))?;
-    crate::store::set_auth_code(&auth_code.code, auth_code_json, 600).await?;
+    let auth_code_record = common::AuthCodeRecord {
+        client_id: auth_code.client_id.clone(),
+        redirect_uri: auth_code.redirect_uri.clone(),
+        nonce: None, // Not handled in this flow currently
+        scope: auth_code.scope.clone().unwrap_or_default(),
+        pkce_challenge: auth_code.code_challenge.clone(),
+        pkce_method: auth_code.code_challenge_method.clone(),
+        user_id: None, // Not handled in this flow currently
+        exp: auth_code.expires_at,
+    };
+    state.store.set_auth_code(&auth_code.code, &auth_code_record, 600).await?;
 
     // Build redirect URL
     let mut redirect_url = Url::parse(&req.redirect_uri)
@@ -1791,7 +1794,7 @@ pub async fn issue_token(
         "refresh_token" => {
             let rt = form.refresh_token.as_ref().ok_or(AuthError::MissingRefreshToken)?;
             // Detect refresh token reuse
-            if state.token_store.is_refresh_reused(rt).await.unwrap_or(false) {
+            if state.store.is_refresh_reused(rt).await.unwrap_or(false) {
                 SecurityLogger::log_token_operation(
                     "refresh",
                     "refresh_token",
@@ -1808,8 +1811,8 @@ pub async fn issue_token(
                 );
                 return Err(AuthError::InvalidRefreshToken);
             }
-            let consumed = state.token_store.consume_refresh(rt).await?;
-            if !consumed {
+            let consumed = state.store.consume_refresh_token(rt).await?;
+            if consumed.is_none() {
                 // Log failed refresh token attempt
                 SecurityLogger::log_token_operation(
                     "refresh",
@@ -1898,16 +1901,11 @@ pub async fn issue_token(
             })?;
 
             // Consume authorization code
-            let auth_code_json = crate::store::consume_auth_code(code).await?.ok_or_else(|| {
+            let auth_code = state.store.consume_auth_code(code).await?.ok_or_else(|| {
                 AuthError::InvalidToken {
                     reason: "invalid or expired authorization code".to_string(),
                 }
             })?;
-
-            let auth_code: AuthorizationCode =
-                serde_json::from_str(&auth_code_json).map_err(|_| AuthError::InvalidToken {
-                    reason: "malformed authorization code".to_string(),
-                })?;
 
             // Validate authorization code hasn't expired
             if chrono::Utc::now().timestamp() > auth_code.expires_at {
@@ -2061,7 +2059,7 @@ pub async fn userinfo(
         );
         return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
     }
-    let rec = state.token_store.get_record(token).await?;
+    let rec = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
     if !rec.active {
         SecurityLogger::log_validation_failure(
             "/oauth/userinfo",
@@ -2153,21 +2151,18 @@ async fn store_access_token_metadata(
     exp: i64,
     expiry_secs: u64,
 ) -> Result<(), AuthError> {
-    state.token_store.set_active(access_token, true, Some(expiry_secs)).await?;
-    state.token_store.set_scope(access_token, scope, Some(expiry_secs)).await?;
-    state.token_store.set_exp(access_token, exp, Some(expiry_secs)).await?;
-    state.token_store.set_iat(access_token, now, Some(expiry_secs)).await?;
+    let record = common::TokenRecord {
+        active: true,
+        scope,
+        client_id,
+        exp: Some(exp),
+        iat: Some(now),
+        sub: subject,
+        token_binding: Some(crate::security::generate_token_binding("unknown", "unknown")),
+        mfa_verified: false,
+    };
 
-    if let Some(client_id) = client_id {
-        state.token_store.set_client_id(access_token, client_id, Some(expiry_secs)).await?;
-    }
-    if let Some(subject) = subject {
-        state.token_store.set_subject(access_token, subject, Some(expiry_secs)).await?;
-    }
-
-    // Persist token binding placeholder to enable validation hooks later
-    let binding = crate::security::generate_token_binding("unknown", "unknown");
-    let _ = state.token_store.set_token_binding(access_token, binding, Some(expiry_secs)).await;
+    state.store.set_token_record(access_token, &record, Some(expiry_secs)).await?;
 
     Ok(())
 }
@@ -2234,7 +2229,7 @@ async fn issue_new_token(
     .await?;
 
     // Store refresh token
-    state.token_store.set_refresh(&refresh_token, REFRESH_TOKEN_EXPIRY_SECONDS).await?;
+    state.store.set_refresh_token_association(&refresh_token, &access_token, REFRESH_TOKEN_EXPIRY_SECONDS).await?;
 
     let id_token =
         if make_id_token { create_id_token(subject.clone(), now, exp).await } else { None };
@@ -2316,7 +2311,7 @@ pub async fn revoke_token(
         .unwrap_or("unknown")
         .to_string();
 
-    state.token_store.revoke(&form.token).await?;
+    state.store.revoke_token(&form.token).await?;
     TOKENS_REVOKED.inc();
 
     // Log token revocation
@@ -2425,7 +2420,7 @@ pub fn app(state: AppState) -> Router {
         .route("/mfa/webauthn/register/finish", post(crate::webauthn::finish_register))
         .route("/mfa/webauthn/assert/challenge", post(crate::webauthn::begin_assert))
         .route("/mfa/webauthn/assert/finish", post(crate::webauthn::finish_assert))
-        .merge(crate::scim::router().with_state(()));
+        .merge(crate::scim::router());
 
     // Admin-protected routes (require admin authentication and authorization)
     let api_key_router = crate::api_key_endpoints::router(state.api_key_store.clone());

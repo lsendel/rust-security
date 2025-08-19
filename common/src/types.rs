@@ -139,3 +139,65 @@ pub struct PaginatedResponse<T> {
     pub items: Vec<T>,
     pub pagination: PaginationInfo,
 }
+
+// === SCIM Data Models ===
+
+/// Represents a SCIM User.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ScimUser {
+    #[serde(default)]
+    pub id: String,
+    #[serde(rename = "userName")]
+    pub user_name: String,
+    pub active: bool,
+}
+
+/// Represents a SCIM Group.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct ScimGroup {
+    #[serde(default)]
+    pub id: String,
+    #[serde(rename = "displayName")]
+    pub display_name: String,
+    pub members: Vec<String>,
+}
+
+
+// === Store Data Models ===
+
+/// Represents the data stored for an access or refresh token.
+/// Based on the `IntrospectionRecord` from `auth-service`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TokenRecord {
+    pub active: bool,
+    pub scope: Option<String>,
+    pub client_id: Option<String>,
+    pub exp: Option<i64>,
+    pub iat: Option<i64>,
+    pub sub: Option<String>,
+    pub token_binding: Option<String>,
+    pub mfa_verified: bool,
+}
+
+/// Represents the data stored for an authorization code.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthCodeRecord {
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub nonce: Option<String>,
+    pub scope: String,
+    pub pkce_challenge: Option<String>,
+    pub pkce_method: Option<String>,
+    pub user_id: Option<String>,
+    pub exp: i64,
+}
+
+/// Represents a collection of metrics for a `Store` implementation.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StoreMetrics {
+    pub users_total: u64,
+    pub groups_total: u64,
+    pub tokens_total: u64,
+    pub active_tokens: u64,
+    pub auth_codes_total: u64,
+}
