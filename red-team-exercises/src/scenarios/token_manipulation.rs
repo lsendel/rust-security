@@ -336,7 +336,7 @@ async fn token_enumeration_attacks(
     for pattern in &token_patterns {
         let mut valid_tokens = Vec::new();
 
-        for i in 0..(range / token_patterns.len()) {
+        for i in 0..(range / token_patterns.len() as u32) {
             let token = pattern.replace("{}", &format!("{:06}", i));
 
             let introspect_body = json!({

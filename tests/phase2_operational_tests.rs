@@ -7,9 +7,13 @@ impl RegressionTestSuite {
     pub async fn test_performance_metrics(&mut self) {
         println!("\n⚡ Phase 2: Operational Excellence");
 
-        self.run_test("Performance Metrics", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Performance Metrics", || async move {
             let response =
-                self.client.get(&format!("{}/metrics", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/metrics", auth_base_url)).send().await?;
 
             if response.status() != 200 {
                 return Err(format!("Metrics endpoint failed: {}", response.status()).into());
@@ -47,10 +51,14 @@ impl RegressionTestSuite {
 
     /// Test caching functionality
     pub async fn test_caching_functionality(&mut self) {
-        self.run_test("Caching Functionality", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Caching Functionality", || async move {
             // Test token introspection caching by making the same request multiple times
-            let token_response = self.client
-                .post(&format!("{}/oauth/token", self.auth_base_url))
+            let token_response = client
+                .post(&format!("{}/oauth/token", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
                 .send()
@@ -62,8 +70,8 @@ impl RegressionTestSuite {
 
             // First introspection (should be slow - cache miss)
             let start1 = Instant::now();
-            let introspect1 = self.client
-                .post(&format!("{}/oauth/introspect", self.auth_base_url))
+            let introspect1 = client
+                .post(&format!("{}/oauth/introspect", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
                 .send()
@@ -76,8 +84,8 @@ impl RegressionTestSuite {
 
             // Second introspection (should be faster - cache hit)
             let start2 = Instant::now();
-            let introspect2 = self.client
-                .post(&format!("{}/oauth/introspect", self.auth_base_url))
+            let introspect2 = client
+                .post(&format!("{}/oauth/introspect", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
                 .send()
@@ -104,11 +112,14 @@ impl RegressionTestSuite {
 
     /// Test distributed tracing headers
     pub async fn test_distributed_tracing(&mut self) {
-        self.run_test("Distributed Tracing", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Distributed Tracing", || async move {
             // Test that tracing headers are properly handled
-            let response = self
-                .client
-                .get(&format!("{}/health", self.auth_base_url))
+            let response = client
+                .get(&format!("{}/health", auth_base_url))
                 .header("X-Trace-Id", "test-trace-123")
                 .header("X-Span-Id", "test-span-456")
                 .send()
@@ -134,12 +145,16 @@ impl RegressionTestSuite {
 
     /// Test monitoring endpoints
     pub async fn test_monitoring_endpoints(&mut self) {
-        self.run_test("Monitoring Endpoints", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Monitoring Endpoints", || async move {
             let mut endpoints_tested = Vec::new();
 
             // Test health endpoint
             let health_response =
-                self.client.get(&format!("{}/health", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/health", auth_base_url)).send().await?;
 
             endpoints_tested.push(json!({
                 "endpoint": "/health",
@@ -149,7 +164,7 @@ impl RegressionTestSuite {
 
             // Test metrics endpoint
             let metrics_response =
-                self.client.get(&format!("{}/metrics", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/metrics", auth_base_url)).send().await?;
 
             endpoints_tested.push(json!({
                 "endpoint": "/metrics",
@@ -159,7 +174,7 @@ impl RegressionTestSuite {
 
             // Test OpenAPI endpoint
             let openapi_response =
-                self.client.get(&format!("{}/openapi.json", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/openapi.json", auth_base_url)).send().await?;
 
             endpoints_tested.push(json!({
                 "endpoint": "/openapi.json",
@@ -185,11 +200,14 @@ impl RegressionTestSuite {
 
     /// Test key rotation functionality
     pub async fn test_key_rotation(&mut self) {
-        self.run_test("Key Rotation", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Key Rotation", || async move {
             // Test key rotation status endpoint (if available)
-            let status_response = self
-                .client
-                .get(&format!("{}/admin/key-rotation/status", self.auth_base_url))
+            let status_response = client
+                .get(&format!("{}/admin/key-rotation/status", auth_base_url))
                 .send()
                 .await;
 
@@ -227,7 +245,11 @@ impl RegressionTestSuite {
     pub async fn test_policy_evaluation(&mut self) {
         println!("\n🛡️  Policy Service Tests");
 
-        self.run_test("Policy Evaluation", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Policy Evaluation", || async move {
             let test_request = json!({
                 "request_id": "test_regression_001",
                 "principal": {"type": "User", "id": "test_user"},
@@ -236,9 +258,8 @@ impl RegressionTestSuite {
                 "context": {"ip": "192.168.1.100", "time": "2025-08-16T10:48:00Z"}
             });
 
-            let response = self
-                .client
-                .post(&format!("{}/v1/authorize", self.policy_base_url))
+            let response = client
+                .post(&format!("{}/v1/authorize", policy_base_url))
                 .header("Content-Type", "application/json")
                 .json(&test_request)
                 .send()
@@ -265,7 +286,11 @@ impl RegressionTestSuite {
 
     /// Test Cedar policies
     pub async fn test_cedar_policies(&mut self) {
-        self.run_test("Cedar Policies", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Cedar Policies", || async move {
             // Test multiple policy scenarios
             let test_scenarios = vec![
                 (
@@ -303,9 +328,8 @@ impl RegressionTestSuite {
             let mut results = Vec::new();
 
             for (request, scenario) in test_scenarios {
-                let response = self
-                    .client
-                    .post(&format!("{}/v1/authorize", self.policy_base_url))
+                let response = client
+                    .post(&format!("{}/v1/authorize", policy_base_url))
                     .header("Content-Type", "application/json")
                     .json(&request)
                     .send()
@@ -345,7 +369,11 @@ impl RegressionTestSuite {
 
     /// Test policy performance
     pub async fn test_policy_performance(&mut self) {
-        self.run_test("Policy Performance", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Policy Performance", || async move {
             let test_request = json!({
                 "request_id": "perf_test",
                 "principal": {"type": "User", "id": "perf_user"},
@@ -360,9 +388,8 @@ impl RegressionTestSuite {
 
             for _ in 0..num_requests {
                 let start = Instant::now();
-                let response = self
-                    .client
-                    .post(&format!("{}/v1/authorize", self.policy_base_url))
+                let response = client
+                    .post(&format!("{}/v1/authorize", policy_base_url))
                     .header("Content-Type", "application/json")
                     .json(&test_request)
                     .send()
@@ -378,7 +405,7 @@ impl RegressionTestSuite {
 
             let avg_duration = durations.iter().sum::<f64>() / durations.len() as f64;
             let min_duration = durations.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-            let max_duration = durations.iter().fold(0.0, |a, &b| a.max(b));
+            let max_duration = durations.iter().fold(0.0_f64, |a, &b| a.max(b));
 
             // Performance threshold: average should be under 100ms
             let performance_acceptable = avg_duration < 100.0;

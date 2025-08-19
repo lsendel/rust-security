@@ -638,7 +638,7 @@ impl SecurityControlValidator {
             .send()
             .await?;
 
-        let session_security_score = 0;
+        let _session_security_score = 0;
         // Add more specific session security tests here
 
         test.actual_behavior = format!("Session creation status: {}", response.status());

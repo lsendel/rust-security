@@ -8,10 +8,13 @@ impl RegressionTestSuite {
     pub async fn test_end_to_end_flow(&mut self) {
         println!("\n🔄 Integration & End-to-End Tests");
 
-        self.run_test("End-to-End Flow", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+        self.run_test("End-to-End Flow", || async move {
             // Step 1: Get OAuth token
-            let token_response = self.client
-                .post(&format!("{}/oauth/token", self.auth_base_url))
+            let token_response = client
+                .post(&format!("{}/oauth/token", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=orders:read")
                 .send()
@@ -26,8 +29,8 @@ impl RegressionTestSuite {
                 .ok_or("No access token in response")?;
 
             // Step 2: Introspect token
-            let introspect_response = self.client
-                .post(&format!("{}/oauth/introspect", self.auth_base_url))
+            let introspect_response = client
+                .post(&format!("{}/oauth/introspect", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
                 .send()
@@ -54,8 +57,8 @@ impl RegressionTestSuite {
                 }
             });
 
-            let policy_response = self.client
-                .post(&format!("{}/v1/authorize", self.policy_base_url))
+            let policy_response = client
+                .post(&format!("{}/v1/authorize", policy_base_url))
                 .header("Content-Type", "application/json")
                 .json(&policy_request)
                 .send()
@@ -68,10 +71,10 @@ impl RegressionTestSuite {
             let policy_result: Value = policy_response.json().await?;
 
             // Step 4: Revoke token
-            let revoke_response = self.client
-                .post(&format!("{}/oauth/revoke", self.auth_base_url))
+            let revoke_response = client
+                .post(&format!("{}/oauth/revoke", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .body(&format!("token={}", access_token))
+                .body(format!("token={}", access_token))
                 .send()
                 .await?;
 
@@ -80,8 +83,8 @@ impl RegressionTestSuite {
             }
 
             // Step 5: Verify token is revoked
-            let final_introspect = self.client
-                .post(&format!("{}/oauth/introspect", self.auth_base_url))
+            let final_introspect = client
+                .post(&format!("{}/oauth/introspect", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
                 .send()
@@ -106,20 +109,23 @@ impl RegressionTestSuite {
 
     /// Test concurrent operations
     pub async fn test_concurrent_operations(&mut self) {
-        self.run_test("Concurrent Operations", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+        self.run_test("Concurrent Operations", || async move {
             let concurrent_requests = 10;
             let mut handles = Vec::new();
 
             // Launch concurrent token requests
             for i in 0..concurrent_requests {
-                let client = self.client.clone();
-                let auth_url = self.auth_base_url.clone();
+                let client = client.clone();
+                let auth_url = auth_base_url.clone();
 
                 let handle = tokio::spawn(async move {
                     let response = client
                         .post(&format!("{}/oauth/token", auth_url))
                         .header("Content-Type", "application/x-www-form-urlencoded")
-                        .body(&format!("grant_type=client_credentials&client_id=test_client_{}&client_secret=test_secret&scope=read", i))
+                        .body(format!("grant_type=client_credentials&client_id=test_client_{}&client_secret=test_secret&scope=read", i))
                         .send()
                         .await;
 
@@ -174,22 +180,25 @@ impl RegressionTestSuite {
 
     /// Test error handling
     pub async fn test_error_handling(&mut self) {
-        self.run_test("Error Handling", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+        self.run_test("Error Handling", || async move {
             let error_scenarios = vec![
                 // Invalid endpoint
-                (format!("{}/invalid/endpoint", self.auth_base_url), "GET", None, 404),
+                (format!("{}/invalid/endpoint", auth_base_url), "GET", None, 404),
                 // Invalid method
-                (format!("{}/oauth/token", self.auth_base_url), "GET", None, 405),
+                (format!("{}/oauth/token", auth_base_url), "GET", None, 405),
                 // Invalid JSON
                 (
-                    format!("{}/oauth/introspect", self.auth_base_url),
+                    format!("{}/oauth/introspect", auth_base_url),
                     "POST",
                     Some("{invalid json}"),
                     400,
                 ),
                 // Missing required fields
                 (
-                    format!("{}/oauth/token", self.auth_base_url),
+                    format!("{}/oauth/token", auth_base_url),
                     "POST",
                     Some("grant_type=client_credentials"),
                     400,
@@ -200,9 +209,9 @@ impl RegressionTestSuite {
 
             for (url, method, body, expected_status) in error_scenarios {
                 let request = match method {
-                    "GET" => self.client.get(&url),
+                    "GET" => client.get(&url),
                     "POST" => {
-                        let mut req = self.client.post(&url);
+                        let mut req = client.post(&url);
                         if let Some(body_content) = body {
                             req = req.header("Content-Type", "application/json").body(body_content);
                         }
@@ -246,15 +255,17 @@ impl RegressionTestSuite {
 
     /// Test failover scenarios
     pub async fn test_failover_scenarios(&mut self) {
-        self.run_test("Failover Scenarios", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+        self.run_test("Failover Scenarios", || async move {
             // Test service resilience by making requests when one service might be under load
             let mut resilience_results = Vec::new();
 
             // Test auth service resilience
             let auth_start = Instant::now();
-            let auth_response = self
-                .client
-                .get(&format!("{}/health", self.auth_base_url))
+            let auth_response = client
+                .get(&format!("{}/health", auth_base_url))
                 .timeout(Duration::from_secs(5))
                 .send()
                 .await;
@@ -279,9 +290,8 @@ impl RegressionTestSuite {
 
             // Test policy service resilience
             let policy_start = Instant::now();
-            let policy_response = self
-                .client
-                .get(&format!("{}/health", self.policy_base_url))
+            let policy_response = client
+                .get(&format!("{}/health", policy_base_url))
                 .timeout(Duration::from_secs(5))
                 .send()
                 .await;

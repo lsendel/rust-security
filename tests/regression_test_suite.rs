@@ -7,10 +7,10 @@ use std::collections::HashMap;
 /// Comprehensive regression test suite for Rust Security Workspace
 /// Tests all Phase 1 and Phase 2 features end-to-end
 pub struct RegressionTestSuite {
-    auth_base_url: String,
-    policy_base_url: String,
-    client: Client,
-    test_results: HashMap<String, TestResult>,
+    pub auth_base_url: String,
+    pub policy_base_url: String,
+    pub client: Client,
+    pub test_results: HashMap<String, TestResult>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +78,7 @@ impl RegressionTestSuite {
         Ok(self.generate_summary())
     }
 
-    async fn run_test<F, Fut>(&mut self, test_name: &str, test_fn: F)
+    pub async fn run_test<F, Fut>(&mut self, test_name: &str, test_fn: F)
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<Option<Value>, Box<dyn std::error::Error + Send + Sync>>>,

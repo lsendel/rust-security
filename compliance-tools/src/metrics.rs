@@ -403,10 +403,14 @@ mod tests {
     async fn test_audit_log_analysis() {
         let mut temp_file = NamedTempFile::new().unwrap();
 
-        // Write sample audit log entries
+        // Write sample audit log entries with current timestamps
+        let now = chrono::Utc::now();
+        let five_minutes_ago = now - chrono::Duration::minutes(5);
+        let ten_minutes_ago = now - chrono::Duration::minutes(10);
+        
         let sample_logs = vec![
             serde_json::json!({
-                "timestamp": "2024-01-01T12:00:00Z",
+                "timestamp": five_minutes_ago.to_rfc3339(),
                 "user_id": "user1",
                 "action": "login",
                 "resource": "/auth",
@@ -415,7 +419,7 @@ mod tests {
                 "details": {}
             }),
             serde_json::json!({
-                "timestamp": "2024-01-01T12:01:00Z",
+                "timestamp": ten_minutes_ago.to_rfc3339(),
                 "user_id": "user2",
                 "action": "login",
                 "resource": "/auth",

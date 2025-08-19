@@ -6,11 +6,15 @@ impl RegressionTestSuite {
     /// Test health endpoints for both services
     pub async fn test_health_endpoints(&mut self) {
         println!("\n🔍 Phase 1: Critical Security Features");
+        
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
 
-        self.run_test("Health Endpoints", || async {
+        self.run_test("Health Endpoints", || async move {
             // Test auth service health
             let auth_health =
-                self.client.get(&format!("{}/health", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/health", auth_base_url)).send().await?;
 
             if auth_health.status() != 200 {
                 return Err(
@@ -20,7 +24,7 @@ impl RegressionTestSuite {
 
             // Test policy service health
             let policy_health =
-                self.client.get(&format!("{}/health", self.policy_base_url)).send().await?;
+                client.get(&format!("{}/health", policy_base_url)).send().await?;
 
             if policy_health.status() != 200 {
                 return Err(format!(
@@ -40,9 +44,13 @@ impl RegressionTestSuite {
 
     /// Test OAuth2 token flow
     pub async fn test_oauth_token_flow(&mut self) {
-        self.run_test("OAuth2 Token Flow", || async {
-            let response = self.client
-                .post(&format!("{}/oauth/token", self.auth_base_url))
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("OAuth2 Token Flow", || async move {
+            let response = client
+                .post(&format!("{}/oauth/token", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=read write")
                 .send()
@@ -73,10 +81,14 @@ impl RegressionTestSuite {
 
     /// Test token introspection
     pub async fn test_token_introspection(&mut self) {
-        self.run_test("Token Introspection", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Token Introspection", || async move {
             // First get a token
-            let token_response = self.client
-                .post(&format!("{}/oauth/token", self.auth_base_url))
+            let token_response = client
+                .post(&format!("{}/oauth/token", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=read")
                 .send()
@@ -87,8 +99,8 @@ impl RegressionTestSuite {
                 .ok_or("No access token in response")?;
 
             // Test introspection
-            let introspect_response = self.client
-                .post(&format!("{}/oauth/introspect", self.auth_base_url))
+            let introspect_response = client
+                .post(&format!("{}/oauth/introspect", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
                 .send()
@@ -111,11 +123,14 @@ impl RegressionTestSuite {
 
     /// Test token revocation
     pub async fn test_token_revocation(&mut self) {
-        self.run_test("Token Revocation", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Token Revocation", || async move {
             // Get a token first
-            let token_response = self
-                .client
-                .post(&format!("{}/oauth/token", self.auth_base_url))
+            let token_response = client
+                .post(&format!("{}/oauth/token", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body(
                     "grant_type=client_credentials&client_id=test_client&client_secret=test_secret",
@@ -128,11 +143,10 @@ impl RegressionTestSuite {
                 token_data["access_token"].as_str().ok_or("No access token in response")?;
 
             // Revoke the token
-            let revoke_response = self
-                .client
-                .post(&format!("{}/oauth/revoke", self.auth_base_url))
+            let revoke_response = client
+                .post(&format!("{}/oauth/revoke", auth_base_url))
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .body(&format!("token={}", access_token))
+                .body(format!("token={}", access_token))
                 .send()
                 .await?;
 
@@ -141,9 +155,8 @@ impl RegressionTestSuite {
             }
 
             // Verify token is now inactive
-            let introspect_response = self
-                .client
-                .post(&format!("{}/oauth/introspect", self.auth_base_url))
+            let introspect_response = client
+                .post(&format!("{}/oauth/introspect", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"token": access_token}))
                 .send()
@@ -161,11 +174,14 @@ impl RegressionTestSuite {
 
     /// Test OpenID Connect endpoints
     pub async fn test_openid_connect(&mut self) {
-        self.run_test("OpenID Connect", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("OpenID Connect", || async move {
             // Test OIDC discovery document
-            let discovery_response = self
-                .client
-                .get(&format!("{}/.well-known/openid-configuration", self.auth_base_url))
+            let discovery_response = client
+                .get(&format!("{}/.well-known/openid-configuration", auth_base_url))
                 .send()
                 .await?;
 
@@ -187,9 +203,8 @@ impl RegressionTestSuite {
             }
 
             // Test OAuth2 authorization server metadata
-            let oauth_metadata_response = self
-                .client
-                .get(&format!("{}/.well-known/oauth-authorization-server", self.auth_base_url))
+            let oauth_metadata_response = client
+                .get(&format!("{}/.well-known/oauth-authorization-server", auth_base_url))
                 .send()
                 .await?;
 
@@ -206,9 +221,13 @@ impl RegressionTestSuite {
 
     /// Test JWKS endpoint
     pub async fn test_jwks_endpoint(&mut self) {
-        self.run_test("JWKS Endpoint", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("JWKS Endpoint", || async move {
             let jwks_response =
-                self.client.get(&format!("{}/jwks.json", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/jwks.json", auth_base_url)).send().await?;
 
             if jwks_response.status() != 200 {
                 return Err(format!("JWKS request failed: {}", jwks_response.status()).into());
@@ -243,11 +262,14 @@ impl RegressionTestSuite {
 
     /// Test MFA TOTP functionality
     pub async fn test_mfa_totp(&mut self) {
-        self.run_test("MFA TOTP", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("MFA TOTP", || async move {
             // Test TOTP registration
-            let register_response = self
-                .client
-                .post(&format!("{}/mfa/totp/register", self.auth_base_url))
+            let register_response = client
+                .post(&format!("{}/mfa/totp/register", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"user_id": "test_user"}))
                 .send()
@@ -267,9 +289,8 @@ impl RegressionTestSuite {
             }
 
             // Test backup codes generation
-            let backup_response = self
-                .client
-                .post(&format!("{}/mfa/totp/backup-codes/generate", self.auth_base_url))
+            let backup_response = client
+                .post(&format!("{}/mfa/totp/backup-codes/generate", auth_base_url))
                 .header("Content-Type", "application/json")
                 .json(&json!({"user_id": "test_user"}))
                 .send()
@@ -299,10 +320,14 @@ impl RegressionTestSuite {
 
     /// Test SCIM endpoints
     pub async fn test_scim_endpoints(&mut self) {
-        self.run_test("SCIM Endpoints", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("SCIM Endpoints", || async move {
             // Test SCIM Users endpoint
             let users_response =
-                self.client.get(&format!("{}/scim/v2/Users", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/scim/v2/Users", auth_base_url)).send().await?;
 
             if users_response.status() != 200 {
                 return Err(
@@ -322,7 +347,7 @@ impl RegressionTestSuite {
 
             // Test SCIM Groups endpoint
             let groups_response =
-                self.client.get(&format!("{}/scim/v2/Groups", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/scim/v2/Groups", auth_base_url)).send().await?;
 
             if groups_response.status() != 200 {
                 return Err(
@@ -341,14 +366,18 @@ impl RegressionTestSuite {
 
     /// Test rate limiting
     pub async fn test_rate_limiting(&mut self) {
-        self.run_test("Rate Limiting", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Rate Limiting", || async move {
             let mut successful_requests = 0;
             let mut rate_limited_requests = 0;
 
             // Send multiple requests rapidly to trigger rate limiting
             for _ in 0..20 {
-                let response = self.client
-                    .post(&format!("{}/oauth/token", self.auth_base_url))
+                let response = client
+                    .post(&format!("{}/oauth/token", auth_base_url))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
                     .send()
@@ -379,9 +408,13 @@ impl RegressionTestSuite {
 
     /// Test security headers
     pub async fn test_security_headers(&mut self) {
-        self.run_test("Security Headers", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Security Headers", || async move {
             let response =
-                self.client.get(&format!("{}/health", self.auth_base_url)).send().await?;
+                client.get(&format!("{}/health", auth_base_url)).send().await?;
 
             let headers = response.headers();
             let mut found_headers = HashMap::new();
@@ -419,7 +452,11 @@ impl RegressionTestSuite {
 
     /// Test request signing (placeholder - would need actual implementation)
     pub async fn test_request_signing(&mut self) {
-        self.run_test("Request Signing", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Request Signing", || async move {
             // This is a placeholder test since request signing requires specific implementation
             // In a real scenario, you would test HMAC signature validation
 
@@ -433,7 +470,11 @@ impl RegressionTestSuite {
 
     /// Test token binding (placeholder)
     pub async fn test_token_binding(&mut self) {
-        self.run_test("Token Binding", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Token Binding", || async move {
             // Placeholder for token binding tests
             // Would test that tokens are bound to client characteristics
 
@@ -447,7 +488,11 @@ impl RegressionTestSuite {
 
     /// Test PKCE flow (placeholder)
     pub async fn test_pkce_flow(&mut self) {
-        self.run_test("PKCE Flow", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("PKCE Flow", || async move {
             // Placeholder for PKCE testing
             // Would test code verifier/challenge generation and validation
 
@@ -461,7 +506,11 @@ impl RegressionTestSuite {
 
     /// Test circuit breaker (placeholder)
     pub async fn test_circuit_breaker(&mut self) {
-        self.run_test("Circuit Breaker", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Circuit Breaker", || async move {
             // Placeholder for circuit breaker testing
             // Would test fault tolerance for external dependencies
 
@@ -475,7 +524,11 @@ impl RegressionTestSuite {
 
     /// Test input validation
     pub async fn test_input_validation(&mut self) {
-        self.run_test("Input Validation", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Input Validation", || async move {
             // Test with invalid inputs
             let invalid_requests = vec![
                 // Invalid grant type
@@ -489,9 +542,8 @@ impl RegressionTestSuite {
             let mut validation_results = Vec::new();
 
             for (body, expected_status) in invalid_requests {
-                let response = self
-                    .client
-                    .post(&format!("{}/oauth/token", self.auth_base_url))
+                let response = client
+                    .post(&format!("{}/oauth/token", auth_base_url))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .body(body)
                     .send()
@@ -522,7 +574,11 @@ impl RegressionTestSuite {
 
     /// Test audit logging (placeholder)
     pub async fn test_audit_logging(&mut self) {
-        self.run_test("Audit Logging", || async {
+        let client = self.client.clone();
+        let auth_base_url = self.auth_base_url.clone();
+        let policy_base_url = self.policy_base_url.clone();
+
+        self.run_test("Audit Logging", || async move {
             // Placeholder for audit logging tests
             // Would verify that security events are properly logged
 

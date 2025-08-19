@@ -32,6 +32,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
+fastrand = "2.2"
 uuid = { workspace = true }
 
 # HTTP and API clients
@@ -81,7 +82,7 @@ tokio-test = { workspace = true }
 wiremock = { workspace = true }
 
 [features]
-default = ["prometheus-metrics", "pdf-reports"]
+default = ["prometheus-metrics"]
 prometheus-metrics = []
 pdf-reports = ["printpdf"]
 excel-reports = ["dep:rust_xlsxwriter"]

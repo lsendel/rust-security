@@ -44,19 +44,19 @@ hex = "0.4"
 config = "0.14"
 toml = "0.8"
 xml-rs = "0.8"
-elasticsearch = "8.5"
-serde_xml_rs = "0.6"
-kafka = "0.10"
+elasticsearch = "8.19.0-alpha.1"
+serde-xml-rs = "0.6"
+# kafka = "0.10" # Requires OpenSSL, commented out
 rdkafka = "0.36"
 aws-sdk-s3 = "1.0"
 aws-config = "1.0"
 aws-sdk-sqs = "1.0"
 slack-morphism = "1.14"
 teloxide = "0.12"
-webhook = "4.0"
+webhook = "2.1"
 rust-crypto = "0.2"
 ring = "0.17"
-rust-smtp = "0.21"
+# rust-smtp = "0.21" # Package not found, commented out
 # Common utilities (optional)
 # common = { path = "../common", optional = true }
 

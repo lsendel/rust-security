@@ -552,7 +552,7 @@ async fn authentication_state_confusion(
     // Test 1: Session fixation
     let fixed_session_id = "FIXED_SESSION_12345";
     let mut headers = HeaderMap::new();
-    headers.insert("Cookie", HeaderValue::from_str(&format!("session_id={}", fixed_session_id))?);
+    headers.insert(reqwest::header::COOKIE, HeaderValue::from_str(&format!("session_id={}", fixed_session_id))?);
 
     let result = framework
         .execute_attack(
@@ -581,7 +581,7 @@ async fn authentication_state_confusion(
 
     for (header_name, header_value) in &state_manipulation_tests {
         let mut headers = HeaderMap::new();
-        headers.insert(header_name, HeaderValue::from_str(header_value)?);
+        headers.insert(*header_name, HeaderValue::from_str(header_value)?);
 
         let result = framework
             .execute_attack(
@@ -602,9 +602,12 @@ async fn authentication_state_confusion(
 
     // Test 3: Multiple authentication headers
     let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, HeaderValue::from_str("Bearer invalid_token")?);
-    headers.insert("X-API-Key", HeaderValue::from_str("admin_key")?);
-    headers.insert("Cookie", HeaderValue::from_str("auth_token=admin_session")?);
+    headers.insert(reqwest::header::AUTHORIZATION, HeaderValue::from_str("Bearer invalid_token")?);
+    headers.insert(
+        reqwest::header::HeaderName::from_static("x-api-key"),
+        HeaderValue::from_str("admin_key")?
+    );
+    headers.insert(reqwest::header::COOKIE, HeaderValue::from_str("auth_token=admin_session")?);
 
     let result = framework
         .execute_attack(

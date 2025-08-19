@@ -51,7 +51,10 @@ pub enum ComplianceError {
 }
 
 /// Result type for compliance operations
-pub type ComplianceResult<T> = Result<T, ComplianceError>;
+pub type ComplianceResult<T> = std::result::Result<T, ComplianceError>;
+
+/// Shorter alias for compliance result
+pub type Result<T> = std::result::Result<T, ComplianceError>;
 
 /// Security metric data structure
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -12,6 +12,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
+use rand;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttackResult {

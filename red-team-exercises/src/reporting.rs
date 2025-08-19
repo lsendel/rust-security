@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tabular::{Row, Table};
 use tracing::info;
+use chrono;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedTeamReport {

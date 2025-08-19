@@ -22,9 +22,39 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
     setDismissedAlerts(prev => new Set([...prev, alertId]))
   }
 
-  const acknowledgeAlert = (alertId: string) => {
-    // TODO: Call API to acknowledge alert
-    console.log('Acknowledging alert:', alertId)
+  const acknowledgeAlert = async (alertId: string) => {
+    try {
+      // Call API to acknowledge alert
+      const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify({
+          acknowledged_at: new Date().toISOString(),
+          acknowledged_by: 'current_user', // Would come from auth context
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to acknowledge alert: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('Alert acknowledged successfully:', result)
+      
+      // Update local state to reflect acknowledgment
+      setDismissedAlerts(prev => new Set([...prev, alertId]))
+      
+      // Show success notification
+      // You could use a toast library here
+      console.log(`Alert ${alertId} has been acknowledged`)
+      
+    } catch (error) {
+      console.error('Error acknowledging alert:', error)
+      // Handle error (show toast, etc.)
+    }
   }
 
   if (visibleAlerts.length === 0) {

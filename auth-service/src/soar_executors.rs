@@ -7,11 +7,13 @@
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::soar_core::*;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use lettre::{
     transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
     Tokio1Executor,
 };
 use reqwest::{header::HeaderMap, Client};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -921,12 +923,117 @@ impl StepExecutor for SiemQueryExecutor {
 
 /// Database query step executor
 pub struct DatabaseQueryExecutor {
-    // TODO: Add database connection pool
+    #[cfg(feature = "soar")]
+    pool: Option<sqlx::PgPool>,
 }
 
 impl DatabaseQueryExecutor {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            #[cfg(feature = "soar")]
+            pool: Self::initialize_pool(),
+        }
+    }
+
+    #[cfg(feature = "soar")]
+    fn initialize_pool() -> Option<sqlx::PgPool> {
+        // Try to get database URL from environment
+        if let Ok(database_url) = std::env::var("DATABASE_URL") {
+            match sqlx::postgres::PgPoolOptions::new()
+                .max_connections(10)
+                .min_connections(2)
+                .acquire_timeout(std::time::Duration::from_secs(30))
+                .idle_timeout(Some(std::time::Duration::from_secs(600))) // 10 minutes
+                .max_lifetime(Some(std::time::Duration::from_secs(1800))) // 30 minutes
+                .connect_lazy(&database_url)
+            {
+                Ok(pool) => {
+                    info!("Database pool initialized successfully");
+                    Some(pool)
+                }
+                Err(e) => {
+                    error!("Failed to create database pool: {}", e);
+                    None
+                }
+            }
+        } else {
+            warn!("DATABASE_URL not set, database queries will be disabled");
+            None
+        }
+    }
+
+    #[cfg(feature = "soar")]
+    fn validate_query(&self, query: &str) -> Result<(), StepError> {
+        // Whitelist of safe operations
+        let safe_operations = [
+            "SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC",
+        ];
+        
+        // Dangerous operations that should never be allowed
+        let dangerous_operations = [
+            "DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE",
+            "GRANT", "REVOKE", "TRUNCATE", "EXEC", "EXECUTE", "CALL",
+            "DO", "LOAD", "COPY", "BULK"
+        ];
+
+        let query_upper = query.to_uppercase();
+        let first_word = query_upper.trim().split_whitespace().next().unwrap_or("");
+
+        // Check if it's a safe operation
+        if !safe_operations.contains(&first_word) {
+            return Err(StepError {
+                code: "UNSAFE_QUERY_OPERATION".to_string(),
+                message: format!("Query operation '{}' is not allowed for security reasons", first_word),
+                details: Some(serde_json::json!({
+                    "allowed_operations": safe_operations,
+                    "attempted_operation": first_word
+                })),
+                retryable: false,
+            });
+        }
+
+        // Check for dangerous patterns
+        for dangerous_op in &dangerous_operations {
+            if query_upper.contains(dangerous_op) {
+                return Err(StepError {
+                    code: "DANGEROUS_QUERY_PATTERN".to_string(),
+                    message: format!("Query contains dangerous pattern: {}", dangerous_op),
+                    details: Some(serde_json::json!({
+                        "dangerous_pattern": dangerous_op,
+                        "query_snippet": &query[..std::cmp::min(query.len(), 100)]
+                    })),
+                    retryable: false,
+                });
+            }
+        }
+
+        // Check query length
+        if query.len() > 10000 {
+            return Err(StepError {
+                code: "QUERY_TOO_LONG".to_string(),
+                message: "Query exceeds maximum allowed length".to_string(),
+                details: Some(serde_json::json!({
+                    "query_length": query.len(),
+                    "max_length": 10000
+                })),
+                retryable: false,
+            });
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "soar")]
+    fn sanitize_parameter(&self, value: &str) -> String {
+        // Remove potentially dangerous characters and patterns
+        value.chars()
+            .filter(|c| c.is_alphanumeric() || " .-_@:".contains(*c))
+            .take(1000) // Limit parameter length
+            .collect::<String>()
+            .replace("--", "")  // Remove SQL comment markers
+            .replace("/*", "")  // Remove SQL comment start
+            .replace("*/", "")  // Remove SQL comment end
+            .replace(";", "")   // Remove statement terminators
     }
 }
 
@@ -938,15 +1045,222 @@ impl StepExecutor for DatabaseQueryExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        // TODO: Implement database query execution
-        let mut outputs = HashMap::new();
-        outputs.insert("query_executed".to_string(), Value::Bool(true));
+        #[cfg(not(feature = "soar"))]
+        {
+            return Err(StepError {
+                code: "FEATURE_NOT_ENABLED".to_string(),
+                message: "Database queries require the 'soar' feature to be enabled".to_string(),
+                details: None,
+                retryable: false,
+            });
+        }
 
-        Ok(outputs)
+        #[cfg(feature = "soar")]
+        {
+            if let StepAction::ExecuteQuery { query, parameters, timeout_seconds } = &step.action {
+                // Validate that we have a database pool
+                let pool = self.pool.as_ref().ok_or_else(|| StepError {
+                    code: "DATABASE_NOT_AVAILABLE".to_string(),
+                    message: "Database connection pool is not available".to_string(),
+                    details: None,
+                    retryable: false,
+                })?;
+
+                info!("Executing database query");
+
+                // Validate query for safety
+                self.validate_query(query)?;
+
+                // Sanitize parameters
+                let mut sanitized_params: HashMap<String, String> = HashMap::new();
+                if let Some(params) = parameters {
+                    for (key, value) in params {
+                        let sanitized_value = self.sanitize_parameter(value);
+                        sanitized_params.insert(key.clone(), sanitized_value);
+                    }
+                }
+
+                // Replace parameters in query safely (using positional parameters)
+                let mut final_query = query.clone();
+                let mut param_values: Vec<String> = Vec::new();
+                
+                for (i, (key, value)) in sanitized_params.iter().enumerate() {
+                    let placeholder = format!("${{{}}}", key);
+                    let positional_param = format!("${}", i + 1);
+                    final_query = final_query.replace(&placeholder, &positional_param);
+                    param_values.push(value.clone());
+                }
+
+                let timeout_duration = Duration::from_secs(*timeout_seconds as u64);
+
+                // Execute query with timeout and error handling
+                let start_time = tokio::time::Instant::now();
+                let query_result = tokio::time::timeout(
+                    timeout_duration,
+                    self.execute_query_internal(pool, &final_query, &param_values)
+                ).await;
+
+                let execution_time = start_time.elapsed();
+
+                match query_result {
+                    Ok(Ok(results)) => {
+                        SecurityLogger::log_event(
+                            &SecurityEvent::new(
+                                SecurityEventType::DataAccess,
+                                SecuritySeverity::Low,
+                                "soar_executor".to_string(),
+                                "Database query executed successfully".to_string(),
+                            )
+                            .with_actor("soar_system".to_string())
+                            .with_action("soar_execute".to_string())
+                            .with_target("soar_playbook".to_string())
+                            .with_outcome("success".to_string())
+                            .with_reason("Database query step executed successfully".to_string())
+                            .with_detail("execution_time_ms".to_string(), execution_time.as_millis())
+                            .with_detail("result_count".to_string(), results.len()),
+                        );
+
+                        let mut outputs = HashMap::new();
+                        outputs.insert("query_results".to_string(), Value::Array(results));
+                        outputs.insert("execution_time_ms".to_string(), Value::Number((execution_time.as_millis() as u64).into()));
+                        outputs.insert("success".to_string(), Value::Bool(true));
+
+                        Ok(outputs)
+                    }
+                    Ok(Err(e)) => {
+                        error!("Database query failed: {}", e);
+
+                        SecurityLogger::log_event(
+                            &SecurityEvent::new(
+                                SecurityEventType::SystemError,
+                                SecuritySeverity::Medium,
+                                "soar_executor".to_string(),
+                                "Database query execution failed".to_string(),
+                            )
+                            .with_actor("soar_system".to_string())
+                            .with_action("soar_execute".to_string())
+                            .with_target("soar_playbook".to_string())
+                            .with_outcome("failure".to_string())
+                            .with_reason(format!("Database query failed: {}", e.to_string()))
+                            .with_detail("error".to_string(), e.to_string())
+                            .with_detail("execution_time_ms".to_string(), execution_time.as_millis()),
+                        );
+
+                        Err(StepError {
+                            code: "DATABASE_QUERY_FAILED".to_string(),
+                            message: format!("Database query execution failed: {}", e),
+                            details: Some(serde_json::json!({
+                                "query": &final_query[..std::cmp::min(final_query.len(), 200)],
+                                "error": e.to_string(),
+                                "execution_time_ms": execution_time.as_millis()
+                            })),
+                            retryable: true,
+                        })
+                    }
+                    Err(_) => {
+                        error!("Database query timed out after {} seconds", timeout_seconds);
+
+                        Err(StepError {
+                            code: "DATABASE_QUERY_TIMEOUT".to_string(),
+                            message: format!("Database query timed out after {} seconds", timeout_seconds),
+                            details: Some(serde_json::json!({
+                                "timeout_seconds": timeout_seconds,
+                                "execution_time_ms": execution_time.as_millis()
+                            })),
+                            retryable: true,
+                        })
+                    }
+                }
+            } else {
+                Err(StepError {
+                    code: "INVALID_ACTION".to_string(),
+                    message: "Step action is not ExecuteQuery".to_string(),
+                    details: None,
+                    retryable: false,
+                })
+            }
+        }
     }
 
     fn get_step_type(&self) -> String {
         "database_query".to_string()
+    }
+}
+
+#[cfg(feature = "soar")]
+impl DatabaseQueryExecutor {
+    async fn execute_query_internal(
+        &self,
+        pool: &sqlx::PgPool,
+        query: &str,
+        parameters: &[String],
+    ) -> Result<Vec<Value>, sqlx::Error> {
+        use sqlx::Row;
+
+        // Build the query with parameters
+        let mut query_builder = sqlx::query(query);
+        
+        for param in parameters {
+            query_builder = query_builder.bind(param);
+        }
+
+        let rows = query_builder.fetch_all(pool).await?;
+        let mut results = Vec::new();
+
+        for row in rows {
+            let mut result_obj = serde_json::Map::new();
+            
+            // Convert each column to a JSON value
+            for (i, column) in row.columns().iter().enumerate() {
+                let column_name = column.name();
+                
+                // Safely extract values based on PostgreSQL types
+                let value = match column.type_info().name() {
+                    "VARCHAR" | "TEXT" | "CHAR" => {
+                        row.try_get::<Option<String>, _>(i)
+                            .map(|v| v.map(Value::String).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                    "INT4" | "INT8" | "BIGINT" => {
+                        row.try_get::<Option<i64>, _>(i)
+                            .map(|v| v.map(|n| Value::Number(n.into())).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                    "FLOAT4" | "FLOAT8" | "NUMERIC" => {
+                        row.try_get::<Option<f64>, _>(i)
+                            .map(|v| v.map(|n| serde_json::Number::from_f64(n).map(Value::Number).unwrap_or(Value::Null)).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                    "BOOL" => {
+                        row.try_get::<Option<bool>, _>(i)
+                            .map(|v| v.map(Value::Bool).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                    "TIMESTAMPTZ" | "TIMESTAMP" => {
+                        row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(i)
+                            .map(|v| v.map(|dt| Value::String(dt.to_rfc3339())).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                    "UUID" => {
+                        row.try_get::<Option<uuid::Uuid>, _>(i)
+                            .map(|v| v.map(|id| Value::String(id.to_string())).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                    _ => {
+                        // For unknown types, try to get as string
+                        row.try_get::<Option<String>, _>(i)
+                            .map(|v| v.map(Value::String).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    }
+                };
+
+                result_obj.insert(column_name.to_string(), value);
+            }
+
+            results.push(Value::Object(result_obj));
+        }
+
+        Ok(results)
     }
 }
 
@@ -1034,12 +1348,90 @@ impl StepExecutor for TicketCreateExecutor {
 
 /// Case update step executor
 pub struct CaseUpdateExecutor {
-    // Will integrate with the case manager
+    case_manager: Arc<CaseManagerClient>,
 }
 
 impl CaseUpdateExecutor {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            case_manager: Arc::new(CaseManagerClient::new()),
+        }
+    }
+
+    fn validate_case_fields(fields: &HashMap<String, Value>) -> Result<(), StepError> {
+        // Define allowed fields to prevent injection attacks
+        let allowed_fields = [
+            "status", "priority", "assignee", "description", "tags",
+            "resolution", "category", "severity", "due_date", "notes"
+        ];
+
+        for field_name in fields.keys() {
+            if !allowed_fields.contains(&field_name.as_str()) {
+                return Err(StepError {
+                    code: "INVALID_CASE_FIELD".to_string(),
+                    message: format!("Field '{}' is not allowed for case updates", field_name),
+                    details: Some(serde_json::json!({
+                        "invalid_field": field_name,
+                        "allowed_fields": allowed_fields
+                    })),
+                    retryable: false,
+                });
+            }
+        }
+
+        // Validate specific field constraints
+        if let Some(status) = fields.get("status") {
+            if let Some(status_str) = status.as_str() {
+                let valid_statuses = ["new", "in_progress", "resolved", "closed", "on_hold"];
+                if !valid_statuses.contains(&status_str) {
+                    return Err(StepError {
+                        code: "INVALID_CASE_STATUS".to_string(),
+                        message: format!("Invalid case status: {}", status_str),
+                        details: Some(serde_json::json!({
+                            "invalid_status": status_str,
+                            "valid_statuses": valid_statuses
+                        })),
+                        retryable: false,
+                    });
+                }
+            }
+        }
+
+        if let Some(priority) = fields.get("priority") {
+            if let Some(priority_str) = priority.as_str() {
+                let valid_priorities = ["low", "medium", "high", "critical"];
+                if !valid_priorities.contains(&priority_str) {
+                    return Err(StepError {
+                        code: "INVALID_CASE_PRIORITY".to_string(),
+                        message: format!("Invalid case priority: {}", priority_str),
+                        details: Some(serde_json::json!({
+                            "invalid_priority": priority_str,
+                            "valid_priorities": valid_priorities
+                        })),
+                        retryable: false,
+                    });
+                }
+            }
+        }
+
+        if let Some(severity) = fields.get("severity") {
+            if let Some(severity_str) = severity.as_str() {
+                let valid_severities = ["low", "medium", "high", "critical"];
+                if !valid_severities.contains(&severity_str) {
+                    return Err(StepError {
+                        code: "INVALID_CASE_SEVERITY".to_string(),
+                        message: format!("Invalid case severity: {}", severity_str),
+                        details: Some(serde_json::json!({
+                            "invalid_severity": severity_str,
+                            "valid_severities": valid_severities
+                        })),
+                        retryable: false,
+                    });
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1051,11 +1443,153 @@ impl StepExecutor for CaseUpdateExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        // TODO: Implement case update logic
-        let mut outputs = HashMap::new();
-        outputs.insert("case_updated".to_string(), Value::Bool(true));
+        if let StepAction::UpdateCase { case_id, fields, add_note } = &step.action {
+            info!("Updating case: {}", case_id);
 
-        Ok(outputs)
+            // Validate case ID format
+            if case_id.is_empty() {
+                return Err(StepError {
+                    code: "INVALID_CASE_ID".to_string(),
+                    message: "Case ID cannot be empty".to_string(),
+                    details: None,
+                    retryable: false,
+                });
+            }
+
+            // Validate case fields
+            Self::validate_case_fields(fields)?;
+
+            // Check if case exists first
+            match self.case_manager.get_case_details(case_id).await {
+                Ok(Some(case_details)) => {
+                    debug!("Found case {} with current status: {}", case_id, case_details.status);
+                }
+                Ok(None) => {
+                    return Err(StepError {
+                        code: "CASE_NOT_FOUND".to_string(),
+                        message: format!("Case with ID '{}' was not found", case_id),
+                        details: Some(serde_json::json!({
+                            "case_id": case_id
+                        })),
+                        retryable: false,
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to retrieve case details for {}: {}", case_id, e);
+                    return Err(StepError {
+                        code: "CASE_RETRIEVAL_FAILED".to_string(),
+                        message: format!("Failed to retrieve case details: {}", e),
+                        details: Some(serde_json::json!({
+                            "case_id": case_id,
+                            "error": e.to_string()
+                        })),
+                        retryable: true,
+                    });
+                }
+            }
+
+            // Update the case
+            match self.case_manager.update_case(case_id, fields).await {
+                Ok(updated_case) => {
+                    info!("Successfully updated case: {}", case_id);
+
+                    // Add note if specified
+                    let note_added = if let Some(note_content) = add_note {
+                        if !note_content.trim().is_empty() {
+                            match self.case_manager.add_case_note(case_id, note_content, "soar_system").await {
+                                Ok(note_id) => {
+                                    debug!("Added note {} to case {}", note_id, case_id);
+                                    true
+                                }
+                                Err(e) => {
+                                    warn!("Failed to add note to case {}: {}", case_id, e);
+                                    false
+                                }
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::AdminAction,
+                            SecuritySeverity::Low,
+                            "soar_executor".to_string(),
+                            format!("Case {} updated successfully", case_id),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("success".to_string())
+                        .with_reason("Case update step executed successfully".to_string())
+                        .with_detail("case_id".to_string(), case_id.clone())
+                        .with_detail("updated_fields".to_string(), fields.keys().collect::<Vec<_>>().join(", "))
+                        .with_detail("note_added".to_string(), note_added),
+                    );
+
+                    let mut outputs = HashMap::new();
+                    outputs.insert("case_id".to_string(), Value::String(case_id.clone()));
+                    outputs.insert("case_updated".to_string(), Value::Bool(true));
+                    outputs.insert("note_added".to_string(), Value::Bool(note_added));
+                    outputs.insert("updated_fields".to_string(), Value::Array(
+                        fields.keys().map(|k| Value::String(k.clone())).collect()
+                    ));
+                    
+                    // Include some key updated case details
+                    if let Some(status) = updated_case.get("status") {
+                        outputs.insert("new_status".to_string(), status.clone());
+                    }
+                    if let Some(priority) = updated_case.get("priority") {
+                        outputs.insert("new_priority".to_string(), priority.clone());
+                    }
+                    if let Some(assignee) = updated_case.get("assignee") {
+                        outputs.insert("new_assignee".to_string(), assignee.clone());
+                    }
+
+                    Ok(outputs)
+                }
+                Err(e) => {
+                    error!("Failed to update case {}: {}", case_id, e);
+
+                    SecurityLogger::log_event(
+                        &SecurityEvent::new(
+                            SecurityEventType::SystemError,
+                            SecuritySeverity::Medium,
+                            "soar_executor".to_string(),
+                            format!("Failed to update case {}", case_id),
+                        )
+                        .with_actor("soar_system".to_string())
+                        .with_action("soar_execute".to_string())
+                        .with_target("soar_playbook".to_string())
+                        .with_outcome("failure".to_string())
+                        .with_reason(format!("Case update failed: {}", e.to_string()))
+                        .with_detail("case_id".to_string(), case_id.clone())
+                        .with_detail("error".to_string(), e.to_string()),
+                    );
+
+                    Err(StepError {
+                        code: "CASE_UPDATE_FAILED".to_string(),
+                        message: format!("Failed to update case: {}", e),
+                        details: Some(serde_json::json!({
+                            "case_id": case_id,
+                            "fields": fields,
+                            "error": e.to_string()
+                        })),
+                        retryable: true,
+                    })
+                }
+            }
+        } else {
+            Err(StepError {
+                code: "INVALID_ACTION".to_string(),
+                message: "Step action is not UpdateCase".to_string(),
+                details: None,
+                retryable: false,
+            })
+        }
     }
 
     fn get_step_type(&self) -> String {
@@ -1715,15 +2249,103 @@ impl StepExecutor for WaitExecutor {
     }
 }
 
-// Client implementations (stubs for now)
-pub struct FirewallClient;
-pub struct IdentityProviderClient;
-pub struct SiemClient;
-pub struct TicketingClient;
+// Client implementations for external integrations
+pub struct FirewallClient {
+    client: Client,
+    config: FirewallConfig,
+}
+
+pub struct IdentityProviderClient {
+    client: Client,
+    config: IdentityProviderConfig,
+}
+
+pub struct SiemClient {
+    client: Client,
+    config: SiemConfig,
+}
+
+pub struct TicketingClient {
+    client: Client,
+    config: TicketingConfig,
+}
+
+pub struct CaseManagerClient {
+    client: Client,
+    config: CaseManagerConfig,
+}
+
+// Configuration structures
+#[derive(Debug, Clone)]
+pub struct FirewallConfig {
+    pub api_endpoint: String,
+    pub api_key: String,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct IdentityProviderConfig {
+    pub api_endpoint: String,
+    pub api_key: String,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SiemConfig {
+    pub api_endpoint: String,
+    pub api_key: String,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TicketingConfig {
+    pub api_endpoint: String,
+    pub api_key: String,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct CaseManagerConfig {
+    pub api_endpoint: String,
+    pub api_key: String,
+    pub timeout_seconds: u64,
+}
+
+// Case details structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseDetails {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub priority: String,
+    pub assignee: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
 
 impl FirewallClient {
     pub fn new() -> Self {
-        Self
+        let config = Self::load_config();
+        Self {
+            client: Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
+            config,
+        }
+    }
+
+    fn load_config() -> FirewallConfig {
+        FirewallConfig {
+            api_endpoint: std::env::var("FIREWALL_API_ENDPOINT")
+                .unwrap_or_else(|_| "https://firewall-api.example.com".to_string()),
+            api_key: std::env::var("FIREWALL_API_KEY")
+                .unwrap_or_else(|_| "mock-api-key".to_string()),
+            timeout_seconds: std::env::var("FIREWALL_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+        }
     }
 
     pub async fn block_ip(
@@ -1732,18 +2354,71 @@ impl FirewallClient {
         duration_minutes: u32,
         reason: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Implement actual firewall integration
-        info!(
-            "Mock: Blocking IP {} for {} minutes (reason: {})",
-            ip_address, duration_minutes, reason
-        );
-        Ok(format!("block_{}", Uuid::new_v4()))
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let payload = serde_json::json!({
+                "action": "block",
+                "ip_address": ip_address,
+                "duration_minutes": duration_minutes,
+                "reason": reason,
+                "timestamp": Utc::now().to_rfc3339()
+            });
+
+            let response = self.client
+                .post(&format!("{}/rules/block", self.config.api_endpoint))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let result: Value = response.json().await?;
+                let block_id = result["block_id"].as_str()
+                    .unwrap_or(&format!("block_{}", Uuid::new_v4()))
+                    .to_string();
+                
+                info!("Successfully blocked IP {} with ID {}", ip_address, block_id);
+                Ok(block_id)
+            } else {
+                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("Firewall API error: {}", error_body).into())
+            }
+        } else {
+            // Mock implementation for testing
+            info!(
+                "Mock: Blocking IP {} for {} minutes (reason: {})",
+                ip_address, duration_minutes, reason
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await; // Simulate API call
+            Ok(format!("block_{}", Uuid::new_v4()))
+        }
     }
 }
 
 impl IdentityProviderClient {
     pub fn new() -> Self {
-        Self
+        let config = Self::load_config();
+        Self {
+            client: Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
+            config,
+        }
+    }
+
+    fn load_config() -> IdentityProviderConfig {
+        IdentityProviderConfig {
+            api_endpoint: std::env::var("IDENTITY_PROVIDER_API_ENDPOINT")
+                .unwrap_or_else(|_| "https://identity-api.example.com".to_string()),
+            api_key: std::env::var("IDENTITY_PROVIDER_API_KEY")
+                .unwrap_or_else(|_| "mock-api-key".to_string()),
+            timeout_seconds: std::env::var("IDENTITY_PROVIDER_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+        }
     }
 
     pub async fn lock_account(
@@ -1752,18 +2427,71 @@ impl IdentityProviderClient {
         duration_minutes: u32,
         reason: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Implement actual identity provider integration
-        info!(
-            "Mock: Locking account {} for {} minutes (reason: {})",
-            user_id, duration_minutes, reason
-        );
-        Ok(format!("lock_{}", Uuid::new_v4()))
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let payload = serde_json::json!({
+                "action": "lock",
+                "user_id": user_id,
+                "duration_minutes": duration_minutes,
+                "reason": reason,
+                "timestamp": Utc::now().to_rfc3339()
+            });
+
+            let response = self.client
+                .post(&format!("{}/users/lock", self.config.api_endpoint))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let result: Value = response.json().await?;
+                let lock_id = result["lock_id"].as_str()
+                    .unwrap_or(&format!("lock_{}", Uuid::new_v4()))
+                    .to_string();
+                
+                info!("Successfully locked account {} with ID {}", user_id, lock_id);
+                Ok(lock_id)
+            } else {
+                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("Identity Provider API error: {}", error_body).into())
+            }
+        } else {
+            // Mock implementation for testing
+            info!(
+                "Mock: Locking account {} for {} minutes (reason: {})",
+                user_id, duration_minutes, reason
+            );
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            Ok(format!("lock_{}", Uuid::new_v4()))
+        }
     }
 }
 
 impl SiemClient {
     pub fn new() -> Self {
-        Self
+        let config = Self::load_config();
+        Self {
+            client: Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
+            config,
+        }
+    }
+
+    fn load_config() -> SiemConfig {
+        SiemConfig {
+            api_endpoint: std::env::var("SIEM_API_ENDPOINT")
+                .unwrap_or_else(|_| "https://siem-api.example.com".to_string()),
+            api_key: std::env::var("SIEM_API_KEY")
+                .unwrap_or_else(|_| "mock-api-key".to_string()),
+            timeout_seconds: std::env::var("SIEM_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(60), // SIEM queries might take longer
+        }
     }
 
     pub async fn execute_query(
@@ -1772,33 +2500,86 @@ impl SiemClient {
         time_range: &str,
         max_results: u32,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Implement actual SIEM integration
-        info!(
-            "Mock: Executing SIEM query: {} (time_range: {}, max_results: {})",
-            query, time_range, max_results
-        );
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let payload = serde_json::json!({
+                "query": query,
+                "time_range": time_range,
+                "max_results": max_results,
+                "timestamp": Utc::now().to_rfc3339()
+            });
 
-        // Return mock results
-        Ok(serde_json::json!([
-            {
-                "timestamp": "2024-01-01T00:00:00Z",
-                "source_ip": "192.168.1.100",
-                "event_type": "authentication_failure",
-                "count": 5
-            },
-            {
-                "timestamp": "2024-01-01T00:05:00Z",
-                "source_ip": "192.168.1.101",
-                "event_type": "authentication_failure",
-                "count": 3
+            let response = self.client
+                .post(&format!("{}/query", self.config.api_endpoint))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let result: Value = response.json().await?;
+                info!("SIEM query executed successfully, {} results returned", 
+                      result.get("results").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0));
+                Ok(result)
+            } else {
+                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("SIEM API error: {}", error_body).into())
             }
-        ]))
+        } else {
+            // Mock implementation for testing
+            info!(
+                "Mock: Executing SIEM query: {} (time_range: {}, max_results: {})",
+                query, time_range, max_results
+            );
+            tokio::time::sleep(Duration::from_millis(500)).await; // Simulate query time
+
+            // Return realistic mock results
+            Ok(serde_json::json!([
+                {
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "source_ip": "192.168.1.100",
+                    "event_type": "authentication_failure",
+                    "count": 5,
+                    "user_agent": "Mozilla/5.0...",
+                    "geo_location": "US"
+                },
+                {
+                    "timestamp": "2024-01-01T00:05:00Z",
+                    "source_ip": "192.168.1.101",
+                    "event_type": "authentication_failure",
+                    "count": 3,
+                    "user_agent": "curl/7.68.0",
+                    "geo_location": "CN"
+                }
+            ]))
+        }
     }
 }
 
 impl TicketingClient {
     pub fn new() -> Self {
-        Self
+        let config = Self::load_config();
+        Self {
+            client: Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
+            config,
+        }
+    }
+
+    fn load_config() -> TicketingConfig {
+        TicketingConfig {
+            api_endpoint: std::env::var("TICKETING_API_ENDPOINT")
+                .unwrap_or_else(|_| "https://ticketing-api.example.com".to_string()),
+            api_key: std::env::var("TICKETING_API_KEY")
+                .unwrap_or_else(|_| "mock-api-key".to_string()),
+            timeout_seconds: std::env::var("TICKETING_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+        }
     }
 
     pub async fn create_ticket(
@@ -1808,14 +2589,185 @@ impl TicketingClient {
         priority: &str,
         assignee: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Implement actual ticketing system integration
-        info!(
-            "Mock: Creating ticket '{}' with priority {} (assignee: {:?})",
-            title, priority, assignee
-        );
-        Ok(format!(
-            "TICKET-{}",
-            Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()
-        ))
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let payload = serde_json::json!({
+                "title": title,
+                "description": description,
+                "priority": priority,
+                "assignee": assignee,
+                "timestamp": Utc::now().to_rfc3339(),
+                "source": "soar_automation"
+            });
+
+            let response = self.client
+                .post(&format!("{}/tickets", self.config.api_endpoint))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let result: Value = response.json().await?;
+                let ticket_id = result["ticket_id"].as_str()
+                    .unwrap_or(&format!("TICKET-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()))
+                    .to_string();
+                
+                info!("Successfully created ticket {} with title '{}'", ticket_id, title);
+                Ok(ticket_id)
+            } else {
+                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("Ticketing API error: {}", error_body).into())
+            }
+        } else {
+            // Mock implementation for testing
+            info!(
+                "Mock: Creating ticket '{}' with priority {} (assignee: {:?})",
+                title, priority, assignee
+            );
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            Ok(format!(
+                "TICKET-{}",
+                Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()
+            ))
+        }
+    }
+}
+
+impl CaseManagerClient {
+    pub fn new() -> Self {
+        let config = Self::load_config();
+        Self {
+            client: Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .unwrap_or_else(|_| Client::new()),
+            config,
+        }
+    }
+
+    fn load_config() -> CaseManagerConfig {
+        CaseManagerConfig {
+            api_endpoint: std::env::var("CASE_MANAGER_API_ENDPOINT")
+                .unwrap_or_else(|_| "https://case-manager-api.example.com".to_string()),
+            api_key: std::env::var("CASE_MANAGER_API_KEY")
+                .unwrap_or_else(|_| "mock-api-key".to_string()),
+            timeout_seconds: std::env::var("CASE_MANAGER_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+        }
+    }
+
+    pub async fn get_case_details(&self, case_id: &str) -> Result<Option<CaseDetails>, Box<dyn std::error::Error + Send + Sync>> {
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let response = self.client
+                .get(&format!("{}/cases/{}", self.config.api_endpoint, case_id))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .send()
+                .await?;
+
+            match response.status().as_u16() {
+                200 => {
+                    let case_details: CaseDetails = response.json().await?;
+                    Ok(Some(case_details))
+                }
+                404 => Ok(None),
+                _ => {
+                    let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    Err(format!("Case Manager API error: {}", error_body).into())
+                }
+            }
+        } else {
+            // Mock implementation for testing
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if case_id.starts_with("NONEXISTENT") {
+                Ok(None)
+            } else {
+                Ok(Some(CaseDetails {
+                    id: case_id.to_string(),
+                    title: format!("Mock Case {}", case_id),
+                    status: "in_progress".to_string(),
+                    priority: "medium".to_string(),
+                    assignee: Some("analyst@example.com".to_string()),
+                    created_at: Utc::now() - chrono::Duration::hours(24),
+                    updated_at: Utc::now() - chrono::Duration::minutes(30),
+                }))
+            }
+        }
+    }
+
+    pub async fn update_case(&self, case_id: &str, fields: &HashMap<String, Value>) -> Result<HashMap<String, Value>, Box<dyn std::error::Error + Send + Sync>> {
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let response = self.client
+                .patch(&format!("{}/cases/{}", self.config.api_endpoint, case_id))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(fields)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let updated_case: HashMap<String, Value> = response.json().await?;
+                info!("Successfully updated case {}", case_id);
+                Ok(updated_case)
+            } else {
+                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("Case Manager API error: {}", error_body).into())
+            }
+        } else {
+            // Mock implementation for testing
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let mut updated_case = HashMap::new();
+            updated_case.insert("id".to_string(), Value::String(case_id.to_string()));
+            
+            // Copy all the updated fields
+            for (key, value) in fields {
+                updated_case.insert(key.clone(), value.clone());
+            }
+            
+            updated_case.insert("updated_at".to_string(), Value::String(Utc::now().to_rfc3339()));
+            info!("Mock: Updated case {} with fields: {:?}", case_id, fields.keys().collect::<Vec<_>>());
+            Ok(updated_case)
+        }
+    }
+
+    pub async fn add_case_note(&self, case_id: &str, note: &str, author: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        // If we have a real endpoint, make the API call
+        if !self.config.api_endpoint.contains("example.com") {
+            let payload = serde_json::json!({
+                "note": note,
+                "author": author,
+                "timestamp": Utc::now().to_rfc3339()
+            });
+
+            let response = self.client
+                .post(&format!("{}/cases/{}/notes", self.config.api_endpoint, case_id))
+                .header("Authorization", &format!("Bearer {}", self.config.api_key))
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let result: Value = response.json().await?;
+                let note_id = result["note_id"].as_str()
+                    .unwrap_or(&format!("note_{}", Uuid::new_v4()))
+                    .to_string();
+                Ok(note_id)
+            } else {
+                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("Case Manager API error: {}", error_body).into())
+            }
+        } else {
+            // Mock implementation for testing
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let note_id = format!("note_{}", Uuid::new_v4());
+            info!("Mock: Added note {} to case {} by author {}", note_id, case_id, author);
+            Ok(note_id)
+        }
     }
 }

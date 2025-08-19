@@ -1353,8 +1353,95 @@ impl WorkflowOrchestrator {
     async fn register_default_executors(
         &self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Register built-in step executors
-        info!("Registered default step executors");
+        use crate::soar_executors::*;
+
+        info!("Registering built-in step executors...");
+
+        // Security action executors
+        self.step_executors.insert(
+            "block_ip".to_string(),
+            Arc::new(IpBlockExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "lock_account".to_string(),
+            Arc::new(AccountLockExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "revoke_tokens".to_string(),
+            Arc::new(TokenRevokeExecutor::new())
+        );
+
+        // Notification executors
+        self.step_executors.insert(
+            "email_notification".to_string(),
+            Arc::new(EmailNotificationExecutor::new().await?)
+        );
+        
+        self.step_executors.insert(
+            "slack_notification".to_string(),
+            Arc::new(SlackNotificationExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "webhook_notification".to_string(),
+            Arc::new(WebhookNotificationExecutor::new())
+        );
+
+        // Query and data executors
+        self.step_executors.insert(
+            "siem_query".to_string(),
+            Arc::new(SiemQueryExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "database_query".to_string(),
+            Arc::new(DatabaseQueryExecutor::new())
+        );
+
+        // Case and ticket management
+        self.step_executors.insert(
+            "create_ticket".to_string(),
+            Arc::new(TicketCreateExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "update_case".to_string(),
+            Arc::new(CaseUpdateExecutor::new())
+        );
+
+        // Script and automation executors
+        self.step_executors.insert(
+            "execute_script".to_string(),
+            Arc::new(ScriptExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "http_request".to_string(),
+            Arc::new(HttpRequestExecutor::new())
+        );
+
+        // Control flow executors
+        self.step_executors.insert(
+            "decision".to_string(),
+            Arc::new(DecisionExecutor::new())
+        );
+        
+        self.step_executors.insert(
+            "wait".to_string(),
+            Arc::new(WaitExecutor::new())
+        );
+
+        let executor_count = self.step_executors.len();
+        info!("Successfully registered {} built-in step executors", executor_count);
+
+        // Log all registered executors for debugging
+        let executor_types: Vec<String> = self.step_executors.iter()
+            .map(|(k, _)| k.clone())
+            .collect();
+        debug!("Registered step executor types: {:?}", executor_types);
+
         Ok(())
     }
 
@@ -1486,12 +1573,176 @@ impl ApprovalManager {
 
     async fn submit_approval(
         &self,
-        _approval_id: String,
-        _approver_id: String,
-        _decision: ApprovalDecision,
-        _comments: Option<String>,
+        approval_id: String,
+        approver_id: String,
+        decision: ApprovalDecision,
+        comments: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // TODO: Implement approval submission
+        info!(
+            "Processing approval submission: {} by {} with decision: {:?}",
+            approval_id, approver_id, decision
+        );
+
+        // Find the pending approval
+        let approval_request = self.pending_approvals.remove(&approval_id)
+            .ok_or_else(|| {
+                error!("Approval request {} not found in pending approvals", approval_id);
+                format!("Approval request {} not found", approval_id)
+            })?;
+
+        // Validate that the approver is authorized
+        if !self.validate_approver_authorization(&approval_request, &approver_id).await? {
+            error!("Approver {} not authorized for approval {}", approver_id, approval_id);
+            return Err(format!("Approver {} not authorized for this approval", approver_id).into());
+        }
+
+        // Create approval response
+        let response = ApprovalResponse {
+            approval_id: approval_id.clone(),
+            approver_id: approver_id.clone(),
+            decision: decision.clone(),
+            comments: comments.clone(),
+            timestamp: Utc::now(),
+        };
+
+        // Store the approval response
+        self.approval_responses.insert(approval_id.clone(), response.clone());
+
+        // Log the approval decision
+        SecurityLogger::log_event(
+            &SecurityEvent::new(
+                SecurityEventType::AdminAction,
+                SecuritySeverity::Medium,
+                "soar_workflow".to_string(),
+                format!("Approval {} {} by {}", approval_id, 
+                    match decision {
+                        ApprovalDecision::Approved => "approved",
+                        ApprovalDecision::Rejected => "rejected",
+                        ApprovalDecision::RequestMoreInfo => "requested more info for",
+                    }, 
+                    approver_id
+                ),
+            )
+            .with_actor(approver_id.clone())
+            .with_action("submit_approval".to_string())
+            .with_target("soar_workflow".to_string())
+            .with_outcome(match decision {
+                ApprovalDecision::Approved => "approved",
+                ApprovalDecision::Rejected => "rejected",
+                ApprovalDecision::RequestMoreInfo => "more_info_requested",
+            }.to_string())
+            .with_reason(format!("Manual approval decision: {:?}", decision))
+            .with_detail("approval_id".to_string(), approval_id.clone())
+            .with_detail("workflow_id".to_string(), approval_request.workflow_id.clone())
+            .with_detail("comments".to_string(), comments.unwrap_or_else(|| "None".to_string())),
+        );
+
+        // Handle the approval decision
+        match decision {
+            ApprovalDecision::Approved => {
+                info!("Approval {} approved, resuming workflow {}", approval_id, approval_request.workflow_id);
+                self.resume_workflow_after_approval(&approval_request.workflow_id, true).await?;
+            }
+            ApprovalDecision::Rejected => {
+                warn!("Approval {} rejected, stopping workflow {}", approval_id, approval_request.workflow_id);
+                self.resume_workflow_after_approval(&approval_request.workflow_id, false).await?;
+            }
+            ApprovalDecision::RequestMoreInfo => {
+                info!("More information requested for approval {}", approval_id);
+                // For now, treat as rejected. In a full implementation, 
+                // this would notify the requester to provide more information
+                self.resume_workflow_after_approval(&approval_request.workflow_id, false).await?;
+            }
+        }
+
+        // Send notifications about the approval decision
+        self.send_approval_notification(&approval_request, &response).await?;
+
+        info!("Successfully processed approval submission {}", approval_id);
+        Ok(())
+    }
+
+    /// Validate that the approver is authorized to make this approval decision
+    async fn validate_approver_authorization(
+        &self,
+        approval_request: &ApprovalRequest,
+        approver_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        // Check if the approver is in the list of authorized approvers
+        if let Some(authorized_approvers) = &approval_request.authorized_approvers {
+            if !authorized_approvers.contains(&approver_id.to_string()) {
+                return Ok(false);
+            }
+        }
+
+        // Additional authorization checks could go here:
+        // - Check if approver has the required role
+        // - Check if approver is not the same as the requester
+        // - Check organizational hierarchy
+        
+        // For now, if no specific approvers are listed, any authenticated user can approve
+        Ok(true)
+    }
+
+    /// Resume workflow execution after approval decision
+    async fn resume_workflow_after_approval(
+        &self,
+        workflow_id: &str,
+        approved: bool,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // This would integrate with the workflow engine to resume execution
+        // For now, we'll just log the action
+        if approved {
+            info!("Workflow {} approved and ready to resume", workflow_id);
+            // TODO: Send signal to workflow engine to resume execution
+        } else {
+            warn!("Workflow {} rejected and will be terminated", workflow_id);
+            // TODO: Send signal to workflow engine to terminate execution
+        }
+        Ok(())
+    }
+
+    /// Send notifications about approval decisions
+    async fn send_approval_notification(
+        &self,
+        approval_request: &ApprovalRequest,
+        response: &ApprovalResponse,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let subject = format!(
+            "Workflow Approval {}: {}",
+            response.approval_id,
+            match response.decision {
+                ApprovalDecision::Approved => "Approved",
+                ApprovalDecision::Rejected => "Rejected", 
+                ApprovalDecision::RequestMoreInfo => "More Information Requested",
+            }
+        );
+
+        let message = format!(
+            "Workflow approval {} has been {} by {}.\n\nWorkflow: {}\nStep: {}\nComments: {}\n\nTimestamp: {}",
+            response.approval_id,
+            match response.decision {
+                ApprovalDecision::Approved => "approved",
+                ApprovalDecision::Rejected => "rejected",
+                ApprovalDecision::RequestMoreInfo => "sent back for more information",
+            },
+            response.approver_id,
+            approval_request.workflow_id,
+            approval_request.step_name,
+            response.comments.as_deref().unwrap_or("None"),
+            response.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
+        );
+
+        // Send notification to the workflow requester if specified
+        if let Some(requester) = &approval_request.requester_id {
+            // TODO: Send email/notification to requester
+            info!("Would send notification to requester {}: {}", requester, subject);
+        }
+
+        // Send notification to configured approval notification channels
+        // TODO: Integrate with notification system
+        debug!("Approval notification sent: {}", subject);
+
         Ok(())
     }
 

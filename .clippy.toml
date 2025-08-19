@@ -3,7 +3,7 @@ cognitive-complexity-threshold = 30
 type-complexity-threshold = 200
 # Performance optimizations for faster linting
 check-private-items = false  # Skip private items for faster dev builds
-single-component-path-imports = false  # Allow for faster parsing
+# single-component-path-imports = false  # Not a valid clippy option
 single-char-binding-names-threshold = 4
 trivial-copy-size-limit = 64
 pass-by-value-size-limit = 256

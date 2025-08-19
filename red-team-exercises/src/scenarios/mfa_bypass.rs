@@ -10,6 +10,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{debug, info, warn};
+use rand;
 
 pub async fn run_mfa_scenarios(
     framework: &mut RedTeamFramework,
@@ -468,7 +469,7 @@ async fn mfa_header_bypass(
 
     for (header_name, header_value) in &bypass_headers {
         let mut headers = HeaderMap::new();
-        headers.insert(header_name, HeaderValue::from_str(header_value)?);
+        headers.insert(*header_name, HeaderValue::from_str(header_value)?);
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
         // Test on endpoint that should require MFA
@@ -507,7 +508,7 @@ async fn mfa_header_bypass(
 
     for (header_name, header_value) in &session_verify_headers {
         let mut headers = HeaderMap::new();
-        headers.insert(header_name, HeaderValue::from_str(header_value)?);
+        headers.insert(*header_name, HeaderValue::from_str(header_value)?);
 
         let session_body = json!({
             "user_id": "redteam_session_user"
@@ -670,8 +671,8 @@ async fn mfa_state_confusion(
     let mut handles = Vec::new();
     for i in 0..5 {
         // Simplified race condition test - in practice we'd need Arc<> for framework
-        let session_clone = session.clone();
-        let body_clone = verify_body.to_string();
+        let _session_clone = session.clone();
+        let _body_clone = verify_body.to_string();
 
         let handle = tokio::spawn(async move {
             // This is a simplified version - in practice we'd need proper cloning
@@ -713,7 +714,7 @@ async fn mfa_state_confusion(
 
     // Test 3: State manipulation via session
     let mut headers = HeaderMap::new();
-    headers.insert("Cookie", HeaderValue::from_str("mfa_verified=true; auth_level=2")?);
+    headers.insert(reqwest::header::COOKIE, HeaderValue::from_str("mfa_verified=true; auth_level=2")?);
 
     let session_result = framework
         .execute_attack(
