@@ -4,6 +4,24 @@
 
 This document outlines the security measures implemented in the Rust Security Workspace and provides guidelines for secure deployment and operation.
 
+## Recent Security Updates (2025-08-19)
+
+### ✅ Fixed Vulnerabilities
+- **Kubernetes Configuration**: Removed unnecessary NET_BIND_SERVICE capabilities from all containers
+- **Rust Dependencies**: 
+  - Removed vulnerable `rust-crypto` package (CVE-2022-0011)
+  - Updated `time` package to fix segmentation fault vulnerability (CVE-2020-26235)
+- **Python Dependencies**:
+  - Updated `streamlit` to ≥1.37.0 (fixes CVE-2024-42474)
+  - Updated `gunicorn` to ≥23.0.0 (fixes CVE-2024-6827, CVE-2024-1135)
+  - Updated `Pillow` to ≥10.3.0 (fixes CVE-2024-28219, CVE-2023-50447)
+
+### ⚠️ Accepted Risks
+- **RSA vulnerability (RUSTSEC-2023-0071)**: Present in unused MySQL connector, documented in deny.toml
+- **Unmaintained packages**: `paste` and `proc-macro-error` - low risk, monitoring for replacements
+
+This document outlines the security measures implemented in the Rust Security Workspace and provides guidelines for secure deployment and operation.
+
 ## Security Features
 
 ### 1. Authentication & Authorization

@@ -50,8 +50,10 @@ hex = { workspace = true }
 rand = { workspace = true }
 once_cell = { workspace = true }
 base64 = { workspace = true }
+# Common workspace dependency
+common = { path = "../common" }
 # SOAR optional dependencies
-sqlx = { workspace = true, optional = true, features = ["sqlite", "runtime-tokio-rustls"] }
+sqlx = { workspace = true, optional = true, features = ["sqlite", "runtime-tokio-rustls"], default-features = false }
 handlebars = { workspace = true, optional = true }
 lettre = { workspace = true, optional = true }
 tera = { workspace = true, optional = true }
@@ -190,7 +192,7 @@ arbitrary = { workspace = true }
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-default = ["fast-build"]  # Development-optimized defaults
+default = ["fast-build"]  # Development-optimized defaults, ML features disabled for security
 fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]

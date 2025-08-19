@@ -23,7 +23,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 # Database dependencies
-sqlx = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true, default-features = false }
 
 # Authentication dependencies
 jsonwebtoken = { workspace = true, optional = true }
@@ -50,8 +50,8 @@ common = { path = "../../common" }
 
 [features]
 default = ["auth"]
-postgres = ["dep:sqlx", "sqlx/postgres", "sqlx/any"]
-sqlite = ["dep:sqlx", "sqlx/sqlite", "sqlx/any"]
+postgres = ["dep:sqlx", "sqlx/postgres"]
+sqlite = ["dep:sqlx", "sqlx/sqlite"]
 auth = ["dep:jsonwebtoken", "dep:bcrypt"]
 docs = ["dep:utoipa", "dep:utoipa-swagger-ui"]
 monitoring = ["dep:prometheus", "dep:metrics", "dep:metrics-prometheus"]

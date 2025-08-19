@@ -18,6 +18,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 regex = { workspace = true }
 rand = { workspace = true }
+async-trait = { workspace = true }
 
 [features]
 default = []

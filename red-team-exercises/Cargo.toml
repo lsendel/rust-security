@@ -54,7 +54,7 @@ aws-sdk-sqs = "1.0"
 slack-morphism = "1.14"
 teloxide = "0.12"
 webhook = "2.1"
-rust-crypto = "0.2"
+# rust-crypto removed due to security vulnerability - use ring and modern crypto libraries instead
 ring = "0.17"
 # rust-smtp = "0.21" # Package not found, commented out
 # Common utilities (optional)

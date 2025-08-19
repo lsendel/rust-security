@@ -28,7 +28,9 @@ yanked = "deny"
 notice = "warn"
 ignore = [
     # Add specific advisories to ignore (with justification)
-    # Example: "RUSTSEC-2023-0001", # Justified: Not applicable to our use case
+    # RSA vulnerability in MySQL connector - not directly exploitable in our usage
+    # We only use PostgreSQL and SQLite, MySQL support will be removed in future version
+    "RUSTSEC-2023-0071", # RSA Marvin Attack - only affects MySQL connector we don't use
 ]
 
 [licenses]
