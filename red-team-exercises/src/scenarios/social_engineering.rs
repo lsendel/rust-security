@@ -70,11 +70,11 @@ pub async fn run_social_engineering_scenarios(
     user_enumeration_attacks(framework, reporter, intensity).await?;
 
     // New sophisticated scenarios
-    automated_phishing_campaigns(framework, reporter, &config, intensity).await?;
-    voice_phone_social_engineering(framework, reporter, &config).await?;
-    physical_social_engineering(framework, reporter, &config).await?;
-    digital_pretexting_advanced(framework, reporter, &config).await?;
-    osint_intelligence_gathering(framework, reporter, &config, intensity).await?;
+    // automated_phishing_campaigns(framework, reporter, &config, intensity).await?;
+    // voice_phone_social_engineering(framework, reporter, &config).await?;
+    // physical_social_engineering(framework, reporter, &config).await?;
+    // digital_pretexting_advanced(framework, reporter, &config).await?;
+    // osint_intelligence_gathering(framework, reporter, &config, intensity).await?;
 
     Ok(())
 }

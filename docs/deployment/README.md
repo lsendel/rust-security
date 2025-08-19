@@ -142,26 +142,46 @@ kubectl apply -f k8s/namespace.yaml
 
 ### 2. Secrets Management
 
-```bash
-# Copy secrets template
-cp k8s/secrets.yaml.template k8s/secrets.yaml
+The application's secrets are managed using Kubernetes secrets. The `k8s/secrets.yaml.template` file provides a template for these secrets.
 
-# Generate secrets
-JWT_SECRET=$(openssl rand -base64 32)
-CLIENT_CREDS="client1:$(openssl rand -base64 16);client2:$(openssl rand -base64 16)"
-SIGNING_SECRET=$(openssl rand -base64 32)
+**To create the secrets:**
 
-# Encode secrets
-echo -n "$JWT_SECRET" | base64
-echo -n "$CLIENT_CREDS" | base64
-echo -n "$SIGNING_SECRET" | base64
+1.  **Copy the template:**
 
-# Edit secrets.yaml with encoded values
-vim k8s/secrets.yaml
+    ```bash
+    cp k8s/secrets.yaml.template k8s/secrets.yaml
+    ```
 
-# Apply secrets
-kubectl apply -f k8s/secrets.yaml
-```
+2.  **Generate secret values:**
+
+    The following secrets need to be generated and base64 encoded:
+
+    -   `JWT_SECRET`: A secret key for signing JWTs.
+    -   `CLIENT_CREDENTIALS`: A list of client credentials.
+    -   `REQUEST_SIGNING_SECRET`: A secret for signing requests.
+
+    You can generate random values for these secrets using `openssl`:
+
+    ```bash
+    # Generate JWT_SECRET
+    openssl rand -base64 32
+
+    # Generate CLIENT_CREDENTIALS
+    echo -n "client1:$(openssl rand -base64 16);client2:$(openssl rand -base64 16)" | base64
+
+    # Generate REQUEST_SIGNING_SECRET
+    openssl rand -base64 32
+    ```
+
+3.  **Update `k8s/secrets.yaml`:**
+
+    Open `k8s/secrets.yaml` and replace the placeholder values with the base64-encoded values you generated.
+
+4.  **Apply the secrets:**
+
+    ```bash
+    kubectl apply -f k8s/secrets.yaml
+    ```
 
 ### 3. Deploy Infrastructure
 

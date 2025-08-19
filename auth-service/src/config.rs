@@ -48,6 +48,9 @@ pub struct AppConfig {
     // SCIM configuration
     pub scim: ScimConfig,
 
+    // Store configuration
+    pub store: StoreConfig,
+
     // Client credentials
     pub client_credentials: HashMap<String, String>,
 
@@ -203,12 +206,35 @@ impl Default for AppConfig {
             features: FeatureFlags::default(),
             oauth: OAuthConfig::default(),
             scim: ScimConfig::default(),
+            store: StoreConfig::default(),
             client_credentials: HashMap::new(),
             allowed_scopes: vec!["read".to_string(), "write".to_string()],
             // Legacy fields
             jwt_secret: "legacy".to_string(),
             token_expiry_seconds: 3600,
             rate_limit_requests_per_minute: 60,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum StoreBackend {
+    Hybrid,
+    Sql,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+pub struct StoreConfig {
+    pub backend: StoreBackend,
+    #[validate(url)]
+    pub database_url: Option<String>,
+}
+
+impl Default for StoreConfig {
+    fn default() -> Self {
+        Self {
+            backend: StoreBackend::Hybrid,
+            database_url: None,
         }
     }
 }
@@ -305,6 +331,24 @@ impl Default for ScimConfig {
     }
 }
 
+impl StoreConfig {
+    pub fn from_env() -> Self {
+        let backend_str = env::var("STORE_BACKEND").unwrap_or_else(|_| "hybrid".to_string());
+        let backend = match backend_str.to_lowercase().as_str() {
+            "sql" => StoreBackend::Sql,
+            _ => StoreBackend::Hybrid,
+        };
+        let database_url = env::var("DATABASE_URL").ok();
+
+        if backend == StoreBackend::Sql && database_url.is_none() {
+            // This is a critical configuration error, so we panic.
+            panic!("FATAL: `STORE_BACKEND` is set to `sql`, but `DATABASE_URL` is not set.");
+        }
+
+        Self { backend, database_url }
+    }
+}
+
 impl AppConfig {
     /// Load configuration from environment variables with validation
     pub fn from_env() -> Result<Self, anyhow::Error> {
@@ -343,6 +387,9 @@ impl AppConfig {
 
         // SCIM configuration
         config.scim = ScimConfig::default();
+
+        // Store Configuration
+        config.store = StoreConfig::from_env();
 
         // Client credentials (required)
         config.client_credentials = if let Ok(creds) = env::var("CLIENT_CREDENTIALS") {

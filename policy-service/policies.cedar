@@ -36,3 +36,14 @@ forbid(
     resource
 )
 unless { context.mfa_verified == true };
+
+// API Key policy
+permit(
+    principal,
+    action,
+    resource
+)
+when {
+    principal.type == "ApiKey" &&
+    context.permissions has action
+};

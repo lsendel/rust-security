@@ -52,6 +52,7 @@ This is a comprehensive Rust-based monorepo for security-focused applications. I
 - ✅ **Google OAuth**: OAuth2 integration with Google Identity Platform
 
 ### Production Features
+- ✅ **Pluggable Storage**: Choose between the default in-memory/Redis hybrid store or a persistent SQL backend.
 - ✅ **High Availability**: Redis clustering support with in-memory fallback
 - ✅ **Kubernetes Ready**: Complete K8s manifests with security policies
 - ✅ **Monitoring**: Prometheus metrics and health checks
@@ -171,7 +172,7 @@ kubectl get pods -n rust-security
 kubectl port-forward svc/auth-service 8080:8080 -n rust-security
 ```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive deployment instructions.
+See [DEPLOYMENT.md](docs/deployment/README.md) for comprehensive deployment instructions.
 
 ## 🔧 Configuration
 
@@ -197,7 +198,11 @@ EXTERNAL_BASE_URL=https://auth.example.com
 # Rate Limiting
 RATE_LIMIT_REQUESTS_PER_MINUTE=120
 
-# Redis Configuration
+# Storage Configuration
+# STORE_BACKEND=hybrid # Use 'hybrid' (default) or 'sql'
+# DATABASE_URL=postgres://user:password@host/database # Required if STORE_BACKEND=sql
+
+# Redis Configuration (used by hybrid store)
 REDIS_URL=redis://redis:6379
 
 # CORS Configuration
@@ -431,7 +436,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions, issues, or contributions:
 - Open an issue on GitHub
-- Check the [DEPLOYMENT.md](DEPLOYMENT.md) for deployment help
+- Check the [DEPLOYMENT.md](docs/deployment/README.md) for deployment help
 - Review the [SECURITY.md](SECURITY.md) for security considerations
 
 ---

@@ -46,7 +46,7 @@ impl StepExecutorRegistry {
         // Security action executors
         self.register_executor(Arc::new(IpBlockExecutor::new())).await?;
         self.register_executor(Arc::new(AccountLockExecutor::new())).await?;
-        self.register_executor(Arc::new(TokenRevokeExecutor::new())).await?;
+        self.register_executor(Arc::new(TokenRevokeExecutor::new().await)).await?;
 
         // Notification executors
         self.register_executor(Arc::new(EmailNotificationExecutor::new().await?)).await?;
@@ -321,14 +321,17 @@ impl StepExecutor for AccountLockExecutor {
     }
 }
 
+use crate::store::HybridStore;
+use common::Store;
+
 /// Token revocation step executor
 pub struct TokenRevokeExecutor {
-    token_store: Arc<crate::store::TokenStore>,
+    store: Arc<dyn Store>,
 }
 
 impl TokenRevokeExecutor {
-    pub fn new() -> Self {
-        Self { token_store: Arc::new(crate::store::TokenStore::new()) }
+    pub async fn new() -> Self {
+        Self { store: Arc::new(HybridStore::new().await) }
     }
 }
 
