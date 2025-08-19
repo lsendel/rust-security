@@ -581,7 +581,7 @@ async fn authentication_state_confusion(
 
     for (header_name, header_value) in &state_manipulation_tests {
         let mut headers = HeaderMap::new();
-        headers.insert(header_name, HeaderValue::from_str(header_value)?);
+        headers.insert(*header_name, HeaderValue::from_str(header_value)?);
 
         let result = framework
             .execute_attack(

@@ -55,7 +55,7 @@ async fn ip_spoofing_bypass(
         ("True-Client-IP", "192.0.2."),
     ];
 
-    for (header_name, ip_prefix) in ip_headers {
+    for (header_name, ip_prefix) in &ip_headers {
         let mut successful_requests = 0;
         let mut rate_limited = false;
 
@@ -63,7 +63,7 @@ async fn ip_spoofing_bypass(
         for i in 1..=20 {
             let ip = format!("{}{}", ip_prefix, i);
             let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert(header_name, reqwest::header::HeaderValue::from_str(&ip)?);
+            headers.insert(*header_name, reqwest::header::HeaderValue::from_str(&ip)?);
 
             let result = framework
                 .execute_attack(

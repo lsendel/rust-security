@@ -259,7 +259,7 @@ async fn token_introspection_bypass(
     let mut bypass_results = Vec::new();
 
     // Generate various token formats to test
-    let test_tokens = vec![
+    let static_tokens = vec![
         "tk_00000000-0000-0000-0000-000000000000", // UUID format
         "tk_11111111-1111-1111-1111-111111111111",
         "tk_admin-token-12345",
@@ -273,10 +273,11 @@ async fn token_introspection_bypass(
         "null",
         "undefined",
         "",
-        format!("tk_{}", "a".repeat(100)),   // Long token
         "../../../etc/passwd",      // Path traversal
         "'; DROP TABLE tokens; --", // SQL injection
     ];
+    let mut test_tokens: Vec<String> = static_tokens.iter().map(|s| s.to_string()).collect();
+    test_tokens.push(format!("tk_{}", "a".repeat(100)));
 
     for token in &test_tokens {
         let introspect_body = json!({
@@ -398,7 +399,7 @@ async fn admin_endpoint_access(
 
         for (header_name, header_value) in &manipulation_headers {
             let mut headers = HeaderMap::new();
-            headers.insert(header_name, HeaderValue::from_str(header_value)?);
+            headers.insert(*header_name, HeaderValue::from_str(header_value)?);
 
             let manip_result = framework
                 .execute_attack(
@@ -864,7 +865,7 @@ async fn database_enumeration_attacks(
         let mut last_successful_id = None;
 
         // Smart enumeration with exponential probing
-        let probe_points = vec![1, 10, 100, 1000, 5000, 10000];
+        let probe_points: Vec<u64> = vec![1, 10, 100, 1000, 5000, 10000];
         
         for &probe_id in &probe_points {
             if probe_id > enumeration_range {
@@ -1199,7 +1200,7 @@ async fn privilege_escalation_attacks(
     for (param_name, param_value) in &role_modifications {
         let role_body = json!({
             "user_id": "redteam_role_user",
-            param_name: param_value
+            (*param_name): param_value
         });
 
         let role_result = framework
