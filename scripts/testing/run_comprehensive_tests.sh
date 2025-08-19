@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_ROOT="/Users/lsendel/IdeaProjects/rust-security"
+PROJECT_ROOT="."
 AUTH_SERVICE_DIR="$PROJECT_ROOT/auth-service"
 COVERAGE_THRESHOLD=85
 PERFORMANCE_THRESHOLD_MS=100
@@ -75,7 +75,7 @@ PASSED_TESTS=0
 FAILED_TESTS=0
 
 # Create results directory
-RESULTS_DIR="$PROJECT_ROOT/test_results"
+RESULTS_DIR="$(pwd)/test_results"
 mkdir -p "$RESULTS_DIR"
 TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
