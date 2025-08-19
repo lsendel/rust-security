@@ -67,17 +67,17 @@ This documentation provides comprehensive guidance for the Rust Authentication S
 ```bash
 # Clone the repository
 git clone https://github.com/your-org/rust-security.git
-cd rust-security/auth-service
+cd rust-security
 
 # Set up environment
-cp .env.example .env
-# Edit .env with your configuration
+cp auth-service/.env.example auth-service/.env
+# Edit auth-service/.env with your configuration
 
 # Run with Docker
 docker-compose up -d
 
 # Or run locally
-cargo run --bin auth-service
+cargo run -p auth-service
 ```
 
 ## Support and Community

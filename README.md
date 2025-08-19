@@ -171,7 +171,7 @@ kubectl get pods -n rust-security
 kubectl port-forward svc/auth-service 8080:8080 -n rust-security
 ```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive deployment instructions.
+See [DEPLOYMENT.md](docs/deployment/README.md) for comprehensive deployment instructions.
 
 ## 🔧 Configuration
 
@@ -431,7 +431,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions, issues, or contributions:
 - Open an issue on GitHub
-- Check the [DEPLOYMENT.md](DEPLOYMENT.md) for deployment help
+- Check the [DEPLOYMENT.md](docs/deployment/README.md) for deployment help
 - Review the [SECURITY.md](SECURITY.md) for security considerations
 
 ---
