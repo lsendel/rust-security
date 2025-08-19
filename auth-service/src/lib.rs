@@ -92,6 +92,8 @@ pub mod store;
 pub mod validation;
 
 // Authentication and authorization
+pub mod api_key_endpoints;
+pub mod api_key_store;
 pub mod client_auth;
 pub mod mfa;
 pub mod otp_provider;
@@ -696,7 +698,9 @@ pub async fn invalidate_user_sessions_endpoint(
     })))
 }
 
+
 use common::Store;
+use crate::api_key_store::ApiKeyStore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -705,6 +709,7 @@ pub struct AppState {
     pub allowed_scopes: Vec<String>,
     pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<crate::backpressure::BackpressureState>,
+    pub api_key_store: ApiKeyStore,
 }
 
 // IntrospectionRecord is now common::TokenRecord, used by the Store trait.
@@ -782,9 +787,10 @@ pub async fn authorize_check(
     use crate::policy_cache::{normalize_policy_request, PolicyResponse};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    // Extract bearer token and introspect locally
-    let auth =
+    // Handle both JWT and API Key authentication
+    let auth_header =
         headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+
     let token = auth.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
         return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
@@ -794,14 +800,53 @@ pub async fn authorize_check(
         return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
     }
 
-    // Compose principal from token record
-    let principal_id = rec.sub.clone().unwrap_or_else(|| "anonymous".to_string());
-    let principal = serde_json::json!({
-        "type": "User",
-        "id": principal_id,
-        // Attach simple attrs if needed later (tenant/brand/location)
-        "attrs": {}
-    });
+
+    let (principal, mut context) = if auth_header.starts_with("Bearer ") {
+        // JWT-based authentication
+        let token = auth_header.strip_prefix("Bearer ").unwrap();
+        let rec = state.token_store.get_record(token).await?;
+        if !rec.active {
+            return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
+        }
+        let principal_id = rec.sub.clone().unwrap_or_else(|| "anonymous".to_string());
+        let principal = serde_json::json!({
+            "type": "User",
+            "id": principal_id,
+            "attrs": {}
+        });
+        (principal, req.context.unwrap_or_else(|| serde_json::json!({})))
+    } else if auth_header.starts_with("sk_live_") {
+        // API Key-based authentication
+        let api_key_str = auth_header;
+        let parts: Vec<&str> = api_key_str.split('_').collect();
+        let prefix = format!("{}_{}_", parts[0], parts[1]);
+
+        if let Ok(Some(api_key)) = state.api_key_store.get_api_key_by_prefix(&prefix).await {
+            let argon2 = argon2::Argon2::default();
+            let parsed_hash = argon2::PasswordHash::new(&api_key.hashed_key)
+                .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
+
+            if argon2.verify_password(api_key_str.as_bytes(), &parsed_hash).is_ok() {
+                let principal = serde_json::json!({
+                    "type": "ApiKey",
+                    "id": api_key.client_id,
+                    "attrs": {}
+                });
+                let mut api_key_context = req.context.unwrap_or_else(|| serde_json::json!({}));
+                if let Some(permissions) = api_key.permissions {
+                    let perms: Vec<&str> = permissions.split(',').collect();
+                    api_key_context["permissions"] = serde_json::json!(perms);
+                }
+                (principal, api_key_context)
+            } else {
+                return Err(AuthError::InvalidToken { reason: "invalid api key".to_string() });
+            }
+        } else {
+            return Err(AuthError::InvalidToken { reason: "invalid api key".to_string() });
+        }
+    } else {
+        return Err(AuthError::InvalidToken { reason: "missing or invalid authorization header".to_string() });
+    };
 
     // Context: merge provided context or default empty object
     let mut context = req.context.unwrap_or_else(|| serde_json::json!({}));
@@ -1599,8 +1644,10 @@ pub async fn issue_token(
             let client_id = cid_opt.as_ref().ok_or(AuthError::MissingClientId)?;
             let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
 
-            if crate::client_auth::authenticate_client(client_id, client_secret, Some(&ip_address))?
-            {
+            let mut legacy_authenticator = crate::client_auth::ClientAuthenticator::new();
+            legacy_authenticator.load_from_env()?;
+
+            if crate::client_auth::authenticate_client(&state.api_key_store, &legacy_authenticator, client_id, client_secret, Some(&ip_address)).await? {
                 // Log successful authentication attempt
                 SecurityLogger::log_auth_attempt(
                     client_id,
@@ -2376,6 +2423,7 @@ pub fn app(state: AppState) -> Router {
         .merge(crate::scim::router());
 
     // Admin-protected routes (require admin authentication and authorization)
+    let api_key_router = crate::api_key_endpoints::router(state.api_key_store.clone());
     let admin_router = Router::new()
         .route("/metrics", get(crate::metrics::metrics_handler))
         .route("/admin/health", get(admin_health))
@@ -2388,6 +2436,7 @@ pub fn app(state: AppState) -> Router {
         .route("/admin/policy-cache/stats", get(get_policy_cache_stats))
         .route("/admin/policy-cache/clear", post(clear_policy_cache))
         .route("/admin/policy-cache/invalidate", post(invalidate_policy_cache))
+        .nest("/admin/api-keys", api_key_router)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             crate::admin_middleware::admin_auth_middleware,

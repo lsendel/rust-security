@@ -85,6 +85,13 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(auth_service::backpressure::BackpressureState::new(backpressure_config));
     tracing::info!("Backpressure system initialized");
 
+    // Initialize API key store
+    let api_key_db_url = std::env::var("API_KEY_DATABASE_URL")
+        .unwrap_or_else(|_| "sqlite:api_keys.db".to_string());
+    let api_key_store = auth_service::api_key_store::ApiKeyStore::new(&api_key_db_url)
+        .await
+        .expect("Failed to initialize API key store");
+
     // Create application state
     let app_state = AppState {
         store,
@@ -92,6 +99,7 @@ async fn main() -> anyhow::Result<()> {
         allowed_scopes: cfg.allowed_scopes.clone(),
         policy_cache,
         backpressure_state,
+        api_key_store,
     };
 
     // Build application with OpenAPI documentation

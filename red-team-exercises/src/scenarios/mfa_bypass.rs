@@ -468,7 +468,7 @@ async fn mfa_header_bypass(
 
     for (header_name, header_value) in &bypass_headers {
         let mut headers = HeaderMap::new();
-        headers.insert(header_name, HeaderValue::from_str(header_value)?);
+        headers.insert(*header_name, HeaderValue::from_str(header_value)?);
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
         // Test on endpoint that should require MFA
@@ -507,7 +507,7 @@ async fn mfa_header_bypass(
 
     for (header_name, header_value) in &session_verify_headers {
         let mut headers = HeaderMap::new();
-        headers.insert(header_name, HeaderValue::from_str(header_value)?);
+        headers.insert(*header_name, HeaderValue::from_str(header_value)?);
 
         let session_body = json!({
             "user_id": "redteam_session_user"
