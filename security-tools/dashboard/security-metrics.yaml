@@ -1,0 +1,275 @@
+# Security Metrics Dashboard Configuration
+# Real-time security monitoring and alerting
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-metrics-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - '/etc/prometheus/security-rules.yml'
+    
+    scrape_configs:
+      - job_name: 'security-metrics'
+        static_configs:
+          - targets:
+            - auth-service:9090
+            - policy-service:9090
+            - redis:9121
+        
+      - job_name: 'vulnerability-scanner'
+        scrape_interval: 5m
+        static_configs:
+          - targets:
+            - trivy-exporter:9090
+            
+      - job_name: 'audit-logs'
+        static_configs:
+          - targets:
+            - audit-exporter:9090
+
+  security-rules.yml: |
+    groups:
+      - name: security_alerts
+        interval: 30s
+        rules:
+          # Critical vulnerability detected
+          - alert: CriticalVulnerability
+            expr: vulnerability_severity{severity="critical"} > 0
+            for: 1m
+            labels:
+              severity: critical
+              team: security
+            annotations:
+              summary: "Critical vulnerability detected"
+              description: "{{ $labels.package }} has a critical vulnerability: {{ $labels.cve }}"
+          
+          # Authentication failures spike
+          - alert: AuthenticationFailureSpike
+            expr: rate(auth_failures_total[5m]) > 10
+            for: 2m
+            labels:
+              severity: high
+              team: security
+            annotations:
+              summary: "High rate of authentication failures"
+              description: "Authentication failures increased to {{ $value }} per second"
+          
+          # Unauthorized access attempts
+          - alert: UnauthorizedAccess
+            expr: unauthorized_access_attempts > 5
+            for: 1m
+            labels:
+              severity: high
+              team: security
+            annotations:
+              summary: "Multiple unauthorized access attempts detected"
+              description: "{{ $value }} unauthorized access attempts from {{ $labels.source_ip }}"
+          
+          # Suspicious network activity
+          - alert: SuspiciousNetworkActivity
+            expr: rate(suspicious_connections[5m]) > 3
+            for: 5m
+            labels:
+              severity: medium
+              team: security
+            annotations:
+              summary: "Suspicious network activity detected"
+              description: "Unusual network patterns detected from {{ $labels.source }}"
+          
+          # Rate limiting triggered
+          - alert: RateLimitExceeded
+            expr: rate_limit_exceeded_total > 100
+            for: 5m
+            labels:
+              severity: medium
+              team: operations
+            annotations:
+              summary: "Rate limits being exceeded"
+              description: "{{ $labels.endpoint }} rate limit exceeded {{ $value }} times"
+          
+          # Certificate expiration warning
+          - alert: CertificateExpiringSoon
+            expr: cert_expiry_days < 30
+            for: 1h
+            labels:
+              severity: warning
+              team: operations
+            annotations:
+              summary: "Certificate expiring soon"
+              description: "Certificate {{ $labels.cert_name }} expires in {{ $value }} days"
+          
+          # Security scan failures
+          - alert: SecurityScanFailed
+            expr: security_scan_failures > 0
+            for: 10m
+            labels:
+              severity: warning
+              team: security
+            annotations:
+              summary: "Security scan failed"
+              description: "Security scan {{ $labels.scan_type }} failed with error: {{ $labels.error }}"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard
+  namespace: monitoring
+data:
+  security-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Security Metrics Dashboard",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Vulnerability Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(vulnerability_count) by (severity)"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Authentication Metrics",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(auth_success_total[5m])",
+                "legendFormat": "Success"
+              },
+              {
+                "expr": "rate(auth_failures_total[5m])",
+                "legendFormat": "Failures"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Security Events Timeline",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "security_events_total",
+                "legendFormat": "{{ event_type }}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 18, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Rate Limiting",
+            "type": "heatmap",
+            "targets": [
+              {
+                "expr": "rate_limit_hits"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 9, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Active Threats",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "active_threats{severity!=\"\"}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 9, "x": 9, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Compliance Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "compliance_score"
+              }
+            ],
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "green", "value": 90}
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "title": "Security Score",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "security_score"
+              }
+            ],
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 4},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 60},
+                {"color": "green", "value": 80}
+              ]
+            }
+          },
+          {
+            "id": 8,
+            "title": "Dependency Health",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "dependency_health_status"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8}
+          },
+          {
+            "id": 9,
+            "title": "Incident Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, incident_response_time_bucket)",
+                "legendFormat": "P95"
+              },
+              {
+                "expr": "histogram_quantile(0.50, incident_response_time_bucket)",
+                "legendFormat": "P50"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 10,
+            "title": "Security Alerts",
+            "type": "alertlist",
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          }
+        ],
+        "refresh": "10s",
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "timepicker": {
+          "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+        },
+        "timezone": "browser",
+        "version": 1
+      }
+    }

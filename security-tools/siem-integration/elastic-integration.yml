@@ -1,0 +1,446 @@
+# SIEM Integration Configuration - Elastic Stack
+# Configures log shipping and security event correlation
+
+version: '3.8'
+
+services:
+  # Elasticsearch for log storage and searching
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: security-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=changeme_secure_password
+      - xpack.security.enrollment.enabled=true
+      - xpack.license.self_generated.type=basic
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config:/usr/share/elasticsearch/config:ro
+    ports:
+      - "9200:9200"
+    networks:
+      - security-monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  # Kibana for visualization and dashboards
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    container_name: security-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme_secure_password
+      - xpack.security.enabled=true
+    ports:
+      - "5601:5601"
+    networks:
+      - security-monitoring
+    depends_on:
+      - elasticsearch
+    volumes:
+      - ./kibana/config:/usr/share/kibana/config:ro
+
+  # Logstash for log processing and enrichment
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.0
+    container_name: security-logstash
+    environment:
+      - xpack.monitoring.elasticsearch.hosts=http://elasticsearch:9200
+      - xpack.monitoring.elasticsearch.username=elastic
+      - xpack.monitoring.elasticsearch.password=changeme_secure_password
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/patterns:/usr/share/logstash/patterns:ro
+    ports:
+      - "5044:5044"  # Beats input
+      - "9600:9600"  # Logstash monitoring
+    networks:
+      - security-monitoring
+    depends_on:
+      - elasticsearch
+
+  # Filebeat for log shipping
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.0
+    container_name: security-filebeat
+    user: root
+    environment:
+      - setup.kibana.host=kibana:5601
+      - output.elasticsearch.hosts=["elasticsearch:9200"]
+      - output.elasticsearch.username=elastic
+      - output.elasticsearch.password=changeme_secure_password
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log:/var/log:ro
+      - filebeat_data:/usr/share/filebeat/data
+    networks:
+      - security-monitoring
+    depends_on:
+      - logstash
+
+  # Metricbeat for system metrics
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:8.15.0
+    container_name: security-metricbeat
+    user: root
+    environment:
+      - setup.kibana.host=kibana:5601
+      - output.elasticsearch.hosts=["elasticsearch:9200"]
+      - output.elasticsearch.username=elastic
+      - output.elasticsearch.password=changeme_secure_password
+    volumes:
+      - ./metricbeat/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
+      - /proc:/hostfs/proc:ro
+      - /:/hostfs:ro
+    networks:
+      - security-monitoring
+    depends_on:
+      - elasticsearch
+
+  # Auditbeat for security events
+  auditbeat:
+    image: docker.elastic.co/beats/auditbeat:8.15.0
+    container_name: security-auditbeat
+    user: root
+    pid: host
+    cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_READ
+    environment:
+      - setup.kibana.host=kibana:5601
+      - output.elasticsearch.hosts=["elasticsearch:9200"]
+      - output.elasticsearch.username=elastic
+      - output.elasticsearch.password=changeme_secure_password
+    volumes:
+      - ./auditbeat/auditbeat.yml:/usr/share/auditbeat/auditbeat.yml:ro
+    networks:
+      - security-monitoring
+    depends_on:
+      - elasticsearch
+
+  # SIEM Detection Engine (Custom)
+  siem-engine:
+    build:
+      context: ./siem-engine
+      dockerfile: Dockerfile
+    container_name: security-siem-engine
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=changeme_secure_password
+      - ALERT_WEBHOOK_URL=http://alertmanager:9093/api/v1/alerts
+    volumes:
+      - ./siem-engine/rules:/app/rules:ro
+      - ./siem-engine/config:/app/config:ro
+    networks:
+      - security-monitoring
+    depends_on:
+      - elasticsearch
+      - logstash
+
+  # AlertManager for security alerts
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: security-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - security-monitoring
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+
+volumes:
+  elasticsearch_data:
+    driver: local
+  filebeat_data:
+    driver: local
+
+networks:
+  security-monitoring:
+    driver: bridge
+
+---
+# Filebeat configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+data:
+  filebeat.yml: |
+    filebeat.inputs:
+    # Security logs from applications
+    - type: log
+      enabled: true
+      paths:
+        - /var/log/auth-service/*.log
+        - /var/log/policy-service/*.log
+        - /var/log/security/*.log
+      fields:
+        service: security-services
+        environment: production
+      fields_under_root: true
+      multiline.pattern: '^\d{4}-\d{2}-\d{2}'
+      multiline.negate: true
+      multiline.match: after
+      
+    # Container logs
+    - type: container
+      enabled: true
+      paths:
+        - /var/lib/docker/containers/*/*.log
+      processors:
+        - add_docker_metadata:
+            host: "unix:///var/run/docker.sock"
+            
+    # System authentication logs
+    - type: log
+      enabled: true
+      paths:
+        - /var/log/auth.log
+        - /var/log/secure
+      fields:
+        log_type: authentication
+        
+    # Audit logs
+    - type: log
+      enabled: true
+      paths:
+        - /var/log/audit/audit.log
+      fields:
+        log_type: audit
+
+    # Output to Logstash for processing
+    output.logstash:
+      hosts: ["logstash:5044"]
+      
+    # Enable security modules
+    modules:
+      - module: security
+        access:
+          enabled: true
+        auth:
+          enabled: true
+
+    # Processors for enrichment
+    processors:
+      - add_host_metadata:
+          when.not.contains.tags: forwarded
+      - add_cloud_metadata: ~
+      - add_docker_metadata: ~
+      - add_kubernetes_metadata: ~
+      - timestamp:
+          field: json.timestamp
+          layouts:
+            - '2006-01-02T15:04:05.000Z'
+            - '2006-01-02T15:04:05Z'
+
+---
+# Logstash pipeline configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+data:
+  security-pipeline.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+    }
+    
+    filter {
+      # Parse JSON logs
+      if [fields][service] == "security-services" {
+        json {
+          source => "message"
+        }
+        
+        # Extract security event fields
+        if [event_type] {
+          mutate {
+            add_tag => ["security_event"]
+          }
+        }
+        
+        # Enrich with threat intelligence
+        if [source_ip] {
+          cidr {
+            address => ["%{source_ip}"]
+            network => ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+            add_tag => ["internal_ip"]
+          }
+          
+          # GeoIP enrichment
+          geoip {
+            source => "source_ip"
+            target => "geoip"
+          }
+        }
+        
+        # Detect suspicious patterns
+        if [message] =~ /(?i)(failed|error|unauthorized|denied|blocked)/ {
+          mutate {
+            add_tag => ["security_alert"]
+          }
+        }
+        
+        # Add severity based on keywords
+        if [message] =~ /(?i)(critical|emergency|fatal)/ {
+          mutate {
+            add_field => { "severity" => "critical" }
+          }
+        } else if [message] =~ /(?i)(error|warning|fail)/ {
+          mutate {
+            add_field => { "severity" => "high" }
+          }
+        } else {
+          mutate {
+            add_field => { "severity" => "info" }
+          }
+        }
+      }
+      
+      # Process authentication logs
+      if [fields][log_type] == "authentication" {
+        grok {
+          match => { 
+            "message" => "%{SYSLOGTIMESTAMP:timestamp} %{HOSTNAME:hostname} %{WORD:service}: %{GREEDYDATA:auth_message}"
+          }
+        }
+        
+        if "Failed password" in [auth_message] {
+          mutate {
+            add_tag => ["failed_authentication"]
+            add_field => { "severity" => "high" }
+          }
+        }
+      }
+      
+      # Process audit logs
+      if [fields][log_type] == "audit" {
+        grok {
+          match => {
+            "message" => "type=%{WORD:audit_type} msg=audit\(%{NUMBER:audit_id}:%{NUMBER:audit_subid}\): %{GREEDYDATA:audit_data}"
+          }
+        }
+        
+        kv {
+          source => "audit_data"
+          field_split => " "
+          value_split => "="
+        }
+      }
+      
+      # Add timestamp
+      date {
+        match => [ "timestamp", "MMM dd HH:mm:ss", "MMM  d HH:mm:ss" ]
+      }
+    }
+    
+    output {
+      elasticsearch {
+        hosts => ["elasticsearch:9200"]
+        user => "elastic"
+        password => "changeme_secure_password"
+        index => "security-logs-%{+YYYY.MM.dd}"
+        template_name => "security-logs"
+      }
+      
+      # Send critical alerts to external systems
+      if "security_alert" in [tags] and [severity] == "critical" {
+        http {
+          url => "http://alertmanager:9093/api/v1/alerts"
+          http_method => "post"
+          content_type => "application/json"
+          mapping => {
+            "alerts" => [{
+              "labels" => {
+                "alertname" => "SecurityEvent"
+                "severity" => "%{severity}"
+                "service" => "%{[fields][service]}"
+                "instance" => "%{host}"
+              }
+              "annotations" => {
+                "summary" => "Security event detected"
+                "description" => "%{message}"
+              }
+            }]
+          }
+        }
+      }
+    }
+
+---
+# Security alerting rules
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-alert-rules
+data:
+  security-rules.yml: |
+    rules:
+      # Authentication anomalies
+      - name: "Multiple Failed Logins"
+        query: "fields.log_type:authentication AND failed_authentication:true"
+        threshold: 5
+        window: "5m"
+        severity: "high"
+        description: "Multiple failed authentication attempts detected"
+        
+      - name: "Unusual Login Location"
+        query: "fields.log_type:authentication AND geoip.country_name:(NOT 'United States')"
+        threshold: 1
+        window: "1m"
+        severity: "medium"
+        description: "Login attempt from unusual geographic location"
+        
+      # System security events
+      - name: "Privilege Escalation"
+        query: "audit_type:USER_CMD AND (cmd:sudo OR cmd:su)"
+        threshold: 10
+        window: "10m"
+        severity: "high"
+        description: "Unusual privilege escalation activity"
+        
+      - name: "File Integrity Violation"
+        query: "event_type:file_integrity_violation"
+        threshold: 1
+        window: "1m"
+        severity: "critical"
+        description: "Critical file modification detected"
+        
+      # Network security
+      - name: "Suspicious Network Activity"
+        query: "event_type:network_anomaly"
+        threshold: 5
+        window: "5m"
+        severity: "medium"
+        description: "Anomalous network traffic patterns"
+        
+      # Application security
+      - name: "High Error Rate"
+        query: "severity:error"
+        threshold: 50
+        window: "5m"
+        severity: "medium"
+        description: "Elevated error rate indicating potential issues"
+        
+      - name: "Security Scanner Detection"
+        query: "message:*nikto* OR message:*nmap* OR message:*sqlmap*"
+        threshold: 1
+        window: "1m"
+        severity: "high"
+        description: "Security scanning tools detected"
