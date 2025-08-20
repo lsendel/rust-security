@@ -1,0 +1,473 @@
+{
+  "mitre_attack_mappings": {
+    "APT1": {
+      "group_id": "G0006",
+      "aliases": ["Comment Crew", "Comment Group", "Comment Panda"],
+      "tactics": [
+        {
+          "tactic": "Initial Access",
+          "techniques": [
+            {
+              "technique_id": "T1566.001",
+              "technique_name": "Spearphishing Attachment",
+              "description": "APT1 uses spearphishing emails with malicious attachments"
+            }
+          ]
+        },
+        {
+          "tactic": "Persistence",
+          "techniques": [
+            {
+              "technique_id": "T1053.005",
+              "technique_name": "Scheduled Task/Job",
+              "description": "Creates scheduled tasks for persistence"
+            }
+          ]
+        },
+        {
+          "tactic": "Privilege Escalation",
+          "techniques": [
+            {
+              "technique_id": "T1055",
+              "technique_name": "Process Injection",
+              "description": "Injects code into legitimate processes"
+            }
+          ]
+        },
+        {
+          "tactic": "Defense Evasion",
+          "techniques": [
+            {
+              "technique_id": "T1027",
+              "technique_name": "Obfuscated Files or Information",
+              "description": "Uses various encoding schemes to obfuscate malware"
+            }
+          ]
+        },
+        {
+          "tactic": "Credential Access",
+          "techniques": [
+            {
+              "technique_id": "T1003.001",
+              "technique_name": "LSASS Memory",
+              "description": "Dumps LSASS memory to extract credentials"
+            }
+          ]
+        },
+        {
+          "tactic": "Discovery",
+          "techniques": [
+            {
+              "technique_id": "T1083",
+              "technique_name": "File and Directory Discovery",
+              "description": "Searches for specific file types and directories"
+            }
+          ]
+        },
+        {
+          "tactic": "Lateral Movement",
+          "techniques": [
+            {
+              "technique_id": "T1021.001",
+              "technique_name": "Remote Desktop Protocol",
+              "description": "Uses RDP for lateral movement"
+            }
+          ]
+        },
+        {
+          "tactic": "Collection",
+          "techniques": [
+            {
+              "technique_id": "T1560.001",
+              "technique_name": "Archive Collected Data",
+              "description": "Archives collected data for exfiltration"
+            }
+          ]
+        },
+        {
+          "tactic": "Command and Control",
+          "techniques": [
+            {
+              "technique_id": "T1071.001",
+              "technique_name": "Web Protocols",
+              "description": "Uses HTTP/HTTPS for C2 communication"
+            }
+          ]
+        },
+        {
+          "tactic": "Exfiltration",
+          "techniques": [
+            {
+              "technique_id": "T1041",
+              "technique_name": "Exfiltration Over C2 Channel",
+              "description": "Exfiltrates data over established C2 channels"
+            }
+          ]
+        }
+      ]
+    },
+    "Lazarus": {
+      "group_id": "G0032",
+      "aliases": ["HIDDEN COBRA", "Lazarus Group", "ZINC"],
+      "tactics": [
+        {
+          "tactic": "Initial Access",
+          "techniques": [
+            {
+              "technique_id": "T1566.001",
+              "technique_name": "Spearphishing Attachment",
+              "description": "Uses weaponized documents in spearphishing campaigns"
+            },
+            {
+              "technique_id": "T1190",
+              "technique_name": "Exploit Public-Facing Application",
+              "description": "Exploits vulnerabilities in public-facing applications"
+            }
+          ]
+        },
+        {
+          "tactic": "Execution",
+          "techniques": [
+            {
+              "technique_id": "T1059.003",
+              "technique_name": "Windows Command Shell",
+              "description": "Uses cmd.exe for command execution"
+            }
+          ]
+        },
+        {
+          "tactic": "Persistence",
+          "techniques": [
+            {
+              "technique_id": "T1547.001",
+              "technique_name": "Registry Run Keys / Startup Folder",
+              "description": "Uses registry run keys for persistence"
+            }
+          ]
+        },
+        {
+          "tactic": "Defense Evasion",
+          "techniques": [
+            {
+              "technique_id": "T1055",
+              "technique_name": "Process Injection",
+              "description": "Injects malicious code into legitimate processes"
+            },
+            {
+              "technique_id": "T1027.002",
+              "technique_name": "Software Packing",
+              "description": "Uses packers to obfuscate malware"
+            }
+          ]
+        },
+        {
+          "tactic": "Credential Access",
+          "techniques": [
+            {
+              "technique_id": "T1003",
+              "technique_name": "OS Credential Dumping",
+              "description": "Dumps credentials from operating system"
+            }
+          ]
+        },
+        {
+          "tactic": "Discovery",
+          "techniques": [
+            {
+              "technique_id": "T1057",
+              "technique_name": "Process Discovery",
+              "description": "Enumerates running processes"
+            }
+          ]
+        },
+        {
+          "tactic": "Lateral Movement",
+          "techniques": [
+            {
+              "technique_id": "T1021.002",
+              "technique_name": "SMB/Windows Admin Shares",
+              "description": "Uses admin shares for lateral movement"
+            }
+          ]
+        },
+        {
+          "tactic": "Collection",
+          "techniques": [
+            {
+              "technique_id": "T1005",
+              "technique_name": "Data from Local System",
+              "description": "Collects data from local system"
+            }
+          ]
+        },
+        {
+          "tactic": "Command and Control",
+          "techniques": [
+            {
+              "technique_id": "T1071.001",
+              "technique_name": "Web Protocols",
+              "description": "Uses HTTPS for C2 communication"
+            }
+          ]
+        },
+        {
+          "tactic": "Exfiltration",
+          "techniques": [
+            {
+              "technique_id": "T1041",
+              "technique_name": "Exfiltration Over C2 Channel",
+              "description": "Exfiltrates data through C2 channels"
+            }
+          ]
+        },
+        {
+          "tactic": "Impact",
+          "techniques": [
+            {
+              "technique_id": "T1485",
+              "technique_name": "Data Destruction",
+              "description": "Destroys data as part of destructive attacks"
+            },
+            {
+              "technique_id": "T1486",
+              "technique_name": "Data Encrypted for Impact",
+              "description": "Encrypts data for ransomware attacks"
+            }
+          ]
+        }
+      ]
+    },
+    "APT28": {
+      "group_id": "G0007",
+      "aliases": ["Fancy Bear", "Pawn Storm", "Sofacy", "Sednit"],
+      "tactics": [
+        {
+          "tactic": "Initial Access",
+          "techniques": [
+            {
+              "technique_id": "T1566.001",
+              "technique_name": "Spearphishing Attachment",
+              "description": "Uses malicious attachments in targeted emails"
+            },
+            {
+              "technique_id": "T1566.002",
+              "technique_name": "Spearphishing Link",
+              "description": "Uses malicious links in spearphishing emails"
+            }
+          ]
+        },
+        {
+          "tactic": "Execution",
+          "techniques": [
+            {
+              "technique_id": "T1059.003",
+              "technique_name": "Windows Command Shell",
+              "description": "Uses command shell for execution"
+            },
+            {
+              "technique_id": "T1059.001",
+              "technique_name": "PowerShell",
+              "description": "Uses PowerShell for various malicious activities"
+            }
+          ]
+        },
+        {
+          "tactic": "Persistence",
+          "techniques": [
+            {
+              "technique_id": "T1547.001",
+              "technique_name": "Registry Run Keys / Startup Folder",
+              "description": "Uses registry modifications for persistence"
+            }
+          ]
+        },
+        {
+          "tactic": "Defense Evasion",
+          "techniques": [
+            {
+              "technique_id": "T1027",
+              "technique_name": "Obfuscated Files or Information",
+              "description": "Obfuscates malware and command execution"
+            }
+          ]
+        },
+        {
+          "tactic": "Credential Access",
+          "techniques": [
+            {
+              "technique_id": "T1003.001",
+              "technique_name": "LSASS Memory",
+              "description": "Extracts credentials from LSASS memory"
+            }
+          ]
+        },
+        {
+          "tactic": "Discovery",
+          "techniques": [
+            {
+              "technique_id": "T1082",
+              "technique_name": "System Information Discovery",
+              "description": "Gathers system information"
+            }
+          ]
+        },
+        {
+          "tactic": "Lateral Movement",
+          "techniques": [
+            {
+              "technique_id": "T1021.002",
+              "technique_name": "SMB/Windows Admin Shares",
+              "description": "Uses SMB for lateral movement"
+            }
+          ]
+        },
+        {
+          "tactic": "Collection",
+          "techniques": [
+            {
+              "technique_id": "T1005",
+              "technique_name": "Data from Local System",
+              "description": "Collects data from compromised systems"
+            }
+          ]
+        },
+        {
+          "tactic": "Command and Control",
+          "techniques": [
+            {
+              "technique_id": "T1071.001",
+              "technique_name": "Web Protocols",
+              "description": "Uses HTTP/HTTPS for C2"
+            }
+          ]
+        },
+        {
+          "tactic": "Exfiltration",
+          "techniques": [
+            {
+              "technique_id": "T1041",
+              "technique_name": "Exfiltration Over C2 Channel",
+              "description": "Exfiltrates data over C2 channels"
+            }
+          ]
+        }
+      ]
+    },
+    "APT29": {
+      "group_id": "G0016",
+      "aliases": ["Cozy Bear", "The Dukes", "YTTRIUM"],
+      "tactics": [
+        {
+          "tactic": "Initial Access",
+          "techniques": [
+            {
+              "technique_id": "T1566.001",
+              "technique_name": "Spearphishing Attachment",
+              "description": "Uses sophisticated spearphishing attachments"
+            },
+            {
+              "technique_id": "T1195.002",
+              "technique_name": "Compromise Software Supply Chain",
+              "description": "Compromises software supply chain"
+            }
+          ]
+        },
+        {
+          "tactic": "Execution",
+          "techniques": [
+            {
+              "technique_id": "T1059.001",
+              "technique_name": "PowerShell",
+              "description": "Uses PowerShell extensively"
+            }
+          ]
+        },
+        {
+          "tactic": "Persistence",
+          "techniques": [
+            {
+              "technique_id": "T1078",
+              "technique_name": "Valid Accounts",
+              "description": "Uses compromised valid accounts"
+            }
+          ]
+        },
+        {
+          "tactic": "Defense Evasion",
+          "techniques": [
+            {
+              "technique_id": "T1027",
+              "technique_name": "Obfuscated Files or Information",
+              "description": "Uses advanced obfuscation techniques"
+            },
+            {
+              "technique_id": "T1055",
+              "technique_name": "Process Injection",
+              "description": "Injects into legitimate processes"
+            }
+          ]
+        },
+        {
+          "tactic": "Credential Access",
+          "techniques": [
+            {
+              "technique_id": "T1003",
+              "technique_name": "OS Credential Dumping",
+              "description": "Dumps OS credentials"
+            }
+          ]
+        },
+        {
+          "tactic": "Discovery",
+          "techniques": [
+            {
+              "technique_id": "T1083",
+              "technique_name": "File and Directory Discovery",
+              "description": "Discovers files and directories"
+            }
+          ]
+        },
+        {
+          "tactic": "Lateral Movement",
+          "techniques": [
+            {
+              "technique_id": "T1021.006",
+              "technique_name": "Windows Remote Management",
+              "description": "Uses WinRM for lateral movement"
+            }
+          ]
+        },
+        {
+          "tactic": "Collection",
+          "techniques": [
+            {
+              "technique_id": "T1005",
+              "technique_name": "Data from Local System",
+              "description": "Collects local data"
+            }
+          ]
+        },
+        {
+          "tactic": "Command and Control",
+          "techniques": [
+            {
+              "technique_id": "T1071.001",
+              "technique_name": "Web Protocols",
+              "description": "Uses web protocols for C2"
+            }
+          ]
+        },
+        {
+          "tactic": "Exfiltration",
+          "techniques": [
+            {
+              "technique_id": "T1041",
+              "technique_name": "Exfiltration Over C2 Channel",
+              "description": "Exfiltrates over C2 channels"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

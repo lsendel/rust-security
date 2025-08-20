@@ -1,0 +1,97 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "name": "Block Untrusted Devices",
+    "description": "Deny access from devices that are not compliant or untrusted",
+    "conditions": [
+      {
+        "field": "device.compliance",
+        "operator": "==",
+        "value": "NonCompliant"
+      }
+    ],
+    "action": "Deny",
+    "priority": 1,
+    "enabled": true,
+    "created_at": "2025-08-20T00:00:00Z"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "name": "Require MFA for Admin Access",
+    "description": "Challenge administrative access without MFA",
+    "conditions": [
+      {
+        "field": "resource.type",
+        "operator": "==",
+        "value": "Admin"
+      },
+      {
+        "field": "user.mfa_enabled",
+        "operator": "==",
+        "value": "false"
+      }
+    ],
+    "action": "Challenge",
+    "priority": 2,
+    "enabled": true,
+    "created_at": "2025-08-20T00:00:00Z"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "name": "Low Trust Database Access",
+    "description": "Monitor database access with low trust scores",
+    "conditions": [
+      {
+        "field": "resource.type",
+        "operator": "==",
+        "value": "Database"
+      },
+      {
+        "field": "trust_score",
+        "operator": "<",
+        "value": "0.6"
+      }
+    ],
+    "action": "Monitor",
+    "priority": 3,
+    "enabled": true,
+    "created_at": "2025-08-20T00:00:00Z"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440004",
+    "name": "Block Quarantined Devices",
+    "description": "Absolutely deny access from quarantined devices",
+    "conditions": [
+      {
+        "field": "device.compliance",
+        "operator": "==",
+        "value": "Quarantined"
+      }
+    ],
+    "action": "Deny",
+    "priority": 0,
+    "enabled": true,
+    "created_at": "2025-08-20T00:00:00Z"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440005",
+    "name": "Finance Department Restrictions",
+    "description": "Enhanced verification for finance department access",
+    "conditions": [
+      {
+        "field": "user.department",
+        "operator": "==",
+        "value": "Finance"
+      },
+      {
+        "field": "trust_score",
+        "operator": "<",
+        "value": "0.8"
+      }
+    ],
+    "action": "Challenge",
+    "priority": 4,
+    "enabled": true,
+    "created_at": "2025-08-20T00:00:00Z"
+  }
+]

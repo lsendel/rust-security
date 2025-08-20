@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  zero-trust-engine:
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      - RUST_LOG=info
+      - ZERO_TRUST_DB_URL=postgresql://zt_user:zt_password@postgres:5432/zerotrust
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./policies:/app/policies:ro
+    networks:
+      - zero-trust-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=zerotrust
+      - POSTGRES_USER=zt_user
+      - POSTGRES_PASSWORD=zt_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - zero-trust-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass zt_redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - zero-trust-network
+
+  # Zero Trust Proxy for service protection
+  zero-trust-proxy:
+    image: envoyproxy/envoy:v1.27-latest
+    ports:
+      - "8080:8080"
+      - "9901:9901"  # Admin interface
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml
+    depends_on:
+      - zero-trust-engine
+    networks:
+      - zero-trust-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  zero-trust-network:
+    driver: bridge
