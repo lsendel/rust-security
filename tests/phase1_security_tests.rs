@@ -6,15 +6,14 @@ impl RegressionTestSuite {
     /// Test health endpoints for both services
     pub async fn test_health_endpoints(&mut self) {
         println!("\n🔍 Phase 1: Critical Security Features");
-        
+
         let client = self.client.clone();
         let auth_base_url = self.auth_base_url.clone();
         let policy_base_url = self.policy_base_url.clone();
 
         self.run_test("Health Endpoints", || async move {
             // Test auth service health
-            let auth_health =
-                client.get(&format!("{}/health", auth_base_url)).send().await?;
+            let auth_health = client.get(&format!("{}/health", auth_base_url)).send().await?;
 
             if auth_health.status() != 200 {
                 return Err(
@@ -23,8 +22,7 @@ impl RegressionTestSuite {
             }
 
             // Test policy service health
-            let policy_health =
-                client.get(&format!("{}/health", policy_base_url)).send().await?;
+            let policy_health = client.get(&format!("{}/health", policy_base_url)).send().await?;
 
             if policy_health.status() != 200 {
                 return Err(format!(
@@ -226,8 +224,7 @@ impl RegressionTestSuite {
         let policy_base_url = self.policy_base_url.clone();
 
         self.run_test("JWKS Endpoint", || async move {
-            let jwks_response =
-                client.get(&format!("{}/jwks.json", auth_base_url)).send().await?;
+            let jwks_response = client.get(&format!("{}/jwks.json", auth_base_url)).send().await?;
 
             if jwks_response.status() != 200 {
                 return Err(format!("JWKS request failed: {}", jwks_response.status()).into());
@@ -413,8 +410,7 @@ impl RegressionTestSuite {
         let policy_base_url = self.policy_base_url.clone();
 
         self.run_test("Security Headers", || async move {
-            let response =
-                client.get(&format!("{}/health", auth_base_url)).send().await?;
+            let response = client.get(&format!("{}/health", auth_base_url)).send().await?;
 
             let headers = response.headers();
             let mut found_headers = HashMap::new();

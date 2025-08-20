@@ -1,0 +1,627 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: performance-monitor
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: performance-monitor
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "nodes"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: performance-monitor
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: performance-monitor
+subjects:
+- kind: ServiceAccount
+  name: performance-monitor
+  namespace: rust-security
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: performance-budget-rules
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+data:
+  performance-budget-alerts.yml: |
+    groups:
+      - name: performance-budget
+        rules:
+          # Auth Service Performance Budget Alerts
+          - alert: AuthServiceResponseTimeBudgetViolation
+            expr: |
+              histogram_quantile(0.95, 
+                sum(rate(http_request_duration_seconds_bucket{service="auth-service"}[5m])) by (le)
+              ) * 1000 > 200
+            for: 2m
+            labels:
+              severity: warning
+              service: auth-service
+              budget_type: response_time
+              metric: p95_latency
+            annotations:
+              summary: "Auth Service P95 response time budget violation"
+              description: "Auth Service P95 response time is {{ $value }}ms, exceeding budget of 200ms"
+              runbook_url: "https://docs.example.com/runbooks/performance-budget-violation"
+          
+          - alert: AuthServiceResponseTimeCriticalViolation
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket{service="auth-service"}[5m])) by (le)
+              ) * 1000 > 200 * 1.2
+            for: 1m
+            labels:
+              severity: critical
+              service: auth-service
+              budget_type: response_time
+              metric: p95_latency
+            annotations:
+              summary: "Auth Service P95 response time critical budget violation"
+              description: "Auth Service P95 response time is {{ $value }}ms, critically exceeding budget"
+              
+          - alert: AuthServiceThroughputBudgetViolation
+            expr: |
+              sum(rate(http_requests_total{service="auth-service"}[5m])) < 800
+            for: 5m
+            labels:
+              severity: warning
+              service: auth-service
+              budget_type: throughput
+              metric: requests_per_second
+            annotations:
+              summary: "Auth Service throughput below budget"
+              description: "Auth Service throughput is {{ $value }} RPS, below budget of 800 RPS"
+          
+          - alert: AuthServiceErrorRateBudgetViolation
+            expr: |
+              (
+                sum(rate(http_requests_total{service="auth-service",code=~"5.."}[5m])) /
+                sum(rate(http_requests_total{service="auth-service"}[5m]))
+              ) * 100 > 1.0
+            for: 2m
+            labels:
+              severity: critical
+              service: auth-service
+              budget_type: error_rate
+              metric: error_percentage
+            annotations:
+              summary: "Auth Service error rate budget violation"
+              description: "Auth Service error rate is {{ $value }}%, exceeding budget of 1.0%"
+          
+          # Policy Service Performance Budget Alerts
+          - alert: PolicyServiceDecisionLatencyBudgetViolation
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(authorization_duration_seconds_bucket{service="policy-service"}[5m])) by (le)
+              ) * 1000 > 50
+            for: 2m
+            labels:
+              severity: warning
+              service: policy-service
+              budget_type: response_time
+              metric: p95_decision_latency
+            annotations:
+              summary: "Policy Service decision latency budget violation"
+              description: "Policy Service P95 decision latency is {{ $value }}ms, exceeding budget of 50ms"
+          
+          - alert: PolicyServiceThroughputBudgetViolation
+            expr: |
+              sum(rate(authorization_decisions_total{service="policy-service"}[5m])) < 4000
+            for: 5m
+            labels:
+              severity: warning
+              service: policy-service
+              budget_type: throughput
+              metric: decisions_per_second
+            annotations:
+              summary: "Policy Service throughput below budget"
+              description: "Policy Service throughput is {{ $value }} decisions/sec, below budget of 4000"
+          
+          - alert: PolicyServiceCacheHitRateBudgetViolation
+            expr: |
+              (
+                sum(rate(policy_cache_hits_total{service="policy-service"}[5m])) /
+                sum(rate(policy_cache_requests_total{service="policy-service"}[5m]))
+              ) * 100 < 80
+            for: 10m
+            labels:
+              severity: warning
+              service: policy-service
+              budget_type: cache_efficiency
+              metric: cache_hit_rate
+            annotations:
+              summary: "Policy Service cache hit rate below budget"
+              description: "Policy Service cache hit rate is {{ $value }}%, below budget of 80%"
+          
+          # Performance Regression Alerts
+          - alert: PerformanceRegressionDetected
+            expr: |
+              increase(performance_regression_total[1h]) > 0
+            for: 0m
+            labels:
+              severity: warning
+              alert_type: regression
+            annotations:
+              summary: "Performance regression detected"
+              description: "Performance regression detected in the last hour"
+          
+          # Resource Usage Budget Alerts
+          - alert: AuthServiceCPUBudgetViolation
+            expr: |
+              avg(rate(container_cpu_usage_seconds_total{pod=~"auth-service-.*"}[5m])) * 100 > 70
+            for: 10m
+            labels:
+              severity: warning
+              service: auth-service
+              budget_type: resource_usage
+              metric: cpu_percentage
+            annotations:
+              summary: "Auth Service CPU usage budget violation"
+              description: "Auth Service CPU usage is {{ $value }}%, exceeding budget of 70%"
+          
+          - alert: AuthServiceMemoryBudgetViolation
+            expr: |
+              avg(container_memory_usage_bytes{pod=~"auth-service-.*"} / 
+                  container_spec_memory_limit_bytes) * 100 > 80
+            for: 10m
+            labels:
+              severity: warning
+              service: auth-service
+              budget_type: resource_usage
+              metric: memory_percentage
+            annotations:
+              summary: "Auth Service memory usage budget violation"
+              description: "Auth Service memory usage is {{ $value }}%, exceeding budget of 80%"
+
+  regression-detection-rules.yml: |
+    groups:
+      - name: regression-detection
+        rules:
+          # Response Time Regression Detection
+          - record: performance:auth_service_response_time_p95_baseline
+            expr: |
+              avg_over_time(
+                histogram_quantile(0.95,
+                  sum(rate(http_request_duration_seconds_bucket{service="auth-service"}[5m])) by (le)
+                )[7d:1h]
+              )
+          
+          - alert: AuthServiceResponseTimeRegression
+            expr: |
+              (
+                histogram_quantile(0.95,
+                  sum(rate(http_request_duration_seconds_bucket{service="auth-service"}[5m])) by (le)
+                ) - 
+                performance:auth_service_response_time_p95_baseline
+              ) / performance:auth_service_response_time_p95_baseline > 0.15
+            for: 15m
+            labels:
+              severity: warning
+              service: auth-service
+              alert_type: regression
+              metric: response_time_p95
+            annotations:
+              summary: "Auth Service response time regression detected"
+              description: "Auth Service P95 response time has regressed by {{ $value | humanizePercentage }} from baseline"
+          
+          # Throughput Regression Detection
+          - record: performance:auth_service_throughput_baseline
+            expr: |
+              avg_over_time(
+                sum(rate(http_requests_total{service="auth-service"}[5m]))[7d:1h]
+              )
+          
+          - alert: AuthServiceThroughputRegression
+            expr: |
+              (
+                performance:auth_service_throughput_baseline -
+                sum(rate(http_requests_total{service="auth-service"}[5m]))
+              ) / performance:auth_service_throughput_baseline > 0.10
+            for: 15m
+            labels:
+              severity: warning
+              service: auth-service
+              alert_type: regression
+              metric: throughput
+            annotations:
+              summary: "Auth Service throughput regression detected"
+              description: "Auth Service throughput has decreased by {{ $value | humanizePercentage }} from baseline"
+          
+          # Policy Service Regression Detection
+          - record: performance:policy_service_decision_latency_p95_baseline
+            expr: |
+              avg_over_time(
+                histogram_quantile(0.95,
+                  sum(rate(authorization_duration_seconds_bucket{service="policy-service"}[5m])) by (le)
+                )[7d:1h]
+              )
+          
+          - alert: PolicyServiceDecisionLatencyRegression
+            expr: |
+              (
+                histogram_quantile(0.95,
+                  sum(rate(authorization_duration_seconds_bucket{service="policy-service"}[5m])) by (le)
+                ) -
+                performance:policy_service_decision_latency_p95_baseline
+              ) / performance:policy_service_decision_latency_p95_baseline > 0.15
+            for: 10m
+            labels:
+              severity: warning
+              service: policy-service
+              alert_type: regression
+              metric: decision_latency_p95
+            annotations:
+              summary: "Policy Service decision latency regression detected"
+              description: "Policy Service P95 decision latency has regressed by {{ $value | humanizePercentage }} from baseline"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: performance-dashboard
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+    grafana_dashboard: "true"
+data:
+  performance-budget-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Performance Budget Dashboard",
+        "tags": ["rust-security", "performance", "budget"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Performance Budget Compliance",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(up{job=~\"auth-service|policy-service\"}) / count(up{job=~\"auth-service|policy-service\"}) * 100",
+                "legendFormat": "Service Availability"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 95},
+                    {"color": "green", "value": 99}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Auth Service Response Time Budget",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"auth-service\"}[5m])) by (le)) * 1000",
+                "legendFormat": "P95 Response Time"
+              },
+              {
+                "expr": "200",
+                "legendFormat": "Budget (200ms)"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "custom": {
+                  "thresholdsStyle": {
+                    "mode": "line"
+                  }
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 160},
+                    {"color": "red", "value": 200}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 18, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Policy Service Decision Latency Budget",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(authorization_duration_seconds_bucket{service=\"policy-service\"}[5m])) by (le)) * 1000",
+                "legendFormat": "P95 Decision Latency"
+              },
+              {
+                "expr": "50",
+                "legendFormat": "Budget (50ms)"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 40},
+                    {"color": "red", "value": 50}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Throughput Budget Compliance",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{service=\"auth-service\"}[5m]))",
+                "legendFormat": "Auth Service RPS"
+              },
+              {
+                "expr": "sum(rate(authorization_decisions_total{service=\"policy-service\"}[5m]))",
+                "legendFormat": "Policy Service Decisions/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Error Rate Budget",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{service=\"auth-service\",code=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"auth-service\"}[5m])) * 100",
+                "legendFormat": "Auth Service Error Rate"
+              },
+              {
+                "expr": "sum(rate(authorization_decisions_total{service=\"policy-service\",result=\"error\"}[5m])) / sum(rate(authorization_decisions_total{service=\"policy-service\"}[5m])) * 100",
+                "legendFormat": "Policy Service Error Rate"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "max": 5,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 0.5},
+                    {"color": "red", "value": 1}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Performance Regression Detection",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "ALERTS{alertname=~\".*Regression.*\",alertstate=\"firing\"}",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "displayMode": "list"
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+          },
+          {
+            "id": 7,
+            "title": "Resource Usage Budget",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "avg(rate(container_cpu_usage_seconds_total{pod=~\"auth-service-.*\"}[5m])) * 100",
+                "legendFormat": "Auth Service CPU %"
+              },
+              {
+                "expr": "avg(container_memory_usage_bytes{pod=~\"auth-service-.*\"} / container_spec_memory_limit_bytes) * 100",
+                "legendFormat": "Auth Service Memory %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 70},
+                    {"color": "red", "value": 90}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+          }
+        ],
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: performance-budget-monitor
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: performance-monitor
+            app.kubernetes.io/part-of: rust-security
+        spec:
+          serviceAccountName: performance-monitor
+          containers:
+          - name: performance-monitor
+            image: alpine:3.18
+            command: ["sh", "-c"]
+            args:
+            - |
+              apk add --no-cache curl jq python3 py3-pip bash bc
+              pip3 install --no-cache-dir requests
+              cd /scripts
+              ./performance-budget-monitor.sh monitor 5m
+            volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: config
+              mountPath: /config
+            - name: results
+              mountPath: /results
+            env:
+            - name: PROMETHEUS_URL
+              value: "http://prometheus.monitoring.svc.cluster.local:9090"
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+          volumes:
+          - name: scripts
+            configMap:
+              name: performance-scripts
+              defaultMode: 0755
+          - name: config
+            configMap:
+              name: performance-budget-config
+          - name: results
+            emptyDir: {}
+          restartPolicy: OnFailure
+      backoffLimit: 3
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: performance-results-pvc
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: performance-monitor-network-policy
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: performance-monitor
+    app.kubernetes.io/part-of: rust-security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: performance-monitor
+  policyTypes:
+  - Ingress
+  - Egress
+  egress:
+  # Allow access to Kubernetes API
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow access to Prometheus
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow access to services being monitored
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: rust-security
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53

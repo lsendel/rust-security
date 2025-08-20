@@ -51,7 +51,7 @@ impl Default for SecurityLevel {
         let env = std::env::var("ENVIRONMENT")
             .unwrap_or_else(|_| "development".to_string())
             .to_lowercase();
-        
+
         match env.as_str() {
             "production" | "prod" => SecurityLevel::Production,
             _ => SecurityLevel::Development,
@@ -133,14 +133,12 @@ impl SecurityHeadersConfig {
 
     /// Load configuration from environment variables
     pub fn from_env() -> Self {
-        let base_config = if std::env::var("ENVIRONMENT")
-            .unwrap_or_default()
-            .to_lowercase() == "production"
-        {
-            Self::production()
-        } else {
-            Self::development()
-        };
+        let base_config =
+            if std::env::var("ENVIRONMENT").unwrap_or_default().to_lowercase() == "production" {
+                Self::production()
+            } else {
+                Self::development()
+            };
 
         Self {
             csp: std::env::var("SECURITY_CSP").unwrap_or(base_config.csp),

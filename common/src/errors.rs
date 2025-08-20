@@ -8,37 +8,37 @@ use thiserror::Error;
 pub enum CommonError {
     #[error("Authentication failed: {message}")]
     Authentication { message: String },
-    
+
     #[error("Authorization failed: {message}")]
     Authorization { message: String },
-    
+
     #[error("Configuration error: {message}")]
     Configuration { message: String },
-    
+
     #[error("Network error: {message}")]
     Network { message: String },
-    
+
     #[error("Database error: {message}")]
     Database { message: String },
-    
+
     #[error("Cache error: {message}")]
     Cache { message: String },
-    
+
     #[error("Rate limit exceeded: {message}")]
     RateLimit { message: String },
-    
+
     #[error("Security violation: {message}")]
     Security { message: String },
-    
+
     #[error("Service unavailable: {message}")]
     ServiceUnavailable { message: String },
-    
+
     #[error("Invalid input: {message}")]
     InvalidInput { message: String },
-    
+
     #[error("Resource not found: {resource}")]
     NotFound { resource: String },
-    
+
     #[error("Internal error: {message}")]
     Internal { message: String },
 }
@@ -53,12 +53,12 @@ impl CommonError {
             CommonError::RateLimit { .. } => 429,
             CommonError::ServiceUnavailable { .. } => 503,
             CommonError::InvalidInput { .. } => 400,
-            CommonError::Configuration { .. } | 
-            CommonError::Network { .. } | 
-            CommonError::Database { .. } | 
-            CommonError::Cache { .. } | 
-            CommonError::Security { .. } | 
-            CommonError::Internal { .. } => 500,
+            CommonError::Configuration { .. }
+            | CommonError::Network { .. }
+            | CommonError::Database { .. }
+            | CommonError::Cache { .. }
+            | CommonError::Security { .. }
+            | CommonError::Internal { .. } => 500,
         }
     }
 }

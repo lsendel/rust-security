@@ -9,7 +9,7 @@ mod config;
 use auth_service::{
     app,
     config::{self, StoreBackend},
-    config_reload::{ConfigReloadManager, ConfigReloadEvent},
+    config_reload::{ConfigReloadEvent, ConfigReloadManager},
     keys,
     sql_store::SqlStore,
     store::HybridStore,
@@ -47,11 +47,11 @@ async fn main() -> anyhow::Result<()> {
     let config_path = std::env::var("CONFIG_FILE").ok();
     let (config_manager, mut config_events) = ConfigReloadManager::new(cfg.clone(), config_path);
     let config_manager = Arc::new(config_manager);
-    
+
     // Start configuration reload handler
     let reload_manager = Arc::clone(&config_manager);
     reload_manager.start_reload_handler().await?;
-    
+
     // Spawn configuration event handler
     let event_manager = Arc::clone(&config_manager);
     tokio::spawn(async move {
@@ -61,13 +61,21 @@ async fn main() -> anyhow::Result<()> {
                     tracing::info!("Configuration reload requested");
                 }
                 ConfigReloadEvent::ReloadSuccess { version, changes } => {
-                    tracing::info!("Configuration reload successful (version: {}, changes: {})", version, changes.len());
+                    tracing::info!(
+                        "Configuration reload successful (version: {}, changes: {})",
+                        version,
+                        changes.len()
+                    );
                     for change in changes {
                         tracing::info!("Configuration change: {}", change);
                     }
                 }
                 ConfigReloadEvent::ReloadFailed { error, fallback_used } => {
-                    tracing::error!("Configuration reload failed: {} (fallback used: {})", error, fallback_used);
+                    tracing::error!(
+                        "Configuration reload failed: {} (fallback used: {})",
+                        error,
+                        fallback_used
+                    );
                 }
                 ConfigReloadEvent::ValidationFailed { errors } => {
                     tracing::error!("Configuration validation failed: {:?}", errors);
@@ -75,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
-    
+
     tracing::info!("Configuration reload manager initialized");
 
     // Initialize secure keys
@@ -89,11 +97,8 @@ async fn main() -> anyhow::Result<()> {
     // Initialize the unified store based on config
     let store: Arc<dyn Store> = match cfg.store.backend {
         StoreBackend::Sql => {
-            let db_url = cfg
-                .store
-                .database_url
-                .as_ref()
-                .expect("DATABASE_URL is checked in config");
+            let db_url =
+                cfg.store.database_url.as_ref().expect("DATABASE_URL is checked in config");
             let sql_store = SqlStore::new(db_url).await?;
             sql_store.run_migrations().await?;
             tracing::info!("Using SQL store backend.");
@@ -122,8 +127,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Backpressure system initialized");
 
     // Initialize API key store
-    let api_key_db_url = std::env::var("API_KEY_DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite:api_keys.db".to_string());
+    let api_key_db_url =
+        std::env::var("API_KEY_DATABASE_URL").unwrap_or_else(|_| "sqlite:api_keys.db".to_string());
     let api_key_store = auth_service::api_key_store::ApiKeyStore::new(&api_key_db_url)
         .await
         .expect("Failed to initialize API key store");

@@ -1,4 +1,4 @@
-use auth_service::{app, store::TokenStore, AppState, api_key_store::ApiKeyStore};
+use auth_service::{api_key_store::ApiKeyStore, app, store::TokenStore, AppState};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -19,7 +19,9 @@ async fn spawn_app() -> String {
         allowed_scopes: vec!["admin".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
         policy_cache: Arc::new(auth_service::policy_cache::PolicyCache::new(Default::default())),
-        backpressure_state: Arc::new(auth_service::backpressure::BackpressureState::new(Default::default())),
+        backpressure_state: Arc::new(auth_service::backpressure::BackpressureState::new(
+            Default::default(),
+        )),
         api_key_store,
     };
 

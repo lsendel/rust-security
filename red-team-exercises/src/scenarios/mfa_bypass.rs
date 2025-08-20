@@ -5,12 +5,12 @@
 use crate::attack_framework::RedTeamFramework;
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
+use rand;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{debug, info, warn};
-use rand;
 
 pub async fn run_mfa_scenarios(
     framework: &mut RedTeamFramework,
@@ -714,7 +714,8 @@ async fn mfa_state_confusion(
 
     // Test 3: State manipulation via session
     let mut headers = HeaderMap::new();
-    headers.insert(reqwest::header::COOKIE, HeaderValue::from_str("mfa_verified=true; auth_level=2")?);
+    headers
+        .insert(reqwest::header::COOKIE, HeaderValue::from_str("mfa_verified=true; auth_level=2")?);
 
     let session_result = framework
         .execute_attack(
@@ -875,7 +876,7 @@ async fn biometric_bypass_attacks(
     // Test 1: Fingerprint template injection
     let fingerprint_templates = vec![
         "template_admin_001",
-        "biometric_bypass_001", 
+        "biometric_bypass_001",
         "fingerprint_fake_template",
         "admin_fingerprint_data",
         "template_injection_test",
@@ -920,7 +921,8 @@ async fn biometric_bypass_attacks(
                 .await?;
 
             if auth_result.success {
-                biometric_bypasses.push(format!("Fingerprint template injection successful: {}", template));
+                biometric_bypasses
+                    .push(format!("Fingerprint template injection successful: {}", template));
                 warn!("🚨 Biometric template injection bypass: {}", template);
             }
         }
@@ -1073,7 +1075,7 @@ async fn biometric_bypass_attacks(
                 "data": biometric1
             },
             "secondary_biometric": {
-                "type": "voice", 
+                "type": "voice",
                 "data": biometric2
             }
         });
@@ -1097,7 +1099,11 @@ async fn biometric_bypass_attacks(
     let mut scenario_data = HashMap::new();
     scenario_data.insert("biometric_bypasses".to_string(), json!(biometric_bypasses));
 
-    reporter.add_scenario_result("biometric_bypass_attacks", biometric_bypasses.is_empty(), scenario_data);
+    reporter.add_scenario_result(
+        "biometric_bypass_attacks",
+        biometric_bypasses.is_empty(),
+        scenario_data,
+    );
     Ok(())
 }
 
@@ -1203,7 +1209,11 @@ async fn push_notification_bypass(
     let mut scenario_data = HashMap::new();
     scenario_data.insert("push_bypasses".to_string(), json!(push_bypasses));
 
-    reporter.add_scenario_result("push_notification_bypass", push_bypasses.is_empty(), scenario_data);
+    reporter.add_scenario_result(
+        "push_notification_bypass",
+        push_bypasses.is_empty(),
+        scenario_data,
+    );
     Ok(())
 }
 
@@ -1318,7 +1328,11 @@ async fn hardware_token_emulation(
     let mut scenario_data = HashMap::new();
     scenario_data.insert("token_emulation_results".to_string(), json!(token_emulation_results));
 
-    reporter.add_scenario_result("hardware_token_emulation", token_emulation_results.is_empty(), scenario_data);
+    reporter.add_scenario_result(
+        "hardware_token_emulation",
+        token_emulation_results.is_empty(),
+        scenario_data,
+    );
     Ok(())
 }
 
@@ -1368,7 +1382,7 @@ async fn voice_recognition_bypass(
     // Test 2: Audio manipulation attacks
     let audio_manipulation = vec![
         "pitch_shifting",
-        "formant_modification", 
+        "formant_modification",
         "speed_adjustment",
         "noise_injection",
         "echo_removal",
@@ -1436,7 +1450,11 @@ async fn voice_recognition_bypass(
     let mut scenario_data = HashMap::new();
     scenario_data.insert("voice_bypasses".to_string(), json!(voice_bypasses));
 
-    reporter.add_scenario_result("voice_recognition_bypass", voice_bypasses.is_empty(), scenario_data);
+    reporter.add_scenario_result(
+        "voice_recognition_bypass",
+        voice_bypasses.is_empty(),
+        scenario_data,
+    );
     Ok(())
 }
 

@@ -357,17 +357,14 @@ async fn user_agent_rotation_bypass(
 
     for (i, user_agent) in user_agents.iter().enumerate() {
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            "User-Agent",
-            reqwest::header::HeaderValue::from_str(user_agent)?,
-        );
+        headers.insert("User-Agent", reqwest::header::HeaderValue::from_str(user_agent)?);
 
         // Send multiple requests with each User-Agent
         for j in 0..5 {
             let result = framework
                 .execute_attack(
                     "user_agent_rotation",
-                    "GET", 
+                    "GET",
                     "/oauth/token",
                     Some(headers.clone()),
                     Some("grant_type=client_credentials&client_id=test".to_string()),
@@ -429,14 +426,7 @@ async fn token_bucket_exploitation(
     // Rapid burst to find the bucket size
     for i in 0..100 {
         let result = framework
-            .execute_attack(
-                "token_bucket_burst",
-                "GET",
-                "/health",
-                None,
-                None,
-                Some(&session),
-            )
+            .execute_attack("token_bucket_burst", "GET", "/health", None, None, Some(&session))
             .await?;
 
         if result.http_status == 429 {
@@ -465,7 +455,7 @@ async fn token_bucket_exploitation(
     for _ in 0..10 {
         let result = framework
             .execute_attack(
-                "token_bucket_refill_test", 
+                "token_bucket_refill_test",
                 "GET",
                 "/health",
                 None,
@@ -499,7 +489,7 @@ async fn token_bucket_exploitation(
                 .execute_attack(
                     "token_bucket_slow_leak",
                     "GET",
-                    "/health", 
+                    "/health",
                     None,
                     None,
                     Some(&session),
@@ -549,11 +539,14 @@ async fn protocol_level_bypass(
 
     // Test 1: HTTP version manipulation
     let http_versions = vec!["HTTP/1.0", "HTTP/1.1", "HTTP/2.0"];
-    
+
     for version in &http_versions {
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(reqwest::header::CONNECTION, reqwest::header::HeaderValue::from_static("close"));
-        
+        headers.insert(
+            reqwest::header::CONNECTION,
+            reqwest::header::HeaderValue::from_static("close"),
+        );
+
         let mut version_successful = 0;
         for _ in 0..10 {
             let result = framework
@@ -617,16 +610,13 @@ async fn protocol_level_bypass(
         }
 
         if connection_successful > 7 {
-            bypass_results.push(format!(
-                "Rate limit bypassed using {} header", 
-                header_name
-            ));
+            bypass_results.push(format!("Rate limit bypassed using {} header", header_name));
         }
     }
 
     // Test 3: Request method variation
     let methods = vec!["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
-    
+
     for method in &methods {
         let mut method_successful = 0;
         for _ in 0..5 {
@@ -660,11 +650,7 @@ async fn protocol_level_bypass(
     let mut scenario_data = HashMap::new();
     scenario_data.insert("bypass_results".to_string(), json!(bypass_results));
 
-    reporter.add_scenario_result(
-        "protocol_level_bypass",
-        bypass_results.is_empty(),
-        scenario_data,
-    );
+    reporter.add_scenario_result("protocol_level_bypass", bypass_results.is_empty(), scenario_data);
     Ok(())
 }
 
@@ -728,10 +714,8 @@ async fn adaptive_rate_limit_detection(
     }
 
     if let Some(delay) = optimal_delay {
-        bypass_results.push(format!(
-            "Optimal delay for rate limit evasion discovered: {}ms",
-            delay
-        ));
+        bypass_results
+            .push(format!("Optimal delay for rate limit evasion discovered: {}ms", delay));
 
         // Test the discovered optimal delay with a longer run
         let mut sustained_successful = 0;
@@ -771,17 +755,10 @@ async fn adaptive_rate_limit_detection(
 
     for round in 0..10 {
         let mut round_successful = 0;
-        
+
         for _ in 0..10 {
             let result = framework
-                .execute_attack(
-                    "dynamic_adaptation",
-                    "GET",
-                    "/health",
-                    None,
-                    None,
-                    Some(&session),
-                )
+                .execute_attack("dynamic_adaptation", "GET", "/health", None, None, Some(&session))
                 .await?;
 
             if result.success {

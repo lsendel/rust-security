@@ -1,5 +1,6 @@
 # Dependabot configuration for automated dependency updates
 # This ensures the supply chain security by keeping dependencies up to date
+# Enhanced security-focused configuration with risk management
 
 version: 2
 updates:
@@ -23,9 +24,9 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
-    # Group updates by dependency type
+    # Enhanced security-focused grouping
     groups:
-      security-updates:
+      critical-security-updates:
         patterns:
           - "*security*"
           - "*crypto*"
@@ -34,39 +35,82 @@ updates:
           - "ring*"
           - "rustls*"
           - "openssl*"
+          - "jsonwebtoken*"
+          - "argon2*"
+          - "aes*"
+          - "chacha*"
+          - "hmac*"
+          - "sha*"
+          - "rand*"
+          - "secrecy*"
+          - "zeroize*"
+        update-types:
+          - "security-update"
+          - "minor"
+          - "patch"
+        priority: 10
+      runtime-core-updates:
+        patterns:
+          - "tokio*"
+          - "serde*"
+          - "axum*"
+          - "hyper*"
+          - "tower*"
         update-types:
           - "minor"
           - "patch"
+        priority: 8
       performance-updates:
         patterns:
-          - "tokio*"
           - "async*"
           - "futures*"
           - "rayon*"
           - "dashmap*"
+          - "mimalloc*"
+          - "jemalloc*"
         update-types:
           - "minor"
           - "patch"
+        priority: 6
+      database-storage-updates:
+        patterns:
+          - "redis*"
+          - "sqlx*"
+          - "bb8*"
+          - "deadpool*"
+        update-types:
+          - "minor"
+          - "patch"
+        priority: 7
       web-framework-updates:
         patterns:
-          - "axum*"
-          - "tower*"
-          - "hyper*"
           - "reqwest*"
+          - "tower-http*"
+          - "utoipa*"
         update-types:
           - "minor"
           - "patch"
-    # Allow automatic security updates
+        priority: 5
+    # Enhanced dependency management rules
     allow:
       - dependency-type: "all"
-    # Ignore major version updates for critical dependencies
+    # Strategic ignore rules for critical dependencies
     ignore:
       - dependency-name: "tokio"
         update-types: ["version-update:semver-major"]
+        reason: "Major tokio updates require extensive testing"
       - dependency-name: "serde"
         update-types: ["version-update:semver-major"]
+        reason: "Core serialization library - manual review required"
       - dependency-name: "axum"
         update-types: ["version-update:semver-major"]
+        reason: "Web framework changes need careful migration"
+      - dependency-name: "ring"
+        update-types: ["version-update:semver-major"]
+        reason: "Cryptographic library - security review required"
+      - dependency-name: "rustls"
+        update-types: ["version-update:semver-major"]
+        reason: "TLS implementation - security team approval needed"
 
   # Auth Service specific dependencies
   - package-ecosystem: "cargo"

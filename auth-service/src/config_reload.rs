@@ -12,6 +12,7 @@ use tokio::fs;
 use tokio::signal;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info, warn};
+use validator::Validate;
 
 /// Configuration reload events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,19 +20,11 @@ pub enum ConfigReloadEvent {
     /// Configuration reload requested
     ReloadRequested,
     /// Configuration reload successful
-    ReloadSuccess {
-        version: u64,
-        changes: Vec<String>,
-    },
+    ReloadSuccess { version: u64, changes: Vec<String> },
     /// Configuration reload failed
-    ReloadFailed {
-        error: String,
-        fallback_used: bool,
-    },
+    ReloadFailed { error: String, fallback_used: bool },
     /// Configuration validation failed
-    ValidationFailed {
-        errors: Vec<String>,
-    },
+    ValidationFailed { errors: Vec<String> },
 }
 
 /// Configuration change detection
@@ -65,7 +58,7 @@ impl ConfigReloadManager {
         config_path: Option<String>,
     ) -> (Self, broadcast::Receiver<ConfigReloadEvent>) {
         let (event_sender, event_receiver) = broadcast::channel(100);
-        
+
         let manager = Self {
             config: Arc::new(RwLock::new(initial_config.clone())),
             config_path,
@@ -73,7 +66,7 @@ impl ConfigReloadManager {
             version: Arc::new(RwLock::new(1)),
             backup_config: Arc::new(RwLock::new(Some(initial_config))),
         };
-        
+
         (manager, event_receiver)
     }
 
@@ -90,10 +83,10 @@ impl ConfigReloadManager {
     /// Start the configuration reload handler
     pub async fn start_reload_handler(self: Arc<Self>) -> Result<()> {
         info!("Starting configuration reload handler");
-        
+
         // Clone Arc for the signal handler
         let manager = Arc::clone(&self);
-        
+
         tokio::spawn(async move {
             loop {
                 // Wait for SIGHUP signal on Unix systems
@@ -108,7 +101,7 @@ impl ConfigReloadManager {
                         continue;
                     }
                 }
-                
+
                 // On Windows or for testing, we could use other mechanisms
                 #[cfg(not(unix))]
                 {
@@ -116,18 +109,18 @@ impl ConfigReloadManager {
                     tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
                     continue;
                 }
-                
+
                 info!("Configuration reload signal received");
-                
+
                 // Send reload event
                 if let Err(e) = manager.event_sender.send(ConfigReloadEvent::ReloadRequested) {
                     warn!("Failed to send reload event: {}", e);
                 }
-                
+
                 // Perform the reload
                 if let Err(e) = manager.reload_configuration().await {
                     error!("Configuration reload failed: {}", e);
-                    
+
                     let _ = manager.event_sender.send(ConfigReloadEvent::ReloadFailed {
                         error: e.to_string(),
                         fallback_used: false,
@@ -135,18 +128,18 @@ impl ConfigReloadManager {
                 }
             }
         });
-        
+
         Ok(())
     }
 
     /// Manually trigger configuration reload
     pub async fn trigger_reload(&self) -> Result<()> {
         info!("Manual configuration reload triggered");
-        
+
         if let Err(e) = self.event_sender.send(ConfigReloadEvent::ReloadRequested) {
             warn!("Failed to send reload event: {}", e);
         }
-        
+
         self.reload_configuration().await
     }
 
@@ -161,9 +154,9 @@ impl ConfigReloadManager {
 
         // Validate the new configuration
         if let Err(validation_errors) = self.validate_config(&new_config).await {
-            let _ = self.event_sender.send(ConfigReloadEvent::ValidationFailed {
-                errors: validation_errors,
-            });
+            let _ = self
+                .event_sender
+                .send(ConfigReloadEvent::ValidationFailed { errors: validation_errors });
             return Err(anyhow::anyhow!("Configuration validation failed"));
         }
 
@@ -207,10 +200,9 @@ impl ConfigReloadManager {
             .map(|c| format!("{}: {} -> {}", c.field, c.old_value, c.new_value))
             .collect();
 
-        let _ = self.event_sender.send(ConfigReloadEvent::ReloadSuccess {
-            version,
-            changes: change_descriptions,
-        });
+        let _ = self
+            .event_sender
+            .send(ConfigReloadEvent::ReloadSuccess { version, changes: change_descriptions });
 
         info!(
             "Configuration reloaded successfully (version: {}, changes: {})",
@@ -228,8 +220,7 @@ impl ConfigReloadManager {
             .with_context(|| format!("Failed to read configuration file: {}", path))?;
 
         let config: AppConfig = if path.ends_with(".toml") {
-            toml::from_str(&config_content)
-                .with_context(|| "Failed to parse TOML configuration")?
+            toml::from_str(&config_content).with_context(|| "Failed to parse TOML configuration")?
         } else if path.ends_with(".json") {
             serde_json::from_str(&config_content)
                 .with_context(|| "Failed to parse JSON configuration")?
@@ -279,17 +270,11 @@ impl ConfigReloadManager {
                     errors.push("Redis URL required for hybrid store backend".to_string());
                 }
             }
-            StoreBackend::Redis => {
-                if config.redis_url.is_none() {
-                    errors.push("Redis URL required for Redis store backend".to_string());
-                }
-            }
             StoreBackend::Sql => {
                 if config.store.database_url.is_none() {
                     errors.push("Database URL required for SQL store backend".to_string());
                 }
             }
-            _ => {} // Memory and other backends don't require additional validation
         }
 
         if errors.is_empty() {
@@ -300,7 +285,11 @@ impl ConfigReloadManager {
     }
 
     /// Detect changes between configurations
-    async fn detect_changes(&self, old_config: &AppConfig, new_config: &AppConfig) -> Vec<ConfigChange> {
+    async fn detect_changes(
+        &self,
+        old_config: &AppConfig,
+        new_config: &AppConfig,
+    ) -> Vec<ConfigChange> {
         let mut changes = Vec::new();
 
         // Compare bind address
@@ -324,17 +313,21 @@ impl ConfigReloadManager {
         }
 
         // Compare rate limiting settings
-        if old_config.rate_limiting.requests_per_minute != new_config.rate_limiting.requests_per_minute {
+        if old_config.rate_limiting.oauth_requests_per_minute
+            != new_config.rate_limiting.oauth_requests_per_minute
+        {
             changes.push(ConfigChange {
-                field: "rate_limiting.requests_per_minute".to_string(),
-                old_value: old_config.rate_limiting.requests_per_minute.to_string(),
-                new_value: new_config.rate_limiting.requests_per_minute.to_string(),
+                field: "rate_limiting.oauth_requests_per_minute".to_string(),
+                old_value: old_config.rate_limiting.oauth_requests_per_minute.to_string(),
+                new_value: new_config.rate_limiting.oauth_requests_per_minute.to_string(),
                 requires_restart: false, // Rate limiting can be updated dynamically
             });
         }
 
         // Compare security settings
-        if old_config.security.jwt_access_token_ttl_seconds != new_config.security.jwt_access_token_ttl_seconds {
+        if old_config.security.jwt_access_token_ttl_seconds
+            != new_config.security.jwt_access_token_ttl_seconds
+        {
             changes.push(ConfigChange {
                 field: "security.jwt_access_token_ttl_seconds".to_string(),
                 old_value: old_config.security.jwt_access_token_ttl_seconds.to_string(),
@@ -344,7 +337,9 @@ impl ConfigReloadManager {
         }
 
         // Compare store backend
-        if std::mem::discriminant(&old_config.store.backend) != std::mem::discriminant(&new_config.store.backend) {
+        if std::mem::discriminant(&old_config.store.backend)
+            != std::mem::discriminant(&new_config.store.backend)
+        {
             changes.push(ConfigChange {
                 field: "store.backend".to_string(),
                 old_value: format!("{:?}", old_config.store.backend),
@@ -369,25 +364,23 @@ impl ConfigReloadManager {
     /// Rollback to backup configuration
     pub async fn rollback(&self) -> Result<()> {
         let backup = self.backup_config.read().await.clone();
-        
+
         match backup {
             Some(backup_config) => {
                 {
                     let mut config = self.config.write().await;
                     *config = backup_config;
                 }
-                
+
                 {
                     let mut version = self.version.write().await;
                     *version += 1;
                 }
-                
+
                 info!("Configuration rolled back successfully");
                 Ok(())
             }
-            None => {
-                Err(anyhow::anyhow!("No backup configuration available"))
-            }
+            None => Err(anyhow::anyhow!("No backup configuration available")),
         }
     }
 }
@@ -442,7 +435,10 @@ impl Default for ConfigReloadMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{FeatureFlags, MonitoringConfig, OAuthConfig, RateLimitConfig, ScimConfig, SecurityConfig, StoreConfig};
+    use crate::config::{
+        FeatureFlags, MonitoringConfig, OAuthConfig, RateLimitConfig, ScimConfig, SecurityConfig,
+        StoreConfig,
+    };
     use std::collections::HashMap;
 
     fn create_test_config() -> AppConfig {
@@ -467,7 +463,7 @@ mod tests {
                 request_signature_max_age_seconds: 300,
             },
             rate_limiting: RateLimitConfig {
-                requests_per_minute: 60,
+                oauth_requests_per_minute: 60,
                 burst_size: 10,
                 per_ip_limit: Some(100),
                 per_client_limit: Some(1000),
@@ -513,7 +509,7 @@ mod tests {
             allowed_scopes: vec!["read".to_string(), "write".to_string()],
             jwt_secret: "test-secret".to_string(),
             token_expiry_seconds: 3600,
-            rate_limit_requests_per_minute: 60,
+            rate_limit_oauth_requests_per_minute: 60,
         }
     }
 
@@ -521,7 +517,7 @@ mod tests {
     async fn test_config_reload_manager_creation() {
         let config = create_test_config();
         let (manager, _receiver) = ConfigReloadManager::new(config.clone(), None);
-        
+
         let current_config = manager.get_config().await;
         assert_eq!(current_config.bind_addr, config.bind_addr);
         assert_eq!(manager.get_version().await, 1);
@@ -531,14 +527,14 @@ mod tests {
     async fn test_change_detection() {
         let old_config = create_test_config();
         let mut new_config = old_config.clone();
-        new_config.rate_limiting.requests_per_minute = 120;
+        new_config.rate_limiting.oauth_requests_per_minute = 120;
         new_config.bind_addr = "0.0.0.0:8080".to_string();
-        
+
         let (manager, _receiver) = ConfigReloadManager::new(old_config.clone(), None);
         let changes = manager.detect_changes(&old_config, &new_config).await;
-        
+
         assert_eq!(changes.len(), 2);
-        assert!(changes.iter().any(|c| c.field == "rate_limiting.requests_per_minute"));
+        assert!(changes.iter().any(|c| c.field == "rate_limiting.oauth_requests_per_minute"));
         assert!(changes.iter().any(|c| c.field == "bind_addr"));
         assert!(changes.iter().any(|c| c.requires_restart));
     }
@@ -548,10 +544,10 @@ mod tests {
         let mut config = create_test_config();
         config.bind_addr = "".to_string(); // Invalid empty bind address
         config.client_credentials.clear(); // Invalid empty credentials
-        
+
         let (manager, _receiver) = ConfigReloadManager::new(create_test_config(), None);
         let result = manager.validate_config(&config).await;
-        
+
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert!(errors.iter().any(|e| e.contains("bind_addr")));

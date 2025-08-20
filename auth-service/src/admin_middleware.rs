@@ -209,8 +209,8 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
     }
 
     // Validate token and extract record
-    let record = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken {
-        reason: "Token not found or invalid".to_string(),
+    let record = state.store.get_token_record(token).await?.ok_or_else(|| {
+        AuthError::InvalidToken { reason: "Token not found or invalid".to_string() }
     })?;
 
     // Check if token is active

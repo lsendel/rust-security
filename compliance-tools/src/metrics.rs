@@ -407,7 +407,7 @@ mod tests {
         let now = chrono::Utc::now();
         let five_minutes_ago = now - chrono::Duration::minutes(5);
         let ten_minutes_ago = now - chrono::Duration::minutes(10);
-        
+
         let sample_logs = vec![
             serde_json::json!({
                 "timestamp": five_minutes_ago.to_rfc3339(),

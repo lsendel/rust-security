@@ -162,7 +162,6 @@ pub struct ScimGroup {
     pub members: Vec<String>,
 }
 
-
 // === Store Data Models ===
 
 /// Represents the data stored for an access or refresh token.

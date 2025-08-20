@@ -633,10 +633,8 @@ async fn test_bulk_large_operation_count() {
 #[tokio::test]
 async fn scim_security_headers_present() {
     let base = spawn_app().await;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .unwrap();
+    let client =
+        reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build().unwrap();
 
     // Ensure at least one user exists so list returns JSON with content-type
     let _ = client
@@ -646,11 +644,8 @@ async fn scim_security_headers_present() {
         .await
         .unwrap();
 
-    let resp = client
-        .get(format!("{}/scim/v2/Users?startIndex=1&count=1", base))
-        .send()
-        .await
-        .unwrap();
+    let resp =
+        client.get(format!("{}/scim/v2/Users?startIndex=1&count=1", base)).send().await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
     let headers = resp.headers();

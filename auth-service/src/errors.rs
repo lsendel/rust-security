@@ -107,6 +107,8 @@ pub enum AuthError {
     SessionExpired,
     #[error("Session not found")]
     SessionNotFound,
+    #[error("{resource} not found")]
+    NotFound { resource: String },
 
     // MFA errors
     #[error("MFA challenge required")]
@@ -125,6 +127,15 @@ pub enum AuthError {
     // Generic errors (use sparingly)
     #[error("Internal server error")]
     InternalError { error_id: Uuid, context: String },
+}
+
+impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
+    fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        AuthError::InternalError {
+            error_id: Uuid::new_v4(),
+            context: err.to_string(),
+        }
+    }
 }
 
 /// Structured error response for API clients
@@ -272,6 +283,10 @@ impl IntoResponse for AuthError {
             AuthError::SessionNotFound => (
                 StatusCode::NOT_FOUND,
                 ErrorResponse::new("session_not_found", "session not found"),
+            ),
+            AuthError::NotFound { resource } => (
+                StatusCode::NOT_FOUND,
+                ErrorResponse::new("not_found", &format!("{} not found", resource.to_lowercase())),
             ),
             AuthError::SessionError { reason } => (
                 StatusCode::BAD_REQUEST,

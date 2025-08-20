@@ -1,16 +1,16 @@
 //! Unit tests for red team exercises functionality
 
+use chrono::Utc;
 use red_team_exercises::attack_framework::*;
 use red_team_exercises::reporting::*;
 use red_team_exercises::scenarios::social_engineering::*;
-use chrono::Utc;
 use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_red_team_framework_initialization() {
     let target_url = "http://localhost:8080".to_string();
     let result = RedTeamFramework::new(target_url.clone()).await;
-    
+
     assert!(result.is_ok());
     let framework = result.unwrap();
     // Basic validation that framework was created
@@ -21,7 +21,7 @@ async fn test_red_team_framework_initialization() {
 async fn test_red_team_reporter_creation() {
     let campaign_id = "test_campaign_001".to_string();
     let reporter = RedTeamReporter::new(campaign_id.clone());
-    
+
     assert_eq!(reporter.campaign_id, campaign_id);
 }
 
@@ -30,7 +30,7 @@ async fn test_social_engineering_scenario_validation() {
     // Test that social engineering scenarios can be properly configured
     let mut framework = RedTeamFramework::new("http://localhost:8080".to_string()).await.unwrap();
     let mut reporter = RedTeamReporter::new("test_campaign".to_string());
-    
+
     // Test with low intensity (safe for testing)
     let result = run_token_scenarios(&mut framework, &mut reporter, "low").await;
     assert!(result.is_ok());
@@ -46,7 +46,7 @@ fn test_scenario_result_creation() {
         metrics: HashMap::new(),
         recommendations: vec!["Recommendation 1".to_string()],
     };
-    
+
     assert_eq!(result.scenario_name, "test_scenario");
     assert!(result.success);
     assert!(!result.details.is_empty());
@@ -63,7 +63,7 @@ fn test_attack_vector_creation() {
         techniques: vec!["Social Engineering".to_string(), "Email Spoofing".to_string()],
         mitigations: vec!["Email filtering".to_string(), "User training".to_string()],
     };
-    
+
     assert_eq!(vector.name, "Email Phishing");
     assert_eq!(vector.difficulty, AttackDifficulty::Medium);
     assert_eq!(vector.risk_level, RiskLevel::High);
@@ -85,7 +85,7 @@ fn test_security_finding_creation() {
         references: vec!["https://example.com/vuln".to_string()],
         discovered_at: Utc::now(),
     };
-    
+
     assert_eq!(finding.id, "FIND-001");
     assert_eq!(finding.severity, FindingSeverity::Medium);
     assert_eq!(finding.category, FindingCategory::Authentication);
@@ -108,17 +108,20 @@ fn test_campaign_metrics_aggregation() {
         low_findings: 0,
         success_rate: 0.7,
     };
-    
+
     assert_eq!(metrics.total_scenarios, 10);
     assert_eq!(metrics.successful_scenarios, 7);
     assert_eq!(metrics.failed_scenarios, 3);
     assert_eq!(metrics.findings_discovered, 5);
     assert_eq!(metrics.success_rate, 0.7);
-    
+
     // Validate calculations
     assert_eq!(metrics.successful_scenarios + metrics.failed_scenarios, metrics.total_scenarios);
     assert_eq!(
-        metrics.critical_findings + metrics.high_findings + metrics.medium_findings + metrics.low_findings,
+        metrics.critical_findings
+            + metrics.high_findings
+            + metrics.medium_findings
+            + metrics.low_findings,
         metrics.findings_discovered
     );
 }
@@ -159,7 +162,7 @@ fn test_finding_category_enumeration() {
         FindingCategory::NetworkSecurity,
         FindingCategory::Other("Custom Category".to_string()),
     ];
-    
+
     // Test serialization/deserialization
     for category in categories {
         let serialized = serde_json::to_string(&category).unwrap();
@@ -173,15 +176,15 @@ async fn test_scenario_execution_safety() {
     // Ensure that test scenarios don't perform actual attacks
     let mut framework = RedTeamFramework::new("http://localhost:8080".to_string()).await.unwrap();
     let mut reporter = RedTeamReporter::new("safety_test".to_string());
-    
+
     // All scenarios should run in "test" mode without making real network requests
     let result = run_token_scenarios(&mut framework, &mut reporter, "test").await;
     assert!(result.is_ok());
-    
+
     // Verify that the reporter has captured some results
     let report = reporter.generate_report().await;
     assert!(!report.scenario_results.is_empty());
-    
+
     // Ensure all scenarios are marked as simulated/test runs
     for (_, result) in report.scenario_results.iter() {
         assert!(result.details.contains("simulated") || result.details.contains("test"));

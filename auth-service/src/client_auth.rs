@@ -5,6 +5,7 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Instant;
 
 #[cfg(not(test))]
@@ -41,6 +42,11 @@ pub struct ClientMetadata {
     pub is_active: bool,
     pub max_token_lifetime: Option<u64>,
 }
+
+// Global CLIENT_AUTHENTICATOR instance
+static CLIENT_AUTHENTICATOR: Lazy<Mutex<ClientAuthenticator>> = Lazy::new(|| {
+    Mutex::new(ClientAuthenticator::new())
+});
 
 impl ClientAuthenticator {
     pub fn new() -> Self {
@@ -315,7 +321,11 @@ pub async fn authenticate_client(
                 }
                 // Update last used timestamp
                 if let Err(e) = api_key_store.update_last_used(api_key.id).await {
-                    tracing::warn!("Failed to update last used timestamp for key {}: {}", api_key.id, e);
+                    tracing::warn!(
+                        "Failed to update last used timestamp for key {}: {}",
+                        api_key.id,
+                        e
+                    );
                 }
                 return Ok(true);
             }

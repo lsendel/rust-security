@@ -957,15 +957,18 @@ impl ThreatIntelligenceCorrelator {
 
                     if needs_refresh {
                         info!("Refreshing threat feed: {}", feed.name);
-                        
+
                         // Implement full feed synchronization
                         match self.synchronize_threat_feed(&feed).await {
                             Ok(sync_result) => {
                                 info!(
                                     "Feed sync completed: {} - Added: {}, Updated: {}, Removed: {}",
-                                    feed.name, sync_result.added, sync_result.updated, sync_result.removed
+                                    feed.name,
+                                    sync_result.added,
+                                    sync_result.updated,
+                                    sync_result.removed
                                 );
-                                
+
                                 // Update feed metadata
                                 if let Some(ref mut metadata) = feed_metadata.get_mut(&feed.name) {
                                     metadata.last_updated = Some(Utc::now());
@@ -975,14 +978,17 @@ impl ThreatIntelligenceCorrelator {
                             }
                             Err(e) => {
                                 error!("Failed to synchronize feed {}: {}", feed.name, e);
-                                
+
                                 if let Some(ref mut metadata) = feed_metadata.get_mut(&feed.name) {
                                     metadata.error_count += 1;
                                     metadata.last_error = Some(e.to_string());
-                                    
+
                                     // Disable feed after too many failures
                                     if metadata.error_count >= 3 {
-                                        warn!("Disabling feed {} after {} failures", feed.name, metadata.error_count);
+                                        warn!(
+                                            "Disabling feed {} after {} failures",
+                                            feed.name, metadata.error_count
+                                        );
                                         metadata.enabled = false;
                                     }
                                 }
@@ -1097,12 +1103,15 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
     }
 
     /// Synchronize a threat feed by downloading and processing indicators
-    async fn synchronize_threat_feed(&self, feed: &ThreatFeed) -> Result<FeedSyncResult, AuthError> {
+    async fn synchronize_threat_feed(
+        &self,
+        feed: &ThreatFeed,
+    ) -> Result<FeedSyncResult, AuthError> {
         let start_time = std::time::Instant::now();
         let mut sync_result = FeedSyncResult::default();
-        
+
         info!("Starting synchronization for feed: {}", feed.name);
-        
+
         // Download feed data
         let feed_data = match self.download_feed_data(feed).await {
             Ok(data) => data,
@@ -1111,7 +1120,7 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
                 return Err(AuthError::ExternalService(format!("Feed download failed: {}", e)));
             }
         };
-        
+
         // Parse indicators from feed data
         let new_indicators = match self.parse_feed_indicators(&feed_data, &feed.format).await {
             Ok(indicators) => indicators,
@@ -1120,10 +1129,10 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
                 return Err(AuthError::ExternalService(format!("Feed parsing failed: {}", e)));
             }
         };
-        
+
         // Get existing indicators for this feed
         let existing_indicators = self.get_feed_indicators(&feed.name).await?;
-        
+
         // Process new indicators
         for indicator in new_indicators {
             match self.process_feed_indicator(&indicator, &feed.name, &existing_indicators).await {
@@ -1136,49 +1145,54 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
                 }
             }
         }
-        
+
         // Remove indicators that are no longer in the feed
         let removed = self.cleanup_stale_indicators(&feed.name, &existing_indicators).await?;
         sync_result.removed = removed;
-        
-        sync_result.total_indicators = sync_result.added + sync_result.updated + sync_result.skipped;
+
+        sync_result.total_indicators =
+            sync_result.added + sync_result.updated + sync_result.skipped;
         sync_result.duration_ms = start_time.elapsed().as_millis() as u64;
-        
+
         info!(
             "Feed synchronization completed: {} in {}ms - Added: {}, Updated: {}, Removed: {}, Skipped: {}, Errors: {}",
-            feed.name, sync_result.duration_ms, sync_result.added, sync_result.updated, 
+            feed.name, sync_result.duration_ms, sync_result.added, sync_result.updated,
             sync_result.removed, sync_result.skipped, sync_result.errors
         );
-        
+
         Ok(sync_result)
     }
-    
+
     async fn download_feed_data(&self, feed: &ThreatFeed) -> Result<String, reqwest::Error> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .user_agent("ThreatIntelligence/1.0")
             .build()?;
-            
+
         let mut request = client.get(&feed.url);
-        
+
         // Add authentication if required
         if let Some(ref api_key) = feed.api_key {
             request = request.header("Authorization", format!("Bearer {}", api_key));
         }
-        
+
         let response = request.send().await?.text().await?;
         Ok(response)
     }
-    
-    async fn parse_feed_indicators(&self, data: &str, format: &str) -> Result<Vec<ThreatIndicator>, AuthError> {
+
+    async fn parse_feed_indicators(
+        &self,
+        data: &str,
+        format: &str,
+    ) -> Result<Vec<ThreatIndicator>, AuthError> {
         let mut indicators = Vec::new();
-        
+
         match format.to_lowercase().as_str() {
             "json" => {
                 // Parse JSON format feed
                 let json_data: serde_json::Value = serde_json::from_str(data)
                     .map_err(|e| AuthError::ExternalService(format!("JSON parse error: {}", e)))?;
-                    
+
                 if let Some(array) = json_data.as_array() {
                     for item in array {
                         if let Some(indicator) = self.parse_json_indicator(item)? {
@@ -1186,10 +1200,11 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
                         }
                     }
                 }
-            },
+            }
             "csv" => {
                 // Parse CSV format feed
-                for line in data.lines().skip(1) { // Skip header
+                for line in data.lines().skip(1) {
+                    // Skip header
                     let fields: Vec<&str> = line.split(',').collect();
                     if fields.len() >= 2 {
                         let indicator = ThreatIndicator {
@@ -1208,7 +1223,7 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
                         indicators.push(indicator);
                     }
                 }
-            },
+            }
             "text" => {
                 // Parse plain text format (one indicator per line)
                 for line in data.lines() {
@@ -1230,25 +1245,31 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
                         indicators.push(indicator);
                     }
                 }
-            },
+            }
             _ => {
-                return Err(AuthError::ExternalService(format!("Unsupported feed format: {}", format)));
+                return Err(AuthError::ExternalService(format!(
+                    "Unsupported feed format: {}",
+                    format
+                )));
             }
         }
-        
+
         Ok(indicators)
     }
-    
-    fn parse_json_indicator(&self, item: &serde_json::Value) -> Result<Option<ThreatIndicator>, AuthError> {
+
+    fn parse_json_indicator(
+        &self,
+        item: &serde_json::Value,
+    ) -> Result<Option<ThreatIndicator>, AuthError> {
         let value = match item.get("indicator").or_else(|| item.get("value")) {
             Some(v) => v.as_str().unwrap_or_default().to_string(),
             None => return Ok(None),
         };
-        
+
         if value.is_empty() {
             return Ok(None);
         }
-        
+
         let indicator = ThreatIndicator {
             id: uuid::Uuid::new_v4().to_string(),
             indicator_type: self.detect_indicator_type(&value),
@@ -1259,34 +1280,38 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             description: item.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
             created_at: Utc::now(),
             updated_at: Utc::now(),
-            expires_at: item.get("expires_at").and_then(|v| v.as_str()).and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map(|dt| dt.with_timezone(&Utc)),
+            expires_at: item
+                .get("expires_at")
+                .and_then(|v| v.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc)),
             metadata: std::collections::HashMap::new(),
         };
-        
+
         Ok(Some(indicator))
     }
-    
+
     fn detect_indicator_type(&self, value: &str) -> IndicatorType {
         // IP address detection
         if std::net::IpAddr::from_str(value).is_ok() {
             return IndicatorType::IpAddress;
         }
-        
+
         // Domain detection
         if value.contains('.') && !value.contains('/') && !value.contains('@') {
             return IndicatorType::Domain;
         }
-        
+
         // URL detection
         if value.starts_with("http://") || value.starts_with("https://") {
             return IndicatorType::Url;
         }
-        
+
         // Email detection
         if value.contains('@') && value.contains('.') {
             return IndicatorType::Email;
         }
-        
+
         // Hash detection (common lengths)
         match value.len() {
             32 => IndicatorType::FileHash, // MD5
@@ -1295,7 +1320,7 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             _ => IndicatorType::Other,
         }
     }
-    
+
     fn parse_severity(&self, severity_value: Option<&serde_json::Value>) -> ThreatSeverity {
         match severity_value.and_then(|v| v.as_str()) {
             Some("low") => ThreatSeverity::Low,
@@ -1305,18 +1330,21 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             _ => ThreatSeverity::Medium,
         }
     }
-    
-    async fn get_feed_indicators(&self, feed_name: &str) -> Result<std::collections::HashSet<String>, AuthError> {
+
+    async fn get_feed_indicators(
+        &self,
+        feed_name: &str,
+    ) -> Result<std::collections::HashSet<String>, AuthError> {
         // In a real implementation, this would query the database
         // For now, return an empty set
         Ok(std::collections::HashSet::new())
     }
-    
+
     async fn process_feed_indicator(
         &self,
         indicator: &ThreatIndicator,
         feed_name: &str,
-        existing: &std::collections::HashSet<String>
+        existing: &std::collections::HashSet<String>,
     ) -> Result<ProcessResult, AuthError> {
         if existing.contains(&indicator.value) {
             // Update existing indicator
@@ -1326,11 +1354,11 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             Ok(ProcessResult::Added)
         }
     }
-    
+
     async fn cleanup_stale_indicators(
         &self,
         feed_name: &str,
-        existing: &std::collections::HashSet<String>
+        existing: &std::collections::HashSet<String>,
     ) -> Result<u32, AuthError> {
         // In a real implementation, this would remove indicators not in the current feed
         Ok(0)

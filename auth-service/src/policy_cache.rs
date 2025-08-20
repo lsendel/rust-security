@@ -114,7 +114,7 @@ impl PolicyCache {
     #[instrument(skip(self))]
     pub async fn get(&self, request: &PolicyRequest) -> Option<PolicyResponse> {
         let start_time = Instant::now();
-        
+
         if !self.config.enabled {
             return None;
         }
@@ -137,13 +137,15 @@ impl PolicyCache {
                     age_seconds = entry.created_at.elapsed().as_secs(),
                     "Policy cache hit"
                 );
-                
+
                 // Record cache hit metrics
                 let duration = start_time.elapsed();
-                METRICS.policy_cache_operations
+                METRICS
+                    .policy_cache_operations
                     .with_label_values(&["get", "hit", policy_type])
                     .inc();
-                METRICS.cache_operation_duration
+                METRICS
+                    .cache_operation_duration
                     .with_label_values(&["policy", "get"])
                     .observe(duration.as_secs_f64());
 
@@ -166,13 +168,12 @@ impl PolicyCache {
         // Cache miss
         let mut stats = self.stats.write().await;
         stats.misses += 1;
-        
+
         // Record cache miss metrics
         let duration = start_time.elapsed();
-        METRICS.policy_cache_operations
-            .with_label_values(&["get", "miss", policy_type])
-            .inc();
-        METRICS.cache_operation_duration
+        METRICS.policy_cache_operations.with_label_values(&["get", "miss", policy_type]).inc();
+        METRICS
+            .cache_operation_duration
             .with_label_values(&["policy", "get"])
             .observe(duration.as_secs_f64());
 

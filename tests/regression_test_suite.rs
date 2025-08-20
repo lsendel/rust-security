@@ -1,8 +1,8 @@
+use reqwest::Client;
+use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::timeout;
-use serde_json::{json, Value};
-use reqwest::Client;
-use std::collections::HashMap;
 
 /// Comprehensive regression test suite for Rust Security Workspace
 /// Tests all Phase 1 and Phase 2 features end-to-end
@@ -81,7 +81,9 @@ impl RegressionTestSuite {
     pub async fn run_test<F, Fut>(&mut self, test_name: &str, test_fn: F)
     where
         F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = Result<Option<Value>, Box<dyn std::error::Error + Send + Sync>>>,
+        Fut: std::future::Future<
+            Output = Result<Option<Value>, Box<dyn std::error::Error + Send + Sync>>,
+        >,
     {
         let start_time = std::time::Instant::now();
         print!("  {} ... ", test_name);
@@ -90,35 +92,44 @@ impl RegressionTestSuite {
             Ok(Ok(details)) => {
                 let duration = start_time.elapsed();
                 println!("✅ PASS ({:.2}s)", duration.as_secs_f64());
-                self.test_results.insert(test_name.to_string(), TestResult {
-                    name: test_name.to_string(),
-                    passed: true,
-                    duration,
-                    error: None,
-                    details,
-                });
+                self.test_results.insert(
+                    test_name.to_string(),
+                    TestResult {
+                        name: test_name.to_string(),
+                        passed: true,
+                        duration,
+                        error: None,
+                        details,
+                    },
+                );
             }
             Ok(Err(e)) => {
                 let duration = start_time.elapsed();
                 println!("❌ FAIL ({:.2}s): {}", duration.as_secs_f64(), e);
-                self.test_results.insert(test_name.to_string(), TestResult {
-                    name: test_name.to_string(),
-                    passed: false,
-                    duration,
-                    error: Some(e.to_string()),
-                    details: None,
-                });
+                self.test_results.insert(
+                    test_name.to_string(),
+                    TestResult {
+                        name: test_name.to_string(),
+                        passed: false,
+                        duration,
+                        error: Some(e.to_string()),
+                        details: None,
+                    },
+                );
             }
             Err(_) => {
                 let duration = start_time.elapsed();
                 println!("⏰ TIMEOUT ({:.2}s)", duration.as_secs_f64());
-                self.test_results.insert(test_name.to_string(), TestResult {
-                    name: test_name.to_string(),
-                    passed: false,
-                    duration,
-                    error: Some("Test timed out after 30 seconds".to_string()),
-                    details: None,
-                });
+                self.test_results.insert(
+                    test_name.to_string(),
+                    TestResult {
+                        name: test_name.to_string(),
+                        passed: false,
+                        duration,
+                        error: Some("Test timed out after 30 seconds".to_string()),
+                        details: None,
+                    },
+                );
             }
         }
     }
@@ -128,14 +139,10 @@ impl RegressionTestSuite {
         let passed_tests = self.test_results.values().filter(|r| r.passed).count();
         let failed_tests = total_tests - passed_tests;
 
-        let total_duration: Duration = self.test_results.values()
-            .map(|r| r.duration)
-            .sum();
+        let total_duration: Duration = self.test_results.values().map(|r| r.duration).sum();
 
-        let failed_test_names: Vec<String> = self.test_results.values()
-            .filter(|r| !r.passed)
-            .map(|r| r.name.clone())
-            .collect();
+        let failed_test_names: Vec<String> =
+            self.test_results.values().filter(|r| !r.passed).map(|r| r.name.clone()).collect();
 
         TestSummary {
             total_tests,
@@ -176,11 +183,17 @@ impl TestSummary {
             }
         }
 
-        println!("\n🎯 Overall Status: {}",
-            if self.success_rate >= 95.0 { "✅ EXCELLENT" }
-            else if self.success_rate >= 90.0 { "⚠️  GOOD" }
-            else if self.success_rate >= 80.0 { "⚠️  NEEDS ATTENTION" }
-            else { "❌ CRITICAL ISSUES" }
+        println!(
+            "\n🎯 Overall Status: {}",
+            if self.success_rate >= 95.0 {
+                "✅ EXCELLENT"
+            } else if self.success_rate >= 90.0 {
+                "⚠️  GOOD"
+            } else if self.success_rate >= 80.0 {
+                "⚠️  NEEDS ATTENTION"
+            } else {
+                "❌ CRITICAL ISSUES"
+            }
         );
         println!("{}", "=".repeat(80));
     }
@@ -203,21 +216,27 @@ mod tests {
         let mut suite = RegressionTestSuite::new("http://localhost:8080", "http://localhost:8081");
 
         // Add some mock test results
-        suite.test_results.insert("test1".to_string(), TestResult {
-            name: "test1".to_string(),
-            passed: true,
-            duration: Duration::from_millis(100),
-            error: None,
-            details: None,
-        });
+        suite.test_results.insert(
+            "test1".to_string(),
+            TestResult {
+                name: "test1".to_string(),
+                passed: true,
+                duration: Duration::from_millis(100),
+                error: None,
+                details: None,
+            },
+        );
 
-        suite.test_results.insert("test2".to_string(), TestResult {
-            name: "test2".to_string(),
-            passed: false,
-            duration: Duration::from_millis(200),
-            error: Some("Test failed".to_string()),
-            details: None,
-        });
+        suite.test_results.insert(
+            "test2".to_string(),
+            TestResult {
+                name: "test2".to_string(),
+                passed: false,
+                duration: Duration::from_millis(200),
+                error: Some("Test failed".to_string()),
+                details: None,
+            },
+        );
 
         let summary = suite.generate_summary();
         assert_eq!(summary.total_tests, 2);

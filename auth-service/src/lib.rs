@@ -20,6 +20,7 @@ use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
+use argon2::PasswordVerifier;
 use tower_http::{
     cors::CorsLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
@@ -66,7 +67,7 @@ async fn metrics_handler() -> Response {
     let encoder = TextEncoder::new();
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
-    
+
     if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
         tracing::error!("Failed to encode metrics: {}", e);
         return Response::builder()
@@ -74,7 +75,7 @@ async fn metrics_handler() -> Response {
             .body(axum::body::Body::from("Failed to encode metrics"))
             .unwrap_or_else(|_| Response::new(axum::body::Body::empty()));
     }
-    
+
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, encoder.format_type())
@@ -86,6 +87,7 @@ async fn metrics_handler() -> Response {
 }
 
 // Core modules
+pub mod config;
 pub mod config_endpoints;
 pub mod config_reload;
 pub mod errors;
@@ -393,8 +395,16 @@ async fn extract_user_from_token(
     }
 
     // Get token record and validate
-    let record = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
-    let record = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let record = state
+        .store
+        .get_token_record(token)
+        .await?
+        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let record = state
+        .store
+        .get_token_record(token)
+        .await?
+        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
 
     if !record.active {
         return Err(AuthError::InvalidToken { reason: "Token is not active".to_string() });
@@ -700,9 +710,8 @@ pub async fn invalidate_user_sessions_endpoint(
     })))
 }
 
-
-use common::Store;
 use crate::api_key_store::ApiKeyStore;
+use common::{Store, TokenRecord};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -793,20 +802,33 @@ pub async fn authorize_check(
     let auth_header =
         headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
 
-    let token = auth.strip_prefix("Bearer ").unwrap_or("");
+    let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
         return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
     }
-    let rec = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let rec = state
+        .store
+        .get_token_record(token)
+        .await?
+        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
     if !rec.active {
         return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
     }
 
-
     let (principal, mut context) = if auth_header.starts_with("Bearer ") {
         // JWT-based authentication
         let token = auth_header.strip_prefix("Bearer ").unwrap();
-        let rec = state.token_store.get_record(token).await?;
+        let rec_option = state.store.get_token_record(token).await?;
+        let rec = rec_option.unwrap_or_else(|| TokenRecord {
+            active: false,
+            sub: None,
+            client_id: None,
+            scope: None,
+            exp: None,
+            iat: None,
+            token_binding: None,
+            mfa_verified: false,
+        });
         if !rec.active {
             return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
         }
@@ -847,7 +869,9 @@ pub async fn authorize_check(
             return Err(AuthError::InvalidToken { reason: "invalid api key".to_string() });
         }
     } else {
-        return Err(AuthError::InvalidToken { reason: "missing or invalid authorization header".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "missing or invalid authorization header".to_string(),
+        });
     };
 
     // Context: merge provided context or default empty object
@@ -864,7 +888,7 @@ pub async fn authorize_check(
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        let token = auth.strip_prefix("Bearer ").unwrap_or("");
+        let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
         if !token.is_empty() {
             if let Ok(Some(record)) = state.store.get_token_record(token).await {
                 context["mfa_verified"] = serde_json::json!(record.mfa_verified);
@@ -1106,12 +1130,11 @@ pub async fn admin_health(
     // Note: This would require a reference to the session manager from app state
 
     // Aggregate health status
-    let overall_status =
-        if store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
-            "healthy"
-        } else {
-            "degraded"
-        };
+    let overall_status = if store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
+        "healthy"
+    } else {
+        "degraded"
+    };
 
     health_data["status"] = serde_json::Value::String(overall_status.to_string());
     health_data["components"] = serde_json::json!({
@@ -1276,7 +1299,11 @@ pub async fn introspect(
         return Err(AuthError::InvalidToken { reason: e.to_string() });
     }
 
-    let rec = state.store.get_token_record(&body.token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let rec = state
+        .store
+        .get_token_record(&body.token)
+        .await?
+        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
 
     // Log token introspection event
     let mut event = SecurityEvent::new(
@@ -1319,11 +1346,13 @@ pub async fn introspect(
     let duration = start_time.elapsed();
     let client_id = rec.client_id.as_deref().unwrap_or("unknown");
     let token_active = if rec.active { "true" } else { "false" };
-    
-    METRICS.token_introspection_total
+
+    METRICS
+        .token_introspection_total
         .with_label_values(&[client_id, "success", token_active])
         .inc();
-    METRICS.token_operation_duration
+    METRICS
+        .token_operation_duration
         .with_label_values(&["introspect", "success"])
         .observe(duration.as_secs_f64());
 
@@ -1367,15 +1396,14 @@ pub async fn oauth_authorize(
         Ok(validator) => validator.validate_redirect_uri(&req.client_id, &req.redirect_uri),
         Err(e) => {
             tracing::error!("Failed to acquire redirect validator lock: {}", e);
-            return Err(AuthError::InternalError { 
+            return Err(AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: "Security validation unavailable".to_string() 
+                context: "Security validation unavailable".to_string(),
             });
         }
     };
-    
-    if let Err(validation_error) = validation_result
-    {
+
+    if let Err(validation_error) = validation_result {
         // Log security violation
         SecurityLogger::log_event(
             &mut SecurityEvent::new(
@@ -1456,8 +1484,8 @@ pub async fn oauth_authorize(
         redirect_uri: auth_code.redirect_uri.clone(),
         nonce: None, // Not handled in this flow currently
         scope: auth_code.scope.clone().unwrap_or_default(),
-        pkce_challenge: auth_code.code_challenge.clone(),
-        pkce_method: auth_code.code_challenge_method.clone(),
+        pkce_challenge: auth_code.pkce_challenge.clone(),
+        pkce_method: auth_code.pkce_challenge_method.clone(),
         user_id: None, // Not handled in this flow currently
         exp: auth_code.expires_at,
     };
@@ -1595,10 +1623,10 @@ pub async fn issue_token(
     Form(form): Form<TokenRequest>,
 ) -> Result<Json<TokenResponse>, AuthError> {
     use crate::metrics::{MetricsHelper, METRICS};
-    
+
     // Start timing token issuance
     let start_time = std::time::Instant::now();
-    
+
     // Extract client information for security logging
     let ip_address = headers
         .get("x-forwarded-for")
@@ -1649,7 +1677,15 @@ pub async fn issue_token(
             let mut legacy_authenticator = crate::client_auth::ClientAuthenticator::new();
             legacy_authenticator.load_from_env()?;
 
-            if crate::client_auth::authenticate_client(&state.api_key_store, &legacy_authenticator, client_id, client_secret, Some(&ip_address)).await? {
+            if crate::client_auth::authenticate_client(
+                &state.api_key_store,
+                &legacy_authenticator,
+                client_id,
+                client_secret,
+                Some(&ip_address),
+            )
+            .await?
+            {
                 // Log successful authentication attempt
                 SecurityLogger::log_auth_attempt(
                     client_id,
@@ -1739,16 +1775,23 @@ pub async fn issue_token(
                         "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
                     }),
                 );
-                
+
                 // Record successful client_credentials token issuance
                 let duration = start_time.elapsed();
-                METRICS.token_issuance_total
-                    .with_label_values(&["access_token", "client_credentials", client_id, "success"])
+                METRICS
+                    .token_issuance_total
+                    .with_label_values(&[
+                        "access_token",
+                        "client_credentials",
+                        client_id,
+                        "success",
+                    ])
                     .inc();
-                METRICS.token_operation_duration
+                METRICS
+                    .token_operation_duration
                     .with_label_values(&["issue", "success"])
                     .observe(duration.as_secs_f64());
-                
+
                 Ok(res)
             } else {
                 // Log failed authentication attempt
@@ -1780,16 +1823,18 @@ pub async fn issue_token(
                         "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
                     }),
                 );
-                
+
                 // Record failed client_credentials token issuance
                 let duration = start_time.elapsed();
-                METRICS.token_issuance_total
+                METRICS
+                    .token_issuance_total
                     .with_label_values(&["access_token", "client_credentials", "unknown", "error"])
                     .inc();
-                METRICS.token_operation_duration
+                METRICS
+                    .token_operation_duration
                     .with_label_values(&["issue", "error"])
                     .observe(duration.as_secs_f64());
-                
+
                 Err(AuthError::InvalidClientCredentials)
             }
         }
@@ -1910,7 +1955,7 @@ pub async fn issue_token(
             })?;
 
             // Validate authorization code hasn't expired
-            if chrono::Utc::now().timestamp() > auth_code.expires_at {
+            if chrono::Utc::now().timestamp() > auth_code.exp {
                 return Err(AuthError::InvalidToken {
                     reason: "authorization code expired".to_string(),
                 });
@@ -1931,12 +1976,12 @@ pub async fn issue_token(
             }
 
             // Validate PKCE if code_challenge was used during authorization
-            if let Some(stored_challenge) = &auth_code.code_challenge {
+            if let Some(stored_challenge) = &auth_code.pkce_challenge {
                 let code_verifier = form.code_verifier.as_ref().ok_or_else(|| {
                     AuthError::InvalidRequest { reason: "missing code_verifier".to_string() }
                 })?;
 
-                let method = auth_code.code_challenge_method.as_deref().unwrap_or("S256");
+                let method = auth_code.pkce_method.as_deref().unwrap_or("S256");
                 let challenge_method = method
                     .parse::<crate::security::CodeChallengeMethod>()
                     .map_err(|_| AuthError::InvalidRequest {
@@ -1984,7 +2029,7 @@ pub async fn issue_token(
                         ),
                         (
                             "had_pkce".to_string(),
-                            serde_json::Value::Bool(auth_code.code_challenge.is_some()),
+                            serde_json::Value::Bool(auth_code.pkce_challenge.is_some()),
                         ),
                         ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
                     ]
@@ -1997,34 +2042,43 @@ pub async fn issue_token(
                 serde_json::json!({
                     "client_id": auth_code.client_id,
                     "has_scope": auth_code.scope.is_some(),
-                    "had_pkce": auth_code.code_challenge.is_some(),
+                    "had_pkce": auth_code.pkce_challenge.is_some(),
                     "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
                 }),
             );
 
             TOKENS_ISSUED.inc();
-            
+
             // Record successful token issuance metrics
             let duration = start_time.elapsed();
-            METRICS.token_issuance_total
-                .with_label_values(&["access_token", &form.grant_type, &auth_code.client_id, "success"])
+            METRICS
+                .token_issuance_total
+                .with_label_values(&[
+                    "access_token",
+                    &form.grant_type,
+                    &auth_code.client_id,
+                    "success",
+                ])
                 .inc();
-            METRICS.token_operation_duration
+            METRICS
+                .token_operation_duration
                 .with_label_values(&["issue", "success"])
                 .observe(duration.as_secs_f64());
-            
+
             Ok(res)
         }
         _ => {
             // Record unsupported grant type error
             let duration = start_time.elapsed();
-            METRICS.token_issuance_total
+            METRICS
+                .token_issuance_total
                 .with_label_values(&["access_token", &form.grant_type, "unknown", "error"])
                 .inc();
-            METRICS.token_operation_duration
+            METRICS
+                .token_operation_duration
                 .with_label_values(&["issue", "error"])
                 .observe(duration.as_secs_f64());
-            
+
             Err(AuthError::UnsupportedGrantType { grant_type: form.grant_type })
         }
     }
@@ -2048,9 +2102,9 @@ pub async fn userinfo(
         .to_string();
 
     // Extract bearer token
-    let auth =
+    let auth_header =
         headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
-    let token = auth.strip_prefix("Bearer ").unwrap_or("");
+    let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
         SecurityLogger::log_validation_failure(
             "/oauth/userinfo",
@@ -2061,7 +2115,11 @@ pub async fn userinfo(
         );
         return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
     }
-    let rec = state.store.get_token_record(token).await?.ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let rec = state
+        .store
+        .get_token_record(token)
+        .await?
+        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
     if !rec.active {
         SecurityLogger::log_validation_failure(
             "/oauth/userinfo",
@@ -2231,7 +2289,10 @@ async fn issue_new_token(
     .await?;
 
     // Store refresh token
-    state.store.set_refresh_token_association(&refresh_token, &access_token, REFRESH_TOKEN_EXPIRY_SECONDS).await?;
+    state
+        .store
+        .set_refresh_token_association(&refresh_token, &access_token, REFRESH_TOKEN_EXPIRY_SECONDS)
+        .await?;
 
     let id_token =
         if make_id_token { create_id_token(subject.clone(), now, exp).await } else { None };
@@ -2341,16 +2402,18 @@ pub async fn revoke_token(
             "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
         }),
     );
-    
+
     // Record successful token revocation
     let duration = start_time.elapsed();
-    METRICS.token_revocation_total
+    METRICS
+        .token_revocation_total
         .with_label_values(&["access_token", "requested", "unknown", "success"])
         .inc();
-    METRICS.token_operation_duration
+    METRICS
+        .token_operation_duration
         .with_label_values(&["revoke", "success"])
         .observe(duration.as_secs_f64());
-    
+
     Ok(Json(RevokeResponse { revoked: true }))
 }
 
@@ -2425,7 +2488,7 @@ pub fn app(state: AppState) -> Router {
         .merge(crate::scim::router());
 
     // Admin-protected routes (require admin authentication and authorization)
-    let api_key_router = crate::api_key_endpoints::router(state.api_key_store.clone());
+    let api_key_router = crate::api_key_endpoints::router();
     let admin_router = Router::new()
         .route("/metrics", get(crate::metrics::metrics_handler))
         .route("/admin/health", get(admin_health))

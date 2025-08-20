@@ -216,7 +216,9 @@ async fn bulk_operations(
     // on failure, which could leave the system in an inconsistent state.
 
     if !request.schemas.contains(&BULK_SCHEMA.to_string()) {
-        return Err(AuthError::InvalidRequest { reason: "Invalid bulk request schema".to_string() });
+        return Err(AuthError::InvalidRequest {
+            reason: "Invalid bulk request schema".to_string(),
+        });
     }
     if request.operations.len() > MAX_BULK_OPERATIONS {
         return Err(AuthError::InvalidRequest { reason: "Too many operations".to_string() });
@@ -261,10 +263,12 @@ async fn process_single_operation(
     match (operation.method.clone(), path_parts.as_slice()) {
         // Create User
         (BulkOperationMethod::Post, [_, "scim", "v2", "Users"]) => {
-            let user: ScimUser = serde_json::from_value(data)
-                .map_err(|_| create_error_response(operation.method.clone(), "400", "Invalid user data"))?;
-            let created_user = state.store.create_user(&user).await
-                .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?;
+            let user: ScimUser = serde_json::from_value(data).map_err(|_| {
+                create_error_response(operation.method.clone(), "400", "Invalid user data")
+            })?;
+            let created_user = state.store.create_user(&user).await.map_err(|e| {
+                create_error_response(operation.method.clone(), "500", &e.to_string())
+            })?;
 
             Ok(BulkOperationResponse {
                 method: BulkOperationMethod::Post,
@@ -277,11 +281,13 @@ async fn process_single_operation(
         }
         // Update User (PUT)
         (BulkOperationMethod::Put, [_, "scim", "v2", "Users", user_id]) => {
-            let mut user: ScimUser = serde_json::from_value(data)
-                .map_err(|_| create_error_response(operation.method.clone(), "400", "Invalid user data"))?;
+            let mut user: ScimUser = serde_json::from_value(data).map_err(|_| {
+                create_error_response(operation.method.clone(), "400", "Invalid user data")
+            })?;
             user.id = user_id.to_string();
-            let updated_user = state.store.update_user(&user).await
-                .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?;
+            let updated_user = state.store.update_user(&user).await.map_err(|e| {
+                create_error_response(operation.method.clone(), "500", &e.to_string())
+            })?;
 
             Ok(BulkOperationResponse {
                 method: BulkOperationMethod::Put,
@@ -294,8 +300,9 @@ async fn process_single_operation(
         }
         // Delete User
         (BulkOperationMethod::Delete, [_, "scim", "v2", "Users", user_id]) => {
-            state.store.delete_user(user_id).await
-                .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?;
+            state.store.delete_user(user_id).await.map_err(|e| {
+                create_error_response(operation.method.clone(), "500", &e.to_string())
+            })?;
 
             Ok(BulkOperationResponse {
                 method: BulkOperationMethod::Delete,
@@ -308,10 +315,12 @@ async fn process_single_operation(
         }
         // Create Group
         (BulkOperationMethod::Post, [_, "scim", "v2", "Groups"]) => {
-            let group: ScimGroup = serde_json::from_value(data)
-                .map_err(|_| create_error_response(operation.method.clone(), "400", "Invalid group data"))?;
-            let created_group = state.store.create_group(&group).await
-                .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?;
+            let group: ScimGroup = serde_json::from_value(data).map_err(|_| {
+                create_error_response(operation.method.clone(), "400", "Invalid group data")
+            })?;
+            let created_group = state.store.create_group(&group).await.map_err(|e| {
+                create_error_response(operation.method.clone(), "500", &e.to_string())
+            })?;
 
             Ok(BulkOperationResponse {
                 method: BulkOperationMethod::Post,
@@ -324,19 +333,28 @@ async fn process_single_operation(
         }
         // Note: PATCH is complex and not fully implemented here. This is a simplified version.
         (BulkOperationMethod::Patch, [_, "scim", "v2", "Users", user_id]) => {
-             let patch_data: serde_json::Value = serde_json::from_value(data)
-                .map_err(|_| create_error_response(operation.method.clone(), "400", "Invalid patch data"))?;
+            let patch_data: serde_json::Value = serde_json::from_value(data).map_err(|_| {
+                create_error_response(operation.method.clone(), "400", "Invalid patch data")
+            })?;
 
-            let mut user = state.store.get_user(user_id).await
-                .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?
-                .ok_or_else(|| create_error_response(operation.method.clone(), "404", "User not found"))?;
+            let mut user = state
+                .store
+                .get_user(user_id)
+                .await
+                .map_err(|e| {
+                    create_error_response(operation.method.clone(), "500", &e.to_string())
+                })?
+                .ok_or_else(|| {
+                    create_error_response(operation.method.clone(), "404", "User not found")
+                })?;
 
             if let Some(active) = patch_data.get("active").and_then(|v| v.as_bool()) {
                 user.active = active;
             }
 
-            let updated_user = state.store.update_user(&user).await
-                 .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?;
+            let updated_user = state.store.update_user(&user).await.map_err(|e| {
+                create_error_response(operation.method.clone(), "500", &e.to_string())
+            })?;
 
             Ok(BulkOperationResponse {
                 method: BulkOperationMethod::Patch,
@@ -347,7 +365,11 @@ async fn process_single_operation(
                 version: None,
             })
         }
-        _ => Err(create_error_response(operation.method.clone(), "404", "Operation not supported or path is invalid")),
+        _ => Err(create_error_response(
+            operation.method.clone(),
+            "404",
+            "Operation not supported or path is invalid",
+        )),
     }
 }
 

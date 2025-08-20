@@ -13,11 +13,11 @@
 use crate::attack_framework::{AttackSession, RedTeamFramework};
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tracing::{info, warn, debug};
-use base64::{Engine, engine::general_purpose};
+use tracing::{debug, info, warn};
 
 pub async fn run_oauth_scenarios(
     framework: &mut RedTeamFramework,
@@ -271,14 +271,19 @@ async fn client_authentication_bypass(
         ("none", "No authentication", None, None),
         ("basic_empty", "Empty basic auth", Some(""), Some("")),
         ("basic_null", "Null basic auth", Some("null"), Some("null")),
-        ("jwt_none", "JWT none algorithm", Some("test"), Some("eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ0ZXN0In0.")),
+        (
+            "jwt_none",
+            "JWT none algorithm",
+            Some("test"),
+            Some("eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJ0ZXN0In0."),
+        ),
         ("client_secret_guess", "Guessed secret", Some("test"), Some("secret")),
         ("client_secret_weak", "Weak secret", Some("test"), Some("123456")),
     ];
 
     for (attack_type, description, client_id, client_secret) in bypass_attempts {
         let mut headers = reqwest::header::HeaderMap::new();
-        
+
         if let (Some(id), Some(secret)) = (client_id, client_secret) {
             if secret.starts_with("eyJ") {
                 // JWT client assertion
@@ -375,11 +380,8 @@ async fn token_exchange_attacks(
         }
 
         // Test token substitution
-        let malicious_tokens = vec![
-            "fake_admin_token",
-            "system_override_token",
-            "debug_access_token",
-        ];
+        let malicious_tokens =
+            vec!["fake_admin_token", "system_override_token", "debug_access_token"];
 
         for malicious_token in malicious_tokens {
             let body = format!(
@@ -426,7 +428,7 @@ async fn oidc_specific_attacks(
 
     // Test ID token manipulation
     let malicious_nonce_values = vec![
-        "",  // Missing nonce
+        "", // Missing nonce
         "predictable_nonce_123",
         "admin_override",
         "../../../etc/passwd",
@@ -440,14 +442,7 @@ async fn oidc_specific_attacks(
         );
 
         let result = framework
-            .execute_attack(
-                "oidc_nonce_manipulation",
-                "GET",
-                &auth_url,
-                None,
-                None,
-                Some(&session),
-            )
+            .execute_attack("oidc_nonce_manipulation", "GET", &auth_url, None, None, Some(&session))
             .await?;
 
         if result.success {
@@ -481,7 +476,9 @@ async fn oidc_specific_attacks(
                 )
                 .await?;
 
-            if result.success && (result.response_body.contains("admin") || result.response_body.contains("root")) {
+            if result.success
+                && (result.response_body.contains("admin") || result.response_body.contains("root"))
+            {
                 oidc_attacks.push(format!("Userinfo attack successful: {}", attack_type));
             }
         }
@@ -490,11 +487,7 @@ async fn oidc_specific_attacks(
     let mut scenario_data = HashMap::new();
     scenario_data.insert("oidc_attacks".to_string(), json!(oidc_attacks));
 
-    reporter.add_scenario_result(
-        "oidc_specific_attacks",
-        oidc_attacks.is_empty(),
-        scenario_data,
-    );
+    reporter.add_scenario_result("oidc_specific_attacks", oidc_attacks.is_empty(), scenario_data);
     Ok(())
 }
 
@@ -541,11 +534,7 @@ async fn authorization_code_injection(
     }
 
     // Test code replay attacks
-    let replay_codes = vec![
-        "previously_used_code_123",
-        "expired_code_456",
-        "shared_code_789",
-    ];
+    let replay_codes = vec!["previously_used_code_123", "expired_code_456", "shared_code_789"];
 
     for code in replay_codes {
         // First attempt

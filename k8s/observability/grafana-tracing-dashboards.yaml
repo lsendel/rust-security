@@ -1,0 +1,691 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-tracing-dashboards
+  namespace: observability
+  labels:
+    grafana_dashboard: "true"
+data:
+  auth-service-tracing-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Auth Service - Distributed Tracing Dashboard",
+        "tags": ["rust-security", "auth-service", "tracing", "opentelemetry"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Authentication Flow Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(auth_attempts_total[5m]))",
+                "legendFormat": "Auth Attempts/sec"
+              },
+              {
+                "expr": "sum(rate(auth_failures_total[5m]))",
+                "legendFormat": "Auth Failures/sec"
+              },
+              {
+                "expr": "(1 - sum(rate(auth_failures_total[5m])) / sum(rate(auth_attempts_total[5m]))) * 100",
+                "legendFormat": "Success Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 95},
+                    {"color": "green", "value": 99}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Authentication Flow Response Times",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{service=\"auth-service\"}[5m])) by (le)) * 1000",
+                "legendFormat": "P50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"auth-service\"}[5m])) by (le)) * 1000",
+                "legendFormat": "P95"
+              },
+              {
+                "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service=\"auth-service\"}[5m])) by (le)) * 1000",
+                "legendFormat": "P99"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "custom": {
+                  "thresholdsStyle": {"mode": "line"}
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 100},
+                    {"color": "red", "value": 500}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 3,
+            "title": "Token Operations",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(token_operations_total[5m])) by (operation, token_type)",
+                "legendFormat": "{{ operation }} - {{ token_type }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Security Events by Type",
+            "type": "bargauge",
+            "targets": [
+              {
+                "expr": "sum(rate(security_events_total[1h])) by (event_type)",
+                "legendFormat": "{{ event_type }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "displayName": "Events/hour"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Database Operations Performance",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(database_operation_duration_seconds_bucket[5m])) by (le, operation)) * 1000",
+                "legendFormat": "{{ operation }} P95"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Top Slowest Traces",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "topk(10, max_over_time(trace_duration_seconds[1h])) * 1000",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms",
+                "custom": {
+                  "displayMode": "list"
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 7,
+            "title": "Error Rate by Endpoint",
+            "type": "heatmap",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{service=\"auth-service\",code=~\"4..|5..\"}[5m])) by (path)",
+                "legendFormat": "{{ path }}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          },
+          {
+            "id": 8,
+            "title": "Active Sessions",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "active_sessions",
+                "legendFormat": "Current Sessions"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "color": {"mode": "continuous-GrYlRd"}
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 32}
+          },
+          {
+            "id": 9,
+            "title": "Policy Evaluations/sec",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(policy_evaluations_total[5m]))",
+                "legendFormat": "Evaluations/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 32}
+          },
+          {
+            "id": 10,
+            "title": "Rate Limit Violations",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(rate_limit_violations_total[1h]))",
+                "legendFormat": "Violations/hour"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 10},
+                    {"color": "red", "value": 50}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 32}
+          },
+          {
+            "id": 11,
+            "title": "Memory Usage",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "memory_usage_bytes / 1024 / 1024",
+                "legendFormat": "Memory MB"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "MB"
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 32}
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "10s"
+      }
+    }
+
+  distributed-tracing-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Distributed Tracing Overview",
+        "tags": ["rust-security", "distributed-tracing", "jaeger", "tempo"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Trace Volume",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(traces_received_total[5m]))",
+                "legendFormat": "Traces/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Span Volume by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(spans_received_total[5m])) by (service_name)",
+                "legendFormat": "{{ service_name }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Average Trace Duration by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "avg(trace_duration_seconds) by (service_name) * 1000",
+                "legendFormat": "{{ service_name }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Error Rate by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(spans_received_total{status_code=\"error\"}[5m])) by (service_name) / sum(rate(spans_received_total[5m])) by (service_name) * 100",
+                "legendFormat": "{{ service_name }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "max": 100
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Top Operations by Duration",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "topk(20, avg(operation_duration_seconds) by (operation_name, service_name)) * 1000",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Service Dependencies",
+            "type": "nodeGraph",
+            "targets": [
+              {
+                "expr": "sum(rate(service_call_total[5m])) by (source_service, target_service)",
+                "format": "table"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 7,
+            "title": "Authentication Flow Traces",
+            "type": "trace",
+            "targets": [
+              {
+                "expr": "traces{service_name=\"auth-service\", operation_name=~\"auth_flow_.*\"}",
+                "queryType": "traceId"
+              }
+            ],
+            "gridPos": {"h": 12, "w": 24, "x": 0, "y": 24}
+          },
+          {
+            "id": 8,
+            "title": "Critical Path Analysis",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(critical_path_duration_seconds_bucket[5m])) by (le, path)) * 1000",
+                "legendFormat": "{{ path }} P95"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 36}
+          }
+        ],
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+
+  security-tracing-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Security Event Tracing Dashboard",
+        "tags": ["rust-security", "security", "tracing", "audit"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Security Events by Severity",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "sum(rate(security_events_total[1h])) by (severity)",
+                "legendFormat": "{{ severity }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Failed Authentication Attempts",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(auth_failures_total[5m])) by (method, user_id)",
+                "legendFormat": "{{ method }} - {{ user_id }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Suspicious Activity by IP",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "topk(10, sum(rate(suspicious_activity_total[1h])) by (source_ip))",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Rate Limit Violations Timeline",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(rate_limit_violations_total[5m])) by (source_ip, violation_type)",
+                "legendFormat": "{{ source_ip }} - {{ violation_type }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Authentication Method Distribution",
+            "type": "bargauge",
+            "targets": [
+              {
+                "expr": "sum(rate(auth_attempts_total[1h])) by (method)",
+                "legendFormat": "{{ method }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Token Validation Failures",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "sum(rate(token_validation_failures_total[5m])) by (token_type, failure_reason)",
+                "legendFormat": "{{ token_type }} - {{ failure_reason }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ops"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 7,
+            "title": "Policy Violations by Resource",
+            "type": "heatmap",
+            "targets": [
+              {
+                "expr": "sum(rate(policy_violations_total[5m])) by (resource, action)",
+                "legendFormat": "{{ resource }} - {{ action }}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+          },
+          {
+            "id": 8,
+            "title": "Security Event Traces",
+            "type": "trace",
+            "targets": [
+              {
+                "expr": "traces{service_name=\"auth-service\", operation_name=\"security_event\"}",
+                "queryType": "traceId"
+              }
+            ],
+            "gridPos": {"h": 12, "w": 24, "x": 0, "y": 32}
+          }
+        ],
+        "time": {
+          "from": "now-24h",
+          "to": "now"
+        },
+        "refresh": "1m"
+      }
+    }
+
+  performance-tracing-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Performance Tracing Dashboard",
+        "tags": ["rust-security", "performance", "tracing", "latency"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Latency Heatmap",
+            "type": "heatmap",
+            "targets": [
+              {
+                "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path)",
+                "format": "heatmap",
+                "legendFormat": "{{ path }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Database Operation Performance",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(database_operation_duration_seconds_bucket[5m])) by (le, operation)) * 1000",
+                "legendFormat": "{{ operation }} P50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(database_operation_duration_seconds_bucket[5m])) by (le, operation)) * 1000",
+                "legendFormat": "{{ operation }} P95"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 3,
+            "title": "Token Validation Performance",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(token_validation_duration_seconds_bucket[5m])) by (le, token_type)) * 1000",
+                "legendFormat": "{{ token_type }} P95"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Memory Usage Trend",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "memory_usage_bytes / 1024 / 1024",
+                "legendFormat": "Memory Usage MB"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "MB"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Database Connection Pool",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "database_connection_pool_size",
+                "legendFormat": "Active Connections"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Slowest Operations",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "topk(20, max_over_time(operation_duration_seconds[1h])) * 1000",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 7,
+            "title": "Performance Regression Detection",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "increase(performance_regression_total[1h])",
+                "legendFormat": "Regressions/hour"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "short",
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 1},
+                    {"color": "red", "value": 5}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          }
+        ],
+        "time": {
+          "from": "now-3h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

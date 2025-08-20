@@ -650,7 +650,14 @@ pub async fn migrate_token_issuance(
         let refresh_token = format!("rt_{}", uuid::Uuid::new_v4());
 
         // Store refresh token using existing token store
-        state.store.set_refresh_token_association(&refresh_token, "unassociated", crate::REFRESH_TOKEN_EXPIRY_SECONDS).await?;
+        state
+            .store
+            .set_refresh_token_association(
+                &refresh_token,
+                "unassociated",
+                crate::REFRESH_TOKEN_EXPIRY_SECONDS,
+            )
+            .await?;
 
         let id_token = if make_id_token {
             // Create ID token (could be enhanced with post-quantum in the future)

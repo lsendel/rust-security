@@ -1,5 +1,5 @@
 //! Simple authentication client example
-//! 
+//!
 //! This example demonstrates how to authenticate with the auth-service
 //! and make authorized requests.
 //!
@@ -31,8 +31,8 @@ async fn main() -> Result<()> {
     tracing_subscriber::init();
 
     let client = Client::new();
-    let auth_service_url = std::env::var("AUTH_SERVICE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let auth_service_url =
+        std::env::var("AUTH_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     println!("🔐 Auth Service Client Example");
     println!("Connecting to: {}", auth_service_url);
@@ -83,10 +83,8 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let auth_response: AuthResponse = response
-        .json()
-        .await
-        .context("Failed to parse token response")?;
+    let auth_response: AuthResponse =
+        response.json().await.context("Failed to parse token response")?;
 
     println!("✅ Successfully obtained access token");
     println!("Token type: {}", auth_response.token_type);
@@ -95,7 +93,7 @@ async fn main() -> Result<()> {
     // Test introspection endpoint
     println!("\\n🔍 Testing token introspection...");
     let introspect_url = format!("{}/introspect", auth_service_url);
-    
+
     let mut introspect_params = HashMap::new();
     introspect_params.insert("token", auth_response.access_token.clone());
 
@@ -110,7 +108,10 @@ async fn main() -> Result<()> {
     if introspect_response.status().is_success() {
         println!("✅ Token introspection successful");
         let introspect_data: serde_json::Value = introspect_response.json().await?;
-        println!("Token is active: {}", introspect_data.get("active").unwrap_or(&serde_json::Value::Bool(false)));
+        println!(
+            "Token is active: {}",
+            introspect_data.get("active").unwrap_or(&serde_json::Value::Bool(false))
+        );
     } else {
         println!("❌ Token introspection failed: {}", introspect_response.status());
     }

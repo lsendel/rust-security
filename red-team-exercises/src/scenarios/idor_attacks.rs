@@ -5,11 +5,11 @@
 use crate::attack_framework::{AttackSession, RedTeamFramework};
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde_json::json;
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
-use base64::{Engine, engine::general_purpose};
 
 pub async fn run_idor_scenarios(
     framework: &mut RedTeamFramework,
@@ -782,18 +782,12 @@ async fn uuid_manipulation_attacks(
             let endpoint = endpoint_template.replace("{}", uuid);
 
             let result = framework
-                .execute_attack(
-                    "uuid_manipulation",
-                    "GET",
-                    &endpoint,
-                    None,
-                    None,
-                    Some(&session),
-                )
+                .execute_attack("uuid_manipulation", "GET", &endpoint, None, None, Some(&session))
                 .await?;
 
             if result.success && result.response_body.len() > 50 {
-                uuid_attacks.push(format!("UUID manipulation successful: {} -> {}", uuid, endpoint));
+                uuid_attacks
+                    .push(format!("UUID manipulation successful: {} -> {}", uuid, endpoint));
                 warn!("🚨 IDOR: UUID manipulation successful for {}", uuid);
 
                 // Check for admin or sensitive data
@@ -809,7 +803,7 @@ async fn uuid_manipulation_attacks(
     let base_uuid = "12345678-1234-4234-8234-123456789012";
     for version in 1..=5 {
         let version_uuid = base_uuid.replace("4234", &format!("{version}234"));
-        
+
         let result = framework
             .execute_attack(
                 "uuid_version_confusion",
@@ -830,7 +824,11 @@ async fn uuid_manipulation_attacks(
     scenario_data.insert("uuid_attacks".to_string(), json!(uuid_attacks));
     scenario_data.insert("patterns_tested".to_string(), json!(uuid_patterns.len()));
 
-    reporter.add_scenario_result("uuid_manipulation_attacks", uuid_attacks.is_empty(), scenario_data);
+    reporter.add_scenario_result(
+        "uuid_manipulation_attacks",
+        uuid_attacks.is_empty(),
+        scenario_data,
+    );
     Ok(())
 }
 
@@ -865,14 +863,14 @@ async fn database_enumeration_attacks(
 
         // Smart enumeration with exponential probing
         let probe_points = vec![1, 10, 100, 1000, 5000, 10000];
-        
+
         for &probe_id in &probe_points {
             if probe_id > enumeration_range {
                 break;
             }
 
             let endpoint = endpoint_template.replace("{}", &probe_id.to_string());
-            
+
             let result = framework
                 .execute_attack(
                     "database_enumeration_probe",
@@ -898,7 +896,7 @@ async fn database_enumeration_attacks(
 
             for id in start..=end {
                 let endpoint = endpoint_template.replace("{}", &id.to_string());
-                
+
                 let result = framework
                     .execute_attack(
                         "database_enumeration_focused",
@@ -915,12 +913,13 @@ async fn database_enumeration_attacks(
 
                     // Check for sensitive data patterns
                     let response_lower = result.response_body.to_lowercase();
-                    if response_lower.contains("password") 
+                    if response_lower.contains("password")
                         || response_lower.contains("secret")
                         || response_lower.contains("token")
-                        || response_lower.contains("private") {
+                        || response_lower.contains("private")
+                    {
                         enumeration_results.push(format!(
-                            "Sensitive data exposed at ID {}: {}", 
+                            "Sensitive data exposed at ID {}: {}",
                             id, endpoint_template
                         ));
                     }
@@ -937,19 +936,20 @@ async fn database_enumeration_attacks(
                 endpoint_template,
                 discovered_records.len()
             ));
-            warn!("🚨 IDOR: Database enumeration found {} records for {}", 
-                discovered_records.len(), endpoint_template);
+            warn!(
+                "🚨 IDOR: Database enumeration found {} records for {}",
+                discovered_records.len(),
+                endpoint_template
+            );
         }
     }
 
     // Test database table enumeration
-    let table_suffixes = vec![
-        "_backup", "_temp", "_old", "_v2", "_staging", "_dev", "_test"
-    ];
+    let table_suffixes = vec!["_backup", "_temp", "_old", "_v2", "_staging", "_dev", "_test"];
 
     for suffix in &table_suffixes {
         let modified_endpoint = format!("/admin/users{}/1", suffix);
-        
+
         let result = framework
             .execute_attack(
                 "table_enumeration",
@@ -1026,25 +1026,18 @@ async fn file_path_traversal_attacks(
             let endpoint = endpoint_template.replace("{}", &urlencoding::encode(payload));
 
             let result = framework
-                .execute_attack(
-                    "path_traversal",
-                    "GET",
-                    &endpoint,
-                    None,
-                    None,
-                    Some(&session),
-                )
+                .execute_attack("path_traversal", "GET", &endpoint, None, None, Some(&session))
                 .await?;
 
             if result.success {
                 // Check for file system indicators
                 let response_lower = result.response_body.to_lowercase();
-                if response_lower.contains("root:") 
+                if response_lower.contains("root:")
                     || response_lower.contains("administrator")
                     || response_lower.contains("linux version")
                     || response_lower.contains("microsoft windows")
-                    || response_lower.contains("[autorun]") {
-                    
+                    || response_lower.contains("[autorun]")
+                {
                     traversal_results.push(format!(
                         "Path traversal successful: {} via {}",
                         payload, endpoint_template
@@ -1056,18 +1049,11 @@ async fn file_path_traversal_attacks(
     }
 
     // Test directory traversal with resource IDs
-    let directory_payloads = vec![
-        "../",
-        "../../",
-        "../../../",
-        "..\\",
-        "..\\..\\",
-        "..\\..\\..\\",
-    ];
+    let directory_payloads = vec!["../", "../../", "../../../", "..\\", "..\\..\\", "..\\..\\..\\"];
 
     for payload in &directory_payloads {
         let directory_endpoint = format!("/session/{}config.json", payload);
-        
+
         let result = framework
             .execute_attack(
                 "directory_traversal",
@@ -1118,7 +1104,7 @@ async fn privilege_escalation_attacks(
     for (target_id, description) in &privilege_targets {
         // Test user info access
         let userinfo_endpoint = format!("/oauth/userinfo?sub={}", target_id);
-        
+
         let result = framework
             .execute_attack(
                 "privilege_escalation_userinfo",
@@ -1132,7 +1118,7 @@ async fn privilege_escalation_attacks(
 
         if result.success && result.response_body.len() > 50 {
             escalation_results.push(format!("Privilege escalation: {}", description));
-            
+
             // Check for administrative privileges in response
             let response_lower = result.response_body.to_lowercase();
             if response_lower.contains("admin") || response_lower.contains("privilege") {
@@ -1159,9 +1145,11 @@ async fn privilege_escalation_attacks(
 
         if create_result.success {
             escalation_results.push(format!("Session created for privileged user: {}", target_id));
-            
+
             // Try to use the privileged session
-            if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&create_result.response_body) {
+            if let Ok(response_json) =
+                serde_json::from_str::<serde_json::Value>(&create_result.response_body)
+            {
                 if let Some(session_id) = response_json["session_id"].as_str() {
                     let admin_result = framework
                         .execute_attack(
@@ -1175,10 +1163,8 @@ async fn privilege_escalation_attacks(
                         .await?;
 
                     if admin_result.success {
-                        escalation_results.push(format!(
-                            "Administrative access gained via user: {}", 
-                            target_id
-                        ));
+                        escalation_results
+                            .push(format!("Administrative access gained via user: {}", target_id));
                         warn!("🚨 IDOR: Privilege escalation successful for user: {}", target_id);
                     }
                 }
@@ -1214,10 +1200,8 @@ async fn privilege_escalation_attacks(
             .await?;
 
         if role_result.success {
-            escalation_results.push(format!(
-                "Role-based escalation: {}={}", 
-                param_name, param_value
-            ));
+            escalation_results
+                .push(format!("Role-based escalation: {}={}", param_name, param_value));
         }
     }
 
@@ -1244,14 +1228,22 @@ async fn tenant_isolation_bypass(
 
     // Test multi-tenant isolation
     let tenant_ids = vec![
-        "tenant_001", "tenant_002", "tenant_admin", "tenant_system",
-        "org_001", "org_002", "company_a", "company_b",
-        "client_001", "client_002", "customer_vip"
+        "tenant_001",
+        "tenant_002",
+        "tenant_admin",
+        "tenant_system",
+        "org_001",
+        "org_002",
+        "company_a",
+        "company_b",
+        "client_001",
+        "client_002",
+        "customer_vip",
     ];
 
     let tenant_endpoints = vec![
         "/api/v1/tenant/{}/users",
-        "/api/v1/tenant/{}/sessions", 
+        "/api/v1/tenant/{}/sessions",
         "/admin/tenant/{}/config",
         "/oauth/tenant/{}/clients",
     ];
@@ -1272,20 +1264,15 @@ async fn tenant_isolation_bypass(
                 .await?;
 
             if result.success && result.response_body.len() > 50 {
-                isolation_bypass.push(format!(
-                    "Tenant isolation bypass: {} accessible",
-                    endpoint
-                ));
+                isolation_bypass.push(format!("Tenant isolation bypass: {} accessible", endpoint));
 
                 // Check for sensitive tenant data
                 let response_lower = result.response_body.to_lowercase();
-                if response_lower.contains("users") 
+                if response_lower.contains("users")
                     || response_lower.contains("config")
-                    || response_lower.contains("secret") {
-                    isolation_bypass.push(format!(
-                        "Sensitive tenant data exposed: {}",
-                        tenant_id
-                    ));
+                    || response_lower.contains("secret")
+                {
+                    isolation_bypass.push(format!("Sensitive tenant data exposed: {}", tenant_id));
                     warn!("🚨 IDOR: Tenant isolation bypass for: {}", tenant_id);
                 }
             }
@@ -1312,18 +1299,18 @@ async fn tenant_isolation_bypass(
             .await?;
 
         if create_result.success {
-            isolation_bypass.push(format!(
-                "Cross-tenant session created for: {}",
-                tenant_id
-            ));
+            isolation_bypass.push(format!("Cross-tenant session created for: {}", tenant_id));
 
             // Test accessing other tenant's data with this session
-            if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&create_result.response_body) {
+            if let Ok(response_json) =
+                serde_json::from_str::<serde_json::Value>(&create_result.response_body)
+            {
                 if let Some(session_id) = response_json["session_id"].as_str() {
                     for other_tenant in &tenant_ids {
                         if other_tenant != tenant_id {
-                            let cross_access_endpoint = format!("/api/v1/tenant/{}/users", other_tenant);
-                            
+                            let cross_access_endpoint =
+                                format!("/api/v1/tenant/{}/users", other_tenant);
+
                             let cross_result = framework
                                 .execute_attack(
                                     "cross_tenant_access",

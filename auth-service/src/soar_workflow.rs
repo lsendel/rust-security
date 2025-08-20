@@ -1358,88 +1358,57 @@ impl WorkflowOrchestrator {
         info!("Registering built-in step executors...");
 
         // Security action executors
-        self.step_executors.insert(
-            "block_ip".to_string(),
-            Arc::new(IpBlockExecutor::new())
-        );
-        
-        self.step_executors.insert(
-            "lock_account".to_string(),
-            Arc::new(AccountLockExecutor::new())
-        );
-        
-        self.step_executors.insert(
-            "revoke_tokens".to_string(),
-            Arc::new(TokenRevokeExecutor::new())
-        );
+        self.step_executors.insert("block_ip".to_string(), Arc::new(IpBlockExecutor::new()));
+
+        self.step_executors
+            .insert("lock_account".to_string(), Arc::new(AccountLockExecutor::new()));
+
+        self.step_executors
+            .insert("revoke_tokens".to_string(), Arc::new(TokenRevokeExecutor::new()));
 
         // Notification executors
         self.step_executors.insert(
             "email_notification".to_string(),
-            Arc::new(EmailNotificationExecutor::new().await?)
+            Arc::new(EmailNotificationExecutor::new().await?),
         );
-        
-        self.step_executors.insert(
-            "slack_notification".to_string(),
-            Arc::new(SlackNotificationExecutor::new())
-        );
-        
+
+        self.step_executors
+            .insert("slack_notification".to_string(), Arc::new(SlackNotificationExecutor::new()));
+
         self.step_executors.insert(
             "webhook_notification".to_string(),
-            Arc::new(WebhookNotificationExecutor::new())
+            Arc::new(WebhookNotificationExecutor::new()),
         );
 
         // Query and data executors
-        self.step_executors.insert(
-            "siem_query".to_string(),
-            Arc::new(SiemQueryExecutor::new())
-        );
-        
-        self.step_executors.insert(
-            "database_query".to_string(),
-            Arc::new(DatabaseQueryExecutor::new())
-        );
+        self.step_executors.insert("siem_query".to_string(), Arc::new(SiemQueryExecutor::new()));
+
+        self.step_executors
+            .insert("database_query".to_string(), Arc::new(DatabaseQueryExecutor::new()));
 
         // Case and ticket management
-        self.step_executors.insert(
-            "create_ticket".to_string(),
-            Arc::new(TicketCreateExecutor::new())
-        );
-        
-        self.step_executors.insert(
-            "update_case".to_string(),
-            Arc::new(CaseUpdateExecutor::new())
-        );
+        self.step_executors
+            .insert("create_ticket".to_string(), Arc::new(TicketCreateExecutor::new()));
+
+        self.step_executors.insert("update_case".to_string(), Arc::new(CaseUpdateExecutor::new()));
 
         // Script and automation executors
-        self.step_executors.insert(
-            "execute_script".to_string(),
-            Arc::new(ScriptExecutor::new())
-        );
-        
-        self.step_executors.insert(
-            "http_request".to_string(),
-            Arc::new(HttpRequestExecutor::new())
-        );
+        self.step_executors.insert("execute_script".to_string(), Arc::new(ScriptExecutor::new()));
+
+        self.step_executors
+            .insert("http_request".to_string(), Arc::new(HttpRequestExecutor::new()));
 
         // Control flow executors
-        self.step_executors.insert(
-            "decision".to_string(),
-            Arc::new(DecisionExecutor::new())
-        );
-        
-        self.step_executors.insert(
-            "wait".to_string(),
-            Arc::new(WaitExecutor::new())
-        );
+        self.step_executors.insert("decision".to_string(), Arc::new(DecisionExecutor::new()));
+
+        self.step_executors.insert("wait".to_string(), Arc::new(WaitExecutor::new()));
 
         let executor_count = self.step_executors.len();
         info!("Successfully registered {} built-in step executors", executor_count);
 
         // Log all registered executors for debugging
-        let executor_types: Vec<String> = self.step_executors.iter()
-            .map(|(k, _)| k.clone())
-            .collect();
+        let executor_types: Vec<String> =
+            self.step_executors.iter().map(|(k, _)| k.clone()).collect();
         debug!("Registered step executor types: {:?}", executor_types);
 
         Ok(())
@@ -1584,11 +1553,10 @@ impl ApprovalManager {
         );
 
         // Find the pending approval
-        let approval_request = self.pending_approvals.remove(&approval_id)
-            .ok_or_else(|| {
-                error!("Approval request {} not found in pending approvals", approval_id);
-                format!("Approval request {} not found", approval_id)
-            })?;
+        let approval_request = self.pending_approvals.remove(&approval_id).ok_or_else(|| {
+            error!("Approval request {} not found in pending approvals", approval_id);
+            format!("Approval request {} not found", approval_id)
+        })?;
 
         // Validate that the approver is authorized
         if !self.validate_approver_authorization(&approval_request, &approver_id).await? {
@@ -1614,23 +1582,28 @@ impl ApprovalManager {
                 SecurityEventType::AdminAction,
                 SecuritySeverity::Medium,
                 "soar_workflow".to_string(),
-                format!("Approval {} {} by {}", approval_id, 
+                format!(
+                    "Approval {} {} by {}",
+                    approval_id,
                     match decision {
                         ApprovalDecision::Approved => "approved",
                         ApprovalDecision::Rejected => "rejected",
                         ApprovalDecision::RequestMoreInfo => "requested more info for",
-                    }, 
+                    },
                     approver_id
                 ),
             )
             .with_actor(approver_id.clone())
             .with_action("submit_approval".to_string())
             .with_target("soar_workflow".to_string())
-            .with_outcome(match decision {
-                ApprovalDecision::Approved => "approved",
-                ApprovalDecision::Rejected => "rejected",
-                ApprovalDecision::RequestMoreInfo => "more_info_requested",
-            }.to_string())
+            .with_outcome(
+                match decision {
+                    ApprovalDecision::Approved => "approved",
+                    ApprovalDecision::Rejected => "rejected",
+                    ApprovalDecision::RequestMoreInfo => "more_info_requested",
+                }
+                .to_string(),
+            )
             .with_reason(format!("Manual approval decision: {:?}", decision))
             .with_detail("approval_id".to_string(), approval_id.clone())
             .with_detail("workflow_id".to_string(), approval_request.workflow_id.clone())
@@ -1640,16 +1613,22 @@ impl ApprovalManager {
         // Handle the approval decision
         match decision {
             ApprovalDecision::Approved => {
-                info!("Approval {} approved, resuming workflow {}", approval_id, approval_request.workflow_id);
+                info!(
+                    "Approval {} approved, resuming workflow {}",
+                    approval_id, approval_request.workflow_id
+                );
                 self.resume_workflow_after_approval(&approval_request.workflow_id, true).await?;
             }
             ApprovalDecision::Rejected => {
-                warn!("Approval {} rejected, stopping workflow {}", approval_id, approval_request.workflow_id);
+                warn!(
+                    "Approval {} rejected, stopping workflow {}",
+                    approval_id, approval_request.workflow_id
+                );
                 self.resume_workflow_after_approval(&approval_request.workflow_id, false).await?;
             }
             ApprovalDecision::RequestMoreInfo => {
                 info!("More information requested for approval {}", approval_id);
-                // For now, treat as rejected. In a full implementation, 
+                // For now, treat as rejected. In a full implementation,
                 // this would notify the requester to provide more information
                 self.resume_workflow_after_approval(&approval_request.workflow_id, false).await?;
             }
@@ -1679,7 +1658,7 @@ impl ApprovalManager {
         // - Check if approver has the required role
         // - Check if approver is not the same as the requester
         // - Check organizational hierarchy
-        
+
         // For now, if no specific approvers are listed, any authenticated user can approve
         Ok(true)
     }
@@ -1713,7 +1692,7 @@ impl ApprovalManager {
             response.approval_id,
             match response.decision {
                 ApprovalDecision::Approved => "Approved",
-                ApprovalDecision::Rejected => "Rejected", 
+                ApprovalDecision::Rejected => "Rejected",
                 ApprovalDecision::RequestMoreInfo => "More Information Requested",
             }
         );

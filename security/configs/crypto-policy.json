@@ -1,0 +1,25 @@
+{
+  "cryptographic_policy": {
+    "version": "1.0",
+    "algorithms": {
+      "symmetric_encryption": {
+        "approved": ["AES-256-GCM", "ChaCha20Poly1305"],
+        "forbidden": ["DES", "3DES", "RC4"]
+      },
+      "asymmetric_encryption": {
+        "approved": ["RSA-4096", "ECDSA-P256", "Ed25519"],
+        "forbidden": ["RSA-1024", "DSA"]
+      },
+      "hashing": {
+        "approved": ["SHA-256", "SHA-384", "SHA-512", "BLAKE3"],
+        "forbidden": ["MD5", "SHA-1"]
+      }
+    },
+    "key_management": {
+      "rotation_policy": {
+        "signing_keys": "90_days",
+        "encryption_keys": "365_days"
+      }
+    }
+  }
+}

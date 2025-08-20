@@ -1,12 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Renovate configuration for Rust Security Platform - Advanced dependency management",
+  "description": "Renovate configuration for Rust Security Platform - Production-grade dependency management with risk assessment",
   "extends": [
     "config:base",
     "security:openssf-scorecard",
     ":semanticCommits",
     ":dependencyDashboard",
-    ":gitSignOff"
+    ":gitSignOff",
+    ":pinVersions",
+    "schedule:weekly",
+    "group:monorepos",
+    ":enableVulnerabilityAlertsWithLabel(security)"
   ],
   "timezone": "UTC",
   "schedule": [
@@ -39,9 +43,16 @@
   },
   "vulnerabilityAlerts": {
     "enabled": true,
-    "schedule": ["at any time"]
+    "schedule": ["at any time"],
+    "prCreation": "immediate",
+    "labels": ["security", "vulnerability"],
+    "assignees": ["security-team"],
+    "reviewers": ["security-team"]
   },
   "osvVulnerabilityAlerts": true,
+  "transitiveRemediation": true,
+  "separateMultipleMajor": true,
+  "separateMinorPatch": true,
   "cargo": {
     "enabled": true,
     "rangeStrategy": "bump"
@@ -72,7 +83,15 @@
         "sha*",
         "rand",
         "secrecy",
-        "zeroize"
+        "zeroize",
+        "bcrypt",
+        "constant_time_eq",
+        "subtle",
+        "pqcrypto*",
+        "p256",
+        "p384",
+        "ed25519*",
+        "x25519*"
       ],
       "schedule": ["at any time"],
       "prPriority": 10,
@@ -94,7 +113,29 @@
       "schedule": ["before 10am on monday"],
       "prPriority": 8,
       "labels": ["core", "runtime"],
-      "minimumReleaseAge": "3 days"
+      "minimumReleaseAge": "3 days",
+      "requiredStatusChecks": [
+        "Security Audit",
+        "Build and Test",
+        "Performance Regression Check"
+      ]
+    },
+    {
+      "description": "Post-quantum cryptography updates - high security priority",
+      "matchPackagePatterns": [
+        "pqcrypto*",
+        "*quantum*",
+        "*lattice*",
+        "dilithium*",
+        "kyber*",
+        "mlkem*",
+        "mldsa*"
+      ],
+      "schedule": ["at any time"],
+      "prPriority": 9,
+      "labels": ["security", "post-quantum", "crypto"],
+      "assignees": ["crypto-team"],
+      "reviewers": ["crypto-team", "security-team"]
     },
     {
       "description": "Database and storage dependencies",
@@ -164,13 +205,17 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "Patch updates - frequent",
+      "description": "Patch updates - frequent with security validation",
       "matchUpdateTypes": ["patch"],
       "schedule": ["at any time"],
       "prPriority": 4,
       "automerge": true,
       "automergeType": "pr",
-      "requiredStatusChecks": null
+      "requiredStatusChecks": [
+        "Security Audit",
+        "Build and Test"
+      ],
+      "platformAutomerge": true
     },
     {
       "description": "GitHub Actions - security updates",
@@ -247,6 +292,12 @@
   "ignoreDeps": [
     "node"
   ],
+  "onboarding": false,
+  "requireConfig": "optional",
+  "forkProcessing": "enabled",
+  "rollbackPrs": true,
+  "recreateClosed": true,
+  "rangeStrategy": "replace",
   "ignorePaths": [
     "**/target/**",
     "**/node_modules/**",

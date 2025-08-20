@@ -4,13 +4,13 @@
 
 use crate::validation::{RiskLevel, ValidationResult};
 use anyhow::Result;
+use chrono;
 use colored::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use tabular::{Row, Table};
 use tracing::info;
-use chrono;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedTeamReport {

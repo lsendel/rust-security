@@ -4,6 +4,7 @@
 //! against the authentication service while monitoring detection and response capabilities.
 
 use anyhow::Result;
+use rand;
 use reqwest::{header::HeaderMap, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -12,7 +13,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
-use rand;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttackResult {

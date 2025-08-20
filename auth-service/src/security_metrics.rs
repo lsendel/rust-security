@@ -266,9 +266,8 @@ impl Default for SecurityMetrics {
 }
 
 /// Global security metrics instance
-pub static SECURITY_METRICS: Lazy<SecurityMetrics> = Lazy::new(|| {
-    SecurityMetrics::new().expect("Failed to initialize security metrics")
-});
+pub static SECURITY_METRICS: Lazy<SecurityMetrics> =
+    Lazy::new(|| SecurityMetrics::new().expect("Failed to initialize security metrics"));
 
 /// Helper macro for recording security events
 #[macro_export]

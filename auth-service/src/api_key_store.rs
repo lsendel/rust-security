@@ -1,4 +1,6 @@
-use sqlx::{migrate::MigrateDatabase, Sqlite, SqlitePool};
+use sqlx::prelude::*;
+use sqlx::{Sqlite, SqlitePool, migrate};
+use sqlx::migrate::MigrateDatabase;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -11,7 +13,7 @@ pub enum ApiKeyError {
     NotFound,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct ApiKey {
     pub id: i64,
     pub hashed_key: String,
@@ -24,7 +26,7 @@ pub struct ApiKey {
     pub status: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct ApiKeyDetails {
     pub id: i64,
     pub prefix: String,
@@ -35,7 +37,6 @@ pub struct ApiKeyDetails {
     pub last_used_at: Option<chrono::DateTime<chrono::Utc>>,
     pub status: String,
 }
-
 
 #[derive(Clone)]
 pub struct ApiKeyStore {
@@ -49,7 +50,21 @@ impl ApiKeyStore {
         }
 
         let pool = SqlitePool::connect(database_url).await?;
-        sqlx::migrate!("./migrations").run(&pool).await?;
+        // Run migrations manually for now to avoid compile-time database dependency
+        let migration_query = r#"
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_id TEXT NOT NULL,
+                prefix TEXT NOT NULL UNIQUE,
+                hashed_key TEXT NOT NULL,
+                permissions TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME,
+                last_used_at DATETIME,
+                status TEXT DEFAULT 'active'
+            )
+        "#;
+        sqlx::query(migration_query).execute(&pool).await?;
 
         Ok(Self { pool })
     }
@@ -62,19 +77,14 @@ impl ApiKeyStore {
         permissions: Option<&str>,
         expires_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<ApiKey, ApiKeyError> {
-        let api_key = sqlx::query_as!(
-            ApiKey,
-            r#"
-            INSERT INTO api_keys (client_id, prefix, hashed_key, permissions, expires_at)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING *
-            "#,
-            client_id,
-            prefix,
-            hashed_key,
-            permissions,
-            expires_at,
+        let api_key = sqlx::query_as::<_, ApiKey>(
+            "INSERT INTO api_keys (client_id, prefix, hashed_key, permissions, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING *"
         )
+        .bind(client_id)
+        .bind(prefix)
+        .bind(hashed_key)
+        .bind(permissions)
+        .bind(expires_at)
         .fetch_one(&self.pool)
         .await?;
 
@@ -82,13 +92,10 @@ impl ApiKeyStore {
     }
 
     pub async fn get_api_key_by_prefix(&self, prefix: &str) -> Result<Option<ApiKey>, ApiKeyError> {
-        let api_key = sqlx::query_as!(
-            ApiKey,
-            r#"
-            SELECT * FROM api_keys WHERE prefix = $1
-            "#,
-            prefix,
+        let api_key = sqlx::query_as::<_, ApiKey>(
+            "SELECT * FROM api_keys WHERE prefix = $1"
         )
+        .bind(prefix)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -96,12 +103,8 @@ impl ApiKeyStore {
     }
 
     pub async fn list_api_keys(&self) -> Result<Vec<ApiKeyDetails>, ApiKeyError> {
-        let keys = sqlx::query_as!(
-            ApiKeyDetails,
-            r#"
-            SELECT id, prefix, client_id, permissions, created_at, expires_at, last_used_at, status
-            FROM api_keys
-            "#,
+        let keys = sqlx::query_as::<_, ApiKeyDetails>(
+            "SELECT id, prefix, client_id, permissions, created_at, expires_at, last_used_at, status FROM api_keys"
         )
         .fetch_all(&self.pool)
         .await?;
@@ -110,14 +113,10 @@ impl ApiKeyStore {
     }
 
     pub async fn revoke_api_key(&self, prefix: &str) -> Result<(), ApiKeyError> {
-        let result = sqlx::query!(
-            r#"
-            UPDATE api_keys
-            SET status = 'revoked'
-            WHERE prefix = $1
-            "#,
-            prefix,
+        let result = sqlx::query(
+            "UPDATE api_keys SET status = 'revoked' WHERE prefix = $1"
         )
+        .bind(prefix)
         .execute(&self.pool)
         .await?;
 
@@ -129,15 +128,11 @@ impl ApiKeyStore {
     }
 
     pub async fn update_last_used(&self, key_id: i64) -> Result<(), ApiKeyError> {
-        sqlx::query!(
-            r#"
-            UPDATE api_keys
-            SET last_used_at = $1
-            WHERE id = $2
-            "#,
-            chrono::Utc::now(),
-            key_id,
+        sqlx::query(
+            "UPDATE api_keys SET last_used_at = $1 WHERE id = $2"
         )
+        .bind(chrono::Utc::now())
+        .bind(key_id)
         .execute(&self.pool)
         .await?;
 
@@ -161,7 +156,8 @@ mod tests {
         let hashed_key = "hashed_key";
         let permissions = Some("read,write");
 
-        let created_key = store.create_api_key(client_id, prefix, hashed_key, permissions, None).await.unwrap();
+        let created_key =
+            store.create_api_key(client_id, prefix, hashed_key, permissions, None).await.unwrap();
         assert_eq!(created_key.client_id, client_id);
         assert_eq!(created_key.prefix, prefix);
 

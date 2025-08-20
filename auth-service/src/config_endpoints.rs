@@ -3,7 +3,9 @@
 //! Provides admin endpoints for configuration management including reload,
 //! status monitoring, and rollback capabilities.
 
-use crate::config_reload::{ConfigReloadManager, ConfigReloadRequest, ConfigReloadResponse, ConfigStatus};
+use crate::config_reload::{
+    ConfigReloadManager, ConfigReloadRequest, ConfigReloadResponse, ConfigStatus,
+};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -14,6 +16,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{error, info, warn};
+use validator::Validate;
 
 /// Configuration management state
 #[derive(Clone)]
@@ -24,7 +27,7 @@ pub struct ConfigState {
 /// Configuration reload endpoint
 ///
 /// Triggers manual configuration reload. Requires admin authentication.
-/// 
+///
 /// # Security
 /// This endpoint should be protected by admin middleware and request signing.
 pub async fn reload_config(
@@ -38,7 +41,7 @@ pub async fn reload_config(
         Ok(()) => {
             let version = state.reload_manager.get_version().await;
             info!("Configuration reload successful (version: {})", version);
-            
+
             Ok(Json(ConfigReloadResponse {
                 success: true,
                 version,
@@ -49,7 +52,7 @@ pub async fn reload_config(
         }
         Err(e) => {
             error!("Configuration reload failed: {}", e);
-            
+
             Ok(Json(ConfigReloadResponse {
                 success: false,
                 version: state.reload_manager.get_version().await,
@@ -69,18 +72,18 @@ pub async fn config_status(
 ) -> Result<Json<ConfigStatus>, StatusCode> {
     let version = state.reload_manager.get_version().await;
     let config = state.reload_manager.get_config().await;
-    
+
     // Determine configuration source
     let source = std::env::var("CONFIG_FILE")
         .map(|_| "file".to_string())
         .unwrap_or_else(|_| "environment".to_string());
-    
+
     Ok(Json(ConfigStatus {
         version,
         last_reload: Some(chrono::Utc::now()), // TODO: Track actual last reload time
         source,
         validation_status: "valid".to_string(), // TODO: Implement validation status tracking
-        requires_restart: false, // TODO: Implement restart requirement detection
+        requires_restart: false,                // TODO: Implement restart requirement detection
     }))
 }
 
@@ -96,7 +99,7 @@ pub async fn rollback_config(
         Ok(()) => {
             let version = state.reload_manager.get_version().await;
             info!("Configuration rollback successful (version: {})", version);
-            
+
             Ok(Json(ConfigReloadResponse {
                 success: true,
                 version,
@@ -107,7 +110,7 @@ pub async fn rollback_config(
         }
         Err(e) => {
             error!("Configuration rollback failed: {}", e);
-            
+
             Ok(Json(ConfigReloadResponse {
                 success: false,
                 version: state.reload_manager.get_version().await,
@@ -144,28 +147,18 @@ pub async fn validate_config(
     // In a real implementation, we would use the ConfigReloadManager's validation
     match parsed_config.validate() {
         Ok(()) => {
-            Ok(Json(ConfigValidationResponse {
-                valid: true,
-                errors: vec![],
-                warnings: vec![],
-            }))
+            Ok(Json(ConfigValidationResponse { valid: true, errors: vec![], warnings: vec![] }))
         }
         Err(validation_errors) => {
             let errors = validation_errors
                 .field_errors()
                 .iter()
                 .flat_map(|(field, errors)| {
-                    errors.iter().map(move |error| {
-                        format!("Field '{}': {}", field, error.code)
-                    })
+                    errors.iter().map(move |error| format!("Field '{}': {}", field, error.code))
                 })
                 .collect();
 
-            Ok(Json(ConfigValidationResponse {
-                valid: false,
-                errors,
-                warnings: vec![],
-            }))
+            Ok(Json(ConfigValidationResponse { valid: false, errors, warnings: vec![] }))
         }
     }
 }
@@ -195,7 +188,7 @@ pub async fn config_schema() -> Result<Json<serde_json::Value>, StatusCode> {
                 "description": "Security configuration"
             },
             "rate_limiting": {
-                "type": "object", 
+                "type": "object",
                 "description": "Rate limiting configuration"
             }
         },
@@ -232,7 +225,10 @@ pub fn config_router(reload_manager: Arc<ConfigReloadManager>) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AppConfig, FeatureFlags, MonitoringConfig, OAuthConfig, OidcProviders, RateLimitConfig, ScimConfig, SecurityConfig, StoreConfig, StoreBackend};
+    use crate::config::{
+        AppConfig, FeatureFlags, MonitoringConfig, OAuthConfig, OidcProviders, RateLimitConfig,
+        ScimConfig, SecurityConfig, StoreBackend, StoreConfig,
+    };
     use axum::body::Body;
     use axum::http::{Method, Request};
     use std::collections::HashMap;
@@ -242,11 +238,7 @@ mod tests {
         AppConfig {
             bind_addr: "127.0.0.1:8080".to_string(),
             redis_url: Some("redis://localhost:6379".to_string()),
-            oidc_providers: OidcProviders {
-                google: None,
-                microsoft: None,
-                github: None,
-            },
+            oidc_providers: OidcProviders { google: None, microsoft: None, github: None },
             security: SecurityConfig {
                 jwt_access_token_ttl_seconds: 3600,
                 jwt_refresh_token_ttl_seconds: 86400,
@@ -299,9 +291,7 @@ mod tests {
                 max_idle_connections: 5,
                 database_url: None,
             },
-            client_credentials: HashMap::from([
-                ("client1".to_string(), "secret1".to_string()),
-            ]),
+            client_credentials: HashMap::from([("client1".to_string(), "secret1".to_string())]),
             allowed_scopes: vec!["read".to_string(), "write".to_string()],
             jwt_secret: "test-secret".to_string(),
             token_expiry_seconds: 3600,
@@ -317,11 +307,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::builder()
-                    .method(Method::GET)
-                    .uri("/status")
-                    .body(Body::empty())
-                    .unwrap(),
+                Request::builder().method(Method::GET).uri("/status").body(Body::empty()).unwrap(),
             )
             .await
             .unwrap();
@@ -337,11 +323,7 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::builder()
-                    .method(Method::GET)
-                    .uri("/schema")
-                    .body(Body::empty())
-                    .unwrap(),
+                Request::builder().method(Method::GET).uri("/schema").body(Body::empty()).unwrap(),
             )
             .await
             .unwrap();

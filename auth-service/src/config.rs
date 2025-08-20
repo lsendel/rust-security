@@ -151,7 +151,7 @@ pub struct MonitoringConfig {
     pub audit_logging_enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FeatureFlags {
     pub soar_integration: bool,
     pub google_oidc: bool,
@@ -232,10 +232,7 @@ pub struct StoreConfig {
 
 impl Default for StoreConfig {
     fn default() -> Self {
-        Self {
-            backend: StoreBackend::Hybrid,
-            database_url: None,
-        }
+        Self { backend: StoreBackend::Hybrid, database_url: None }
     }
 }
 
@@ -581,7 +578,10 @@ mod tests {
 fn validate_secret_strength(secret: &str, secret_name: &str) -> Result<()> {
     // Check minimum length
     if secret.len() < 32 {
-        return Err(anyhow::anyhow!("{} must be at least 32 characters long in production", secret_name));
+        return Err(anyhow::anyhow!(
+            "{} must be at least 32 characters long in production",
+            secret_name
+        ));
     }
 
     // Check for weak patterns
@@ -625,7 +625,7 @@ fn validate_secret_strength(secret: &str, secret_name: &str) -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -645,7 +645,9 @@ pub fn validate_production_secrets() -> Result<()> {
             validate_secret_strength(&secret, "REQUEST_SIGNING_SECRET")?;
         }
         Err(_) => {
-            return Err(anyhow::anyhow!("REQUEST_SIGNING_SECRET environment variable is required in production"));
+            return Err(anyhow::anyhow!(
+                "REQUEST_SIGNING_SECRET environment variable is required in production"
+            ));
         }
     }
 

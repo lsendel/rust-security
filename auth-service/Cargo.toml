@@ -195,7 +195,7 @@ arbitrary = { workspace = true }
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-default = ["fast-build"]  # Development-optimized defaults, ML features disabled for security
+default = ["fast-build", "api-keys"]  # Development-optimized defaults, ML features disabled for security
 fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]

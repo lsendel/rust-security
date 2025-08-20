@@ -1,10 +1,10 @@
 //! Unit tests for compliance-tools functionality
 
-use compliance_tools::*;
 use chrono::Utc;
+use compliance_tools::*;
 use std::collections::HashMap;
-use tempfile::NamedTempFile;
 use std::io::Write;
+use tempfile::NamedTempFile;
 
 #[tokio::test]
 async fn test_security_metric_creation() {
@@ -136,12 +136,8 @@ async fn test_compliance_config_creation() {
 #[tokio::test]
 async fn test_metric_status_hierarchy() {
     // Test that metric statuses can be properly ordered
-    let statuses = vec![
-        MetricStatus::Pass,
-        MetricStatus::Warning,
-        MetricStatus::Fail,
-        MetricStatus::Unknown,
-    ];
+    let statuses =
+        vec![MetricStatus::Pass, MetricStatus::Warning, MetricStatus::Fail, MetricStatus::Unknown];
 
     for status in statuses {
         // Test serialization

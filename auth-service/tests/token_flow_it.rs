@@ -1,6 +1,5 @@
 use auth_service::{
-    app, sql_store::SqlStore, store::HybridStore, AppState, IntrospectRequest,
-    IntrospectResponse,
+    app, sql_store::SqlStore, store::HybridStore, AppState, IntrospectRequest, IntrospectResponse,
 };
 use common::Store;
 use reqwest::header::CONTENT_TYPE;
@@ -58,10 +57,7 @@ async fn token_issue_and_revoke_flow_test(store: Arc<dyn Store>) {
     // Introspect -> active=true and matching exp/iat
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest {
-            token: token.clone(),
-            token_type_hint: None,
-        })
+        .json(&IntrospectRequest { token: token.clone(), token_type_hint: None })
         .send()
         .await
         .unwrap();
@@ -83,10 +79,7 @@ async fn token_issue_and_revoke_flow_test(store: Arc<dyn Store>) {
     // Introspect -> active=false
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest {
-            token,
-            token_type_hint: None,
-        })
+        .json(&IntrospectRequest { token, token_type_hint: None })
         .send()
         .await
         .unwrap();

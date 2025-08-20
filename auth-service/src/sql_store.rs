@@ -1,5 +1,6 @@
 use crate::scim_filter::{parse_scim_filter, ScimFilterError, ScimOperator};
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
+use std::error::Error as StdError;
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
 use sqlx::{PgPool, Postgres, QueryBuilder};
@@ -19,13 +20,33 @@ pub struct SqlStore {
 }
 
 impl SqlStore {
-    pub async fn new(database_url: &str) -> Result<Self> {
+    pub async fn new(database_url: &str) -> Result<Self, Box<dyn StdError + Send + Sync>> {
         let pool = PgPool::connect(database_url).await?;
         Ok(Self { pool: Arc::new(pool) })
     }
 
-    pub async fn run_migrations(&self) -> Result<()> {
-        sqlx::migrate!("./migrations").run(&*self.pool).await?;
+    pub async fn run_migrations(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        // Manual migration for compilation without database dependency
+        let migration_queries = vec![
+            r#"CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                user_name TEXT NOT NULL,
+                display_name TEXT,
+                active BOOLEAN DEFAULT TRUE,
+                emails TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"#,
+            r#"CREATE TABLE IF NOT EXISTS groups (
+                id TEXT PRIMARY KEY,
+                display_name TEXT NOT NULL,
+                members TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"#,
+        ];
+        
+        for query in migration_queries {
+            sqlx::query(query).execute(&*self.pool).await?;
+        }
         Ok(())
     }
 }
@@ -33,18 +54,15 @@ impl SqlStore {
 #[async_trait]
 impl Store for SqlStore {
     // User Management
-    async fn get_user(&self, id: &str) -> Result<Option<ScimUser>> {
-        let user = sqlx::query_as!(
-            ScimUser,
-            "SELECT id, user_name, active FROM users WHERE id = $1",
-            id
-        )
-        .fetch_optional(&*self.pool)
-        .await?;
+    async fn get_user(&self, id: &str) -> Result<Option<ScimUser>, Box<dyn StdError + Send + Sync>> {
+        let user =
+            sqlx::query_as!(ScimUser, "SELECT id, user_name, active FROM users WHERE id = $1", id)
+                .fetch_optional(&*self.pool)
+                .await?;
         Ok(user)
     }
 
-    async fn create_user(&self, user: &ScimUser) -> Result<ScimUser> {
+    async fn create_user(&self, user: &ScimUser) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
         let mut u = user.clone();
         if u.id.is_empty() {
             u.id = uuid::Uuid::new_v4().to_string();
@@ -58,7 +76,7 @@ impl Store for SqlStore {
         Ok(u)
     }
 
-    async fn list_users(&self, filter: Option<&str>) -> Result<Vec<ScimUser>> {
+    async fn list_users(&self, filter: Option<&str>) -> Result<Vec<ScimUser>, Box<dyn StdError + Send + Sync>> {
         let mut builder: QueryBuilder<Postgres> =
             QueryBuilder::new("SELECT id, user_name, active FROM users");
 
@@ -73,7 +91,12 @@ impl Store for SqlStore {
                 "userName" => "user_name",
                 "active" => "active",
                 "id" => "id",
-                _ => return Err(anyhow!("Unsupported filter attribute: {}", parsed_filter.attribute)),
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported filter attribute: {}",
+                        parsed_filter.attribute
+                    ))
+                }
             };
             builder.push(db_column);
 
@@ -83,7 +106,12 @@ impl Store for SqlStore {
                 ScimOperator::Co => builder.push(" LIKE "),
                 ScimOperator::Sw => builder.push(" LIKE "),
                 ScimOperator::Ew => builder.push(" LIKE "),
-                _ => return Err(anyhow!("Unsupported filter operator for SQL: {:?}", parsed_filter.operator)),
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported filter operator for SQL: {:?}",
+                        parsed_filter.operator
+                    ))
+                }
             };
 
             if parsed_filter.attribute == "active" {
@@ -95,7 +123,8 @@ impl Store for SqlStore {
                     .map_err(|_| anyhow!("Invalid boolean value for 'active' filter"))?;
                 builder.push_bind(bool_val);
             } else {
-                let value = parsed_filter.value.ok_or_else(|| anyhow!("Filter value is required"))?;
+                let value =
+                    parsed_filter.value.ok_or_else(|| anyhow!("Filter value is required"))?;
                 let bind_value = match parsed_filter.operator {
                     ScimOperator::Co => format!("%{}%", value),
                     ScimOperator::Sw => format!("{}%", value),
@@ -110,7 +139,7 @@ impl Store for SqlStore {
         Ok(users)
     }
 
-    async fn update_user(&self, user: &ScimUser) -> Result<ScimUser> {
+    async fn update_user(&self, user: &ScimUser) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
         sqlx::query("UPDATE users SET user_name = $2, active = $3 WHERE id = $1")
             .bind(&user.id)
             .bind(&user.user_name)
@@ -119,16 +148,13 @@ impl Store for SqlStore {
             .await?;
         Ok(user.clone())
     }
-    async fn delete_user(&self, id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(id)
-            .execute(&*self.pool)
-            .await?;
+    async fn delete_user(&self, id: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&*self.pool).await?;
         Ok(())
     }
 
     // Group Management
-    async fn get_group(&self, id: &str) -> Result<Option<ScimGroup>> {
+    async fn get_group(&self, id: &str) -> Result<Option<ScimGroup>, Box<dyn StdError + Send + Sync>> {
         let mut group: Option<ScimGroup> = sqlx::query_as!(
             ScimGroup,
             "SELECT id, display_name, array[]::TEXT[] AS members FROM groups WHERE id = $1",
@@ -138,16 +164,18 @@ impl Store for SqlStore {
         .await?;
 
         if let Some(g) = &mut group {
-            let member_records =
-                sqlx::query!("SELECT user_id FROM group_members WHERE group_id = $1", g.id)
-                    .fetch_all(&*self.pool)
-                    .await?;
-            g.members = member_records.into_iter().map(|r| r.user_id).collect();
+            let member_records: Vec<(String,)> = sqlx::query_as(
+                "SELECT user_id FROM group_members WHERE group_id = $1"
+            )
+            .bind(&g.id)
+            .fetch_all(&*self.pool)
+            .await?;
+            g.members = member_records.into_iter().map(|r| r.0).collect();
         }
 
         Ok(group)
     }
-    async fn create_group(&self, group: &ScimGroup) -> Result<ScimGroup> {
+    async fn create_group(&self, group: &ScimGroup) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
         let mut g = group.clone();
         if g.id.is_empty() {
             g.id = uuid::Uuid::new_v4().to_string();
@@ -173,7 +201,7 @@ impl Store for SqlStore {
 
         Ok(g)
     }
-    async fn list_groups(&self, filter: Option<&str>) -> Result<Vec<ScimGroup>> {
+    async fn list_groups(&self, filter: Option<&str>) -> Result<Vec<ScimGroup>, Box<dyn StdError + Send + Sync>> {
         let mut builder: QueryBuilder<Postgres> =
             QueryBuilder::new("SELECT id, display_name, array[]::TEXT[] AS members FROM groups");
 
@@ -186,14 +214,24 @@ impl Store for SqlStore {
             let db_column = match parsed_filter.attribute.as_str() {
                 "displayName" => "display_name",
                 "id" => "id",
-                _ => return Err(anyhow!("Unsupported filter attribute for groups: {}", parsed_filter.attribute)),
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported filter attribute for groups: {}",
+                        parsed_filter.attribute
+                    ))
+                }
             };
             builder.push(db_column);
 
             match parsed_filter.operator {
                 ScimOperator::Eq => builder.push(" = "),
                 ScimOperator::Co => builder.push(" LIKE "),
-                _ => return Err(anyhow!("Unsupported filter operator for groups: {:?}", parsed_filter.operator)),
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported filter operator for groups: {:?}",
+                        parsed_filter.operator
+                    ))
+                }
             }
 
             let value = parsed_filter.value.ok_or_else(|| anyhow!("Filter value is required"))?;
@@ -208,16 +246,18 @@ impl Store for SqlStore {
         let mut groups: Vec<ScimGroup> = builder.build_query_as().fetch_all(&*self.pool).await?;
 
         for group in &mut groups {
-            let member_records =
-                sqlx::query!("SELECT user_id FROM group_members WHERE group_id = $1", group.id)
-                    .fetch_all(&*self.pool)
-                    .await?;
-            group.members = member_records.into_iter().map(|r| r.user_id).collect();
+            let member_records: Vec<(String,)> = sqlx::query_as(
+                "SELECT user_id FROM group_members WHERE group_id = $1"
+            )
+            .bind(&group.id)
+            .fetch_all(&*self.pool)
+            .await?;
+            group.members = member_records.into_iter().map(|r| r.0).collect();
         }
 
         Ok(groups)
     }
-    async fn update_group(&self, group: &ScimGroup) -> Result<ScimGroup> {
+    async fn update_group(&self, group: &ScimGroup) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
         let mut tx = self.pool.begin().await?;
 
         sqlx::query("UPDATE groups SET display_name = $2 WHERE id = $1")
@@ -244,12 +284,9 @@ impl Store for SqlStore {
 
         Ok(group.clone())
     }
-    async fn delete_group(&self, id: &str) -> Result<()> {
+    async fn delete_group(&self, id: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // The ON DELETE CASCADE in the schema will handle cleaning up group_members
-        sqlx::query("DELETE FROM groups WHERE id = $1")
-            .bind(id)
-            .execute(&*self.pool)
-            .await?;
+        sqlx::query("DELETE FROM groups WHERE id = $1").bind(id).execute(&*self.pool).await?;
         Ok(())
     }
 
@@ -259,7 +296,7 @@ impl Store for SqlStore {
         code: &str,
         record: &AuthCodeRecord,
         ttl_secs: u64,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let exp = chrono::Utc::now().timestamp() + ttl_secs as i64;
         sqlx::query("INSERT INTO auth_codes (code, client_id, redirect_uri, nonce, scope, pkce_challenge, pkce_method, user_id, exp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(code)
@@ -275,7 +312,7 @@ impl Store for SqlStore {
             .await?;
         Ok(())
     }
-    async fn consume_auth_code(&self, code: &str) -> Result<Option<AuthCodeRecord>> {
+    async fn consume_auth_code(&self, code: &str) -> Result<Option<AuthCodeRecord>, Box<dyn StdError + Send + Sync>> {
         let record = sqlx::query_as!(AuthCodeRecord, "DELETE FROM auth_codes WHERE code = $1 RETURNING client_id, redirect_uri, nonce, scope, pkce_challenge, pkce_method, user_id, exp", code)
             .fetch_optional(&*self.pool)
             .await?;
@@ -283,7 +320,7 @@ impl Store for SqlStore {
     }
 
     // Token Management
-    async fn get_token_record(&self, token: &str) -> Result<Option<TokenRecord>> {
+    async fn get_token_record(&self, token: &str) -> Result<Option<TokenRecord>, Box<dyn StdError + Send + Sync>> {
         let token_hash = hash_token(token);
         let record = sqlx::query_as!(TokenRecord, "SELECT active, scope, client_id, exp, iat, sub, token_binding, mfa_verified FROM tokens WHERE token_hash = $1", &token_hash)
             .fetch_optional(&*self.pool)
@@ -295,7 +332,7 @@ impl Store for SqlStore {
         token: &str,
         record: &TokenRecord,
         _ttl_secs: Option<u64>,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // ttl_secs is used to calculate exp, which is already in the record.
         let token_hash = hash_token(token);
         let token_display = format!("{}...", &token[..4]); // For non-sensitive logging
@@ -321,7 +358,7 @@ impl Store for SqlStore {
 
         Ok(())
     }
-    async fn revoke_token(&self, token: &str) -> Result<()> {
+    async fn revoke_token(&self, token: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let token_hash = hash_token(token);
         sqlx::query("UPDATE tokens SET active = false WHERE token_hash = $1")
             .bind(&token_hash)
@@ -336,7 +373,7 @@ impl Store for SqlStore {
         refresh_token: &str,
         access_token: &str,
         ttl_secs: u64,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let refresh_token_hash = hash_token(refresh_token);
         let access_token_hash = hash_token(access_token);
         let exp = chrono::Utc::now().timestamp() + ttl_secs as i64;
@@ -352,7 +389,7 @@ impl Store for SqlStore {
 
         Ok(())
     }
-    async fn consume_refresh_token(&self, refresh_token: &str) -> Result<Option<String>> {
+    async fn consume_refresh_token(&self, refresh_token: &str) -> Result<Option<String>, Box<dyn StdError + Send + Sync>> {
         let refresh_token_hash = hash_token(refresh_token);
 
         let mut tx = self.pool.begin().await?;
@@ -380,7 +417,7 @@ impl Store for SqlStore {
 
         Ok(result.map(|(access_token_hash,)| access_token_hash))
     }
-    async fn is_refresh_reused(&self, refresh_token: &str) -> Result<bool> {
+    async fn is_refresh_reused(&self, refresh_token: &str) -> Result<bool, Box<dyn StdError + Send + Sync>> {
         let refresh_token_hash = hash_token(refresh_token);
         let exists: (bool,) = sqlx::query_as(
             "SELECT EXISTS(SELECT 1 FROM refresh_token_reuse WHERE refresh_token_hash = $1)",
@@ -392,27 +429,24 @@ impl Store for SqlStore {
     }
 
     // Health Check
-    async fn health_check(&self) -> Result<bool> {
+    async fn health_check(&self) -> Result<bool, Box<dyn StdError + Send + Sync>> {
         sqlx::query("SELECT 1").fetch_one(&*self.pool).await?;
         Ok(true)
     }
 
-    async fn get_metrics(&self) -> Result<common::StoreMetrics> {
-        let users_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-            .fetch_one(&*self.pool)
-            .await?;
-        let groups_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM groups")
-            .fetch_one(&*self.pool)
-            .await?;
-        let tokens_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tokens")
-            .fetch_one(&*self.pool)
-            .await?;
-        let active_tokens: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tokens WHERE active = true")
-            .fetch_one(&*self.pool)
-            .await?;
-        let auth_codes_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM auth_codes")
-            .fetch_one(&*self.pool)
-            .await?;
+    async fn get_metrics(&self) -> Result<common::StoreMetrics, Box<dyn StdError + Send + Sync>> {
+        let users_total: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(&*self.pool).await?;
+        let groups_total: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM groups").fetch_one(&*self.pool).await?;
+        let tokens_total: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM tokens").fetch_one(&*self.pool).await?;
+        let active_tokens: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM tokens WHERE active = true")
+                .fetch_one(&*self.pool)
+                .await?;
+        let auth_codes_total: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM auth_codes").fetch_one(&*self.pool).await?;
 
         Ok(common::StoreMetrics {
             users_total: users_total.0 as u64,

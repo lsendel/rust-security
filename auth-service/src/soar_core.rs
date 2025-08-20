@@ -1045,10 +1045,10 @@ pub struct StepError {
 pub struct ExecutionContext {
     /// Variables accessible to workflow steps
     pub variables: HashMap<String, serde_json::Value>,
-    
+
     /// Metadata about the execution
     pub metadata: HashMap<String, serde_json::Value>,
-    
+
     /// History of errors encountered
     pub error_history: Vec<StepError>,
 }
@@ -1659,22 +1659,22 @@ pub struct IntegrationMetrics {
 pub struct IntegrationHealthInfo {
     /// Integration ID
     pub integration_id: String,
-    
+
     /// Health status
     pub status: IntegrationHealth,
-    
+
     /// Status message
     pub status_message: String,
-    
+
     /// Response time in milliseconds
     pub response_time_ms: Option<u64>,
-    
+
     /// Last check timestamp
     pub last_check: DateTime<Utc>,
-    
+
     /// Number of consecutive failures
     pub consecutive_failures: u32,
-    
+
     /// Additional metadata
     pub metadata: HashMap<String, serde_json::Value>,
 }
@@ -1693,16 +1693,16 @@ pub enum IntegrationHealth {
 pub struct HealthMetrics {
     /// Total number of integrations
     pub total_integrations: usize,
-    
+
     /// Number of healthy integrations
     pub healthy_integrations: usize,
-    
+
     /// Number of unhealthy integrations
     pub unhealthy_integrations: usize,
-    
+
     /// Overall health percentage
     pub overall_health_percentage: usize,
-    
+
     /// Last check timestamp
     pub last_check: DateTime<Utc>,
 }
@@ -1712,13 +1712,13 @@ pub struct HealthMetrics {
 pub struct IntegrationConfig {
     /// Integration ID
     pub id: String,
-    
+
     /// Integration type
     pub integration_type: IntegrationType,
-    
+
     /// Configuration parameters
     pub config: HashMap<String, serde_json::Value>,
-    
+
     /// Whether integration is enabled
     pub enabled: bool,
 }
@@ -2769,8 +2769,10 @@ impl WorkflowEngine {
         &self,
         request: WorkflowExecutionRequest,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Queueing workflow execution: {} (priority: {})", 
-              request.playbook_id, request.priority);
+        info!(
+            "Queueing workflow execution: {} (priority: {})",
+            request.playbook_id, request.priority
+        );
 
         // Validate request
         self.validate_workflow_request(&request)?;
@@ -2853,7 +2855,11 @@ impl WorkflowEngine {
             if let Some(existing_workflow) = self.active_workflows.get(&request.id) {
                 match existing_workflow.status {
                     WorkflowStatus::Running | WorkflowStatus::Queued => {
-                        return Err(format!("Workflow {} is already running or queued", request.id).into());
+                        return Err(format!(
+                            "Workflow {} is already running or queued",
+                            request.id
+                        )
+                        .into());
                     }
                     _ => {
                         // Allow re-running completed or failed workflows
@@ -2875,7 +2881,7 @@ impl WorkflowEngine {
 
     async fn start_execution_processor(&self) {
         info!("Starting workflow execution processor...");
-        
+
         let active_workflows = self.active_workflows.clone();
         let workflow_engine = self.workflow_engine.clone();
         let config = self.config.clone();
@@ -2883,7 +2889,7 @@ impl WorkflowEngine {
 
         tokio::spawn(async move {
             let mut processing_interval = tokio::time::interval(
-                tokio::time::Duration::from_millis(500) // Check queue every 500ms
+                tokio::time::Duration::from_millis(500), // Check queue every 500ms
             );
 
             info!("Workflow execution processor started and monitoring queue");
@@ -2899,8 +2905,10 @@ impl WorkflowEngine {
                 };
 
                 if active_count >= max_concurrent {
-                    debug!("Maximum concurrent workflows reached ({}/{}), waiting...", 
-                           active_count, max_concurrent);
+                    debug!(
+                        "Maximum concurrent workflows reached ({}/{}), waiting...",
+                        active_count, max_concurrent
+                    );
                     continue;
                 }
 
@@ -2915,7 +2923,7 @@ impl WorkflowEngine {
                 // Process the first queued workflow (FIFO for now)
                 if let Some(workflow_id) = queued_workflows.first() {
                     info!("Processing queued workflow: {}", workflow_id);
-                    
+
                     // Update workflow status to running
                     if let Some(mut workflow) = active_workflows.get_mut(workflow_id) {
                         workflow.status = WorkflowStatus::Running;
@@ -2931,15 +2939,18 @@ impl WorkflowEngine {
                         let execution_result = Self::execute_workflow_async(
                             &workflow_id,
                             active_workflows_clone.clone(),
-                        ).await;
+                        )
+                        .await;
 
                         // Update workflow status based on result
                         if let Some(mut workflow) = active_workflows_clone.get_mut(&workflow_id) {
                             match execution_result {
                                 Ok(_) => {
                                     workflow.status = WorkflowStatus::Completed;
-                                    workflow.outputs.insert("completed_at".to_string(), 
-                                        serde_json::Value::String(Utc::now().to_rfc3339()));
+                                    workflow.outputs.insert(
+                                        "completed_at".to_string(),
+                                        serde_json::Value::String(Utc::now().to_rfc3339()),
+                                    );
                                     info!("Workflow {} completed successfully", workflow_id);
                                 }
                                 Err(e) => {
@@ -2967,16 +2978,18 @@ impl WorkflowEngine {
         active_workflows: Arc<DashMap<String, WorkflowInstance>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Executing workflow {}", workflow_id);
-        
+
         // Simulate workflow execution with some processing time
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        
+
         // Update workflow with simulated results
         if let Some(mut workflow) = active_workflows.get_mut(workflow_id) {
-            workflow.outputs.insert("execution_time_ms".to_string(), 
-                serde_json::Value::Number(500.into()));
-            workflow.outputs.insert("steps_completed".to_string(), 
-                serde_json::Value::Number(3.into()));
+            workflow
+                .outputs
+                .insert("execution_time_ms".to_string(), serde_json::Value::Number(500.into()));
+            workflow
+                .outputs
+                .insert("steps_completed".to_string(), serde_json::Value::Number(3.into()));
         }
 
         SecurityLogger::log_event(
@@ -3012,8 +3025,7 @@ impl AlertCorrelationEngine {
         &self,
         alert: &SecurityAlert,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Processing alert for correlation: {} (severity: {:?})", 
-              alert.id, alert.severity);
+        info!("Processing alert for correlation: {} (severity: {:?})", alert.id, alert.severity);
 
         // Store alert in cache with timestamp-based key
         let cache_key = format!("{}_{}", alert.alert_type, alert.timestamp.format("%Y%m%d_%H"));
@@ -3021,13 +3033,13 @@ impl AlertCorrelationEngine {
 
         // Find related alerts based on correlation rules
         let mut correlations = Vec::new();
-        
+
         // Apply time-based correlation rules
         correlations.extend(self.correlate_by_time_window(alert).await?);
-        
+
         // Apply source-based correlation (same IP, user, etc.)
         correlations.extend(self.correlate_by_source(alert).await?);
-        
+
         // Apply pattern-based correlation (similar attack patterns)
         correlations.extend(self.correlate_by_pattern(alert).await?);
 
@@ -3036,7 +3048,7 @@ impl AlertCorrelationEngine {
 
         if !correlations.is_empty() {
             info!("Found {} correlations for alert {}", correlations.len(), alert.id);
-            
+
             // Create correlation result
             let correlation_result = CorrelationResult {
                 id: format!("corr_{}", uuid::Uuid::new_v4()),
@@ -3049,7 +3061,8 @@ impl AlertCorrelationEngine {
             };
 
             // Store correlation result
-            self.correlation_results.insert(correlation_result.id.clone(), correlation_result.clone());
+            self.correlation_results
+                .insert(correlation_result.id.clone(), correlation_result.clone());
 
             // Log correlation event
             SecurityLogger::log_event(
@@ -3062,8 +3075,11 @@ impl AlertCorrelationEngine {
                         _ => SecuritySeverity::Low,
                     },
                     "soar_alert_correlation".to_string(),
-                    format!("Alert correlation detected: {} alerts correlated with confidence {}%", 
-                            correlations.len() + 1, correlation_result.confidence_score),
+                    format!(
+                        "Alert correlation detected: {} alerts correlated with confidence {}%",
+                        correlations.len() + 1,
+                        correlation_result.confidence_score
+                    ),
                 )
                 .with_actor("soar_correlation_engine".to_string())
                 .with_action("correlate_alerts".to_string())
@@ -3082,8 +3098,10 @@ impl AlertCorrelationEngine {
                 self.trigger_automated_response(&correlation_result).await?;
             }
 
-            info!("Alert correlation completed for {} with risk score: {}", 
-                  alert.id, correlation_result.risk_score);
+            info!(
+                "Alert correlation completed for {} with risk score: {}",
+                alert.id, correlation_result.risk_score
+            );
         } else {
             debug!("No correlations found for alert {}", alert.id);
         }
@@ -3098,16 +3116,16 @@ impl AlertCorrelationEngine {
     ) -> Result<Vec<SecurityAlert>, Box<dyn std::error::Error + Send + Sync>> {
         let mut correlated_alerts = Vec::new();
         let time_window = chrono::Duration::minutes(30); // 30-minute window
-        
+
         // Check alerts within the time window
         for cached_alert in self.alert_cache.iter() {
             let cached_alert = cached_alert.value();
-            
+
             // Skip the same alert
             if cached_alert.id == alert.id {
                 continue;
             }
-            
+
             // Check if within time window
             let time_diff = alert.timestamp.signed_duration_since(cached_alert.timestamp);
             if time_diff.abs() <= time_window {
@@ -3127,14 +3145,14 @@ impl AlertCorrelationEngine {
         alert: &SecurityAlert,
     ) -> Result<Vec<SecurityAlert>, Box<dyn std::error::Error + Send + Sync>> {
         let mut correlated_alerts = Vec::new();
-        
+
         for cached_alert in self.alert_cache.iter() {
             let cached_alert = cached_alert.value();
-            
+
             if cached_alert.id == alert.id {
                 continue;
             }
-            
+
             // Check for same source IP
             if let (Some(source1), Some(source2)) = (&alert.source_ip, &cached_alert.source_ip) {
                 if source1 == source2 && alert.alert_type != cached_alert.alert_type {
@@ -3142,7 +3160,7 @@ impl AlertCorrelationEngine {
                     continue;
                 }
             }
-            
+
             // Check for same user
             if let (Some(user1), Some(user2)) = (&alert.user_id, &cached_alert.user_id) {
                 if user1 == user2 && alert.alert_type != cached_alert.alert_type {
@@ -3161,12 +3179,12 @@ impl AlertCorrelationEngine {
         alert: &SecurityAlert,
     ) -> Result<Vec<SecurityAlert>, Box<dyn std::error::Error + Send + Sync>> {
         let mut correlated_alerts = Vec::new();
-        
+
         // Define attack pattern relationships
         let attack_patterns = [
             // Reconnaissance patterns
             &["PortScan", "ServiceEnumeration", "VulnerabilityProbe"] as &[&str],
-            // Credential attack patterns  
+            // Credential attack patterns
             &["BruteForce", "PasswordSpray", "CredentialStuffing"],
             // Lateral movement patterns
             &["UnauthorizedAccess", "PrivilegeEscalation", "LateralMovement"],
@@ -3175,7 +3193,7 @@ impl AlertCorrelationEngine {
         ];
 
         let alert_type_str = format!("{:?}", alert.alert_type);
-        
+
         // Find which pattern group this alert belongs to
         for pattern_group in &attack_patterns {
             if pattern_group.iter().any(|&pattern| alert_type_str.contains(pattern)) {
@@ -3185,7 +3203,7 @@ impl AlertCorrelationEngine {
                     if cached_alert.id == alert.id {
                         continue;
                     }
-                    
+
                     let cached_type_str = format!("{:?}", cached_alert.alert_type);
                     if pattern_group.iter().any(|&pattern| cached_type_str.contains(pattern)) {
                         correlated_alerts.push(cached_alert.clone());
@@ -3206,17 +3224,17 @@ impl AlertCorrelationEngine {
         let mut correlated_alerts = Vec::new();
         let threshold_window = chrono::Duration::hours(1);
         let threshold_count = 5;
-        
+
         // Count similar alerts within the time window
         let mut similar_alerts = Vec::new();
-        
+
         for cached_alert in self.alert_cache.iter() {
             let cached_alert = cached_alert.value();
-            
+
             if cached_alert.id == alert.id {
                 continue;
             }
-            
+
             let time_diff = alert.timestamp.signed_duration_since(cached_alert.timestamp);
             if time_diff.abs() <= threshold_window {
                 if alert.alert_type == cached_alert.alert_type {
@@ -3224,7 +3242,7 @@ impl AlertCorrelationEngine {
                 }
             }
         }
-        
+
         // If we have more than threshold, consider it a correlation
         if similar_alerts.len() >= threshold_count {
             correlated_alerts.extend(similar_alerts);
@@ -3241,25 +3259,30 @@ impl AlertCorrelationEngine {
                 return true;
             }
         }
-        
+
         // Same user
         if let (Some(user1), Some(user2)) = (&alert1.user_id, &alert2.user_id) {
             if user1 == user2 {
                 return true;
             }
         }
-        
+
         // Same alert family
-        if format!("{:?}", alert1.alert_type).chars().take(4).collect::<String>() == 
-           format!("{:?}", alert2.alert_type).chars().take(4).collect::<String>() {
+        if format!("{:?}", alert1.alert_type).chars().take(4).collect::<String>()
+            == format!("{:?}", alert2.alert_type).chars().take(4).collect::<String>()
+        {
             return true;
         }
-        
+
         false
     }
 
     /// Get triggered correlation rules
-    fn get_triggered_rules(&self, _primary: &SecurityAlert, _related: &[SecurityAlert]) -> Vec<String> {
+    fn get_triggered_rules(
+        &self,
+        _primary: &SecurityAlert,
+        _related: &[SecurityAlert],
+    ) -> Vec<String> {
         vec![
             "time_window_correlation".to_string(),
             "source_ip_correlation".to_string(),
@@ -3270,13 +3293,13 @@ impl AlertCorrelationEngine {
     /// Calculate confidence score for correlation
     fn calculate_confidence_score(&self, primary: &SecurityAlert, related: &[SecurityAlert]) -> u8 {
         let mut score = 0u8;
-        
+
         // Base score for having correlations
         score += 20;
-        
+
         // More correlations = higher confidence
         score += std::cmp::min((related.len() as u8) * 10, 40);
-        
+
         // Higher severity = higher confidence
         score += match primary.severity {
             AlertSeverity::Critical => 30,
@@ -3284,7 +3307,7 @@ impl AlertCorrelationEngine {
             AlertSeverity::Medium => 10,
             AlertSeverity::Low => 5,
         };
-        
+
         // Cap at 100
         std::cmp::min(score, 100)
     }
@@ -3292,7 +3315,7 @@ impl AlertCorrelationEngine {
     /// Calculate risk score for correlation
     fn calculate_risk_score(&self, primary: &SecurityAlert, related: &[SecurityAlert]) -> u8 {
         let mut score = 0u8;
-        
+
         // Base risk from primary alert
         score += match primary.severity {
             AlertSeverity::Critical => 40,
@@ -3300,7 +3323,7 @@ impl AlertCorrelationEngine {
             AlertSeverity::Medium => 20,
             AlertSeverity::Low => 10,
         };
-        
+
         // Add risk from related alerts
         for alert in related {
             score += match alert.severity {
@@ -3310,14 +3333,14 @@ impl AlertCorrelationEngine {
                 AlertSeverity::Low => 2,
             };
         }
-        
+
         // More correlations in short time = higher risk
         if related.len() >= 5 {
             score += 20;
         } else if related.len() >= 3 {
             score += 10;
         }
-        
+
         // Cap at 100
         std::cmp::min(score, 100)
     }
@@ -3327,13 +3350,17 @@ impl AlertCorrelationEngine {
         &self,
         correlation: &CorrelationResult,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Triggering automated response for correlation {} (risk score: {})", 
-              correlation.id, correlation.risk_score);
+        info!(
+            "Triggering automated response for correlation {} (risk score: {})",
+            correlation.id, correlation.risk_score
+        );
 
         // This would trigger SOAR playbooks based on the correlation
         // For now, we'll just log the action
-        warn!("HIGH RISK CORRELATION DETECTED: {} - Automated response should be triggered", 
-              correlation.id);
+        warn!(
+            "HIGH RISK CORRELATION DETECTED: {} - Automated response should be triggered",
+            correlation.id
+        );
 
         Ok(())
     }
@@ -3460,14 +3487,14 @@ impl IntegrationFramework {
 
     async fn start_health_checker(&self) {
         info!("Starting integration health checker...");
-        
+
         let integrations = self.integrations.clone();
         let health_status = self.health_status.clone();
         let metrics = self.metrics.clone();
 
         tokio::spawn(async move {
             let mut health_check_interval = tokio::time::interval(
-                tokio::time::Duration::from_secs(60) // Check every minute
+                tokio::time::Duration::from_secs(60), // Check every minute
             );
 
             info!("Integration health checker started");
@@ -3483,27 +3510,35 @@ impl IntegrationFramework {
                 for integration_ref in integrations.iter() {
                     let integration_id = integration_ref.key().clone();
                     let integration_config = integration_ref.value();
-                    
+
                     total_checks += 1;
-                    
-                    match Self::check_integration_health(&integration_id, integration_config).await {
+
+                    match Self::check_integration_health(&integration_id, integration_config).await
+                    {
                         Ok(health_info) => {
                             if health_info.status == IntegrationHealth::Healthy {
                                 healthy_count += 1;
-                                debug!("Integration {} is healthy (response time: {}ms)", 
-                                       integration_id, health_info.response_time_ms);
+                                debug!(
+                                    "Integration {} is healthy (response time: {}ms)",
+                                    integration_id, health_info.response_time_ms
+                                );
                             } else {
                                 unhealthy_count += 1;
-                                warn!("Integration {} is unhealthy: {}", 
-                                      integration_id, health_info.status_message);
+                                warn!(
+                                    "Integration {} is unhealthy: {}",
+                                    integration_id, health_info.status_message
+                                );
                             }
-                            
+
                             health_status.insert(integration_id.clone(), health_info);
                         }
                         Err(e) => {
                             unhealthy_count += 1;
-                            error!("Failed to check health of integration {}: {}", integration_id, e);
-                            
+                            error!(
+                                "Failed to check health of integration {}: {}",
+                                integration_id, e
+                            );
+
                             let unhealthy_info = IntegrationHealthInfo {
                                 integration_id: integration_id.clone(),
                                 status: IntegrationHealth::Unhealthy,
@@ -3522,18 +3557,15 @@ impl IntegrationFramework {
                                     .unwrap_or(1),
                                 metadata: HashMap::new(),
                             };
-                            
+
                             health_status.insert(integration_id, unhealthy_info);
                         }
                     }
                 }
 
                 // Update overall health metrics
-                let overall_health_percentage = if total_checks > 0 {
-                    (healthy_count * 100) / total_checks
-                } else {
-                    100
-                };
+                let overall_health_percentage =
+                    if total_checks > 0 { (healthy_count * 100) / total_checks } else { 100 };
 
                 // Store health metrics
                 let health_summary = HealthMetrics {
@@ -3544,13 +3576,17 @@ impl IntegrationFramework {
                     last_check: Utc::now(),
                 };
 
-                metrics.insert("health_summary".to_string(), 
-                    serde_json::to_value(&health_summary).unwrap_or_default());
+                metrics.insert(
+                    "health_summary".to_string(),
+                    serde_json::to_value(&health_summary).unwrap_or_default(),
+                );
 
                 // Log health summary
                 if unhealthy_count > 0 {
-                    warn!("Integration health check complete: {}/{} healthy ({}%)", 
-                          healthy_count, total_checks, overall_health_percentage);
+                    warn!(
+                        "Integration health check complete: {}/{} healthy ({}%)",
+                        healthy_count, total_checks, overall_health_percentage
+                    );
                 } else {
                     info!("All integrations healthy ({}/{})", healthy_count, total_checks);
                 }
@@ -3562,7 +3598,10 @@ impl IntegrationFramework {
                             SecurityEventType::SystemError,
                             SecuritySeverity::High,
                             "soar_integration_framework".to_string(),
-                            format!("Integration health degraded: {}% healthy", overall_health_percentage),
+                            format!(
+                                "Integration health degraded: {}% healthy",
+                                overall_health_percentage
+                            ),
                         )
                         .with_actor("health_checker".to_string())
                         .with_action("health_check".to_string())
@@ -3586,24 +3625,14 @@ impl IntegrationFramework {
         _config: &IntegrationConfig,
     ) -> Result<IntegrationHealthInfo, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = std::time::Instant::now();
-        
+
         // Simulate health check based on integration type
         let health_check_result = match integration_id {
-            id if id.starts_with("firewall") => {
-                Self::check_firewall_health(id).await
-            }
-            id if id.starts_with("siem") => {
-                Self::check_siem_health(id).await
-            }
-            id if id.starts_with("identity") => {
-                Self::check_identity_provider_health(id).await
-            }
-            id if id.starts_with("ticketing") => {
-                Self::check_ticketing_health(id).await
-            }
-            id if id.starts_with("case_manager") => {
-                Self::check_case_manager_health(id).await
-            }
+            id if id.starts_with("firewall") => Self::check_firewall_health(id).await,
+            id if id.starts_with("siem") => Self::check_siem_health(id).await,
+            id if id.starts_with("identity") => Self::check_identity_provider_health(id).await,
+            id if id.starts_with("ticketing") => Self::check_ticketing_health(id).await,
+            id if id.starts_with("case_manager") => Self::check_case_manager_health(id).await,
             _ => {
                 // Generic health check
                 Self::check_generic_integration_health(integration_id).await
@@ -3611,38 +3640,36 @@ impl IntegrationFramework {
         };
 
         let response_time = start_time.elapsed();
-        
+
         match health_check_result {
-            Ok(status_message) => {
-                Ok(IntegrationHealthInfo {
-                    integration_id: integration_id.to_string(),
-                    status: IntegrationHealth::Healthy,
-                    status_message,
-                    response_time_ms: Some(response_time.as_millis() as u64),
-                    last_check: Utc::now(),
-                    consecutive_failures: 0,
-                    metadata: HashMap::new(),
-                })
-            }
-            Err(e) => {
-                Ok(IntegrationHealthInfo {
-                    integration_id: integration_id.to_string(),
-                    status: IntegrationHealth::Unhealthy,
-                    status_message: e.to_string(),
-                    response_time_ms: Some(response_time.as_millis() as u64),
-                    last_check: Utc::now(),
-                    consecutive_failures: 1,
-                    metadata: HashMap::new(),
-                })
-            }
+            Ok(status_message) => Ok(IntegrationHealthInfo {
+                integration_id: integration_id.to_string(),
+                status: IntegrationHealth::Healthy,
+                status_message,
+                response_time_ms: Some(response_time.as_millis() as u64),
+                last_check: Utc::now(),
+                consecutive_failures: 0,
+                metadata: HashMap::new(),
+            }),
+            Err(e) => Ok(IntegrationHealthInfo {
+                integration_id: integration_id.to_string(),
+                status: IntegrationHealth::Unhealthy,
+                status_message: e.to_string(),
+                response_time_ms: Some(response_time.as_millis() as u64),
+                last_check: Utc::now(),
+                consecutive_failures: 1,
+                metadata: HashMap::new(),
+            }),
         }
     }
 
     /// Check firewall integration health
-    async fn check_firewall_health(integration_id: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_firewall_health(
+        integration_id: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // Simulate firewall health check
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        
+
         // Check if we have real endpoint configuration
         if let Ok(endpoint) = std::env::var("FIREWALL_API_ENDPOINT") {
             if !endpoint.contains("example.com") {
@@ -3650,22 +3677,17 @@ impl IntegrationFramework {
                 let client = reqwest::Client::new();
                 let response = tokio::time::timeout(
                     tokio::time::Duration::from_secs(5),
-                    client.get(&format!("{}/health", endpoint)).send()
-                ).await;
+                    client.get(&format!("{}/health", endpoint)).send(),
+                )
+                .await;
 
                 match response {
                     Ok(Ok(resp)) if resp.status().is_success() => {
                         Ok("Firewall API accessible and responsive".to_string())
                     }
-                    Ok(Ok(_)) => {
-                        Err("Firewall API returned non-success status".into())
-                    }
-                    Ok(Err(e)) => {
-                        Err(format!("Firewall API request failed: {}", e).into())
-                    }
-                    Err(_) => {
-                        Err("Firewall API health check timed out".into())
-                    }
+                    Ok(Ok(_)) => Err("Firewall API returned non-success status".into()),
+                    Ok(Err(e)) => Err(format!("Firewall API request failed: {}", e).into()),
+                    Err(_) => Err("Firewall API health check timed out".into()),
                 }
             } else {
                 Ok("Mock firewall integration healthy".to_string())
@@ -3676,9 +3698,11 @@ impl IntegrationFramework {
     }
 
     /// Check SIEM integration health
-    async fn check_siem_health(_integration_id: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_siem_health(
+        _integration_id: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         if let Ok(endpoint) = std::env::var("SIEM_API_ENDPOINT") {
             if !endpoint.contains("example.com") {
                 // Real SIEM health check would go here
@@ -3692,25 +3716,33 @@ impl IntegrationFramework {
     }
 
     /// Check identity provider health
-    async fn check_identity_provider_health(_integration_id: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_identity_provider_health(
+        _integration_id: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(75)).await;
         Ok("Identity provider integration healthy".to_string())
     }
 
     /// Check ticketing system health
-    async fn check_ticketing_health(_integration_id: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_ticketing_health(
+        _integration_id: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(60)).await;
         Ok("Ticketing system integration healthy".to_string())
     }
 
     /// Check case manager health
-    async fn check_case_manager_health(_integration_id: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_case_manager_health(
+        _integration_id: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(80)).await;
         Ok("Case manager integration healthy".to_string())
     }
 
     /// Generic integration health check
-    async fn check_generic_integration_health(integration_id: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn check_generic_integration_health(
+        integration_id: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
         Ok(format!("Integration {} is healthy", integration_id))
     }

@@ -1,0 +1,1073 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multi-tenant-monitor
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: multi-tenant-monitor
+    app.kubernetes.io/part-of: rust-security
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multi-tenant-monitor
+  labels:
+    app.kubernetes.io/name: multi-tenant-monitor
+    app.kubernetes.io/part-of: rust-security
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "nodes", "namespaces", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies", "ingresses"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multi-tenant-monitor
+  labels:
+    app.kubernetes.io/name: multi-tenant-monitor
+    app.kubernetes.io/part-of: rust-security
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: multi-tenant-monitor
+subjects:
+- kind: ServiceAccount
+  name: multi-tenant-monitor
+  namespace: rust-security
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-monitoring-rules
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: multi-tenant-monitor
+    app.kubernetes.io/part-of: rust-security
+data:
+  tenant-alerts.yml: |
+    groups:
+      - name: multi-tenant-alerts
+        rules:
+          # Tenant Resource Usage Alerts
+          - alert: TenantResourceQuotaExceeded
+            expr: |
+              (
+                sum(rate(container_cpu_usage_seconds_total{namespace=~"rust-security-.*"}[5m])) by (namespace) /
+                sum(kube_resourcequota_cpu_limit{namespace=~"rust-security-.*"}) by (namespace)
+              ) * 100 > 90
+            for: 10m
+            labels:
+              severity: warning
+              alert_type: resource_quota
+            annotations:
+              summary: "Tenant CPU quota nearly exceeded"
+              description: "Tenant {{ $labels.namespace }} is using {{ $value }}% of CPU quota"
+          
+          - alert: TenantMemoryQuotaExceeded
+            expr: |
+              (
+                sum(container_memory_usage_bytes{namespace=~"rust-security-.*"}) by (namespace) /
+                sum(kube_resourcequota_memory_limit{namespace=~"rust-security-.*"}) by (namespace)
+              ) * 100 > 90
+            for: 10m
+            labels:
+              severity: warning
+              alert_type: resource_quota
+            annotations:
+              summary: "Tenant memory quota nearly exceeded"
+              description: "Tenant {{ $labels.namespace }} is using {{ $value }}% of memory quota"
+          
+          # Tenant Service Health Alerts
+          - alert: TenantServiceDown
+            expr: |
+              up{namespace=~"rust-security-.*"} == 0
+            for: 5m
+            labels:
+              severity: critical
+              alert_type: service_health
+            annotations:
+              summary: "Tenant service is down"
+              description: "Service {{ $labels.job }} in tenant {{ $labels.namespace }} is down"
+          
+          - alert: TenantHighErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{namespace=~"rust-security-.*",code=~"5.."}[5m])) by (namespace, service) /
+                sum(rate(http_requests_total{namespace=~"rust-security-.*"}[5m])) by (namespace, service)
+              ) * 100 > 5
+            for: 10m
+            labels:
+              severity: warning
+              alert_type: error_rate
+            annotations:
+              summary: "High error rate in tenant service"
+              description: "Service {{ $labels.service }} in tenant {{ $labels.namespace }} has {{ $value }}% error rate"
+          
+          # Tenant Security Alerts
+          - alert: TenantUnauthorizedAccess
+            expr: |
+              increase(http_requests_total{namespace=~"rust-security-.*",code="403"}[5m]) > 10
+            for: 2m
+            labels:
+              severity: warning
+              alert_type: security
+            annotations:
+              summary: "Unusual unauthorized access attempts"
+              description: "Tenant {{ $labels.namespace }} has {{ $value }} unauthorized access attempts"
+          
+          - alert: TenantFailedLogins
+            expr: |
+              increase(auth_failed_login_attempts_total{namespace=~"rust-security-.*"}[5m]) > 20
+            for: 2m
+            labels:
+              severity: warning
+              alert_type: security
+            annotations:
+              summary: "High number of failed login attempts"
+              description: "Tenant {{ $labels.namespace }} has {{ $value }} failed login attempts"
+          
+          # Tenant Policy Violations
+          - alert: TenantPolicyViolations
+            expr: |
+              increase(policy_violations_total{namespace=~"rust-security-.*"}[5m]) > 5
+            for: 2m
+            labels:
+              severity: warning
+              alert_type: policy_violation
+            annotations:
+              summary: "Policy violations detected"
+              description: "Tenant {{ $labels.namespace }} has {{ $value }} policy violations"
+          
+          # Tenant Performance Alerts
+          - alert: TenantHighLatency
+            expr: |
+              histogram_quantile(0.95, 
+                sum(rate(http_request_duration_seconds_bucket{namespace=~"rust-security-.*"}[5m])) by (namespace, service, le)
+              ) * 1000 > 1000
+            for: 15m
+            labels:
+              severity: warning
+              alert_type: performance
+            annotations:
+              summary: "High latency in tenant service"
+              description: "Service {{ $labels.service }} in tenant {{ $labels.namespace }} has P95 latency {{ $value }}ms"
+          
+          # Cross-Tenant Isolation Alerts
+          - alert: CrossTenantNetworkTraffic
+            expr: |
+              increase(network_policy_violations_total{source_namespace=~"rust-security-.*",target_namespace=~"rust-security-.*"}[5m]) > 0
+            for: 0m
+            labels:
+              severity: critical
+              alert_type: isolation_violation
+            annotations:
+              summary: "Cross-tenant network traffic detected"
+              description: "Network traffic from {{ $labels.source_namespace }} to {{ $labels.target_namespace }}"
+          
+          - alert: TenantDataLeakage
+            expr: |
+              increase(data_access_violations_total{source_tenant!="",target_tenant!=""}[5m]) > 0
+            for: 0m
+            labels:
+              severity: critical
+              alert_type: data_leakage
+            annotations:
+              summary: "Potential tenant data leakage detected"
+              description: "Data access from tenant {{ $labels.source_tenant }} to {{ $labels.target_tenant }}"
+
+  tenant-recording-rules.yml: |
+    groups:
+      - name: tenant-metrics
+        rules:
+          # Tenant Resource Usage Recording Rules
+          - record: tenant:cpu_usage_rate
+            expr: |
+              sum(rate(container_cpu_usage_seconds_total{namespace=~"rust-security-.*"}[5m])) by (namespace)
+          
+          - record: tenant:memory_usage_bytes
+            expr: |
+              sum(container_memory_usage_bytes{namespace=~"rust-security-.*"}) by (namespace)
+          
+          - record: tenant:network_receive_bytes_rate
+            expr: |
+              sum(rate(container_network_receive_bytes_total{namespace=~"rust-security-.*"}[5m])) by (namespace)
+          
+          - record: tenant:network_transmit_bytes_rate
+            expr: |
+              sum(rate(container_network_transmit_bytes_total{namespace=~"rust-security-.*"}[5m])) by (namespace)
+          
+          # Tenant Service Performance Recording Rules
+          - record: tenant:request_rate
+            expr: |
+              sum(rate(http_requests_total{namespace=~"rust-security-.*"}[5m])) by (namespace, service)
+          
+          - record: tenant:error_rate
+            expr: |
+              sum(rate(http_requests_total{namespace=~"rust-security-.*",code=~"5.."}[5m])) by (namespace, service) /
+              sum(rate(http_requests_total{namespace=~"rust-security-.*"}[5m])) by (namespace, service)
+          
+          - record: tenant:response_time_p95
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket{namespace=~"rust-security-.*"}[5m])) by (namespace, service, le)
+              )
+          
+          - record: tenant:response_time_p99
+            expr: |
+              histogram_quantile(0.99,
+                sum(rate(http_request_duration_seconds_bucket{namespace=~"rust-security-.*"}[5m])) by (namespace, service, le)
+              )
+          
+          # Tenant Security Metrics
+          - record: tenant:auth_success_rate
+            expr: |
+              sum(rate(auth_attempts_total{namespace=~"rust-security-.*",result="success"}[5m])) by (namespace) /
+              sum(rate(auth_attempts_total{namespace=~"rust-security-.*"}[5m])) by (namespace)
+          
+          - record: tenant:policy_decision_rate
+            expr: |
+              sum(rate(policy_decisions_total{namespace=~"rust-security-.*"}[5m])) by (namespace, decision)
+          
+          # Tenant Quota Utilization
+          - record: tenant:cpu_quota_utilization
+            expr: |
+              (
+                sum(rate(container_cpu_usage_seconds_total{namespace=~"rust-security-.*"}[5m])) by (namespace) /
+                sum(kube_resourcequota_cpu_limit{namespace=~"rust-security-.*"}) by (namespace)
+              ) * 100
+          
+          - record: tenant:memory_quota_utilization
+            expr: |
+              (
+                sum(container_memory_usage_bytes{namespace=~"rust-security-.*"}) by (namespace) /
+                sum(kube_resourcequota_memory_limit{namespace=~"rust-security-.*"}) by (namespace)
+              ) * 100
+          
+          - record: tenant:storage_quota_utilization
+            expr: |
+              (
+                sum(kubelet_volume_stats_used_bytes{namespace=~"rust-security-.*"}) by (namespace) /
+                sum(kube_persistentvolumeclaim_resource_requests_storage_bytes{namespace=~"rust-security-.*"}) by (namespace)
+              ) * 100
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-dashboard-template
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: multi-tenant-monitor
+    app.kubernetes.io/part-of: rust-security
+    grafana_dashboard: "true"
+data:
+  tenant-overview-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Multi-Tenant Overview Dashboard",
+        "tags": ["rust-security", "multi-tenant", "overview"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Tenant Resource Usage Overview",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "tenant:cpu_quota_utilization",
+                "legendFormat": "{{ namespace }} CPU %",
+                "format": "table",
+                "instant": true
+              },
+              {
+                "expr": "tenant:memory_quota_utilization", 
+                "legendFormat": "{{ namespace }} Memory %",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 70},
+                    {"color": "red", "value": 90}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Tenant Request Rates",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:request_rate",
+                "legendFormat": "{{ namespace }}/{{ service }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 3,
+            "title": "Tenant Error Rates",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:error_rate * 100",
+                "legendFormat": "{{ namespace }}/{{ service }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "max": 10,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 1},
+                    {"color": "red", "value": 5}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Tenant Response Times (P95)",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:response_time_p95 * 1000",
+                "legendFormat": "{{ namespace }}/{{ service }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Tenant Authentication Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "tenant:auth_success_rate * 100",
+                "legendFormat": "{{ namespace }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 95},
+                    {"color": "green", "value": 99}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Policy Decisions by Tenant",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:policy_decision_rate",
+                "legendFormat": "{{ namespace }} - {{ decision }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decisions/sec"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+          },
+          {
+            "id": 7,
+            "title": "Active Alerts by Tenant",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "ALERTS{namespace=~\"rust-security-.*\",alertstate=\"firing\"}",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "displayMode": "list"
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+  
+  tenant-specific-dashboard-template.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Tenant {{TENANT_ID}} Dashboard",
+        "tags": ["rust-security", "tenant", "{{TENANT_ID}}"],
+        "timezone": "browser",
+        "templating": {
+          "list": [
+            {
+              "name": "tenant_namespace",
+              "type": "constant",
+              "current": {
+                "value": "rust-security-{{TENANT_ID}}"
+              }
+            }
+          ]
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Health Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "{{ job }}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {"type": "value", "value": "1", "text": "Up"},
+                  {"type": "value", "value": "0", "text": "Down"}
+                ],
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Resource Quota Utilization",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "tenant:cpu_quota_utilization{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "CPU"
+              },
+              {
+                "expr": "tenant:memory_quota_utilization{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "Memory"
+              },
+              {
+                "expr": "tenant:storage_quota_utilization{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "Storage"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "min": 0,
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 70},
+                    {"color": "red", "value": 90}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Request Rate and Response Time",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:request_rate{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "{{ service }} RPS"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Error Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:error_rate{namespace=\"$tenant_namespace\"} * 100",
+                "legendFormat": "{{ service }} Error %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": 0},
+                    {"color": "yellow", "value": 1},
+                    {"color": "red", "value": 5}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Authentication Metrics",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(auth_attempts_total{namespace=\"$tenant_namespace\"}[5m])",
+                "legendFormat": "{{ result }} attempts/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 6,
+            "title": "Policy Decisions",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(policy_decisions_total{namespace=\"$tenant_namespace\"}[5m])",
+                "legendFormat": "{{ decision }} decisions/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          },
+          {
+            "id": 7,
+            "title": "Network Traffic",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "tenant:network_receive_bytes_rate{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "Received"
+              },
+              {
+                "expr": "tenant:network_transmit_bytes_rate{namespace=\"$tenant_namespace\"}",
+                "legendFormat": "Transmitted"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "binBps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 8,
+            "title": "Active Alerts",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "ALERTS{namespace=\"$tenant_namespace\",alertstate=\"firing\"}",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          }
+        ],
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-dashboard-provisioner
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: tenant-dashboard-provisioner
+    app.kubernetes.io/part-of: rust-security
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tenant-dashboard-provisioner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tenant-dashboard-provisioner
+        app.kubernetes.io/part-of: rust-security
+    spec:
+      serviceAccountName: multi-tenant-monitor
+      containers:
+      - name: dashboard-provisioner
+        image: alpine:3.18
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          apk add --no-cache curl jq bash kubectl
+          while true; do
+            echo "Checking for new tenants to provision dashboards..."
+            
+            # Get all tenant namespaces
+            for namespace in $(kubectl get namespaces -l tenant-type=rust-security -o jsonpath='{.items[*].metadata.name}' | grep "rust-security-"); do
+              tenant_id=$(echo $namespace | sed 's/rust-security-//')
+              dashboard_name="tenant-dashboard-$tenant_id"
+              
+              # Check if dashboard already exists
+              if ! kubectl get configmap "$dashboard_name" -n monitoring >/dev/null 2>&1; then
+                echo "Creating dashboard for tenant: $tenant_id"
+                
+                # Generate tenant-specific dashboard
+                sed "s/{{TENANT_ID}}/$tenant_id/g" /templates/tenant-specific-dashboard-template.json > /tmp/dashboard.json
+                
+                # Create ConfigMap for Grafana
+                kubectl create configmap "$dashboard_name" \
+                  --from-file="dashboard.json=/tmp/dashboard.json" \
+                  --namespace=monitoring \
+                  --dry-run=client -o yaml | \
+                  kubectl label --local=true -f - grafana_dashboard=true -o yaml | \
+                  kubectl apply -f -
+                
+                echo "Dashboard created for tenant: $tenant_id"
+              fi
+            done
+            
+            # Sleep for 5 minutes before checking again
+            sleep 300
+          done
+        volumeMounts:
+        - name: dashboard-templates
+          mountPath: /templates
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+      volumes:
+      - name: dashboard-templates
+        configMap:
+          name: tenant-dashboard-template
+      restartPolicy: Always
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tenant-metrics-collector
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: tenant-metrics-collector
+    app.kubernetes.io/part-of: rust-security
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: tenant-metrics-collector
+        spec:
+          serviceAccountName: multi-tenant-monitor
+          containers:
+          - name: metrics-collector
+            image: alpine:3.18
+            command: ["/bin/sh"]
+            args:
+            - -c
+            - |
+              apk add --no-cache curl jq python3 py3-pip bash
+              pip3 install --no-cache-dir requests prometheus_client
+              
+              echo "Collecting tenant metrics..."
+              python3 << 'EOF'
+              import requests
+              import json
+              import time
+              from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+              
+              # Prometheus configuration
+              PROMETHEUS_URL = "http://prometheus.monitoring.svc.cluster.local:9090"
+              PUSHGATEWAY_URL = "http://pushgateway.monitoring.svc.cluster.local:9091"
+              
+              # Custom metrics registry
+              registry = CollectorRegistry()
+              
+              # Define custom tenant metrics
+              tenant_health_score = Gauge('tenant_health_score', 'Overall health score for tenant', ['tenant_id'], registry=registry)
+              tenant_compliance_score = Gauge('tenant_compliance_score', 'Compliance score for tenant', ['tenant_id'], registry=registry)
+              tenant_cost_estimate = Gauge('tenant_cost_estimate_usd', 'Estimated cost for tenant', ['tenant_id'], registry=registry)
+              
+              def query_prometheus(query):
+                  """Query Prometheus and return results"""
+                  try:
+                      response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
+                      if response.status_code == 200:
+                          return response.json()["data"]["result"]
+                      return []
+                  except Exception as e:
+                      print(f"Error querying Prometheus: {e}")
+                      return []
+              
+              def calculate_health_score(tenant_id):
+                  """Calculate health score based on multiple metrics"""
+                  score = 100
+                  
+                  # Check service availability (20% weight)
+                  availability_query = f'avg(up{{namespace="rust-security-{tenant_id}"}})'
+                  availability_result = query_prometheus(availability_query)
+                  if availability_result:
+                      availability = float(availability_result[0]["value"][1])
+                      score -= (1 - availability) * 20
+                  
+                  # Check error rate (30% weight)
+                  error_rate_query = f'avg(tenant:error_rate{{namespace="rust-security-{tenant_id}"}})'
+                  error_rate_result = query_prometheus(error_rate_query)
+                  if error_rate_result:
+                      error_rate = float(error_rate_result[0]["value"][1])
+                      score -= min(error_rate * 100 * 30, 30)
+                  
+                  # Check resource utilization (25% weight)
+                  cpu_util_query = f'avg(tenant:cpu_quota_utilization{{namespace="rust-security-{tenant_id}"}})'
+                  cpu_util_result = query_prometheus(cpu_util_query)
+                  if cpu_util_result:
+                      cpu_util = float(cpu_util_result[0]["value"][1])
+                      if cpu_util > 90:
+                          score -= 25
+                      elif cpu_util > 80:
+                          score -= 15
+                  
+                  # Check response time (25% weight)
+                  response_time_query = f'avg(tenant:response_time_p95{{namespace="rust-security-{tenant_id}"}})'
+                  response_time_result = query_prometheus(response_time_query)
+                  if response_time_result:
+                      response_time_ms = float(response_time_result[0]["value"][1]) * 1000
+                      if response_time_ms > 1000:
+                          score -= 25
+                      elif response_time_ms > 500:
+                          score -= 15
+                  
+                  return max(score, 0)
+              
+              def calculate_compliance_score(tenant_id):
+                  """Calculate compliance score based on security metrics"""
+                  score = 100
+                  
+                  # Check for policy violations
+                  violations_query = f'increase(policy_violations_total{{namespace="rust-security-{tenant_id}"}}[1h])'
+                  violations_result = query_prometheus(violations_query)
+                  if violations_result:
+                      violations = float(violations_result[0]["value"][1])
+                      score -= min(violations * 5, 30)
+                  
+                  # Check for failed authentication attempts
+                  failed_auth_query = f'increase(auth_failed_login_attempts_total{{namespace="rust-security-{tenant_id}"}}[1h])'
+                  failed_auth_result = query_prometheus(failed_auth_query)
+                  if failed_auth_result:
+                      failed_auth = float(failed_auth_result[0]["value"][1])
+                      score -= min(failed_auth * 0.5, 20)
+                  
+                  # Check for unauthorized access attempts
+                  unauth_query = f'increase(http_requests_total{{namespace="rust-security-{tenant_id}",code="403"}}[1h])'
+                  unauth_result = query_prometheus(unauth_query)
+                  if unauth_result:
+                      unauth = float(unauth_result[0]["value"][1])
+                      score -= min(unauth * 0.1, 15)
+                  
+                  return max(score, 0)
+              
+              def estimate_tenant_cost(tenant_id):
+                  """Estimate tenant cost based on resource usage"""
+                  cost = 0
+                  
+                  # CPU cost ($0.05 per vCPU hour)
+                  cpu_query = f'avg(tenant:cpu_usage_rate{{namespace="rust-security-{tenant_id}"}})'
+                  cpu_result = query_prometheus(cpu_query)
+                  if cpu_result:
+                      cpu_cores = float(cpu_result[0]["value"][1])
+                      cost += cpu_cores * 0.05
+                  
+                  # Memory cost ($0.01 per GB hour)
+                  memory_query = f'avg(tenant:memory_usage_bytes{{namespace="rust-security-{tenant_id}"}})'
+                  memory_result = query_prometheus(memory_query)
+                  if memory_result:
+                      memory_gb = float(memory_result[0]["value"][1]) / (1024**3)
+                      cost += memory_gb * 0.01
+                  
+                  # Network cost ($0.001 per GB)
+                  network_query = f'avg(tenant:network_transmit_bytes_rate{{namespace="rust-security-{tenant_id}"}})'
+                  network_result = query_prometheus(network_query)
+                  if network_result:
+                      network_gbps = float(network_result[0]["value"][1]) / (1024**3)
+                      cost += network_gbps * 3600 * 0.001  # Convert to GB/hour
+                  
+                  return cost
+              
+              # Get list of tenant namespaces
+              namespaces_query = 'kube_namespace_labels{label_tenant_type="rust-security"}'
+              namespaces_result = query_prometheus(namespaces_query)
+              
+              for result in namespaces_result:
+                  namespace = result["metric"]["namespace"]
+                  if namespace.startswith("rust-security-"):
+                      tenant_id = namespace.replace("rust-security-", "")
+                      
+                      print(f"Processing metrics for tenant: {tenant_id}")
+                      
+                      # Calculate and set metrics
+                      health = calculate_health_score(tenant_id)
+                      compliance = calculate_compliance_score(tenant_id)
+                      cost = estimate_tenant_cost(tenant_id)
+                      
+                      tenant_health_score.labels(tenant_id=tenant_id).set(health)
+                      tenant_compliance_score.labels(tenant_id=tenant_id).set(compliance)
+                      tenant_cost_estimate.labels(tenant_id=tenant_id).set(cost)
+                      
+                      print(f"Tenant {tenant_id}: Health={health:.1f}, Compliance={compliance:.1f}, Cost=${cost:.2f}/hour")
+              
+              # Push metrics to Prometheus
+              try:
+                  push_to_gateway(PUSHGATEWAY_URL, job='tenant-metrics-collector', registry=registry)
+                  print("Metrics pushed successfully")
+              except Exception as e:
+                  print(f"Error pushing metrics: {e}")
+              
+              EOF
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+          restartPolicy: OnFailure
+      backoffLimit: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-metrics-api
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: tenant-metrics-api
+    app.kubernetes.io/part-of: rust-security
+spec:
+  selector:
+    app.kubernetes.io/name: tenant-metrics-api
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-metrics-api
+  namespace: rust-security
+  labels:
+    app.kubernetes.io/name: tenant-metrics-api
+    app.kubernetes.io/part-of: rust-security
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tenant-metrics-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tenant-metrics-api
+        app.kubernetes.io/part-of: rust-security
+    spec:
+      serviceAccountName: multi-tenant-monitor
+      containers:
+      - name: metrics-api
+        image: alpine:3.18
+        ports:
+        - containerPort: 8080
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          apk add --no-cache python3 py3-pip
+          pip3 install --no-cache-dir flask requests prometheus_client
+          
+          python3 << 'EOF'
+          from flask import Flask, jsonify, request
+          import requests
+          import json
+          from datetime import datetime, timedelta
+          
+          app = Flask(__name__)
+          
+          PROMETHEUS_URL = "http://prometheus.monitoring.svc.cluster.local:9090"
+          
+          @app.route('/health')
+          def health():
+              return jsonify({"status": "healthy"})
+          
+          @app.route('/api/v1/tenants')
+          def list_tenants():
+              """List all tenants with basic metrics"""
+              try:
+                  query = 'kube_namespace_labels{label_tenant_type="rust-security"}'
+                  response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
+                  
+                  if response.status_code != 200:
+                      return jsonify({"error": "Failed to query Prometheus"}), 500
+                  
+                  tenants = []
+                  for result in response.json()["data"]["result"]:
+                      namespace = result["metric"]["namespace"]
+                      if namespace.startswith("rust-security-"):
+                          tenant_id = namespace.replace("rust-security-", "")
+                          tenants.append({
+                              "tenant_id": tenant_id,
+                              "namespace": namespace,
+                              "status": "active"
+                          })
+                  
+                  return jsonify({"tenants": tenants})
+              except Exception as e:
+                  return jsonify({"error": str(e)}), 500
+          
+          @app.route('/api/v1/tenants/<tenant_id>')
+          def get_tenant_metrics(tenant_id):
+              """Get detailed metrics for a specific tenant"""
+              try:
+                  namespace = f"rust-security-{tenant_id}"
+                  
+                  # Query multiple metrics
+                  metrics = {}
+                  
+                  queries = {
+                      "health_score": f'tenant_health_score{{tenant_id="{tenant_id}"}}',
+                      "compliance_score": f'tenant_compliance_score{{tenant_id="{tenant_id}"}}',
+                      "cost_estimate": f'tenant_cost_estimate_usd{{tenant_id="{tenant_id}"}}',
+                      "cpu_utilization": f'tenant:cpu_quota_utilization{{namespace="{namespace}"}}',
+                      "memory_utilization": f'tenant:memory_quota_utilization{{namespace="{namespace}"}}',
+                      "request_rate": f'sum(tenant:request_rate{{namespace="{namespace}"}})',
+                      "error_rate": f'avg(tenant:error_rate{{namespace="{namespace}"}}) * 100',
+                      "response_time_p95": f'avg(tenant:response_time_p95{{namespace="{namespace}"}}) * 1000'
+                  }
+                  
+                  for metric_name, query in queries.items():
+                      response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
+                      if response.status_code == 200:
+                          result = response.json()["data"]["result"]
+                          if result:
+                              metrics[metric_name] = float(result[0]["value"][1])
+                          else:
+                              metrics[metric_name] = 0
+                      else:
+                          metrics[metric_name] = 0
+                  
+                  return jsonify({
+                      "tenant_id": tenant_id,
+                      "namespace": namespace,
+                      "timestamp": datetime.utcnow().isoformat(),
+                      "metrics": metrics
+                  })
+              except Exception as e:
+                  return jsonify({"error": str(e)}), 500
+          
+          @app.route('/api/v1/tenants/<tenant_id>/alerts')
+          def get_tenant_alerts(tenant_id):
+              """Get active alerts for a specific tenant"""
+              try:
+                  namespace = f"rust-security-{tenant_id}"
+                  query = f'ALERTS{{namespace="{namespace}",alertstate="firing"}}'
+                  
+                  response = requests.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
+                  
+                  if response.status_code != 200:
+                      return jsonify({"error": "Failed to query alerts"}), 500
+                  
+                  alerts = []
+                  for result in response.json()["data"]["result"]:
+                      alert = result["metric"]
+                      alerts.append({
+                          "alert_name": alert.get("alertname", "unknown"),
+                          "severity": alert.get("severity", "unknown"),
+                          "summary": alert.get("summary", ""),
+                          "description": alert.get("description", ""),
+                          "timestamp": result["value"][0]
+                      })
+                  
+                  return jsonify({
+                      "tenant_id": tenant_id,
+                      "alerts": alerts,
+                      "alert_count": len(alerts)
+                  })
+              except Exception as e:
+                  return jsonify({"error": str(e)}), 500
+          
+          if __name__ == '__main__':
+              app.run(host='0.0.0.0', port=8080)
+          EOF
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi

@@ -56,9 +56,7 @@ tall = "test --workspace"
 call = "check --workspace"
 fall = "fmt --all"
 
-# Security commands
-audit = "audit"
-deny = "deny check"
+# Security commands (using external tools directly)
 sec = ["clippy", "--workspace", "--all-targets", "--", "-D", "clippy::unwrap_used"]
 
 # Development shortcuts

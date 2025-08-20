@@ -156,7 +156,7 @@ aws-config = "1.0"
 aws-sdk-secretsmanager = "1.0"
 
 # SOAR dependencies (removed mysql to avoid RSA vulnerability)
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "sqlite", "uuid", "chrono", "json"], default-features = false }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "sqlite", "uuid", "chrono", "json", "migrate", "macros"], default-features = false }
 handlebars = "6.1"
 lettre = { version = "0.11", features = ["smtp-transport", "pool", "hostname", "builder", "rustls-tls"], default-features = false }
 tera = "1.20"

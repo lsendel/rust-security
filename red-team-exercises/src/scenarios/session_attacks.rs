@@ -12,11 +12,11 @@
 use crate::attack_framework::{AttackSession, RedTeamFramework};
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tracing::{info, warn, debug};
-use base64::{Engine, engine::general_purpose};
+use tracing::{debug, info, warn};
 
 pub async fn run_session_scenarios(
     framework: &mut RedTeamFramework,
@@ -273,7 +273,9 @@ async fn session_timeout_bypass(
         .await?;
 
     if create_result.success {
-        if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&create_result.response_body) {
+        if let Ok(response_json) =
+            serde_json::from_str::<serde_json::Value>(&create_result.response_body)
+        {
             if let Some(session_id) = response_json["session_id"].as_str() {
                 // Test various timeout bypass techniques
                 let bypass_techniques = vec![
@@ -288,7 +290,10 @@ async fn session_timeout_bypass(
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert(
                         "Cookie",
-                        reqwest::header::HeaderValue::from_str(&format!("session_id={}", session_id))?,
+                        reqwest::header::HeaderValue::from_str(&format!(
+                            "session_id={}",
+                            session_id
+                        ))?,
                     );
 
                     // Simulate expired session by waiting
@@ -306,7 +311,8 @@ async fn session_timeout_bypass(
                         .await?;
 
                     if result.success {
-                        timeout_bypass_results.push(format!("Timeout bypass successful: {}", technique));
+                        timeout_bypass_results
+                            .push(format!("Timeout bypass successful: {}", technique));
                         warn!("🚨 Session timeout bypass detected: {}", technique);
                     }
                 }
@@ -323,7 +329,10 @@ async fn session_timeout_bypass(
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert(
                         "Cookie",
-                        reqwest::header::HeaderValue::from_str(&format!("session_id={}", session_id))?,
+                        reqwest::header::HeaderValue::from_str(&format!(
+                            "session_id={}",
+                            session_id
+                        ))?,
                     );
 
                     let result = framework
@@ -338,7 +347,8 @@ async fn session_timeout_bypass(
                         .await?;
 
                     if result.success {
-                        timeout_bypass_results.push(format!("Session extension attack successful: {}", payload));
+                        timeout_bypass_results
+                            .push(format!("Session extension attack successful: {}", payload));
                     }
                 }
             }
@@ -368,7 +378,7 @@ async fn cross_subdomain_attacks(
     // Test session sharing across different subdomains
     let subdomains = vec![
         "admin.localhost",
-        "api.localhost", 
+        "api.localhost",
         "secure.localhost",
         "internal.localhost",
         "test.localhost",
@@ -383,7 +393,7 @@ async fn cross_subdomain_attacks(
     let create_result = framework
         .execute_attack(
             "session_create_subdomain",
-            "POST", 
+            "POST",
             "/session/create",
             None,
             Some(create_body.to_string()),
@@ -392,18 +402,20 @@ async fn cross_subdomain_attacks(
         .await?;
 
     if create_result.success {
-        if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&create_result.response_body) {
+        if let Ok(response_json) =
+            serde_json::from_str::<serde_json::Value>(&create_result.response_body)
+        {
             if let Some(session_id) = response_json["session_id"].as_str() {
                 for subdomain in &subdomains {
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert(
                         "Cookie",
-                        reqwest::header::HeaderValue::from_str(&format!("session_id={}; Domain={}", session_id, subdomain))?,
+                        reqwest::header::HeaderValue::from_str(&format!(
+                            "session_id={}; Domain={}",
+                            session_id, subdomain
+                        ))?,
                     );
-                    headers.insert(
-                        "Host",
-                        reqwest::header::HeaderValue::from_str(subdomain)?,
-                    );
+                    headers.insert("Host", reqwest::header::HeaderValue::from_str(subdomain)?);
 
                     let result = framework
                         .execute_attack(
@@ -417,7 +429,8 @@ async fn cross_subdomain_attacks(
                         .await?;
 
                     if result.success && result.response_body.contains("users") {
-                        subdomain_attacks.push(format!("Cross-subdomain access successful: {}", subdomain));
+                        subdomain_attacks
+                            .push(format!("Cross-subdomain access successful: {}", subdomain));
                         warn!("🚨 Cross-subdomain session abuse: {}", subdomain);
                     }
                 }
@@ -432,10 +445,7 @@ async fn cross_subdomain_attacks(
 
                 for cookie in &malicious_cookies {
                     let mut headers = reqwest::header::HeaderMap::new();
-                    headers.insert(
-                        "Cookie",
-                        reqwest::header::HeaderValue::from_str(&cookie)?,
-                    );
+                    headers.insert("Cookie", reqwest::header::HeaderValue::from_str(&cookie)?);
 
                     let result = framework
                         .execute_attack(
@@ -496,7 +506,7 @@ async fn session_token_manipulation(
         .execute_attack(
             "session_create_manipulation",
             "POST",
-            "/session/create", 
+            "/session/create",
             None,
             Some(create_body.to_string()),
             Some(&session),
@@ -504,7 +514,9 @@ async fn session_token_manipulation(
         .await?;
 
     if create_result.success {
-        if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(&create_result.response_body) {
+        if let Ok(response_json) =
+            serde_json::from_str::<serde_json::Value>(&create_result.response_body)
+        {
             if let Some(session_id) = response_json["session_id"].as_str() {
                 for (attack_type, prefix, suffix) in &manipulation_attacks {
                     let manipulated_token = match *attack_type {
@@ -516,26 +528,29 @@ async fn session_token_manipulation(
                             } else {
                                 session_id.to_string()
                             }
-                        },
+                        }
                         "hex_decode" => {
                             // Simulate hex decode attempt
                             session_id.to_string()
-                        },
+                        }
                         "url_decode" => {
                             // Simulate URL decode
                             session_id.to_string()
-                        },
+                        }
                         "double_decode" => {
                             // Simulate double decode
                             session_id.to_string()
-                        },
+                        }
                         _ => session_id.to_string(),
                     };
 
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert(
                         "Cookie",
-                        reqwest::header::HeaderValue::from_str(&format!("session_id={}", manipulated_token))?,
+                        reqwest::header::HeaderValue::from_str(&format!(
+                            "session_id={}",
+                            manipulated_token
+                        ))?,
                     );
 
                     let result = framework
@@ -550,7 +565,8 @@ async fn session_token_manipulation(
                         .await?;
 
                     if result.success {
-                        manipulation_results.push(format!("Token manipulation successful: {}", attack_type));
+                        manipulation_results
+                            .push(format!("Token manipulation successful: {}", attack_type));
                         warn!("🚨 Session token manipulation detected: {}", attack_type);
                     }
                 }
@@ -558,17 +574,20 @@ async fn session_token_manipulation(
                 // Test session token prediction
                 let prediction_patterns = vec![
                     format!("{}_2", session_id.trim_end_matches('1')), // Sequential pattern
-                    session_id.replace('0', "1"), // Bit flip
-                    session_id.replace('a', "b"), // Character substitution
-                    format!("{}0", session_id), // Append zero
-                    session_id[1..].to_string(), // Remove first character
+                    session_id.replace('0', "1"),                      // Bit flip
+                    session_id.replace('a', "b"),                      // Character substitution
+                    format!("{}0", session_id),                        // Append zero
+                    session_id[1..].to_string(),                       // Remove first character
                 ];
 
                 for predicted_token in &prediction_patterns {
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert(
                         "Cookie",
-                        reqwest::header::HeaderValue::from_str(&format!("session_id={}", predicted_token))?,
+                        reqwest::header::HeaderValue::from_str(&format!(
+                            "session_id={}",
+                            predicted_token
+                        ))?,
                     );
 
                     let result = framework
@@ -583,7 +602,8 @@ async fn session_token_manipulation(
                         .await?;
 
                     if result.success {
-                        manipulation_results.push(format!("Token prediction successful: {}", predicted_token));
+                        manipulation_results
+                            .push(format!("Token prediction successful: {}", predicted_token));
                     }
                 }
             }

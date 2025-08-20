@@ -12,8 +12,7 @@ impl RegressionTestSuite {
         let policy_base_url = self.policy_base_url.clone();
 
         self.run_test("Performance Metrics", || async move {
-            let response =
-                client.get(&format!("{}/metrics", auth_base_url)).send().await?;
+            let response = client.get(&format!("{}/metrics", auth_base_url)).send().await?;
 
             if response.status() != 200 {
                 return Err(format!("Metrics endpoint failed: {}", response.status()).into());
@@ -153,8 +152,7 @@ impl RegressionTestSuite {
             let mut endpoints_tested = Vec::new();
 
             // Test health endpoint
-            let health_response =
-                client.get(&format!("{}/health", auth_base_url)).send().await?;
+            let health_response = client.get(&format!("{}/health", auth_base_url)).send().await?;
 
             endpoints_tested.push(json!({
                 "endpoint": "/health",
@@ -163,8 +161,7 @@ impl RegressionTestSuite {
             }));
 
             // Test metrics endpoint
-            let metrics_response =
-                client.get(&format!("{}/metrics", auth_base_url)).send().await?;
+            let metrics_response = client.get(&format!("{}/metrics", auth_base_url)).send().await?;
 
             endpoints_tested.push(json!({
                 "endpoint": "/metrics",
@@ -206,10 +203,8 @@ impl RegressionTestSuite {
 
         self.run_test("Key Rotation", || async move {
             // Test key rotation status endpoint (if available)
-            let status_response = client
-                .get(&format!("{}/admin/key-rotation/status", auth_base_url))
-                .send()
-                .await;
+            let status_response =
+                client.get(&format!("{}/admin/key-rotation/status", auth_base_url)).send().await;
 
             match status_response {
                 Ok(response) if response.status() == 200 => {

@@ -1,0 +1,628 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    name: observability
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+data:
+  otel-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      
+      # Prometheus metrics receiver
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: 'otel-collector'
+              static_configs:
+                - targets: ['localhost:8888']
+            - job_name: 'auth-service'
+              static_configs:
+                - targets: ['auth-service.rust-security:8080']
+            - job_name: 'policy-service'
+              static_configs:
+                - targets: ['policy-service.rust-security:8080']
+
+    processors:
+      # Batch processor for efficient data transmission
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+      
+      # Memory limiter to prevent OOM
+      memory_limiter:
+        limit_mib: 512
+        spike_limit_mib: 128
+        check_interval: 5s
+      
+      # Resource processor to add/modify resource attributes
+      resource:
+        attributes:
+          - key: service.instance.id
+            value: "${HOSTNAME}"
+            action: upsert
+          - key: k8s.cluster.name
+            value: "rust-security-cluster"
+            action: upsert
+      
+      # Attributes processor for span/metric attribute manipulation
+      attributes:
+        actions:
+          - key: environment
+            value: "production"
+            action: upsert
+          - key: version
+            from_attribute: service.version
+            action: upsert
+      
+      # Probabilistic sampling for trace data
+      probabilistic_sampler:
+        sampling_percentage: 10.0
+      
+      # Resource detection processor
+      resourcedetection:
+        detectors: [env, system, k8sattributes]
+        timeout: 2s
+        override: false
+
+    exporters:
+      # Jaeger exporter for distributed tracing
+      jaeger:
+        endpoint: jaeger-collector.observability:14250
+        tls:
+          insecure: true
+      
+      # Prometheus exporter for metrics
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        metric_expiration: 180m
+        enable_open_metrics: true
+      
+      # OTLP exporter for forwarding to external systems
+      otlp:
+        endpoint: "http://tempo.observability:4317"
+        tls:
+          insecure: true
+      
+      # Elasticsearch exporter for logs
+      elasticsearch:
+        endpoints: ["http://elasticsearch.observability:9200"]
+        index: "otel-logs"
+        mapping:
+          mode: ecs
+      
+      # Logging exporter for debugging
+      logging:
+        loglevel: debug
+
+    extensions:
+      # Health check extension
+      health_check:
+        endpoint: 0.0.0.0:13133
+        path: /health
+      
+      # Prometheus metrics for collector itself
+      pprof:
+        endpoint: 0.0.0.0:1777
+      
+      # Memory ballast to reduce GC pressure
+      memory_ballast:
+        size_mib: 165
+
+    service:
+      extensions: [health_check, pprof, memory_ballast]
+      pipelines:
+        # Traces pipeline
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch, resource, attributes, probabilistic_sampler, resourcedetection]
+          exporters: [jaeger, otlp, logging]
+        
+        # Metrics pipeline
+        metrics:
+          receivers: [otlp, prometheus]
+          processors: [memory_limiter, batch, resource, attributes, resourcedetection]
+          exporters: [prometheus, logging]
+        
+        # Logs pipeline
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch, resource, attributes, resourcedetection]
+          exporters: [elasticsearch, logging]
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+    component: observability
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        component: observability
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.89.0
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+          protocol: TCP
+        - containerPort: 4318
+          name: otlp-http
+          protocol: TCP
+        - containerPort: 8889
+          name: prometheus
+          protocol: TCP
+        - containerPort: 13133
+          name: health-check
+          protocol: TCP
+        - containerPort: 1777
+          name: pprof
+          protocol: TCP
+        args:
+        - --config=/etc/otel-collector-config.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/otel-collector-config.yaml
+          subPath: otel-config.yaml
+          readOnly: true
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: K8S_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 500m
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 13133
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 13133
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+      volumes:
+      - name: config
+        configMap:
+          name: otel-collector-config
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+    component: observability
+spec:
+  selector:
+    app: otel-collector
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+    protocol: TCP
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+    protocol: TCP
+  - name: prometheus
+    port: 8889
+    targetPort: 8889
+    protocol: TCP
+  - name: health-check
+    port: 13133
+    targetPort: 13133
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+  labels:
+    app: otel-collector
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "services", "endpoints", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+  labels:
+    app: otel-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+- kind: ServiceAccount
+  name: otel-collector
+  namespace: observability
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: otel-collector-network-policy
+  namespace: observability
+spec:
+  podSelector:
+    matchLabels:
+      app: otel-collector
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow OTLP traffic from application namespaces
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: rust-security
+    ports:
+    - protocol: TCP
+      port: 4317
+    - protocol: TCP
+      port: 4318
+  # Allow health checks
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 13133
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow access to backend services
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: observability
+    ports:
+    - protocol: TCP
+      port: 14250  # Jaeger
+    - protocol: TCP
+      port: 4317   # Tempo
+    - protocol: TCP
+      port: 9200   # Elasticsearch
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-config
+  namespace: observability
+data:
+  jaeger.yaml: |
+    query:
+      base-path: /
+      log-level: info
+    collector:
+      grpc-server:
+        host-port: :14250
+      http-server:
+        host-port: :14268
+    storage:
+      type: elasticsearch
+      options:
+        elasticsearch:
+          server-urls: http://elasticsearch.observability:9200
+          index-prefix: jaeger
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: observability
+  labels:
+    app: jaeger
+    component: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+        component: observability
+    spec:
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:1.51
+        ports:
+        - containerPort: 16686
+          name: query
+        - containerPort: 14250
+          name: grpc
+        - containerPort: 14268
+          name: http
+        env:
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        - name: SPAN_STORAGE_TYPE
+          value: "elasticsearch"
+        - name: ES_SERVER_URLS
+          value: "http://elasticsearch.observability:9200"
+        - name: ES_INDEX_PREFIX
+          value: "jaeger"
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 500m
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: observability
+  labels:
+    app: jaeger
+    component: collector
+spec:
+  selector:
+    app: jaeger
+  ports:
+  - name: grpc
+    port: 14250
+    targetPort: 14250
+  - name: http
+    port: 14268
+    targetPort: 14268
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-query
+  namespace: observability
+  labels:
+    app: jaeger
+    component: query
+spec:
+  selector:
+    app: jaeger
+  ports:
+  - name: query
+    port: 16686
+    targetPort: 16686
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-query
+  namespace: observability
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - jaeger.example.com
+    secretName: jaeger-tls
+  rules:
+  - host: jaeger.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger-query
+            port:
+              number: 16686
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: observability
+  labels:
+    app: tempo
+    component: observability
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+        component: observability
+    spec:
+      containers:
+      - name: tempo
+        image: grafana/tempo:2.3.0
+        ports:
+        - containerPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          name: otlp-http
+        - containerPort: 3200
+          name: tempo
+        args:
+        - -config.file=/etc/tempo.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /etc/tempo.yaml
+          subPath: tempo.yaml
+        - name: storage
+          mountPath: /var/tempo
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 100m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 10001
+      volumes:
+      - name: config
+        configMap:
+          name: tempo-config
+      - name: storage
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: observability
+data:
+  tempo.yaml: |
+    server:
+      http_listen_port: 3200
+      
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+    
+    ingester:
+      trace_idle_period: 10s
+      max_block_duration: 5m
+    
+    compactor:
+      compaction:
+        compaction_window: 1h
+        max_block_bytes: 100_000_000
+        block_retention: 1h
+        compacted_block_retention: 10m
+    
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+        pool:
+          max_workers: 100
+          queue_depth: 10000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  namespace: observability
+  labels:
+    app: tempo
+spec:
+  selector:
+    app: tempo
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+  - name: tempo
+    port: 3200
+    targetPort: 3200
+  type: ClusterIP

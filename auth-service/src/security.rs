@@ -255,7 +255,9 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
     if let Ok(value) = "max-age=31536000; includeSubDomains".parse() {
         headers.insert("Strict-Transport-Security", value);
     }
-    if let Ok(value) = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'".parse() {
+    if let Ok(value) =
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'".parse()
+    {
         headers.insert("Content-Security-Policy", value);
     }
     if let Ok(value) = "strict-origin-when-cross-origin".parse() {

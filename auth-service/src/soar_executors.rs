@@ -968,15 +968,12 @@ impl DatabaseQueryExecutor {
     #[cfg(feature = "soar")]
     fn validate_query(&self, query: &str) -> Result<(), StepError> {
         // Whitelist of safe operations
-        let safe_operations = [
-            "SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC",
-        ];
-        
+        let safe_operations = ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE", "DESC"];
+
         // Dangerous operations that should never be allowed
         let dangerous_operations = [
-            "DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE",
-            "GRANT", "REVOKE", "TRUNCATE", "EXEC", "EXECUTE", "CALL",
-            "DO", "LOAD", "COPY", "BULK"
+            "DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE", "GRANT", "REVOKE", "TRUNCATE",
+            "EXEC", "EXECUTE", "CALL", "DO", "LOAD", "COPY", "BULK",
         ];
 
         let query_upper = query.to_uppercase();
@@ -986,7 +983,10 @@ impl DatabaseQueryExecutor {
         if !safe_operations.contains(&first_word) {
             return Err(StepError {
                 code: "UNSAFE_QUERY_OPERATION".to_string(),
-                message: format!("Query operation '{}' is not allowed for security reasons", first_word),
+                message: format!(
+                    "Query operation '{}' is not allowed for security reasons",
+                    first_word
+                ),
                 details: Some(serde_json::json!({
                     "allowed_operations": safe_operations,
                     "attempted_operation": first_word
@@ -1036,7 +1036,7 @@ impl DatabaseQueryExecutor {
             .replace("--", "")  // Remove SQL comment markers
             .replace("/*", "")  // Remove SQL comment start
             .replace("*/", "")  // Remove SQL comment end
-            .replace(";", "")   // Remove statement terminators
+            .replace(";", "") // Remove statement terminators
     }
 }
 
@@ -1086,7 +1086,7 @@ impl StepExecutor for DatabaseQueryExecutor {
                 // Replace parameters in query safely (using positional parameters)
                 let mut final_query = query.clone();
                 let mut param_values: Vec<String> = Vec::new();
-                
+
                 for (i, (key, value)) in sanitized_params.iter().enumerate() {
                     let placeholder = format!("${{{}}}", key);
                     let positional_param = format!("${}", i + 1);
@@ -1100,8 +1100,9 @@ impl StepExecutor for DatabaseQueryExecutor {
                 let start_time = tokio::time::Instant::now();
                 let query_result = tokio::time::timeout(
                     timeout_duration,
-                    self.execute_query_internal(pool, &final_query, &param_values)
-                ).await;
+                    self.execute_query_internal(pool, &final_query, &param_values),
+                )
+                .await;
 
                 let execution_time = start_time.elapsed();
 
@@ -1119,13 +1120,19 @@ impl StepExecutor for DatabaseQueryExecutor {
                             .with_target("soar_playbook".to_string())
                             .with_outcome("success".to_string())
                             .with_reason("Database query step executed successfully".to_string())
-                            .with_detail("execution_time_ms".to_string(), execution_time.as_millis())
+                            .with_detail(
+                                "execution_time_ms".to_string(),
+                                execution_time.as_millis(),
+                            )
                             .with_detail("result_count".to_string(), results.len()),
                         );
 
                         let mut outputs = HashMap::new();
                         outputs.insert("query_results".to_string(), Value::Array(results));
-                        outputs.insert("execution_time_ms".to_string(), Value::Number((execution_time.as_millis() as u64).into()));
+                        outputs.insert(
+                            "execution_time_ms".to_string(),
+                            Value::Number((execution_time.as_millis() as u64).into()),
+                        );
                         outputs.insert("success".to_string(), Value::Bool(true));
 
                         Ok(outputs)
@@ -1146,7 +1153,10 @@ impl StepExecutor for DatabaseQueryExecutor {
                             .with_outcome("failure".to_string())
                             .with_reason(format!("Database query failed: {}", e.to_string()))
                             .with_detail("error".to_string(), e.to_string())
-                            .with_detail("execution_time_ms".to_string(), execution_time.as_millis()),
+                            .with_detail(
+                                "execution_time_ms".to_string(),
+                                execution_time.as_millis(),
+                            ),
                         );
 
                         Err(StepError {
@@ -1165,7 +1175,10 @@ impl StepExecutor for DatabaseQueryExecutor {
 
                         Err(StepError {
                             code: "DATABASE_QUERY_TIMEOUT".to_string(),
-                            message: format!("Database query timed out after {} seconds", timeout_seconds),
+                            message: format!(
+                                "Database query timed out after {} seconds",
+                                timeout_seconds
+                            ),
                             details: Some(serde_json::json!({
                                 "timeout_seconds": timeout_seconds,
                                 "execution_time_ms": execution_time.as_millis()
@@ -1202,7 +1215,7 @@ impl DatabaseQueryExecutor {
 
         // Build the query with parameters
         let mut query_builder = sqlx::query(query);
-        
+
         for param in parameters {
             query_builder = query_builder.bind(param);
         }
@@ -1212,43 +1225,44 @@ impl DatabaseQueryExecutor {
 
         for row in rows {
             let mut result_obj = serde_json::Map::new();
-            
+
             // Convert each column to a JSON value
             for (i, column) in row.columns().iter().enumerate() {
                 let column_name = column.name();
-                
+
                 // Safely extract values based on PostgreSQL types
                 let value = match column.type_info().name() {
-                    "VARCHAR" | "TEXT" | "CHAR" => {
-                        row.try_get::<Option<String>, _>(i)
-                            .map(|v| v.map(Value::String).unwrap_or(Value::Null))
+                    "VARCHAR" | "TEXT" | "CHAR" => row
+                        .try_get::<Option<String>, _>(i)
+                        .map(|v| v.map(Value::String).unwrap_or(Value::Null))
+                        .unwrap_or(Value::Null),
+                    "INT4" | "INT8" | "BIGINT" => row
+                        .try_get::<Option<i64>, _>(i)
+                        .map(|v| v.map(|n| Value::Number(n.into())).unwrap_or(Value::Null))
+                        .unwrap_or(Value::Null),
+                    "FLOAT4" | "FLOAT8" | "NUMERIC" => row
+                        .try_get::<Option<f64>, _>(i)
+                        .map(|v| {
+                            v.map(|n| {
+                                serde_json::Number::from_f64(n)
+                                    .map(Value::Number)
+                                    .unwrap_or(Value::Null)
+                            })
                             .unwrap_or(Value::Null)
-                    }
-                    "INT4" | "INT8" | "BIGINT" => {
-                        row.try_get::<Option<i64>, _>(i)
-                            .map(|v| v.map(|n| Value::Number(n.into())).unwrap_or(Value::Null))
-                            .unwrap_or(Value::Null)
-                    }
-                    "FLOAT4" | "FLOAT8" | "NUMERIC" => {
-                        row.try_get::<Option<f64>, _>(i)
-                            .map(|v| v.map(|n| serde_json::Number::from_f64(n).map(Value::Number).unwrap_or(Value::Null)).unwrap_or(Value::Null))
-                            .unwrap_or(Value::Null)
-                    }
-                    "BOOL" => {
-                        row.try_get::<Option<bool>, _>(i)
-                            .map(|v| v.map(Value::Bool).unwrap_or(Value::Null))
-                            .unwrap_or(Value::Null)
-                    }
-                    "TIMESTAMPTZ" | "TIMESTAMP" => {
-                        row.try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(i)
-                            .map(|v| v.map(|dt| Value::String(dt.to_rfc3339())).unwrap_or(Value::Null))
-                            .unwrap_or(Value::Null)
-                    }
-                    "UUID" => {
-                        row.try_get::<Option<uuid::Uuid>, _>(i)
-                            .map(|v| v.map(|id| Value::String(id.to_string())).unwrap_or(Value::Null))
-                            .unwrap_or(Value::Null)
-                    }
+                        })
+                        .unwrap_or(Value::Null),
+                    "BOOL" => row
+                        .try_get::<Option<bool>, _>(i)
+                        .map(|v| v.map(Value::Bool).unwrap_or(Value::Null))
+                        .unwrap_or(Value::Null),
+                    "TIMESTAMPTZ" | "TIMESTAMP" => row
+                        .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(i)
+                        .map(|v| v.map(|dt| Value::String(dt.to_rfc3339())).unwrap_or(Value::Null))
+                        .unwrap_or(Value::Null),
+                    "UUID" => row
+                        .try_get::<Option<uuid::Uuid>, _>(i)
+                        .map(|v| v.map(|id| Value::String(id.to_string())).unwrap_or(Value::Null))
+                        .unwrap_or(Value::Null),
                     _ => {
                         // For unknown types, try to get as string
                         row.try_get::<Option<String>, _>(i)
@@ -1356,16 +1370,22 @@ pub struct CaseUpdateExecutor {
 
 impl CaseUpdateExecutor {
     pub fn new() -> Self {
-        Self {
-            case_manager: Arc::new(CaseManagerClient::new()),
-        }
+        Self { case_manager: Arc::new(CaseManagerClient::new()) }
     }
 
     fn validate_case_fields(fields: &HashMap<String, Value>) -> Result<(), StepError> {
         // Define allowed fields to prevent injection attacks
         let allowed_fields = [
-            "status", "priority", "assignee", "description", "tags",
-            "resolution", "category", "severity", "due_date", "notes"
+            "status",
+            "priority",
+            "assignee",
+            "description",
+            "tags",
+            "resolution",
+            "category",
+            "severity",
+            "due_date",
+            "notes",
         ];
 
         for field_name in fields.keys() {
@@ -1499,7 +1519,11 @@ impl StepExecutor for CaseUpdateExecutor {
                     // Add note if specified
                     let note_added = if let Some(note_content) = add_note {
                         if !note_content.trim().is_empty() {
-                            match self.case_manager.add_case_note(case_id, note_content, "soar_system").await {
+                            match self
+                                .case_manager
+                                .add_case_note(case_id, note_content, "soar_system")
+                                .await
+                            {
                                 Ok(note_id) => {
                                     debug!("Added note {} to case {}", note_id, case_id);
                                     true
@@ -1529,7 +1553,10 @@ impl StepExecutor for CaseUpdateExecutor {
                         .with_outcome("success".to_string())
                         .with_reason("Case update step executed successfully".to_string())
                         .with_detail("case_id".to_string(), case_id.clone())
-                        .with_detail("updated_fields".to_string(), fields.keys().collect::<Vec<_>>().join(", "))
+                        .with_detail(
+                            "updated_fields".to_string(),
+                            fields.keys().collect::<Vec<_>>().join(", "),
+                        )
                         .with_detail("note_added".to_string(), note_added),
                     );
 
@@ -1537,10 +1564,11 @@ impl StepExecutor for CaseUpdateExecutor {
                     outputs.insert("case_id".to_string(), Value::String(case_id.clone()));
                     outputs.insert("case_updated".to_string(), Value::Bool(true));
                     outputs.insert("note_added".to_string(), Value::Bool(note_added));
-                    outputs.insert("updated_fields".to_string(), Value::Array(
-                        fields.keys().map(|k| Value::String(k.clone())).collect()
-                    ));
-                    
+                    outputs.insert(
+                        "updated_fields".to_string(),
+                        Value::Array(fields.keys().map(|k| Value::String(k.clone())).collect()),
+                    );
+
                     // Include some key updated case details
                     if let Some(status) = updated_case.get("status") {
                         outputs.insert("new_status".to_string(), status.clone());
@@ -2367,7 +2395,8 @@ impl FirewallClient {
                 "timestamp": Utc::now().to_rfc3339()
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&format!("{}/rules/block", self.config.api_endpoint))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
@@ -2377,14 +2406,16 @@ impl FirewallClient {
 
             if response.status().is_success() {
                 let result: Value = response.json().await?;
-                let block_id = result["block_id"].as_str()
+                let block_id = result["block_id"]
+                    .as_str()
                     .unwrap_or(&format!("block_{}", Uuid::new_v4()))
                     .to_string();
-                
+
                 info!("Successfully blocked IP {} with ID {}", ip_address, block_id);
                 Ok(block_id)
             } else {
-                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body =
+                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Firewall API error: {}", error_body).into())
             }
         } else {
@@ -2440,7 +2471,8 @@ impl IdentityProviderClient {
                 "timestamp": Utc::now().to_rfc3339()
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&format!("{}/users/lock", self.config.api_endpoint))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
@@ -2450,14 +2482,16 @@ impl IdentityProviderClient {
 
             if response.status().is_success() {
                 let result: Value = response.json().await?;
-                let lock_id = result["lock_id"].as_str()
+                let lock_id = result["lock_id"]
+                    .as_str()
                     .unwrap_or(&format!("lock_{}", Uuid::new_v4()))
                     .to_string();
-                
+
                 info!("Successfully locked account {} with ID {}", user_id, lock_id);
                 Ok(lock_id)
             } else {
-                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body =
+                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Identity Provider API error: {}", error_body).into())
             }
         } else {
@@ -2488,8 +2522,7 @@ impl SiemClient {
         SiemConfig {
             api_endpoint: std::env::var("SIEM_API_ENDPOINT")
                 .unwrap_or_else(|_| "https://siem-api.example.com".to_string()),
-            api_key: std::env::var("SIEM_API_KEY")
-                .unwrap_or_else(|_| "mock-api-key".to_string()),
+            api_key: std::env::var("SIEM_API_KEY").unwrap_or_else(|_| "mock-api-key".to_string()),
             timeout_seconds: std::env::var("SIEM_TIMEOUT")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -2512,7 +2545,8 @@ impl SiemClient {
                 "timestamp": Utc::now().to_rfc3339()
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&format!("{}/query", self.config.api_endpoint))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
@@ -2522,11 +2556,14 @@ impl SiemClient {
 
             if response.status().is_success() {
                 let result: Value = response.json().await?;
-                info!("SIEM query executed successfully, {} results returned", 
-                      result.get("results").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0));
+                info!(
+                    "SIEM query executed successfully, {} results returned",
+                    result.get("results").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0)
+                );
                 Ok(result)
             } else {
-                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body =
+                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("SIEM API error: {}", error_body).into())
             }
         } else {
@@ -2603,7 +2640,8 @@ impl TicketingClient {
                 "source": "soar_automation"
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&format!("{}/tickets", self.config.api_endpoint))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
@@ -2613,14 +2651,24 @@ impl TicketingClient {
 
             if response.status().is_success() {
                 let result: Value = response.json().await?;
-                let ticket_id = result["ticket_id"].as_str()
-                    .unwrap_or(&format!("TICKET-{}", Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()))
+                let ticket_id = result["ticket_id"]
+                    .as_str()
+                    .unwrap_or(&format!(
+                        "TICKET-{}",
+                        Uuid::new_v4()
+                            .to_string()
+                            .chars()
+                            .take(8)
+                            .collect::<String>()
+                            .to_uppercase()
+                    ))
                     .to_string();
-                
+
                 info!("Successfully created ticket {} with title '{}'", ticket_id, title);
                 Ok(ticket_id)
             } else {
-                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body =
+                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Ticketing API error: {}", error_body).into())
             }
         } else {
@@ -2663,10 +2711,14 @@ impl CaseManagerClient {
         }
     }
 
-    pub async fn get_case_details(&self, case_id: &str) -> Result<Option<CaseDetails>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_case_details(
+        &self,
+        case_id: &str,
+    ) -> Result<Option<CaseDetails>, Box<dyn std::error::Error + Send + Sync>> {
         // If we have a real endpoint, make the API call
         if !self.config.api_endpoint.contains("example.com") {
-            let response = self.client
+            let response = self
+                .client
                 .get(&format!("{}/cases/{}", self.config.api_endpoint, case_id))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .send()
@@ -2679,7 +2731,8 @@ impl CaseManagerClient {
                 }
                 404 => Ok(None),
                 _ => {
-                    let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    let error_body =
+                        response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                     Err(format!("Case Manager API error: {}", error_body).into())
                 }
             }
@@ -2702,10 +2755,15 @@ impl CaseManagerClient {
         }
     }
 
-    pub async fn update_case(&self, case_id: &str, fields: &HashMap<String, Value>) -> Result<HashMap<String, Value>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn update_case(
+        &self,
+        case_id: &str,
+        fields: &HashMap<String, Value>,
+    ) -> Result<HashMap<String, Value>, Box<dyn std::error::Error + Send + Sync>> {
         // If we have a real endpoint, make the API call
         if !self.config.api_endpoint.contains("example.com") {
-            let response = self.client
+            let response = self
+                .client
                 .patch(&format!("{}/cases/{}", self.config.api_endpoint, case_id))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
@@ -2718,7 +2776,8 @@ impl CaseManagerClient {
                 info!("Successfully updated case {}", case_id);
                 Ok(updated_case)
             } else {
-                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body =
+                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Case Manager API error: {}", error_body).into())
             }
         } else {
@@ -2726,19 +2785,28 @@ impl CaseManagerClient {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let mut updated_case = HashMap::new();
             updated_case.insert("id".to_string(), Value::String(case_id.to_string()));
-            
+
             // Copy all the updated fields
             for (key, value) in fields {
                 updated_case.insert(key.clone(), value.clone());
             }
-            
+
             updated_case.insert("updated_at".to_string(), Value::String(Utc::now().to_rfc3339()));
-            info!("Mock: Updated case {} with fields: {:?}", case_id, fields.keys().collect::<Vec<_>>());
+            info!(
+                "Mock: Updated case {} with fields: {:?}",
+                case_id,
+                fields.keys().collect::<Vec<_>>()
+            );
             Ok(updated_case)
         }
     }
 
-    pub async fn add_case_note(&self, case_id: &str, note: &str, author: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn add_case_note(
+        &self,
+        case_id: &str,
+        note: &str,
+        author: &str,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         // If we have a real endpoint, make the API call
         if !self.config.api_endpoint.contains("example.com") {
             let payload = serde_json::json!({
@@ -2747,7 +2815,8 @@ impl CaseManagerClient {
                 "timestamp": Utc::now().to_rfc3339()
             });
 
-            let response = self.client
+            let response = self
+                .client
                 .post(&format!("{}/cases/{}/notes", self.config.api_endpoint, case_id))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
@@ -2757,12 +2826,14 @@ impl CaseManagerClient {
 
             if response.status().is_success() {
                 let result: Value = response.json().await?;
-                let note_id = result["note_id"].as_str()
+                let note_id = result["note_id"]
+                    .as_str()
                     .unwrap_or(&format!("note_{}", Uuid::new_v4()))
                     .to_string();
                 Ok(note_id)
             } else {
-                let error_body = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body =
+                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Case Manager API error: {}", error_body).into())
             }
         } else {

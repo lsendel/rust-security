@@ -5,12 +5,12 @@
 use crate::attack_framework::{AttackSession, RedTeamFramework};
 use crate::reporting::RedTeamReporter;
 use anyhow::Result;
+use base64::{engine::general_purpose, Engine};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
-use base64::{Engine, engine::general_purpose};
 
 pub async fn run_authentication_scenarios(
     framework: &mut RedTeamFramework,
@@ -552,7 +552,10 @@ async fn authentication_state_confusion(
     // Test 1: Session fixation
     let fixed_session_id = "FIXED_SESSION_12345";
     let mut headers = HeaderMap::new();
-    headers.insert(reqwest::header::COOKIE, HeaderValue::from_str(&format!("session_id={}", fixed_session_id))?);
+    headers.insert(
+        reqwest::header::COOKIE,
+        HeaderValue::from_str(&format!("session_id={}", fixed_session_id))?,
+    );
 
     let result = framework
         .execute_attack(
@@ -605,7 +608,7 @@ async fn authentication_state_confusion(
     headers.insert(reqwest::header::AUTHORIZATION, HeaderValue::from_str("Bearer invalid_token")?);
     headers.insert(
         reqwest::header::HeaderName::from_static("x-api-key"),
-        HeaderValue::from_str("admin_key")?
+        HeaderValue::from_str("admin_key")?,
     );
     headers.insert(reqwest::header::COOKIE, HeaderValue::from_str("auth_token=admin_session")?);
 
@@ -704,9 +707,9 @@ fn get_password_list(intensity: &str) -> Vec<String> {
         }
         "medium" => {
             base_passwords.extend(vec![
-                "Password1".to_string(), 
-                "admin123".to_string(), 
-                "welcome123".to_string()
+                "Password1".to_string(),
+                "admin123".to_string(),
+                "welcome123".to_string(),
             ]);
             base_passwords
         }
