@@ -38,6 +38,8 @@ FUZZ_TARGETS=(
     "fuzz_oauth_parsing"
     "fuzz_jwt_parsing"
     "fuzz_pii_redaction"
+    "fuzz_scim_filter"
+    "fuzz_config_parsing"
 )
 
 # Function to run a single fuzz target

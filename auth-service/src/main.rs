@@ -9,6 +9,7 @@ mod config;
 use auth_service::{
     app,
     config::{self, StoreBackend},
+    config_reload::{ConfigReloadManager, ConfigReloadEvent},
     keys,
     sql_store::SqlStore,
     store::HybridStore,
@@ -41,6 +42,41 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let cfg = config::AppConfig::from_env()?;
     tracing::info!("Starting auth-service with configuration loaded");
+
+    // Initialize configuration reload manager
+    let config_path = std::env::var("CONFIG_FILE").ok();
+    let (config_manager, mut config_events) = ConfigReloadManager::new(cfg.clone(), config_path);
+    let config_manager = Arc::new(config_manager);
+    
+    // Start configuration reload handler
+    let reload_manager = Arc::clone(&config_manager);
+    reload_manager.start_reload_handler().await?;
+    
+    // Spawn configuration event handler
+    let event_manager = Arc::clone(&config_manager);
+    tokio::spawn(async move {
+        while let Ok(event) = config_events.recv().await {
+            match event {
+                ConfigReloadEvent::ReloadRequested => {
+                    tracing::info!("Configuration reload requested");
+                }
+                ConfigReloadEvent::ReloadSuccess { version, changes } => {
+                    tracing::info!("Configuration reload successful (version: {}, changes: {})", version, changes.len());
+                    for change in changes {
+                        tracing::info!("Configuration change: {}", change);
+                    }
+                }
+                ConfigReloadEvent::ReloadFailed { error, fallback_used } => {
+                    tracing::error!("Configuration reload failed: {} (fallback used: {})", error, fallback_used);
+                }
+                ConfigReloadEvent::ValidationFailed { errors } => {
+                    tracing::error!("Configuration validation failed: {:?}", errors);
+                }
+            }
+        }
+    });
+    
+    tracing::info!("Configuration reload manager initialized");
 
     // Initialize secure keys
     tracing::info!("Initializing secure key management...");

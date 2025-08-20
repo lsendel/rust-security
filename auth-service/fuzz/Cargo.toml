@@ -59,3 +59,15 @@ name = "fuzz_pii_redaction"
 path = "fuzz_targets/fuzz_pii_redaction.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "fuzz_scim_filter"
+path = "fuzz_targets/fuzz_scim_filter.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_config_parsing"
+path = "fuzz_targets/fuzz_config_parsing.rs"
+test = false
+doc = false

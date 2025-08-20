@@ -14,6 +14,8 @@ serviceAccount:
   create: true
   annotations: {}
   name: ""
+  # Disable service account token automounting for security
+  automountServiceAccountToken: false
 
 podAnnotations:
   prometheus.io/scrape: "true"
@@ -77,6 +79,41 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
+  
+  # Advanced HPA v2 configuration
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      percentPolicy: 50               # Max 50% scale down
+      podsPolicy: 2                   # Max 2 pods scale down
+      periodSeconds: 60               # Check every minute
+      selectPolicy: "Min"             # Choose minimum of policies
+    scaleUp:
+      stabilizationWindowSeconds: 60   # 1 minute
+      percentPolicy: 100              # Max 100% scale up
+      podsPolicy: 4                   # Max 4 pods scale up
+      periodSeconds: 60               # Check every minute
+      selectPolicy: "Max"             # Choose maximum of policies
+  
+  # Custom metrics (optional)
+  customMetrics: []
+    # Example: Scale based on request rate
+    # - type: "Pods"
+    #   metric:
+    #     name: "http_requests_per_second"
+    #   target:
+    #     type: "AverageValue"
+    #     averageValue: "100"
+    # Example: Scale based on queue depth
+    # - type: "External"
+    #   metric:
+    #     name: "redis_queue_depth"
+    #     selector:
+    #       matchLabels:
+    #         queue: "auth-tasks"
+    #   target:
+    #     type: "Value"
+    #     value: "50"
 
 nodeSelector: {}
 
@@ -144,12 +181,118 @@ postgresql:
       enabled: true
       size: 20Gi
 
-# Secrets (these should be created separately)
+# Secrets configuration
 secrets:
+  # Static secrets (only used when externalSecrets.enabled = false)
+  # WARNING: Do not use these in production - use ExternalSecrets instead
   jwtSecret: "your-super-secret-jwt-key-change-in-production"
   clientCredentials: "client1:secret1;client2:secret2"
   requestSigningSecret: "your-request-signing-secret"
   redisPassword: "redis-password"
+  googleClientSecret: ""
+  databaseUrl: ""
+
+# External Secrets configuration
+externalSecrets:
+  # Enable External Secrets Operator integration
+  enabled: false
+  
+  # Refresh interval for secret updates
+  refreshInterval: "15m"
+  
+  # Create SecretStore resource (set to false if using ClusterSecretStore)
+  createSecretStore: true
+  
+  # SecretStore reference
+  secretStore:
+    name: "auth-service-secret-store"
+    kind: "SecretStore"  # or "ClusterSecretStore"
+  
+  # Additional annotations for the ExternalSecret
+  annotations: {}
+  
+  # Secret provider configuration
+  provider:
+    # Supported types: vault, aws, gcp
+    type: "vault"
+    
+    # Vault configuration
+    vault:
+      server: "https://vault.example.com"
+      path: "secret"
+      version: "v2"
+      auth:
+        # Token-based auth (for development)
+        tokenSecretRef:
+          name: "vault-token"
+          key: "token"
+        # Kubernetes auth (recommended for production)
+        # kubernetes:
+        #   mountPath: "auth/kubernetes"
+        #   role: "rust-security-role"
+        #   serviceAccountRef:
+        #     name: "auth-service"
+      # TLS configuration
+      caProvider:
+        type: "ConfigMap"
+        name: "vault-ca-cert"
+        key: "ca.crt"
+    
+    # AWS Secrets Manager configuration
+    aws:
+      region: "us-west-2"
+      auth:
+        # IAM Role for Service Accounts (recommended)
+        jwt:
+          serviceAccountRef:
+            name: "auth-service-aws-sa"
+        # Access key based auth (not recommended)
+        # secretRef:
+        #   accessKeyIDSecretRef:
+        #     name: "aws-credentials"
+        #     key: "access-key-id"
+        #   secretAccessKeySecretRef:
+        #     name: "aws-credentials"
+        #     key: "secret-access-key"
+    
+    # Google Secret Manager configuration
+    gcp:
+      projectId: "your-gcp-project-id"
+      auth:
+        # Workload Identity (recommended)
+        workloadIdentity:
+          clusterLocation: "us-central1"
+          clusterName: "rust-security-cluster"
+          serviceAccountRef:
+            name: "auth-service-gcp-sa"
+        # Service account key (not recommended)
+        # secretRef:
+        #   secretAccessKey:
+        #     name: "gcp-credentials"
+        #     key: "service-account-key"
+  
+  # Secret mappings from external store to Kubernetes secret keys
+  secrets:
+    - secretKey: "jwt-secret"
+      remoteRef:
+        key: "auth-service/jwt"
+        property: "secret"
+    - secretKey: "client-credentials" 
+      remoteRef:
+        key: "auth-service/clients"
+        property: "credentials"
+    - secretKey: "request-signing-secret"
+      remoteRef:
+        key: "auth-service/signing" 
+        property: "secret"
+    - secretKey: "google-client-secret"
+      remoteRef:
+        key: "auth-service/oauth/google"
+        property: "client_secret"
+    - secretKey: "redis-password"
+      remoteRef:
+        key: "auth-service/redis"
+        property: "password"
 
 # Health checks
 healthCheck:
@@ -211,3 +354,6 @@ networkPolicy:
 podDisruptionBudget:
   enabled: true
   minAvailable: 2
+  # Alternative: Use maxUnavailable instead of minAvailable
+  # maxUnavailable: 1
+  # maxUnavailable: "33%"  # Allow at most 33% of pods to be unavailable

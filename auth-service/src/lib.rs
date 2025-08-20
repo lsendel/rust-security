@@ -86,6 +86,8 @@ async fn metrics_handler() -> Response {
 }
 
 // Core modules
+pub mod config_endpoints;
+pub mod config_reload;
 pub mod errors;
 pub mod sql_store;
 pub mod store;

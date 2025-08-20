@@ -50,6 +50,9 @@ hex = { workspace = true }
 rand = { workspace = true }
 once_cell = { workspace = true }
 base64 = { workspace = true }
+# Configuration file parsing
+toml = { workspace = true }
+serde_yaml = { workspace = true }
 # Common workspace dependency
 common = { path = "../common" }
 # SOAR optional dependencies

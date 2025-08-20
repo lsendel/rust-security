@@ -1,0 +1,255 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for Rust Security Platform - Advanced dependency management",
+  "extends": [
+    "config:base",
+    "security:openssf-scorecard",
+    ":semanticCommits",
+    ":dependencyDashboard",
+    ":gitSignOff"
+  ],
+  "timezone": "UTC",
+  "schedule": [
+    "before 10am on monday"
+  ],
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "reviewers": [
+    "security-team"
+  ],
+  "assignees": [
+    "security-team"
+  ],
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 10,
+  "branchConcurrentLimit": 20,
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "deps",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{newVersion}}",
+  "rebaseWhen": "conflicted",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 5am on sunday"
+    ]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "cargo": {
+    "enabled": true,
+    "rangeStrategy": "bump"
+  },
+  "rust": {
+    "enabled": true
+  },
+  "docker": {
+    "enabled": true,
+    "pinDigests": true
+  },
+  "packageRules": [
+    {
+      "description": "Security-critical dependencies - immediate updates",
+      "matchPackagePatterns": [
+        "*security*",
+        "*crypto*", 
+        "*tls*",
+        "*ssl*",
+        "ring",
+        "rustls",
+        "openssl",
+        "jsonwebtoken",
+        "argon2",
+        "aes*",
+        "chacha*",
+        "hmac",
+        "sha*",
+        "rand",
+        "secrecy",
+        "zeroize"
+      ],
+      "schedule": ["at any time"],
+      "prPriority": 10,
+      "labels": ["security", "critical"],
+      "reviewers": ["security-team"],
+      "assignees": ["security-team"]
+    },
+    {
+      "description": "Core runtime dependencies - careful updates",
+      "matchPackageNames": [
+        "tokio",
+        "serde",
+        "serde_json",
+        "axum",
+        "hyper",
+        "tower",
+        "tracing"
+      ],
+      "schedule": ["before 10am on monday"],
+      "prPriority": 8,
+      "labels": ["core", "runtime"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Database and storage dependencies",
+      "matchPackagePatterns": [
+        "redis*",
+        "sqlx*",
+        "bb8*",
+        "deadpool*"
+      ],
+      "schedule": ["before 10am on tuesday"],
+      "prPriority": 7,
+      "labels": ["database", "storage"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Performance and optimization crates",
+      "matchPackagePatterns": [
+        "rayon*",
+        "dashmap*",
+        "mimalloc*",
+        "jemalloc*"
+      ],
+      "schedule": ["before 10am on wednesday"],
+      "prPriority": 6,
+      "labels": ["performance"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Testing and development dependencies",
+      "matchDepTypes": [
+        "dev-dependencies",
+        "build-dependencies"
+      ],
+      "schedule": ["before 10am on friday"],
+      "prPriority": 3,
+      "labels": ["testing", "dev-deps"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "description": "Docker base images - security focused",
+      "matchDatasources": ["docker"],
+      "matchPackagePatterns": [
+        "rust",
+        "alpine",
+        "debian",
+        "ubuntu",
+        "gcr.io/distroless"
+      ],
+      "schedule": ["before 10am on saturday"],
+      "prPriority": 9,
+      "labels": ["docker", "security"],
+      "pinDigests": true
+    },
+    {
+      "description": "Major version updates - quarterly",
+      "matchUpdateTypes": ["major"],
+      "schedule": ["on the first day of the quarter"],
+      "prPriority": 1,
+      "labels": ["major-update"],
+      "minimumReleaseAge": "30 days"
+    },
+    {
+      "description": "Minor version updates - weekly",
+      "matchUpdateTypes": ["minor"],
+      "schedule": ["before 10am on monday"],
+      "prPriority": 5,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Patch updates - frequent",
+      "matchUpdateTypes": ["patch"],
+      "schedule": ["at any time"],
+      "prPriority": 4,
+      "automerge": true,
+      "automergeType": "pr",
+      "requiredStatusChecks": null
+    },
+    {
+      "description": "GitHub Actions - security updates",
+      "matchManagers": ["github-actions"],
+      "schedule": ["before 10am on saturday"],
+      "prPriority": 8,
+      "labels": ["github-actions", "security"],
+      "pinDigests": true
+    },
+    {
+      "description": "JavaScript dependencies - grouped updates",
+      "matchManagers": ["npm"],
+      "groupName": "javascript dependencies",
+      "schedule": ["before 10am on tuesday"],
+      "prPriority": 5,
+      "labels": ["javascript", "frontend"]
+    },
+    {
+      "description": "Python ML dependencies",
+      "matchManagers": ["pip"],
+      "matchFileNames": ["ml-attack-detection/**"],
+      "schedule": ["before 10am on thursday"],
+      "prPriority": 4,
+      "labels": ["python", "machine-learning"]
+    },
+    {
+      "description": "Terraform infrastructure updates", 
+      "matchManagers": ["terraform"],
+      "schedule": ["on the first day of the month"],
+      "prPriority": 6,
+      "labels": ["terraform", "infrastructure"],
+      "minimumReleaseAge": "14 days"
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Update Rust version in Dockerfiles",
+      "fileMatch": ["^Dockerfile.*$"],
+      "matchStrings": [
+        "FROM rust:(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "rust"
+    },
+    {
+      "description": "Update tool versions in shell scripts",
+      "fileMatch": ["\\.sh$"],
+      "matchStrings": [
+        "TOOL_VERSION=\"(?<currentValue>.*?)\""
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "{{packageName}}"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update versions in CI workflows",
+      "fileMatch": ["^\\.github/workflows/.*\\.yml$"],
+      "matchStrings": [
+        "rust-version:\\s*['\"]?(?<currentValue>[^'\"\\s]+)['\"]?"
+      ],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "github-releases",
+      "lookupNameTemplate": "rust-lang/rust"
+    }
+  ],
+  "hostRules": [
+    {
+      "matchHost": "docker.io",
+      "concurrentRequestLimit": 2
+    }
+  ],
+  "ignoreDeps": [
+    "node"
+  ],
+  "ignorePaths": [
+    "**/target/**",
+    "**/node_modules/**",
+    "**/.git/**"
+  ]
+}
