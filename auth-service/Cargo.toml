@@ -223,9 +223,9 @@ name = "performance_suite"
 harness = false
 required-features = ["benchmarks"]
 
-# [lib]
-# name = "auth_service"
-# path = "src/lib.rs"
+[lib]
+name = "auth_service"
+path = "src/lib.rs"
 
 [[bin]]
 name = "auth-service"
