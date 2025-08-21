@@ -57,7 +57,7 @@ serde_yaml = { workspace = true }
 # Common workspace dependency
 common = { path = "../common" }
 # SOAR optional dependencies
-sqlx = { workspace = true, features = ["postgres", "sqlite", "runtime-tokio-rustls", "chrono", "uuid", "json"], default-features = false, optional = true }
+sqlx = { workspace = true, features = ["postgres", "sqlite", "runtime-tokio-rustls", "chrono", "uuid", "json", "migrate", "macros"], default-features = false, optional = true }
 handlebars = { workspace = true, optional = true }
 lettre = { workspace = true, optional = true }
 tera = { workspace = true, optional = true }

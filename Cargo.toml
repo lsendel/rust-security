@@ -36,11 +36,11 @@ aes = "0.8"
 aes-gcm = "0.10"
 
 # Database
-sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid"], default-features = false }
+sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros"], default-features = false }
 deadpool = "0.12"
 
 # Redis
-redis = "0.26"
+redis = { version = "0.26", features = ["aio", "connection-manager"] }
 deadpool-redis = "0.18"
 
 # Monitoring
@@ -220,7 +220,7 @@ tsc = "0.1"
 
 # Random number generation
 fastrand = "2.0"
-getrandom = "0.3"
+getrandom = { version = "0.3", features = ["std"] }
 
 # WebAssembly/ML
 candle-core = "0.7"
