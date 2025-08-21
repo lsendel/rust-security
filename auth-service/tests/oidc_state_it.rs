@@ -13,7 +13,11 @@ async fn spawn_app() -> String {
     let app_state = AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
-        allowed_scopes: vec!["openid".to_string(), "profile".to_string(), "email".to_string()],
+        allowed_scopes: vec![
+            "openid".to_string(),
+            "profile".to_string(),
+            "email".to_string(),
+        ],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),
@@ -36,7 +40,10 @@ async fn google_callback_invalid_state_returns_400_like_error() {
     let client = Client::new();
 
     let resp = client
-        .get(format!("{}/oauth/google/callback?code=dummy&state=unknown_state", base))
+        .get(format!(
+            "{}/oauth/google/callback?code=dummy&state=unknown_state",
+            base
+        ))
         .send()
         .await
         .unwrap();
@@ -45,7 +52,10 @@ async fn google_callback_invalid_state_returns_400_like_error() {
     let status = resp.status();
     assert!(status.is_client_error() || status.is_success());
     let v: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(v.get("error").and_then(|e| e.as_str()), Some("invalid_state"));
+    assert_eq!(
+        v.get("error").and_then(|e| e.as_str()),
+        Some("invalid_state")
+    );
 }
 
 #[tokio::test]
@@ -54,7 +64,10 @@ async fn microsoft_callback_invalid_state_returns_400_like_error() {
     let client = Client::new();
 
     let resp = client
-        .get(format!("{}/oauth/microsoft/callback?code=dummy&state=unknown_state", base))
+        .get(format!(
+            "{}/oauth/microsoft/callback?code=dummy&state=unknown_state",
+            base
+        ))
         .send()
         .await
         .unwrap();
@@ -62,5 +75,8 @@ async fn microsoft_callback_invalid_state_returns_400_like_error() {
     let status = resp.status();
     assert!(status.is_client_error() || status.is_success());
     let v: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(v.get("error").and_then(|e| e.as_str()), Some("invalid_state"));
+    assert_eq!(
+        v.get("error").and_then(|e| e.as_str()),
+        Some("invalid_state")
+    );
 }

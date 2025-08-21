@@ -57,7 +57,10 @@ async fn token_issue_and_revoke_flow_test(store: Arc<dyn Store>) {
     // Introspect -> active=true and matching exp/iat
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest { token: token.clone(), token_type_hint: None })
+        .json(&IntrospectRequest {
+            token: token.clone(),
+            token_type_hint: None,
+        })
         .send()
         .await
         .unwrap();
@@ -79,7 +82,10 @@ async fn token_issue_and_revoke_flow_test(store: Arc<dyn Store>) {
     // Introspect -> active=false
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest { token, token_type_hint: None })
+        .json(&IntrospectRequest {
+            token,
+            token_type_hint: None,
+        })
         .send()
         .await
         .unwrap();
@@ -98,7 +104,12 @@ async fn token_flow_with_hybrid_store() {
 async fn token_flow_with_sql_store() {
     let db_url = std::env::var("TEST_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://test:test@localhost/test".to_string());
-    let store = SqlStore::new(&db_url).await.expect("Failed to connect to DB");
-    store.run_migrations().await.expect("Failed to run migrations");
+    let store = SqlStore::new(&db_url)
+        .await
+        .expect("Failed to connect to DB");
+    store
+        .run_migrations()
+        .await
+        .expect("Failed to run migrations");
     token_issue_and_revoke_flow_test(Arc::new(store)).await;
 }

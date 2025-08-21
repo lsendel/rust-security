@@ -114,7 +114,10 @@ impl ConfigReloadManager {
                 info!("Configuration reload signal received");
 
                 // Send reload event
-                if let Err(e) = manager.event_sender.send(ConfigReloadEvent::ReloadRequested) {
+                if let Err(e) = manager
+                    .event_sender
+                    .send(ConfigReloadEvent::ReloadRequested)
+                {
                     warn!("Failed to send reload event: {}", e);
                 }
 
@@ -155,9 +158,9 @@ impl ConfigReloadManager {
 
         // Validate the new configuration
         if let Err(validation_errors) = self.validate_config(&new_config).await {
-            let _ = self
-                .event_sender
-                .send(ConfigReloadEvent::ValidationFailed { errors: validation_errors });
+            let _ = self.event_sender.send(ConfigReloadEvent::ValidationFailed {
+                errors: validation_errors,
+            });
             return Err(anyhow::anyhow!("Configuration validation failed"));
         }
 
@@ -201,9 +204,10 @@ impl ConfigReloadManager {
             .map(|c| format!("{}: {} -> {}", c.field, c.old_value, c.new_value))
             .collect();
 
-        let _ = self
-            .event_sender
-            .send(ConfigReloadEvent::ReloadSuccess { version, changes: change_descriptions });
+        let _ = self.event_sender.send(ConfigReloadEvent::ReloadSuccess {
+            version,
+            changes: change_descriptions,
+        });
 
         info!(
             "Configuration reloaded successfully (version: {}, changes: {})",
@@ -307,8 +311,16 @@ impl ConfigReloadManager {
         if old_config.redis_url != new_config.redis_url {
             changes.push(ConfigChange {
                 field: "redis_url".to_string(),
-                old_value: old_config.redis_url.as_deref().unwrap_or("None").to_string(),
-                new_value: new_config.redis_url.as_deref().unwrap_or("None").to_string(),
+                old_value: old_config
+                    .redis_url
+                    .as_deref()
+                    .unwrap_or("None")
+                    .to_string(),
+                new_value: new_config
+                    .redis_url
+                    .as_deref()
+                    .unwrap_or("None")
+                    .to_string(),
                 requires_restart: false, // Can reconnect to Redis
             });
         }
@@ -319,8 +331,14 @@ impl ConfigReloadManager {
         {
             changes.push(ConfigChange {
                 field: "rate_limiting.oauth_requests_per_minute".to_string(),
-                old_value: old_config.rate_limiting.oauth_requests_per_minute.to_string(),
-                new_value: new_config.rate_limiting.oauth_requests_per_minute.to_string(),
+                old_value: old_config
+                    .rate_limiting
+                    .oauth_requests_per_minute
+                    .to_string(),
+                new_value: new_config
+                    .rate_limiting
+                    .oauth_requests_per_minute
+                    .to_string(),
                 requires_restart: false, // Rate limiting can be updated dynamically
             });
         }
@@ -540,7 +558,9 @@ mod tests {
         let changes = manager.detect_changes(&old_config, &new_config).await;
 
         assert_eq!(changes.len(), 2);
-        assert!(changes.iter().any(|c| c.field == "rate_limiting.oauth_requests_per_minute"));
+        assert!(changes
+            .iter()
+            .any(|c| c.field == "rate_limiting.oauth_requests_per_minute"));
         assert!(changes.iter().any(|c| c.field == "bind_addr"));
         assert!(changes.iter().any(|c| c.requires_restart));
     }

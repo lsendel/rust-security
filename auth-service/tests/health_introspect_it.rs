@@ -63,7 +63,10 @@ async fn introspect_valid_token() {
     let base = spawn_app().await;
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest { token: "valid_token".to_string(), token_type_hint: None })
+        .json(&IntrospectRequest {
+            token: "valid_token".to_string(),
+            token_type_hint: None,
+        })
         .send()
         .await
         .unwrap();
@@ -89,7 +92,10 @@ async fn introspect_invalid_token() {
     let base = spawn_app().await;
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/introspect", base))
-        .json(&IntrospectRequest { token: "invalid_token".to_string(), token_type_hint: None })
+        .json(&IntrospectRequest {
+            token: "invalid_token".to_string(),
+            token_type_hint: None,
+        })
         .send()
         .await
         .unwrap();

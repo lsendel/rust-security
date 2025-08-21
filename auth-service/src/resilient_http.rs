@@ -71,7 +71,11 @@ impl ResilientHttpClient {
 
         let circuit_breaker = CircuitBreaker::new(name, config.circuit_breaker.clone());
 
-        Ok(Self { client, circuit_breaker, config })
+        Ok(Self {
+            client,
+            circuit_breaker,
+            config,
+        })
     }
 
     pub fn get(&self, url: &str) -> ResilientRequestBuilder {
@@ -107,7 +111,11 @@ impl ResilientRequestBuilder {
         circuit_breaker: &CircuitBreaker,
         config: &ResilientHttpConfig,
     ) -> Self {
-        Self { request_builder, circuit_breaker: circuit_breaker.clone(), config: config.clone() }
+        Self {
+            request_builder,
+            circuit_breaker: circuit_breaker.clone(),
+            config: config.clone(),
+        }
     }
 
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
@@ -159,11 +167,16 @@ impl ResilientRequestBuilder {
         loop {
             // Clone request builder for retry attempts
             let request =
-                self.request_builder.try_clone().ok_or_else(|| AuthError::ServiceUnavailable {
-                    reason: "Cannot retry request with streaming body".to_string(),
-                })?;
+                self.request_builder
+                    .try_clone()
+                    .ok_or_else(|| AuthError::ServiceUnavailable {
+                        reason: "Cannot retry request with streaming body".to_string(),
+                    })?;
 
-            let result = self.circuit_breaker.call(async move { request.send().await }).await;
+            let result = self
+                .circuit_breaker
+                .call(async move { request.send().await })
+                .await;
 
             match result {
                 Ok(response) => {
@@ -223,22 +236,31 @@ impl ResilientResponse {
     }
 
     pub async fn text(self) -> Result<String, AuthError> {
-        self.response.text().await.map_err(|e| AuthError::ServiceUnavailable {
-            reason: format!("Failed to read response text: {}", e),
-        })
+        self.response
+            .text()
+            .await
+            .map_err(|e| AuthError::ServiceUnavailable {
+                reason: format!("Failed to read response text: {}", e),
+            })
     }
 
     pub async fn bytes(self) -> Result<Bytes, AuthError> {
-        self.response.bytes().await.map_err(|e| AuthError::ServiceUnavailable {
-            reason: format!("Failed to read response bytes: {}", e),
-        })
+        self.response
+            .bytes()
+            .await
+            .map_err(|e| AuthError::ServiceUnavailable {
+                reason: format!("Failed to read response bytes: {}", e),
+            })
     }
 
     pub async fn json<T: for<'de> Deserialize<'de>>(self) -> Result<T, AuthError> {
-        self.response.json().await.map_err(|e| AuthError::ValidationError {
-            field: "response".to_string(),
-            reason: format!("Failed to parse JSON response: {}", e),
-        })
+        self.response
+            .json()
+            .await
+            .map_err(|e| AuthError::ValidationError {
+                field: "response".to_string(),
+                reason: format!("Failed to parse JSON response: {}", e),
+            })
     }
 
     pub fn error_for_status(self) -> Result<Self, AuthError> {

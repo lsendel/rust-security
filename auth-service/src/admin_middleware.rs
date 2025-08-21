@@ -197,25 +197,38 @@ pub async fn admin_auth_middleware(
 /// Enhanced admin scope validation
 async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<(), AuthError> {
     // Extract bearer token
-    let auth =
-        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
 
-    let token = auth.strip_prefix("Bearer ").ok_or_else(|| AuthError::InvalidToken {
-        reason: "Missing or malformed authorization header".to_string(),
-    })?;
+    let token = auth
+        .strip_prefix("Bearer ")
+        .ok_or_else(|| AuthError::InvalidToken {
+            reason: "Missing or malformed authorization header".to_string(),
+        })?;
 
     if token.is_empty() {
-        return Err(AuthError::InvalidToken { reason: "Empty bearer token".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "Empty bearer token".to_string(),
+        });
     }
 
     // Validate token and extract record
-    let record = state.store.get_token_record(token).await?.ok_or_else(|| {
-        AuthError::InvalidToken { reason: "Token not found or invalid".to_string() }
-    })?;
+    let record =
+        state
+            .store
+            .get_token_record(token)
+            .await?
+            .ok_or_else(|| AuthError::InvalidToken {
+                reason: "Token not found or invalid".to_string(),
+            })?;
 
     // Check if token is active
     if !record.active {
-        return Err(AuthError::InvalidToken { reason: "Token is inactive".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "Token is inactive".to_string(),
+        });
     }
 
     // Check for admin scope
@@ -245,19 +258,26 @@ async fn validate_request_signature(
     };
 
     // Extract signature and timestamp headers
-    let signature = headers.get("x-signature").and_then(|v| v.to_str().ok()).ok_or_else(|| {
-        AuthError::InvalidRequest { reason: "Missing x-signature header".to_string() }
-    })?;
+    let signature = headers
+        .get("x-signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AuthError::InvalidRequest {
+            reason: "Missing x-signature header".to_string(),
+        })?;
 
-    let timestamp_str =
-        headers.get("x-timestamp").and_then(|v| v.to_str().ok()).ok_or_else(|| {
-            AuthError::InvalidRequest { reason: "Missing x-timestamp header".to_string() }
+    let timestamp_str = headers
+        .get("x-timestamp")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AuthError::InvalidRequest {
+            reason: "Missing x-timestamp header".to_string(),
         })?;
 
     // Parse and validate timestamp
-    let timestamp: u64 = timestamp_str.parse().map_err(|_| AuthError::InvalidRequest {
-        reason: "Invalid timestamp format".to_string(),
-    })?;
+    let timestamp: u64 = timestamp_str
+        .parse()
+        .map_err(|_| AuthError::InvalidRequest {
+            reason: "Invalid timestamp format".to_string(),
+        })?;
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -280,7 +300,9 @@ async fn validate_request_signature(
 
     // Constant-time comparison to prevent timing attacks
     if !constant_time_compare(signature, &expected_signature) {
-        return Err(AuthError::InvalidRequest { reason: "Invalid request signature".to_string() });
+        return Err(AuthError::InvalidRequest {
+            reason: "Invalid request signature".to_string(),
+        });
     }
 
     Ok(())
@@ -362,7 +384,10 @@ fn extract_correlation_id(headers: &HeaderMap) -> Option<String> {
 
 /// Extract User-Agent from request headers
 fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
-    headers.get("user-agent").and_then(|v| v.to_str().ok()).map(String::from)
+    headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from)
 }
 
 #[cfg(test)]

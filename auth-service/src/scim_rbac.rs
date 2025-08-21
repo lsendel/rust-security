@@ -167,7 +167,9 @@ impl ScimUserContext {
             return false;
         }
 
-        self.roles.iter().any(|role| role.has_permission(permission))
+        self.roles
+            .iter()
+            .any(|role| role.has_permission(permission))
     }
 
     /// Check if user can access a specific resource
@@ -205,7 +207,10 @@ pub struct ScimAuthorizationManager {
 
 impl ScimAuthorizationManager {
     pub fn new() -> Self {
-        Self { user_roles: HashMap::new(), client_roles: HashMap::new() }
+        Self {
+            user_roles: HashMap::new(),
+            client_roles: HashMap::new(),
+        }
     }
 
     /// Assign roles to a user
@@ -311,14 +316,24 @@ impl ScimAuthorizationManager {
             "scim-service".to_string(),
             "SCIM operation authorized".to_string(),
         )
-        .with_actor(if context.client_id.is_some() { "admin" } else { "user" }.to_string())
+        .with_actor(
+            if context.client_id.is_some() {
+                "admin"
+            } else {
+                "user"
+            }
+            .to_string(),
+        )
         .with_action("rbac_check".to_string())
         .with_target(format!("scim_{}", operation.get_resource_type()))
         .with_outcome("allowed".to_string())
         .with_reason("User has sufficient permissions for SCIM operation".to_string())
         .with_detail("user_id".to_string(), context.user_id.clone())
         .with_detail("operation".to_string(), format!("{:?}", operation))
-        .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default());
+        .with_detail(
+            "client_id".to_string(),
+            context.client_id.clone().unwrap_or_default(),
+        );
 
         SecurityLogger::log_event(&mut event);
     }
@@ -336,7 +351,14 @@ impl ScimAuthorizationManager {
             "scim-service".to_string(),
             "SCIM operation denied".to_string(),
         )
-        .with_actor(if context.client_id.is_some() { "admin" } else { "user" }.to_string())
+        .with_actor(
+            if context.client_id.is_some() {
+                "admin"
+            } else {
+                "user"
+            }
+            .to_string(),
+        )
         .with_action("rbac_check".to_string())
         .with_target(format!("scim_{}", operation.get_resource_type()))
         .with_outcome("denied".to_string())
@@ -344,7 +366,10 @@ impl ScimAuthorizationManager {
         .with_detail("user_id".to_string(), context.user_id.clone())
         .with_detail("operation".to_string(), format!("{:?}", operation))
         .with_detail("reason".to_string(), reason.to_string())
-        .with_detail("client_id".to_string(), context.client_id.clone().unwrap_or_default());
+        .with_detail(
+            "client_id".to_string(),
+            context.client_id.clone().unwrap_or_default(),
+        );
 
         SecurityLogger::log_event(&mut event);
     }
@@ -464,12 +489,18 @@ pub fn authorize_scim_operation(
 
 /// Assign roles to a user
 pub fn assign_user_scim_roles(user_id: String, roles: Vec<ScimRole>) {
-    SCIM_AUTHZ_MANAGER.lock().unwrap().assign_user_roles(user_id, roles);
+    SCIM_AUTHZ_MANAGER
+        .lock()
+        .unwrap()
+        .assign_user_roles(user_id, roles);
 }
 
 /// Assign roles to a client
 pub fn assign_client_scim_roles(client_id: String, roles: Vec<ScimRole>) {
-    SCIM_AUTHZ_MANAGER.lock().unwrap().assign_client_roles(client_id, roles);
+    SCIM_AUTHZ_MANAGER
+        .lock()
+        .unwrap()
+        .assign_client_roles(client_id, roles);
 }
 
 #[cfg(test)]
@@ -515,8 +546,12 @@ mod tests {
         let operation = ScimOperation::UserCreate;
         assert!(manager.authorize_operation(&context, &operation).is_ok());
 
-        let forbidden_operation = ScimOperation::GroupDelete { group_id: "group1".to_string() };
-        assert!(manager.authorize_operation(&context, &forbidden_operation).is_err());
+        let forbidden_operation = ScimOperation::GroupDelete {
+            group_id: "group1".to_string(),
+        };
+        assert!(manager
+            .authorize_operation(&context, &forbidden_operation)
+            .is_err());
     }
 
     #[test]

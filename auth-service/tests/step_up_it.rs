@@ -95,8 +95,14 @@ async fn spawn_policy() -> String {
                     .map(|s| s.to_string())
             })
             .unwrap_or_default();
-        let decision = if action == "orders:refund" && !mfa_verified { "Deny" } else { "Allow" };
-        Json(AuthorizeResp { decision: decision.to_string() })
+        let decision = if action == "orders:refund" && !mfa_verified {
+            "Deny"
+        } else {
+            "Allow"
+        };
+        Json(AuthorizeResp {
+            decision: decision.to_string(),
+        })
     }
     let app = axum::Router::new().route("/v1/authorize", axum::routing::post(handler));
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -114,7 +120,10 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
     // Mint a token
     let tok_body: serde_json::Value = reqwest::Client::new()
         .post(format!("{}/oauth/token", base))
-        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
         .send()
         .await
@@ -122,7 +131,11 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
         .json()
         .await
         .unwrap();
-    let token = tok_body.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
+    let token = tok_body
+        .get("access_token")
+        .and_then(|x| x.as_str())
+        .unwrap()
+        .to_string();
 
     // Call authorize for a sensitive action: expect Deny
     let res1 = reqwest::Client::new()
@@ -144,7 +157,9 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
     let _ack: serde_json::Value = reqwest::Client::new()
         .post(format!("{}/mfa/session/verify", base))
         .bearer_auth(&token)
-        .json(&MfaSessionVerifyRequest { user_id: "user1".to_string() })
+        .json(&MfaSessionVerifyRequest {
+            user_id: "user1".to_string(),
+        })
         .send()
         .await
         .unwrap()

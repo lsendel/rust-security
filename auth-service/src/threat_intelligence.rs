@@ -452,11 +452,13 @@ impl ThreatIntelligenceCorrelator {
             }
 
             // Check local indicators
-            if let Some(local_match) =
-                self.check_local_indicators(&indicator_value, &indicator_type, event).await
+            if let Some(local_match) = self
+                .check_local_indicators(&indicator_value, &indicator_type, event)
+                .await
             {
                 matches.push(local_match.clone());
-                self.cache_result(&indicator_value, &indicator_type, Some(local_match)).await;
+                self.cache_result(&indicator_value, &indicator_type, Some(local_match))
+                    .await;
                 continue;
             }
 
@@ -538,7 +540,9 @@ impl ThreatIntelligenceCorrelator {
 
         if let Some(cached_result) = cache.get(&cache_key) {
             let now = Utc::now();
-            let age = now.signed_duration_since(cached_result.cached_at).num_seconds() as u64;
+            let age = now
+                .signed_duration_since(cached_result.cached_at)
+                .num_seconds() as u64;
 
             if age < cached_result.ttl_seconds {
                 return cached_result.result.clone();
@@ -626,8 +630,11 @@ impl ThreatIntelligenceCorrelator {
         let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
         let config = self.config.read().await;
 
-        let cached_result =
-            CachedResult { result, cached_at: Utc::now(), ttl_seconds: config.cache_ttl_seconds };
+        let cached_result = CachedResult {
+            result,
+            cached_at: Utc::now(),
+            ttl_seconds: config.cache_ttl_seconds,
+        };
 
         cache.insert(cache_key, cached_result);
     }
@@ -712,8 +719,13 @@ impl ThreatIntelligenceCorrelator {
             }
 
             // Query the feed
-            match Self::query_feed(feed, &query.indicator_value, &query.indicator_type, http_client)
-                .await
+            match Self::query_feed(
+                feed,
+                &query.indicator_value,
+                &query.indicator_type,
+                http_client,
+            )
+            .await
             {
                 Ok(Some(indicator)) => {
                     // Store the indicator
@@ -763,12 +775,20 @@ impl ThreatIntelligenceCorrelator {
             let now = Utc::now();
 
             // Reset counters if needed
-            if now.signed_duration_since(limiter.last_minute_reset).num_minutes() >= 1 {
+            if now
+                .signed_duration_since(limiter.last_minute_reset)
+                .num_minutes()
+                >= 1
+            {
                 limiter.requests_this_minute = 0;
                 limiter.last_minute_reset = now;
             }
 
-            if now.signed_duration_since(limiter.last_hour_reset).num_hours() >= 1 {
+            if now
+                .signed_duration_since(limiter.last_hour_reset)
+                .num_hours()
+                >= 1
+            {
                 limiter.requests_this_hour = 0;
                 limiter.last_hour_reset = now;
             }
@@ -827,7 +847,10 @@ impl ThreatIntelligenceCorrelator {
             return Ok(None);
         };
 
-        let url = format!("{}?ipAddress={}&maxAgeInDays=90&verbose", feed.api_url, indicator);
+        let url = format!(
+            "{}?ipAddress={}&maxAgeInDays=90&verbose",
+            feed.api_url, indicator
+        );
 
         let response = http_client
             .get(&url)
@@ -1014,8 +1037,9 @@ impl ThreatIntelligenceCorrelator {
                 let now = Utc::now();
 
                 cache.retain(|_, cached_result| {
-                    let age =
-                        now.signed_duration_since(cached_result.cached_at).num_seconds() as u64;
+                    let age = now
+                        .signed_duration_since(cached_result.cached_at)
+                        .num_seconds() as u64;
                     age < cached_result.ttl_seconds
                 });
 
@@ -1117,7 +1141,10 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to download feed {}: {}", feed.name, e);
-                return Err(AuthError::ExternalService(format!("Feed download failed: {}", e)));
+                return Err(AuthError::ExternalService(format!(
+                    "Feed download failed: {}",
+                    e
+                )));
             }
         };
 
@@ -1126,7 +1153,10 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             Ok(indicators) => indicators,
             Err(e) => {
                 error!("Failed to parse feed {}: {}", feed.name, e);
-                return Err(AuthError::ExternalService(format!("Feed parsing failed: {}", e)));
+                return Err(AuthError::ExternalService(format!(
+                    "Feed parsing failed: {}",
+                    e
+                )));
             }
         };
 
@@ -1135,7 +1165,10 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
 
         // Process new indicators
         for indicator in new_indicators {
-            match self.process_feed_indicator(&indicator, &feed.name, &existing_indicators).await {
+            match self
+                .process_feed_indicator(&indicator, &feed.name, &existing_indicators)
+                .await
+            {
                 Ok(ProcessResult::Added) => sync_result.added += 1,
                 Ok(ProcessResult::Updated) => sync_result.updated += 1,
                 Ok(ProcessResult::Skipped) => sync_result.skipped += 1,
@@ -1147,7 +1180,9 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
         }
 
         // Remove indicators that are no longer in the feed
-        let removed = self.cleanup_stale_indicators(&feed.name, &existing_indicators).await?;
+        let removed = self
+            .cleanup_stale_indicators(&feed.name, &existing_indicators)
+            .await?;
         sync_result.removed = removed;
 
         sync_result.total_indicators =
@@ -1274,10 +1309,20 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
             id: uuid::Uuid::new_v4().to_string(),
             indicator_type: self.detect_indicator_type(&value),
             value,
-            confidence: item.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.5),
+            confidence: item
+                .get("confidence")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.5),
             severity: self.parse_severity(item.get("severity")),
-            source: item.get("source").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
-            description: item.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            source: item
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            description: item
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             expires_at: item

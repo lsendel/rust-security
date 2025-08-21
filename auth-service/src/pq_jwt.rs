@@ -90,11 +90,15 @@ impl PQJwtManager {
         algorithm: Option<PQAlgorithm>,
         expires_in: Option<u64>,
     ) -> Result<String> {
-        let current_time =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs() as i64;
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
 
         // Add standard JWT claims
-        let mut claims = payload.as_object().unwrap_or(&serde_json::Map::new()).clone();
+        let mut claims = payload
+            .as_object()
+            .unwrap_or(&serde_json::Map::new())
+            .clone();
         claims.insert("iat".to_string(), Value::Number(current_time.into()));
 
         if let Some(exp_secs) = expires_in {
@@ -326,7 +330,10 @@ impl PQJwtManager {
             .decode(parts[2])
             .map_err(|_| anyhow!("Invalid signature encoding"))?;
 
-        let kid = header.kid.as_ref().ok_or_else(|| anyhow!("Missing key ID in token header"))?;
+        let kid = header
+            .kid
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing key ID in token header"))?;
 
         let manager = get_pq_manager();
 
@@ -334,15 +341,20 @@ impl PQJwtManager {
         let is_valid = if header.hybrid.unwrap_or(false) {
             // Hybrid token verification
             if manager.is_available() {
-                manager.verify(message.as_bytes(), &signature_bytes, kid).await?
+                manager
+                    .verify(message.as_bytes(), &signature_bytes, kid)
+                    .await?
             } else {
                 // Fallback to classical verification
                 warn!("Post-quantum not available, attempting classical verification");
-                self.verify_classical_signature(message.as_bytes(), &signature_bytes).await?
+                self.verify_classical_signature(message.as_bytes(), &signature_bytes)
+                    .await?
             }
         } else {
             // Pure post-quantum verification
-            manager.verify(message.as_bytes(), &signature_bytes, kid).await?
+            manager
+                .verify(message.as_bytes(), &signature_bytes, kid)
+                .await?
         };
 
         if !is_valid {
@@ -380,7 +392,10 @@ impl PQJwtManager {
             .with_target("jwt_token".to_string())
             .with_outcome("success".to_string())
             .with_reason("Post-quantum JWT token signature verification successful".to_string())
-            .with_detail("algorithm".to_string(), header.pq_alg.clone().unwrap_or_default())
+            .with_detail(
+                "algorithm".to_string(),
+                header.pq_alg.clone().unwrap_or_default(),
+            )
             .with_detail("hybrid".to_string(), header.hybrid.unwrap_or(false))
             .with_detail("kid".to_string(), kid.clone()),
         );
@@ -543,7 +558,9 @@ pub fn get_pq_jwt_manager() -> &'static PQJwtManager {
 
 /// Convenience function to create a post-quantum JWT token
 pub async fn create_pq_jwt_token(payload: Value, expires_in: Option<u64>) -> Result<String> {
-    get_pq_jwt_manager().create_token(payload, None, expires_in).await
+    get_pq_jwt_manager()
+        .create_token(payload, None, expires_in)
+        .await
 }
 
 /// Convenience function to verify a JWT token
@@ -572,11 +589,16 @@ pub async fn create_pq_access_token(
         payload.insert("scope".to_string(), Value::String(scp));
     }
 
-    payload.insert("token_type".to_string(), Value::String("access_token".to_string()));
+    payload.insert(
+        "token_type".to_string(),
+        Value::String("access_token".to_string()),
+    );
 
     let payload_value = Value::Object(payload);
 
-    get_pq_jwt_manager().create_token(payload_value, None, Some(expires_in)).await
+    get_pq_jwt_manager()
+        .create_token(payload_value, None, Some(expires_in))
+        .await
 }
 
 #[cfg(test)]

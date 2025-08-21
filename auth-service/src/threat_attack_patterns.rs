@@ -803,8 +803,11 @@ impl AttackPatternDetector {
         let cutoff_time = current_event.timestamp - time_window;
 
         // Get relevant events within time window
-        let relevant_events: Vec<_> =
-            event_buffer.iter().filter(|e| e.timestamp > cutoff_time).cloned().collect();
+        let relevant_events: Vec<_> = event_buffer
+            .iter()
+            .filter(|e| e.timestamp > cutoff_time)
+            .cloned()
+            .collect();
 
         // Check if the event sequence matches the rule
         let matched_events = self.match_event_sequence(rule, &relevant_events, current_event)?;
@@ -838,7 +841,10 @@ impl AttackPatternDetector {
             detection_confidence: confidence,
             first_observed: matched_events.first()?.timestamp,
             last_observed: matched_events.last()?.timestamp,
-            event_sequence: matched_events.iter().map(|e| e.event_type.clone()).collect(),
+            event_sequence: matched_events
+                .iter()
+                .map(|e| e.event_type.clone())
+                .collect(),
             timing_constraints: rule.timing_constraints.clone(),
             entity_relationships: Vec::new(), // Would be populated with actual relationships
             statistical_signatures: Vec::new(), // Would be populated with statistical analysis
@@ -1199,7 +1205,10 @@ impl AttackPatternDetector {
 
         // Create new window if needed
         if windows.is_empty()
-            || event.timestamp.signed_duration_since(windows.back().unwrap().end_time) > window_size
+            || event
+                .timestamp
+                .signed_duration_since(windows.back().unwrap().end_time)
+                > window_size
         {
             let new_window = TemporalWindow {
                 window_id: Uuid::new_v4().to_string(),
@@ -1332,7 +1341,10 @@ impl AttackPatternDetector {
                         // - Trend analysis
 
                         window.analysis_complete = true;
-                        debug!("Temporal analysis completed for window {}", window.window_id);
+                        debug!(
+                            "Temporal analysis completed for window {}",
+                            window.window_id
+                        );
                     }
                 }
             }

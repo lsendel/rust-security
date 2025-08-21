@@ -66,7 +66,10 @@ pub struct IpRateLimitEntry {
 
 impl IpRateLimitEntry {
     fn new(initial_burst: u32) -> Self {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         Self {
             count: AtomicU32::new(0),
@@ -82,7 +85,10 @@ impl IpRateLimitEntry {
 
     /// Check if request should be allowed and update counters
     fn check_and_update(&self, config: &PerIpRateLimitConfig, ip: &IpAddr) -> bool {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         // Update last access time
         self.last_access.store(now, Ordering::Relaxed);
@@ -99,7 +105,8 @@ impl IpRateLimitEntry {
             self.window_start.store(now, Ordering::Relaxed);
             self.count.store(0, Ordering::Relaxed);
             // Refill burst tokens to configured allowance
-            self.burst_tokens.store(config.burst_allowance, Ordering::Relaxed);
+            self.burst_tokens
+                .store(config.burst_allowance, Ordering::Relaxed);
         }
 
         // Determine rate limit based on IP status
@@ -177,7 +184,10 @@ impl PerIpRateLimiter {
             entries: DashMap::new(),
             config,
             last_cleanup: AtomicU64::new(
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
             ),
         }
     }
@@ -197,7 +207,10 @@ impl PerIpRateLimiter {
 
         // Get or create entry for this IP
         let burst = self.config.burst_allowance;
-        let entry = self.entries.entry(*ip).or_insert_with(|| IpRateLimitEntry::new(burst));
+        let entry = self
+            .entries
+            .entry(*ip)
+            .or_insert_with(|| IpRateLimitEntry::new(burst));
 
         // Check rate limit
         let allowed = entry.check_and_update(&self.config, ip);
@@ -235,7 +248,12 @@ impl PerIpRateLimiter {
             total_violations += stats.rate_limit_violations as u64;
         }
 
-        OverallStats { total_ips, suspicious_ips, total_requests, total_violations }
+        OverallStats {
+            total_ips,
+            suspicious_ips,
+            total_requests,
+            total_violations,
+        }
     }
 
     /// Add IP to blacklist
@@ -253,7 +271,10 @@ impl PerIpRateLimiter {
 
     /// Clean up old entries
     fn maybe_cleanup(&self) {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let last_cleanup = self.last_cleanup.load(Ordering::Relaxed);
 
@@ -262,7 +283,8 @@ impl PerIpRateLimiter {
 
             // Remove entries that haven't been accessed recently
             let cutoff = now - (self.config.cleanup_interval_secs * 2);
-            self.entries.retain(|_, entry| entry.last_access.load(Ordering::Relaxed) > cutoff);
+            self.entries
+                .retain(|_, entry| entry.last_access.load(Ordering::Relaxed) > cutoff);
         }
     }
 
@@ -274,7 +296,11 @@ impl PerIpRateLimiter {
         reason: &str,
         user_agent: Option<&str>,
     ) {
-        let severity = if allowed { SecuritySeverity::Info } else { SecuritySeverity::Warning };
+        let severity = if allowed {
+            SecuritySeverity::Info
+        } else {
+            SecuritySeverity::Warning
+        };
 
         // Determine actor and action based on context
         let (actor, action, target, outcome) = match reason {
@@ -294,7 +320,11 @@ impl PerIpRateLimiter {
                 ip.to_string(),
                 "rate_limit_check".to_string(),
                 "auth_service".to_string(),
-                if allowed { "allowed".to_string() } else { "blocked".to_string() },
+                if allowed {
+                    "allowed".to_string()
+                } else {
+                    "blocked".to_string()
+                },
             ),
         };
 
@@ -302,7 +332,11 @@ impl PerIpRateLimiter {
             SecurityEventType::RateLimitViolation,
             severity,
             "auth-service".to_string(),
-            format!("Rate limit {} for IP {}", if allowed { "passed" } else { "exceeded" }, ip),
+            format!(
+                "Rate limit {} for IP {}",
+                if allowed { "passed" } else { "exceeded" },
+                ip
+            ),
         )
         .with_actor(actor)
         .with_action(action)
@@ -373,11 +407,18 @@ pub async fn per_ip_rate_limit_middleware(
     let trust_proxy = std::env::var("TRUST_PROXY_HEADERS")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
-    let ip = if trust_proxy { extract_ip_address(&request) } else { None }
-        .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
+    let ip = if trust_proxy {
+        extract_ip_address(&request)
+    } else {
+        None
+    }
+    .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
 
     // Extract User-Agent for logging
-    let user_agent = request.headers().get("user-agent").and_then(|ua| ua.to_str().ok());
+    let user_agent = request
+        .headers()
+        .get("user-agent")
+        .and_then(|ua| ua.to_str().ok());
 
     // Check rate limit
     let allowed = PER_IP_RATE_LIMITER.check_rate_limit(&ip, user_agent);

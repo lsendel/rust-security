@@ -59,7 +59,10 @@ pub async fn begin_register(
 ) -> Json<BeginRegisterResponse> {
     // Stub challenge (library to generate real challenge later)
     let challenge = serde_json::json!({ "challenge": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes()) });
-    REGISTRATION_CHALLENGES.write().await.insert(body.user_id.clone(), challenge.clone());
+    REGISTRATION_CHALLENGES
+        .write()
+        .await
+        .insert(body.user_id.clone(), challenge.clone());
     let rp_id = std::env::var("WEBAUTHN_RP_ID").unwrap_or_else(|_| "localhost".to_string());
     let origin =
         std::env::var("WEBAUTHN_ORIGIN").unwrap_or_else(|_| "http://localhost".to_string());
@@ -82,7 +85,10 @@ pub async fn finish_register(
 ) -> Json<FinishRegisterResponse> {
     // Stub: accept any credential, store it
     let mut creds = CREDENTIALS.write().await;
-    creds.entry(body.user_id.clone()).or_default().push(body.credential);
+    creds
+        .entry(body.user_id.clone())
+        .or_default()
+        .push(body.credential);
     Json(FinishRegisterResponse { registered: true })
 }
 
@@ -91,9 +97,17 @@ pub async fn begin_assert(
     Json(body): Json<BeginAssertRequest>,
 ) -> Json<BeginAssertResponse> {
     let challenge = serde_json::json!({ "challenge": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes()) });
-    ASSERTION_CHALLENGES.write().await.insert(body.user_id.clone(), challenge.clone());
+    ASSERTION_CHALLENGES
+        .write()
+        .await
+        .insert(body.user_id.clone(), challenge.clone());
     let rp_id = std::env::var("WEBAUTHN_RP_ID").unwrap_or_else(|_| "localhost".to_string());
-    let allow = CREDENTIALS.read().await.get(&body.user_id).cloned().unwrap_or_default();
+    let allow = CREDENTIALS
+        .read()
+        .await
+        .get(&body.user_id)
+        .cloned()
+        .unwrap_or_default();
     let pubkey = serde_json::json!({
         "rpId": rp_id,
         "challenge": challenge["challenge"],

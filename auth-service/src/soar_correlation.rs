@@ -601,7 +601,10 @@ impl AlertCorrelationEngine {
 
         // 1. Check for deduplication
         if let Some(duplicate_info) = self.deduplication_engine.check_duplicate(alert).await? {
-            debug!("Alert {} is a duplicate of {}", alert.id, duplicate_info.alert_id);
+            debug!(
+                "Alert {} is a duplicate of {}",
+                alert.id, duplicate_info.alert_id
+            );
 
             let mut metrics = self.metrics.lock().await;
             metrics.duplicates_suppressed += 1;
@@ -657,7 +660,8 @@ impl AlertCorrelationEngine {
 
         // Store correlation results
         for result in &correlation_results {
-            self.correlation_results.insert(result.id.clone(), result.clone());
+            self.correlation_results
+                .insert(result.id.clone(), result.clone());
 
             // Publish correlation event
             if let Some(ref publisher) = self.event_publisher {
@@ -677,7 +681,11 @@ impl AlertCorrelationEngine {
         }
 
         if !correlation_results.is_empty() {
-            info!("Found {} correlations for alert {}", correlation_results.len(), alert.id);
+            info!(
+                "Found {} correlations for alert {}",
+                correlation_results.len(),
+                alert.id
+            );
         }
 
         Ok(correlation_results)
@@ -702,8 +710,10 @@ impl AlertCorrelationEngine {
         );
 
         // Get or create window cache
-        let mut cache =
-            self.alert_cache.entry(window_key.clone()).or_insert_with(|| TimeWindowCache {
+        let mut cache = self
+            .alert_cache
+            .entry(window_key.clone())
+            .or_insert_with(|| TimeWindowCache {
                 window_id: window_key.clone(),
                 window_start,
                 window_end,
@@ -786,7 +796,10 @@ impl AlertCorrelationEngine {
                 score: correlation_score,
                 timestamp: Utc::now(),
                 metadata: [
-                    ("rule_name".to_string(), serde_json::Value::String(rule.name.clone())),
+                    (
+                        "rule_name".to_string(),
+                        serde_json::Value::String(rule.name.clone()),
+                    ),
                     (
                         "alert_count".to_string(),
                         serde_json::Value::Number((related_alerts.len() + 1).into()),
@@ -980,7 +993,10 @@ impl AlertCorrelationEngine {
                         "title".to_string(),
                         serde_json::Value::String("Multiple Authentication Failures".to_string()),
                     ),
-                    ("severity".to_string(), serde_json::Value::String("medium".to_string())),
+                    (
+                        "severity".to_string(),
+                        serde_json::Value::String("medium".to_string()),
+                    ),
                 ]
                 .into_iter()
                 .collect(),
@@ -1122,7 +1138,10 @@ impl AlertCorrelationEngine {
 
     /// Get active correlations
     pub async fn get_active_correlations(&self) -> Vec<CorrelationResult> {
-        self.correlation_results.iter().map(|entry| entry.value().clone()).collect()
+        self.correlation_results
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 }
 
@@ -1320,8 +1339,10 @@ impl DeduplicationEngine {
 
     fn generate_fingerprint(&self, alert: &SecurityAlert) -> String {
         // Simple fingerprint based on alert type, severity, and source
-        let mut fingerprint_parts =
-            vec![format!("{:?}", alert.alert_type), format!("{:?}", alert.severity)];
+        let mut fingerprint_parts = vec![
+            format!("{:?}", alert.alert_type),
+            format!("{:?}", alert.severity),
+        ];
 
         if let Some(ref source_ip) = alert.source_ip {
             fingerprint_parts.push(source_ip.clone());

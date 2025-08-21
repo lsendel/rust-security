@@ -125,7 +125,9 @@ impl RedactionAudit {
     /// Check if the redacted content still contains original sensitive data
     pub fn contains_original_sensitive_data(&self) -> bool {
         let redactor = PiiSpiRedactor::new();
-        !redactor.contains_sensitive_data(&self.redacted_content).is_empty()
+        !redactor
+            .contains_sensitive_data(&self.redacted_content)
+            .is_empty()
     }
 
     /// Get compliance score (0.0 to 1.0)
@@ -163,7 +165,9 @@ mod tests {
 
         for sensitive_item in test_data.all_sensitive_data() {
             let error_message = format!("Authentication failed for user: {}", sensitive_item);
-            let error = AuthError::InvalidRequest { reason: error_message.clone() };
+            let error = AuthError::InvalidRequest {
+                reason: error_message.clone(),
+            };
 
             // Convert error to string representation (this would be logged)
             let error_string = format!("{}", error);
@@ -228,7 +232,10 @@ mod tests {
         }
 
         // Check compliance
-        let failed_count = audit_results.iter().filter(|audit| !audit.is_compliant()).count();
+        let failed_count = audit_results
+            .iter()
+            .filter(|audit| !audit.is_compliant())
+            .count();
 
         assert_eq!(
             failed_count, 0,
@@ -317,7 +324,10 @@ mod tests {
         let test_cases = vec![
             ("user@test.com", DataClassification::Pii),
             ("123-45-6789", DataClassification::Spi),
-            ("eyJhbGciOiJIUzI1NiJ9.payload.sig", DataClassification::Confidential),
+            (
+                "eyJhbGciOiJIUzI1NiJ9.payload.sig",
+                DataClassification::Confidential,
+            ),
             ("normal text", DataClassification::Public),
         ];
 
@@ -415,7 +425,9 @@ pub struct ComplianceTestResult {
 
 impl ComplianceReport {
     pub fn new() -> Self {
-        Self { test_results: Vec::new() }
+        Self {
+            test_results: Vec::new(),
+        }
     }
 
     pub fn add_test_result(
@@ -459,8 +471,11 @@ impl ComplianceReport {
             self.overall_compliance() * 100.0
         ));
 
-        let failed_tests: Vec<_> =
-            self.test_results.iter().filter(|r| r.overall_compliance < 1.0).collect();
+        let failed_tests: Vec<_> = self
+            .test_results
+            .iter()
+            .filter(|r| r.overall_compliance < 1.0)
+            .collect();
 
         if !failed_tests.is_empty() {
             report.push_str("FAILED TESTS:\n");

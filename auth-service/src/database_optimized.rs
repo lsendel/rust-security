@@ -128,21 +128,25 @@ impl DatabaseOptimized {
         let results: Vec<std::collections::HashMap<String, String>> =
             pipeline.query_async(&mut *conn).await?;
 
-        let records: Vec<Option<crate::IntrospectionRecord>> =
-            results
-                .into_iter()
-                .map(|hash_map| {
-                    if hash_map.is_empty() {
-                        None
-                    } else {
-                        Some(self.parse_token_record(hash_map))
-                    }
-                })
-                .collect();
+        let records: Vec<Option<crate::IntrospectionRecord>> = results
+            .into_iter()
+            .map(|hash_map| {
+                if hash_map.is_empty() {
+                    None
+                } else {
+                    Some(self.parse_token_record(hash_map))
+                }
+            })
+            .collect();
 
         // Log performance metrics
-        self.log_query_metrics("batch_get_tokens", start.elapsed(), tokens.len() as u64, false)
-            .await;
+        self.log_query_metrics(
+            "batch_get_tokens",
+            start.elapsed(),
+            tokens.len() as u64,
+            false,
+        )
+        .await;
 
         Ok(records)
     }
@@ -183,7 +187,11 @@ impl DatabaseOptimized {
         }
 
         if let Some(token_binding) = &record.token_binding {
-            pipeline.hset(&key, "token_binding", self.encrypt_if_required(token_binding).await?);
+            pipeline.hset(
+                &key,
+                "token_binding",
+                self.encrypt_if_required(token_binding).await?,
+            );
         }
 
         // Set TTL if specified
@@ -199,7 +207,8 @@ impl DatabaseOptimized {
             self.audit_token_operation("store", token, "success").await;
         }
 
-        self.log_query_metrics("secure_store_token", start.elapsed(), 1, false).await;
+        self.log_query_metrics("secure_store_token", start.elapsed(), 1, false)
+            .await;
         Ok(())
     }
 
@@ -269,8 +278,10 @@ impl DatabaseOptimized {
             tokio::time::timeout(timeout, self.execute_secure_query(query, params)).await??;
 
         // Cache result based on security level
-        let should_cache =
-            matches!(security_level, SecurityLevel::Public | SecurityLevel::Internal);
+        let should_cache = matches!(
+            security_level,
+            SecurityLevel::Public | SecurityLevel::Internal
+        );
         if should_cache {
             let cached_query = CachedQuery {
                 result: self.encrypt_if_required(&result).await?,
@@ -281,7 +292,8 @@ impl DatabaseOptimized {
             self.query_cache.insert(cache_key, cached_query);
         }
 
-        self.log_query_metrics("execute_cached_query", start.elapsed(), 1, false).await;
+        self.log_query_metrics("execute_cached_query", start.elapsed(), 1, false)
+            .await;
         Ok(result)
     }
 
@@ -333,8 +345,13 @@ impl DatabaseOptimized {
             0
         };
 
-        self.log_query_metrics("bulk_cleanup_expired_tokens", start.elapsed(), deleted, false)
-            .await;
+        self.log_query_metrics(
+            "bulk_cleanup_expired_tokens",
+            start.elapsed(),
+            deleted,
+            false,
+        )
+        .await;
         Ok(deleted)
     }
 
@@ -385,7 +402,8 @@ impl DatabaseOptimized {
             }
         };
 
-        self.log_query_metrics("execute_secure_transaction", start.elapsed(), 1, false).await;
+        self.log_query_metrics("execute_secure_transaction", start.elapsed(), 1, false)
+            .await;
         result
     }
 
@@ -527,7 +545,9 @@ pub async fn initialize_database(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let constraints = SecurityConstraints::secure_default();
     let db = DatabaseOptimized::new(redis_url, constraints).await?;
-    DATABASE_ENGINE.set(db).map_err(|_| "Database already initialized")?;
+    DATABASE_ENGINE
+        .set(db)
+        .map_err(|_| "Database already initialized")?;
     Ok(())
 }
 
@@ -564,10 +584,22 @@ mod tests {
     fn test_cache_ttl_by_security_level() {
         let db = create_test_db();
 
-        assert_eq!(db.get_cache_ttl(&SecurityLevel::Public), Duration::from_secs(300));
-        assert_eq!(db.get_cache_ttl(&SecurityLevel::Internal), Duration::from_secs(120));
-        assert_eq!(db.get_cache_ttl(&SecurityLevel::Confidential), Duration::from_secs(60));
-        assert_eq!(db.get_cache_ttl(&SecurityLevel::Secret), Duration::from_secs(30));
+        assert_eq!(
+            db.get_cache_ttl(&SecurityLevel::Public),
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            db.get_cache_ttl(&SecurityLevel::Internal),
+            Duration::from_secs(120)
+        );
+        assert_eq!(
+            db.get_cache_ttl(&SecurityLevel::Confidential),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            db.get_cache_ttl(&SecurityLevel::Secret),
+            Duration::from_secs(30)
+        );
     }
 
     fn create_test_db() -> DatabaseOptimized {

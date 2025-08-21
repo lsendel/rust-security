@@ -757,7 +757,9 @@ impl ThreatSignature {
 
     /// Get threat age in hours
     pub fn age_hours(&self) -> i64 {
-        Utc::now().signed_duration_since(self.first_seen).num_hours()
+        Utc::now()
+            .signed_duration_since(self.first_seen)
+            .num_hours()
     }
 }
 

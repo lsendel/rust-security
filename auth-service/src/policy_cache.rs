@@ -171,7 +171,10 @@ impl PolicyCache {
 
         // Record cache miss metrics
         let duration = start_time.elapsed();
-        METRICS.policy_cache_operations.with_label_values(&["get", "miss", policy_type]).inc();
+        METRICS
+            .policy_cache_operations
+            .with_label_values(&["get", "miss", policy_type])
+            .inc();
         METRICS
             .cache_operation_duration
             .with_label_values(&["policy", "get"])
@@ -366,7 +369,10 @@ impl PolicyCache {
 
     /// Get current Unix timestamp
     fn current_timestamp() -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
     }
 }
 
@@ -404,7 +410,12 @@ pub fn normalize_policy_request(
         // Keep mfa_required, mfa_verified as they affect policy decisions
     }
 
-    PolicyRequest { principal, action, resource, context: normalized_context }
+    PolicyRequest {
+        principal,
+        action,
+        resource,
+        context: normalized_context,
+    }
 }
 
 #[cfg(test)]
@@ -566,7 +577,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_disabled_cache() {
-        let config = PolicyCacheConfig { enabled: false, ..Default::default() };
+        let config = PolicyCacheConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let cache = PolicyCache::new(config);
 
         let request = PolicyRequest {

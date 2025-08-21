@@ -145,7 +145,9 @@ pub async fn create_enhanced_access_token(
         // Fall back to classical JWT using existing system
         let payload = build_jwt_payload(client_id, subject, scope);
         let jwt_manager = get_pq_jwt_manager();
-        jwt_manager.create_token(payload, None, Some(expires_in)).await
+        jwt_manager
+            .create_token(payload, None, Some(expires_in))
+            .await
     }
 }
 
@@ -169,7 +171,10 @@ fn build_jwt_payload(
         payload.insert("scope".to_string(), Value::String(scp));
     }
 
-    payload.insert("token_type".to_string(), Value::String("access_token".to_string()));
+    payload.insert(
+        "token_type".to_string(),
+        Value::String("access_token".to_string()),
+    );
 
     Value::Object(payload)
 }
@@ -290,17 +295,24 @@ pub async fn run_pq_benchmark(
         "DILITHIUM2" => PQAlgorithm::Dilithium(SecurityLevel::Level1),
         "DILITHIUM3" => PQAlgorithm::Dilithium(SecurityLevel::Level3),
         "DILITHIUM5" => PQAlgorithm::Dilithium(SecurityLevel::Level5),
-        _ => return Err(AuthError::InvalidRequest("Unsupported algorithm".to_string())),
+        _ => {
+            return Err(AuthError::InvalidRequest(
+                "Unsupported algorithm".to_string(),
+            ))
+        }
     };
 
     let iterations = request.iterations.unwrap_or(100);
 
     if iterations > 10000 {
-        return Err(AuthError::InvalidRequest("Too many iterations (max 10000)".to_string()));
+        return Err(AuthError::InvalidRequest(
+            "Too many iterations (max 10000)".to_string(),
+        ));
     }
 
-    let benchmark =
-        run_benchmark(algorithm, iterations).await.map_err(|e| AuthError::InternalError(e))?;
+    let benchmark = run_benchmark(algorithm, iterations)
+        .await
+        .map_err(|e| AuthError::InternalError(e))?;
 
     Ok(Json(benchmark))
 }
@@ -336,8 +348,10 @@ pub async fn force_key_rotation(
         crate::pq_key_management::RotationReason::Scheduled
     };
 
-    let rotated_keys =
-        key_manager.rotate_keys(reason).await.map_err(|e| AuthError::InternalError(e))?;
+    let rotated_keys = key_manager
+        .rotate_keys(reason)
+        .await
+        .map_err(|e| AuthError::InternalError(e))?;
 
     // Log key rotation
     SecurityLogger::log_event(
@@ -435,12 +449,18 @@ pub async fn emergency_rollback(
         "key_compromise" => EmergencyTrigger::KeyCompromise,
         "quantum_threat" => EmergencyTrigger::QuantumThreatEscalation,
         "manual" => EmergencyTrigger::Manual,
-        _ => return Err(AuthError::InvalidRequest("Invalid trigger type".to_string())),
+        _ => {
+            return Err(AuthError::InvalidRequest(
+                "Invalid trigger type".to_string(),
+            ))
+        }
     };
 
     let key_manager = get_pq_key_manager();
-    let rotated_keys =
-        key_manager.emergency_rotation(trigger).await.map_err(|e| AuthError::InternalError(e))?;
+    let rotated_keys = key_manager
+        .emergency_rotation(trigger)
+        .await
+        .map_err(|e| AuthError::InternalError(e))?;
 
     // Log emergency rollback
     SecurityLogger::log_event(
@@ -533,8 +553,11 @@ pub async fn pq_health_check() -> Result<Json<serde_json::Value>, AuthError> {
             if perf.error_rate > 5.0 {
                 // 5% error rate threshold
                 health["status"] = "degraded".into();
-                health["issues"] =
-                    vec![format!("High error rate for {}: {:.2}%", alg, perf.error_rate)].into();
+                health["issues"] = vec![format!(
+                    "High error rate for {}: {:.2}%",
+                    alg, perf.error_rate
+                )]
+                .into();
             }
         }
     }
@@ -725,7 +748,11 @@ mod tests {
             migration_mode: "Hybrid".to_string(),
             security_level: "Level3".to_string(),
             hybrid_enabled: true,
-            features_available: PQFeaturesResponse { dilithium: true, kyber: true, hybrid: true },
+            features_available: PQFeaturesResponse {
+                dilithium: true,
+                kyber: true,
+                hybrid: true,
+            },
             current_algorithm: Some("DILITHIUM3".to_string()),
         };
 

@@ -30,7 +30,9 @@ async fn spawn_app() -> String {
 async fn openid_metadata_and_jwks() {
     let base = spawn_app().await;
 
-    let res = reqwest::get(format!("{}/.well-known/openid-configuration", base)).await.unwrap();
+    let res = reqwest::get(format!("{}/.well-known/openid-configuration", base))
+        .await
+        .unwrap();
     assert!(res.status().is_success());
     let body: serde_json::Value = res.json().await.unwrap();
     assert!(body.get("issuer").is_some());

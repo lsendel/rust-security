@@ -147,7 +147,8 @@ impl AsyncSecurityExecutor {
         let operation_id = uuid::Uuid::new_v4().to_string();
         let start_time = Instant::now();
 
-        self.active_operations.insert(operation_id.clone(), start_time);
+        self.active_operations
+            .insert(operation_id.clone(), start_time);
 
         let result = self.execute_with_retry(operation, &operation_id).await;
         let duration = start_time.elapsed();
@@ -178,7 +179,11 @@ impl AsyncSecurityExecutor {
 
         loop {
             // Acquire semaphore permit for concurrency control
-            let _permit = self.semaphore.acquire().await.map_err(|_| AsyncError::SemaphoreError)?;
+            let _permit = self
+                .semaphore
+                .acquire()
+                .await
+                .map_err(|_| AsyncError::SemaphoreError)?;
 
             // Update concurrent operations metric
             let current_permits =
@@ -186,8 +191,9 @@ impl AsyncSecurityExecutor {
             {
                 let mut metrics = self.metrics.write().await;
                 metrics.current_concurrent_operations = current_permits;
-                metrics.max_concurrent_operations_reached =
-                    metrics.max_concurrent_operations_reached.max(current_permits);
+                metrics.max_concurrent_operations_reached = metrics
+                    .max_concurrent_operations_reached
+                    .max(current_permits);
             }
 
             // Execute operation with timeout
@@ -239,7 +245,9 @@ impl AsyncSecurityExecutor {
                         "Security operation {} timed out after {:?}",
                         operation_id, self.config.default_timeout
                     );
-                    return Err(AsyncError::Timeout { duration: self.config.default_timeout });
+                    return Err(AsyncError::Timeout {
+                        duration: self.config.default_timeout,
+                    });
                 }
             }
         }
@@ -252,7 +260,10 @@ impl AsyncSecurityExecutor {
         T: Send + 'static,
     {
         let start_time = Instant::now();
-        info!("Executing batch of {} security operations", operations.len());
+        info!(
+            "Executing batch of {} security operations",
+            operations.len()
+        );
 
         // Split operations into optimal batch sizes
         let mut results = Vec::with_capacity(operations.len());
@@ -328,7 +339,8 @@ impl AsyncSecurityExecutor {
         let operation_id = uuid::Uuid::new_v4().to_string();
         let start_time = Instant::now();
 
-        self.active_operations.insert(operation_id.clone(), start_time);
+        self.active_operations
+            .insert(operation_id.clone(), start_time);
 
         let _permit = match self.semaphore.acquire().await {
             Ok(permit) => permit,
@@ -347,14 +359,21 @@ impl AsyncSecurityExecutor {
         let result = match timeout(custom_timeout, operation).await {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(error)) => Err(error),
-            Err(_) => Err(AsyncError::Timeout { duration: custom_timeout }),
+            Err(_) => Err(AsyncError::Timeout {
+                duration: custom_timeout,
+            }),
         };
 
         let duration = start_time.elapsed();
         self.active_operations.remove(&operation_id);
         self.update_metrics(duration, result.is_ok()).await;
 
-        AsyncOperationResult { result, duration, retry_count: 0, operation_id }
+        AsyncOperationResult {
+            result,
+            duration,
+            retry_count: 0,
+            operation_id,
+        }
     }
 
     /// Add operation to batch queue for processing
@@ -405,7 +424,9 @@ impl AsyncSecurityExecutor {
                 drop(queue); // Release lock early
 
                 if batch.len() >= config.batch_size
-                    || batch.iter().any(|op| op.created_at.elapsed() > config.batch_timeout)
+                    || batch
+                        .iter()
+                        .any(|op| op.created_at.elapsed() > config.batch_timeout)
                 {
                     info!("Processing batch of {} operations", batch.len());
 
@@ -549,7 +570,9 @@ where
 
     match timeout(reset_timeout, operation).await {
         Ok(result) => result,
-        Err(_) => Err(AsyncError::Timeout { duration: reset_timeout }),
+        Err(_) => Err(AsyncError::Timeout {
+            duration: reset_timeout,
+        }),
     }
 }
 

@@ -224,7 +224,9 @@ mod tests {
 
         // PKCE verifier should be 128 characters (96 bytes base64url encoded)
         assert_eq!(verifier.len(), 128);
-        assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(verifier
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
     }
 
     #[test]

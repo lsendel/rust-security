@@ -184,24 +184,43 @@ impl ResilienceConfig {
             if let Ok(t) = timeout.parse::<u64>() {
                 let timeout_duration = Duration::from_secs(t);
                 config.oidc_providers.google.circuit_breaker.request_timeout = timeout_duration;
-                config.oidc_providers.microsoft.circuit_breaker.request_timeout = timeout_duration;
+                config
+                    .oidc_providers
+                    .microsoft
+                    .circuit_breaker
+                    .request_timeout = timeout_duration;
                 config.oidc_providers.github.circuit_breaker.request_timeout = timeout_duration;
             }
         }
 
         if let Ok(threshold) = std::env::var("OIDC_CIRCUIT_BREAKER_FAILURE_THRESHOLD") {
             if let Ok(t) = threshold.parse() {
-                config.oidc_providers.google.circuit_breaker.failure_threshold = t;
-                config.oidc_providers.microsoft.circuit_breaker.failure_threshold = t;
-                config.oidc_providers.github.circuit_breaker.failure_threshold = t;
+                config
+                    .oidc_providers
+                    .google
+                    .circuit_breaker
+                    .failure_threshold = t;
+                config
+                    .oidc_providers
+                    .microsoft
+                    .circuit_breaker
+                    .failure_threshold = t;
+                config
+                    .oidc_providers
+                    .github
+                    .circuit_breaker
+                    .failure_threshold = t;
             }
         }
 
         // Policy service configuration
         if let Ok(timeout) = std::env::var("POLICY_SERVICE_REQUEST_TIMEOUT_SECS") {
             if let Ok(t) = timeout.parse::<u64>() {
-                config.external_apis.policy_service.circuit_breaker.request_timeout =
-                    Duration::from_secs(t);
+                config
+                    .external_apis
+                    .policy_service
+                    .circuit_breaker
+                    .request_timeout = Duration::from_secs(t);
             }
         }
 
@@ -225,7 +244,10 @@ impl ResilienceConfig {
             ("github", &self.oidc_providers.github),
         ] {
             if config.circuit_breaker.failure_threshold == 0 {
-                return Err(format!("{} OIDC circuit breaker failure threshold must be > 0", name));
+                return Err(format!(
+                    "{} OIDC circuit breaker failure threshold must be > 0",
+                    name
+                ));
             }
         }
 
@@ -243,13 +265,37 @@ mod tests {
 
         // Test Redis defaults
         assert_eq!(config.redis.circuit_breaker.failure_threshold, 5);
-        assert_eq!(config.redis.timeouts.connect_timeout, Duration::from_secs(5));
+        assert_eq!(
+            config.redis.timeouts.connect_timeout,
+            Duration::from_secs(5)
+        );
         assert_eq!(config.redis.retry.max_retries, 3);
 
         // Test OIDC defaults
-        assert_eq!(config.oidc_providers.google.circuit_breaker.failure_threshold, 3);
-        assert_eq!(config.oidc_providers.microsoft.circuit_breaker.failure_threshold, 3);
-        assert_eq!(config.oidc_providers.github.circuit_breaker.failure_threshold, 3);
+        assert_eq!(
+            config
+                .oidc_providers
+                .google
+                .circuit_breaker
+                .failure_threshold,
+            3
+        );
+        assert_eq!(
+            config
+                .oidc_providers
+                .microsoft
+                .circuit_breaker
+                .failure_threshold,
+            3
+        );
+        assert_eq!(
+            config
+                .oidc_providers
+                .github
+                .circuit_breaker
+                .failure_threshold,
+            3
+        );
 
         // Test validation
         assert!(config.validate().is_ok());

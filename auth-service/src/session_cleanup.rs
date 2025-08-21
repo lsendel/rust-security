@@ -150,7 +150,10 @@ impl SessionCleanupScheduler {
                 "auth-service".to_string(),
                 "Session cleanup scheduler started".to_string(),
             )
-            .with_detail("base_interval_secs".to_string(), self.config.base_interval_secs)
+            .with_detail(
+                "base_interval_secs".to_string(),
+                self.config.base_interval_secs,
+            )
             .with_detail("jitter_percent".to_string(), self.config.jitter_percent)
             .with_detail("batch_size".to_string(), self.config.batch_size),
         );
@@ -207,7 +210,10 @@ impl SessionCleanupScheduler {
             .with_detail("total_runs".to_string(), stats.total_runs)
             .with_detail("successful_runs".to_string(), stats.successful_runs)
             .with_detail("failed_runs".to_string(), stats.failed_runs)
-            .with_detail("total_sessions_cleaned".to_string(), stats.total_sessions_cleaned),
+            .with_detail(
+                "total_sessions_cleaned".to_string(),
+                stats.total_sessions_cleaned,
+            ),
         );
 
         Ok(())
@@ -217,7 +223,9 @@ impl SessionCleanupScheduler {
     pub async fn shutdown(&self, signal: ShutdownSignal) -> Result<(), CleanupError> {
         let sender_guard = self.shutdown_sender.read().await;
         if let Some(sender) = sender_guard.as_ref() {
-            sender.send(signal).map_err(|_| CleanupError::ShutdownFailed)?;
+            sender
+                .send(signal)
+                .map_err(|_| CleanupError::ShutdownFailed)?;
             Ok(())
         } else {
             Err(CleanupError::NotRunning)
@@ -259,8 +267,9 @@ impl SessionCleanupScheduler {
         let jitter = rng.gen_range(-jitter_amount..=jitter_amount);
 
         let jittered_secs = (base_duration.as_secs() as f64 + jitter).max(0.0) as u64;
-        let clamped_secs =
-            jittered_secs.max(self.config.min_interval_secs).min(self.config.max_interval_secs);
+        let clamped_secs = jittered_secs
+            .max(self.config.min_interval_secs)
+            .min(self.config.max_interval_secs);
 
         Duration::from_secs(clamped_secs)
     }
@@ -421,7 +430,10 @@ impl SessionCleanupScheduler {
                     "Session cleanup completed".to_string(),
                 )
                 .with_detail("operation_id".to_string(), result.operation_id)
-                .with_detail("expired_cleaned".to_string(), result.expired_sessions_cleaned)
+                .with_detail(
+                    "expired_cleaned".to_string(),
+                    result.expired_sessions_cleaned,
+                )
                 .with_detail("total_cleaned".to_string(), result.total_cleaned()),
             );
         }
@@ -539,7 +551,10 @@ pub enum CleanupError {
 
 /// Helper function to get current timestamp
 fn current_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Factory function to create and start session cleanup scheduler
@@ -624,7 +639,10 @@ mod tests {
         // Wait for shutdown with longer timeout
         let result = tokio::time::timeout(Duration::from_secs(10), handle).await;
         assert!(result.is_ok(), "Scheduler should shutdown within timeout");
-        assert!(result.unwrap().is_ok(), "Scheduler should shutdown without error");
+        assert!(
+            result.unwrap().is_ok(),
+            "Scheduler should shutdown without error"
+        );
         assert!(!scheduler.is_running());
     }
 

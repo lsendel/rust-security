@@ -118,25 +118,37 @@ impl MetricsRegistry {
 
         // === Token Operation Metrics ===
         let token_issuance_total = IntCounterVec::new(
-            Opts::new("auth_token_issuance_total", "Total token issuance operations"),
+            Opts::new(
+                "auth_token_issuance_total",
+                "Total token issuance operations",
+            ),
             &["token_type", "grant_type", "client_id", "result"],
         )
         .expect("Failed to create token_issuance_total metric");
 
         let token_validation_total = IntCounterVec::new(
-            Opts::new("auth_token_validation_total", "Total token validation operations"),
+            Opts::new(
+                "auth_token_validation_total",
+                "Total token validation operations",
+            ),
             &["token_type", "validation_type", "result", "client_id"],
         )
         .expect("Failed to create token_validation_total metric");
 
         let token_revocation_total = IntCounterVec::new(
-            Opts::new("auth_token_revocation_total", "Total token revocation operations"),
+            Opts::new(
+                "auth_token_revocation_total",
+                "Total token revocation operations",
+            ),
             &["token_type", "reason", "client_id", "result"],
         )
         .expect("Failed to create token_revocation_total metric");
 
         let token_introspection_total = IntCounterVec::new(
-            Opts::new("auth_token_introspection_total", "Total token introspection operations"),
+            Opts::new(
+                "auth_token_introspection_total",
+                "Total token introspection operations",
+            ),
             &["client_id", "result", "token_active"],
         )
         .expect("Failed to create token_introspection_total metric");
@@ -146,7 +158,9 @@ impl MetricsRegistry {
                 "auth_token_operation_duration_seconds",
                 "Duration of token operations in seconds",
             )
-            .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]),
+            .buckets(vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+            ]),
             &["operation_type", "result"],
         )
         .expect("Failed to create token_operation_duration metric");
@@ -159,7 +173,10 @@ impl MetricsRegistry {
 
         // === Policy Evaluation Metrics ===
         let policy_evaluation_total = IntCounterVec::new(
-            Opts::new("auth_policy_evaluation_total", "Total policy evaluation operations"),
+            Opts::new(
+                "auth_policy_evaluation_total",
+                "Total policy evaluation operations",
+            ),
             &["policy_type", "resource", "action", "result"],
         )
         .expect("Failed to create policy_evaluation_total metric");
@@ -169,19 +186,27 @@ impl MetricsRegistry {
                 "auth_policy_evaluation_duration_seconds",
                 "Duration of policy evaluation in seconds",
             )
-            .buckets(vec![0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25]),
+            .buckets(vec![
+                0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25,
+            ]),
             &["policy_type", "result"],
         )
         .expect("Failed to create policy_evaluation_duration metric");
 
         let policy_cache_operations = IntCounterVec::new(
-            Opts::new("auth_policy_cache_operations_total", "Total policy cache operations"),
+            Opts::new(
+                "auth_policy_cache_operations_total",
+                "Total policy cache operations",
+            ),
             &["operation", "result", "policy_type"],
         )
         .expect("Failed to create policy_cache_operations metric");
 
         let policy_compilation_total = IntCounterVec::new(
-            Opts::new("auth_policy_compilation_total", "Total policy compilation operations"),
+            Opts::new(
+                "auth_policy_compilation_total",
+                "Total policy compilation operations",
+            ),
             &["policy_type", "result", "source"],
         )
         .expect("Failed to create policy_compilation_total metric");
@@ -194,8 +219,11 @@ impl MetricsRegistry {
         .expect("Failed to create cache_operations_total metric");
 
         let cache_hit_ratio = HistogramVec::new(
-            HistogramOpts::new("auth_cache_hit_ratio", "Cache hit ratio by cache type")
-                .buckets(vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0]),
+            HistogramOpts::new("auth_cache_hit_ratio", "Cache hit ratio by cache type").buckets(
+                vec![
+                    0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0,
+                ],
+            ),
             &["cache_type"],
         )
         .expect("Failed to create cache_hit_ratio metric");
@@ -211,7 +239,9 @@ impl MetricsRegistry {
                 "auth_cache_operation_duration_seconds",
                 "Duration of cache operations in seconds",
             )
-            .buckets(vec![0.00001, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1]),
+            .buckets(vec![
+                0.00001, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1,
+            ]),
             &["cache_type", "operation"],
         )
         .expect("Failed to create cache_operation_duration metric");
@@ -228,21 +258,30 @@ impl MetricsRegistry {
                 "auth_http_request_duration_seconds",
                 "HTTP request duration in seconds",
             )
-            .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]),
+            .buckets(vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+            ]),
             &["method", "endpoint"],
         )
         .expect("Failed to create http_request_duration metric");
 
         let http_request_size_bytes = HistogramVec::new(
             HistogramOpts::new("auth_http_request_size_bytes", "HTTP request size in bytes")
-                .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0]),
+                .buckets(vec![
+                    64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0,
+                ]),
             &["method", "endpoint"],
         )
         .expect("Failed to create http_request_size_bytes metric");
 
         let http_response_size_bytes = HistogramVec::new(
-            HistogramOpts::new("auth_http_response_size_bytes", "HTTP response size in bytes")
-                .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0]),
+            HistogramOpts::new(
+                "auth_http_response_size_bytes",
+                "HTTP response size in bytes",
+            )
+            .buckets(vec![
+                64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0,
+            ]),
             &["method", "endpoint", "status_code"],
         )
         .expect("Failed to create http_response_size_bytes metric");
@@ -255,13 +294,19 @@ impl MetricsRegistry {
 
         // === Rate Limiting Metrics ===
         let rate_limit_enforcement_total = IntCounterVec::new(
-            Opts::new("auth_rate_limit_enforcement_total", "Total rate limit enforcement events"),
+            Opts::new(
+                "auth_rate_limit_enforcement_total",
+                "Total rate limit enforcement events",
+            ),
             &["endpoint", "client_id", "result", "limit_type"],
         )
         .expect("Failed to create rate_limit_enforcement_total metric");
 
         let rate_limit_quota_gauge = IntCounterVec::new(
-            Opts::new("auth_rate_limit_quota", "Current rate limit quota by client and endpoint"),
+            Opts::new(
+                "auth_rate_limit_quota",
+                "Current rate limit quota by client and endpoint",
+            ),
             &["client_id", "endpoint", "quota_type"],
         )
         .expect("Failed to create rate_limit_quota_gauge metric");
@@ -282,7 +327,13 @@ impl MetricsRegistry {
                 "auth_authentication_attempts_detailed_total",
                 "Detailed authentication attempts",
             ),
-            &["method", "client_id", "ip_address", "user_agent_class", "result"],
+            &[
+                "method",
+                "client_id",
+                "ip_address",
+                "user_agent_class",
+                "result",
+            ],
         )
         .expect("Failed to create auth_attempts_detailed metric");
 
@@ -293,13 +344,19 @@ impl MetricsRegistry {
         .expect("Failed to create mfa_operations_total metric");
 
         let security_violations_total = IntCounterVec::new(
-            Opts::new("auth_security_violations_total", "Total security policy violations"),
+            Opts::new(
+                "auth_security_violations_total",
+                "Total security policy violations",
+            ),
             &["violation_type", "severity", "client_id", "resource"],
         )
         .expect("Failed to create security_violations_total metric");
 
         let anomaly_detection_total = IntCounterVec::new(
-            Opts::new("auth_anomaly_detection_total", "Total anomaly detection events"),
+            Opts::new(
+                "auth_anomaly_detection_total",
+                "Total anomaly detection events",
+            ),
             &["anomaly_type", "confidence", "client_id", "action_taken"],
         )
         .expect("Failed to create anomaly_detection_total metric");
@@ -312,7 +369,10 @@ impl MetricsRegistry {
         .expect("Failed to create system_resources_gauge metric");
 
         let background_task_total = IntCounterVec::new(
-            Opts::new("auth_background_task_total", "Total background task executions"),
+            Opts::new(
+                "auth_background_task_total",
+                "Total background task executions",
+            ),
             &["task_type", "result", "duration_bucket"],
         )
         .expect("Failed to create background_task_total metric");
@@ -324,7 +384,10 @@ impl MetricsRegistry {
         .expect("Failed to create connection_health_gauge metric");
 
         let circuit_breaker_state_changes = IntCounterVec::new(
-            Opts::new("auth_circuit_breaker_state_changes_total", "Circuit breaker state changes"),
+            Opts::new(
+                "auth_circuit_breaker_state_changes_total",
+                "Circuit breaker state changes",
+            ),
             &["service", "from_state", "to_state", "reason"],
         )
         .expect("Failed to create circuit_breaker_state_changes metric");
@@ -474,7 +537,12 @@ pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     // Record metrics
     METRICS
         .http_requests_total
-        .with_label_values(&[method.as_str(), &path, &status_code.as_u16().to_string(), &client_id])
+        .with_label_values(&[
+            method.as_str(),
+            &path,
+            &status_code.as_u16().to_string(),
+            &client_id,
+        ])
         .inc();
 
     METRICS
@@ -532,7 +600,10 @@ fn extract_client_id_with_protection(req: &Request) -> String {
 
 /// Validate client ID to prevent cardinality explosion
 fn is_valid_client_id(id: &str) -> bool {
-    id.len() <= 50 && id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    id.len() <= 50
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Normalize path for metrics to prevent cardinality explosion
@@ -619,7 +690,10 @@ impl MetricsHelper {
         result: &str,
         duration: Duration,
     ) {
-        METRICS.cache_operations_total.with_label_values(&[cache_type, operation, result]).inc();
+        METRICS
+            .cache_operations_total
+            .with_label_values(&[cache_type, operation, result])
+            .inc();
 
         METRICS
             .cache_operation_duration
@@ -676,7 +750,10 @@ impl MetricsHelper {
     pub fn update_cache_hit_ratio(cache_type: &str, hits: u64, total: u64) {
         if total > 0 {
             let ratio = hits as f64 / total as f64;
-            METRICS.cache_hit_ratio.with_label_values(&[cache_type]).observe(ratio);
+            METRICS
+                .cache_hit_ratio
+                .with_label_values(&[cache_type])
+                .observe(ratio);
         }
     }
 
@@ -695,10 +772,16 @@ impl MetricsHelper {
 
     /// Update system resource usage
     pub fn update_system_resources(resource_type: &str, unit: &str, value: i64) {
-        METRICS.system_resources_gauge.with_label_values(&[resource_type, unit]).reset();
+        METRICS
+            .system_resources_gauge
+            .with_label_values(&[resource_type, unit])
+            .reset();
 
         for _ in 0..value {
-            METRICS.system_resources_gauge.with_label_values(&[resource_type, unit]).inc();
+            METRICS
+                .system_resources_gauge
+                .with_label_values(&[resource_type, unit])
+                .inc();
         }
     }
 

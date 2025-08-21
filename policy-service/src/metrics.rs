@@ -94,8 +94,17 @@ impl PolicyMetricsRegistry {
 
         // === Authorization Metrics ===
         let authorization_requests_total = IntCounterVec::new(
-            Opts::new("policy_authorization_requests_total", "Total authorization requests"),
-            &["decision", "principal_type", "action_type", "resource_type", "client_id"],
+            Opts::new(
+                "policy_authorization_requests_total",
+                "Total authorization requests",
+            ),
+            &[
+                "decision",
+                "principal_type",
+                "action_type",
+                "resource_type",
+                "client_id",
+            ],
         )
         .expect("Failed to create authorization_requests_total metric");
 
@@ -104,13 +113,18 @@ impl PolicyMetricsRegistry {
                 "policy_authorization_duration_seconds",
                 "Duration of authorization decisions in seconds",
             )
-            .buckets(vec![0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5]),
+            .buckets(vec![
+                0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+            ]),
             &["decision", "policy_complexity"],
         )
         .expect("Failed to create authorization_duration metric");
 
         let policy_evaluation_errors_total = IntCounterVec::new(
-            Opts::new("policy_evaluation_errors_total", "Total policy evaluation errors"),
+            Opts::new(
+                "policy_evaluation_errors_total",
+                "Total policy evaluation errors",
+            ),
             &["error_type", "error_cause", "policy_id"],
         )
         .expect("Failed to create policy_evaluation_errors_total metric");
@@ -127,7 +141,10 @@ impl PolicyMetricsRegistry {
 
         // === Policy Management Metrics ===
         let policy_compilation_total = IntCounterVec::new(
-            Opts::new("policy_compilation_total", "Total policy compilation operations"),
+            Opts::new(
+                "policy_compilation_total",
+                "Total policy compilation operations",
+            ),
             &["result", "policy_source", "validation_type"],
         )
         .expect("Failed to create policy_compilation_total metric");
@@ -139,7 +156,10 @@ impl PolicyMetricsRegistry {
         .expect("Failed to create policy_reload_total metric");
 
         let active_policies_gauge = IntCounterVec::new(
-            Opts::new("policy_active_policies", "Number of active policies by type"),
+            Opts::new(
+                "policy_active_policies",
+                "Number of active policies by type",
+            ),
             &["policy_type", "scope"],
         )
         .expect("Failed to create active_policies_gauge metric");
@@ -158,13 +178,19 @@ impl PolicyMetricsRegistry {
         .expect("Failed to create entity_operations_total metric");
 
         let entity_cache_operations = IntCounterVec::new(
-            Opts::new("policy_entity_cache_operations_total", "Total entity cache operations"),
+            Opts::new(
+                "policy_entity_cache_operations_total",
+                "Total entity cache operations",
+            ),
             &["operation", "result", "entity_type"],
         )
         .expect("Failed to create entity_cache_operations metric");
 
         let active_entities_gauge = IntCounterVec::new(
-            Opts::new("policy_active_entities", "Number of active entities by type"),
+            Opts::new(
+                "policy_active_entities",
+                "Number of active entities by type",
+            ),
             &["entity_type", "namespace"],
         )
         .expect("Failed to create active_entities_gauge metric");
@@ -181,21 +207,29 @@ impl PolicyMetricsRegistry {
                 "policy_http_request_duration_seconds",
                 "HTTP request duration in seconds",
             )
-            .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]),
+            .buckets(vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5,
+            ]),
             &["method", "endpoint"],
         )
         .expect("Failed to create http_request_duration metric");
 
         let http_request_size_bytes = HistogramVec::new(
-            HistogramOpts::new("policy_http_request_size_bytes", "HTTP request size in bytes")
-                .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0]),
+            HistogramOpts::new(
+                "policy_http_request_size_bytes",
+                "HTTP request size in bytes",
+            )
+            .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0]),
             &["method", "endpoint"],
         )
         .expect("Failed to create http_request_size_bytes metric");
 
         let http_response_size_bytes = HistogramVec::new(
-            HistogramOpts::new("policy_http_response_size_bytes", "HTTP response size in bytes")
-                .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0]),
+            HistogramOpts::new(
+                "policy_http_response_size_bytes",
+                "HTTP response size in bytes",
+            )
+            .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0]),
             &["method", "endpoint", "status_code"],
         )
         .expect("Failed to create http_response_size_bytes metric");
@@ -208,38 +242,56 @@ impl PolicyMetricsRegistry {
 
         // === Security Metrics ===
         let security_violations_total = IntCounterVec::new(
-            Opts::new("policy_security_violations_total", "Total security violations"),
+            Opts::new(
+                "policy_security_violations_total",
+                "Total security violations",
+            ),
             &["violation_type", "severity", "client_id", "resource"],
         )
         .expect("Failed to create security_violations_total metric");
 
         let authorization_anomalies_total = IntCounterVec::new(
-            Opts::new("policy_authorization_anomalies_total", "Total authorization anomalies"),
+            Opts::new(
+                "policy_authorization_anomalies_total",
+                "Total authorization anomalies",
+            ),
             &["anomaly_type", "confidence", "principal", "action_taken"],
         )
         .expect("Failed to create authorization_anomalies_total metric");
 
         let rate_limit_enforcement_total = IntCounterVec::new(
-            Opts::new("policy_rate_limit_enforcement_total", "Total rate limit enforcement"),
+            Opts::new(
+                "policy_rate_limit_enforcement_total",
+                "Total rate limit enforcement",
+            ),
             &["endpoint", "client_id", "result", "limit_type"],
         )
         .expect("Failed to create rate_limit_enforcement_total metric");
 
         // === Performance Metrics ===
         let memory_usage_bytes = IntCounterVec::new(
-            Opts::new("policy_memory_usage_bytes", "Memory usage in bytes by component"),
+            Opts::new(
+                "policy_memory_usage_bytes",
+                "Memory usage in bytes by component",
+            ),
             &["component", "type"],
         )
         .expect("Failed to create memory_usage_bytes metric");
 
         let cpu_usage_percent = IntCounterVec::new(
-            Opts::new("policy_cpu_usage_percent", "CPU usage percentage by component"),
+            Opts::new(
+                "policy_cpu_usage_percent",
+                "CPU usage percentage by component",
+            ),
             &["component", "type"],
         )
         .expect("Failed to create cpu_usage_percent metric");
 
         let background_tasks_total = IntCounterVec::new(
-            Opts::new("policy_background_tasks_total", "Total background task executions"),
+            Opts::new(
+                "policy_background_tasks_total",
+                "Total background task executions",
+            ),
             &["task_type", "result", "duration_bucket"],
         )
         .expect("Failed to create background_tasks_total metric");
@@ -252,7 +304,10 @@ impl PolicyMetricsRegistry {
         .expect("Failed to create slo_violations_total metric");
 
         let error_budget_consumption = IntCounterVec::new(
-            Opts::new("policy_error_budget_consumption", "Error budget consumption"),
+            Opts::new(
+                "policy_error_budget_consumption",
+                "Error budget consumption",
+            ),
             &["slo_type", "time_window", "service_component"],
         )
         .expect("Failed to create error_budget_consumption metric");
@@ -384,7 +439,12 @@ pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
     // Record metrics
     POLICY_METRICS
         .http_requests_total
-        .with_label_values(&[method.as_str(), &path, &status_code.as_u16().to_string(), &client_id])
+        .with_label_values(&[
+            method.as_str(),
+            &path,
+            &status_code.as_u16().to_string(),
+            &client_id,
+        ])
         .inc();
 
     POLICY_METRICS
@@ -440,7 +500,10 @@ fn extract_client_id_with_protection(req: &Request) -> String {
 
 /// Validate client ID to prevent cardinality explosion
 fn is_valid_client_id(id: &str) -> bool {
-    id.len() <= 50 && id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    id.len() <= 50
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Normalize path for metrics to prevent cardinality explosion
@@ -488,7 +551,13 @@ impl PolicyMetricsHelper {
     ) {
         POLICY_METRICS
             .authorization_requests_total
-            .with_label_values(&[decision, principal_type, action_type, resource_type, client_id])
+            .with_label_values(&[
+                decision,
+                principal_type,
+                action_type,
+                resource_type,
+                client_id,
+            ])
             .inc();
 
         POLICY_METRICS

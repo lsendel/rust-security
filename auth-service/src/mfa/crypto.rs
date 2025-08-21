@@ -59,7 +59,11 @@ impl SecretManager {
             let mut key_array = [0u8; 32];
             key_array.copy_from_slice(&key_bytes);
             let cipher = ChaCha20Poly1305::new(&key_array.into());
-            let key = EncryptionKey { key: cipher, version: 1, created_at: chrono::Utc::now() };
+            let key = EncryptionKey {
+                key: cipher,
+                version: 1,
+                created_at: chrono::Utc::now(),
+            };
             Ok(Self {
                 current_key: Arc::new(RwLock::new(key)),
                 old_keys: Arc::new(RwLock::new(HashMap::new())),
@@ -88,7 +92,11 @@ impl SecretManager {
             .encrypt(&nonce, secret)
             .map_err(|e| CryptoError::EncryptionFailed(e.to_string()))?;
 
-        Ok(EncryptedSecret { ciphertext, nonce: nonce.to_vec(), key_version: current_key.version })
+        Ok(EncryptedSecret {
+            ciphertext,
+            nonce: nonce.to_vec(),
+            key_version: current_key.version,
+        })
     }
 
     pub async fn decrypt_secret(

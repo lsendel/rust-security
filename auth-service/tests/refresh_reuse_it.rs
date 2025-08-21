@@ -18,7 +18,11 @@ async fn spawn_app() -> String {
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
-        allowed_scopes: vec!["read".to_string(), "write".to_string(), "openid".to_string()],
+        allowed_scopes: vec![
+            "read".to_string(),
+            "write".to_string(),
+            "openid".to_string(),
+        ],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),
@@ -46,25 +50,49 @@ async fn refresh_token_reuse_is_rejected() {
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success(), "token mint failed: {}", res.status());
+    assert!(
+        res.status().is_success(),
+        "token mint failed: {}",
+        res.status()
+    );
     let v: serde_json::Value = res.json().await.unwrap();
-    let refresh_token = v.get("refresh_token").and_then(|x| x.as_str()).unwrap().to_string();
+    let refresh_token = v
+        .get("refresh_token")
+        .and_then(|x| x.as_str())
+        .unwrap()
+        .to_string();
 
     // Step 2: Use refresh token once (should succeed)
     let res_ok = client
         .post(format!("{}/oauth/token", base))
-        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(format!(
+            "grant_type=refresh_token&refresh_token={}",
+            refresh_token
+        ))
         .send()
         .await
         .unwrap();
-    assert!(res_ok.status().is_success(), "first refresh failed: {}", res_ok.status());
+    assert!(
+        res_ok.status().is_success(),
+        "first refresh failed: {}",
+        res_ok.status()
+    );
 
     // Step 3: Reuse the same refresh token (should be rejected)
     let res_reuse = client
         .post(format!("{}/oauth/token", base))
-        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .body(format!(
+            "grant_type=refresh_token&refresh_token={}",
+            refresh_token
+        ))
         .send()
         .await
         .unwrap();

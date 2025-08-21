@@ -85,7 +85,8 @@ impl RateLimitEntry {
             {
                 // Successfully reset window
                 self.count.store(1, Ordering::Relaxed);
-                self.burst_tokens.store(config.burst_allowance, Ordering::Relaxed);
+                self.burst_tokens
+                    .store(config.burst_allowance, Ordering::Relaxed);
                 return RateLimitResult::Allowed;
             }
             // Another thread reset the window, fall through to normal check
@@ -159,7 +160,10 @@ impl ShardedRateLimiter {
 
     /// Check rate limit for a key
     pub fn check_rate_limit(&self, key: &str) -> RateLimitResult {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let shard_index = self.get_shard_index(key);
         let shard = &self.shards[shard_index];
@@ -173,7 +177,10 @@ impl ShardedRateLimiter {
 
     /// Cleanup stale entries from all shards
     pub fn cleanup_stale_entries(&self) -> usize {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let max_age = self.config.cleanup_interval_secs * 2; // Keep entries for 2x cleanup interval
         let mut total_removed = 0;
@@ -245,7 +252,10 @@ struct TrustedProxyConfig {
 
 impl Default for TrustedProxyConfig {
     fn default() -> Self {
-        Self { trusted_proxies: Vec::new(), trust_proxy_headers: false }
+        Self {
+            trusted_proxies: Vec::new(),
+            trust_proxy_headers: false,
+        }
     }
 }
 
@@ -269,7 +279,10 @@ fn get_trusted_proxy_config() -> TrustedProxyConfig {
         Vec::new()
     };
 
-    TrustedProxyConfig { trusted_proxies, trust_proxy_headers: trust_headers }
+    TrustedProxyConfig {
+        trusted_proxies,
+        trust_proxy_headers: trust_headers,
+    }
 }
 
 /// Extract client identifier for rate limiting with trusted proxy validation
@@ -384,18 +397,23 @@ pub async fn optimized_rate_limit(request: Request, next: Next) -> Response {
             let mut response =
                 (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded").into_response();
 
-            response
-                .headers_mut()
-                .insert("Retry-After", format!("{}", retry_after.max(1)).parse().unwrap());
+            response.headers_mut().insert(
+                "Retry-After",
+                format!("{}", retry_after.max(1)).parse().unwrap(),
+            );
 
             response.headers_mut().insert(
                 "X-RateLimit-Limit",
-                format!("{}", GLOBAL_RATE_LIMITER.config.requests_per_window).parse().unwrap(),
+                format!("{}", GLOBAL_RATE_LIMITER.config.requests_per_window)
+                    .parse()
+                    .unwrap(),
             );
 
             response.headers_mut().insert(
                 "X-RateLimit-Window",
-                format!("{}", GLOBAL_RATE_LIMITER.config.window_duration_secs).parse().unwrap(),
+                format!("{}", GLOBAL_RATE_LIMITER.config.window_duration_secs)
+                    .parse()
+                    .unwrap(),
             );
 
             response
@@ -414,7 +432,10 @@ pub async fn start_rate_limit_cleanup_task() {
 
         let removed_count = GLOBAL_RATE_LIMITER.cleanup_stale_entries();
         if removed_count > 0 {
-            tracing::debug!("Rate limit cleanup: removed {} stale entries", removed_count);
+            tracing::debug!(
+                "Rate limit cleanup: removed {} stale entries",
+                removed_count
+            );
         }
     }
 }
@@ -433,7 +454,10 @@ pub struct PerClientRateLimiter {
 
 impl PerClientRateLimiter {
     pub fn new(key_prefix: String, config: RateLimitConfig) -> Self {
-        Self { limiter: ShardedRateLimiter::new(config), key_prefix }
+        Self {
+            limiter: ShardedRateLimiter::new(config),
+            key_prefix,
+        }
     }
 
     pub fn check_client_rate_limit(&self, client_id: &str) -> RateLimitResult {
@@ -488,7 +512,9 @@ impl EndpointRateLimiter {
         endpoint: &str,
         client_id: &str,
     ) -> Option<RateLimitResult> {
-        self.limiters.get(endpoint).map(|limiter| limiter.check_client_rate_limit(client_id))
+        self.limiters
+            .get(endpoint)
+            .map(|limiter| limiter.check_client_rate_limit(client_id))
     }
 }
 
@@ -582,7 +608,10 @@ mod tests {
 
     #[test]
     fn test_rate_limit_entry_atomicity() {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let config = RateLimitConfig {
             requests_per_window: 10,

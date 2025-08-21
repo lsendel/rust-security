@@ -122,5 +122,8 @@ async fn test_all_allowed_scopes() {
     assert_eq!(res.status(), 200, "Should accept all allowed scopes");
     let body: serde_json::Value = res.json().await.unwrap();
     assert!(body.get("access_token").is_some());
-    assert_eq!(body.get("scope").unwrap().as_str().unwrap(), "read write admin");
+    assert_eq!(
+        body.get("scope").unwrap().as_str().unwrap(),
+        "read write admin"
+    );
 }

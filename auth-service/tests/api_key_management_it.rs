@@ -18,7 +18,9 @@ async fn spawn_app() -> String {
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["admin".to_string()],
         authorization_codes: Arc::new(RwLock::new(HashMap::new())),
-        policy_cache: Arc::new(auth_service::policy_cache::PolicyCache::new(Default::default())),
+        policy_cache: Arc::new(auth_service::policy_cache::PolicyCache::new(
+            Default::default(),
+        )),
         backpressure_state: Arc::new(auth_service::backpressure::BackpressureState::new(
             Default::default(),
         )),

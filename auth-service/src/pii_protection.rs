@@ -171,8 +171,10 @@ static SENSITIVE_PATTERNS: Lazy<HashMap<SensitiveDataType, Regex>> = Lazy::new(|
     );
 
     // API keys (specific patterns for common API key formats)
-    patterns
-        .insert(SensitiveDataType::ApiKey, Regex::new(r"\b(?:sk_|pk_)[a-zA-Z0-9]{20,}\b").unwrap());
+    patterns.insert(
+        SensitiveDataType::ApiKey,
+        Regex::new(r"\b(?:sk_|pk_)[a-zA-Z0-9]{20,}\b").unwrap(),
+    );
 
     // Passwords in logs (password=value patterns)
     patterns.insert(
@@ -218,7 +220,10 @@ impl Default for PiiSpiRedactor {
 impl PiiSpiRedactor {
     /// Create a new PII/SPI redactor
     pub fn new() -> Self {
-        Self { aggressive_mode: false, custom_patterns: HashMap::new() }
+        Self {
+            aggressive_mode: false,
+            custom_patterns: HashMap::new(),
+        }
     }
 
     /// Enable aggressive redaction mode
@@ -315,13 +320,15 @@ impl PiiSpiRedactor {
 
         match data_type.redaction_strategy() {
             RedactionStrategy::NoRedaction => text.to_string(),
-            RedactionStrategy::FullRedaction => {
-                pattern.replace_all(text, &format!("[{:?}_REDACTED]", data_type)).to_string()
-            }
+            RedactionStrategy::FullRedaction => pattern
+                .replace_all(text, &format!("[{:?}_REDACTED]", data_type))
+                .to_string(),
             RedactionStrategy::PartialRedaction => self.partial_redact(text, pattern, data_type),
             RedactionStrategy::HashRedaction => {
                 // For now, treat as full redaction. Could implement hashing later.
-                pattern.replace_all(text, &format!("[{:?}_HASH]", data_type)).to_string()
+                pattern
+                    .replace_all(text, &format!("[{:?}_HASH]", data_type))
+                    .to_string()
             }
         }
     }
@@ -490,8 +497,14 @@ mod tests {
             SensitiveDataType::SocialSecurityNumber.classification(),
             DataClassification::Spi
         );
-        assert_eq!(SensitiveDataType::EmailAddress.classification(), DataClassification::Pii);
-        assert_eq!(SensitiveDataType::JwtToken.classification(), DataClassification::Confidential);
+        assert_eq!(
+            SensitiveDataType::EmailAddress.classification(),
+            DataClassification::Pii
+        );
+        assert_eq!(
+            SensitiveDataType::JwtToken.classification(),
+            DataClassification::Confidential
+        );
     }
 
     #[test]

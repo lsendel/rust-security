@@ -59,7 +59,10 @@ pub struct FailureStats {
 
 impl FailureStats {
     fn new() -> Self {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         Self {
             count: AtomicU64::new(0),
@@ -70,7 +73,10 @@ impl FailureStats {
     }
 
     fn increment(&self, max_failures: u32, window_secs: u64) -> bool {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         self.last_failure.store(now, Ordering::Relaxed);
 
@@ -134,8 +140,14 @@ impl AuthFailureTracker {
 
         // Track IP-based failures
         if let Some(ip) = ip_address {
-            let entry = self.ip_failures.entry(ip.to_string()).or_insert_with(FailureStats::new);
-            if entry.increment(self.config.max_failures_per_ip, self.config.failure_window_secs) {
+            let entry = self
+                .ip_failures
+                .entry(ip.to_string())
+                .or_insert_with(FailureStats::new);
+            if entry.increment(
+                self.config.max_failures_per_ip,
+                self.config.failure_window_secs,
+            ) {
                 is_suspicious = true;
                 suspicious_reasons.push(format!("IP {} exceeded failure threshold", ip));
             }
@@ -143,10 +155,14 @@ impl AuthFailureTracker {
 
         // Track client-based failures
         if let Some(client) = client_id {
-            let entry =
-                self.client_failures.entry(client.to_string()).or_insert_with(FailureStats::new);
-            if entry.increment(self.config.max_failures_per_client, self.config.failure_window_secs)
-            {
+            let entry = self
+                .client_failures
+                .entry(client.to_string())
+                .or_insert_with(FailureStats::new);
+            if entry.increment(
+                self.config.max_failures_per_client,
+                self.config.failure_window_secs,
+            ) {
                 is_suspicious = true;
                 suspicious_reasons.push(format!("Client {} exceeded failure threshold", client));
             }
@@ -215,8 +231,10 @@ impl AuthFailureTracker {
         // Add suspicious activity indicators
         if is_suspicious {
             event = event.with_detail("is_suspicious".to_string(), "true".to_string());
-            event =
-                event.with_detail("suspicious_reasons".to_string(), suspicious_reasons.join(", "));
+            event = event.with_detail(
+                "suspicious_reasons".to_string(),
+                suspicious_reasons.join(", "),
+            );
         }
 
         // Add additional context
@@ -270,7 +288,9 @@ impl AuthFailureTracker {
             "java", "postman", "insomnia", "httpie", "nmap", "nikto", "sqlmap", "burp", "zap",
         ];
 
-        suspicious_patterns.iter().any(|pattern| ua_lower.contains(pattern))
+        suspicious_patterns
+            .iter()
+            .any(|pattern| ua_lower.contains(pattern))
     }
 
     /// Log suspicious activity alert

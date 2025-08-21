@@ -1156,8 +1156,9 @@ impl AdvancedUserBehaviorProfiler {
         event: &SecurityEvent,
     ) -> Option<BehavioralAnomaly> {
         // Get recent activity count
-        let recent_events =
-            self.count_recent_events(&profile.base_profile.user_id, Duration::hours(1)).await;
+        let recent_events = self
+            .count_recent_events(&profile.base_profile.user_id, Duration::hours(1))
+            .await;
         let baseline_rate = profile.base_profile.request_rate_baseline;
 
         if baseline_rate > 0.0 && recent_events > (baseline_rate * 3.0) as u32 {
@@ -1303,7 +1304,10 @@ impl AdvancedUserBehaviorProfiler {
                         Self::process_time_series_update(&time_series_data, &update_request).await;
                     }
                     _ => {
-                        debug!("Update type {:?} not yet implemented", update_request.update_type);
+                        debug!(
+                            "Update type {:?} not yet implemented",
+                            update_request.update_type
+                        );
                     }
                 }
 
@@ -1321,33 +1325,43 @@ impl AdvancedUserBehaviorProfiler {
         update_request: &ProfileUpdateRequest,
     ) {
         let mut profiles = user_profiles.write().await;
-        let profile = profiles.entry(update_request.user_id.clone()).or_insert_with(|| {
-            let base_profile = UserBehaviorProfile::new(update_request.user_id.clone());
-            EnhancedUserBehaviorProfile {
-                base_profile,
-                time_series_metrics: HashMap::new(),
-                behavioral_features: BehavioralFeatureVector::default(),
-                risk_assessment: RiskAssessment::default(),
-                peer_comparisons: PeerComparisons::default(),
-                anomaly_history: Vec::new(),
-                model_predictions: Vec::new(),
-                profile_confidence: 0.1,
-                last_comprehensive_analysis: None,
-            }
-        });
+        let profile = profiles
+            .entry(update_request.user_id.clone())
+            .or_insert_with(|| {
+                let base_profile = UserBehaviorProfile::new(update_request.user_id.clone());
+                EnhancedUserBehaviorProfile {
+                    base_profile,
+                    time_series_metrics: HashMap::new(),
+                    behavioral_features: BehavioralFeatureVector::default(),
+                    risk_assessment: RiskAssessment::default(),
+                    peer_comparisons: PeerComparisons::default(),
+                    anomaly_history: Vec::new(),
+                    model_predictions: Vec::new(),
+                    profile_confidence: 0.1,
+                    last_comprehensive_analysis: None,
+                }
+            });
 
         // Update base profile
-        profile.base_profile.update_with_event(&update_request.event);
+        profile
+            .base_profile
+            .update_with_event(&update_request.event);
         profile.base_profile.calculate_behavior_entropy();
 
         // Update time series data
         let mut ts_data = time_series_data.write().await;
-        let user_ts = ts_data.entry(update_request.user_id.clone()).or_insert_with(HashMap::new);
+        let user_ts = ts_data
+            .entry(update_request.user_id.clone())
+            .or_insert_with(HashMap::new);
 
         // Add data point for login frequency
-        if matches!(update_request.event.event_type, SecurityEventType::AuthenticationSuccess) {
-            let ts = user_ts.entry("login_frequency".to_string()).or_insert_with(|| {
-                BehavioralTimeSeries {
+        if matches!(
+            update_request.event.event_type,
+            SecurityEventType::AuthenticationSuccess
+        ) {
+            let ts = user_ts
+                .entry("login_frequency".to_string())
+                .or_insert_with(|| BehavioralTimeSeries {
                     series_id: Uuid::new_v4().to_string(),
                     user_id: update_request.user_id.clone(),
                     metric_name: "login_frequency".to_string(),
@@ -1357,8 +1371,7 @@ impl AdvancedUserBehaviorProfiler {
                     seasonality: SeasonalityAnalysis::default(),
                     forecast: None,
                     last_updated: Utc::now(),
-                }
-            });
+                });
 
             ts.data_points.push_back(TimeSeriesPoint {
                 timestamp: update_request.event.timestamp,
@@ -1392,7 +1405,10 @@ impl AdvancedUserBehaviorProfiler {
         // 4. Updating risk assessments
         // 5. Refreshing peer comparisons
 
-        debug!("Full recomputation requested for user: {}", update_request.user_id);
+        debug!(
+            "Full recomputation requested for user: {}",
+            update_request.user_id
+        );
     }
 
     /// Process time series update
@@ -1408,7 +1424,10 @@ impl AdvancedUserBehaviorProfiler {
         // 4. Change point detection
         // 5. Anomaly detection in time series
 
-        debug!("Time series update requested for user: {}", update_request.user_id);
+        debug!(
+            "Time series update requested for user: {}",
+            update_request.user_id
+        );
     }
 
     /// Start other background tasks (simplified implementations)

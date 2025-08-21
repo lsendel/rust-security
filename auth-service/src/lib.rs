@@ -134,16 +134,16 @@ pub mod security_metrics;
 pub mod security_monitoring;
 
 // Key management
+pub mod jwks_handler;
+pub mod jwks_rate_limiter;
 pub mod key_management;
 pub mod key_rotation;
 pub mod keys;
-pub mod jwks_handler;
-pub mod jwks_rate_limiter;
 
 // OAuth 2.0 Dynamic Client Registration
 pub mod oauth_client_registration;
-pub mod oauth_client_secret_rotation;
 pub mod oauth_client_registration_policies;
+pub mod oauth_client_secret_rotation;
 
 // Rate limiting and resilience
 pub mod backpressure;
@@ -256,7 +256,10 @@ pub async fn get_security_alerts(
 ) -> Result<Json<serde_json::Value>, AuthError> {
     let limit = params.get("limit").and_then(|l| l.parse::<usize>().ok());
 
-    let active_only = params.get("active_only").map(|v| v == "true").unwrap_or(false);
+    let active_only = params
+        .get("active_only")
+        .map(|v| v == "true")
+        .unwrap_or(false);
 
     let alerts = if active_only {
         SECURITY_MONITOR.get_active_alerts().await
@@ -279,10 +282,14 @@ pub async fn resolve_security_alert(
     Path(alert_id): axum::extract::Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
-    let resolution_notes =
-        body.get("resolution_notes").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let resolution_notes = body
+        .get("resolution_notes")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
-    let resolved = SECURITY_MONITOR.resolve_alert(&alert_id, resolution_notes).await;
+    let resolved = SECURITY_MONITOR
+        .resolve_alert(&alert_id, resolution_notes)
+        .await;
 
     if resolved {
         Ok(Json(serde_json::json!({
@@ -290,7 +297,9 @@ pub async fn resolve_security_alert(
             "message": "Alert resolved successfully"
         })))
     } else {
-        Err(AuthError::InvalidRequest { reason: "Alert not found".to_string() })
+        Err(AuthError::InvalidRequest {
+            reason: "Alert not found".to_string(),
+        })
     }
 }
 
@@ -392,31 +401,45 @@ async fn extract_user_from_token(
     state: &AppState,
 ) -> Result<String, AuthError> {
     // Extract bearer token
-    let auth =
-        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
 
     let token = auth
         .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Missing bearer token".to_string() })?;
+        .ok_or_else(|| AuthError::InvalidToken {
+            reason: "Missing bearer token".to_string(),
+        })?;
 
     if token.is_empty() {
-        return Err(AuthError::InvalidToken { reason: "Empty bearer token".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "Empty bearer token".to_string(),
+        });
     }
 
     // Get token record and validate
-    let record = state
-        .store
-        .get_token_record(token)
-        .await?
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
-    let record = state
-        .store
-        .get_token_record(token)
-        .await?
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let record =
+        state
+            .store
+            .get_token_record(token)
+            .await?
+            .ok_or_else(|| AuthError::InvalidToken {
+                reason: "Token not found".to_string(),
+            })?;
+    let record =
+        state
+            .store
+            .get_token_record(token)
+            .await?
+            .ok_or_else(|| AuthError::InvalidToken {
+                reason: "Token not found".to_string(),
+            })?;
 
     if !record.active {
-        return Err(AuthError::InvalidToken { reason: "Token is not active".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "Token is not active".to_string(),
+        });
     }
 
     // Check token expiration
@@ -427,7 +450,9 @@ async fn extract_user_from_token(
             .as_secs() as i64;
 
         if now > exp {
-            return Err(AuthError::InvalidToken { reason: "Token has expired".to_string() });
+            return Err(AuthError::InvalidToken {
+                reason: "Token has expired".to_string(),
+            });
         }
     }
 
@@ -435,12 +460,16 @@ async fn extract_user_from_token(
     if let Some(binding) = &record.token_binding {
         let (client_ip, user_agent) = crate::security::extract_client_info(headers);
         if !crate::security::validate_token_binding(binding, &client_ip, &user_agent) {
-            return Err(AuthError::InvalidToken { reason: "Token binding mismatch".to_string() });
+            return Err(AuthError::InvalidToken {
+                reason: "Token binding mismatch".to_string(),
+            });
         }
     }
 
     // Extract user ID from token subject
-    record.sub.ok_or_else(|| AuthError::InvalidToken { reason: "Token has no subject".to_string() })
+    record.sub.ok_or_else(|| AuthError::InvalidToken {
+        reason: "Token has no subject".to_string(),
+    })
 }
 
 /// Require that the caller has an access token with the "admin" scope
@@ -485,10 +514,19 @@ pub async fn create_session_endpoint(
         .unwrap_or("unknown")
         .to_string();
 
-    let user_agent = headers.get("user-agent").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let session = SESSION_MANAGER
-        .create_session(derived_user_id, req.client_id, ip_address, user_agent, req.duration)
+        .create_session(
+            derived_user_id,
+            req.client_id,
+            ip_address,
+            user_agent,
+            req.duration,
+        )
         .await
         .map_err(|e| internal_error(&format!("Session creation failed: {}", e)))?;
 
@@ -541,12 +579,16 @@ pub async fn get_session_endpoint(
             }
 
             if session.is_expired(None) {
-                Err(AuthError::InvalidToken { reason: "Session expired".to_string() })
+                Err(AuthError::InvalidToken {
+                    reason: "Session expired".to_string(),
+                })
             } else {
                 Ok(Json(session))
             }
         }
-        Ok(None) => Err(AuthError::InvalidToken { reason: "Session not found".to_string() }),
+        Ok(None) => Err(AuthError::InvalidToken {
+            reason: "Session not found".to_string(),
+        }),
         Err(e) => Err(internal_error(&format!("Session operation failed: {}", e))),
     }
 }
@@ -620,7 +662,9 @@ pub async fn delete_session_endpoint(
                 "message": "Session deleted"
             })))
         }
-        Ok(None) => Err(AuthError::InvalidToken { reason: "Session not found".to_string() }),
+        Ok(None) => Err(AuthError::InvalidToken {
+            reason: "Session not found".to_string(),
+        }),
         Err(e) => Err(internal_error(&format!("Session operation failed: {}", e))),
     }
 }
@@ -670,7 +714,10 @@ pub async fn refresh_session_endpoint(
             }
 
             // User owns the session, proceed with refresh
-            match SESSION_MANAGER.refresh_session(&session_id, req.duration).await {
+            match SESSION_MANAGER
+                .refresh_session(&session_id, req.duration)
+                .await
+            {
                 Ok(Some(refreshed_session)) => {
                     // Log successful session refresh
                     SecurityLogger::log_event(
@@ -693,7 +740,9 @@ pub async fn refresh_session_endpoint(
                 Err(e) => Err(internal_error(&format!("Session operation failed: {}", e))),
             }
         }
-        Ok(None) => Err(AuthError::InvalidToken { reason: "Session not found".to_string() }),
+        Ok(None) => Err(AuthError::InvalidToken {
+            reason: "Session not found".to_string(),
+        }),
         Err(e) => Err(internal_error(&format!("Session operation failed: {}", e))),
     }
 }
@@ -809,20 +858,29 @@ pub async fn authorize_check(
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // Handle both JWT and API Key authentication
-    let auth_header =
-        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let auth_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
 
     let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
-        return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "missing bearer".to_string(),
+        });
     }
-    let rec = state
-        .store
-        .get_token_record(token)
-        .await?
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let rec =
+        state
+            .store
+            .get_token_record(token)
+            .await?
+            .ok_or_else(|| AuthError::InvalidToken {
+                reason: "Token not found".to_string(),
+            })?;
     if !rec.active {
-        return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "inactive".to_string(),
+        });
     }
 
     let (principal, mut context) = if auth_header.starts_with("Bearer ") {
@@ -840,7 +898,9 @@ pub async fn authorize_check(
             mfa_verified: false,
         });
         if !rec.active {
-            return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
+            return Err(AuthError::InvalidToken {
+                reason: "inactive".to_string(),
+            });
         }
         let principal_id = rec.sub.clone().unwrap_or_else(|| "anonymous".to_string());
         let principal = serde_json::json!({
@@ -860,7 +920,10 @@ pub async fn authorize_check(
             let parsed_hash = argon2::PasswordHash::new(&api_key.hashed_key)
                 .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
 
-            if argon2.verify_password(api_key_str.as_bytes(), &parsed_hash).is_ok() {
+            if argon2
+                .verify_password(api_key_str.as_bytes(), &parsed_hash)
+                .is_ok()
+            {
                 let principal = serde_json::json!({
                     "type": "ApiKey",
                     "id": api_key.client_id,
@@ -873,10 +936,14 @@ pub async fn authorize_check(
                 }
                 (principal, api_key_context)
             } else {
-                return Err(AuthError::InvalidToken { reason: "invalid api key".to_string() });
+                return Err(AuthError::InvalidToken {
+                    reason: "invalid api key".to_string(),
+                });
             }
         } else {
-            return Err(AuthError::InvalidToken { reason: "invalid api key".to_string() });
+            return Err(AuthError::InvalidToken {
+                reason: "invalid api key".to_string(),
+            });
         }
     } else {
         return Err(AuthError::InvalidToken {
@@ -921,7 +988,9 @@ pub async fn authorize_check(
             cached_at = cached_response.cached_at,
             "Policy decision served from cache"
         );
-        return Ok(Json(AuthorizationCheckResponse { decision: cached_response.decision }));
+        return Ok(Json(AuthorizationCheckResponse {
+            decision: cached_response.decision,
+        }));
     }
 
     // Cache miss - evaluate policy via service
@@ -937,7 +1006,10 @@ pub async fn authorize_check(
     // Store in cache with appropriate TTL based on decision
     let policy_response = PolicyResponse {
         decision: decision.clone(),
-        cached_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+        cached_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
         ttl_seconds: match decision.as_str() {
             "Allow" => 300, // 5 minutes for allow decisions
             "Deny" => 60,   // 1 minute for deny decisions
@@ -946,7 +1018,11 @@ pub async fn authorize_check(
     };
 
     // Cache the response (ignore errors to not affect main flow)
-    if let Err(e) = state.policy_cache.put(&cache_request, policy_response).await {
+    if let Err(e) = state
+        .policy_cache
+        .put(&cache_request, policy_response)
+        .await
+    {
         tracing::warn!(error = %redact_log(&e.to_string()), "Failed to cache policy response");
     }
 
@@ -968,7 +1044,13 @@ async fn evaluate_policy_remote(
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    let payload = PolicyAuthorizeRequest { request_id, principal, action, resource, context };
+    let payload = PolicyAuthorizeRequest {
+        request_id,
+        principal,
+        action,
+        resource,
+        context,
+    };
 
     // Allow per-request override of policy URL to avoid env races in tests
     let policy_base = headers
@@ -1035,7 +1117,10 @@ async fn evaluate_policy_remote(
                 Err(err) => {
                     tracing::warn!(error = %redact_log(&err.to_string()), "Policy service returned error status; falling back");
                     if strict {
-                        return Err(internal_error(&format!("Policy service HTTP error: {}", err)));
+                        return Err(internal_error(&format!(
+                            "Policy service HTTP error: {}",
+                            err
+                        )));
                     }
                     "Allow".to_string()
                 }
@@ -1057,7 +1142,9 @@ async fn evaluate_policy_remote(
 }
 
 pub async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok".to_string() })
+    Json(HealthResponse {
+        status: "ok".to_string(),
+    })
 }
 
 /// Detailed admin health endpoint with comprehensive system status
@@ -1254,15 +1341,20 @@ pub async fn introspect(
     // In TEST_MODE, allow introspection without client authentication to simplify integration tests
     if std::env::var("TEST_MODE").is_err() {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) = if let Some(auth_header) =
-            headers.get(axum::http::header::AUTHORIZATION)
-        {
-            let header_val = auth_header.to_str().unwrap_or("");
-            if let Some(b64) = header_val.strip_prefix("Basic ") {
-                if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
-                    if let Ok(pair) = std::str::from_utf8(&decoded) {
-                        let mut parts = pair.splitn(2, ':');
-                        (parts.next().map(|s| s.to_string()), parts.next().map(|s| s.to_string()))
+        let (cid_opt, csec_opt) =
+            if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+                let header_val = auth_header.to_str().unwrap_or("");
+                if let Some(b64) = header_val.strip_prefix("Basic ") {
+                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        if let Ok(pair) = std::str::from_utf8(&decoded) {
+                            let mut parts = pair.splitn(2, ':');
+                            (
+                                parts.next().map(|s| s.to_string()),
+                                parts.next().map(|s| s.to_string()),
+                            )
+                        } else {
+                            (None, None)
+                        }
                     } else {
                         (None, None)
                     }
@@ -1271,10 +1363,7 @@ pub async fn introspect(
                 }
             } else {
                 (None, None)
-            }
-        } else {
-            (None, None)
-        };
+            };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
         if state.client_credentials.get(&client_id) != Some(&client_secret) {
@@ -1289,7 +1378,10 @@ pub async fn introspect(
         .unwrap_or("unknown")
         .to_string();
 
-    let user_agent = headers.get("user-agent").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let request_id = headers
         .get("x-request-id")
@@ -1304,16 +1396,26 @@ pub async fn introspect(
             "token_format",
             None,
             &ip_address,
-            Some([("error".to_string(), serde_json::Value::String(e.to_string()))].into()),
+            Some(
+                [(
+                    "error".to_string(),
+                    serde_json::Value::String(e.to_string()),
+                )]
+                .into(),
+            ),
         );
-        return Err(AuthError::InvalidToken { reason: e.to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: e.to_string(),
+        });
     }
 
     let rec = state
         .store
         .get_token_record(&body.token)
         .await?
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+        .ok_or_else(|| AuthError::InvalidToken {
+            reason: "Token not found".to_string(),
+        })?;
 
     // Log token introspection event
     let mut event = SecurityEvent::new(
@@ -1323,7 +1425,14 @@ pub async fn introspect(
         "Token introspection performed".to_string(),
     )
     .with_ip_address(ip_address)
-    .with_outcome(if rec.active { "success" } else { "inactive_token" }.to_string())
+    .with_outcome(
+        if rec.active {
+            "success"
+        } else {
+            "inactive_token"
+        }
+        .to_string(),
+    )
     .with_resource("/oauth/introspect".to_string())
     .with_action("introspect".to_string())
     .with_detail("token_active".to_string(), rec.active)
@@ -1393,12 +1502,16 @@ pub async fn oauth_authorize(
         .to_string();
     // Validate response_type
     if req.response_type != "code" {
-        return Err(AuthError::UnsupportedResponseType { response_type: req.response_type });
+        return Err(AuthError::UnsupportedResponseType {
+            response_type: req.response_type,
+        });
     }
 
     // Validate client_id and check if active
     if !crate::client_auth::is_client_active(&req.client_id) {
-        return Err(AuthError::UnauthorizedClient { client_id: req.client_id });
+        return Err(AuthError::UnauthorizedClient {
+            client_id: req.client_id,
+        });
     }
 
     // CRITICAL SECURITY FIX: Validate redirect URI
@@ -1424,7 +1537,10 @@ pub async fn oauth_authorize(
             )
             .with_action("oauth_authorize".to_string())
             .with_detail("client_id".to_string(), req.client_id.clone())
-            .with_detail("attempted_redirect_uri".to_string(), req.redirect_uri.clone())
+            .with_detail(
+                "attempted_redirect_uri".to_string(),
+                req.redirect_uri.clone(),
+            )
             .with_detail("ip_address".to_string(), ip_address.clone())
             .with_outcome("blocked".to_string()),
         );
@@ -1473,7 +1589,9 @@ pub async fn oauth_authorize(
     // Validate scope
     if let Some(scope) = &req.scope {
         if !validate_scope(scope, &state.allowed_scopes) {
-            return Err(AuthError::InvalidScope { scope: scope.clone() });
+            return Err(AuthError::InvalidScope {
+                scope: scope.clone(),
+            });
         }
     }
 
@@ -1499,16 +1617,25 @@ pub async fn oauth_authorize(
         user_id: None, // Not handled in this flow currently
         exp: auth_code.expires_at,
     };
-    state.store.set_auth_code(&auth_code.code, &auth_code_record, 600).await?;
+    state
+        .store
+        .set_auth_code(&auth_code.code, &auth_code_record, 600)
+        .await?;
 
     // Build redirect URL
-    let mut redirect_url = Url::parse(&req.redirect_uri)
-        .map_err(|_| AuthError::InvalidRequest { reason: "Invalid redirect_uri".to_string() })?;
+    let mut redirect_url =
+        Url::parse(&req.redirect_uri).map_err(|_| AuthError::InvalidRequest {
+            reason: "Invalid redirect_uri".to_string(),
+        })?;
 
-    redirect_url.query_pairs_mut().append_pair("code", &auth_code.code);
+    redirect_url
+        .query_pairs_mut()
+        .append_pair("code", &auth_code.code);
 
     if let Some(state_param) = &req.state {
-        redirect_url.query_pairs_mut().append_pair("state", state_param);
+        redirect_url
+            .query_pairs_mut()
+            .append_pair("state", state_param);
     }
 
     // Log authorization code issuance
@@ -1565,7 +1692,9 @@ fn generate_secure_code() -> String {
 /// Validate scope against allowed scopes
 fn validate_scope(requested_scope: &str, allowed_scopes: &[String]) -> bool {
     let scopes: Vec<&str> = requested_scope.split(' ').collect();
-    scopes.iter().all(|scope| allowed_scopes.contains(&scope.to_string()))
+    scopes
+        .iter()
+        .all(|scope| allowed_scopes.contains(&scope.to_string()))
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -1645,7 +1774,10 @@ pub async fn issue_token(
         .unwrap_or("unknown")
         .to_string();
 
-    let user_agent = headers.get("user-agent").and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let _request_id = headers
         .get("x-request-id")
@@ -1735,7 +1867,9 @@ pub async fn issue_token(
                                 .into(),
                             ),
                         );
-                        return Err(AuthError::InvalidScope { scope: scope_str.to_string() });
+                        return Err(AuthError::InvalidScope {
+                            scope: scope_str.to_string(),
+                        });
                     }
                 }
                 let make_id_token = form
@@ -1770,7 +1904,10 @@ pub async fn issue_token(
                                 "has_scope".to_string(),
                                 serde_json::Value::Bool(form.scope.is_some()),
                             ),
-                            ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                            (
+                                "has_id_token".to_string(),
+                                serde_json::Value::Bool(make_id_token),
+                            ),
                         ]
                         .into(),
                     ),
@@ -1849,7 +1986,10 @@ pub async fn issue_token(
             }
         }
         "refresh_token" => {
-            let rt = form.refresh_token.as_ref().ok_or(AuthError::MissingRefreshToken)?;
+            let rt = form
+                .refresh_token
+                .as_ref()
+                .ok_or(AuthError::MissingRefreshToken)?;
             // Detect refresh token reuse
             if state.store.is_refresh_reused(rt).await.unwrap_or(false) {
                 SecurityLogger::log_token_operation(
@@ -1905,7 +2045,9 @@ pub async fn issue_token(
                             .into(),
                         ),
                     );
-                    return Err(AuthError::InvalidScope { scope: scope_str.to_string() });
+                    return Err(AuthError::InvalidScope {
+                        scope: scope_str.to_string(),
+                    });
                 }
             }
             let make_id_token = form
@@ -1930,8 +2072,14 @@ pub async fn issue_token(
                             "grant_type".to_string(),
                             serde_json::Value::String("refresh_token".to_string()),
                         ),
-                        ("has_scope".to_string(), serde_json::Value::Bool(form.scope.is_some())),
-                        ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                        (
+                            "has_scope".to_string(),
+                            serde_json::Value::Bool(form.scope.is_some()),
+                        ),
+                        (
+                            "has_id_token".to_string(),
+                            serde_json::Value::Bool(make_id_token),
+                        ),
                     ]
                     .into(),
                 ),
@@ -1951,11 +2099,16 @@ pub async fn issue_token(
             let code = form
                 .code
                 .as_ref()
-                .ok_or_else(|| AuthError::InvalidRequest { reason: "missing code".to_string() })?;
+                .ok_or_else(|| AuthError::InvalidRequest {
+                    reason: "missing code".to_string(),
+                })?;
 
-            let redirect_uri = form.redirect_uri.as_ref().ok_or_else(|| {
-                AuthError::InvalidRequest { reason: "missing redirect_uri".to_string() }
-            })?;
+            let redirect_uri =
+                form.redirect_uri
+                    .as_ref()
+                    .ok_or_else(|| AuthError::InvalidRequest {
+                        reason: "missing redirect_uri".to_string(),
+                    })?;
 
             // Consume authorization code
             let auth_code = state.store.consume_auth_code(code).await?.ok_or_else(|| {
@@ -1981,15 +2134,20 @@ pub async fn issue_token(
             // Validate client_id (if provided in form)
             if let Some(client_id) = &form.client_id {
                 if client_id != &auth_code.client_id {
-                    return Err(AuthError::UnauthorizedClient { client_id: client_id.clone() });
+                    return Err(AuthError::UnauthorizedClient {
+                        client_id: client_id.clone(),
+                    });
                 }
             }
 
             // Validate PKCE if code_challenge was used during authorization
             if let Some(stored_challenge) = &auth_code.pkce_challenge {
-                let code_verifier = form.code_verifier.as_ref().ok_or_else(|| {
-                    AuthError::InvalidRequest { reason: "missing code_verifier".to_string() }
-                })?;
+                let code_verifier =
+                    form.code_verifier
+                        .as_ref()
+                        .ok_or_else(|| AuthError::InvalidRequest {
+                            reason: "missing code_verifier".to_string(),
+                        })?;
 
                 let method = auth_code.pkce_method.as_deref().unwrap_or("S256");
                 let challenge_method = method
@@ -2041,7 +2199,10 @@ pub async fn issue_token(
                             "had_pkce".to_string(),
                             serde_json::Value::Bool(auth_code.pkce_challenge.is_some()),
                         ),
-                        ("has_id_token".to_string(), serde_json::Value::Bool(make_id_token)),
+                        (
+                            "has_id_token".to_string(),
+                            serde_json::Value::Bool(make_id_token),
+                        ),
                     ]
                     .into(),
                 ),
@@ -2089,7 +2250,9 @@ pub async fn issue_token(
                 .with_label_values(&["issue", "error"])
                 .observe(duration.as_secs_f64());
 
-            Err(AuthError::UnsupportedGrantType { grant_type: form.grant_type })
+            Err(AuthError::UnsupportedGrantType {
+                grant_type: form.grant_type,
+            })
         }
     }
 }
@@ -2112,8 +2275,10 @@ pub async fn userinfo(
         .to_string();
 
     // Extract bearer token
-    let auth_header =
-        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let auth_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
     if token.is_empty() {
         SecurityLogger::log_validation_failure(
@@ -2123,13 +2288,18 @@ pub async fn userinfo(
             &ip_address,
             None,
         );
-        return Err(AuthError::InvalidToken { reason: "missing bearer".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "missing bearer".to_string(),
+        });
     }
-    let rec = state
-        .store
-        .get_token_record(token)
-        .await?
-        .ok_or_else(|| AuthError::InvalidToken { reason: "Token not found".to_string() })?;
+    let rec =
+        state
+            .store
+            .get_token_record(token)
+            .await?
+            .ok_or_else(|| AuthError::InvalidToken {
+                reason: "Token not found".to_string(),
+            })?;
     if !rec.active {
         SecurityLogger::log_validation_failure(
             "/oauth/userinfo",
@@ -2138,7 +2308,9 @@ pub async fn userinfo(
             &ip_address,
             None,
         );
-        return Err(AuthError::InvalidToken { reason: "inactive".to_string() });
+        return Err(AuthError::InvalidToken {
+            reason: "inactive".to_string(),
+        });
     }
 
     // Enforce required scopes (at least "openid")
@@ -2149,7 +2321,9 @@ pub async fn userinfo(
             });
         }
     } else {
-        return Err(AuthError::UnauthorizedClient { client_id: "insufficient_scope".to_string() });
+        return Err(AuthError::UnauthorizedClient {
+            client_id: "insufficient_scope".to_string(),
+        });
     }
 
     // Log successful userinfo access
@@ -2228,11 +2402,16 @@ async fn store_access_token_metadata(
         exp: Some(exp),
         iat: Some(now),
         sub: subject,
-        token_binding: Some(crate::security::generate_token_binding("unknown", "unknown")),
+        token_binding: Some(crate::security::generate_token_binding(
+            "unknown", "unknown",
+        )),
         mfa_verified: false,
     };
 
-    state.store.set_token_record(access_token, &record, Some(expiry_secs)).await?;
+    state
+        .store
+        .set_token_record(access_token, &record, Some(expiry_secs))
+        .await?;
 
     Ok(())
 }
@@ -2266,7 +2445,13 @@ async fn create_id_token(subject: Option<String>, now: i64, exp: i64) -> Option<
     let iss_val =
         std::env::var("EXTERNAL_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let sub_val = subject.as_deref().unwrap_or("service");
-    let claims = IdClaims { iss: &iss_val, sub: sub_val, aud: None, exp, iat: now };
+    let claims = IdClaims {
+        iss: &iss_val,
+        sub: sub_val,
+        aud: None,
+        exp,
+        iat: now,
+    };
 
     jsonwebtoken::encode(&header, &claims, &encoding_key).ok()
 }
@@ -2304,8 +2489,11 @@ async fn issue_new_token(
         .set_refresh_token_association(&refresh_token, &access_token, REFRESH_TOKEN_EXPIRY_SECONDS)
         .await?;
 
-    let id_token =
-        if make_id_token { create_id_token(subject.clone(), now, exp).await } else { None };
+    let id_token = if make_id_token {
+        create_id_token(subject.clone(), now, exp).await
+    } else {
+        None
+    };
 
     Ok(Json(TokenResponse {
         access_token,
@@ -2349,15 +2537,20 @@ pub async fn revoke_token(
     // In TEST_MODE, bypass client authentication to simplify integration tests
     if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) = if let Some(auth_header) =
-            headers.get(axum::http::header::AUTHORIZATION)
-        {
-            let header_val = auth_header.to_str().unwrap_or("");
-            if let Some(b64) = header_val.strip_prefix("Basic ") {
-                if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
-                    if let Ok(pair) = std::str::from_utf8(&decoded) {
-                        let mut parts = pair.splitn(2, ':');
-                        (parts.next().map(|s| s.to_string()), parts.next().map(|s| s.to_string()))
+        let (cid_opt, csec_opt) =
+            if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+                let header_val = auth_header.to_str().unwrap_or("");
+                if let Some(b64) = header_val.strip_prefix("Basic ") {
+                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        if let Ok(pair) = std::str::from_utf8(&decoded) {
+                            let mut parts = pair.splitn(2, ':');
+                            (
+                                parts.next().map(|s| s.to_string()),
+                                parts.next().map(|s| s.to_string()),
+                            )
+                        } else {
+                            (None, None)
+                        }
                     } else {
                         (None, None)
                     }
@@ -2366,10 +2559,7 @@ pub async fn revoke_token(
                 }
             } else {
                 (None, None)
-            }
-        } else {
-            (None, None)
-        };
+            };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
         if state.client_credentials.get(&client_id) != Some(&client_secret) {
@@ -2398,7 +2588,9 @@ pub async fn revoke_token(
             [(
                 "token_type_hint".to_string(),
                 serde_json::Value::String(
-                    form.token_type_hint.clone().unwrap_or_else(|| "access_token".to_string()),
+                    form.token_type_hint
+                        .clone()
+                        .unwrap_or_else(|| "access_token".to_string()),
                 ),
             )]
             .into(),
@@ -2465,7 +2657,10 @@ pub fn app(state: AppState) -> Router {
             "/oauth/google/callback",
             get(crate::oidc_google::google_callback),
         )
-        .route("/oauth/microsoft/login", get(crate::oidc_microsoft::microsoft_login))
+        .route(
+            "/oauth/microsoft/login",
+            get(crate::oidc_microsoft::microsoft_login),
+        )
         .route(
             "/oauth/microsoft/callback",
             get(crate::oidc_microsoft::microsoft_callback),
@@ -2489,12 +2684,27 @@ pub fn app(state: AppState) -> Router {
         .route("/session/:id", get(get_session_endpoint))
         .route("/session/:id", delete(delete_session_endpoint))
         .route("/session/:id/refresh", post(refresh_session_endpoint))
-        .route("/session/invalidate-user/:user_id", post(invalidate_user_sessions_endpoint))
+        .route(
+            "/session/invalidate-user/:user_id",
+            post(invalidate_user_sessions_endpoint),
+        )
         // Enhanced MFA v2 endpoints
-        .route("/mfa/webauthn/register/challenge", post(crate::webauthn::begin_register))
-        .route("/mfa/webauthn/register/finish", post(crate::webauthn::finish_register))
-        .route("/mfa/webauthn/assert/challenge", post(crate::webauthn::begin_assert))
-        .route("/mfa/webauthn/assert/finish", post(crate::webauthn::finish_assert))
+        .route(
+            "/mfa/webauthn/register/challenge",
+            post(crate::webauthn::begin_register),
+        )
+        .route(
+            "/mfa/webauthn/register/finish",
+            post(crate::webauthn::finish_register),
+        )
+        .route(
+            "/mfa/webauthn/assert/challenge",
+            post(crate::webauthn::begin_assert),
+        )
+        .route(
+            "/mfa/webauthn/assert/finish",
+            post(crate::webauthn::finish_assert),
+        )
         .merge(crate::scim::router());
 
     // Admin-protected routes (require admin authentication and authorization)
@@ -2503,14 +2713,23 @@ pub fn app(state: AppState) -> Router {
         .route("/metrics", get(crate::metrics::metrics_handler))
         .route("/admin/health", get(admin_health))
         // Key rotation admin endpoints
-        .route("/admin/keys/rotation/status", get(admin_get_rotation_status))
+        .route(
+            "/admin/keys/rotation/status",
+            get(admin_get_rotation_status),
+        )
         .route("/admin/keys/rotation/force", post(admin_force_rotation))
         // Rate limiting admin endpoints
-        .route("/admin/rate-limit/stats", get(get_rate_limit_stats_endpoint))
+        .route(
+            "/admin/rate-limit/stats",
+            get(get_rate_limit_stats_endpoint),
+        )
         // Policy cache admin endpoints
         .route("/admin/policy-cache/stats", get(get_policy_cache_stats))
         .route("/admin/policy-cache/clear", post(clear_policy_cache))
-        .route("/admin/policy-cache/invalidate", post(invalidate_policy_cache))
+        .route(
+            "/admin/policy-cache/invalidate",
+            post(invalidate_policy_cache),
+        )
         .nest("/admin/api-keys", api_key_router)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -2525,7 +2744,9 @@ pub fn app(state: AppState) -> Router {
                 .layer(TraceLayer::new_for_http())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
                 .layer(PropagateRequestIdLayer::x_request_id())
-                .layer(axum::middleware::from_fn(crate::metrics::metrics_middleware))
+                .layer(axum::middleware::from_fn(
+                    crate::metrics::metrics_middleware,
+                ))
                 .layer(cors)
                 .layer(axum::middleware::from_fn_with_state(
                     state.backpressure_state.clone(),
@@ -2534,12 +2755,18 @@ pub fn app(state: AppState) -> Router {
                 .layer(axum::middleware::from_fn(
                     crate::backpressure::adaptive_body_limit_middleware,
                 ))
-                .layer(axum::middleware::from_fn(crate::security::validate_request_signature))
+                .layer(axum::middleware::from_fn(
+                    crate::security::validate_request_signature,
+                ))
                 .layer(axum::middleware::from_fn(
                     crate::per_ip_rate_limit::per_ip_rate_limit_middleware,
                 ))
-                .layer(axum::middleware::from_fn(crate::rate_limit_optimized::optimized_rate_limit))
-                .layer(axum::middleware::from_fn(crate::security_headers::add_security_headers))
+                .layer(axum::middleware::from_fn(
+                    crate::rate_limit_optimized::optimized_rate_limit,
+                ))
+                .layer(axum::middleware::from_fn(
+                    crate::security_headers::add_security_headers,
+                ))
                 .layer(crate::security::security_middleware()),
         )
         .with_state(state);
@@ -2557,7 +2784,15 @@ pub fn app(state: AppState) -> Router {
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(introspect, issue_token, revoke_token, userinfo, oauth_metadata, oidc_metadata, jwks),
+    paths(
+        introspect,
+        issue_token,
+        revoke_token,
+        userinfo,
+        oauth_metadata,
+        oidc_metadata,
+        jwks
+    ),
     components(schemas(
         HealthResponse,
         IntrospectRequest,

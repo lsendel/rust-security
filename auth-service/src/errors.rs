@@ -52,7 +52,10 @@ pub enum AuthError {
     #[error("Redis connection error")]
     RedisConnectionError { source: redis::RedisError },
     #[error("Token store error: {operation}")]
-    TokenStoreError { operation: String, source: Box<dyn std::error::Error + Send + Sync> },
+    TokenStoreError {
+        operation: String,
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     #[error("Serialization error")]
     SerializationError { source: serde_json::Error },
 
@@ -68,13 +71,20 @@ pub enum AuthError {
 
     // Cryptographic errors
     #[error("Key generation failed")]
-    KeyGenerationError { source: Box<dyn std::error::Error + Send + Sync> },
+    KeyGenerationError {
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     #[error("JWT signing failed")]
-    JwtSigningError { source: Box<dyn std::error::Error + Send + Sync> },
+    JwtSigningError {
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     #[error("JWT verification failed")]
     JwtVerificationError { reason: String },
     #[error("Cryptographic operation failed")]
-    CryptographicError { operation: String, source: Box<dyn std::error::Error + Send + Sync> },
+    CryptographicError {
+        operation: String,
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 
     // Network/HTTP errors
     #[error("HTTP client error")]
@@ -131,7 +141,10 @@ pub enum AuthError {
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        AuthError::InternalError { error_id: Uuid::new_v4(), context: err.to_string() }
+        AuthError::InternalError {
+            error_id: Uuid::new_v4(),
+            context: err.to_string(),
+        }
     }
 }
 
@@ -172,7 +185,10 @@ impl ErrorResponse {
         if self.details.is_none() {
             self.details = Some(HashMap::new());
         }
-        self.details.as_mut().unwrap().insert(key.to_string(), value);
+        self.details
+            .as_mut()
+            .unwrap()
+            .insert(key.to_string(), value);
         self
     }
 
@@ -228,7 +244,10 @@ impl IntoResponse for AuthError {
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new(
                     "unsupported_response_type",
-                    &format!("unsupported response type: {}", redact_error(&response_type)),
+                    &format!(
+                        "unsupported response type: {}",
+                        redact_error(&response_type)
+                    ),
                 ),
             ),
             AuthError::UnauthorizedClient { client_id } => (
@@ -242,9 +261,10 @@ impl IntoResponse for AuthError {
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new("invalid_request", &redact_error(&reason)),
             ),
-            AuthError::Forbidden { reason } => {
-                (StatusCode::FORBIDDEN, ErrorResponse::new("access_denied", &redact_error(&reason)))
-            }
+            AuthError::Forbidden { reason } => (
+                StatusCode::FORBIDDEN,
+                ErrorResponse::new("access_denied", &redact_error(&reason)),
+            ),
             AuthError::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 ErrorResponse::new("rate_limit_exceeded", "rate limit exceeded"),
@@ -263,7 +283,10 @@ impl IntoResponse for AuthError {
                     "invalid_request",
                     &format!("validation failed for field: {}", redact_error(&field)),
                 )
-                .with_detail("validation_error", serde_json::Value::String(redact_error(&reason))),
+                .with_detail(
+                    "validation_error",
+                    serde_json::Value::String(redact_error(&reason)),
+                ),
             ),
             AuthError::ScimFilterError { filter: _, reason } => (
                 StatusCode::BAD_REQUEST,
@@ -283,7 +306,10 @@ impl IntoResponse for AuthError {
             ),
             AuthError::NotFound { resource } => (
                 StatusCode::NOT_FOUND,
-                ErrorResponse::new("not_found", &format!("{} not found", resource.to_lowercase())),
+                ErrorResponse::new(
+                    "not_found",
+                    &format!("{} not found", resource.to_lowercase()),
+                ),
             ),
             AuthError::SessionError { reason } => (
                 StatusCode::BAD_REQUEST,
@@ -294,9 +320,10 @@ impl IntoResponse for AuthError {
                 ErrorResponse::new("mfa_required", "multi-factor authentication required")
                     .with_detail("challenge_id", serde_json::Value::String(challenge_id)),
             ),
-            AuthError::MfaVerificationFailed { reason } => {
-                (StatusCode::UNAUTHORIZED, ErrorResponse::new("mfa_failed", &redact_error(&reason)))
-            }
+            AuthError::MfaVerificationFailed { reason } => (
+                StatusCode::UNAUTHORIZED,
+                ErrorResponse::new("mfa_failed", &redact_error(&reason)),
+            ),
             AuthError::OAuthStateMismatch => (
                 StatusCode::BAD_REQUEST,
                 ErrorResponse::new("invalid_request", "OAuth state parameter mismatch"),
@@ -390,7 +417,10 @@ impl IntoResponse for AuthError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 ErrorResponse::new(
                     "service_unavailable",
-                    &format!("service temporarily unavailable: {}", redact_error(&service)),
+                    &format!(
+                        "service temporarily unavailable: {}",
+                        redact_error(&service)
+                    ),
                 ),
             ),
             AuthError::ConfigurationError { field, reason } => {
@@ -493,16 +523,18 @@ impl From<reqwest::Error> for AuthError {
 impl From<jsonwebtoken::errors::Error> for AuthError {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
         match err.kind() {
-            jsonwebtoken::errors::ErrorKind::InvalidToken => {
-                AuthError::JwtVerificationError { reason: "invalid token format".to_string() }
-            }
-            jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                AuthError::JwtVerificationError { reason: "invalid signature".to_string() }
-            }
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                AuthError::JwtVerificationError { reason: "token expired".to_string() }
-            }
-            _ => AuthError::JwtVerificationError { reason: "token validation failed".to_string() },
+            jsonwebtoken::errors::ErrorKind::InvalidToken => AuthError::JwtVerificationError {
+                reason: "invalid token format".to_string(),
+            },
+            jsonwebtoken::errors::ErrorKind::InvalidSignature => AuthError::JwtVerificationError {
+                reason: "invalid signature".to_string(),
+            },
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::JwtVerificationError {
+                reason: "token expired".to_string(),
+            },
+            _ => AuthError::JwtVerificationError {
+                reason: "token validation failed".to_string(),
+            },
         }
     }
 }
@@ -511,7 +543,10 @@ impl From<anyhow::Error> for AuthError {
     fn from(err: anyhow::Error) -> Self {
         let error_id = uuid::Uuid::new_v4();
         tracing::error!(error_id = %error_id, error = %redact_log(&err.to_string()), "Converting anyhow error to AuthError");
-        AuthError::InternalError { error_id, context: format!("Internal error: {}", err) }
+        AuthError::InternalError {
+            error_id,
+            context: format!("Internal error: {}", err),
+        }
     }
 }
 
@@ -550,12 +585,18 @@ fn redact_error_with_context(input: &str, context: &str) -> String {
 pub fn internal_error(context: &str) -> AuthError {
     let error_id = Uuid::new_v4();
     tracing::error!(error_id = %error_id, context = %redact_log(context), "Internal error created");
-    AuthError::InternalError { error_id, context: context.to_string() }
+    AuthError::InternalError {
+        error_id,
+        context: context.to_string(),
+    }
 }
 
 /// Create a validation error
 pub fn validation_error(field: &str, reason: &str) -> AuthError {
-    AuthError::ValidationError { field: field.to_string(), reason: reason.to_string() }
+    AuthError::ValidationError {
+        field: field.to_string(),
+        reason: reason.to_string(),
+    }
 }
 
 /// Create a token store error
@@ -563,7 +604,10 @@ pub fn token_store_error(
     operation: &str,
     source: Box<dyn std::error::Error + Send + Sync>,
 ) -> AuthError {
-    AuthError::TokenStoreError { operation: operation.to_string(), source }
+    AuthError::TokenStoreError {
+        operation: operation.to_string(),
+        source,
+    }
 }
 
 #[cfg(test)]

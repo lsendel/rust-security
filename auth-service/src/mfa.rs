@@ -104,7 +104,12 @@ async fn persist_secret(user_id: &str, secret: &[u8]) {
 async fn set_verified(user_id: &str) {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:totp:{}:verified", user_id);
-        let _ = redis::cmd("SET").arg(&key).arg("1").query_async::<String>(&mut conn).await.ok();
+        let _ = redis::cmd("SET")
+            .arg(&key)
+            .arg("1")
+            .query_async::<String>(&mut conn)
+            .await
+            .ok();
     }
 }
 
@@ -112,7 +117,12 @@ async fn set_last_verified(user_id: &str) {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:last_verified:{}", user_id);
         let now = now_unix() as i64;
-        let _ = redis::cmd("SET").arg(&key).arg(now).query_async::<String>(&mut conn).await.ok();
+        let _ = redis::cmd("SET")
+            .arg(&key)
+            .arg(now)
+            .query_async::<String>(&mut conn)
+            .await
+            .ok();
     }
 }
 
@@ -156,7 +166,11 @@ async fn is_totp_code_used(user_id: &str, code: &str) -> bool {
         let nonce_key = format!("mfa:totp:nonce:{}:{}", user_id, code);
 
         // Check if the nonce exists
-        match redis::cmd("EXISTS").arg(&nonce_key).query_async::<i64>(&mut conn).await {
+        match redis::cmd("EXISTS")
+            .arg(&nonce_key)
+            .query_async::<i64>(&mut conn)
+            .await
+        {
             Ok(exists) => exists == 1,
             Err(_) => false, // If we can't check, assume not used
         }
@@ -168,8 +182,10 @@ async fn is_totp_code_used(user_id: &str, code: &str) -> bool {
 pub async fn is_recently_verified(user_id: &str, window_secs: u64) -> bool {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:last_verified:{}", user_id);
-        if let Ok(Some(ts)) =
-            redis::cmd("GET").arg(&key).query_async::<Option<i64>>(&mut conn).await
+        if let Ok(Some(ts)) = redis::cmd("GET")
+            .arg(&key)
+            .query_async::<Option<i64>>(&mut conn)
+            .await
         {
             let now = now_unix() as i64;
             return now.saturating_sub(ts) <= window_secs as i64;
@@ -185,14 +201,19 @@ fn hash_backup_code(code: &str) -> String {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
 
-    argon2.hash_password(code.as_bytes(), &salt).expect("Failed to hash backup code").to_string()
+    argon2
+        .hash_password(code.as_bytes(), &salt)
+        .expect("Failed to hash backup code")
+        .to_string()
 }
 
 fn verify_backup_code(code: &str, hash: &str) -> bool {
     // Verify a backup code against its Argon2 hash
     if let Ok(parsed_hash) = PasswordHash::new(hash) {
         let argon2 = Argon2::default();
-        argon2.verify_password(code.as_bytes(), &parsed_hash).is_ok()
+        argon2
+            .verify_password(code.as_bytes(), &parsed_hash)
+            .is_ok()
     } else {
         false
     }
@@ -202,15 +223,28 @@ async fn persist_backup_codes(user_id: &str, codes: &[String]) {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:totp:{}:backup", user_id);
         let hashed: Vec<String> = codes.iter().map(|c| hash_backup_code(c)).collect();
-        let _ = redis::cmd("DEL").arg(&key).query_async::<i64>(&mut conn).await.ok();
-        let _ = redis::cmd("SADD").arg(&key).arg(hashed).query_async::<i64>(&mut conn).await.ok();
+        let _ = redis::cmd("DEL")
+            .arg(&key)
+            .query_async::<i64>(&mut conn)
+            .await
+            .ok();
+        let _ = redis::cmd("SADD")
+            .arg(&key)
+            .arg(hashed)
+            .query_async::<i64>(&mut conn)
+            .await
+            .ok();
         let ttl = std::env::var("MFA_TOTP_BACKUP_TTL_SECS")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
         if ttl > 0 {
-            let _ =
-                redis::cmd("EXPIRE").arg(&key).arg(ttl).query_async::<i64>(&mut conn).await.ok();
+            let _ = redis::cmd("EXPIRE")
+                .arg(&key)
+                .arg(ttl)
+                .query_async::<i64>(&mut conn)
+                .await
+                .ok();
         }
     }
 }
@@ -220,8 +254,10 @@ async fn consume_backup_code(user_id: &str, code: &str) -> bool {
         let key = format!("mfa:totp:{}:backup", user_id);
 
         // Fetch all hashed backup codes from Redis
-        if let Ok(stored_hashes) =
-            redis::cmd("SMEMBERS").arg(&key).query_async::<Vec<String>>(&mut conn).await
+        if let Ok(stored_hashes) = redis::cmd("SMEMBERS")
+            .arg(&key)
+            .query_async::<Vec<String>>(&mut conn)
+            .await
         {
             // Find matching hash by verifying against each stored hash
             for stored_hash in stored_hashes {
@@ -243,7 +279,10 @@ async fn consume_backup_code(user_id: &str, code: &str) -> bool {
 }
 
 fn now_unix() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 fn hotp(secret: &[u8], counter: u64) -> u32 {
@@ -299,10 +338,17 @@ pub async fn totp_register(
     let mut store = MFA_STORE.write().await;
     store.insert(
         req.user_id.clone(),
-        TotpRecord { secret, verified: false, backup_codes: HashSet::new() },
+        TotpRecord {
+            secret,
+            verified: false,
+            backup_codes: HashSet::new(),
+        },
     );
 
-    Json(TotpRegisterResponse { secret_base32: secret_b32, otpauth_url: uri })
+    Json(TotpRegisterResponse {
+        secret_base32: secret_b32,
+        otpauth_url: uri,
+    })
 }
 
 pub async fn totp_verify(
@@ -315,7 +361,9 @@ pub async fn totp_verify(
         let mut w = MFA_STORE.write().await;
         if let Some(rec_w) = w.get_mut(&req.user_id) {
             // Find and remove the matching hashed backup code
-            rec_w.backup_codes.retain(|hash| !verify_backup_code(&req.code, hash));
+            rec_w
+                .backup_codes
+                .retain(|hash| !verify_backup_code(&req.code, hash));
             rec_w.verified = true;
         }
         return Json(TotpVerifyResponse { verified: true });
@@ -437,8 +485,10 @@ pub async fn totp_generate_backup_codes(
     for _ in 0..8 {
         let mut b = [0u8; 10];
         getrandom::getrandom(&mut b).expect("random");
-        let code: String =
-            b.iter().map(|x| alphabet[(*x as usize) % alphabet.len()] as char).collect();
+        let code: String = b
+            .iter()
+            .map(|x| alphabet[(*x as usize) % alphabet.len()] as char)
+            .collect();
         codes.push(code);
     }
     persist_backup_codes(&req.user_id, &codes).await;
@@ -502,10 +552,17 @@ pub async fn otp_send(
             .ok()
             .and_then(|s| s.parse::<i64>().ok())
             .unwrap_or(5);
-        if let Ok(count) = redis::cmd("INCR").arg(&rl_key).query_async::<i64>(&mut conn).await {
+        if let Ok(count) = redis::cmd("INCR")
+            .arg(&rl_key)
+            .query_async::<i64>(&mut conn)
+            .await
+        {
             if count == 1 {
-                let _: Result<i64, _> =
-                    redis::cmd("EXPIRE").arg(&rl_key).arg(3600).query_async(&mut conn).await;
+                let _: Result<i64, _> = redis::cmd("EXPIRE")
+                    .arg(&rl_key)
+                    .arg(3600)
+                    .query_async(&mut conn)
+                    .await;
             }
             if count > sends_per_hour {
                 tracing::warn!(target = "mfa", user = %redact_log(&req.user_id), "OTP rate limit exceeded");
@@ -539,10 +596,16 @@ pub async fn otp_send(
         _ => Box::new(MockSender),
     };
     let send_res = if req.channel.eq_ignore_ascii_case("sms") {
-        provider.send_sms(&req.destination, &format!("Your code is {}", code)).await
+        provider
+            .send_sms(&req.destination, &format!("Your code is {}", code))
+            .await
     } else {
         provider
-            .send_email(&req.destination, "Your verification code", &format!("Code: {}", code))
+            .send_email(
+                &req.destination,
+                "Your verification code",
+                &format!("Code: {}", code),
+            )
             .await
     };
     if send_res.is_err() {
@@ -586,8 +649,10 @@ pub async fn otp_verify(
 ) -> Json<OtpVerifyResponse> {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("mfa:otp:{}", req.user_id);
-        if let Ok(Some(stored)) =
-            redis::cmd("GET").arg(&key).query_async::<Option<String>>(&mut conn).await
+        if let Ok(Some(stored)) = redis::cmd("GET")
+            .arg(&key)
+            .query_async::<Option<String>>(&mut conn)
+            .await
         {
             if verify_otp(&req.code, &stored) {
                 let _: Result<i64, _> = redis::cmd("DEL").arg(&key).query_async(&mut conn).await;
@@ -642,8 +707,10 @@ pub async fn mfa_session_verify(
     headers: axum::http::HeaderMap,
     Json(body): Json<MfaSessionVerifyRequest>,
 ) -> Json<MfaSessionVerifyResponse> {
-    let auth =
-        headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     let token = auth.strip_prefix("Bearer ").unwrap_or("");
     if !token.is_empty() {
         let window = std::env::var("MFA_VERIFIED_WINDOW_SECS")
@@ -652,7 +719,10 @@ pub async fn mfa_session_verify(
             .unwrap_or(300);
         if let Ok(Some(mut record)) = state.store.get_token_record(token).await {
             record.mfa_verified = true;
-            let _ = state.store.set_token_record(token, &record, Some(window)).await;
+            let _ = state
+                .store
+                .set_token_record(token, &record, Some(window))
+                .await;
         }
     }
     set_last_verified(&body.user_id).await;

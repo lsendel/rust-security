@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
-use deadpool_redis::{Config, Pool, Runtime, redis::AsyncCommands};
+use deadpool_redis::{redis::AsyncCommands, Config, Pool, Runtime};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 // This new struct encapsulates all storage logic.
 // It maintains the original behavior: in-memory for users/groups,
@@ -28,7 +28,7 @@ pub struct HybridStore {
 impl HybridStore {
     pub async fn new() -> Self {
         let redis_pool = Self::create_redis_pool().await;
-        
+
         Self {
             redis_pool,
             users: Arc::new(RwLock::new(HashMap::new())),
@@ -39,15 +39,15 @@ impl HybridStore {
             refresh_reuse_markers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     async fn create_redis_pool() -> Option<Pool> {
         let redis_url = std::env::var("REDIS_URL").ok()?;
-        
+
         info!("Initializing Redis connection pool");
-        
+
         let config = Config::from_url(&redis_url);
         let pool = config.create_pool(Some(Runtime::Tokio1)).ok()?;
-        
+
         // Test the connection
         match pool.get().await {
             Ok(_conn) => {
@@ -63,15 +63,13 @@ impl HybridStore {
 
     async fn get_redis_connection(&self) -> Option<deadpool_redis::Connection> {
         match &self.redis_pool {
-            Some(pool) => {
-                match pool.get().await {
-                    Ok(conn) => Some(conn),
-                    Err(e) => {
-                        warn!("Failed to get Redis connection from pool: {}", e);
-                        None
-                    }
+            Some(pool) => match pool.get().await {
+                Ok(conn) => Some(conn),
+                Err(e) => {
+                    warn!("Failed to get Redis connection from pool: {}", e);
+                    None
                 }
-            }
+            },
             None => None,
         }
     }
@@ -115,7 +113,10 @@ impl Store for HybridStore {
         &self,
         user: &ScimUser,
     ) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
-        self.users.write().await.insert(user.id.clone(), user.clone());
+        self.users
+            .write()
+            .await
+            .insert(user.id.clone(), user.clone());
         Ok(user.clone())
     }
 
@@ -155,7 +156,10 @@ impl Store for HybridStore {
         &self,
         group: &ScimGroup,
     ) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
-        self.groups.write().await.insert(group.id.clone(), group.clone());
+        self.groups
+            .write()
+            .await
+            .insert(group.id.clone(), group.clone());
         Ok(group.clone())
     }
 
@@ -172,7 +176,7 @@ impl Store for HybridStore {
         ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let record_json = serde_json::to_string(record)?;
-        
+
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("authcode:{}", code);
@@ -185,11 +189,14 @@ impl Store for HybridStore {
                     set_result
                 }
             };
-                
+
             match result {
                 Ok(_) => {
                     // Successfully stored in Redis, also store in memory as backup
-                    self.auth_codes.write().await.insert(code.to_string(), record_json);
+                    self.auth_codes
+                        .write()
+                        .await
+                        .insert(code.to_string(), record_json);
                     return Ok(());
                 }
                 Err(e) => {
@@ -197,10 +204,13 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         warn!("Storing auth code in memory as fallback");
-        self.auth_codes.write().await.insert(code.to_string(), record_json);
+        self.auth_codes
+            .write()
+            .await
+            .insert(code.to_string(), record_json);
         Ok(())
     }
 
@@ -226,7 +236,7 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         if let Some(json) = self.auth_codes.write().await.remove(code) {
             Ok(serde_json::from_str(&json)?)
@@ -255,7 +265,7 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory
         Ok(self.tokens.read().await.get(token).cloned())
     }
@@ -267,7 +277,7 @@ impl Store for HybridStore {
         ttl_secs: Option<u64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let record_json = serde_json::to_string(record)?;
-        
+
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("token_record:{}", token);
@@ -282,11 +292,14 @@ impl Store for HybridStore {
             } else {
                 conn.set::<_, _, ()>(&key, &record_json).await
             };
-            
+
             match redis_result {
                 Ok(_) => {
                     // Successfully stored in Redis, also store in memory as backup
-                    self.tokens.write().await.insert(token.to_string(), record.clone());
+                    self.tokens
+                        .write()
+                        .await
+                        .insert(token.to_string(), record.clone());
                     return Ok(());
                 }
                 Err(e) => {
@@ -294,10 +307,13 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         warn!("Storing token record in memory as fallback");
-        self.tokens.write().await.insert(token.to_string(), record.clone());
+        self.tokens
+            .write()
+            .await
+            .insert(token.to_string(), record.clone());
         Ok(())
     }
 
@@ -328,8 +344,7 @@ impl Store for HybridStore {
                     let _: Result<(), _> = conn.expire(&key, ttl_secs as i64).await;
                 }
                 set_result
-            } 
-            {
+            } {
                 Ok(_) => {
                     // Successfully stored in Redis, also store in memory as backup
                     self.refresh_tokens
@@ -343,7 +358,7 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         warn!("Storing refresh token in memory as fallback");
         self.refresh_tokens
@@ -358,7 +373,7 @@ impl Store for HybridStore {
         refresh_token: &str,
     ) -> Result<Option<String>, Box<dyn StdError + Send + Sync>> {
         let mut access_token: Option<String> = None;
-        
+
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_token:{}", refresh_token);
@@ -376,7 +391,7 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage if Redis failed or returned None
         if access_token.is_none() {
             access_token = self.refresh_tokens.write().await.remove(refresh_token);
@@ -384,18 +399,21 @@ impl Store for HybridStore {
 
         if access_token.is_some() {
             // Mark as reused for security monitoring
-            self.refresh_reuse_markers.write().await.insert(refresh_token.to_string(), ());
-            
+            self.refresh_reuse_markers
+                .write()
+                .await
+                .insert(refresh_token.to_string(), ());
+
             if let Some(mut conn) = self.get_redis_connection().await {
                 let key = format!("refresh_reused:{}", refresh_token);
                 // Reuse detection window 10 minutes
                 let _: Result<(), _> = {
-                        let set_result = conn.set::<_, _, ()>(&key, 1).await;
-                        if set_result.is_ok() {
-                            let _: Result<(), _> = conn.expire(&key, 600i64).await;
-                        }
-                        set_result
-                    };
+                    let set_result = conn.set::<_, _, ()>(&key, 1).await;
+                    if set_result.is_ok() {
+                        let _: Result<(), _> = conn.expire(&key, 600i64).await;
+                    }
+                    set_result
+                };
             }
         }
 
@@ -416,9 +434,13 @@ impl Store for HybridStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory check
-        Ok(self.refresh_reuse_markers.read().await.contains_key(refresh_token))
+        Ok(self
+            .refresh_reuse_markers
+            .read()
+            .await
+            .contains_key(refresh_token))
     }
 
     // === Health Check ===
@@ -432,7 +454,6 @@ impl Store for HybridStore {
     }
 
     async fn get_metrics(&self) -> Result<common::StoreMetrics, Box<dyn StdError + Send + Sync>> {
-
         let users_total = self.users.read().await.len() as u64;
         let groups_total = self.groups.read().await.len() as u64;
 

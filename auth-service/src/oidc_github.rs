@@ -69,7 +69,9 @@ pub async fn github_callback(
 ) -> impl IntoResponse {
     // Check for OAuth errors first
     if let Some(error) = q.error {
-        let error_desc = q.error_description.unwrap_or_else(|| "Unknown error".to_string());
+        let error_desc = q
+            .error_description
+            .unwrap_or_else(|| "Unknown error".to_string());
         return Json(serde_json::json!({
             "error": error,
             "error_description": error_desc,
@@ -179,8 +181,9 @@ async fn exchange_code_for_token(
 
     // Check for errors in the response
     if let Some(error) = token_response.error {
-        let description =
-            token_response.error_description.unwrap_or_else(|| "Unknown error".to_string());
+        let description = token_response
+            .error_description
+            .unwrap_or_else(|| "Unknown error".to_string());
         return Err(format!("GitHub OAuth error: {} - {}", error, description).into());
     }
 
@@ -241,9 +244,11 @@ async fn get_primary_email(
         .await?;
 
     if !emails_response.status().is_success() {
-        return Err(
-            format!("Failed to get GitHub user emails: {}", emails_response.status()).into()
-        );
+        return Err(format!(
+            "Failed to get GitHub user emails: {}",
+            emails_response.status()
+        )
+        .into());
     }
 
     let emails: Vec<GitHubEmail> = emails_response.json().await?;

@@ -28,7 +28,10 @@ async fn spawn_app() -> String {
     // Set Google envs to satisfy id_token flow where needed
     std::env::set_var("GOOGLE_CLIENT_ID", "test-client-id");
     std::env::set_var("GOOGLE_CLIENT_SECRET", "test-client-secret");
-    std::env::set_var("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth/google/callback");
+    std::env::set_var(
+        "GOOGLE_REDIRECT_URI",
+        "http://localhost:8080/oauth/google/callback",
+    );
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
@@ -74,7 +77,11 @@ async fn test_complete_oauth_flow() {
     assert!(metadata.get("token_endpoint").is_some());
 
     // Test 3: JWKS endpoint
-    let response = client.get(format!("{}/jwks.json", base)).send().await.unwrap();
+    let response = client
+        .get(format!("{}/jwks.json", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), 200);
     let jwks: Value = response.json().await.unwrap();
     assert!(jwks.get("keys").is_some());
@@ -90,8 +97,16 @@ async fn test_complete_oauth_flow() {
 
     assert_eq!(response.status(), 200);
     let token_response: Value = response.json().await.unwrap();
-    let access_token = token_response.get("access_token").unwrap().as_str().unwrap();
-    let refresh_token = token_response.get("refresh_token").unwrap().as_str().unwrap();
+    let access_token = token_response
+        .get("access_token")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let refresh_token = token_response
+        .get("refresh_token")
+        .unwrap()
+        .as_str()
+        .unwrap();
     assert!(access_token.starts_with("tk_"));
     assert!(refresh_token.starts_with("rt_"));
 
@@ -109,21 +124,35 @@ async fn test_complete_oauth_flow() {
 
     assert_eq!(response.status(), 200);
     let introspect_response: Value = response.json().await.unwrap();
-    assert!(introspect_response.get("active").unwrap().as_bool().unwrap());
-    assert_eq!(introspect_response.get("scope").unwrap().as_str().unwrap(), "read write");
+    assert!(introspect_response
+        .get("active")
+        .unwrap()
+        .as_bool()
+        .unwrap());
+    assert_eq!(
+        introspect_response.get("scope").unwrap().as_str().unwrap(),
+        "read write"
+    );
 
     // Test 6: Token refresh
     let response = client
         .post(format!("{}/oauth/token", base))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .body(format!(
+            "grant_type=refresh_token&refresh_token={}",
+            refresh_token
+        ))
         .send()
         .await
         .unwrap();
 
     assert_eq!(response.status(), 200);
     let new_token_response: Value = response.json().await.unwrap();
-    let new_access_token = new_token_response.get("access_token").unwrap().as_str().unwrap();
+    let new_access_token = new_token_response
+        .get("access_token")
+        .unwrap()
+        .as_str()
+        .unwrap();
     assert!(new_access_token.starts_with("tk_"));
     assert_ne!(new_access_token, access_token);
 
@@ -151,7 +180,11 @@ async fn test_complete_oauth_flow() {
         .unwrap();
 
     let introspect_response: Value = response.json().await.unwrap();
-    assert!(!introspect_response.get("active").unwrap().as_bool().unwrap());
+    assert!(!introspect_response
+        .get("active")
+        .unwrap()
+        .as_bool()
+        .unwrap());
 }
 
 #[tokio::test]
@@ -234,7 +267,12 @@ async fn test_rate_limiting() {
         .unwrap();
     assert_eq!(token_res.status(), 200);
     let token_json: Value = token_res.json().await.unwrap();
-    let access_token = token_json.get("access_token").unwrap().as_str().unwrap().to_string();
+    let access_token = token_json
+        .get("access_token")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Enable rate limit for this portion (disable TEST_MODE)
     std::env::set_var("TEST_MODE", "0");
@@ -271,7 +309,10 @@ async fn test_rate_limiting() {
         }
     }
 
-    assert!(rate_limited_count > 0, "Expected some requests to be rate limited");
+    assert!(
+        rate_limited_count > 0,
+        "Expected some requests to be rate limited"
+    );
 
     // Disable again for other tests
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
@@ -346,7 +387,10 @@ async fn test_scim_endpoints() {
     assert_eq!(response.status(), 200);
     let user_response: Value = response.json().await.unwrap();
     assert!(user_response.get("id").is_some());
-    assert_eq!(user_response.get("userName").unwrap().as_str().unwrap(), "test.user@example.com");
+    assert_eq!(
+        user_response.get("userName").unwrap().as_str().unwrap(),
+        "test.user@example.com"
+    );
 }
 
 #[tokio::test]

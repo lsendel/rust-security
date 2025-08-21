@@ -433,7 +433,10 @@ impl MigrationManager {
         algorithm: PQAlgorithm,
         iterations: usize,
     ) -> Result<PerformanceBenchmark> {
-        info!("Running performance benchmark for {:?} with {} iterations", algorithm, iterations);
+        info!(
+            "Running performance benchmark for {:?} with {} iterations",
+            algorithm, iterations
+        );
 
         let start_time = Instant::now();
         let mut durations = Vec::new();
@@ -466,7 +469,9 @@ impl MigrationManager {
                     error!("Benchmark iteration {} failed: {}", i, e);
 
                     if let Some(kid) = manager.current_signing_key_id().await {
-                        let _ = key_manager.record_operation(&kid, KeyOperation::Error, 0).await;
+                        let _ = key_manager
+                            .record_operation(&kid, KeyOperation::Error, 0)
+                            .await;
                     }
                 }
             }
@@ -528,12 +533,18 @@ impl MigrationManager {
             .with_reason("Post-quantum cryptography performance assessment completed".to_string())
             .with_detail("algorithm".to_string(), benchmark.algorithm.clone())
             .with_detail("iterations".to_string(), iterations)
-            .with_detail("avg_duration_ms".to_string(), benchmark.metrics.avg_duration_ms)
+            .with_detail(
+                "avg_duration_ms".to_string(),
+                benchmark.metrics.avg_duration_ms,
+            )
             .with_detail(
                 "throughput_ops_per_sec".to_string(),
                 benchmark.metrics.throughput_ops_per_sec,
             )
-            .with_detail("error_rate_percent".to_string(), benchmark.metrics.error_rate_percent),
+            .with_detail(
+                "error_rate_percent".to_string(),
+                benchmark.metrics.error_rate_percent,
+            ),
         );
 
         Ok(benchmark)
@@ -641,7 +652,10 @@ impl MigrationManager {
         // For now, we'll just log the action
         match trigger {
             RollbackTrigger::PerformanceDegradation(percentage) => {
-                info!("Rollback: Performance degradation {}% exceeded threshold", percentage);
+                info!(
+                    "Rollback: Performance degradation {}% exceeded threshold",
+                    percentage
+                );
                 // Would disable post-quantum algorithms and fallback to classical
             }
             RollbackTrigger::ClientFailures(count) => {
@@ -671,7 +685,12 @@ impl MigrationManager {
             estimated_completion: phases.iter().filter_map(|p| p.target_completion).max(),
             total_estimated_duration: phases
                 .iter()
-                .map(|p| p.actions.iter().map(|a| a.estimated_duration.as_secs()).sum::<u64>())
+                .map(|p| {
+                    p.actions
+                        .iter()
+                        .map(|a| a.estimated_duration.as_secs())
+                        .sum::<u64>()
+                })
                 .sum(),
         }
     }
@@ -805,7 +824,10 @@ fn generate_recommendations(
 }
 
 fn current_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Global migration manager
@@ -828,7 +850,9 @@ pub async fn run_benchmark(
     algorithm: PQAlgorithm,
     iterations: usize,
 ) -> Result<PerformanceBenchmark> {
-    get_migration_manager().run_performance_benchmark(algorithm, iterations).await
+    get_migration_manager()
+        .run_performance_benchmark(algorithm, iterations)
+        .await
 }
 
 /// Generate a compliance report

@@ -319,7 +319,10 @@ impl SecureKeyStorage {
                     private_key.zeroize();
                 }
                 #[cfg(feature = "hybrid-crypto")]
-                PQKeyData::Hybrid { classical, post_quantum } => {
+                PQKeyData::Hybrid {
+                    classical,
+                    post_quantum,
+                } => {
                     match classical {
                         ClassicalKeyData::Ed25519 { private_key, .. } => {
                             private_key.zeroize();
@@ -439,7 +442,11 @@ pub struct PQKeyManager {
 
 impl PQKeyManager {
     pub fn new(policy: KeyRotationPolicy) -> Self {
-        Self { storage: SecureKeyStorage::new(), policy, rotation_task: Arc::new(Mutex::new(None)) }
+        Self {
+            storage: SecureKeyStorage::new(),
+            policy,
+            rotation_task: Arc::new(Mutex::new(None)),
+        }
     }
 
     pub fn default() -> Self {
@@ -476,7 +483,10 @@ impl PQKeyManager {
             .with_outcome("success".to_string())
             .with_reason("Post-quantum key management system started".to_string())
             .with_detail("active_keys".to_string(), active_keys.len())
-            .with_detail("proactive_rotation".to_string(), self.policy.proactive_rotation),
+            .with_detail(
+                "proactive_rotation".to_string(),
+                self.policy.proactive_rotation,
+            ),
         );
 
         Ok(())
@@ -596,7 +606,10 @@ impl PQKeyManager {
             .with_action("pq_emergency_rotate".to_string())
             .with_target("pq_keys".to_string())
             .with_outcome("initiated".to_string())
-            .with_reason(format!("Emergency key rotation triggered by: {:?}", trigger))
+            .with_reason(format!(
+                "Emergency key rotation triggered by: {:?}",
+                trigger
+            ))
             .with_detail("trigger".to_string(), format!("{:?}", trigger)),
         );
 
@@ -623,7 +636,10 @@ impl PQKeyManager {
 
                 let keys_needing_rotation = storage.get_keys_needing_rotation(&policy).await;
                 if !keys_needing_rotation.is_empty() {
-                    info!("Found {} keys needing rotation", keys_needing_rotation.len());
+                    info!(
+                        "Found {} keys needing rotation",
+                        keys_needing_rotation.len()
+                    );
 
                     for kid in keys_needing_rotation {
                         if let Err(e) = storage.rotate_key(&kid, RotationReason::Scheduled).await {
@@ -681,8 +697,10 @@ impl PQKeyManager {
             total_age += current_time - meta.created_at;
 
             let alg_name = format!("{:?}", meta.algorithm);
-            let perf_entry =
-                stats.performance_summary.entry(alg_name).or_insert_with(|| AlgorithmPerformance {
+            let perf_entry = stats
+                .performance_summary
+                .entry(alg_name)
+                .or_insert_with(|| AlgorithmPerformance {
                     total_operations: 0,
                     avg_sign_time_ms: 0.0,
                     avg_verify_time_ms: 0.0,
@@ -729,7 +747,10 @@ impl PQKeyManager {
             // Perform basic integrity checks
             match &key.key_data {
                 #[cfg(feature = "post-quantum")]
-                PQKeyData::Dilithium { public_key, private_key } => {
+                PQKeyData::Dilithium {
+                    public_key,
+                    private_key,
+                } => {
                     // Check key lengths and basic structure
                     match key.security_level {
                         SecurityLevel::Level1 => Ok(public_key.len()
@@ -788,7 +809,10 @@ pub async fn initialize_pq_key_management() -> Result<()> {
 
 /// Helper function to get current timestamp
 fn current_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 #[cfg(test)]

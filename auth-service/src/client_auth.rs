@@ -78,7 +78,8 @@ impl ClientAuthenticator {
             .map_err(|e| internal_error(&format!("Failed to hash client secret: {}", e)))?;
 
         // Store hashed secret and metadata
-        self.client_secrets.insert(client_id.clone(), password_hash.to_string());
+        self.client_secrets
+            .insert(client_id.clone(), password_hash.to_string());
         self.client_metadata.insert(client_id, metadata);
 
         Ok(())
@@ -108,13 +109,19 @@ impl ClientAuthenticator {
                     let parsed_hash = PasswordHash::new(hash)
                         .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
 
-                    let verification_result =
-                        self.argon2.verify_password(client_secret.as_bytes(), &parsed_hash).is_ok();
+                    let verification_result = self
+                        .argon2
+                        .verify_password(client_secret.as_bytes(), &parsed_hash)
+                        .is_ok();
 
                     self.log_auth_attempt(
                         client_id,
                         verification_result,
-                        if verification_result { "success" } else { "invalid_credentials" },
+                        if verification_result {
+                            "success"
+                        } else {
+                            "invalid_credentials"
+                        },
                         ip_address,
                     );
 
@@ -126,7 +133,9 @@ impl ClientAuthenticator {
                 // to align timing and code path with existing clients
                 if !DUMMY_HASH.is_empty() {
                     if let Ok(parsed) = PasswordHash::new(&DUMMY_HASH) {
-                        let _ = self.argon2.verify_password(client_secret.as_bytes(), &parsed);
+                        let _ = self
+                            .argon2
+                            .verify_password(client_secret.as_bytes(), &parsed);
                     }
                 }
 
@@ -153,7 +162,10 @@ impl ClientAuthenticator {
 
     /// Check if client exists and is active
     pub fn is_client_active(&self, client_id: &str) -> bool {
-        self.client_metadata.get(client_id).map(|m| m.is_active).unwrap_or(false)
+        self.client_metadata
+            .get(client_id)
+            .map(|m| m.is_active)
+            .unwrap_or(false)
     }
 
     /// Validate client secret strength
@@ -202,13 +214,20 @@ impl ClientAuthenticator {
         reason: &str,
         ip_address: Option<&str>,
     ) {
-        let severity = if success { SecuritySeverity::Info } else { SecuritySeverity::Warning };
+        let severity = if success {
+            SecuritySeverity::Info
+        } else {
+            SecuritySeverity::Warning
+        };
 
         let mut event = SecurityEvent::new(
             SecurityEventType::Authentication,
             severity,
             "auth-service".to_string(),
-            format!("Client authentication {}", if success { "succeeded" } else { "failed" }),
+            format!(
+                "Client authentication {}",
+                if success { "succeeded" } else { "failed" }
+            ),
         )
         .with_actor("client".to_string())
         .with_action("authenticate".to_string())
@@ -252,10 +271,12 @@ impl ClientAuthenticator {
                     // Use relaxed path in TEST_MODE
                     if std::env::var("TEST_MODE").ok().as_deref() == Some("1") {
                         let salt = SaltString::generate(&mut OsRng);
-                        let password_hash =
-                            self.argon2.hash_password(client_secret.as_bytes(), &salt).map_err(
-                                |e| internal_error(&format!("Failed to hash client secret: {}", e)),
-                            )?;
+                        let password_hash = self
+                            .argon2
+                            .hash_password(client_secret.as_bytes(), &salt)
+                            .map_err(|e| {
+                                internal_error(&format!("Failed to hash client secret: {}", e))
+                            })?;
                         self.client_secrets
                             .insert(client_id.to_string(), password_hash.to_string());
                         self.client_metadata.insert(client_id.to_string(), metadata);
@@ -279,7 +300,10 @@ impl Default for ClientMetadata {
         Self {
             name: "Default Client".to_string(),
             redirect_uris: vec!["http://localhost:3000/callback".to_string()],
-            grant_types: vec!["client_credentials".to_string(), "authorization_code".to_string()],
+            grant_types: vec![
+                "client_credentials".to_string(),
+                "authorization_code".to_string(),
+            ],
             scopes: vec!["read".to_string(), "write".to_string()],
             created_at: chrono::Utc::now(),
             is_active: true,
@@ -309,7 +333,10 @@ pub async fn authenticate_client(
             let parsed_hash = PasswordHash::new(&api_key.hashed_key)
                 .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
 
-            if argon2.verify_password(client_secret.as_bytes(), &parsed_hash).is_ok() {
+            if argon2
+                .verify_password(client_secret.as_bytes(), &parsed_hash)
+                .is_ok()
+            {
                 if api_key.status != "active" {
                     return Ok(false); // Key is not active
                 }
@@ -337,12 +364,19 @@ pub async fn authenticate_client(
 
 /// Convenience function to get client metadata
 pub fn get_client_metadata(client_id: &str) -> Option<ClientMetadata> {
-    CLIENT_AUTHENTICATOR.lock().unwrap().get_client_metadata(client_id).cloned()
+    CLIENT_AUTHENTICATOR
+        .lock()
+        .unwrap()
+        .get_client_metadata(client_id)
+        .cloned()
 }
 
 /// Convenience function to check if client is active
 pub fn is_client_active(client_id: &str) -> bool {
-    CLIENT_AUTHENTICATOR.lock().unwrap().is_client_active(client_id)
+    CLIENT_AUTHENTICATOR
+        .lock()
+        .unwrap()
+        .is_client_active(client_id)
 }
 
 #[cfg(test)]
@@ -370,7 +404,11 @@ mod tests {
 
         // Too short
         assert!(auth
-            .register_client("test_client".to_string(), "short".to_string(), metadata.clone())
+            .register_client(
+                "test_client".to_string(),
+                "short".to_string(),
+                metadata.clone()
+            )
             .is_err());
 
         // All digits
@@ -398,16 +436,23 @@ mod tests {
         let metadata = ClientMetadata::default();
         let secret = "very_strong_secret_with_mixed_chars_123!@#";
 
-        auth.register_client("test_client".to_string(), secret.to_string(), metadata).unwrap();
+        auth.register_client("test_client".to_string(), secret.to_string(), metadata)
+            .unwrap();
 
         // Correct credentials
-        assert!(auth.authenticate_client("test_client", secret, None).unwrap());
+        assert!(auth
+            .authenticate_client("test_client", secret, None)
+            .unwrap());
 
         // Wrong credentials
-        assert!(!auth.authenticate_client("test_client", "wrong_secret", None).unwrap());
+        assert!(!auth
+            .authenticate_client("test_client", "wrong_secret", None)
+            .unwrap());
 
         // Non-existent client
-        assert!(!auth.authenticate_client("unknown_client", secret, None).unwrap());
+        assert!(!auth
+            .authenticate_client("unknown_client", secret, None)
+            .unwrap());
     }
 
     #[test]

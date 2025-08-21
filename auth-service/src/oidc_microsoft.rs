@@ -75,8 +75,10 @@ pub async fn microsoft_callback(
             match rsp.json::<Value>().await {
                 Ok(v) => {
                     let mut result = serde_json::json!({ "token": v, "state": q.state });
-                    if let Some(id_token) =
-                        result.get("token").and_then(|t| t.get("id_token")).and_then(|x| x.as_str())
+                    if let Some(id_token) = result
+                        .get("token")
+                        .and_then(|t| t.get("id_token"))
+                        .and_then(|x| x.as_str())
                     {
                         let verified =
                             validate_ms_id_token(id_token, &client_id, expected_nonce.as_deref())
@@ -144,24 +146,34 @@ async fn validate_ms_id_token(
         None => return (false, None),
     };
     let jwks_uri = "https://login.microsoftonline.com/common/discovery/v2.0/keys";
-    let jwks = match reqwest::get(jwks_uri).await.and_then(|r| r.error_for_status()) {
+    let jwks = match reqwest::get(jwks_uri)
+        .await
+        .and_then(|r| r.error_for_status())
+    {
         Ok(resp) => resp.json::<Value>().await.ok(),
         Err(_) => None,
     };
-    let Some(keys) = jwks.and_then(|v| v.get("keys").cloned()) else { return (false, None) };
-    let Some(arr) = keys.as_array() else { return (false, None) };
+    let Some(keys) = jwks.and_then(|v| v.get("keys").cloned()) else {
+        return (false, None);
+    };
+    let Some(arr) = keys.as_array() else {
+        return (false, None);
+    };
     let mut n_e: Option<(String, String)> = None;
     for k in arr {
         if k.get("kid").and_then(|x| x.as_str()) == Some(kid.as_str()) {
-            if let (Some(n), Some(e)) =
-                (k.get("n").and_then(|x| x.as_str()), k.get("e").and_then(|x| x.as_str()))
-            {
+            if let (Some(n), Some(e)) = (
+                k.get("n").and_then(|x| x.as_str()),
+                k.get("e").and_then(|x| x.as_str()),
+            ) {
                 n_e = Some((n.to_string(), e.to_string()));
                 break;
             }
         }
     }
-    let Some((n, e)) = n_e else { return (false, None) };
+    let Some((n, e)) = n_e else {
+        return (false, None);
+    };
     let key = match jsonwebtoken::DecodingKey::from_rsa_components(&n, &e) {
         Ok(k) => k,
         Err(_) => return (false, None),
@@ -204,10 +216,16 @@ async fn redis_conn() -> Option<redis::aio::ConnectionManager> {
 }
 
 async fn store_ms_oauth_state(state: &str, nonce: &str) {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     if let Some(mut conn) = redis_conn().await {
         let key = format!("oidc:microsoft:state:{}", state);
-        let _: () = redis::Cmd::set_ex(&key, nonce, 600).query_async(&mut conn).await.unwrap_or(());
+        let _: () = redis::Cmd::set_ex(&key, nonce, 600)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
         return;
     }
     let mut guard = MS_STATE_CACHE.write().await;
@@ -218,7 +236,10 @@ async fn consume_ms_oauth_state(state: &str) -> Option<(String, u64)> {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("oidc:microsoft:state:{}", state);
         let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
-        let _: () = redis::Cmd::del(&key).query_async(&mut conn).await.unwrap_or(());
+        let _: () = redis::Cmd::del(&key)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
         if let Some(nonce) = val {
             return Some((
                 nonce,
@@ -232,8 +253,10 @@ async fn consume_ms_oauth_state(state: &str) -> Option<(String, u64)> {
     }
     let mut guard = MS_STATE_CACHE.write().await;
     if let Some((nonce, exp)) = guard.remove(state) {
-        let now =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         if now <= exp {
             return Some((nonce, exp));
         }

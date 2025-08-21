@@ -49,7 +49,9 @@ async fn health() -> Json<HealthResponse> {
     })
 }
 
-async fn token(Query(params): Query<TokenRequest>) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
+async fn token(
+    Query(params): Query<TokenRequest>,
+) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Simple validation for E2E testing
     if params.grant_type != "client_credentials" {
         return Err((
@@ -74,7 +76,7 @@ async fn token(Query(params): Query<TokenRequest>) -> Result<Json<TokenResponse>
 
     // Generate a test token
     let token = format!("test_token_{}", uuid::Uuid::new_v4());
-    
+
     Ok(Json(TokenResponse {
         access_token: token,
         token_type: "Bearer".to_string(),
@@ -98,14 +100,14 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let app = create_app();
-    
+
     let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{}", port);
-    
+
     tracing::info!("Auth service starting on {}", addr);
-    
+
     let listener = TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }

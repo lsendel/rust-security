@@ -182,7 +182,11 @@ impl SessionManager {
             None
         };
 
-        Self { config, redis_client, memory_store: Arc::new(RwLock::new(HashMap::new())) }
+        Self {
+            config,
+            redis_client,
+            memory_store: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     /// Create a new session
@@ -378,7 +382,10 @@ impl SessionManager {
 
         if cleaned_count > 0 {
             SECURITY_METRICS.active_sessions.sub(cleaned_count as i64);
-            info!(cleaned_sessions = cleaned_count, "Cleaned up expired sessions");
+            info!(
+                cleaned_sessions = cleaned_count,
+                "Cleaned up expired sessions"
+            );
         }
 
         Ok(cleaned_count)
@@ -452,10 +459,18 @@ impl SessionManager {
             .await?;
 
         // Add to user sessions set
-        redis::cmd("SADD").arg(&user_key).arg(&session.id).query_async::<()>(&mut conn).await?;
+        redis::cmd("SADD")
+            .arg(&user_key)
+            .arg(&session.id)
+            .query_async::<()>(&mut conn)
+            .await?;
 
         // Set TTL on user sessions set
-        redis::cmd("EXPIRE").arg(&user_key).arg(ttl).query_async::<()>(&mut conn).await?;
+        redis::cmd("EXPIRE")
+            .arg(&user_key)
+            .arg(ttl)
+            .query_async::<()>(&mut conn)
+            .await?;
 
         Ok(())
     }
@@ -470,11 +485,18 @@ impl SessionManager {
         // Get session to find user_id
         if let Some(session) = self.get_session_from_redis(client, session_id).await? {
             let user_key = format!("user_sessions:{}", session.user_id);
-            redis::cmd("SREM").arg(&user_key).arg(session_id).query_async::<()>(&mut conn).await?;
+            redis::cmd("SREM")
+                .arg(&user_key)
+                .arg(session_id)
+                .query_async::<()>(&mut conn)
+                .await?;
         }
 
         let key = format!("session:{}", session_id);
-        redis::cmd("DEL").arg(&key).query_async::<()>(&mut conn).await?;
+        redis::cmd("DEL")
+            .arg(&key)
+            .query_async::<()>(&mut conn)
+            .await?;
 
         Ok(())
     }
@@ -511,8 +533,10 @@ impl SessionManager {
         let mut conn = client.get_connection_manager().await?;
         let user_key = format!("user_sessions:{}", user_id);
 
-        let session_ids: Vec<String> =
-            redis::cmd("SMEMBERS").arg(&user_key).query_async(&mut conn).await?;
+        let session_ids: Vec<String> = redis::cmd("SMEMBERS")
+            .arg(&user_key)
+            .query_async(&mut conn)
+            .await?;
 
         let mut sessions = Vec::new();
         for session_id in session_ids {
@@ -585,7 +609,10 @@ pub static SESSION_MANAGER: Lazy<SessionManager> = Lazy::new(|| {
 
 /// Helper functions
 fn current_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 fn generate_session_id() -> String {
@@ -684,7 +711,10 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let refreshed = manager.refresh_session(&session.id, Some(7200)).await.unwrap();
+        let refreshed = manager
+            .refresh_session(&session.id, Some(7200))
+            .await
+            .unwrap();
         assert!(refreshed.is_some());
         assert!(refreshed.unwrap().expires_at > original_expires);
     }
@@ -713,8 +743,13 @@ mod tests {
 
     #[test]
     fn test_session_expiration() {
-        let mut session =
-            Session::new("test_user".to_string(), None, "192.168.1.1".to_string(), None, 3600);
+        let mut session = Session::new(
+            "test_user".to_string(),
+            None,
+            "192.168.1.1".to_string(),
+            None,
+            3600,
+        );
 
         assert!(!session.is_expired(None));
 
@@ -725,8 +760,13 @@ mod tests {
 
     #[test]
     fn test_session_inactivity() {
-        let mut session =
-            Session::new("test_user".to_string(), None, "192.168.1.1".to_string(), None, 3600);
+        let mut session = Session::new(
+            "test_user".to_string(),
+            None,
+            "192.168.1.1".to_string(),
+            None,
+            3600,
+        );
 
         assert!(!session.is_inactive(1800, None)); // 30 min timeout
 

@@ -80,7 +80,10 @@ pub enum PQAlgorithm {
     /// CRYSTALS-Dilithium digital signature algorithm
     Dilithium(SecurityLevel),
     /// Hybrid scheme combining classical and post-quantum
-    Hybrid { classical: ClassicalAlgorithm, post_quantum: Box<PQAlgorithm> },
+    Hybrid {
+        classical: ClassicalAlgorithm,
+        post_quantum: Box<PQAlgorithm>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,7 +125,10 @@ pub enum PQKeyData {
         private_key: Vec<u8>,
     },
     #[cfg(feature = "hybrid-crypto")]
-    Hybrid { classical: ClassicalKeyData, post_quantum: Box<PQKeyData> },
+    Hybrid {
+        classical: ClassicalKeyData,
+        post_quantum: Box<PQKeyData>,
+    },
     /// Placeholder for when post-quantum features are disabled
     #[cfg(not(feature = "post-quantum"))]
     Placeholder,
@@ -238,9 +244,15 @@ impl PQCryptoManager {
             .with_target("crypto_system".to_string())
             .with_outcome("success".to_string())
             .with_reason("PQ cryptography system startup initialization".to_string())
-            .with_detail("security_level".to_string(), self.config.default_security_level.as_str())
+            .with_detail(
+                "security_level".to_string(),
+                self.config.default_security_level.as_str(),
+            )
             .with_detail("hybrid_enabled".to_string(), self.config.enable_hybrid)
-            .with_detail("migration_mode".to_string(), format!("{:?}", self.config.migration_mode)),
+            .with_detail(
+                "migration_mode".to_string(),
+                format!("{:?}", self.config.migration_mode),
+            ),
         );
 
         // Generate initial key pair
@@ -341,10 +353,16 @@ impl PQCryptoManager {
                 }
             },
             #[cfg(feature = "hybrid-crypto")]
-            PQAlgorithm::Hybrid { classical, post_quantum } => {
+            PQAlgorithm::Hybrid {
+                classical,
+                post_quantum,
+            } => {
                 let classical_data = self.generate_classical_key_data(classical).await?;
                 let pq_data = Box::new(self.generate_key_data(post_quantum).await?);
-                Ok(PQKeyData::Hybrid { classical: classical_data, post_quantum: pq_data })
+                Ok(PQKeyData::Hybrid {
+                    classical: classical_data,
+                    post_quantum: pq_data,
+                })
             }
             _ => {
                 #[cfg(not(feature = "post-quantum"))]
@@ -384,7 +402,10 @@ impl PQCryptoManager {
                     private_key: signing_key.to_bytes().to_vec(),
                 })
             }
-            _ => Err(anyhow!("Classical algorithm not supported: {:?}", algorithm)),
+            _ => Err(anyhow!(
+                "Classical algorithm not supported: {:?}",
+                algorithm
+            )),
         }
     }
 
@@ -422,11 +443,19 @@ impl PQCryptoManager {
             }
             #[cfg(feature = "hybrid-crypto")]
             (
-                PQAlgorithm::Hybrid { classical, post_quantum },
-                PQKeyData::Hybrid { classical: classical_data, post_quantum: pq_data },
+                PQAlgorithm::Hybrid {
+                    classical,
+                    post_quantum,
+                },
+                PQKeyData::Hybrid {
+                    classical: classical_data,
+                    post_quantum: pq_data,
+                },
             ) => {
                 // For hybrid, create a composite JWK
-                let classical_jwk = self.generate_classical_jwk(classical, classical_data).await?;
+                let classical_jwk = self
+                    .generate_classical_jwk(classical, classical_data)
+                    .await?;
                 let pq_jwk = self.generate_jwk(post_quantum, pq_data).await?;
 
                 Ok(Some(serde_json::json!({
@@ -472,7 +501,9 @@ impl PQCryptoManager {
                     Err(anyhow!("Invalid P-256 public key format"))
                 }
             }
-            _ => Err(anyhow!("Unsupported classical algorithm for JWK generation")),
+            _ => Err(anyhow!(
+                "Unsupported classical algorithm for JWK generation"
+            )),
         }
     }
 
@@ -490,7 +521,8 @@ impl PQCryptoManager {
         let keys = PQ_KEYS.read().await;
 
         let key_material = if let Some(kid) = kid {
-            keys.get(kid).ok_or_else(|| anyhow!("Key not found: {}", kid))?
+            keys.get(kid)
+                .ok_or_else(|| anyhow!("Key not found: {}", kid))?
         } else {
             // Use the most recent key
             keys.values()
@@ -529,7 +561,10 @@ impl PQCryptoManager {
                 }
             },
             #[cfg(feature = "hybrid-crypto")]
-            PQKeyData::Hybrid { classical, post_quantum } => {
+            PQKeyData::Hybrid {
+                classical,
+                post_quantum,
+            } => {
                 // For hybrid signatures, concatenate classical and post-quantum signatures
                 let classical_sig = self.sign_classical(data, classical).await?;
 
@@ -607,9 +642,12 @@ impl PQCryptoManager {
     /// Verify a post-quantum signature
     pub async fn verify(&self, data: &[u8], signature: &[u8], kid: &str) -> Result<bool> {
         let keys = PQ_KEYS.read().await;
-        let key_material = keys.get(kid).ok_or_else(|| anyhow!("Key not found: {}", kid))?;
+        let key_material = keys
+            .get(kid)
+            .ok_or_else(|| anyhow!("Key not found: {}", kid))?;
 
-        self.verify_with_key_material(data, signature, key_material).await
+        self.verify_with_key_material(data, signature, key_material)
+            .await
     }
 
     async fn verify_with_key_material(
@@ -644,7 +682,10 @@ impl PQCryptoManager {
                 }
             },
             #[cfg(feature = "hybrid-crypto")]
-            PQKeyData::Hybrid { classical, post_quantum } => {
+            PQKeyData::Hybrid {
+                classical,
+                post_quantum,
+            } => {
                 // Parse hybrid signature
                 if signature.len() < 4 {
                     return Ok(false);
@@ -662,7 +703,9 @@ impl PQCryptoManager {
                 let pq_sig = &signature[4 + classical_sig_len..];
 
                 // Verify both signatures
-                let classical_valid = self.verify_classical(data, classical_sig, classical).await?;
+                let classical_valid = self
+                    .verify_classical(data, classical_sig, classical)
+                    .await?;
 
                 // Create temporary key material for post-quantum verification
                 let pq_key_material = PQKeyMaterial {
@@ -678,8 +721,9 @@ impl PQCryptoManager {
                     jwk: None,
                 };
 
-                let pq_valid =
-                    self.verify_with_key_material(data, pq_sig, &pq_key_material).await?;
+                let pq_valid = self
+                    .verify_with_key_material(data, pq_sig, &pq_key_material)
+                    .await?;
 
                 // Both signatures must be valid
                 Ok(classical_valid && pq_valid)
@@ -905,7 +949,10 @@ pub async fn initialize_post_quantum_crypto() -> Result<()> {
 
 /// Helper function to get current timestamp
 fn current_timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 #[cfg(test)]
@@ -922,7 +969,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_manager_initialization() {
-        let config = PQConfig { enabled: false, ..Default::default() };
+        let config = PQConfig {
+            enabled: false,
+            ..Default::default()
+        };
         let manager = PQCryptoManager::new(config);
         assert!(manager.initialize().await.is_ok());
     }
@@ -966,7 +1016,10 @@ mod tests {
 
         // Test with different data should fail
         let different_data = b"Different data";
-        let is_valid_different = manager.verify(different_data, &signature, &kid).await.unwrap();
+        let is_valid_different = manager
+            .verify(different_data, &signature, &kid)
+            .await
+            .unwrap();
         assert!(!is_valid_different);
     }
 }

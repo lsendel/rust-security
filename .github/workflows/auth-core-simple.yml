@@ -118,7 +118,7 @@ jobs:
           --reporters html,json \
           --output ./jscpd-report \
           --ignore "**/target/**,**/tests/**" \
-          --formats rust || true
+          --pattern "**/*.rs" || true
       continue-on-error: true
       
     - name: Upload duplicate code report

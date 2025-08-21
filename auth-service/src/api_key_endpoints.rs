@@ -35,12 +35,16 @@ async fn revoke_api_key(
     State(state): State<AppState>,
     Path(prefix): Path<String>,
 ) -> Result<(), AuthError> {
-    state.api_key_store.revoke_api_key(&prefix).await.map_err(|e| match e {
-        crate::api_key_store::ApiKeyError::NotFound => {
-            AuthError::NotFound { resource: "API Key".to_string() }
-        }
-        _ => internal_error("Failed to revoke API key"),
-    })?;
+    state
+        .api_key_store
+        .revoke_api_key(&prefix)
+        .await
+        .map_err(|e| match e {
+            crate::api_key_store::ApiKeyError::NotFound => AuthError::NotFound {
+                resource: "API Key".to_string(),
+            },
+            _ => internal_error("Failed to revoke API key"),
+        })?;
 
     Ok(())
 }
@@ -66,7 +70,9 @@ async fn get_api_key(
         .get_api_key_by_prefix(&prefix)
         .await
         .map_err(|e| internal_error(&format!("Failed to get API key: {}", e)))?
-        .ok_or(AuthError::NotFound { resource: "API Key".to_string() })?;
+        .ok_or(AuthError::NotFound {
+            resource: "API Key".to_string(),
+        })?;
 
     let details = ApiKeyDetails {
         id: api_key.id,
@@ -116,5 +122,8 @@ async fn create_api_key(
         .map_err(|e| internal_error(&format!("Failed to create API key: {}", e)))?;
 
     // 5. Return the full, unhashed key to the user.
-    Ok(Json(CreateApiKeyResponse { api_key: api_key_string, key_details }))
+    Ok(Json(CreateApiKeyResponse {
+        api_key: api_key_string,
+        key_details,
+    }))
 }

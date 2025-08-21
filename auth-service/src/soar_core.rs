@@ -432,13 +432,24 @@ pub enum StepType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StepAction {
     /// Block an IP address
-    BlockIp { ip_address: String, duration_minutes: u32, reason: String },
+    BlockIp {
+        ip_address: String,
+        duration_minutes: u32,
+        reason: String,
+    },
 
     /// Lock a user account
-    LockAccount { user_id: String, duration_minutes: u32, reason: String },
+    LockAccount {
+        user_id: String,
+        duration_minutes: u32,
+        reason: String,
+    },
 
     /// Revoke tokens
-    RevokeTokens { user_id: Option<String>, token_type: Option<String> },
+    RevokeTokens {
+        user_id: Option<String>,
+        token_type: Option<String>,
+    },
 
     /// Send notification
     SendNotification {
@@ -450,10 +461,19 @@ pub enum StepAction {
     },
 
     /// Query SIEM
-    QuerySiem { query: String, time_range: String, max_results: u32 },
+    QuerySiem {
+        query: String,
+        time_range: String,
+        max_results: u32,
+    },
 
     /// Create incident ticket
-    CreateTicket { title: String, description: String, priority: String, assignee: Option<String> },
+    CreateTicket {
+        title: String,
+        description: String,
+        priority: String,
+        assignee: Option<String>,
+    },
 
     /// Execute script
     ExecuteScript {
@@ -485,7 +505,10 @@ pub enum StepAction {
     },
 
     /// Custom action
-    CustomAction { action_type: String, parameters: HashMap<String, serde_json::Value> },
+    CustomAction {
+        action_type: String,
+        parameters: HashMap<String, serde_json::Value>,
+    },
 }
 
 /// Parameter definition
@@ -1256,8 +1279,13 @@ pub struct ResponseExecution {
 /// Execution result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExecutionResult {
-    Success { outputs: HashMap<String, serde_json::Value> },
-    Failure { error: String, details: Option<serde_json::Value> },
+    Success {
+        outputs: HashMap<String, serde_json::Value>,
+    },
+    Failure {
+        error: String,
+        details: Option<serde_json::Value>,
+    },
     Pending,
 }
 
@@ -1878,7 +1906,13 @@ impl Default for CorrelationConfig {
 
 impl Default for NotificationConfig {
     fn default() -> Self {
-        Self { email: None, slack: None, pagerduty: None, webhooks: Vec::new(), sms: None }
+        Self {
+            email: None,
+            slack: None,
+            pagerduty: None,
+            webhooks: Vec::new(),
+            sms: None,
+        }
     }
 }
 
@@ -1914,7 +1948,11 @@ impl Default for SlaConfig {
         escalation_thresholds.insert(AlertSeverity::Medium, 75);
         escalation_thresholds.insert(AlertSeverity::Low, 70);
 
-        Self { response_time_minutes, resolution_time_hours, escalation_thresholds }
+        Self {
+            response_time_minutes,
+            resolution_time_hours,
+            escalation_thresholds,
+        }
     }
 }
 
@@ -2082,7 +2120,11 @@ Case ID: {{case_id}}
         context: HashMap<String, serde_json::Value>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
-        let playbook = config.playbooks.get(&playbook_id).ok_or("Playbook not found")?.clone();
+        let playbook = config
+            .playbooks
+            .get(&playbook_id)
+            .ok_or("Playbook not found")?
+            .clone();
         drop(config);
 
         let instance_id = Uuid::new_v4().to_string();
@@ -2115,7 +2157,9 @@ Case ID: {{case_id}}
             response_tx,
         };
 
-        self.workflow_engine.queue_execution(execution_request).await?;
+        self.workflow_engine
+            .queue_execution(execution_request)
+            .await?;
 
         // Log workflow trigger event
         let event = SoarEvent {
@@ -2138,7 +2182,9 @@ Case ID: {{case_id}}
 
     /// Get workflow status
     pub async fn get_workflow_status(&self, instance_id: &str) -> Option<WorkflowInstance> {
-        self.active_workflows.get(instance_id).map(|entry| entry.clone())
+        self.active_workflows
+            .get(instance_id)
+            .map(|entry| entry.clone())
     }
 
     /// Create a security case
@@ -2149,7 +2195,9 @@ Case ID: {{case_id}}
         severity: AlertSeverity,
         related_alerts: Vec<String>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        self.case_manager.create_case(title, description, severity, related_alerts).await
+        self.case_manager
+            .create_case(title, description, severity, related_alerts)
+            .await
     }
 
     /// Get system metrics
@@ -2285,9 +2333,10 @@ Case ID: {{case_id}}
             Self::create_account_takeover_playbook(),
         );
 
-        config
-            .playbooks
-            .insert("rate_limit_exceeded_response".to_string(), Self::create_rate_limit_playbook());
+        config.playbooks.insert(
+            "rate_limit_exceeded_response".to_string(),
+            Self::create_rate_limit_playbook(),
+        );
 
         info!("Loaded {} default playbooks", config.playbooks.len());
         Ok(())
@@ -2687,7 +2736,10 @@ Case ID: {{case_id}}
                     action: StepAction::CustomAction {
                         action_type: "log_incident".to_string(),
                         parameters: [
-                            ("severity".to_string(), serde_json::Value::String("low".to_string())),
+                            (
+                                "severity".to_string(),
+                                serde_json::Value::String("low".to_string()),
+                            ),
                             (
                                 "category".to_string(),
                                 serde_json::Value::String("rate_limiting".to_string()),
@@ -2785,7 +2837,10 @@ impl WorkflowEngine {
         };
 
         if active_count >= max_concurrent {
-            warn!("Maximum concurrent workflows ({}) reached, queuing request", max_concurrent);
+            warn!(
+                "Maximum concurrent workflows ({}) reached, queuing request",
+                max_concurrent
+            );
         }
 
         // Create workflow instance
@@ -2808,7 +2863,8 @@ impl WorkflowEngine {
         };
 
         // Store the workflow instance
-        self.active_workflows.insert(request.id.clone(), workflow_instance);
+        self.active_workflows
+            .insert(request.id.clone(), workflow_instance);
 
         // Add to execution queue (simulated priority queue)
         // In a real implementation, this would use a proper priority queue
@@ -2984,12 +3040,14 @@ impl WorkflowEngine {
 
         // Update workflow with simulated results
         if let Some(mut workflow) = active_workflows.get_mut(workflow_id) {
-            workflow
-                .outputs
-                .insert("execution_time_ms".to_string(), serde_json::Value::Number(500.into()));
-            workflow
-                .outputs
-                .insert("steps_completed".to_string(), serde_json::Value::Number(3.into()));
+            workflow.outputs.insert(
+                "execution_time_ms".to_string(),
+                serde_json::Value::Number(500.into()),
+            );
+            workflow.outputs.insert(
+                "steps_completed".to_string(),
+                serde_json::Value::Number(3.into()),
+            );
         }
 
         SecurityLogger::log_event(
@@ -3025,10 +3083,17 @@ impl AlertCorrelationEngine {
         &self,
         alert: &SecurityAlert,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Processing alert for correlation: {} (severity: {:?})", alert.id, alert.severity);
+        info!(
+            "Processing alert for correlation: {} (severity: {:?})",
+            alert.id, alert.severity
+        );
 
         // Store alert in cache with timestamp-based key
-        let cache_key = format!("{}_{}", alert.alert_type, alert.timestamp.format("%Y%m%d_%H"));
+        let cache_key = format!(
+            "{}_{}",
+            alert.alert_type,
+            alert.timestamp.format("%Y%m%d_%H")
+        );
         self.alert_cache.insert(cache_key.clone(), alert.clone());
 
         // Find related alerts based on correlation rules
@@ -3047,7 +3112,11 @@ impl AlertCorrelationEngine {
         correlations.extend(self.correlate_by_threshold(alert).await?);
 
         if !correlations.is_empty() {
-            info!("Found {} correlations for alert {}", correlations.len(), alert.id);
+            info!(
+                "Found {} correlations for alert {}",
+                correlations.len(),
+                alert.id
+            );
 
             // Create correlation result
             let correlation_result = CorrelationResult {
@@ -3089,7 +3158,10 @@ impl AlertCorrelationEngine {
                 .with_detail("correlation_id".to_string(), correlation_result.id.clone())
                 .with_detail("primary_alert_id".to_string(), alert.id.clone())
                 .with_detail("correlated_count".to_string(), correlations.len())
-                .with_detail("confidence_score".to_string(), correlation_result.confidence_score)
+                .with_detail(
+                    "confidence_score".to_string(),
+                    correlation_result.confidence_score,
+                )
                 .with_detail("risk_score".to_string(), correlation_result.risk_score),
             );
 
@@ -3127,7 +3199,9 @@ impl AlertCorrelationEngine {
             }
 
             // Check if within time window
-            let time_diff = alert.timestamp.signed_duration_since(cached_alert.timestamp);
+            let time_diff = alert
+                .timestamp
+                .signed_duration_since(cached_alert.timestamp);
             if time_diff.abs() <= time_window {
                 // Additional similarity checks
                 if self.are_alerts_related(alert, cached_alert) {
@@ -3187,7 +3261,11 @@ impl AlertCorrelationEngine {
             // Credential attack patterns
             &["BruteForce", "PasswordSpray", "CredentialStuffing"],
             // Lateral movement patterns
-            &["UnauthorizedAccess", "PrivilegeEscalation", "LateralMovement"],
+            &[
+                "UnauthorizedAccess",
+                "PrivilegeEscalation",
+                "LateralMovement",
+            ],
             // Data exfiltration patterns
             &["DataAccess", "LargeDataTransfer", "UnusualOutboundTraffic"],
         ];
@@ -3196,7 +3274,10 @@ impl AlertCorrelationEngine {
 
         // Find which pattern group this alert belongs to
         for pattern_group in &attack_patterns {
-            if pattern_group.iter().any(|&pattern| alert_type_str.contains(pattern)) {
+            if pattern_group
+                .iter()
+                .any(|&pattern| alert_type_str.contains(pattern))
+            {
                 // Look for other alerts in the same pattern group
                 for cached_alert in self.alert_cache.iter() {
                     let cached_alert = cached_alert.value();
@@ -3205,7 +3286,10 @@ impl AlertCorrelationEngine {
                     }
 
                     let cached_type_str = format!("{:?}", cached_alert.alert_type);
-                    if pattern_group.iter().any(|&pattern| cached_type_str.contains(pattern)) {
+                    if pattern_group
+                        .iter()
+                        .any(|&pattern| cached_type_str.contains(pattern))
+                    {
                         correlated_alerts.push(cached_alert.clone());
                     }
                 }
@@ -3235,7 +3319,9 @@ impl AlertCorrelationEngine {
                 continue;
             }
 
-            let time_diff = alert.timestamp.signed_duration_since(cached_alert.timestamp);
+            let time_diff = alert
+                .timestamp
+                .signed_duration_since(cached_alert.timestamp);
             if time_diff.abs() <= threshold_window {
                 if alert.alert_type == cached_alert.alert_type {
                     similar_alerts.push(cached_alert.clone());
@@ -3268,8 +3354,14 @@ impl AlertCorrelationEngine {
         }
 
         // Same alert family
-        if format!("{:?}", alert1.alert_type).chars().take(4).collect::<String>()
-            == format!("{:?}", alert2.alert_type).chars().take(4).collect::<String>()
+        if format!("{:?}", alert1.alert_type)
+            .chars()
+            .take(4)
+            .collect::<String>()
+            == format!("{:?}", alert2.alert_type)
+                .chars()
+                .take(4)
+                .collect::<String>()
         {
             return true;
         }
@@ -3564,8 +3656,11 @@ impl IntegrationFramework {
                 }
 
                 // Update overall health metrics
-                let overall_health_percentage =
-                    if total_checks > 0 { (healthy_count * 100) / total_checks } else { 100 };
+                let overall_health_percentage = if total_checks > 0 {
+                    (healthy_count * 100) / total_checks
+                } else {
+                    100
+                };
 
                 // Store health metrics
                 let health_summary = HealthMetrics {
@@ -3588,7 +3683,10 @@ impl IntegrationFramework {
                         healthy_count, total_checks, overall_health_percentage
                     );
                 } else {
-                    info!("All integrations healthy ({}/{})", healthy_count, total_checks);
+                    info!(
+                        "All integrations healthy ({}/{})",
+                        healthy_count, total_checks
+                    );
                 }
 
                 // Alert on degraded health

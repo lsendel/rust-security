@@ -73,7 +73,10 @@ impl SecurityMetrics {
         )?;
 
         let token_introspection_total = IntCounterVec::new(
-            Opts::new("token_introspection_total", "Total token introspection requests"),
+            Opts::new(
+                "token_introspection_total",
+                "Total token introspection requests",
+            ),
             &["result", "client_id"],
         )?;
 
@@ -84,7 +87,10 @@ impl SecurityMetrics {
         .unwrap();
 
         let input_validation_failures_total = IntCounterVec::new(
-            Opts::new("input_validation_failures_total", "Total input validation failures"),
+            Opts::new(
+                "input_validation_failures_total",
+                "Total input validation failures",
+            ),
             &["endpoint", "validation_type", "client_id"],
         )
         .unwrap();
@@ -120,7 +126,10 @@ impl SecurityMetrics {
             IntGauge::new("active_sessions", "Number of currently active sessions").unwrap();
 
         let suspicious_activity_total = IntCounterVec::new(
-            Opts::new("suspicious_activity_total", "Total suspicious activities detected"),
+            Opts::new(
+                "suspicious_activity_total",
+                "Total suspicious activities detected",
+            ),
             &["activity_type", "severity", "ip_address"],
         )
         .unwrap();
@@ -136,7 +145,9 @@ impl SecurityMetrics {
                 "auth_duration_seconds",
                 "Authentication request duration in seconds",
             )
-            .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]),
+            .buckets(vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+            ]),
             &["method", "result"],
         )
         .unwrap();
@@ -146,30 +157,70 @@ impl SecurityMetrics {
                 "token_validation_duration_seconds",
                 "Token validation duration in seconds",
             )
-            .buckets(vec![0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1]),
+            .buckets(vec![
+                0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1,
+            ]),
         )
         .unwrap();
 
         // Register all metrics
-        registry.register(Box::new(auth_attempts_total.clone())).unwrap();
-        registry.register(Box::new(auth_failures_total.clone())).unwrap();
-        registry.register(Box::new(auth_success_total.clone())).unwrap();
-        registry.register(Box::new(tokens_issued_total.clone())).unwrap();
-        registry.register(Box::new(tokens_revoked_total.clone())).unwrap();
-        registry.register(Box::new(token_binding_violations_total.clone())).unwrap();
-        registry.register(Box::new(token_introspection_total.clone())).unwrap();
-        registry.register(Box::new(security_events_total.clone())).unwrap();
-        registry.register(Box::new(input_validation_failures_total.clone())).unwrap();
-        registry.register(Box::new(rate_limit_hits_total.clone())).unwrap();
-        registry.register(Box::new(request_signature_failures_total.clone())).unwrap();
-        registry.register(Box::new(mfa_attempts_total.clone())).unwrap();
-        registry.register(Box::new(mfa_failures_total.clone())).unwrap();
-        registry.register(Box::new(backup_codes_used_total.clone())).unwrap();
-        registry.register(Box::new(active_sessions.clone())).unwrap();
-        registry.register(Box::new(suspicious_activity_total.clone())).unwrap();
-        registry.register(Box::new(security_headers_applied_total.clone())).unwrap();
-        registry.register(Box::new(auth_duration_seconds.clone())).unwrap();
-        registry.register(Box::new(token_validation_duration_seconds.clone())).unwrap();
+        registry
+            .register(Box::new(auth_attempts_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(auth_failures_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(auth_success_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(tokens_issued_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(tokens_revoked_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(token_binding_violations_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(token_introspection_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(security_events_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(input_validation_failures_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(rate_limit_hits_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(request_signature_failures_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(mfa_attempts_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(mfa_failures_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(backup_codes_used_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(active_sessions.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(suspicious_activity_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(security_headers_applied_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(auth_duration_seconds.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(token_validation_duration_seconds.clone()))
+            .unwrap();
 
         Ok(Self {
             registry,
@@ -197,17 +248,23 @@ impl SecurityMetrics {
 
     /// Record an authentication attempt
     pub fn record_auth_attempt(&self, client_id: &str, method: &str, result: &str) {
-        self.auth_attempts_total.with_label_values(&[client_id, method, result]).inc();
+        self.auth_attempts_total
+            .with_label_values(&[client_id, method, result])
+            .inc();
     }
 
     /// Record an authentication failure
     pub fn record_auth_failure(&self, client_id: &str, reason: &str, ip_address: &str) {
-        self.auth_failures_total.with_label_values(&[client_id, reason, ip_address]).inc();
+        self.auth_failures_total
+            .with_label_values(&[client_id, reason, ip_address])
+            .inc();
     }
 
     /// Record a security event
     pub fn record_security_event(&self, event_type: &str, severity: &str, source: &str) {
-        self.security_events_total.with_label_values(&[event_type, severity, source]).inc();
+        self.security_events_total
+            .with_label_values(&[event_type, severity, source])
+            .inc();
     }
 
     /// Record input validation failure
@@ -224,7 +281,9 @@ impl SecurityMetrics {
 
     /// Record rate limit hit
     pub fn record_rate_limit_hit(&self, client_id: &str, ip_address: &str, endpoint: &str) {
-        self.rate_limit_hits_total.with_label_values(&[client_id, ip_address, endpoint]).inc();
+        self.rate_limit_hits_total
+            .with_label_values(&[client_id, ip_address, endpoint])
+            .inc();
     }
 
     /// Record token binding violation
@@ -253,7 +312,9 @@ impl SecurityMetrics {
         let result = operation();
         let duration = start.elapsed().as_secs_f64();
 
-        self.auth_duration_seconds.with_label_values(&[method, "success"]).observe(duration);
+        self.auth_duration_seconds
+            .with_label_values(&[method, "success"])
+            .observe(duration);
 
         result
     }

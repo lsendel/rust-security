@@ -38,7 +38,11 @@ async fn scim_requires_basic_auth() {
     let client = Client::new();
 
     // Missing auth
-    let resp = client.get(format!("{}/scim/v2/Users", base)).send().await.unwrap();
+    let resp = client
+        .get(format!("{}/scim/v2/Users", base))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(resp.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     // Valid auth

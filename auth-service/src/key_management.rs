@@ -230,7 +230,8 @@ impl KeyManagementService {
         drop(metrics);
 
         // Log audit event
-        self.log_audit_event(KeyEventType::KeyGenerated, &kid, Some(actor), true, None).await;
+        self.log_audit_event(KeyEventType::KeyGenerated, &kid, Some(actor), true, None)
+            .await;
 
         // Log security event
         let mut event = SecurityEvent::new(
@@ -260,8 +261,9 @@ impl KeyManagementService {
         info!(kid = %kid, "Activating key");
 
         let mut keys = self.keys.write().await;
-        let key =
-            keys.get_mut(kid).ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
+        let key = keys
+            .get_mut(kid)
+            .ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
 
         // Validate key can be activated
         if key.state == KeyState::Revoked {
@@ -289,7 +291,8 @@ impl KeyManagementService {
         drop(active_key_id);
 
         // Log audit event
-        self.log_audit_event(KeyEventType::KeyActivated, kid, Some(actor), true, None).await;
+        self.log_audit_event(KeyEventType::KeyActivated, kid, Some(actor), true, None)
+            .await;
 
         // Log security event
         let mut event = SecurityEvent::new(
@@ -333,7 +336,8 @@ impl KeyManagementService {
         drop(metrics);
 
         // Log audit event
-        self.log_audit_event(KeyEventType::KeyRotated, &new_kid, Some(actor), true, None).await;
+        self.log_audit_event(KeyEventType::KeyRotated, &new_kid, Some(actor), true, None)
+            .await;
 
         info!(new_kid = %new_kid, "Key rotation completed successfully");
         Ok(())
@@ -345,8 +349,9 @@ impl KeyManagementService {
         warn!(kid = %kid, reason = %reason, "Revoking key");
 
         let mut keys = self.keys.write().await;
-        let key =
-            keys.get_mut(kid).ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
+        let key = keys
+            .get_mut(kid)
+            .ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
 
         key.state = KeyState::Revoked;
         key.revoked_at = Some((Self::current_timestamp(), reason.to_string()));
@@ -363,7 +368,14 @@ impl KeyManagementService {
         drop(metrics);
 
         // Log audit event
-        self.log_audit_event(KeyEventType::KeyRevoked, kid, Some(actor), true, Some(reason)).await;
+        self.log_audit_event(
+            KeyEventType::KeyRevoked,
+            kid,
+            Some(actor),
+            true,
+            Some(reason),
+        )
+        .await;
 
         // Log security event
         let mut event = SecurityEvent::new(
@@ -383,7 +395,10 @@ impl KeyManagementService {
         .with_reason(format!("Key revocation required: {}", redact_log(reason)))
         .with_resource(kid.to_string())
         .with_detail("revocation_reason".to_string(), redact_log(reason))
-        .with_detail("emergency_rotation_needed".to_string(), needs_emergency_rotation);
+        .with_detail(
+            "emergency_rotation_needed".to_string(),
+            needs_emergency_rotation,
+        );
 
         SecurityLogger::log_event(&mut event);
 
@@ -407,8 +422,14 @@ impl KeyManagementService {
         self.activate_key(&new_kid, actor).await?;
 
         // Log audit event
-        self.log_audit_event(KeyEventType::EmergencyRotation, &new_kid, Some(actor), true, None)
-            .await;
+        self.log_audit_event(
+            KeyEventType::EmergencyRotation,
+            &new_kid,
+            Some(actor),
+            true,
+            None,
+        )
+        .await;
 
         // Log security event
         let mut event = SecurityEvent::new(
@@ -470,8 +491,9 @@ impl KeyManagementService {
     /// Get decoding key for verification
     pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, AuthError> {
         let keys = self.keys.read().await;
-        let key =
-            keys.get(kid).ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
+        let key = keys
+            .get(kid)
+            .ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
 
         // Allow verification with any non-revoked key
         if key.state == KeyState::Revoked {
@@ -569,7 +591,10 @@ impl KeyManagementService {
         // Create JWK (using hardcoded values for now)
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex).map_err(|e| {
-            internal_error(&format!("Failed to decode modulus: {}", redact_log(&e.to_string())))
+            internal_error(&format!(
+                "Failed to decode modulus: {}",
+                redact_log(&e.to_string())
+            ))
         })?;
 
         let n = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&modulus_bytes);
@@ -623,7 +648,10 @@ impl KeyManagementService {
 
     /// Get current Unix timestamp
     fn current_timestamp() -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
     }
 
     /// Get key management metrics
@@ -721,7 +749,9 @@ mod tests {
         kms.initialize().await.unwrap();
         let kid = kms.active_key_id.read().await.clone().unwrap();
 
-        kms.revoke_key(&kid, "test revocation", "test").await.unwrap();
+        kms.revoke_key(&kid, "test revocation", "test")
+            .await
+            .unwrap();
 
         let keys = kms.keys.read().await;
         let key = keys.get(&kid).unwrap();
@@ -772,9 +802,13 @@ mod tests {
 
         kms.initialize().await.unwrap();
         kms.rotate_keys("test").await.unwrap();
-        kms.revoke_key(&kms.active_key_id.read().await.clone().unwrap(), "test", "test")
-            .await
-            .unwrap();
+        kms.revoke_key(
+            &kms.active_key_id.read().await.clone().unwrap(),
+            "test",
+            "test",
+        )
+        .await
+        .unwrap();
 
         let metrics = kms.get_metrics().await;
         assert!(metrics.keys_generated >= 2); // At least initial + rotation
@@ -795,8 +829,10 @@ mod tests {
         assert!(!events.is_empty());
 
         // Should have events for key generation, activation, and rotation
-        let event_types: std::collections::HashSet<_> =
-            events.iter().map(|e| std::mem::discriminant(&e.event_type)).collect();
+        let event_types: std::collections::HashSet<_> = events
+            .iter()
+            .map(|e| std::mem::discriminant(&e.event_type))
+            .collect();
 
         assert!(event_types.len() >= 2); // At least some different event types
     }

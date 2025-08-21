@@ -165,7 +165,10 @@ pub enum AssignmentTarget {
     Role(String),
     RoundRobin(Vec<String>),
     LeastLoaded(Vec<String>),
-    SkillBased { required_skills: Vec<String>, candidates: Vec<String> },
+    SkillBased {
+        required_skills: Vec<String>,
+        candidates: Vec<String>,
+    },
     Custom(String),
 }
 
@@ -3331,13 +3334,21 @@ impl CaseManagementSystem {
         let config = self.config.read().await;
         let response_deadline = now
             + Duration::minutes(
-                config.sla_config.response_time_minutes.get(&severity).copied().unwrap_or(60)
-                    as i64,
+                config
+                    .sla_config
+                    .response_time_minutes
+                    .get(&severity)
+                    .copied()
+                    .unwrap_or(60) as i64,
             );
         let resolution_deadline = now
             + Duration::hours(
-                config.sla_config.resolution_time_hours.get(&severity).copied().unwrap_or(24)
-                    as i64,
+                config
+                    .sla_config
+                    .resolution_time_hours
+                    .get(&severity)
+                    .copied()
+                    .unwrap_or(24) as i64,
             );
         drop(config);
 
@@ -3401,7 +3412,10 @@ impl CaseManagementSystem {
             let mut metrics = self.metrics.lock().await;
             metrics.total_cases_created += 1;
             *metrics.cases_by_status.entry(CaseStatus::New).or_insert(0) += 1;
-            *metrics.cases_by_severity.entry(severity.clone()).or_insert(0) += 1;
+            *metrics
+                .cases_by_severity
+                .entry(severity.clone())
+                .or_insert(0) += 1;
             metrics.last_updated = now;
         }
 
@@ -3426,7 +3440,10 @@ impl CaseManagementSystem {
             }
         }
 
-        info!("Created security case: {} (severity: {:?})", case_id, severity);
+        info!(
+            "Created security case: {} (severity: {:?})",
+            case_id, severity
+        );
         Ok(case_id)
     }
 
@@ -3468,10 +3485,16 @@ impl CaseManagementSystem {
                 if let Some(count) = metrics.cases_by_status.get_mut(&old_status) {
                     *count = count.saturating_sub(1);
                 }
-                *metrics.cases_by_status.entry(new_status.clone()).or_insert(0) += 1;
+                *metrics
+                    .cases_by_status
+                    .entry(new_status.clone())
+                    .or_insert(0) += 1;
             }
 
-            info!("Updated case {} status from {:?} to {:?}", case_id, old_status, new_status);
+            info!(
+                "Updated case {} status from {:?} to {:?}",
+                case_id, old_status, new_status
+            );
         } else {
             return Err(format!("Case not found: {}", case_id).into());
         }
@@ -3552,7 +3575,10 @@ impl CaseManagementSystem {
         };
 
         // Store evidence data
-        let storage_path = self.evidence_manager.store_evidence(&evidence, &evidence_data).await?;
+        let storage_path = self
+            .evidence_manager
+            .store_evidence(&evidence, &evidence_data)
+            .await?;
 
         // Update case with evidence
         if let Some(mut case) = self.active_cases.get_mut(case_id) {
@@ -3702,8 +3728,14 @@ impl CaseManagementSystem {
 
                 for case_entry in active_cases.iter() {
                     let case = case_entry.value();
-                    *metrics_guard.cases_by_status.entry(case.status.clone()).or_insert(0) += 1;
-                    *metrics_guard.cases_by_severity.entry(case.severity.clone()).or_insert(0) += 1;
+                    *metrics_guard
+                        .cases_by_status
+                        .entry(case.status.clone())
+                        .or_insert(0) += 1;
+                    *metrics_guard
+                        .cases_by_severity
+                        .entry(case.severity.clone())
+                        .or_insert(0) += 1;
                 }
 
                 metrics_guard.last_updated = Utc::now();
@@ -3890,7 +3922,10 @@ impl DocumentSharingManager {
 
 impl DocumentAccessControl {
     fn new() -> Self {
-        Self { access_policies: Vec::new(), audit_logger: Arc::new(DocumentAuditLogger::new()) }
+        Self {
+            access_policies: Vec::new(),
+            audit_logger: Arc::new(DocumentAuditLogger::new()),
+        }
     }
 }
 

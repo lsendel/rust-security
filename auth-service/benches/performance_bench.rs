@@ -32,7 +32,10 @@ fn bench_token_store_operations(c: &mut Criterion) {
     group.bench_function("in_memory_set_active", |b| {
         b.iter(|| {
             let token = format!("token_{}", 42u64);
-            black_box(rt.block_on(in_memory_store.set_active(&token, true, Some(3600))).unwrap());
+            black_box(
+                rt.block_on(in_memory_store.set_active(&token, true, Some(3600)))
+                    .unwrap(),
+            );
         });
     });
 
@@ -96,7 +99,10 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
-            black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0 (compatible; test)"));
+            black_box(generate_token_binding(
+                "192.168.1.1",
+                "Mozilla/5.0 (compatible; test)",
+            ));
         });
     });
 
@@ -141,12 +147,16 @@ fn bench_scim_operations(c: &mut Criterion) {
     ];
 
     for filter in filter_cases {
-        group.bench_with_input(BenchmarkId::new("filter_parsing", filter), filter, |b, filter| {
-            b.iter(|| {
-                // Would need to expose the parse_scim_filter function
-                black_box(filter.len());
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("filter_parsing", filter),
+            filter,
+            |b, filter| {
+                b.iter(|| {
+                    // Would need to expose the parse_scim_filter function
+                    black_box(filter.len());
+                });
+            },
+        );
     }
 
     group.finish();

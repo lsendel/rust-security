@@ -1,5 +1,5 @@
 //! JWKS-specific rate limiting implementation
-//! 
+//!
 //! Provides strict rate limiting for JWKS endpoints with:
 //! - Per-IP rate limiting
 //! - Global rate limiting
@@ -20,7 +20,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 /// Rate limit configuration for JWKS endpoints
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,10 +46,10 @@ pub struct JwksRateLimitConfig {
 impl Default for JwksRateLimitConfig {
     fn default() -> Self {
         Self {
-            per_ip_rpm: 60,        // 60 requests per minute per IP
-            per_ip_burst: 10,      // Allow burst of 10 requests
-            global_rpm: 1000,      // 1000 requests per minute globally
-            global_burst: 100,     // Allow global burst of 100
+            per_ip_rpm: 60,             // 60 requests per minute per IP
+            per_ip_burst: 10,           // Allow burst of 10 requests
+            global_rpm: 1000,           // 1000 requests per minute globally
+            global_burst: 100,          // Allow global burst of 100
             ban_duration_seconds: 3600, // 1 hour ban
             violations_before_ban: 5,   // Ban after 5 violations
             use_redis: true,
@@ -79,7 +79,7 @@ impl TokenBucket {
 
     pub fn try_consume(&mut self, tokens: u32) -> bool {
         self.refill();
-        
+
         if self.tokens >= tokens as f64 {
             self.tokens -= tokens as f64;
             true
@@ -90,9 +90,11 @@ impl TokenBucket {
 
     fn refill(&mut self) {
         let now = SystemTime::now();
-        let elapsed = now.duration_since(self.last_refill).unwrap_or(Duration::ZERO);
+        let elapsed = now
+            .duration_since(self.last_refill)
+            .unwrap_or(Duration::ZERO);
         let tokens_to_add = elapsed.as_secs_f64() * self.refill_rate;
-        
+
         self.tokens = (self.tokens + tokens_to_add).min(self.capacity as f64);
         self.last_refill = now;
     }
@@ -127,10 +129,7 @@ impl JwksRateLimiter {
             None
         };
 
-        let global_bucket = TokenBucket::new(
-            config.global_burst,
-            config.global_rpm as f64 / 60.0,
-        );
+        let global_bucket = TokenBucket::new(config.global_burst, config.global_rpm as f64 / 60.0);
 
         Self {
             config,
@@ -173,27 +172,32 @@ impl JwksRateLimiter {
     /// Ban an IP address
     pub async fn ban_ip(&self, ip: IpAddr) {
         let ban_until = SystemTime::now() + Duration::from_secs(self.config.ban_duration_seconds);
-        
+
         // Add to local ban list
         self.ban_list.insert(ip, ban_until);
-        
+
         // Add to Redis ban list if available
         if let Some(ref pool) = self.redis_client {
             if let Ok(mut conn) = pool.get().await {
                 let key = format!("{}:ban:{}", self.config.redis_prefix, ip);
                 let _: Result<(), _> = conn.set(&key, 1).await;
-                let _: Result<(), _> = conn.expire(&key, self.config.ban_duration_seconds as i64).await;
+                let _: Result<(), _> = conn
+                    .expire(&key, self.config.ban_duration_seconds as i64)
+                    .await;
             }
         }
-        
-        warn!("IP {} has been banned for {} seconds", ip, self.config.ban_duration_seconds);
+
+        warn!(
+            "IP {} has been banned for {} seconds",
+            ip, self.config.ban_duration_seconds
+        );
     }
 
     /// Record a violation for an IP
     pub async fn record_violation(&self, ip: IpAddr) {
         let mut violations = self.violations.entry(ip).or_insert(0);
         *violations += 1;
-        
+
         if *violations >= self.config.violations_before_ban {
             self.ban_ip(ip).await;
             self.violations.remove(&ip);
@@ -248,7 +252,7 @@ impl JwksRateLimiter {
                 self.config.per_ip_rpm as f64 / 60.0,
             )
         });
-        
+
         bucket.try_consume(1)
     }
 
@@ -260,7 +264,7 @@ impl JwksRateLimiter {
     ) -> bool {
         let key = format!("{}:ip:{}", self.config.redis_prefix, ip);
         let window = 60; // 1 minute window
-        
+
         // Use Redis INCR with expiry (simplified approach)
         match conn.incr::<_, _, i64>(&key, 1).await {
             Ok(count) => {
@@ -283,14 +287,15 @@ impl JwksRateLimiter {
         // Clean up expired bans
         let now = SystemTime::now();
         self.ban_list.retain(|_, ban_until| *ban_until > now);
-        
+
         // Clean up old violation records
         self.violations.clear();
-        
+
         // Clean up old token buckets (keep only recent ones)
         let cutoff = SystemTime::now() - Duration::from_secs(300); // 5 minutes
-        self.ip_buckets.retain(|_, bucket| bucket.last_refill > cutoff);
-        
+        self.ip_buckets
+            .retain(|_, bucket| bucket.last_refill > cutoff);
+
         debug!("Rate limiter cleanup completed");
     }
 }
@@ -312,7 +317,7 @@ pub async fn jwks_rate_limit_middleware(
     next: Next,
 ) -> Response {
     let ip = addr.ip();
-    
+
     match limiter.check_rate_limit(ip).await {
         RateLimitResult::Allowed => {
             // Continue to the handler
@@ -336,28 +341,22 @@ pub async fn jwks_rate_limit_middleware(
 /// Build rate limit error response
 fn rate_limit_response(status_code: u16, message: &str, retry_after: Option<u32>) -> Response {
     let mut headers = HeaderMap::new();
-    
+
     if let Some(retry) = retry_after {
-        headers.insert(
-            "Retry-After",
-            retry.to_string().parse().unwrap(),
-        );
+        headers.insert("Retry-After", retry.to_string().parse().unwrap());
     }
-    
-    headers.insert(
-        "X-RateLimit-Limit",
-        "60".parse().unwrap(),
-    );
-    
+
+    headers.insert("X-RateLimit-Limit", "60".parse().unwrap());
+
     let status = StatusCode::from_u16(status_code).unwrap_or(StatusCode::TOO_MANY_REQUESTS);
-    
+
     (status, headers, message.to_string()).into_response()
 }
 
 /// Start background cleanup task
 pub async fn start_rate_limit_cleanup(limiter: Arc<JwksRateLimiter>) {
     let mut interval = tokio::time::interval(Duration::from_secs(60)); // Every minute
-    
+
     loop {
         interval.tick().await;
         limiter.cleanup().await;
@@ -371,19 +370,19 @@ mod tests {
     #[test]
     fn test_token_bucket() {
         let mut bucket = TokenBucket::new(10, 1.0);
-        
+
         // Should allow initial burst
         for _ in 0..10 {
             assert!(bucket.try_consume(1));
         }
-        
+
         // Should be exhausted
         assert!(!bucket.try_consume(1));
-        
+
         // Wait and refill
         std::thread::sleep(Duration::from_secs(2));
         bucket.refill();
-        
+
         // Should have ~2 tokens
         assert!(bucket.try_consume(1));
         assert!(bucket.try_consume(1));
@@ -400,16 +399,19 @@ mod tests {
             use_redis: false,
             ..Default::default()
         };
-        
+
         let limiter = JwksRateLimiter::new(config, None).await;
         let ip = "127.0.0.1".parse().unwrap();
-        
+
         // Should allow initial requests
         for _ in 0..5 {
             assert_eq!(limiter.check_rate_limit(ip).await, RateLimitResult::Allowed);
         }
-        
+
         // Should be rate limited after burst
-        assert_eq!(limiter.check_rate_limit(ip).await, RateLimitResult::IpLimitExceeded);
+        assert_eq!(
+            limiter.check_rate_limit(ip).await,
+            RateLimitResult::IpLimitExceeded
+        );
     }
 }

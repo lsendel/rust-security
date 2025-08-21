@@ -47,9 +47,16 @@ async fn mint_token(base: &str, scope: &str) -> String {
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success(), "token mint failed: {}", res.status());
+    assert!(
+        res.status().is_success(),
+        "token mint failed: {}",
+        res.status()
+    );
     let v: serde_json::Value = res.json().await.unwrap();
-    v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string()
+    v.get("access_token")
+        .and_then(|x| x.as_str())
+        .unwrap()
+        .to_string()
 }
 
 mod common;

@@ -19,7 +19,10 @@ pub fn current_timestamp() -> DateTime<Utc> {
 
 /// Calculate uptime in seconds from a start time
 pub fn calculate_uptime(start_time: SystemTime) -> u64 {
-    SystemTime::now().duration_since(start_time).unwrap_or(Duration::ZERO).as_secs()
+    SystemTime::now()
+        .duration_since(start_time)
+        .unwrap_or(Duration::ZERO)
+        .as_secs()
 }
 
 /// Validate URL format
@@ -29,7 +32,11 @@ pub fn validate_url(url: &str) -> Result<Url> {
 
 /// Validate that a URL uses HTTPS
 pub fn validate_https_url(url: &str) -> ValidationResult {
-    let mut result = ValidationResult { valid: true, errors: Vec::new(), warnings: Vec::new() };
+    let mut result = ValidationResult {
+        valid: true,
+        errors: Vec::new(),
+        warnings: Vec::new(),
+    };
 
     match Url::parse(url) {
         Ok(parsed_url) => {
@@ -50,8 +57,11 @@ pub fn validate_https_url(url: &str) -> ValidationResult {
 /// Sanitize string for logging (remove sensitive information)
 pub fn sanitize_for_logging(input: &str) -> String {
     // Remove potential tokens, passwords, keys
-    let sensitive_patterns =
-        [r"(token|password|key|secret|credential)[:=]\s*\S+", r"Bearer\s+\S+", r"Basic\s+\S+"];
+    let sensitive_patterns = [
+        r"(token|password|key|secret|credential)[:=]\s*\S+",
+        r"Bearer\s+\S+",
+        r"Basic\s+\S+",
+    ];
 
     let mut sanitized = input.to_string();
     for pattern in &sensitive_patterns {
@@ -65,8 +75,13 @@ pub fn sanitize_for_logging(input: &str) -> String {
 /// Extract client IP from various header formats
 pub fn extract_client_ip(headers: &std::collections::HashMap<String, String>) -> Option<String> {
     // Try various headers in order of preference
-    let ip_headers =
-        ["x-forwarded-for", "x-real-ip", "x-client-ip", "cf-connecting-ip", "x-cluster-client-ip"];
+    let ip_headers = [
+        "x-forwarded-for",
+        "x-real-ip",
+        "x-client-ip",
+        "cf-connecting-ip",
+        "x-cluster-client-ip",
+    ];
 
     for header in &ip_headers {
         if let Some(value) = headers.get(&header.to_lowercase()) {

@@ -56,7 +56,10 @@ struct BackupCodesResponse {
 }
 
 fn now_unix() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 fn hotp(secret: &[u8], counter: u64) -> u32 {
@@ -92,7 +95,9 @@ async fn totp_register_and_verify() {
 
     let reg: TotpRegisterResponse = client
         .post(format!("{}/mfa/totp/register", base))
-        .json(&TotpRegisterRequest { user_id: user_id.clone() })
+        .json(&TotpRegisterRequest {
+            user_id: user_id.clone(),
+        })
         .send()
         .await
         .unwrap()
@@ -102,12 +107,17 @@ async fn totp_register_and_verify() {
 
     assert!(!reg.secret_base32.is_empty());
     assert!(reg.otpauth_url.starts_with("otpauth://totp/"));
-    let secret = BASE32.decode(reg.secret_base32.as_bytes()).expect("decode base32");
+    let secret = BASE32
+        .decode(reg.secret_base32.as_bytes())
+        .expect("decode base32");
 
     let code = totp(&secret, now_unix(), 30, 6);
     let verified: TotpVerifyResponse = client
         .post(format!("{}/mfa/totp/verify", base))
-        .json(&TotpVerifyRequest { user_id: user_id.clone(), code })
+        .json(&TotpVerifyRequest {
+            user_id: user_id.clone(),
+            code,
+        })
         .send()
         .await
         .unwrap()
@@ -126,7 +136,9 @@ async fn totp_backup_codes_flow() {
     // register to create entry
     let _ = client
         .post(format!("{}/mfa/totp/register", base))
-        .json(&TotpRegisterRequest { user_id: user_id.clone() })
+        .json(&TotpRegisterRequest {
+            user_id: user_id.clone(),
+        })
         .send()
         .await
         .unwrap();
@@ -134,7 +146,9 @@ async fn totp_backup_codes_flow() {
     // generate backup codes
     let codes: BackupCodesResponse = client
         .post(format!("{}/mfa/totp/backup-codes/generate", base))
-        .json(&TotpRegisterRequest { user_id: user_id.clone() })
+        .json(&TotpRegisterRequest {
+            user_id: user_id.clone(),
+        })
         .send()
         .await
         .unwrap()
@@ -147,7 +161,10 @@ async fn totp_backup_codes_flow() {
     // verify using backup code should succeed once
     let res: TotpVerifyResponse = client
         .post(format!("{}/mfa/totp/verify", base))
-        .json(&TotpVerifyRequest { user_id: user_id.clone(), code: code.clone() })
+        .json(&TotpVerifyRequest {
+            user_id: user_id.clone(),
+            code: code.clone(),
+        })
         .send()
         .await
         .unwrap()

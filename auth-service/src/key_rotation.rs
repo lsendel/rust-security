@@ -70,7 +70,10 @@ pub struct KeyRotationService {
 impl KeyRotationService {
     /// Create a new key rotation service
     pub fn new(config: KeyRotationConfig) -> Self {
-        Self { config, last_rotation: None }
+        Self {
+            config,
+            last_rotation: None,
+        }
     }
 
     /// Start the key rotation service
@@ -180,7 +183,9 @@ impl KeyRotationService {
             enabled: self.config.enabled,
             rotation_interval: self.config.rotation_interval,
             last_rotation: self.last_rotation,
-            next_rotation: self.last_rotation.map(|last| last + self.config.rotation_interval),
+            next_rotation: self
+                .last_rotation
+                .map(|last| last + self.config.rotation_interval),
         }
     }
 }
@@ -237,7 +242,10 @@ mod tests {
         let config = KeyRotationConfig::default();
         assert!(config.enabled);
         assert_eq!(config.rotation_interval, Duration::from_secs(24 * 60 * 60));
-        assert_eq!(config.key_retention_period, Duration::from_secs(48 * 60 * 60));
+        assert_eq!(
+            config.key_retention_period,
+            Duration::from_secs(48 * 60 * 60)
+        );
     }
 
     #[test]
@@ -249,7 +257,10 @@ mod tests {
         let config = KeyRotationConfig::from_env();
         assert!(!config.enabled);
         assert_eq!(config.rotation_interval, Duration::from_secs(12 * 60 * 60));
-        assert_eq!(config.key_retention_period, Duration::from_secs(24 * 60 * 60));
+        assert_eq!(
+            config.key_retention_period,
+            Duration::from_secs(24 * 60 * 60)
+        );
 
         // Clean up
         std::env::remove_var("KEY_ROTATION_INTERVAL_HOURS");

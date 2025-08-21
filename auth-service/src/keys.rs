@@ -82,7 +82,10 @@ impl KeyManager {
         for attempt in 1..=self.config.retry_attempts {
             match self.generate_and_store_key(attempt == 1).await {
                 Ok(_) => {
-                    info!("Key management initialized successfully on attempt {}", attempt);
+                    info!(
+                        "Key management initialized successfully on attempt {}",
+                        attempt
+                    );
                     self.initialized
                         .set(true)
                         .map_err(|_| internal_error("Failed to mark key manager as initialized"))?;
@@ -210,7 +213,9 @@ impl KeyManager {
         if let Some(key_material) = keys.last() {
             Ok((key_material.kid.clone(), key_material.encoding_key.clone()))
         } else {
-            Err(internal_error("No signing key available after initialization"))
+            Err(internal_error(
+                "No signing key available after initialization",
+            ))
         }
     }
 
@@ -276,7 +281,10 @@ impl KeyManager {
     }
 
     fn current_timestamp() -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
     }
 }
 

@@ -22,16 +22,16 @@ pub enum CircuitBreakerError {
 impl From<CircuitBreakerError> for AuthError {
     fn from(err: CircuitBreakerError) -> Self {
         match err {
-            CircuitBreakerError::Open => {
-                AuthError::ServiceUnavailable { reason: "Circuit breaker is open".to_string() }
-            }
+            CircuitBreakerError::Open => AuthError::ServiceUnavailable {
+                reason: "Circuit breaker is open".to_string(),
+            },
             CircuitBreakerError::Timeout { timeout } => AuthError::ServiceUnavailable {
                 reason: format!("Operation timeout after {:?}", timeout),
             },
             CircuitBreakerError::TooManyRequests => AuthError::RateLimitExceeded,
-            CircuitBreakerError::OperationFailed(msg) => {
-                AuthError::ServiceUnavailable { reason: format!("Operation failed: {}", msg) }
-            }
+            CircuitBreakerError::OperationFailed(msg) => AuthError::ServiceUnavailable {
+                reason: format!("Operation failed: {}", msg),
+            },
         }
     }
 }
@@ -142,7 +142,9 @@ impl CircuitBreaker {
             }
             Err(_) => {
                 self.on_failure().await;
-                Err(CircuitBreakerError::Timeout { timeout: self.config.request_timeout })
+                Err(CircuitBreakerError::Timeout {
+                    timeout: self.config.request_timeout,
+                })
             }
         }
     }

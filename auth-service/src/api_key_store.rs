@@ -150,8 +150,10 @@ mod tests {
         let hashed_key = "hashed_key";
         let permissions = Some("read,write");
 
-        let created_key =
-            store.create_api_key(client_id, prefix, hashed_key, permissions, None).await.unwrap();
+        let created_key = store
+            .create_api_key(client_id, prefix, hashed_key, permissions, None)
+            .await
+            .unwrap();
         assert_eq!(created_key.client_id, client_id);
         assert_eq!(created_key.prefix, prefix);
 
@@ -163,8 +165,14 @@ mod tests {
     #[tokio::test]
     async fn test_list_api_keys() {
         let store = setup_store().await;
-        store.create_api_key("client1", "prefix1_", "hash1", None, None).await.unwrap();
-        store.create_api_key("client2", "prefix2_", "hash2", None, None).await.unwrap();
+        store
+            .create_api_key("client1", "prefix1_", "hash1", None, None)
+            .await
+            .unwrap();
+        store
+            .create_api_key("client2", "prefix2_", "hash2", None, None)
+            .await
+            .unwrap();
 
         let keys = store.list_api_keys().await.unwrap();
         assert_eq!(keys.len(), 2);
@@ -174,7 +182,10 @@ mod tests {
     async fn test_revoke_api_key() {
         let store = setup_store().await;
         let prefix = "revoke_";
-        store.create_api_key("client", prefix, "hash", None, None).await.unwrap();
+        store
+            .create_api_key("client", prefix, "hash", None, None)
+            .await
+            .unwrap();
 
         store.revoke_api_key(prefix).await.unwrap();
 
@@ -185,12 +196,19 @@ mod tests {
     #[tokio::test]
     async fn test_update_last_used() {
         let store = setup_store().await;
-        let key = store.create_api_key("client", "last_used_", "hash", None, None).await.unwrap();
+        let key = store
+            .create_api_key("client", "last_used_", "hash", None, None)
+            .await
+            .unwrap();
         assert!(key.last_used_at.is_none());
 
         store.update_last_used(key.id).await.unwrap();
 
-        let updated_key = store.get_api_key_by_prefix("last_used_").await.unwrap().unwrap();
+        let updated_key = store
+            .get_api_key_by_prefix("last_used_")
+            .await
+            .unwrap()
+            .unwrap();
         assert!(updated_key.last_used_at.is_some());
     }
 }

@@ -388,11 +388,26 @@ impl PiiRedactor {
     pub fn redact_path(path: &str) -> String {
         // Common patterns that might contain sensitive info
         let patterns = [
-            (regex::Regex::new(r"/users/[^/]+").unwrap(), "/users/[USER_ID]"),
-            (regex::Regex::new(r"[?&]token=[^&]*").unwrap(), "&token=[REDACTED]"),
-            (regex::Regex::new(r"[?&]secret=[^&]*").unwrap(), "&secret=[REDACTED]"),
-            (regex::Regex::new(r"[?&]password=[^&]*").unwrap(), "&password=[REDACTED]"),
-            (regex::Regex::new(r"[?&]email=[^&]*").unwrap(), "&email=[REDACTED]"),
+            (
+                regex::Regex::new(r"/users/[^/]+").unwrap(),
+                "/users/[USER_ID]",
+            ),
+            (
+                regex::Regex::new(r"[?&]token=[^&]*").unwrap(),
+                "&token=[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"[?&]secret=[^&]*").unwrap(),
+                "&secret=[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"[?&]password=[^&]*").unwrap(),
+                "&password=[REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"[?&]email=[^&]*").unwrap(),
+                "&email=[REDACTED]",
+            ),
         ];
 
         let mut redacted = path.to_string();
@@ -430,9 +445,18 @@ impl PiiRedactor {
     pub fn redact_reason(reason: &str) -> String {
         // Remove tokens, secrets, and other sensitive data from error messages
         let patterns = [
-            (regex::Regex::new(r"token:\s*[A-Za-z0-9._-]+").unwrap(), "token: [REDACTED]"),
-            (regex::Regex::new(r"secret:\s*[A-Za-z0-9._-]+").unwrap(), "secret: [REDACTED]"),
-            (regex::Regex::new(r"password:\s*[^\s]+").unwrap(), "password: [REDACTED]"),
+            (
+                regex::Regex::new(r"token:\s*[A-Za-z0-9._-]+").unwrap(),
+                "token: [REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"secret:\s*[A-Za-z0-9._-]+").unwrap(),
+                "secret: [REDACTED]",
+            ),
+            (
+                regex::Regex::new(r"password:\s*[^\s]+").unwrap(),
+                "password: [REDACTED]",
+            ),
             (
                 regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
                 "[EMAIL_REDACTED]",
@@ -462,7 +486,10 @@ mod tests {
 
     #[test]
     fn test_pii_redaction_ip_address() {
-        assert_eq!(PiiRedactor::redact_ip_address("192.168.1.100"), "192.168.1.***");
+        assert_eq!(
+            PiiRedactor::redact_ip_address("192.168.1.100"),
+            "192.168.1.***"
+        );
         assert_eq!(
             PiiRedactor::redact_ip_address("2001:db8:85a3:8d3:1319:8a2e:370:7348"),
             "2001:db8:85a3:8d3::***"
@@ -472,8 +499,14 @@ mod tests {
 
     #[test]
     fn test_pii_redaction_email() {
-        assert_eq!(PiiRedactor::redact_actor("user@example.com"), "u*@example.com");
-        assert_eq!(PiiRedactor::redact_actor("ab@example.com"), "**@example.com");
+        assert_eq!(
+            PiiRedactor::redact_actor("user@example.com"),
+            "u*@example.com"
+        );
+        assert_eq!(
+            PiiRedactor::redact_actor("ab@example.com"),
+            "**@example.com"
+        );
         assert_eq!(PiiRedactor::redact_actor("system_user"), "system_user");
 
         let long_actor = "a".repeat(60);
@@ -500,8 +533,14 @@ mod tests {
 
     #[test]
     fn test_pii_redaction_path() {
-        assert_eq!(PiiRedactor::redact_path("/users/12345/profile"), "/users/[USER_ID]/profile");
-        assert_eq!(PiiRedactor::redact_path("/api?token=secret123"), "/api&token=[REDACTED]");
+        assert_eq!(
+            PiiRedactor::redact_path("/users/12345/profile"),
+            "/users/[USER_ID]/profile"
+        );
+        assert_eq!(
+            PiiRedactor::redact_path("/api?token=secret123"),
+            "/api&token=[REDACTED]"
+        );
         assert_eq!(
             PiiRedactor::redact_path("/login?password=mypass"),
             "/login&password=[REDACTED]"
@@ -666,7 +705,11 @@ impl SecurityLogger {
     ) {
         let mut event = SecurityEvent::new(
             SecurityEventType::AuthenticationAttempt,
-            if outcome == "success" { SecuritySeverity::Low } else { SecuritySeverity::Medium },
+            if outcome == "success" {
+                SecuritySeverity::Low
+            } else {
+                SecuritySeverity::Medium
+            },
             "auth-service".to_string(),
             format!("Authentication attempt by client {}", client_id),
         )
@@ -805,7 +848,10 @@ impl SecurityLogger {
             SecurityEventType::RateLimitExceeded,
             SecuritySeverity::Medium,
             "auth-service".to_string(),
-            format!("Rate limit exceeded for client {} at {}", client_id, endpoint),
+            format!(
+                "Rate limit exceeded for client {} at {}",
+                client_id, endpoint
+            ),
         )
         .with_client_id(client_id.to_string())
         .with_ip_address(ip_address.to_string())

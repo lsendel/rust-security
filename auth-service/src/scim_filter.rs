@@ -57,12 +57,20 @@ pub fn parse_scim_filter(filter: &str) -> Result<ScimFilter, ScimFilterError> {
         "sw" => ScimOperator::Sw,
         "ew" => ScimOperator::Ew,
         "pr" => ScimOperator::Pr,
-        _ => return Err(ScimFilterError::UnsupportedOperator(operator_str.to_string())),
+        _ => {
+            return Err(ScimFilterError::UnsupportedOperator(
+                operator_str.to_string(),
+            ))
+        }
     };
 
     if operator != ScimOperator::Pr && value.is_none() {
         return Err(ScimFilterError::InvalidSyntax);
     }
 
-    Ok(ScimFilter { attribute, operator, value })
+    Ok(ScimFilter {
+        attribute,
+        operator,
+        value,
+    })
 }

@@ -186,7 +186,10 @@ async fn test_health_endpoint() {
     assert_eq!(response.status(), 200);
 
     let health_response: Value = response.json().await.unwrap();
-    assert_eq!(health_response.get("status").unwrap().as_str().unwrap(), "ok");
+    assert_eq!(
+        health_response.get("status").unwrap().as_str().unwrap(),
+        "ok"
+    );
 }
 
 #[tokio::test]
@@ -194,7 +197,11 @@ async fn test_openapi_endpoint() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let response = client.get(format!("{}/openapi.json", base)).send().await.unwrap();
+    let response = client
+        .get(format!("{}/openapi.json", base))
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), 200);
 

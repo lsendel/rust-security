@@ -51,7 +51,10 @@ async fn refresh_token_flow() {
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/token", base))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .body(format!(
+            "grant_type=refresh_token&refresh_token={}",
+            refresh_token
+        ))
         .send()
         .await
         .unwrap();
@@ -64,7 +67,10 @@ async fn refresh_token_flow() {
     let res = reqwest::Client::new()
         .post(format!("{}/oauth/token", base))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .body(format!(
+            "grant_type=refresh_token&refresh_token={}",
+            refresh_token
+        ))
         .send()
         .await
         .unwrap();

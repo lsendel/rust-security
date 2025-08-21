@@ -126,8 +126,17 @@ async fn scim_users_pagination_and_filter() {
 
     // create users
     for i in 0..10 {
-        let u = ScimUser { id: String::new(), user_name: format!("user{}", i), active: true };
-        let res = client.post(format!("{}/scim/v2/Users", base)).json(&u).send().await.unwrap();
+        let u = ScimUser {
+            id: String::new(),
+            user_name: format!("user{}", i),
+            active: true,
+        };
+        let res = client
+            .post(format!("{}/scim/v2/Users", base))
+            .json(&u)
+            .send()
+            .await
+            .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
 
@@ -159,7 +168,10 @@ async fn scim_users_pagination_and_filter() {
 
     // filter contains
     let filtered: ListResponse<ScimUser> = client
-        .get(format!("{}/scim/v2/Users?filter=userName%20co%20%22user1%22", base))
+        .get(format!(
+            "{}/scim/v2/Users?filter=userName%20co%20%22user1%22",
+            base
+        ))
         .send()
         .await
         .unwrap()
@@ -167,7 +179,10 @@ async fn scim_users_pagination_and_filter() {
         .await
         .unwrap();
     assert!(filtered.total_results >= 1);
-    assert!(filtered.resources.iter().all(|u| u.user_name.contains("user1")));
+    assert!(filtered
+        .resources
+        .iter()
+        .all(|u| u.user_name.contains("user1")));
 }
 
 #[tokio::test]
@@ -177,14 +192,25 @@ async fn scim_groups_pagination_and_filter() {
 
     // create groups
     for i in 0..5 {
-        let g =
-            ScimGroup { id: String::new(), display_name: format!("group{}", i), members: vec![] };
-        let res = client.post(format!("{}/scim/v2/Groups", base)).json(&g).send().await.unwrap();
+        let g = ScimGroup {
+            id: String::new(),
+            display_name: format!("group{}", i),
+            members: vec![],
+        };
+        let res = client
+            .post(format!("{}/scim/v2/Groups", base))
+            .json(&g)
+            .send()
+            .await
+            .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
 
     let filtered: ListResponse<ScimGroup> = client
-        .get(format!("{}/scim/v2/Groups?filter=displayName%20co%20%22group", base))
+        .get(format!(
+            "{}/scim/v2/Groups?filter=displayName%20co%20%22group",
+            base
+        ))
         .send()
         .await
         .unwrap()
@@ -192,7 +218,10 @@ async fn scim_groups_pagination_and_filter() {
         .await
         .unwrap();
     assert_eq!(filtered.total_results, 5);
-    assert!(filtered.resources.iter().all(|g| g.display_name.contains("group")));
+    assert!(filtered
+        .resources
+        .iter()
+        .all(|g| g.display_name.contains("group")));
 }
 
 // === SCIM Bulk Operations Tests ===
@@ -229,8 +258,12 @@ async fn test_bulk_create_users() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -238,14 +271,26 @@ async fn test_bulk_create_users() {
     assert_eq!(bulk_response.operations.len(), 2);
 
     // Check first user creation
-    assert_eq!(bulk_response.operations[0].method, BulkOperationMethod::Post);
-    assert_eq!(bulk_response.operations[0].bulk_id, Some("user1".to_string()));
+    assert_eq!(
+        bulk_response.operations[0].method,
+        BulkOperationMethod::Post
+    );
+    assert_eq!(
+        bulk_response.operations[0].bulk_id,
+        Some("user1".to_string())
+    );
     assert_eq!(bulk_response.operations[0].status, "201");
     assert!(bulk_response.operations[0].location.is_some());
 
     // Check second user creation
-    assert_eq!(bulk_response.operations[1].method, BulkOperationMethod::Post);
-    assert_eq!(bulk_response.operations[1].bulk_id, Some("user2".to_string()));
+    assert_eq!(
+        bulk_response.operations[1].method,
+        BulkOperationMethod::Post
+    );
+    assert_eq!(
+        bulk_response.operations[1].bulk_id,
+        Some("user2".to_string())
+    );
     assert_eq!(bulk_response.operations[1].status, "201");
     assert!(bulk_response.operations[1].location.is_some());
 }
@@ -282,8 +327,12 @@ async fn test_bulk_create_groups() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -304,9 +353,17 @@ async fn test_bulk_mixed_operations() {
     let client = reqwest::Client::new();
 
     // First create a user to update/delete later
-    let user = ScimUser { id: String::new(), user_name: "existing.user".to_string(), active: true };
-    let create_response =
-        client.post(format!("{}/scim/v2/Users", base)).json(&user).send().await.unwrap();
+    let user = ScimUser {
+        id: String::new(),
+        user_name: "existing.user".to_string(),
+        active: true,
+    };
+    let create_response = client
+        .post(format!("{}/scim/v2/Users", base))
+        .json(&user)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
     let created_user: ScimUser = create_response.json().await.unwrap();
 
@@ -347,8 +404,12 @@ async fn test_bulk_mixed_operations() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -356,16 +417,25 @@ async fn test_bulk_mixed_operations() {
     assert_eq!(bulk_response.operations.len(), 3);
 
     // Verify create operation
-    assert_eq!(bulk_response.operations[0].method, BulkOperationMethod::Post);
+    assert_eq!(
+        bulk_response.operations[0].method,
+        BulkOperationMethod::Post
+    );
     assert_eq!(bulk_response.operations[0].status, "201");
     assert!(bulk_response.operations[0].location.is_some());
 
     // Verify update operation
-    assert_eq!(bulk_response.operations[1].method, BulkOperationMethod::Patch);
+    assert_eq!(
+        bulk_response.operations[1].method,
+        BulkOperationMethod::Patch
+    );
     assert_eq!(bulk_response.operations[1].status, "200");
 
     // Verify delete operation
-    assert_eq!(bulk_response.operations[2].method, BulkOperationMethod::Delete);
+    assert_eq!(
+        bulk_response.operations[2].method,
+        BulkOperationMethod::Delete
+    );
     assert_eq!(bulk_response.operations[2].status, "204");
 }
 
@@ -410,8 +480,12 @@ async fn test_bulk_error_handling() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -459,8 +533,12 @@ async fn test_bulk_fail_on_errors() {
         fail_on_errors: Some(1),
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -490,8 +568,12 @@ async fn test_bulk_invalid_schema() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
@@ -511,8 +593,12 @@ async fn test_bulk_empty_operations() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
@@ -553,8 +639,12 @@ async fn test_bulk_duplicate_bulk_ids() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
@@ -583,8 +673,12 @@ async fn test_bulk_update_nonexistent_resource() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -620,8 +714,12 @@ async fn test_bulk_large_operation_count() {
         fail_on_errors: None,
     };
 
-    let response =
-        client.post(format!("{}/scim/v2/Bulk", base)).json(&bulk_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/scim/v2/Bulk", base))
+        .json(&bulk_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
 
@@ -633,19 +731,28 @@ async fn test_bulk_large_operation_count() {
 #[tokio::test]
 async fn scim_security_headers_present() {
     let base = spawn_app().await;
-    let client =
-        reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build().unwrap();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap();
 
     // Ensure at least one user exists so list returns JSON with content-type
     let _ = client
         .post(format!("{}/scim/v2/Users", base))
-        .json(&ScimUser { id: String::new(), user_name: "sec.user".into(), active: true })
+        .json(&ScimUser {
+            id: String::new(),
+            user_name: "sec.user".into(),
+            active: true,
+        })
         .send()
         .await
         .unwrap();
 
-    let resp =
-        client.get(format!("{}/scim/v2/Users?startIndex=1&count=1", base)).send().await.unwrap();
+    let resp = client
+        .get(format!("{}/scim/v2/Users?startIndex=1&count=1", base))
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
     let headers = resp.headers();
@@ -657,7 +764,9 @@ async fn scim_security_headers_present() {
         Some("SAMEORIGIN").or(Some("DENY"))
     );
     assert_eq!(
-        headers.get("X-Content-Type-Options").and_then(|v| v.to_str().ok()),
+        headers
+            .get("X-Content-Type-Options")
+            .and_then(|v| v.to_str().ok()),
         Some("nosniff")
     );
     assert!(headers.contains_key("Referrer-Policy"));
@@ -665,5 +774,8 @@ async fn scim_security_headers_present() {
     assert!(headers.contains_key("Cross-Origin-Embedder-Policy"));
     assert!(headers.contains_key("Cross-Origin-Opener-Policy"));
     assert!(headers.contains_key("Cross-Origin-Resource-Policy"));
-    assert_eq!(headers.get("Server").and_then(|v| v.to_str().ok()), Some("Rust-Security-Service"));
+    assert_eq!(
+        headers.get("Server").and_then(|v| v.to_str().ok()),
+        Some("Rust-Security-Service")
+    );
 }

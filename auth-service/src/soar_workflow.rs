@@ -368,7 +368,10 @@ pub enum RiskEvaluator {
     Fixed(u8),
 
     /// Field-based evaluation
-    FieldBased { field: String, scoring_rules: Vec<ScoringRule> },
+    FieldBased {
+        field: String,
+        scoring_rules: Vec<ScoringRule>,
+    },
 
     /// Custom evaluation logic
     Custom(String),
@@ -828,12 +831,16 @@ impl WorkflowOrchestrator {
         decision: ApprovalDecision,
         comments: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.approval_manager.submit_approval(approval_id, approver_id, decision, comments).await
+        self.approval_manager
+            .submit_approval(approval_id, approver_id, decision, comments)
+            .await
     }
 
     /// Get workflow status
     pub async fn get_workflow_status(&self, instance_id: &str) -> Option<WorkflowInstance> {
-        self.active_workflows.get(instance_id).map(|entry| entry.clone())
+        self.active_workflows
+            .get(instance_id)
+            .map(|entry| entry.clone())
     }
 
     /// Cancel a workflow
@@ -968,8 +975,14 @@ impl WorkflowOrchestrator {
         }
 
         let mut execution_context = request.context;
-        execution_context.insert("workflow_id".to_string(), Value::String(instance_id.clone()));
-        execution_context.insert("playbook_id".to_string(), Value::String(playbook.id.clone()));
+        execution_context.insert(
+            "workflow_id".to_string(),
+            Value::String(instance_id.clone()),
+        );
+        execution_context.insert(
+            "playbook_id".to_string(),
+            Value::String(playbook.id.clone()),
+        );
 
         let mut step_results = HashMap::new();
         let mut workflow_error = None;
@@ -1128,7 +1141,9 @@ impl WorkflowOrchestrator {
             // Extract outputs from final context
             for output_def in &playbook.outputs {
                 if let Some(value) = execution_context.get(&output_def.name) {
-                    instance.outputs.insert(output_def.name.clone(), value.clone());
+                    instance
+                        .outputs
+                        .insert(output_def.name.clone(), value.clone());
                 }
             }
         }
@@ -1186,8 +1201,9 @@ impl WorkflowOrchestrator {
         let start_time = Utc::now();
 
         // Get appropriate executor
-        let executor =
-            step_executors.get(&step.step_type.to_string()).ok_or_else(|| StepError {
+        let executor = step_executors
+            .get(&step.step_type.to_string())
+            .ok_or_else(|| StepError {
                 code: "EXECUTOR_NOT_FOUND".to_string(),
                 message: format!("No executor found for step type: {:?}", step.step_type),
                 details: None,
@@ -1201,8 +1217,11 @@ impl WorkflowOrchestrator {
         // Execute with timeout
         let timeout_duration = TokioDuration::from_secs((step.timeout_minutes * 60) as u64);
 
-        let execution_result =
-            timeout(timeout_duration, executor.execute_step(&rendered_step, context)).await;
+        let execution_result = timeout(
+            timeout_duration,
+            executor.execute_step(&rendered_step, context),
+        )
+        .await;
 
         match execution_result {
             Ok(Ok(outputs)) => Ok(StepResult {
@@ -1217,7 +1236,10 @@ impl WorkflowOrchestrator {
             Ok(Err(e)) => Err(e),
             Err(_) => Err(StepError {
                 code: "STEP_TIMEOUT".to_string(),
-                message: format!("Step execution timed out after {} minutes", step.timeout_minutes),
+                message: format!(
+                    "Step execution timed out after {} minutes",
+                    step.timeout_minutes
+                ),
                 details: None,
                 retryable: true,
             }),
@@ -1232,15 +1254,21 @@ impl WorkflowOrchestrator {
     ) -> Result<(), StepError> {
         // Render step action parameters
         match &mut step.action {
-            StepAction::BlockIp { ip_address, reason, .. } => {
+            StepAction::BlockIp {
+                ip_address, reason, ..
+            } => {
                 *ip_address = Self::render_template(ip_address, context, template_engine)?;
                 *reason = Self::render_template(reason, context, template_engine)?;
             }
-            StepAction::LockAccount { user_id, reason, .. } => {
+            StepAction::LockAccount {
+                user_id, reason, ..
+            } => {
                 *user_id = Self::render_template(user_id, context, template_engine)?;
                 *reason = Self::render_template(reason, context, template_engine)?;
             }
-            StepAction::SendNotification { subject, message, .. } => {
+            StepAction::SendNotification {
+                subject, message, ..
+            } => {
                 *subject = Self::render_template(subject, context, template_engine)?;
                 *message = Self::render_template(message, context, template_engine)?;
             }
@@ -1256,15 +1284,17 @@ impl WorkflowOrchestrator {
         context: &HashMap<String, Value>,
         template_engine: &Handlebars<'static>,
     ) -> Result<String, StepError> {
-        template_engine.render_template(template, context).map_err(|e| StepError {
-            code: "TEMPLATE_RENDER_ERROR".to_string(),
-            message: format!("Failed to render template: {}", e),
-            details: Some(serde_json::json!({
-                "template": template,
-                "error": e.to_string()
-            })),
-            retryable: false,
-        })
+        template_engine
+            .render_template(template, context)
+            .map_err(|e| StepError {
+                code: "TEMPLATE_RENDER_ERROR".to_string(),
+                message: format!("Failed to render template: {}", e),
+                details: Some(serde_json::json!({
+                    "template": template,
+                    "error": e.to_string()
+                })),
+                retryable: false,
+            })
     }
 
     /// Check step dependencies
@@ -1358,13 +1388,18 @@ impl WorkflowOrchestrator {
         info!("Registering built-in step executors...");
 
         // Security action executors
-        self.step_executors.insert("block_ip".to_string(), Arc::new(IpBlockExecutor::new()));
-
         self.step_executors
-            .insert("lock_account".to_string(), Arc::new(AccountLockExecutor::new()));
+            .insert("block_ip".to_string(), Arc::new(IpBlockExecutor::new()));
 
-        self.step_executors
-            .insert("revoke_tokens".to_string(), Arc::new(TokenRevokeExecutor::new()));
+        self.step_executors.insert(
+            "lock_account".to_string(),
+            Arc::new(AccountLockExecutor::new()),
+        );
+
+        self.step_executors.insert(
+            "revoke_tokens".to_string(),
+            Arc::new(TokenRevokeExecutor::new()),
+        );
 
         // Notification executors
         self.step_executors.insert(
@@ -1372,8 +1407,10 @@ impl WorkflowOrchestrator {
             Arc::new(EmailNotificationExecutor::new().await?),
         );
 
-        self.step_executors
-            .insert("slack_notification".to_string(), Arc::new(SlackNotificationExecutor::new()));
+        self.step_executors.insert(
+            "slack_notification".to_string(),
+            Arc::new(SlackNotificationExecutor::new()),
+        );
 
         self.step_executors.insert(
             "webhook_notification".to_string(),
@@ -1381,30 +1418,48 @@ impl WorkflowOrchestrator {
         );
 
         // Query and data executors
-        self.step_executors.insert("siem_query".to_string(), Arc::new(SiemQueryExecutor::new()));
-
         self.step_executors
-            .insert("database_query".to_string(), Arc::new(DatabaseQueryExecutor::new()));
+            .insert("siem_query".to_string(), Arc::new(SiemQueryExecutor::new()));
+
+        self.step_executors.insert(
+            "database_query".to_string(),
+            Arc::new(DatabaseQueryExecutor::new()),
+        );
 
         // Case and ticket management
-        self.step_executors
-            .insert("create_ticket".to_string(), Arc::new(TicketCreateExecutor::new()));
+        self.step_executors.insert(
+            "create_ticket".to_string(),
+            Arc::new(TicketCreateExecutor::new()),
+        );
 
-        self.step_executors.insert("update_case".to_string(), Arc::new(CaseUpdateExecutor::new()));
+        self.step_executors.insert(
+            "update_case".to_string(),
+            Arc::new(CaseUpdateExecutor::new()),
+        );
 
         // Script and automation executors
-        self.step_executors.insert("execute_script".to_string(), Arc::new(ScriptExecutor::new()));
+        self.step_executors.insert(
+            "execute_script".to_string(),
+            Arc::new(ScriptExecutor::new()),
+        );
 
-        self.step_executors
-            .insert("http_request".to_string(), Arc::new(HttpRequestExecutor::new()));
+        self.step_executors.insert(
+            "http_request".to_string(),
+            Arc::new(HttpRequestExecutor::new()),
+        );
 
         // Control flow executors
-        self.step_executors.insert("decision".to_string(), Arc::new(DecisionExecutor::new()));
+        self.step_executors
+            .insert("decision".to_string(), Arc::new(DecisionExecutor::new()));
 
-        self.step_executors.insert("wait".to_string(), Arc::new(WaitExecutor::new()));
+        self.step_executors
+            .insert("wait".to_string(), Arc::new(WaitExecutor::new()));
 
         let executor_count = self.step_executors.len();
-        info!("Successfully registered {} built-in step executors", executor_count);
+        info!(
+            "Successfully registered {} built-in step executors",
+            executor_count
+        );
 
         // Log all registered executors for debugging
         let executor_types: Vec<String> =
@@ -1498,11 +1553,17 @@ impl WorkflowOrchestrator {
 // Implementation stubs for supporting components
 impl<T> PriorityQueue<T> {
     fn new() -> Self {
-        Self { items: VecDeque::new() }
+        Self {
+            items: VecDeque::new(),
+        }
     }
 
     fn push(&mut self, item: T, priority: u8) {
-        let priority_item = PriorityItem { item, priority, timestamp: Utc::now() };
+        let priority_item = PriorityItem {
+            item,
+            priority,
+            timestamp: Utc::now(),
+        };
 
         // Insert in priority order (higher priority first)
         let insert_pos = self
@@ -1536,7 +1597,8 @@ impl ApprovalManager {
         &self,
         approval_request: ApprovalRequest,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.pending_approvals.insert(approval_request.id.clone(), approval_request);
+        self.pending_approvals
+            .insert(approval_request.id.clone(), approval_request);
         Ok(())
     }
 
@@ -1554,14 +1616,25 @@ impl ApprovalManager {
 
         // Find the pending approval
         let approval_request = self.pending_approvals.remove(&approval_id).ok_or_else(|| {
-            error!("Approval request {} not found in pending approvals", approval_id);
+            error!(
+                "Approval request {} not found in pending approvals",
+                approval_id
+            );
             format!("Approval request {} not found", approval_id)
         })?;
 
         // Validate that the approver is authorized
-        if !self.validate_approver_authorization(&approval_request, &approver_id).await? {
-            error!("Approver {} not authorized for approval {}", approver_id, approval_id);
-            return Err(format!("Approver {} not authorized for this approval", approver_id).into());
+        if !self
+            .validate_approver_authorization(&approval_request, &approver_id)
+            .await?
+        {
+            error!(
+                "Approver {} not authorized for approval {}",
+                approver_id, approval_id
+            );
+            return Err(
+                format!("Approver {} not authorized for this approval", approver_id).into(),
+            );
         }
 
         // Create approval response
@@ -1574,7 +1647,8 @@ impl ApprovalManager {
         };
 
         // Store the approval response
-        self.approval_responses.insert(approval_id.clone(), response.clone());
+        self.approval_responses
+            .insert(approval_id.clone(), response.clone());
 
         // Log the approval decision
         SecurityLogger::log_event(
@@ -1606,8 +1680,14 @@ impl ApprovalManager {
             )
             .with_reason(format!("Manual approval decision: {:?}", decision))
             .with_detail("approval_id".to_string(), approval_id.clone())
-            .with_detail("workflow_id".to_string(), approval_request.workflow_id.clone())
-            .with_detail("comments".to_string(), comments.unwrap_or_else(|| "None".to_string())),
+            .with_detail(
+                "workflow_id".to_string(),
+                approval_request.workflow_id.clone(),
+            )
+            .with_detail(
+                "comments".to_string(),
+                comments.unwrap_or_else(|| "None".to_string()),
+            ),
         );
 
         // Handle the approval decision
@@ -1617,25 +1697,29 @@ impl ApprovalManager {
                     "Approval {} approved, resuming workflow {}",
                     approval_id, approval_request.workflow_id
                 );
-                self.resume_workflow_after_approval(&approval_request.workflow_id, true).await?;
+                self.resume_workflow_after_approval(&approval_request.workflow_id, true)
+                    .await?;
             }
             ApprovalDecision::Rejected => {
                 warn!(
                     "Approval {} rejected, stopping workflow {}",
                     approval_id, approval_request.workflow_id
                 );
-                self.resume_workflow_after_approval(&approval_request.workflow_id, false).await?;
+                self.resume_workflow_after_approval(&approval_request.workflow_id, false)
+                    .await?;
             }
             ApprovalDecision::RequestMoreInfo => {
                 info!("More information requested for approval {}", approval_id);
                 // For now, treat as rejected. In a full implementation,
                 // this would notify the requester to provide more information
-                self.resume_workflow_after_approval(&approval_request.workflow_id, false).await?;
+                self.resume_workflow_after_approval(&approval_request.workflow_id, false)
+                    .await?;
             }
         }
 
         // Send notifications about the approval decision
-        self.send_approval_notification(&approval_request, &response).await?;
+        self.send_approval_notification(&approval_request, &response)
+            .await?;
 
         info!("Successfully processed approval submission {}", approval_id);
         Ok(())
@@ -1715,7 +1799,10 @@ impl ApprovalManager {
         // Send notification to the workflow requester if specified
         if let Some(requester) = &approval_request.requester_id {
             // TODO: Send email/notification to requester
-            info!("Would send notification to requester {}: {}", requester, subject);
+            info!(
+                "Would send notification to requester {}: {}",
+                requester, subject
+            );
         }
 
         // Send notification to configured approval notification channels
@@ -1782,9 +1869,13 @@ impl WorkflowScheduler {
             status: ScheduleStatus::Pending,
         };
 
-        self.scheduled_workflows.insert(schedule_id.clone(), scheduled_workflow);
+        self.scheduled_workflows
+            .insert(schedule_id.clone(), scheduled_workflow);
 
-        info!("Scheduled workflow: {} for execution at {}", schedule_id, execution_time);
+        info!(
+            "Scheduled workflow: {} for execution at {}",
+            schedule_id, execution_time
+        );
         Ok(schedule_id)
     }
 

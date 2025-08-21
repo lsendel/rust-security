@@ -21,12 +21,18 @@ mod mock_auth_service {
 
     impl MockAuthService {
         pub fn new() -> Self {
-            Self { tokens: HashMap::new() }
+            Self {
+                tokens: HashMap::new(),
+            }
         }
 
         pub async fn generate_token(&mut self, client_id: &str, scope: &str) -> String {
             let token = format!("tk_{}", uuid::Uuid::new_v4());
-            let expires_at = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 3600;
+            let expires_at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + 3600;
 
             self.tokens.insert(
                 token.clone(),
@@ -117,7 +123,9 @@ fn bench_token_introspection(c: &mut Criterion) {
         let mut tokens = Vec::new();
 
         for i in 0..1000 {
-            let token = service.generate_token(&format!("client_{}", i), "read write").await;
+            let token = service
+                .generate_token(&format!("client_{}", i), "read write")
+                .await;
             tokens.push(token);
         }
 

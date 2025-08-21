@@ -174,8 +174,10 @@ pub async fn google_callback(
                 Ok(v) => {
                     // Validate id_token if present
                     let mut result = serde_json::json!({ "token": v, "state": q.state });
-                    if let Some(id_token) =
-                        result.get("token").and_then(|t| t.get("id_token")).and_then(|x| x.as_str())
+                    if let Some(id_token) = result
+                        .get("token")
+                        .and_then(|t| t.get("id_token"))
+                        .and_then(|x| x.as_str())
                     {
                         let verified = validate_google_id_token(
                             id_token,
@@ -274,7 +276,10 @@ async fn store_oauth_state(state: &str, nonce: &str) {
     let now = current_unix();
     if let Some(mut conn) = redis_conn().await {
         let key = format!("oidc:google:state:{}", state);
-        let _: () = redis::Cmd::set_ex(&key, nonce, 600).query_async(&mut conn).await.unwrap_or(());
+        let _: () = redis::Cmd::set_ex(&key, nonce, 600)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
         return;
     }
     let mut guard = GOOGLE_STATE_CACHE.write().await;
@@ -285,7 +290,10 @@ async fn consume_oauth_state(state: &str) -> Option<(String, u64)> {
     if let Some(mut conn) = redis_conn().await {
         let key = format!("oidc:google:state:{}", state);
         let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
-        let _: () = redis::Cmd::del(&key).query_async(&mut conn).await.unwrap_or(());
+        let _: () = redis::Cmd::del(&key)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(());
         if let Some(nonce) = val {
             return Some((nonce, current_unix() + 1));
         }
@@ -338,7 +346,10 @@ async fn fetch_google_jwks() -> HashMap<String, (String, String)> {
 }
 
 fn current_unix() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -191,8 +191,10 @@ impl SecurityMonitor {
                             Self::extract_metric_value(&metrics_text, &threshold.metric_name)
                         {
                             let mut snapshots = metric_snapshots.lock().await;
-                            let previous_value =
-                                snapshots.get(&threshold.metric_name).copied().unwrap_or(0.0);
+                            let previous_value = snapshots
+                                .get(&threshold.metric_name)
+                                .copied()
+                                .unwrap_or(0.0);
                             snapshots.insert(threshold.metric_name.clone(), current_value);
 
                             let delta = current_value - previous_value;
@@ -412,7 +414,11 @@ impl SecurityMonitor {
 
     pub async fn get_alert_history(&self, limit: Option<usize>) -> Vec<SecurityAlert> {
         let history = self.alert_history.lock().await;
-        let start = if let Some(limit) = limit { history.len().saturating_sub(limit) } else { 0 };
+        let start = if let Some(limit) = limit {
+            history.len().saturating_sub(limit)
+        } else {
+            0
+        };
         history[start..].to_vec()
     }
 
@@ -444,7 +450,10 @@ impl SecurityMonitor {
             severity,
             title,
             description,
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             source_ip,
             user_id,
             client_id,
@@ -532,7 +541,9 @@ mod tests {
         assert_eq!(alerts.len(), 1);
 
         let alert_id = &alerts[0].id;
-        let resolved = monitor.resolve_alert(alert_id, Some("Test resolution".to_string())).await;
+        let resolved = monitor
+            .resolve_alert(alert_id, Some("Test resolution".to_string()))
+            .await;
         assert!(resolved);
     }
 

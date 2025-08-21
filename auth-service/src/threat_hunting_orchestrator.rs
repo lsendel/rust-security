@@ -375,16 +375,20 @@ impl ThreatHuntingOrchestrator {
         let (event_sender, event_receiver) = unbounded();
 
         // Initialize subsystems with their configurations
-        let behavioral_analyzer =
-            Arc::new(AdvancedBehavioralThreatDetector::new(config.behavioral_analysis.clone()));
-        let threat_intelligence =
-            Arc::new(ThreatIntelligenceCorrelator::new(config.threat_intelligence.clone()));
+        let behavioral_analyzer = Arc::new(AdvancedBehavioralThreatDetector::new(
+            config.behavioral_analysis.clone(),
+        ));
+        let threat_intelligence = Arc::new(ThreatIntelligenceCorrelator::new(
+            config.threat_intelligence.clone(),
+        ));
         let attack_pattern_detector =
             Arc::new(AttackPatternDetector::new(config.attack_patterns.clone()));
-        let user_profiler =
-            Arc::new(AdvancedUserBehaviorProfiler::new(config.user_profiling.clone()));
-        let response_orchestrator =
-            Arc::new(ThreatResponseOrchestrator::new(config.response_orchestration.clone()));
+        let user_profiler = Arc::new(AdvancedUserBehaviorProfiler::new(
+            config.user_profiling.clone(),
+        ));
+        let response_orchestrator = Arc::new(ThreatResponseOrchestrator::new(
+            config.response_orchestration.clone(),
+        ));
 
         // Initialize correlation engine
         let correlation_engine = Arc::new(ThreatCorrelationEngine::new());
@@ -540,8 +544,10 @@ impl ThreatHuntingOrchestrator {
 
         // Perform threat correlation
         if !result.threats_detected.is_empty() {
-            let correlations =
-                self.correlation_engine.correlate_threats(&result.threats_detected).await;
+            let correlations = self
+                .correlation_engine
+                .correlate_threats(&result.threats_detected)
+                .await;
             result.correlations_found = correlations;
         }
 
@@ -577,9 +583,12 @@ impl ThreatHuntingOrchestrator {
 
         // Calculate overall confidence
         if !result.threats_detected.is_empty() {
-            result.confidence_score =
-                result.threats_detected.iter().map(|t| t.confidence).sum::<f64>()
-                    / result.threats_detected.len() as f64;
+            result.confidence_score = result
+                .threats_detected
+                .iter()
+                .map(|t| t.confidence)
+                .sum::<f64>()
+                / result.threats_detected.len() as f64;
         }
 
         // Record processing time
@@ -606,7 +615,9 @@ impl ThreatHuntingOrchestrator {
         Box<dyn std::error::Error + Send + Sync>,
     > {
         if let Some(user_id) = &event.user_id {
-            self.user_profiler.analyze_user_behavior(user_id, event.clone()).await
+            self.user_profiler
+                .analyze_user_behavior(user_id, event.clone())
+                .await
         } else {
             Err("No user ID in event".into())
         }

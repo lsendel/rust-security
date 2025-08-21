@@ -102,7 +102,10 @@ impl CryptoOptimized {
     /// SIMD-optimized batch token validation
     #[cfg(feature = "simd")]
     pub fn batch_validate_tokens(&self, tokens: &[String]) -> Vec<bool> {
-        tokens.par_iter().map(|token| self.validate_token_format(token)).collect()
+        tokens
+            .par_iter()
+            .map(|token| self.validate_token_format(token))
+            .collect()
     }
 
     /// Hardware-accelerated HMAC generation
@@ -135,7 +138,9 @@ impl CryptoOptimized {
 
         // Generate secure nonce
         let mut nonce_bytes = [0u8; 12];
-        self.rng.fill(&mut nonce_bytes).map_err(|_| ring::error::Unspecified)?;
+        self.rng
+            .fill(&mut nonce_bytes)
+            .map_err(|_| ring::error::Unspecified)?;
         let nonce = aead::Nonce::assume_unique_for_key(nonce_bytes);
 
         // Encrypt data
@@ -215,7 +220,10 @@ impl CryptoOptimized {
         };
 
         // Verify password in constant time
-        let is_valid = self.argon2.verify_password(password.as_bytes(), &parsed_hash).is_ok();
+        let is_valid = self
+            .argon2
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .is_ok();
 
         self.update_metrics(start.elapsed(), false).await;
         is_valid
@@ -230,7 +238,9 @@ impl CryptoOptimized {
 
         // Validate token prefix and character set in parallel
         let has_valid_prefix = token.starts_with("tk_") || token.starts_with("rt_");
-        let has_valid_chars = token.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-');
+        let has_valid_chars = token
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-');
 
         has_valid_prefix && has_valid_chars
     }
@@ -259,7 +269,9 @@ impl CryptoOptimized {
         use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
         if let Ok(parsed_hash) = PasswordHash::new(hash) {
-            Argon2::default().verify_password(password.as_bytes(), &parsed_hash).is_ok()
+            Argon2::default()
+                .verify_password(password.as_bytes(), &parsed_hash)
+                .is_ok()
         } else {
             false
         }
@@ -305,7 +317,8 @@ impl CryptoOptimized {
         let unbound_key = aead::UnboundKey::new(&aead::AES_256_GCM, &key_material)?;
         let key = Arc::new(aead::LessSafeKey::new(unbound_key));
 
-        self.aead_sealing_keys.insert(key_id.to_string(), key.clone());
+        self.aead_sealing_keys
+            .insert(key_id.to_string(), key.clone());
         Ok(key)
     }
 
@@ -331,7 +344,8 @@ impl CryptoOptimized {
         let unbound_key = aead::UnboundKey::new(&aead::AES_256_GCM, &key_material)?;
         let key = Arc::new(aead::LessSafeKey::new(unbound_key));
 
-        self.aead_opening_keys.insert(key_id.to_string(), key.clone());
+        self.aead_opening_keys
+            .insert(key_id.to_string(), key.clone());
         Ok(key)
     }
 
@@ -371,7 +385,10 @@ pub async fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
     }
     #[cfg(not(feature = "simd"))]
     {
-        tokens.iter().map(|token| CRYPTO_ENGINE.validate_token_format(token)).collect()
+        tokens
+            .iter()
+            .map(|token| CRYPTO_ENGINE.validate_token_format(token))
+            .collect()
     }
 }
 
@@ -393,7 +410,11 @@ pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
     }
 
     // Use SIMD operations for constant-time comparison
-    a.par_iter().zip(b.par_iter()).map(|(x, y)| x ^ y).reduce(|| 0, |acc, x| acc | x) == 0
+    a.par_iter()
+        .zip(b.par_iter())
+        .map(|(x, y)| x ^ y)
+        .reduce(|| 0, |acc, x| acc | x)
+        == 0
 }
 
 #[cfg(not(feature = "simd"))]

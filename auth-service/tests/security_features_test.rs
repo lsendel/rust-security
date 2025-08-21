@@ -64,7 +64,11 @@ async fn test_token_binding() {
 
     assert_eq!(response.status(), 200);
     let token_response: serde_json::Value = response.json().await.unwrap();
-    let access_token = token_response.get("access_token").unwrap().as_str().unwrap();
+    let access_token = token_response
+        .get("access_token")
+        .unwrap()
+        .as_str()
+        .unwrap();
 
     // Introspect with same client info should work
     let response = client
@@ -81,7 +85,11 @@ async fn test_token_binding() {
 
     assert_eq!(response.status(), 200);
     let introspect_response: serde_json::Value = response.json().await.unwrap();
-    assert!(introspect_response.get("active").unwrap().as_bool().unwrap());
+    assert!(introspect_response
+        .get("active")
+        .unwrap()
+        .as_bool()
+        .unwrap());
 }
 
 #[tokio::test]
@@ -116,9 +124,10 @@ async fn test_request_signing() {
     let method = "POST";
     let path = "/oauth/revoke";
     let body = "token=test_token";
-    let timestamp =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-            as i64;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
     let secret = "test_secret";
 
     // Generate signature
@@ -158,7 +167,9 @@ async fn test_circuit_breaker_basic() {
     assert_eq!(cb.state(), CircuitState::Closed);
 
     // First failure should open circuit
-    let result = cb.call(async { Err::<(), TestError>(TestError("failure")) }).await;
+    let result = cb
+        .call(async { Err::<(), TestError>(TestError("failure")) })
+        .await;
     assert!(result.is_err());
     // Due to automatic transition, it might already be HalfOpen
     let state = cb.state();
@@ -191,7 +202,11 @@ async fn test_audit_logging() {
 
     assert_eq!(response.status(), 200);
     let token_response: serde_json::Value = response.json().await.unwrap();
-    let access_token = token_response.get("access_token").unwrap().as_str().unwrap();
+    let access_token = token_response
+        .get("access_token")
+        .unwrap()
+        .as_str()
+        .unwrap();
 
     // Revoke token (should generate audit log)
     let response = client

@@ -232,13 +232,20 @@ pub struct StoreConfig {
 
 impl Default for StoreConfig {
     fn default() -> Self {
-        Self { backend: StoreBackend::Hybrid, database_url: None }
+        Self {
+            backend: StoreBackend::Hybrid,
+            database_url: None,
+        }
     }
 }
 
 impl Default for OidcProviders {
     fn default() -> Self {
-        Self { google: None, microsoft: None, github: None }
+        Self {
+            google: None,
+            microsoft: None,
+            github: None,
+        }
     }
 }
 
@@ -342,7 +349,10 @@ impl StoreConfig {
             panic!("FATAL: `STORE_BACKEND` is set to `sql`, but `DATABASE_URL` is not set.");
         }
 
-        Self { backend, database_url }
+        Self {
+            backend,
+            database_url,
+        }
     }
 }
 
@@ -404,8 +414,10 @@ impl AppConfig {
 
         // Legacy fields for backward compatibility
         config.jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "legacy".to_string());
-        config.token_expiry_seconds =
-            env::var("TOKEN_EXPIRY_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(3600);
+        config.token_expiry_seconds = env::var("TOKEN_EXPIRY_SECONDS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(3600);
         config.rate_limit_requests_per_minute = env::var("RATE_LIMIT_REQUESTS_PER_MINUTE")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -423,7 +435,9 @@ impl AppConfig {
         let raw = envy::from_env::<RawConfig>()
             .context("Failed to parse configuration from environment")?;
 
-        let bind_addr = raw.bind_addr.unwrap_or_else(|| "127.0.0.1:8080".to_string());
+        let bind_addr = raw
+            .bind_addr
+            .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
         // Validate bind address format
         if bind_addr.parse::<std::net::SocketAddr>().is_err() {
@@ -431,7 +445,9 @@ impl AppConfig {
         }
 
         let client_credentials = parse_client_credentials(
-            raw.client_credentials.as_deref().unwrap_or("test_client:test_secret"),
+            raw.client_credentials
+                .as_deref()
+                .unwrap_or("test_client:test_secret"),
         )?;
 
         // Validate client credentials
@@ -459,7 +475,10 @@ impl AppConfig {
         }
 
         for scope in &allowed_scopes {
-            if !scope.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+            if !scope
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            {
                 anyhow::bail!("Invalid scope format: {}", scope);
             }
         }
@@ -522,9 +541,10 @@ fn generate_default_secret() -> String {
     use std::env;
 
     // Check if we're in production environment
-    let is_production =
-        env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()).to_lowercase()
-            == "production";
+    let is_production = env::var("ENVIRONMENT")
+        .unwrap_or_else(|_| "development".to_string())
+        .to_lowercase()
+        == "production";
 
     match env::var("JWT_SECRET") {
         Ok(secret) => {
@@ -604,7 +624,10 @@ fn validate_secret_strength(secret: &str, secret_name: &str) -> Result<()> {
     let has_digit = secret.chars().any(|c| c.is_ascii_digit());
     let has_special = secret.chars().any(|c| !c.is_ascii_alphanumeric());
 
-    let char_types = [has_lower, has_upper, has_digit, has_special].iter().filter(|&&x| x).count();
+    let char_types = [has_lower, has_upper, has_digit, has_special]
+        .iter()
+        .filter(|&&x| x)
+        .count();
 
     if char_types < 3 {
         return Err(anyhow::anyhow!("{} must contain at least 3 different character types (lowercase, uppercase, digits, special characters) in production", secret_name));
@@ -632,9 +655,10 @@ fn validate_secret_strength(secret: &str, secret_name: &str) -> Result<()> {
 
 /// Validates all secrets at startup
 pub fn validate_production_secrets() -> Result<()> {
-    let is_production =
-        env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()).to_lowercase()
-            == "production";
+    let is_production = env::var("ENVIRONMENT")
+        .unwrap_or_else(|_| "development".to_string())
+        .to_lowercase()
+        == "production";
 
     if !is_production {
         return Ok(());

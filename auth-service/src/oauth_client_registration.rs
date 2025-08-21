@@ -1,5 +1,5 @@
 //! OAuth 2.0 Dynamic Client Registration implementation
-//! 
+//!
 //! Implements RFC 7591 - OAuth 2.0 Dynamic Client Registration Protocol
 //! with enterprise-grade security features including:
 //! - Automatic client secret generation and rotation
@@ -20,7 +20,7 @@ use sha2::{Digest, Sha256};
 use sqlx::{Pool, Postgres, Row};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
@@ -30,70 +30,70 @@ pub struct ClientRegistrationRequest {
     /// Array of redirection URI strings for use in redirect-based flows
     #[validate(length(min = 1, message = "At least one redirect URI is required"))]
     pub redirect_uris: Vec<String>,
-    
+
     /// Array of OAuth 2.0 response type strings
     pub response_types: Option<Vec<String>>,
-    
+
     /// Array of OAuth 2.0 grant type strings
     pub grant_types: Option<Vec<String>>,
-    
+
     /// Kind of the application (web, native, etc.)
     pub application_type: Option<String>,
-    
+
     /// Array of contact email addresses
     pub contacts: Option<Vec<String>>,
-    
+
     /// Human-readable name of the client
     #[validate(length(min = 1, max = 100))]
     pub client_name: Option<String>,
-    
+
     /// URL that references a logo for the client
     #[validate(url)]
     pub logo_uri: Option<String>,
-    
+
     /// URL of the home page of the client
     #[validate(url)]
     pub client_uri: Option<String>,
-    
+
     /// URL that the client provides to the end-user for policy information
     #[validate(url)]
     pub policy_uri: Option<String>,
-    
+
     /// URL that the client provides to the end-user for terms of service
     #[validate(url)]
     pub tos_uri: Option<String>,
-    
+
     /// URL for the client's JSON Web Key Set
     #[validate(url)]
     pub jwks_uri: Option<String>,
-    
+
     /// Client's JSON Web Key Set document
     pub jwks: Option<serde_json::Value>,
-    
+
     /// Requested Authentication Context Class Reference values
     pub default_acr_values: Option<Vec<String>>,
-    
+
     /// Default Maximum Authentication Age
     pub default_max_age: Option<u32>,
-    
+
     /// Boolean value specifying whether the authorization server requires the auth_time claim
     pub require_auth_time: Option<bool>,
-    
+
     /// Requested client authentication method for the token endpoint
     pub token_endpoint_auth_method: Option<String>,
-    
+
     /// JWS signing algorithm for the ID Token
     pub id_token_signed_response_alg: Option<String>,
-    
+
     /// Array of scope values that the client can use when requesting access tokens
     pub scope: Option<String>,
-    
+
     /// A unique identifier string assigned by the client developer
     pub software_id: Option<String>,
-    
+
     /// A version identifier string for the client software
     pub software_version: Option<String>,
-    
+
     /// A software statement containing client metadata values
     pub software_statement: Option<String>,
 }
@@ -103,79 +103,79 @@ pub struct ClientRegistrationRequest {
 pub struct ClientRegistrationResponse {
     /// OAuth 2.0 client identifier string
     pub client_id: String,
-    
+
     /// OAuth 2.0 client secret string
     pub client_secret: Option<String>,
-    
+
     /// Time at which the client secret will expire or 0 if it will not expire
     pub client_secret_expires_at: u64,
-    
+
     /// Array of redirection URI strings for use in redirect-based flows
     pub redirect_uris: Vec<String>,
-    
+
     /// Array of OAuth 2.0 response type strings
     pub response_types: Option<Vec<String>>,
-    
+
     /// Array of OAuth 2.0 grant type strings
     pub grant_types: Option<Vec<String>>,
-    
+
     /// Kind of the application
     pub application_type: Option<String>,
-    
+
     /// Array of contact email addresses
     pub contacts: Option<Vec<String>>,
-    
+
     /// Human-readable name of the client
     pub client_name: Option<String>,
-    
+
     /// URL that references a logo for the client
     pub logo_uri: Option<String>,
-    
+
     /// URL of the home page of the client
     pub client_uri: Option<String>,
-    
+
     /// URL for policy information
     pub policy_uri: Option<String>,
-    
+
     /// URL for terms of service
     pub tos_uri: Option<String>,
-    
+
     /// URL for the client's JSON Web Key Set
     pub jwks_uri: Option<String>,
-    
+
     /// Client's JSON Web Key Set document
     pub jwks: Option<serde_json::Value>,
-    
+
     /// Requested Authentication Context Class Reference values
     pub default_acr_values: Option<Vec<String>>,
-    
+
     /// Default Maximum Authentication Age
     pub default_max_age: Option<u32>,
-    
+
     /// Boolean value specifying whether auth_time claim is required
     pub require_auth_time: Option<bool>,
-    
+
     /// Client authentication method for the token endpoint
     pub token_endpoint_auth_method: Option<String>,
-    
+
     /// JWS signing algorithm for the ID Token
     pub id_token_signed_response_alg: Option<String>,
-    
+
     /// Scope values that the client can use
     pub scope: Option<String>,
-    
+
     /// Software identifier
     pub software_id: Option<String>,
-    
+
     /// Software version
     pub software_version: Option<String>,
-    
+
     /// Registration access token for managing this client
     pub registration_access_token: String,
-    
+
     /// Client configuration endpoint URL
     pub registration_client_uri: String,
-    
+
     /// Timestamp when the client was created
     pub client_id_issued_at: u64,
 }
@@ -185,43 +185,43 @@ pub struct ClientRegistrationResponse {
 pub struct ClientRegistrationPolicy {
     /// Whether dynamic registration is enabled
     pub enabled: bool,
-    
+
     /// Whether authentication is required for registration
     pub require_authentication: bool,
-    
+
     /// Maximum number of redirect URIs allowed
     pub max_redirect_uris: usize,
-    
+
     /// Allowed grant types
     pub allowed_grant_types: Vec<String>,
-    
+
     /// Allowed response types
     pub allowed_response_types: Vec<String>,
-    
+
     /// Allowed application types
     pub allowed_application_types: Vec<String>,
-    
+
     /// Allowed scopes for dynamic registration
     pub allowed_scopes: Vec<String>,
-    
+
     /// Required fields for registration
     pub required_fields: Vec<String>,
-    
+
     /// Whether software statements are required
     pub require_software_statement: bool,
-    
+
     /// Trusted software statement issuers
     pub trusted_software_issuers: Vec<String>,
-    
+
     /// Client secret expiry duration in seconds
     pub client_secret_ttl: u64,
-    
+
     /// Maximum number of clients per IP per day
     pub rate_limit_per_ip: u32,
-    
+
     /// Allowed domains for redirect URIs
     pub allowed_redirect_domains: Vec<String>,
-    
+
     /// Whether to validate redirect URI domains
     pub validate_redirect_domains: bool,
 }
@@ -242,20 +242,14 @@ impl Default for ClientRegistrationPolicy {
                 "token".to_string(),
                 "id_token".to_string(),
             ],
-            allowed_application_types: vec![
-                "web".to_string(),
-                "native".to_string(),
-            ],
+            allowed_application_types: vec!["web".to_string(), "native".to_string()],
             allowed_scopes: vec![
                 "openid".to_string(),
                 "profile".to_string(),
                 "email".to_string(),
                 "offline_access".to_string(),
             ],
-            required_fields: vec![
-                "redirect_uris".to_string(),
-                "client_name".to_string(),
-            ],
+            required_fields: vec!["redirect_uris".to_string(), "client_name".to_string()],
             require_software_statement: false,
             trusted_software_issuers: vec![],
             client_secret_ttl: 86400 * 365, // 1 year
@@ -347,10 +341,10 @@ impl ClientRegistrationManager {
         let client_id = format!("client_{}", Uuid::new_v4().simple());
         let client_secret = generate_client_secret();
         let registration_access_token = generate_registration_access_token();
-        
+
         let client_secret_hash = hash_secret(&client_secret);
         let registration_access_token_hash = hash_secret(&registration_access_token);
-        
+
         let now = Utc::now();
         let secret_expires_at = now + Duration::seconds(self.policy.client_secret_ttl as i64);
 
@@ -390,9 +384,13 @@ impl ClientRegistrationManager {
         self.store_client(&client).await?;
 
         // Record registration event
-        self.record_registration_event(&client_id, &client_ip).await?;
+        self.record_registration_event(&client_id, &client_ip)
+            .await?;
 
-        info!("OAuth client registered: {} from IP: {:?}", client_id, client_ip);
+        info!(
+            "OAuth client registered: {} from IP: {:?}",
+            client_id, client_ip
+        );
 
         // Build response
         Ok(ClientRegistrationResponse {
@@ -432,7 +430,7 @@ impl ClientRegistrationManager {
         access_token: &str,
     ) -> Result<ClientRegistrationResponse, ClientRegistrationError> {
         let client = self.get_client_by_id(client_id).await?;
-        
+
         // Verify access token
         if !verify_registration_access_token(access_token, &client.registration_access_token_hash) {
             return Err(ClientRegistrationError::InvalidAccessToken);
@@ -464,7 +462,10 @@ impl ClientRegistrationManager {
             software_id: client.software_id,
             software_version: client.software_version,
             registration_access_token: "***".to_string(), // Redacted
-            registration_client_uri: format!("{}/oauth/register/{}", self.base_url, client.client_id),
+            registration_client_uri: format!(
+                "{}/oauth/register/{}",
+                self.base_url, client.client_id
+            ),
             client_id_issued_at: client.created_at.timestamp() as u64,
         })
     }
@@ -477,7 +478,7 @@ impl ClientRegistrationManager {
         request: ClientRegistrationRequest,
     ) -> Result<ClientRegistrationResponse, ClientRegistrationError> {
         let mut client = self.get_client_by_id(client_id).await?;
-        
+
         // Verify access token
         if !verify_registration_access_token(access_token, &client.registration_access_token_hash) {
             return Err(ClientRegistrationError::InvalidAccessToken);
@@ -543,7 +544,10 @@ impl ClientRegistrationManager {
             software_id: client.software_id,
             software_version: client.software_version,
             registration_access_token: "***".to_string(), // Redacted
-            registration_client_uri: format!("{}/oauth/register/{}", self.base_url, client.client_id),
+            registration_client_uri: format!(
+                "{}/oauth/register/{}",
+                self.base_url, client.client_id
+            ),
             client_id_issued_at: client.created_at.timestamp() as u64,
         })
     }
@@ -555,7 +559,7 @@ impl ClientRegistrationManager {
         access_token: &str,
     ) -> Result<(), ClientRegistrationError> {
         let client = self.get_client_by_id(client_id).await?;
-        
+
         // Verify access token
         if !verify_registration_access_token(access_token, &client.registration_access_token_hash) {
             return Err(ClientRegistrationError::InvalidAccessToken);
@@ -580,16 +584,17 @@ impl ClientRegistrationManager {
         // Basic validation
         if request.redirect_uris.is_empty() {
             return Err(ClientRegistrationError::ValidationFailed(
-                "At least one redirect URI is required".to_string()
+                "At least one redirect URI is required".to_string(),
             ));
         }
 
         // Validate redirect URIs format
         for uri in &request.redirect_uris {
             if url::Url::parse(uri).is_err() {
-                return Err(ClientRegistrationError::ValidationFailed(
-                    format!("Invalid redirect URI format: {}", uri)
-                ));
+                return Err(ClientRegistrationError::ValidationFailed(format!(
+                    "Invalid redirect URI format: {}",
+                    uri
+                )));
             }
         }
 
@@ -597,9 +602,10 @@ impl ClientRegistrationManager {
         if let Some(contacts) = &request.contacts {
             for contact in contacts {
                 if !contact.contains('@') {
-                    return Err(ClientRegistrationError::ValidationFailed(
-                        format!("Invalid email format in contacts: {}", contact)
-                    ));
+                    return Err(ClientRegistrationError::ValidationFailed(format!(
+                        "Invalid email format in contacts: {}",
+                        contact
+                    )));
                 }
             }
         }
@@ -608,7 +614,7 @@ impl ClientRegistrationManager {
         if let Some(uri) = &request.logo_uri {
             if url::Url::parse(uri).is_err() {
                 return Err(ClientRegistrationError::ValidationFailed(
-                    "Invalid logo_uri format".to_string()
+                    "Invalid logo_uri format".to_string(),
                 ));
             }
         }
@@ -616,7 +622,7 @@ impl ClientRegistrationManager {
         if let Some(uri) = &request.client_uri {
             if url::Url::parse(uri).is_err() {
                 return Err(ClientRegistrationError::ValidationFailed(
-                    "Invalid client_uri format".to_string()
+                    "Invalid client_uri format".to_string(),
                 ));
             }
         }
@@ -624,7 +630,7 @@ impl ClientRegistrationManager {
         if let Some(uri) = &request.policy_uri {
             if url::Url::parse(uri).is_err() {
                 return Err(ClientRegistrationError::ValidationFailed(
-                    "Invalid policy_uri format".to_string()
+                    "Invalid policy_uri format".to_string(),
                 ));
             }
         }
@@ -632,7 +638,7 @@ impl ClientRegistrationManager {
         if let Some(uri) = &request.tos_uri {
             if url::Url::parse(uri).is_err() {
                 return Err(ClientRegistrationError::ValidationFailed(
-                    "Invalid tos_uri format".to_string()
+                    "Invalid tos_uri format".to_string(),
                 ));
             }
         }
@@ -640,7 +646,7 @@ impl ClientRegistrationManager {
         if let Some(uri) = &request.jwks_uri {
             if url::Url::parse(uri).is_err() {
                 return Err(ClientRegistrationError::ValidationFailed(
-                    "Invalid jwks_uri format".to_string()
+                    "Invalid jwks_uri format".to_string(),
                 ));
             }
         }
@@ -655,18 +661,20 @@ impl ClientRegistrationManager {
     ) -> Result<(), ClientRegistrationError> {
         // Check redirect URI count
         if request.redirect_uris.len() > self.policy.max_redirect_uris {
-            return Err(ClientRegistrationError::PolicyViolation(
-                format!("Too many redirect URIs. Maximum allowed: {}", self.policy.max_redirect_uris)
-            ));
+            return Err(ClientRegistrationError::PolicyViolation(format!(
+                "Too many redirect URIs. Maximum allowed: {}",
+                self.policy.max_redirect_uris
+            )));
         }
 
         // Validate grant types
         if let Some(grant_types) = &request.grant_types {
             for grant_type in grant_types {
                 if !self.policy.allowed_grant_types.contains(grant_type) {
-                    return Err(ClientRegistrationError::PolicyViolation(
-                        format!("Grant type '{}' is not allowed", grant_type)
-                    ));
+                    return Err(ClientRegistrationError::PolicyViolation(format!(
+                        "Grant type '{}' is not allowed",
+                        grant_type
+                    )));
                 }
             }
         }
@@ -675,9 +683,10 @@ impl ClientRegistrationManager {
         if let Some(response_types) = &request.response_types {
             for response_type in response_types {
                 if !self.policy.allowed_response_types.contains(response_type) {
-                    return Err(ClientRegistrationError::PolicyViolation(
-                        format!("Response type '{}' is not allowed", response_type)
-                    ));
+                    return Err(ClientRegistrationError::PolicyViolation(format!(
+                        "Response type '{}' is not allowed",
+                        response_type
+                    )));
                 }
             }
         }
@@ -685,23 +694,26 @@ impl ClientRegistrationManager {
         // Validate application type
         if let Some(app_type) = &request.application_type {
             if !self.policy.allowed_application_types.contains(app_type) {
-                return Err(ClientRegistrationError::PolicyViolation(
-                    format!("Application type '{}' is not allowed", app_type)
-                ));
+                return Err(ClientRegistrationError::PolicyViolation(format!(
+                    "Application type '{}' is not allowed",
+                    app_type
+                )));
             }
         }
 
         // Validate redirect domains if enabled
-        if self.policy.validate_redirect_domains && !self.policy.allowed_redirect_domains.is_empty() {
+        if self.policy.validate_redirect_domains && !self.policy.allowed_redirect_domains.is_empty()
+        {
             for uri in &request.redirect_uris {
                 if let Ok(url) = url::Url::parse(uri) {
                     if let Some(domain) = url.domain() {
                         if !self.policy.allowed_redirect_domains.iter().any(|allowed| {
                             domain == allowed || domain.ends_with(&format!(".{}", allowed))
                         }) {
-                            return Err(ClientRegistrationError::PolicyViolation(
-                                format!("Redirect URI domain '{}' is not allowed", domain)
-                            ));
+                            return Err(ClientRegistrationError::PolicyViolation(format!(
+                                "Redirect URI domain '{}' is not allowed",
+                                domain
+                            )));
                         }
                     }
                 }
@@ -714,14 +726,14 @@ impl ClientRegistrationManager {
                 "client_name" => {
                     if request.client_name.is_none() {
                         return Err(ClientRegistrationError::PolicyViolation(
-                            "client_name is required".to_string()
+                            "client_name is required".to_string(),
                         ));
                     }
                 }
                 "contacts" => {
                     if request.contacts.is_none() || request.contacts.as_ref().unwrap().is_empty() {
                         return Err(ClientRegistrationError::PolicyViolation(
-                            "contacts is required".to_string()
+                            "contacts is required".to_string(),
                         ));
                     }
                 }
@@ -735,10 +747,10 @@ impl ClientRegistrationManager {
     /// Check rate limit for IP address
     async fn check_rate_limit(&self, ip: &str) -> Result<bool, ClientRegistrationError> {
         let today = Utc::now().date_naive();
-        
+
         let count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM oauth_client_registrations 
-             WHERE created_by_ip = $1 AND DATE(created_at) = $2"
+             WHERE created_by_ip = $1 AND DATE(created_at) = $2",
         )
         .bind(ip)
         .bind(today)
@@ -767,7 +779,7 @@ impl ClientRegistrationManager {
                 $11, $12, $13, $14, $15, $16, $17, $18, $19,
                 $20, $21, $22, $23, $24, $25, $26, $27, $28
             )
-            "#
+            "#,
         )
         .bind(&client.client_id)
         .bind(&client.client_secret_hash)
@@ -805,7 +817,10 @@ impl ClientRegistrationManager {
     }
 
     /// Update client in database
-    async fn update_client(&self, client: &RegisteredClient) -> Result<(), ClientRegistrationError> {
+    async fn update_client(
+        &self,
+        client: &RegisteredClient,
+    ) -> Result<(), ClientRegistrationError> {
         sqlx::query(
             r#"
             UPDATE oauth_clients SET
@@ -818,7 +833,7 @@ impl ClientRegistrationManager {
                 id_token_signed_response_alg = $18, scope = $19,
                 software_id = $20, software_version = $21, updated_at = $22
             WHERE client_id = $1
-            "#
+            "#,
         )
         .bind(&client.client_id)
         .bind(&client.redirect_uris)
@@ -850,14 +865,16 @@ impl ClientRegistrationManager {
     }
 
     /// Get client by ID
-    async fn get_client_by_id(&self, client_id: &str) -> Result<RegisteredClient, ClientRegistrationError> {
-        let row = sqlx::query(
-            "SELECT * FROM oauth_clients WHERE client_id = $1 AND status = 'active'"
-        )
-        .bind(client_id)
-        .fetch_optional(&self.db_pool)
-        .await
-        .map_err(|e| ClientRegistrationError::DatabaseError(e.to_string()))?;
+    async fn get_client_by_id(
+        &self,
+        client_id: &str,
+    ) -> Result<RegisteredClient, ClientRegistrationError> {
+        let row =
+            sqlx::query("SELECT * FROM oauth_clients WHERE client_id = $1 AND status = 'active'")
+                .bind(client_id)
+                .fetch_optional(&self.db_pool)
+                .await
+                .map_err(|e| ClientRegistrationError::DatabaseError(e.to_string()))?;
 
         let row = row.ok_or(ClientRegistrationError::ClientNotFound)?;
 
@@ -879,7 +896,9 @@ impl ClientRegistrationManager {
             jwks_uri: row.get("jwks_uri"),
             jwks: row.get("jwks"),
             default_acr_values: row.get("default_acr_values"),
-            default_max_age: row.get::<Option<i32>, _>("default_max_age").map(|v| v as u32),
+            default_max_age: row
+                .get::<Option<i32>, _>("default_max_age")
+                .map(|v| v as u32),
             require_auth_time: row.get("require_auth_time"),
             token_endpoint_auth_method: row.get("token_endpoint_auth_method"),
             id_token_signed_response_alg: row.get("id_token_signed_response_alg"),
@@ -904,7 +923,7 @@ impl ClientRegistrationManager {
             INSERT INTO oauth_client_registrations (
                 client_id, created_by_ip, created_at, event_type
             ) VALUES ($1, $2, $3, 'registered')
-            "#
+            "#,
         )
         .bind(client_id)
         .bind(ip)
@@ -922,22 +941,22 @@ impl ClientRegistrationManager {
 pub enum ClientRegistrationError {
     #[error("Dynamic client registration is disabled")]
     RegistrationDisabled,
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
-    
+
     #[error("Policy violation: {0}")]
     PolicyViolation(String),
-    
+
     #[error("Client not found")]
     ClientNotFound,
-    
+
     #[error("Invalid access token")]
     InvalidAccessToken,
-    
+
     #[error("Database error: {0}")]
     DatabaseError(String),
 }
@@ -945,9 +964,10 @@ pub enum ClientRegistrationError {
 impl IntoResponse for ClientRegistrationError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            ClientRegistrationError::RegistrationDisabled => {
-                (StatusCode::SERVICE_UNAVAILABLE, "Dynamic client registration is disabled")
-            }
+            ClientRegistrationError::RegistrationDisabled => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Dynamic client registration is disabled",
+            ),
             ClientRegistrationError::RateLimitExceeded => {
                 (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded")
             }
@@ -957,9 +977,7 @@ impl IntoResponse for ClientRegistrationError {
             ClientRegistrationError::PolicyViolation(_) => {
                 (StatusCode::BAD_REQUEST, "Policy violation")
             }
-            ClientRegistrationError::ClientNotFound => {
-                (StatusCode::NOT_FOUND, "Client not found")
-            }
+            ClientRegistrationError::ClientNotFound => (StatusCode::NOT_FOUND, "Client not found"),
             ClientRegistrationError::InvalidAccessToken => {
                 (StatusCode::UNAUTHORIZED, "Invalid access token")
             }
@@ -979,7 +997,7 @@ fn validate_redirect_uris(uris: &[String]) -> Result<(), ValidationError> {
         if let Err(_) = url::Url::parse(uri) {
             return Err(ValidationError::new("Invalid redirect URI format"));
         }
-        
+
         let url = url::Url::parse(uri).unwrap();
         if url.scheme() != "https" && url.scheme() != "http" && url.scheme() != "custom" {
             return Err(ValidationError::new("Invalid redirect URI scheme"));
@@ -1011,7 +1029,7 @@ fn validate_grant_types(types: &[String]) -> Result<(), ValidationError> {
         "urn:ietf:params:oauth:grant-type:jwt-bearer",
         "urn:ietf:params:oauth:grant-type:saml2-bearer",
     ];
-    
+
     for grant_type in types {
         if !valid_types.contains(&grant_type.as_str()) {
             return Err(ValidationError::new("Invalid grant type"));
@@ -1035,13 +1053,13 @@ fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     if parts.is_empty() {
         return Err(ValidationError::new("Scope cannot be empty"));
     }
-    
+
     for part in parts {
         if part.is_empty() || part.contains(' ') {
             return Err(ValidationError::new("Invalid scope format"));
         }
     }
-    
+
     Ok(())
 }
 
@@ -1100,7 +1118,9 @@ pub async fn get_client_configuration_handler(
         .and_then(|s| s.strip_prefix("Bearer "))
         .ok_or(ClientRegistrationError::InvalidAccessToken)?;
 
-    let response = manager.get_client_configuration(&client_id, access_token).await?;
+    let response = manager
+        .get_client_configuration(&client_id, access_token)
+        .await?;
     Ok(Json(response))
 }
 
@@ -1116,7 +1136,9 @@ pub async fn update_client_configuration_handler(
         .and_then(|s| s.strip_prefix("Bearer "))
         .ok_or(ClientRegistrationError::InvalidAccessToken)?;
 
-    let response = manager.update_client_configuration(&client_id, access_token, request).await?;
+    let response = manager
+        .update_client_configuration(&client_id, access_token, request)
+        .await?;
     Ok(Json(response))
 }
 

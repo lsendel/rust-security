@@ -574,19 +574,28 @@ impl ThreatResponseOrchestrator {
         // Initialize firewall integration
         if let Some(firewall_config) = &config.external_integrations.firewall_integration {
             // TODO: Create firewall client based on configuration
-            info!("Firewall integration configured: {:?}", firewall_config.firewall_type);
+            info!(
+                "Firewall integration configured: {:?}",
+                firewall_config.firewall_type
+            );
         }
 
         // Initialize IDP integration
         if let Some(idp_config) = &config.external_integrations.identity_provider_integration {
             // TODO: Create IDP client based on configuration
-            info!("Identity provider integration configured: {:?}", idp_config.idp_type);
+            info!(
+                "Identity provider integration configured: {:?}",
+                idp_config.idp_type
+            );
         }
 
         // Initialize ticket system integration
         if let Some(ticket_config) = &config.external_integrations.ticket_system_integration {
             // TODO: Create ticket system client based on configuration
-            info!("Ticket system integration configured: {:?}", ticket_config.system_type);
+            info!(
+                "Ticket system integration configured: {:?}",
+                ticket_config.system_type
+            );
         }
 
         Ok(())
@@ -611,8 +620,9 @@ impl ThreatResponseOrchestrator {
         let requires_approval = threat_signature.severity >= config.approval_required_threshold;
 
         // Select appropriate actions based on threat type and severity
-        let planned_actions =
-            self.select_response_actions(&threat_signature, &threat_context, &config).await;
+        let planned_actions = self
+            .select_response_actions(&threat_signature, &threat_context, &config)
+            .await;
 
         // Create escalation rules
         let escalation_rules = config.escalation_rules.clone();
@@ -668,7 +678,10 @@ impl ThreatResponseOrchestrator {
             }
         }
 
-        info!("Response plan created: {} for threat: {}", plan_id, response_plan.threat_id);
+        info!(
+            "Response plan created: {} for threat: {}",
+            plan_id, response_plan.threat_id
+        );
         Ok(response_plan)
     }
 
@@ -750,7 +763,10 @@ impl ThreatResponseOrchestrator {
                             timeout_minutes: template.timeout_minutes,
                             retry_count: template.retry_count as u8,
                             parameters: [
-                                ("user_id".to_string(), serde_json::Value::String(entity.clone())),
+                                (
+                                    "user_id".to_string(),
+                                    serde_json::Value::String(entity.clone()),
+                                ),
                                 (
                                     "duration_hours".to_string(),
                                     serde_json::Value::Number(serde_json::Number::from(24)),
@@ -820,7 +836,10 @@ impl ThreatResponseOrchestrator {
                         timeout_minutes: 2,
                         retry_count: 3,
                         parameters: [
-                            ("user_id".to_string(), serde_json::Value::String(entity.clone())),
+                            (
+                                "user_id".to_string(),
+                                serde_json::Value::String(entity.clone()),
+                            ),
                             (
                                 "duration_hours".to_string(),
                                 serde_json::Value::Number(serde_json::Number::from(72)),
@@ -850,7 +869,10 @@ impl ThreatResponseOrchestrator {
                             "incident_type".to_string(),
                             serde_json::Value::String("data_exfiltration".to_string()),
                         ),
-                        ("severity".to_string(), serde_json::Value::String("critical".to_string())),
+                        (
+                            "severity".to_string(),
+                            serde_json::Value::String("critical".to_string()),
+                        ),
                     ]
                     .into_iter()
                     .collect(),
@@ -860,13 +882,18 @@ impl ThreatResponseOrchestrator {
                 for ip in &threat_signature.source_ips {
                     actions.push(PlannedAction {
                         action_id: Uuid::new_v4().to_string(),
-                        action_type: MitigationAction::BlockIp { duration_hours: 168 }, // 1 week
+                        action_type: MitigationAction::BlockIp {
+                            duration_hours: 168,
+                        }, // 1 week
                         priority: 1,
                         dependencies: Vec::new(),
                         timeout_minutes: 5,
                         retry_count: 2,
                         parameters: [
-                            ("ip_address".to_string(), serde_json::Value::String(ip.to_string())),
+                            (
+                                "ip_address".to_string(),
+                                serde_json::Value::String(ip.to_string()),
+                            ),
                             (
                                 "duration_hours".to_string(),
                                 serde_json::Value::Number(serde_json::Number::from(168)),
@@ -1191,7 +1218,10 @@ impl ThreatResponseOrchestrator {
             }
             NotificationType::Email => {
                 // TODO: Implement email sending
-                debug!("Email notification would be sent to: {}", notification_request.recipient);
+                debug!(
+                    "Email notification would be sent to: {}",
+                    notification_request.recipient
+                );
             }
             NotificationType::PagerDuty => {
                 // TODO: Implement PagerDuty integration
@@ -1256,8 +1286,11 @@ impl ThreatResponseOrchestrator {
         let mut approvals = self.pending_approvals.write().await;
 
         if let Some(approval_request) = approvals.get_mut(request_id) {
-            approval_request.status =
-                if approved { ApprovalStatus::Approved } else { ApprovalStatus::Denied };
+            approval_request.status = if approved {
+                ApprovalStatus::Approved
+            } else {
+                ApprovalStatus::Denied
+            };
             approval_request.approved_by = Some(approver.to_string());
             approval_request.approval_notes = notes;
 

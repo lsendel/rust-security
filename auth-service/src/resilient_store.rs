@@ -58,19 +58,25 @@ impl ResilientRedisClient {
             reason: format!("Failed to create Redis client: {}", e),
         })?;
 
-        let connection_manager =
-            timeout(config.timeouts.connect_timeout, client.get_connection_manager())
-                .await
-                .map_err(|_| AuthError::ServiceUnavailable {
-                    reason: "Redis connection timeout".to_string(),
-                })?
-                .map_err(|e| AuthError::ServiceUnavailable {
-                    reason: format!("Failed to create Redis connection manager: {}", e),
-                })?;
+        let connection_manager = timeout(
+            config.timeouts.connect_timeout,
+            client.get_connection_manager(),
+        )
+        .await
+        .map_err(|_| AuthError::ServiceUnavailable {
+            reason: "Redis connection timeout".to_string(),
+        })?
+        .map_err(|e| AuthError::ServiceUnavailable {
+            reason: format!("Failed to create Redis connection manager: {}", e),
+        })?;
 
         let circuit_breaker = CircuitBreaker::new("redis", config.circuit_breaker.clone());
 
-        Ok(Self { connection_manager, circuit_breaker, config })
+        Ok(Self {
+            connection_manager,
+            circuit_breaker,
+            config,
+        })
     }
 
     pub async fn get<K, V>(&self, key: K) -> Result<Option<V>, AuthError>
@@ -155,7 +161,11 @@ impl ResilientRedisClient {
     }
 
     pub async fn pipeline(&self) -> ResilientPipeline {
-        ResilientPipeline::new(self.connection_manager.clone(), &self.circuit_breaker, &self.config)
+        ResilientPipeline::new(
+            self.connection_manager.clone(),
+            &self.circuit_breaker,
+            &self.config,
+        )
     }
 
     async fn execute_with_retry<F, R, Fut>(&self, operation: F) -> Result<R, AuthError>

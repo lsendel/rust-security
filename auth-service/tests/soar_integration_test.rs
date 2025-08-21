@@ -50,7 +50,9 @@ async fn test_workflow_orchestrator() {
     let inputs = HashMap::new();
     let context = HashMap::new();
 
-    let execution_result = orchestrator.execute_workflow(playbook, inputs, context).await;
+    let execution_result = orchestrator
+        .execute_workflow(playbook, inputs, context)
+        .await;
     assert!(execution_result.is_ok());
 
     let instance_id = execution_result.unwrap();
@@ -207,12 +209,20 @@ async fn test_custom_playbook_execution() {
     // Create custom playbook
     let playbook = create_complex_test_playbook();
     let mut inputs = HashMap::new();
-    inputs.insert("alert_severity".to_string(), Value::String("high".to_string()));
-    inputs.insert("source_ip".to_string(), Value::String("192.168.1.100".to_string()));
+    inputs.insert(
+        "alert_severity".to_string(),
+        Value::String("high".to_string()),
+    );
+    inputs.insert(
+        "source_ip".to_string(),
+        Value::String("192.168.1.100".to_string()),
+    );
 
     let context = HashMap::new();
 
-    let result = orchestrator.execute_workflow(playbook, inputs, context).await;
+    let result = orchestrator
+        .execute_workflow(playbook, inputs, context)
+        .await;
     assert!(result.is_ok());
 }
 
@@ -230,7 +240,9 @@ async fn test_error_handling() {
     let inputs = HashMap::new();
     let context = HashMap::new();
 
-    let result = orchestrator.execute_workflow(playbook, inputs, context).await;
+    let result = orchestrator
+        .execute_workflow(playbook, inputs, context)
+        .await;
     assert!(result.is_ok()); // Should handle errors gracefully
 
     let instance_id = result.unwrap();
@@ -257,7 +269,10 @@ async fn test_security_audit_logging() {
 /// Test performance under load
 #[tokio::test]
 async fn test_performance_load() {
-    let config = SoarConfig { max_concurrent_workflows: 50, ..Default::default() };
+    let config = SoarConfig {
+        max_concurrent_workflows: 50,
+        ..Default::default()
+    };
 
     let soar_core = SoarCore::new(config).await.unwrap();
     let _ = soar_core.initialize().await;

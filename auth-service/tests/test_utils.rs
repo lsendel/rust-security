@@ -38,8 +38,9 @@ impl TestFixture {
         client_credentials.insert("write_client".to_string(), "write_secret".to_string());
 
         let policy_cache_config = auth_service::policy_cache::PolicyCacheConfig::default();
-        let policy_cache =
-            Arc::new(auth_service::policy_cache::PolicyCache::new(policy_cache_config));
+        let policy_cache = Arc::new(auth_service::policy_cache::PolicyCache::new(
+            policy_cache_config,
+        ));
 
         let app_state = AppState {
             token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
@@ -171,7 +172,9 @@ pub struct MockRedis {
 
 impl MockRedis {
     pub fn new() -> Self {
-        Self { store: Arc::new(RwLock::new(HashMap::new())) }
+        Self {
+            store: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     pub async fn set(&self, key: &str, value: &str) {
@@ -212,7 +215,11 @@ impl TestDataGenerator {
         }
 
         let now = chrono::Utc::now().timestamp() as usize;
-        let claims = Claims { sub: "test_user".to_string(), exp: now + 3600, iat: now };
+        let claims = Claims {
+            sub: "test_user".to_string(),
+            exp: now + 3600,
+            iat: now,
+        };
 
         let key = EncodingKey::from_secret(b"test_secret");
         encode(&Header::default(), &claims, &key).unwrap()
@@ -417,7 +424,9 @@ pub struct PropertyTestUtils;
 impl PropertyTestUtils {
     /// Generate random valid tokens for property testing
     pub fn generate_valid_tokens(count: usize) -> Vec<String> {
-        (0..count).map(|_| format!("tk_{}", uuid::Uuid::new_v4())).collect()
+        (0..count)
+            .map(|_| format!("tk_{}", uuid::Uuid::new_v4()))
+            .collect()
     }
 
     /// Generate random invalid tokens for property testing

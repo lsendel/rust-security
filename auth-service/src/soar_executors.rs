@@ -31,7 +31,9 @@ pub struct StepExecutorRegistry {
 impl StepExecutorRegistry {
     /// Create a new registry with default executors
     pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let mut registry = Self { executors: HashMap::new() };
+        let mut registry = Self {
+            executors: HashMap::new(),
+        };
 
         // Register default executors
         registry.register_default_executors().await?;
@@ -44,30 +46,44 @@ impl StepExecutorRegistry {
         &mut self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Security action executors
-        self.register_executor(Arc::new(IpBlockExecutor::new())).await?;
-        self.register_executor(Arc::new(AccountLockExecutor::new())).await?;
-        self.register_executor(Arc::new(TokenRevokeExecutor::new().await)).await?;
+        self.register_executor(Arc::new(IpBlockExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(AccountLockExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(TokenRevokeExecutor::new().await))
+            .await?;
 
         // Notification executors
-        self.register_executor(Arc::new(EmailNotificationExecutor::new().await?)).await?;
-        self.register_executor(Arc::new(SlackNotificationExecutor::new())).await?;
-        self.register_executor(Arc::new(WebhookNotificationExecutor::new())).await?;
+        self.register_executor(Arc::new(EmailNotificationExecutor::new().await?))
+            .await?;
+        self.register_executor(Arc::new(SlackNotificationExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(WebhookNotificationExecutor::new()))
+            .await?;
 
         // SIEM and query executors
-        self.register_executor(Arc::new(SiemQueryExecutor::new())).await?;
-        self.register_executor(Arc::new(DatabaseQueryExecutor::new())).await?;
+        self.register_executor(Arc::new(SiemQueryExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(DatabaseQueryExecutor::new()))
+            .await?;
 
         // Ticketing and case management
-        self.register_executor(Arc::new(TicketCreateExecutor::new())).await?;
-        self.register_executor(Arc::new(CaseUpdateExecutor::new())).await?;
+        self.register_executor(Arc::new(TicketCreateExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(CaseUpdateExecutor::new()))
+            .await?;
 
         // Script and custom executors
-        self.register_executor(Arc::new(ScriptExecutor::new())).await?;
-        self.register_executor(Arc::new(HttpRequestExecutor::new())).await?;
+        self.register_executor(Arc::new(ScriptExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(HttpRequestExecutor::new()))
+            .await?;
 
         // Control flow executors
-        self.register_executor(Arc::new(DecisionExecutor::new())).await?;
-        self.register_executor(Arc::new(WaitExecutor::new())).await?;
+        self.register_executor(Arc::new(DecisionExecutor::new()))
+            .await?;
+        self.register_executor(Arc::new(WaitExecutor::new()))
+            .await?;
 
         info!("Registered {} step executors", self.executors.len());
         Ok(())
@@ -102,7 +118,9 @@ pub struct IpBlockExecutor {
 
 impl IpBlockExecutor {
     pub fn new() -> Self {
-        Self { firewall_client: Arc::new(FirewallClient::new()) }
+        Self {
+            firewall_client: Arc::new(FirewallClient::new()),
+        }
     }
 }
 
@@ -114,8 +132,16 @@ impl StepExecutor for IpBlockExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::BlockIp { ip_address, duration_minutes, reason } = &step.action {
-            info!("Blocking IP address: {} for {} minutes", ip_address, duration_minutes);
+        if let StepAction::BlockIp {
+            ip_address,
+            duration_minutes,
+            reason,
+        } = &step.action
+        {
+            info!(
+                "Blocking IP address: {} for {} minutes",
+                ip_address, duration_minutes
+            );
 
             // Validate IP address format
             if !self.validate_ip_address(ip_address) {
@@ -128,7 +154,11 @@ impl StepExecutor for IpBlockExecutor {
             }
 
             // Execute IP block
-            match self.firewall_client.block_ip(ip_address, *duration_minutes, reason).await {
+            match self
+                .firewall_client
+                .block_ip(ip_address, *duration_minutes, reason)
+                .await
+            {
                 Ok(block_id) => {
                     // Log security event
                     SecurityLogger::log_event(
@@ -220,7 +250,9 @@ pub struct AccountLockExecutor {
 
 impl AccountLockExecutor {
     pub fn new() -> Self {
-        Self { identity_client: Arc::new(IdentityProviderClient::new()) }
+        Self {
+            identity_client: Arc::new(IdentityProviderClient::new()),
+        }
     }
 }
 
@@ -232,8 +264,16 @@ impl StepExecutor for AccountLockExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::LockAccount { user_id, duration_minutes, reason } = &step.action {
-            info!("Locking account: {} for {} minutes", user_id, duration_minutes);
+        if let StepAction::LockAccount {
+            user_id,
+            duration_minutes,
+            reason,
+        } = &step.action
+        {
+            info!(
+                "Locking account: {} for {} minutes",
+                user_id, duration_minutes
+            );
 
             // Validate user ID
             if user_id.is_empty() {
@@ -246,14 +286,21 @@ impl StepExecutor for AccountLockExecutor {
             }
 
             // Execute account lock
-            match self.identity_client.lock_account(user_id, *duration_minutes, reason).await {
+            match self
+                .identity_client
+                .lock_account(user_id, *duration_minutes, reason)
+                .await
+            {
                 Ok(lock_id) => {
                     SecurityLogger::log_event(
                         &SecurityEvent::new(
                             SecurityEventType::AdminAction,
                             SecuritySeverity::High,
                             "soar_executor".to_string(),
-                            format!("Account {} locked for {} minutes", user_id, duration_minutes),
+                            format!(
+                                "Account {} locked for {} minutes",
+                                user_id, duration_minutes
+                            ),
                         )
                         .with_actor("soar_system".to_string())
                         .with_action("soar_execute".to_string())
@@ -331,7 +378,9 @@ pub struct TokenRevokeExecutor {
 
 impl TokenRevokeExecutor {
     pub async fn new() -> Self {
-        Self { store: Arc::new(HybridStore::new().await) }
+        Self {
+            store: Arc::new(HybridStore::new().await),
+        }
     }
 }
 
@@ -343,7 +392,11 @@ impl StepExecutor for TokenRevokeExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::RevokeTokens { user_id, token_type } = &step.action {
+        if let StepAction::RevokeTokens {
+            user_id,
+            token_type,
+        } = &step.action
+        {
             let revoked_count = match (user_id, token_type) {
                 (Some(uid), Some(ttype)) => {
                     info!("Revoking {} tokens for user: {}", ttype, uid);
@@ -384,7 +437,10 @@ impl StepExecutor for TokenRevokeExecutor {
             );
 
             let mut outputs = HashMap::new();
-            outputs.insert("revoked_count".to_string(), Value::Number(revoked_count.into()));
+            outputs.insert(
+                "revoked_count".to_string(),
+                Value::Number(revoked_count.into()),
+            );
             if let Some(uid) = user_id {
                 outputs.insert("user_id".to_string(), Value::String(uid.clone()));
             }
@@ -472,7 +528,14 @@ impl EmailNotificationExecutor {
         let use_tls =
             std::env::var("SMTP_USE_TLS").unwrap_or_else(|_| "true".to_string()) == "true";
 
-        Some(EmailConfig { smtp_host, smtp_port, username, password, from_address, use_tls })
+        Some(EmailConfig {
+            smtp_host,
+            smtp_port,
+            username,
+            password,
+            from_address,
+            use_tls,
+        })
     }
 
     async fn create_smtp_transport(
@@ -526,7 +589,10 @@ impl StepExecutor for EmailNotificationExecutor {
                 let mut failed_recipients = Vec::new();
 
                 for recipient in recipients {
-                    match self.send_single_email(transport, recipient, subject, message).await {
+                    match self
+                        .send_single_email(transport, recipient, subject, message)
+                        .await
+                    {
                         Ok(_) => {
                             sent_count += 1;
                             debug!("Email sent successfully to: {}", recipient);
@@ -614,7 +680,9 @@ pub struct SlackNotificationExecutor {
 
 impl SlackNotificationExecutor {
     pub fn new() -> Self {
-        Self { client: Client::new() }
+        Self {
+            client: Client::new(),
+        }
     }
 }
 
@@ -706,7 +774,10 @@ impl StepExecutor for SlackNotificationExecutor {
 
                 let mut outputs = HashMap::new();
                 outputs.insert("notification_sent".to_string(), Value::Bool(true));
-                outputs.insert("notification_type".to_string(), Value::String("slack".to_string()));
+                outputs.insert(
+                    "notification_type".to_string(),
+                    Value::String("slack".to_string()),
+                );
 
                 Ok(outputs)
             } else {
@@ -742,7 +813,9 @@ pub struct WebhookNotificationExecutor {
 
 impl WebhookNotificationExecutor {
     pub fn new() -> Self {
-        Self { client: Client::new() }
+        Self {
+            client: Client::new(),
+        }
     }
 }
 
@@ -824,8 +897,13 @@ impl WebhookNotificationExecutor {
         url: &str,
         payload: &Value,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let response =
-            self.client.post(url).json(payload).timeout(Duration::from_secs(30)).send().await?;
+        let response = self
+            .client
+            .post(url)
+            .json(payload)
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await?;
 
         if response.status().is_success() {
             Ok(())
@@ -842,7 +920,9 @@ pub struct SiemQueryExecutor {
 
 impl SiemQueryExecutor {
     pub fn new() -> Self {
-        Self { siem_client: Arc::new(SiemClient::new()) }
+        Self {
+            siem_client: Arc::new(SiemClient::new()),
+        }
     }
 }
 
@@ -854,13 +934,22 @@ impl StepExecutor for SiemQueryExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::QuerySiem { query, time_range, max_results } = &step.action {
+        if let StepAction::QuerySiem {
+            query,
+            time_range,
+            max_results,
+        } = &step.action
+        {
             info!(
                 "Executing SIEM query: {} (time_range: {}, max_results: {})",
                 query, time_range, max_results
             );
 
-            match self.siem_client.execute_query(query, time_range, *max_results).await {
+            match self
+                .siem_client
+                .execute_query(query, time_range, *max_results)
+                .await
+            {
                 Ok(results) => {
                     let mut outputs = HashMap::new();
                     outputs.insert("query_results".to_string(), results.clone());
@@ -1029,13 +1118,14 @@ impl DatabaseQueryExecutor {
     #[cfg(feature = "soar")]
     fn sanitize_parameter(&self, value: &str) -> String {
         // Remove potentially dangerous characters and patterns
-        value.chars()
+        value
+            .chars()
             .filter(|c| c.is_alphanumeric() || " .-_@:".contains(*c))
             .take(1000) // Limit parameter length
             .collect::<String>()
-            .replace("--", "")  // Remove SQL comment markers
-            .replace("/*", "")  // Remove SQL comment start
-            .replace("*/", "")  // Remove SQL comment end
+            .replace("--", "") // Remove SQL comment markers
+            .replace("/*", "") // Remove SQL comment start
+            .replace("*/", "") // Remove SQL comment end
             .replace(";", "") // Remove statement terminators
     }
 }
@@ -1060,7 +1150,12 @@ impl StepExecutor for DatabaseQueryExecutor {
 
         #[cfg(feature = "soar")]
         {
-            if let StepAction::ExecuteQuery { query, parameters, timeout_seconds } = &step.action {
+            if let StepAction::ExecuteQuery {
+                query,
+                parameters,
+                timeout_seconds,
+            } = &step.action
+            {
                 // Validate that we have a database pool
                 let pool = self.pool.as_ref().ok_or_else(|| StepError {
                     code: "DATABASE_NOT_AVAILABLE".to_string(),
@@ -1257,11 +1352,17 @@ impl DatabaseQueryExecutor {
                         .unwrap_or(Value::Null),
                     "TIMESTAMPTZ" | "TIMESTAMP" => row
                         .try_get::<Option<chrono::DateTime<chrono::Utc>>, _>(i)
-                        .map(|v| v.map(|dt| Value::String(dt.to_rfc3339())).unwrap_or(Value::Null))
+                        .map(|v| {
+                            v.map(|dt| Value::String(dt.to_rfc3339()))
+                                .unwrap_or(Value::Null)
+                        })
                         .unwrap_or(Value::Null),
                     "UUID" => row
                         .try_get::<Option<uuid::Uuid>, _>(i)
-                        .map(|v| v.map(|id| Value::String(id.to_string())).unwrap_or(Value::Null))
+                        .map(|v| {
+                            v.map(|id| Value::String(id.to_string()))
+                                .unwrap_or(Value::Null)
+                        })
                         .unwrap_or(Value::Null),
                     _ => {
                         // For unknown types, try to get as string
@@ -1288,7 +1389,9 @@ pub struct TicketCreateExecutor {
 
 impl TicketCreateExecutor {
     pub fn new() -> Self {
-        Self { ticketing_client: Arc::new(TicketingClient::new()) }
+        Self {
+            ticketing_client: Arc::new(TicketingClient::new()),
+        }
     }
 }
 
@@ -1300,7 +1403,13 @@ impl StepExecutor for TicketCreateExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::CreateTicket { title, description, priority, assignee } = &step.action {
+        if let StepAction::CreateTicket {
+            title,
+            description,
+            priority,
+            assignee,
+        } = &step.action
+        {
             info!("Creating ticket: {} (priority: {})", title, priority);
 
             match self
@@ -1329,7 +1438,10 @@ impl StepExecutor for TicketCreateExecutor {
                     let mut outputs = HashMap::new();
                     outputs.insert("ticket_id".to_string(), Value::String(ticket_id));
                     outputs.insert("ticket_title".to_string(), Value::String(title.clone()));
-                    outputs.insert("ticket_priority".to_string(), Value::String(priority.clone()));
+                    outputs.insert(
+                        "ticket_priority".to_string(),
+                        Value::String(priority.clone()),
+                    );
 
                     Ok(outputs)
                 }
@@ -1370,7 +1482,9 @@ pub struct CaseUpdateExecutor {
 
 impl CaseUpdateExecutor {
     pub fn new() -> Self {
-        Self { case_manager: Arc::new(CaseManagerClient::new()) }
+        Self {
+            case_manager: Arc::new(CaseManagerClient::new()),
+        }
     }
 
     fn validate_case_fields(fields: &HashMap<String, Value>) -> Result<(), StepError> {
@@ -1466,7 +1580,12 @@ impl StepExecutor for CaseUpdateExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::UpdateCase { case_id, fields, add_note } = &step.action {
+        if let StepAction::UpdateCase {
+            case_id,
+            fields,
+            add_note,
+        } = &step.action
+        {
             info!("Updating case: {}", case_id);
 
             // Validate case ID format
@@ -1485,7 +1604,10 @@ impl StepExecutor for CaseUpdateExecutor {
             // Check if case exists first
             match self.case_manager.get_case_details(case_id).await {
                 Ok(Some(case_details)) => {
-                    debug!("Found case {} with current status: {}", case_id, case_details.status);
+                    debug!(
+                        "Found case {} with current status: {}",
+                        case_id, case_details.status
+                    );
                 }
                 Ok(None) => {
                     return Err(StepError {
@@ -1711,7 +1833,11 @@ impl StepExecutor for ScriptExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::ExecuteScript { script_type, script_content, parameters } = &step.action
+        if let StepAction::ExecuteScript {
+            script_type,
+            script_content,
+            parameters,
+        } = &step.action
         {
             if !self.allowed_script_types.contains(script_type) {
                 return Err(StepError {
@@ -1727,7 +1853,10 @@ impl StepExecutor for ScriptExecutor {
             let execution_result = match script_type.as_str() {
                 "bash" => self.execute_bash_script(script_content, parameters).await?,
                 "rust" => self.execute_rust_script(script_content, parameters).await?,
-                "powershell" => self.execute_powershell_script(script_content, parameters).await?,
+                "powershell" => {
+                    self.execute_powershell_script(script_content, parameters)
+                        .await?
+                }
                 _ => {
                     return Err(StepError {
                         code: "UNSUPPORTED_SCRIPT_TYPE".to_string(),
@@ -1749,7 +1878,12 @@ impl StepExecutor for ScriptExecutor {
                 .with_action("soar_execute".to_string())
                 .with_target("soar_playbook".to_string())
                 .with_outcome(
-                    if execution_result.exit_code == 0 { "success" } else { "failure" }.to_string(),
+                    if execution_result.exit_code == 0 {
+                        "success"
+                    } else {
+                        "failure"
+                    }
+                    .to_string(),
                 )
                 .with_reason(format!(
                     "Script execution step completed with exit code {}",
@@ -1760,11 +1894,16 @@ impl StepExecutor for ScriptExecutor {
             );
 
             let mut outputs = HashMap::new();
-            outputs
-                .insert("exit_code".to_string(), Value::Number(execution_result.exit_code.into()));
+            outputs.insert(
+                "exit_code".to_string(),
+                Value::Number(execution_result.exit_code.into()),
+            );
             outputs.insert("stdout".to_string(), Value::String(execution_result.stdout));
             outputs.insert("stderr".to_string(), Value::String(execution_result.stderr));
-            outputs.insert("script_type".to_string(), Value::String(script_type.clone()));
+            outputs.insert(
+                "script_type".to_string(),
+                Value::String(script_type.clone()),
+            );
 
             Ok(outputs)
         } else {
@@ -2084,7 +2223,9 @@ pub struct HttpRequestExecutor {
 
 impl HttpRequestExecutor {
     pub fn new() -> Self {
-        Self { client: Client::new() }
+        Self {
+            client: Client::new(),
+        }
     }
 }
 
@@ -2096,7 +2237,13 @@ impl StepExecutor for HttpRequestExecutor {
         step: &WorkflowStep,
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
-        if let StepAction::HttpRequest { method, url, headers, body } = &step.action {
+        if let StepAction::HttpRequest {
+            method,
+            url,
+            headers,
+            body,
+        } = &step.action
+        {
             info!("Executing HTTP {} request to: {}", method, url);
 
             let mut request_builder = match method.to_uppercase().as_str() {
@@ -2179,7 +2326,14 @@ impl StepExecutor for HttpRequestExecutor {
                 .with_actor("soar_system".to_string())
                 .with_action("soar_execute".to_string())
                 .with_target("soar_playbook".to_string())
-                .with_outcome(if status_code < 400 { "success" } else { "failure" }.to_string())
+                .with_outcome(
+                    if status_code < 400 {
+                        "success"
+                    } else {
+                        "failure"
+                    }
+                    .to_string(),
+                )
                 .with_reason(format!(
                     "HTTP request step completed with status code {}",
                     status_code
@@ -2261,15 +2415,21 @@ impl StepExecutor for WaitExecutor {
         context: &HashMap<String, Value>,
     ) -> Result<HashMap<String, Value>, StepError> {
         // Extract wait duration from step inputs
-        let wait_seconds =
-            step.inputs.get("duration_seconds").and_then(|v| v.as_u64()).unwrap_or(1);
+        let wait_seconds = step
+            .inputs
+            .get("duration_seconds")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1);
 
         info!("Waiting for {} seconds", wait_seconds);
 
         tokio::time::sleep(Duration::from_secs(wait_seconds)).await;
 
         let mut outputs = HashMap::new();
-        outputs.insert("waited_seconds".to_string(), Value::Number(wait_seconds.into()));
+        outputs.insert(
+            "waited_seconds".to_string(),
+            Value::Number(wait_seconds.into()),
+        );
         outputs.insert("wait_completed".to_string(), Value::Bool(true));
 
         Ok(outputs)
@@ -2411,11 +2571,16 @@ impl FirewallClient {
                     .unwrap_or(&format!("block_{}", Uuid::new_v4()))
                     .to_string();
 
-                info!("Successfully blocked IP {} with ID {}", ip_address, block_id);
+                info!(
+                    "Successfully blocked IP {} with ID {}",
+                    ip_address, block_id
+                );
                 Ok(block_id)
             } else {
-                let error_body =
-                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Firewall API error: {}", error_body).into())
             }
         } else {
@@ -2487,11 +2652,16 @@ impl IdentityProviderClient {
                     .unwrap_or(&format!("lock_{}", Uuid::new_v4()))
                     .to_string();
 
-                info!("Successfully locked account {} with ID {}", user_id, lock_id);
+                info!(
+                    "Successfully locked account {} with ID {}",
+                    user_id, lock_id
+                );
                 Ok(lock_id)
             } else {
-                let error_body =
-                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Identity Provider API error: {}", error_body).into())
             }
         } else {
@@ -2558,12 +2728,18 @@ impl SiemClient {
                 let result: Value = response.json().await?;
                 info!(
                     "SIEM query executed successfully, {} results returned",
-                    result.get("results").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0)
+                    result
+                        .get("results")
+                        .and_then(|r| r.as_array())
+                        .map(|a| a.len())
+                        .unwrap_or(0)
                 );
                 Ok(result)
             } else {
-                let error_body =
-                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("SIEM API error: {}", error_body).into())
             }
         } else {
@@ -2664,11 +2840,16 @@ impl TicketingClient {
                     ))
                     .to_string();
 
-                info!("Successfully created ticket {} with title '{}'", ticket_id, title);
+                info!(
+                    "Successfully created ticket {} with title '{}'",
+                    ticket_id, title
+                );
                 Ok(ticket_id)
             } else {
-                let error_body =
-                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Ticketing API error: {}", error_body).into())
             }
         } else {
@@ -2680,7 +2861,12 @@ impl TicketingClient {
             tokio::time::sleep(Duration::from_millis(200)).await;
             Ok(format!(
                 "TICKET-{}",
-                Uuid::new_v4().to_string().chars().take(8).collect::<String>().to_uppercase()
+                Uuid::new_v4()
+                    .to_string()
+                    .chars()
+                    .take(8)
+                    .collect::<String>()
+                    .to_uppercase()
             ))
         }
     }
@@ -2731,8 +2917,10 @@ impl CaseManagerClient {
                 }
                 404 => Ok(None),
                 _ => {
-                    let error_body =
-                        response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                    let error_body = response
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "Unknown error".to_string());
                     Err(format!("Case Manager API error: {}", error_body).into())
                 }
             }
@@ -2776,8 +2964,10 @@ impl CaseManagerClient {
                 info!("Successfully updated case {}", case_id);
                 Ok(updated_case)
             } else {
-                let error_body =
-                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Case Manager API error: {}", error_body).into())
             }
         } else {
@@ -2791,7 +2981,10 @@ impl CaseManagerClient {
                 updated_case.insert(key.clone(), value.clone());
             }
 
-            updated_case.insert("updated_at".to_string(), Value::String(Utc::now().to_rfc3339()));
+            updated_case.insert(
+                "updated_at".to_string(),
+                Value::String(Utc::now().to_rfc3339()),
+            );
             info!(
                 "Mock: Updated case {} with fields: {:?}",
                 case_id,
@@ -2817,7 +3010,10 @@ impl CaseManagerClient {
 
             let response = self
                 .client
-                .post(&format!("{}/cases/{}/notes", self.config.api_endpoint, case_id))
+                .post(&format!(
+                    "{}/cases/{}/notes",
+                    self.config.api_endpoint, case_id
+                ))
                 .header("Authorization", &format!("Bearer {}", self.config.api_key))
                 .header("Content-Type", "application/json")
                 .json(&payload)
@@ -2832,15 +3028,20 @@ impl CaseManagerClient {
                     .to_string();
                 Ok(note_id)
             } else {
-                let error_body =
-                    response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 Err(format!("Case Manager API error: {}", error_body).into())
             }
         } else {
             // Mock implementation for testing
             tokio::time::sleep(Duration::from_millis(50)).await;
             let note_id = format!("note_{}", Uuid::new_v4());
-            info!("Mock: Added note {} to case {} by author {}", note_id, case_id, author);
+            info!(
+                "Mock: Added note {} to case {} by author {}",
+                note_id, case_id, author
+            );
             Ok(note_id)
         }
     }

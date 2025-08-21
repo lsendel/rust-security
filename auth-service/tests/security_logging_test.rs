@@ -35,7 +35,10 @@ fn test_security_logger_auth_attempt() {
         "success",
         Some(
             [
-                ("grant_type".to_string(), Value::String("client_credentials".to_string())),
+                (
+                    "grant_type".to_string(),
+                    Value::String("client_credentials".to_string()),
+                ),
                 ("has_scope".to_string(), Value::Bool(true)),
             ]
             .into(),
@@ -54,7 +57,13 @@ fn test_security_logger_token_operation() {
         "test_client",
         "127.0.0.1",
         "success",
-        Some([("grant_type".to_string(), Value::String("client_credentials".to_string()))].into()),
+        Some(
+            [(
+                "grant_type".to_string(),
+                Value::String("client_credentials".to_string()),
+            )]
+            .into(),
+        ),
     );
 
     // If we reach here without panicking, the test passes
@@ -68,7 +77,13 @@ fn test_security_logger_validation_failure() {
         "invalid_scope",
         Some("test_client"),
         "127.0.0.1",
-        Some([("requested_scope".to_string(), Value::String("invalid_scope".to_string()))].into()),
+        Some(
+            [(
+                "requested_scope".to_string(),
+                Value::String("invalid_scope".to_string()),
+            )]
+            .into(),
+        ),
     );
 
     // If we reach here without panicking, the test passes
@@ -110,7 +125,13 @@ fn test_security_event_with_details() {
     event = event.with_detail("has_refresh".to_string(), true);
 
     assert_eq!(event.details.len(), 3);
-    assert_eq!(event.details.get("token_type"), Some(&Value::String("access_token".to_string())));
-    assert_eq!(event.details.get("expires_in"), Some(&Value::Number(3600.into())));
+    assert_eq!(
+        event.details.get("token_type"),
+        Some(&Value::String("access_token".to_string()))
+    );
+    assert_eq!(
+        event.details.get("expires_in"),
+        Some(&Value::Number(3600.into()))
+    );
     assert_eq!(event.details.get("has_refresh"), Some(&Value::Bool(true)));
 }

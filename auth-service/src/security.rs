@@ -178,7 +178,9 @@ pub async fn validate_request_signature(
         .and_then(|v| v.to_str().ok())
         .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
 
-    let timestamp: i64 = timestamp_str.parse().map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
+    let timestamp: i64 = timestamp_str
+        .parse()
+        .map_err(|_| axum::http::StatusCode::BAD_REQUEST)?;
 
     // Get signing secret from environment
     let secret = match std::env::var("REQUEST_SIGNING_SECRET") {
@@ -230,8 +232,11 @@ pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) 
         .trim()
         .to_string();
 
-    let user_agent =
-        headers.get("user-agent").and_then(|v| v.to_str().ok()).unwrap_or("unknown").to_string();
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
 
     (client_ip, user_agent)
 }
@@ -310,7 +315,10 @@ pub fn validate_client_credentials(
     }
 
     // Basic format validation
-    if !client_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+    if !client_id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    {
         return Err("Invalid client_id format");
     }
 
@@ -372,7 +380,9 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
         }
         let mut response =
             (axum::http::StatusCode::TOO_MANY_REQUESTS, "rate limited").into_response();
-        response.headers_mut().insert("Retry-After", format!("{}", retry_after).parse().unwrap());
+        response
+            .headers_mut()
+            .insert("Retry-After", format!("{}", retry_after).parse().unwrap());
         return response;
     }
     entry.0 += 1;
@@ -418,8 +428,14 @@ mod tests {
     #[test]
     fn test_sanitize_log_input() {
         assert_eq!(sanitize_log_input("normal text"), "normal text");
-        assert_eq!(sanitize_log_input("text\nwith\nnewlines"), "text\\nwith\\nnewlines");
-        assert_eq!(sanitize_log_input("text\rwith\rcarriage"), "text\\rwith\\rcarriage");
+        assert_eq!(
+            sanitize_log_input("text\nwith\nnewlines"),
+            "text\\nwith\\nnewlines"
+        );
+        assert_eq!(
+            sanitize_log_input("text\rwith\rcarriage"),
+            "text\\rwith\\rcarriage"
+        );
         assert_eq!(sanitize_log_input("text\twith\ttabs"), "text\\twith\\ttabs");
     }
 }

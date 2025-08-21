@@ -95,33 +95,58 @@ impl BusinessMetricsRegistry {
         .expect("Failed to create user_session_duration metric");
 
         let user_login_frequency = IntCounterVec::new(
-            Opts::new("auth_user_login_frequency_total", "User login frequency patterns"),
+            Opts::new(
+                "auth_user_login_frequency_total",
+                "User login frequency patterns",
+            ),
             &["user_type", "hour_of_day", "day_of_week", "login_method"],
         )
         .expect("Failed to create user_login_frequency metric");
 
         let password_change_events = IntCounterVec::new(
-            Opts::new("auth_password_change_events_total", "Password change events"),
+            Opts::new(
+                "auth_password_change_events_total",
+                "Password change events",
+            ),
             &["reason", "user_type", "complexity_level", "forced"],
         )
         .expect("Failed to create password_change_events metric");
 
         let mfa_adoption_metrics = IntCounterVec::new(
-            Opts::new("auth_mfa_adoption_metrics_total", "MFA adoption and usage metrics"),
-            &["event_type", "mfa_method", "user_segment", "enrollment_path"],
+            Opts::new(
+                "auth_mfa_adoption_metrics_total",
+                "MFA adoption and usage metrics",
+            ),
+            &[
+                "event_type",
+                "mfa_method",
+                "user_segment",
+                "enrollment_path",
+            ],
         )
         .expect("Failed to create mfa_adoption_metrics metric");
 
         // Business Process Metrics
         let oauth_flow_completion = IntCounterVec::new(
-            Opts::new("auth_oauth_flow_completion_total", "OAuth flow completion tracking"),
+            Opts::new(
+                "auth_oauth_flow_completion_total",
+                "OAuth flow completion tracking",
+            ),
             &["client_id", "grant_type", "flow_stage", "result"],
         )
         .expect("Failed to create oauth_flow_completion metric");
 
         let api_key_usage_metrics = IntCounterVec::new(
-            Opts::new("auth_api_key_usage_total", "API key usage and lifecycle metrics"),
-            &["key_type", "usage_pattern", "client_category", "lifecycle_stage"],
+            Opts::new(
+                "auth_api_key_usage_total",
+                "API key usage and lifecycle metrics",
+            ),
+            &[
+                "key_type",
+                "usage_pattern",
+                "client_category",
+                "lifecycle_stage",
+            ],
         )
         .expect("Failed to create api_key_usage_metrics metric");
 
@@ -145,26 +170,43 @@ impl BusinessMetricsRegistry {
 
         // Compliance and Audit Metrics
         let data_retention_events = IntCounterVec::new(
-            Opts::new("auth_data_retention_events_total", "Data retention compliance events"),
+            Opts::new(
+                "auth_data_retention_events_total",
+                "Data retention compliance events",
+            ),
             &["event_type", "data_category", "retention_period", "result"],
         )
         .expect("Failed to create data_retention_events metric");
 
         let audit_events_total = IntCounterVec::new(
-            Opts::new("auth_audit_events_total", "Audit events generation and processing"),
+            Opts::new(
+                "auth_audit_events_total",
+                "Audit events generation and processing",
+            ),
             &["event_category", "severity", "destination", "format"],
         )
         .expect("Failed to create audit_events_total metric");
 
         let privacy_request_metrics = IntCounterVec::new(
-            Opts::new("auth_privacy_request_total", "Privacy request processing metrics"),
+            Opts::new(
+                "auth_privacy_request_total",
+                "Privacy request processing metrics",
+            ),
             &["request_type", "user_segment", "processing_stage", "result"],
         )
         .expect("Failed to create privacy_request_metrics metric");
 
         let compliance_violations = IntCounterVec::new(
-            Opts::new("auth_compliance_violations_total", "Compliance violation events"),
-            &["violation_type", "regulation", "severity", "remediation_status"],
+            Opts::new(
+                "auth_compliance_violations_total",
+                "Compliance violation events",
+            ),
+            &[
+                "violation_type",
+                "regulation",
+                "severity",
+                "remediation_status",
+            ],
         )
         .expect("Failed to create compliance_violations metric");
 
@@ -174,13 +216,26 @@ impl BusinessMetricsRegistry {
                 "auth_security_control_effectiveness_total",
                 "Security control effectiveness tracking",
             ),
-            &["control_type", "threat_category", "outcome", "confidence_level"],
+            &[
+                "control_type",
+                "threat_category",
+                "outcome",
+                "confidence_level",
+            ],
         )
         .expect("Failed to create security_control_effectiveness metric");
 
         let threat_detection_accuracy = IntCounterVec::new(
-            Opts::new("auth_threat_detection_accuracy_total", "Threat detection accuracy metrics"),
-            &["detection_type", "threat_category", "outcome", "feedback_source"],
+            Opts::new(
+                "auth_threat_detection_accuracy_total",
+                "Threat detection accuracy metrics",
+            ),
+            &[
+                "detection_type",
+                "threat_category",
+                "outcome",
+                "feedback_source",
+            ],
         )
         .expect("Failed to create threat_detection_accuracy metric");
 
@@ -189,14 +244,27 @@ impl BusinessMetricsRegistry {
                 "auth_security_policy_enforcement_total",
                 "Security policy enforcement actions",
             ),
-            &["policy_type", "enforcement_action", "user_segment", "override_reason"],
+            &[
+                "policy_type",
+                "enforcement_action",
+                "user_segment",
+                "override_reason",
+            ],
         )
         .expect("Failed to create security_policy_enforcement metric");
 
         // Revenue and Business Impact Metrics
         let revenue_impact_events = IntCounterVec::new(
-            Opts::new("auth_revenue_impact_events_total", "Authentication-gated revenue events"),
-            &["event_type", "customer_segment", "revenue_tier", "auth_method"],
+            Opts::new(
+                "auth_revenue_impact_events_total",
+                "Authentication-gated revenue events",
+            ),
+            &[
+                "event_type",
+                "customer_segment",
+                "revenue_tier",
+                "auth_method",
+            ],
         )
         .expect("Failed to create revenue_impact_events metric");
 
@@ -205,7 +273,12 @@ impl BusinessMetricsRegistry {
                 "auth_feature_usage_by_auth_total",
                 "Feature usage patterns by authentication method",
             ),
-            &["feature_category", "auth_method", "user_tier", "access_pattern"],
+            &[
+                "feature_category",
+                "auth_method",
+                "user_tier",
+                "access_pattern",
+            ],
         )
         .expect("Failed to create feature_usage_by_auth metric");
 
@@ -214,7 +287,12 @@ impl BusinessMetricsRegistry {
                 "auth_customer_satisfaction_total",
                 "Customer satisfaction indicators related to auth",
             ),
-            &["satisfaction_score", "feedback_type", "user_segment", "auth_journey_stage"],
+            &[
+                "satisfaction_score",
+                "feedback_type",
+                "user_segment",
+                "auth_journey_stage",
+            ],
         )
         .expect("Failed to create customer_satisfaction_metrics metric");
 
@@ -224,19 +302,37 @@ impl BusinessMetricsRegistry {
                 "auth_support_correlation_total",
                 "Support ticket correlation with auth events",
             ),
-            &["ticket_category", "auth_event_type", "resolution_type", "prevention_opportunity"],
+            &[
+                "ticket_category",
+                "auth_event_type",
+                "resolution_type",
+                "prevention_opportunity",
+            ],
         )
         .expect("Failed to create support_correlation_metrics metric");
 
         let onboarding_funnel_metrics = IntCounterVec::new(
-            Opts::new("auth_onboarding_funnel_total", "User onboarding funnel metrics"),
-            &["funnel_stage", "conversion_outcome", "user_segment", "onboarding_path"],
+            Opts::new(
+                "auth_onboarding_funnel_total",
+                "User onboarding funnel metrics",
+            ),
+            &[
+                "funnel_stage",
+                "conversion_outcome",
+                "user_segment",
+                "onboarding_path",
+            ],
         )
         .expect("Failed to create onboarding_funnel_metrics metric");
 
         let self_service_metrics = IntCounterVec::new(
             Opts::new("auth_self_service_total", "Self-service resolution metrics"),
-            &["service_type", "user_segment", "resolution_outcome", "assistance_level"],
+            &[
+                "service_type",
+                "user_segment",
+                "resolution_outcome",
+                "assistance_level",
+            ],
         )
         .expect("Failed to create self_service_metrics metric");
 
@@ -457,7 +553,12 @@ impl BusinessMetricsHelper {
     ) {
         BUSINESS_METRICS
             .onboarding_funnel_metrics
-            .with_label_values(&[funnel_stage, conversion_outcome, user_segment, onboarding_path])
+            .with_label_values(&[
+                funnel_stage,
+                conversion_outcome,
+                user_segment,
+                onboarding_path,
+            ])
             .inc();
     }
 }
@@ -479,7 +580,9 @@ pub struct SessionInfo {
 
 impl UserBehaviorAnalytics {
     pub fn new() -> Self {
-        Self { session_tracking: Arc::new(RwLock::new(HashMap::new())) }
+        Self {
+            session_tracking: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     /// Start tracking a new session
@@ -516,8 +619,10 @@ impl UserBehaviorAnalytics {
     pub async fn end_session(&self, session_id: &str) {
         let mut sessions = self.session_tracking.write().await;
         if let Some(session) = sessions.remove(session_id) {
-            let duration =
-                session.last_activity.duration_since(session.session_start).unwrap_or_default();
+            let duration = session
+                .last_activity
+                .duration_since(session.session_start)
+                .unwrap_or_default();
 
             BusinessMetricsHelper::record_user_session(
                 &session.user_type,
@@ -541,11 +646,15 @@ impl UserBehaviorAnalytics {
         let mut sessions = self.session_tracking.write().await;
 
         sessions.retain(|session_id, session| {
-            let inactive_duration = now.duration_since(session.last_activity).unwrap_or_default();
+            let inactive_duration = now
+                .duration_since(session.last_activity)
+                .unwrap_or_default();
 
             if inactive_duration > timeout {
-                let total_duration =
-                    session.last_activity.duration_since(session.session_start).unwrap_or_default();
+                let total_duration = session
+                    .last_activity
+                    .duration_since(session.session_start)
+                    .unwrap_or_default();
 
                 BusinessMetricsHelper::record_user_session(
                     &session.user_type,

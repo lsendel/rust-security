@@ -20,7 +20,10 @@ async fn spawn_app() -> String {
     std::env::set_var("EXTERNAL_BASE_URL", "http://localhost:8080");
     // Ensure client is registered and redirect URI is allowed for authorization flow
     std::env::set_var("CLIENT_CREDENTIALS", "test_client:any_secret_ok_in_test");
-    std::env::set_var("CLIENT_REDIRECT_URIS", "test_client:http://localhost:3000/callback");
+    std::env::set_var(
+        "CLIENT_REDIRECT_URIS",
+        "test_client:http://localhost:3000/callback",
+    );
 
     let app = app(AppState {
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
@@ -48,8 +51,10 @@ async fn spawn_app() -> String {
 #[tokio::test]
 async fn test_pkce_authorization_code_flow() {
     let base = spawn_app().await;
-    let client =
-        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
 
     // Step 1: Generate PKCE parameters (normally done by client)
     let code_verifier = auth_service::security::generate_code_verifier();
@@ -106,11 +111,17 @@ async fn test_pkce_authorization_code_flow() {
     // Verify token response
     assert!(token_json.get("access_token").is_some());
     assert!(token_json.get("refresh_token").is_some());
-    assert_eq!(token_json.get("token_type").unwrap().as_str().unwrap(), "Bearer");
+    assert_eq!(
+        token_json.get("token_type").unwrap().as_str().unwrap(),
+        "Bearer"
+    );
 
     // Check if ID token is present (may not be if subject is not set)
     if token_json.get("id_token").is_some() {
-        println!("ID token present: {}", token_json.get("id_token").unwrap().as_str().unwrap());
+        println!(
+            "ID token present: {}",
+            token_json.get("id_token").unwrap().as_str().unwrap()
+        );
     } else {
         println!(
             "No ID token generated - this is expected for client credentials without user context"
@@ -136,8 +147,10 @@ async fn test_pkce_authorization_code_flow() {
 #[tokio::test]
 async fn test_pkce_validation_failure() {
     let base = spawn_app().await;
-    let client =
-        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
 
     // Step 1: Generate PKCE parameters
     let code_verifier = auth_service::security::generate_code_verifier();
@@ -187,8 +200,10 @@ async fn test_pkce_validation_failure() {
 #[tokio::test]
 async fn test_authorization_without_pkce() {
     let base = spawn_app().await;
-    let client =
-        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
 
     // Authorization request without PKCE (should still work for backward compatibility)
     let auth_url = format!(

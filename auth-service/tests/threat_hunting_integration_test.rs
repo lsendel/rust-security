@@ -73,11 +73,17 @@ mod threat_hunting_tests {
                 println!("- Processing time: {}ms", result.processing_time_ms);
                 println!("- Threats detected: {}", result.threats_detected.len());
                 println!("- Correlations found: {}", result.correlations_found.len());
-                println!("- Response plans created: {}", result.response_plans_created.len());
+                println!(
+                    "- Response plans created: {}",
+                    result.response_plans_created.len()
+                );
                 println!("- Confidence score: {:.2}", result.confidence_score);
 
                 // Verify that the system detected potential threats
-                assert!(result.processing_time_ms > 0, "Processing should take some time");
+                assert!(
+                    result.processing_time_ms > 0,
+                    "Processing should take some time"
+                );
 
                 if !result.threats_detected.is_empty() {
                     println!("Detected threats:");
@@ -96,7 +102,10 @@ mod threat_hunting_tests {
                     println!("User risk assessment:");
                     println!("  - Risk score: {:.2}", risk_assessment.risk_score);
                     println!("  - Risk level: {:?}", risk_assessment.risk_level);
-                    println!("  - Anomalies: {}", risk_assessment.behavioral_anomalies.len());
+                    println!(
+                        "  - Anomalies: {}",
+                        risk_assessment.behavioral_anomalies.len()
+                    );
                 }
             }
             Err(e) => {
@@ -168,7 +177,10 @@ mod threat_hunting_tests {
 
             if let Ok(result) = orchestrator.process_event(event).await {
                 if !result.threats_detected.is_empty() {
-                    println!("Detected potential credential stuffing after {} attempts", i);
+                    println!(
+                        "Detected potential credential stuffing after {} attempts",
+                        i
+                    );
 
                     // Check if credential stuffing was detected
                     let has_credential_stuffing = result
@@ -478,7 +490,11 @@ mod threat_hunting_tests {
                     session_id: Some(format!("perf_sess_{}", i)),
                     description: "Performance test event".to_string(),
                     details: HashMap::new(),
-                    outcome: if i % 3 == 0 { EventOutcome::Failure } else { EventOutcome::Success },
+                    outcome: if i % 3 == 0 {
+                        EventOutcome::Failure
+                    } else {
+                        EventOutcome::Success
+                    },
                     resource: Some("/oauth/token".to_string()),
                     action: Some("authenticate".to_string()),
                     risk_score: Some((i % 100) as u8),
@@ -514,19 +530,34 @@ mod threat_hunting_tests {
         }
 
         let total_duration = start_time.elapsed();
-        let average_processing_time =
-            if successful_analyses > 0 { total_processing_time / successful_analyses } else { 0 };
+        let average_processing_time = if successful_analyses > 0 {
+            total_processing_time / successful_analyses
+        } else {
+            0
+        };
 
         println!("Performance test results:");
         println!("- Total events: {}", event_count);
         println!("- Successful analyses: {}", successful_analyses);
         println!("- Total time: {:.2}s", total_duration.as_secs_f64());
-        println!("- Events per second: {:.2}", event_count as f64 / total_duration.as_secs_f64());
-        println!("- Average processing time per event: {}ms", average_processing_time);
+        println!(
+            "- Events per second: {:.2}",
+            event_count as f64 / total_duration.as_secs_f64()
+        );
+        println!(
+            "- Average processing time per event: {}ms",
+            average_processing_time
+        );
 
         // Basic performance assertions
-        assert!(successful_analyses > 0, "At least some events should be processed successfully");
-        assert!(total_duration.as_secs() < 30, "Processing should complete within 30 seconds");
+        assert!(
+            successful_analyses > 0,
+            "At least some events should be processed successfully"
+        );
+        assert!(
+            total_duration.as_secs() < 30,
+            "Processing should complete within 30 seconds"
+        );
 
         let status = orchestrator.get_system_status().await;
         println!("Final system status: {:?}", status.system_health);

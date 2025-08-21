@@ -51,7 +51,9 @@ async fn spawn_auth_app() -> String {
 
 async fn spawn_mock_policy(_decision: &'static str) -> String {
     async fn handler() -> Json<AuthorizeResp> {
-        Json(AuthorizeResp { decision: "Allow".to_string() })
+        Json(AuthorizeResp {
+            decision: "Allow".to_string(),
+        })
     }
     let app = Router::new().route("/v1/authorize", post(handler));
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -80,7 +82,11 @@ async fn authorize_allows_via_policy_service() {
         panic!("/oauth/token failed: {} body={} ", status, text);
     }
     let v: serde_json::Value = res.json().await.unwrap();
-    let token = v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
+    let token = v
+        .get("access_token")
+        .and_then(|x| x.as_str())
+        .unwrap()
+        .to_string();
 
     // Call authorize
     let res = reqwest::Client::new()
@@ -124,7 +130,11 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
         panic!("/oauth/token failed: {} body={} ", status, text);
     }
     let v: serde_json::Value = res.json().await.unwrap();
-    let token = v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
+    let token = v
+        .get("access_token")
+        .and_then(|x| x.as_str())
+        .unwrap()
+        .to_string();
 
     let res = reqwest::Client::new()
         .post(format!("{}/v1/authorize", base))
@@ -167,7 +177,11 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
         panic!("/oauth/token failed: {} body={} ", status, text);
     }
     let v: serde_json::Value = res.json().await.unwrap();
-    let token = v.get("access_token").and_then(|x| x.as_str()).unwrap().to_string();
+    let token = v
+        .get("access_token")
+        .and_then(|x| x.as_str())
+        .unwrap()
+        .to_string();
 
     let res = reqwest::Client::new()
         .post(format!("{}/v1/authorize", base))

@@ -1,17 +1,17 @@
 //! Session management with Redis-backed storage
-//! 
+//!
 //! Provides secure session management with automatic expiration,
 //! Redis-first storage with in-memory fallback, and session security features.
 
 use async_trait::async_trait;
-use deadpool_redis::{Config, Pool, Runtime, redis::AsyncCommands};
+use deadpool_redis::{redis::AsyncCommands, Config, Pool, Runtime};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ impl SessionData {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Self {
             session_id: Uuid::new_v4().to_string(),
             user_id,
@@ -57,7 +57,7 @@ impl SessionData {
             device_fingerprint: None,
         }
     }
-    
+
     pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -65,14 +65,14 @@ impl SessionData {
             .as_secs();
         now >= self.expires_at
     }
-    
+
     pub fn update_last_accessed(&mut self) {
         self.last_accessed = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
     }
-    
+
     pub fn extend_session(&mut self, additional_seconds: u64) {
         self.expires_at += additional_seconds;
         self.update_last_accessed();
@@ -81,13 +81,29 @@ impl SessionData {
 
 #[async_trait]
 pub trait SessionStore: Send + Sync {
-    async fn create_session(&self, session: &SessionData) -> Result<(), Box<dyn StdError + Send + Sync>>;
-    async fn get_session(&self, session_id: &str) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>>;
-    async fn update_session(&self, session: &SessionData) -> Result<(), Box<dyn StdError + Send + Sync>>;
-    async fn delete_session(&self, session_id: &str) -> Result<(), Box<dyn StdError + Send + Sync>>;
-    async fn get_user_sessions(&self, user_id: &str) -> Result<Vec<SessionData>, Box<dyn StdError + Send + Sync>>;
+    async fn create_session(
+        &self,
+        session: &SessionData,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>>;
+    async fn get_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>>;
+    async fn update_session(
+        &self,
+        session: &SessionData,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>>;
+    async fn delete_session(&self, session_id: &str)
+        -> Result<(), Box<dyn StdError + Send + Sync>>;
+    async fn get_user_sessions(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<SessionData>, Box<dyn StdError + Send + Sync>>;
     async fn cleanup_expired_sessions(&self) -> Result<u64, Box<dyn StdError + Send + Sync>>;
-    async fn revoke_all_user_sessions(&self, user_id: &str) -> Result<u64, Box<dyn StdError + Send + Sync>>;
+    async fn revoke_all_user_sessions(
+        &self,
+        user_id: &str,
+    ) -> Result<u64, Box<dyn StdError + Send + Sync>>;
 }
 
 #[derive(Clone)]
@@ -104,20 +120,20 @@ impl RedisSessionStore {
         } else {
             None
         };
-        
+
         Self {
             redis_pool,
             memory_fallback: Arc::new(RwLock::new(HashMap::new())),
             user_sessions_index: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     async fn create_redis_pool(redis_url: &str) -> Option<Pool> {
         info!("Initializing Redis session store");
-        
+
         let config = Config::from_url(redis_url);
         let pool = config.create_pool(Some(Runtime::Tokio1)).ok()?;
-        
+
         // Test the connection
         match pool.get().await {
             Ok(_conn) => {
@@ -130,26 +146,24 @@ impl RedisSessionStore {
             }
         }
     }
-    
+
     async fn get_redis_connection(&self) -> Option<deadpool_redis::Connection> {
         match &self.redis_pool {
-            Some(pool) => {
-                match pool.get().await {
-                    Ok(conn) => Some(conn),
-                    Err(e) => {
-                        warn!("Failed to get Redis connection from session pool: {}", e);
-                        None
-                    }
+            Some(pool) => match pool.get().await {
+                Ok(conn) => Some(conn),
+                Err(e) => {
+                    warn!("Failed to get Redis connection from session pool: {}", e);
+                    None
                 }
-            }
+            },
             None => None,
         }
     }
-    
+
     fn session_key(&self, session_id: &str) -> String {
         format!("session:{}", session_id)
     }
-    
+
     fn user_sessions_key(&self, user_id: &str) -> String {
         format!("user_sessions:{}", user_id)
     }
@@ -157,15 +171,18 @@ impl RedisSessionStore {
 
 #[async_trait]
 impl SessionStore for RedisSessionStore {
-    async fn create_session(&self, session: &SessionData) -> Result<(), Box<dyn StdError + Send + Sync>> {
+    async fn create_session(
+        &self,
+        session: &SessionData,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let session_json = serde_json::to_string(session)?;
         let ttl = session.expires_at - session.created_at;
-        
+
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(&session.session_id);
             let user_sessions_key = self.user_sessions_key(&session.user_id);
-            
+
             // Store session data with TTL
             let result1: Result<(), _> = {
                 let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
@@ -175,21 +192,25 @@ impl SessionStore for RedisSessionStore {
                     set_result
                 }
             };
-                
+
             // Add to user sessions set
             let result2: Result<(), _> = conn.sadd(&user_sessions_key, &session.session_id).await;
-            
+
             match (result1, result2) {
                 (Ok(_), Ok(_)) => {
                     // Successfully stored in Redis, also store in memory as backup
-                    self.memory_fallback.write().await.insert(session.session_id.clone(), session.clone());
-                    
+                    self.memory_fallback
+                        .write()
+                        .await
+                        .insert(session.session_id.clone(), session.clone());
+
                     // Update user sessions index
                     let mut user_sessions = self.user_sessions_index.write().await;
-                    user_sessions.entry(session.user_id.clone())
+                    user_sessions
+                        .entry(session.user_id.clone())
                         .or_insert_with(Vec::new)
                         .push(session.session_id.clone());
-                    
+
                     return Ok(());
                 }
                 _ => {
@@ -197,21 +218,28 @@ impl SessionStore for RedisSessionStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         warn!("Storing session in memory as fallback");
-        self.memory_fallback.write().await.insert(session.session_id.clone(), session.clone());
-        
+        self.memory_fallback
+            .write()
+            .await
+            .insert(session.session_id.clone(), session.clone());
+
         // Update user sessions index
         let mut user_sessions = self.user_sessions_index.write().await;
-        user_sessions.entry(session.user_id.clone())
+        user_sessions
+            .entry(session.user_id.clone())
             .or_insert_with(Vec::new)
             .push(session.session_id.clone());
-        
+
         Ok(())
     }
-    
-    async fn get_session(&self, session_id: &str) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>> {
+
+    async fn get_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(session_id);
@@ -236,7 +264,7 @@ impl SessionStore for RedisSessionStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         if let Some(mut session) = self.memory_fallback.read().await.get(session_id).cloned() {
             if session.is_expired() {
@@ -252,15 +280,18 @@ impl SessionStore for RedisSessionStore {
             Ok(None)
         }
     }
-    
-    async fn update_session(&self, session: &SessionData) -> Result<(), Box<dyn StdError + Send + Sync>> {
+
+    async fn update_session(
+        &self,
+        session: &SessionData,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let session_json = serde_json::to_string(session)?;
         let ttl = if session.expires_at > session.last_accessed {
             session.expires_at - session.last_accessed
         } else {
             1 // Minimum TTL to avoid immediate expiration
         };
-        
+
         // Update in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(&session.session_id);
@@ -270,11 +301,13 @@ impl SessionStore for RedisSessionStore {
                     let _: Result<(), _> = conn.expire(&session_key, ttl as i64).await;
                 }
                 set_result
-            } 
-            {
+            } {
                 Ok(_) => {
                     // Successfully updated in Redis, also update memory backup
-                    self.memory_fallback.write().await.insert(session.session_id.clone(), session.clone());
+                    self.memory_fallback
+                        .write()
+                        .await
+                        .insert(session.session_id.clone(), session.clone());
                     return Ok(());
                 }
                 Err(e) => {
@@ -282,23 +315,29 @@ impl SessionStore for RedisSessionStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
-        self.memory_fallback.write().await.insert(session.session_id.clone(), session.clone());
+        self.memory_fallback
+            .write()
+            .await
+            .insert(session.session_id.clone(), session.clone());
         Ok(())
     }
-    
-    async fn delete_session(&self, session_id: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
+
+    async fn delete_session(
+        &self,
+        session_id: &str,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Get session first to find user_id for index cleanup
         let session = self.get_session(session_id).await?;
-        
+
         // Delete from Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(session_id);
-            
+
             if let Some(session_data) = &session {
                 let user_sessions_key = self.user_sessions_key(&session_data.user_id);
-                
+
                 // Delete session and remove from user sessions set
                 let _: Result<(), _> = conn.del(&session_key).await;
                 let _: Result<(), _> = conn.srem(&user_sessions_key, session_id).await;
@@ -306,10 +345,10 @@ impl SessionStore for RedisSessionStore {
                 let _: Result<(), _> = conn.del(&session_key).await;
             }
         }
-        
+
         // Remove from memory fallback
         self.memory_fallback.write().await.remove(session_id);
-        
+
         // Update user sessions index
         if let Some(session_data) = session {
             let mut user_sessions = self.user_sessions_index.write().await;
@@ -320,13 +359,16 @@ impl SessionStore for RedisSessionStore {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
-    async fn get_user_sessions(&self, user_id: &str) -> Result<Vec<SessionData>, Box<dyn StdError + Send + Sync>> {
+
+    async fn get_user_sessions(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<SessionData>, Box<dyn StdError + Send + Sync>> {
         let mut sessions = Vec::new();
-        
+
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let user_sessions_key = self.user_sessions_key(user_id);
@@ -344,7 +386,7 @@ impl SessionStore for RedisSessionStore {
                 }
             }
         }
-        
+
         // Fallback to in-memory storage
         let user_sessions = self.user_sessions_index.read().await;
         if let Some(session_ids) = user_sessions.get(user_id) {
@@ -357,43 +399,51 @@ impl SessionStore for RedisSessionStore {
                 }
             }
         }
-        
+
         Ok(sessions)
     }
-    
+
     async fn cleanup_expired_sessions(&self) -> Result<u64, Box<dyn StdError + Send + Sync>> {
         let mut cleaned_count = 0u64;
-        
+
         // Redis automatically handles TTL expiration, so we mainly need to clean memory fallback
         let expired_sessions: Vec<String> = {
             let sessions = self.memory_fallback.read().await;
-            sessions.iter()
+            sessions
+                .iter()
                 .filter_map(|(id, session)| {
-                    if session.is_expired() { Some(id.clone()) } else { None }
+                    if session.is_expired() {
+                        Some(id.clone())
+                    } else {
+                        None
+                    }
                 })
                 .collect()
         };
-        
+
         for session_id in expired_sessions {
             if self.delete_session(&session_id).await.is_ok() {
                 cleaned_count += 1;
             }
         }
-        
+
         info!("Cleaned up {} expired sessions", cleaned_count);
         Ok(cleaned_count)
     }
-    
-    async fn revoke_all_user_sessions(&self, user_id: &str) -> Result<u64, Box<dyn StdError + Send + Sync>> {
+
+    async fn revoke_all_user_sessions(
+        &self,
+        user_id: &str,
+    ) -> Result<u64, Box<dyn StdError + Send + Sync>> {
         let sessions = self.get_user_sessions(user_id).await?;
         let mut revoked_count = 0u64;
-        
+
         for session in sessions {
             if self.delete_session(&session.session_id).await.is_ok() {
                 revoked_count += 1;
             }
         }
-        
+
         info!("Revoked {} sessions for user {}", revoked_count, user_id);
         Ok(revoked_count)
     }
@@ -402,7 +452,7 @@ impl SessionStore for RedisSessionStore {
 /// Start a background task to periodically clean up expired sessions
 pub async fn start_session_cleanup_task(session_store: Arc<dyn SessionStore>) {
     let mut interval = tokio::time::interval(Duration::from_secs(300)); // Every 5 minutes
-    
+
     loop {
         interval.tick().await;
         match session_store.cleanup_expired_sessions().await {

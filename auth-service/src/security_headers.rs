@@ -133,12 +133,15 @@ impl SecurityHeadersConfig {
 
     /// Load configuration from environment variables
     pub fn from_env() -> Self {
-        let base_config =
-            if std::env::var("ENVIRONMENT").unwrap_or_default().to_lowercase() == "production" {
-                Self::production()
-            } else {
-                Self::development()
-            };
+        let base_config = if std::env::var("ENVIRONMENT")
+            .unwrap_or_default()
+            .to_lowercase()
+            == "production"
+        {
+            Self::production()
+        } else {
+            Self::development()
+        };
 
         Self {
             csp: std::env::var("SECURITY_CSP").unwrap_or(base_config.csp),
@@ -191,7 +194,10 @@ pub async fn add_configurable_security_headers(
 
     // HTTP Strict Transport Security
     let hsts_value = if config.hsts_include_subdomains && config.hsts_preload {
-        format!("max-age={}; includeSubDomains; preload", config.hsts_max_age)
+        format!(
+            "max-age={}; includeSubDomains; preload",
+            config.hsts_max_age
+        )
     } else if config.hsts_include_subdomains {
         format!("max-age={}; includeSubDomains", config.hsts_max_age)
     } else {
@@ -214,7 +220,10 @@ pub async fn add_configurable_security_headers(
     headers.insert("Referrer-Policy", config.referrer_policy.parse().unwrap());
 
     // Permissions-Policy
-    headers.insert("Permissions-Policy", config.permissions_policy.parse().unwrap());
+    headers.insert(
+        "Permissions-Policy",
+        config.permissions_policy.parse().unwrap(),
+    );
 
     // Cross-Origin policies
     headers.insert("Cross-Origin-Embedder-Policy", config.coep.parse().unwrap());
@@ -228,7 +237,9 @@ pub async fn add_configurable_security_headers(
     if config.cache_control && headers_present {
         headers.insert(
             "Cache-Control",
-            "no-store, no-cache, must-revalidate, private".parse().unwrap(),
+            "no-store, no-cache, must-revalidate, private"
+                .parse()
+                .unwrap(),
         );
         headers.insert("Pragma", "no-cache".parse().unwrap());
         headers.insert("Expires", "0".parse().unwrap());
@@ -237,9 +248,15 @@ pub async fn add_configurable_security_headers(
     // Add monitoring headers
     if config.monitoring_headers {
         if let Ok(timestamp) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            headers.insert("X-Response-Time", timestamp.as_secs().to_string().parse().unwrap());
+            headers.insert(
+                "X-Response-Time",
+                timestamp.as_secs().to_string().parse().unwrap(),
+            );
         }
-        headers.insert("X-Request-ID", uuid::Uuid::new_v4().to_string().parse().unwrap());
+        headers.insert(
+            "X-Request-ID",
+            uuid::Uuid::new_v4().to_string().parse().unwrap(),
+        );
     }
 
     response
@@ -273,7 +290,9 @@ pub async fn add_legacy_security_headers(request: Request, next: Next) -> Respon
     // Strict Transport Security - Force HTTPS for 1 year
     headers.insert(
         "Strict-Transport-Security",
-        "max-age=31536000; includeSubDomains; preload".parse().unwrap(),
+        "max-age=31536000; includeSubDomains; preload"
+            .parse()
+            .unwrap(),
     );
 
     // Prevent clickjacking
@@ -287,7 +306,10 @@ pub async fn add_legacy_security_headers(request: Request, next: Next) -> Respon
     headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
 
     // Referrer Policy - Limit referrer information
-    headers.insert("Referrer-Policy", "strict-origin-when-cross-origin".parse().unwrap());
+    headers.insert(
+        "Referrer-Policy",
+        "strict-origin-when-cross-origin".parse().unwrap(),
+    );
 
     // Permissions Policy - Restrict browser features
     headers.insert(
@@ -300,13 +322,19 @@ pub async fn add_legacy_security_headers(request: Request, next: Next) -> Respon
     );
 
     // Cross-Origin Embedder Policy
-    headers.insert("Cross-Origin-Embedder-Policy", "require-corp".parse().unwrap());
+    headers.insert(
+        "Cross-Origin-Embedder-Policy",
+        "require-corp".parse().unwrap(),
+    );
 
     // Cross-Origin Opener Policy
     headers.insert("Cross-Origin-Opener-Policy", "same-origin".parse().unwrap());
 
     // Cross-Origin Resource Policy
-    headers.insert("Cross-Origin-Resource-Policy", "same-origin".parse().unwrap());
+    headers.insert(
+        "Cross-Origin-Resource-Policy",
+        "same-origin".parse().unwrap(),
+    );
 
     // Server identification (minimal information disclosure)
     headers.insert("Server", "Rust-Security-Service".parse().unwrap());
@@ -316,7 +344,9 @@ pub async fn add_legacy_security_headers(request: Request, next: Next) -> Respon
     if headers_present {
         headers.insert(
             "Cache-Control",
-            "no-store, no-cache, must-revalidate, private".parse().unwrap(),
+            "no-store, no-cache, must-revalidate, private"
+                .parse()
+                .unwrap(),
         );
         headers.insert("Pragma", "no-cache".parse().unwrap());
         headers.insert("Expires", "0".parse().unwrap());
@@ -324,7 +354,10 @@ pub async fn add_legacy_security_headers(request: Request, next: Next) -> Respon
 
     // Add timestamp for security monitoring
     if let Ok(timestamp) = SystemTime::now().duration_since(UNIX_EPOCH) {
-        headers.insert("X-Response-Time", timestamp.as_secs().to_string().parse().unwrap());
+        headers.insert(
+            "X-Response-Time",
+            timestamp.as_secs().to_string().parse().unwrap(),
+        );
     }
 
     response
@@ -342,7 +375,10 @@ pub async fn add_api_security_headers(request: Request, next: Next) -> Response 
     headers.insert("X-Frame-Options", "DENY".parse().unwrap());
 
     // Prevent caching of API responses
-    headers.insert("Cache-Control", "no-store, no-cache, must-revalidate".parse().unwrap());
+    headers.insert(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate".parse().unwrap(),
+    );
 
     // CORS headers for API (restrictive by default)
     headers.insert(
@@ -350,11 +386,16 @@ pub async fn add_api_security_headers(request: Request, next: Next) -> Response 
         "null".parse().unwrap(), // Will be overridden by CORS middleware if configured
     );
 
-    headers.insert("Access-Control-Allow-Methods", "GET, POST, OPTIONS".parse().unwrap());
+    headers.insert(
+        "Access-Control-Allow-Methods",
+        "GET, POST, OPTIONS".parse().unwrap(),
+    );
 
     headers.insert(
         "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, X-Requested-With".parse().unwrap(),
+        "Content-Type, Authorization, X-Requested-With"
+            .parse()
+            .unwrap(),
     );
 
     headers.insert(
@@ -376,7 +417,10 @@ pub fn add_rate_limit_headers(
 
     headers.insert("X-RateLimit-Limit", limit.to_string().parse().unwrap());
 
-    headers.insert("X-RateLimit-Remaining", remaining.to_string().parse().unwrap());
+    headers.insert(
+        "X-RateLimit-Remaining",
+        remaining.to_string().parse().unwrap(),
+    );
 
     headers.insert("X-RateLimit-Reset", reset_time.to_string().parse().unwrap());
 
@@ -433,7 +477,10 @@ mod tests {
             .route("/api/test", get(test_handler))
             .layer(middleware::from_fn(add_api_security_headers));
 
-        let request = Request::builder().uri("/api/test").body(Body::empty()).unwrap();
+        let request = Request::builder()
+            .uri("/api/test")
+            .body(Body::empty())
+            .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
 

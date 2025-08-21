@@ -1,5 +1,5 @@
 //! OAuth Client Registration Policy Enforcement
-//! 
+//!
 //! Implements comprehensive policy enforcement for OAuth 2.0 dynamic client registration
 //! including security policies, compliance validation, and administrative controls.
 
@@ -9,32 +9,32 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::oauth_client_registration::{ClientRegistrationRequest, ClientRegistrationError};
+use crate::oauth_client_registration::{ClientRegistrationError, ClientRegistrationRequest};
 
 /// Comprehensive OAuth client registration policy
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientRegistrationPolicyEngine {
     /// Global policy settings
     pub global_policy: GlobalRegistrationPolicy,
-    
+
     /// Domain-specific policies
     pub domain_policies: HashMap<String, DomainPolicy>,
-    
+
     /// Application type policies
     pub application_type_policies: HashMap<String, ApplicationTypePolicy>,
-    
+
     /// Security policies
     pub security_policies: SecurityPolicySet,
-    
+
     /// Compliance policies
     pub compliance_policies: CompliancePolicySet,
-    
+
     /// Rate limiting policies
     pub rate_limiting_policies: RateLimitingPolicySet,
-    
+
     /// Content filtering policies
     pub content_filtering_policies: ContentFilteringPolicy,
 }
@@ -44,28 +44,28 @@ pub struct ClientRegistrationPolicyEngine {
 pub struct GlobalRegistrationPolicy {
     /// Whether dynamic registration is enabled globally
     pub enabled: bool,
-    
+
     /// Require authentication for registration
     pub require_authentication: bool,
-    
+
     /// Require admin approval for registration
     pub require_admin_approval: bool,
-    
+
     /// Maximum number of clients per organization
     pub max_clients_per_organization: Option<u32>,
-    
+
     /// Default client expiry (if supported)
     pub default_client_expiry_days: Option<u32>,
-    
+
     /// Allowed registration sources (IPs or CIDR blocks)
     pub allowed_registration_sources: Vec<String>,
-    
+
     /// Blocked registration sources
     pub blocked_registration_sources: Vec<String>,
-    
+
     /// Require software statements
     pub require_software_statements: bool,
-    
+
     /// Trusted software statement issuers
     pub trusted_software_issuers: Vec<String>,
 }
@@ -75,19 +75,19 @@ pub struct GlobalRegistrationPolicy {
 pub struct DomainPolicy {
     /// Domain pattern (supports wildcards)
     pub domain_pattern: String,
-    
+
     /// Whether this domain is allowed for redirect URIs
     pub allowed_for_redirects: bool,
-    
+
     /// Whether this domain is trusted (less restrictions)
     pub trusted_domain: bool,
-    
+
     /// Maximum redirect URIs allowed for this domain
     pub max_redirect_uris: Option<u32>,
-    
+
     /// Allowed URL schemes for this domain
     pub allowed_schemes: Vec<String>,
-    
+
     /// Additional security requirements
     pub security_requirements: DomainSecurityRequirements,
 }
@@ -97,13 +97,13 @@ pub struct DomainPolicy {
 pub struct DomainSecurityRequirements {
     /// Require HTTPS for all URIs
     pub require_https: bool,
-    
+
     /// Require specific ports
     pub allowed_ports: Option<Vec<u16>>,
-    
+
     /// Require domain validation
     pub require_domain_validation: bool,
-    
+
     /// Block known public redirectors
     pub block_public_redirectors: bool,
 }
@@ -113,20 +113,20 @@ pub struct DomainSecurityRequirements {
 pub struct ApplicationTypePolicy {
     /// Application type (web, native, service, etc.)
     pub application_type: String,
-    
+
     /// Allowed grant types for this application type
     pub allowed_grant_types: Vec<String>,
-    
+
     /// Allowed response types
     pub allowed_response_types: Vec<String>,
-    
+
     /// Required fields for this application type
     pub required_fields: Vec<String>,
-    
+
     /// Maximum token lifetimes
     pub max_access_token_lifetime: Option<u64>,
     pub max_refresh_token_lifetime: Option<u64>,
-    
+
     /// Security requirements
     pub security_requirements: ApplicationSecurityRequirements,
 }
@@ -136,16 +136,16 @@ pub struct ApplicationTypePolicy {
 pub struct ApplicationSecurityRequirements {
     /// Require PKCE for public clients
     pub require_pkce: bool,
-    
+
     /// Require client authentication
     pub require_client_auth: bool,
-    
+
     /// Allowed authentication methods
     pub allowed_auth_methods: Vec<String>,
-    
+
     /// Require signed requests
     pub require_signed_requests: bool,
-    
+
     /// Require mTLS
     pub require_mtls: bool,
 }
@@ -155,13 +155,13 @@ pub struct ApplicationSecurityRequirements {
 pub struct SecurityPolicySet {
     /// URI validation policies
     pub uri_validation: UriValidationPolicy,
-    
+
     /// Content validation policies
     pub content_validation: ContentValidationPolicy,
-    
+
     /// Cryptographic policies
     pub cryptographic_policies: CryptographicPolicy,
-    
+
     /// Network security policies
     pub network_security: NetworkSecurityPolicy,
 }
@@ -171,22 +171,22 @@ pub struct SecurityPolicySet {
 pub struct UriValidationPolicy {
     /// Block localhost redirects
     pub block_localhost: bool,
-    
+
     /// Block private IP ranges
     pub block_private_ips: bool,
-    
+
     /// Block known malicious domains
     pub block_malicious_domains: bool,
-    
+
     /// Require exact URI matching (no wildcards)
     pub require_exact_matching: bool,
-    
+
     /// Maximum URI length
     pub max_uri_length: usize,
-    
+
     /// Blocked URI patterns (regex)
     pub blocked_uri_patterns: Vec<String>,
-    
+
     /// Required URI patterns (regex)
     pub required_uri_patterns: Vec<String>,
 }
@@ -196,16 +196,16 @@ pub struct UriValidationPolicy {
 pub struct ContentValidationPolicy {
     /// Validate software statements
     pub validate_software_statements: bool,
-    
+
     /// Require specific client metadata
     pub required_metadata_fields: Vec<String>,
-    
+
     /// Maximum lengths for text fields
     pub max_field_lengths: HashMap<String, usize>,
-    
+
     /// Content filtering rules
     pub content_filters: Vec<ContentFilter>,
-    
+
     /// Allowed MIME types for logos
     pub allowed_logo_mime_types: Vec<String>,
 }
@@ -215,13 +215,13 @@ pub struct ContentValidationPolicy {
 pub struct ContentFilter {
     /// Field name to apply filter to
     pub field_name: String,
-    
+
     /// Filter type
     pub filter_type: ContentFilterType,
-    
+
     /// Filter pattern or value
     pub pattern: String,
-    
+
     /// Whether to block or allow matching content
     pub action: FilterAction,
 }
@@ -251,16 +251,16 @@ pub enum FilterAction {
 pub struct CryptographicPolicy {
     /// Allowed signing algorithms
     pub allowed_signing_algorithms: Vec<String>,
-    
+
     /// Minimum key sizes
     pub minimum_key_sizes: HashMap<String, u32>,
-    
+
     /// Require key rotation
     pub require_key_rotation: bool,
-    
+
     /// Key rotation intervals
     pub key_rotation_intervals: HashMap<String, u64>,
-    
+
     /// Allowed key usages
     pub allowed_key_usages: Vec<String>,
 }
@@ -270,19 +270,19 @@ pub struct CryptographicPolicy {
 pub struct NetworkSecurityPolicy {
     /// Allowed source networks (CIDR)
     pub allowed_source_networks: Vec<String>,
-    
+
     /// Blocked source networks (CIDR)
     pub blocked_source_networks: Vec<String>,
-    
+
     /// Require reverse DNS validation
     pub require_reverse_dns: bool,
-    
+
     /// Block Tor exit nodes
     pub block_tor_exits: bool,
-    
+
     /// Block VPN/proxy services
     pub block_vpn_proxies: bool,
-    
+
     /// GeoIP restrictions
     pub geolocation_policy: Option<GeolocationPolicy>,
 }
@@ -292,10 +292,10 @@ pub struct NetworkSecurityPolicy {
 pub struct GeolocationPolicy {
     /// Allowed countries (ISO 3166-1 alpha-2)
     pub allowed_countries: Vec<String>,
-    
+
     /// Blocked countries
     pub blocked_countries: Vec<String>,
-    
+
     /// Require country verification
     pub require_country_verification: bool,
 }
@@ -305,16 +305,16 @@ pub struct GeolocationPolicy {
 pub struct CompliancePolicySet {
     /// GDPR compliance requirements
     pub gdpr_compliance: Option<GdprCompliancePolicy>,
-    
+
     /// CCPA compliance requirements
     pub ccpa_compliance: Option<CcpaCompliancePolicy>,
-    
+
     /// Industry-specific compliance
     pub industry_compliance: HashMap<String, IndustryCompliancePolicy>,
-    
+
     /// Data retention policies
     pub data_retention: DataRetentionPolicy,
-    
+
     /// Audit requirements
     pub audit_requirements: AuditPolicy,
 }
@@ -324,13 +324,13 @@ pub struct CompliancePolicySet {
 pub struct GdprCompliancePolicy {
     /// Require explicit consent
     pub require_explicit_consent: bool,
-    
+
     /// Require privacy policy URI
     pub require_privacy_policy: bool,
-    
+
     /// Require data processing agreement
     pub require_dpa: bool,
-    
+
     /// Data minimization requirements
     pub data_minimization: Vec<String>,
 }
@@ -340,10 +340,10 @@ pub struct GdprCompliancePolicy {
 pub struct CcpaCompliancePolicy {
     /// Require privacy policy
     pub require_privacy_policy: bool,
-    
+
     /// Require opt-out mechanism
     pub require_opt_out: bool,
-    
+
     /// Data sale restrictions
     pub restrict_data_sale: bool,
 }
@@ -353,13 +353,13 @@ pub struct CcpaCompliancePolicy {
 pub struct IndustryCompliancePolicy {
     /// Industry type (healthcare, finance, etc.)
     pub industry_type: String,
-    
+
     /// Specific requirements
     pub requirements: Vec<String>,
-    
+
     /// Required certifications
     pub required_certifications: Vec<String>,
-    
+
     /// Additional security controls
     pub security_controls: Vec<String>,
 }
@@ -369,13 +369,13 @@ pub struct IndustryCompliancePolicy {
 pub struct DataRetentionPolicy {
     /// Default retention period (days)
     pub default_retention_days: u32,
-    
+
     /// Field-specific retention periods
     pub field_retention_periods: HashMap<String, u32>,
-    
+
     /// Automatic deletion enabled
     pub auto_deletion_enabled: bool,
-    
+
     /// Retention policy URI (for transparency)
     pub retention_policy_uri: Option<String>,
 }
@@ -385,16 +385,16 @@ pub struct DataRetentionPolicy {
 pub struct AuditPolicy {
     /// Log all registration attempts
     pub log_all_attempts: bool,
-    
+
     /// Log policy violations
     pub log_policy_violations: bool,
-    
+
     /// Detailed audit logging
     pub detailed_logging: bool,
-    
+
     /// Audit log retention period
     pub audit_retention_days: u32,
-    
+
     /// External audit integration
     pub external_audit_endpoints: Vec<String>,
 }
@@ -404,13 +404,13 @@ pub struct AuditPolicy {
 pub struct RateLimitingPolicySet {
     /// Per-IP rate limits
     pub per_ip_limits: RateLimitConfig,
-    
+
     /// Per-domain rate limits
     pub per_domain_limits: HashMap<String, RateLimitConfig>,
-    
+
     /// Global rate limits
     pub global_limits: RateLimitConfig,
-    
+
     /// Burst protection
     pub burst_protection: BurstProtectionConfig,
 }
@@ -420,13 +420,13 @@ pub struct RateLimitingPolicySet {
 pub struct RateLimitConfig {
     /// Requests per hour
     pub requests_per_hour: u32,
-    
+
     /// Requests per day
     pub requests_per_day: u32,
-    
+
     /// Requests per month
     pub requests_per_month: u32,
-    
+
     /// Burst allowance
     pub burst_size: u32,
 }
@@ -436,13 +436,13 @@ pub struct RateLimitConfig {
 pub struct BurstProtectionConfig {
     /// Enable burst detection
     pub enabled: bool,
-    
+
     /// Burst threshold (requests per minute)
     pub burst_threshold: u32,
-    
+
     /// Burst penalty (delay in seconds)
     pub burst_penalty_seconds: u32,
-    
+
     /// Progressive penalties
     pub progressive_penalties: bool,
 }
@@ -452,22 +452,22 @@ pub struct BurstProtectionConfig {
 pub struct ContentFilteringPolicy {
     /// Enable content filtering
     pub enabled: bool,
-    
+
     /// Profanity filtering
     pub profanity_filtering: bool,
-    
+
     /// Spam detection
     pub spam_detection: bool,
-    
+
     /// Malicious content detection
     pub malicious_content_detection: bool,
-    
+
     /// Custom filter rules
     pub custom_filters: Vec<ContentFilter>,
-    
+
     /// Whitelist patterns
     pub whitelist_patterns: Vec<String>,
-    
+
     /// Blacklist patterns
     pub blacklist_patterns: Vec<String>,
 }
@@ -496,30 +496,36 @@ impl PolicyEnforcementEngine {
         let mut result = PolicyEnforcementResult::new();
 
         // Global policy checks
-        self.check_global_policies(request, client_ip, &mut result).await?;
+        self.check_global_policies(request, client_ip, &mut result)
+            .await?;
 
         // Domain policy checks
         self.check_domain_policies(request, &mut result).await?;
 
         // Application type policy checks
-        self.check_application_type_policies(request, &mut result).await?;
+        self.check_application_type_policies(request, &mut result)
+            .await?;
 
         // Security policy checks
-        self.check_security_policies(request, client_ip, &mut result).await?;
+        self.check_security_policies(request, client_ip, &mut result)
+            .await?;
 
         // Compliance policy checks
-        self.check_compliance_policies(request, user_context, &mut result).await?;
+        self.check_compliance_policies(request, user_context, &mut result)
+            .await?;
 
         // Rate limiting checks
-        self.check_rate_limiting_policies(client_ip, &mut result).await?;
+        self.check_rate_limiting_policies(client_ip, &mut result)
+            .await?;
 
         // Content filtering checks
-        self.check_content_filtering_policies(request, &mut result).await?;
+        self.check_content_filtering_policies(request, &mut result)
+            .await?;
 
         // Final policy decision
         if result.has_blocking_violations() {
             return Err(ClientRegistrationError::PolicyViolation(
-                result.get_violation_summary()
+                result.get_violation_summary(),
             ));
         }
 
@@ -547,7 +553,11 @@ impl PolicyEnforcementEngine {
 
         // Check source IP restrictions
         if let Some(ip) = client_ip {
-            if !self.is_ip_allowed(ip, &global.allowed_registration_sources, &global.blocked_registration_sources) {
+            if !self.is_ip_allowed(
+                ip,
+                &global.allowed_registration_sources,
+                &global.blocked_registration_sources,
+            ) {
                 result.add_violation(
                     PolicyViolationType::SourceRestriction,
                     format!("Registration from IP {} is not allowed", ip),
@@ -570,7 +580,10 @@ impl PolicyEnforcementEngine {
             if !global.trusted_software_issuers.is_empty() {
                 // Validate software statement issuer (simplified)
                 // In a real implementation, this would verify JWT signatures
-                if !self.validate_software_statement(software_statement, &global.trusted_software_issuers) {
+                if !self.validate_software_statement(
+                    software_statement,
+                    &global.trusted_software_issuers,
+                ) {
                     result.add_violation(
                         PolicyViolationType::UntrustedIssuer,
                         "Software statement from untrusted issuer".to_string(),
@@ -594,7 +607,7 @@ impl PolicyEnforcementEngine {
                 if let Some(domain) = url.domain() {
                     // Find applicable domain policy
                     let domain_policy = self.find_domain_policy(domain);
-                    
+
                     if let Some(policy) = domain_policy {
                         self.enforce_domain_policy(redirect_uri, &url, policy, result);
                     } else {
@@ -628,7 +641,10 @@ impl PolicyEnforcementEngine {
                         if !policy.allowed_grant_types.contains(grant_type) {
                             result.add_violation(
                                 PolicyViolationType::DisallowedGrantType,
-                                format!("Grant type '{}' not allowed for application type '{}'", grant_type, app_type),
+                                format!(
+                                    "Grant type '{}' not allowed for application type '{}'",
+                                    grant_type, app_type
+                                ),
                                 PolicySeverity::Error,
                             );
                         }
@@ -641,7 +657,10 @@ impl PolicyEnforcementEngine {
                         if !policy.allowed_response_types.contains(response_type) {
                             result.add_violation(
                                 PolicyViolationType::DisallowedResponseType,
-                                format!("Response type '{}' not allowed for application type '{}'", response_type, app_type),
+                                format!(
+                                    "Response type '{}' not allowed for application type '{}'",
+                                    response_type, app_type
+                                ),
                                 PolicySeverity::Error,
                             );
                         }
@@ -655,16 +674,24 @@ impl PolicyEnforcementEngine {
                             if request.client_name.is_none() {
                                 result.add_violation(
                                     PolicyViolationType::MissingRequirement,
-                                    format!("Field '{}' is required for application type '{}'", required_field, app_type),
+                                    format!(
+                                        "Field '{}' is required for application type '{}'",
+                                        required_field, app_type
+                                    ),
                                     PolicySeverity::Error,
                                 );
                             }
                         }
                         "contacts" => {
-                            if request.contacts.is_none() || request.contacts.as_ref().unwrap().is_empty() {
+                            if request.contacts.is_none()
+                                || request.contacts.as_ref().unwrap().is_empty()
+                            {
                                 result.add_violation(
                                     PolicyViolationType::MissingRequirement,
-                                    format!("Field '{}' is required for application type '{}'", required_field, app_type),
+                                    format!(
+                                        "Field '{}' is required for application type '{}'",
+                                        required_field, app_type
+                                    ),
                                     PolicySeverity::Error,
                                 );
                             }
@@ -847,11 +874,20 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_domain_policy(&self, uri: &str, url: &Url, policy: &DomainPolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_domain_policy(
+        &self,
+        uri: &str,
+        url: &Url,
+        policy: &DomainPolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         if !policy.allowed_for_redirects {
             result.add_violation(
                 PolicyViolationType::DisallowedDomain,
-                format!("Domain not allowed for redirect URIs: {}", url.domain().unwrap_or("")),
+                format!(
+                    "Domain not allowed for redirect URIs: {}",
+                    url.domain().unwrap_or("")
+                ),
                 PolicySeverity::Error,
             );
         }
@@ -886,7 +922,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_uri_validation_policy(&self, request: &ClientRegistrationRequest, policy: &UriValidationPolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_uri_validation_policy(
+        &self,
+        request: &ClientRegistrationRequest,
+        policy: &UriValidationPolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         for uri in &request.redirect_uris {
             // Check URI length
             if uri.len() > policy.max_uri_length {
@@ -899,7 +940,9 @@ impl PolicyEnforcementEngine {
 
             if let Ok(url) = Url::parse(uri) {
                 // Check localhost restriction
-                if policy.block_localhost && (url.host_str() == Some("localhost") || url.host_str() == Some("127.0.0.1")) {
+                if policy.block_localhost
+                    && (url.host_str() == Some("localhost") || url.host_str() == Some("127.0.0.1"))
+                {
                     result.add_violation(
                         PolicyViolationType::SecurityViolation,
                         "Localhost URLs are not allowed".to_string(),
@@ -938,7 +981,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_content_validation_policy(&self, request: &ClientRegistrationRequest, policy: &ContentValidationPolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_content_validation_policy(
+        &self,
+        request: &ClientRegistrationRequest,
+        policy: &ContentValidationPolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         // Check required metadata fields
         for required_field in &policy.required_metadata_fields {
             match required_field.as_str() {
@@ -970,7 +1018,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_network_security_policy(&self, ip: &str, policy: &NetworkSecurityPolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_network_security_policy(
+        &self,
+        ip: &str,
+        policy: &NetworkSecurityPolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         if let Ok(ip_addr) = ip.parse::<IpAddr>() {
             // Check allowed networks
             if !policy.allowed_source_networks.is_empty() {
@@ -1003,7 +1056,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_cryptographic_policies(&self, request: &ClientRegistrationRequest, policy: &CryptographicPolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_cryptographic_policies(
+        &self,
+        request: &ClientRegistrationRequest,
+        policy: &CryptographicPolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         // Check signing algorithm
         if let Some(ref alg) = request.id_token_signed_response_alg {
             if !policy.allowed_signing_algorithms.contains(alg) {
@@ -1016,7 +1074,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_gdpr_compliance(&self, request: &ClientRegistrationRequest, policy: &GdprCompliancePolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_gdpr_compliance(
+        &self,
+        request: &ClientRegistrationRequest,
+        policy: &GdprCompliancePolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         if policy.require_privacy_policy && request.policy_uri.is_none() {
             result.add_violation(
                 PolicyViolationType::ComplianceViolation,
@@ -1026,7 +1089,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_ccpa_compliance(&self, request: &ClientRegistrationRequest, policy: &CcpaCompliancePolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_ccpa_compliance(
+        &self,
+        request: &ClientRegistrationRequest,
+        policy: &CcpaCompliancePolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         if policy.require_privacy_policy && request.policy_uri.is_none() {
             result.add_violation(
                 PolicyViolationType::ComplianceViolation,
@@ -1036,7 +1104,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn enforce_industry_compliance(&self, request: &ClientRegistrationRequest, policy: &IndustryCompliancePolicy, result: &mut PolicyEnforcementResult) {
+    fn enforce_industry_compliance(
+        &self,
+        request: &ClientRegistrationRequest,
+        policy: &IndustryCompliancePolicy,
+        result: &mut PolicyEnforcementResult,
+    ) {
         // Industry-specific compliance checks
         for requirement in &policy.requirements {
             match requirement.as_str() {
@@ -1055,7 +1128,12 @@ impl PolicyEnforcementEngine {
         }
     }
 
-    fn apply_content_filter(&self, request: &ClientRegistrationRequest, filter: &ContentFilter, result: &mut PolicyEnforcementResult) {
+    fn apply_content_filter(
+        &self,
+        request: &ClientRegistrationRequest,
+        filter: &ContentFilter,
+        result: &mut PolicyEnforcementResult,
+    ) {
         let content = match filter.field_name.as_str() {
             "client_name" => request.client_name.as_deref(),
             // Add more fields
@@ -1094,14 +1172,21 @@ impl PolicyEnforcementEngine {
 
                 result.add_violation(
                     PolicyViolationType::ContentViolation,
-                    format!("Content filter triggered: {} in field {}", filter.pattern, filter.field_name),
+                    format!(
+                        "Content filter triggered: {} in field {}",
+                        filter.pattern, filter.field_name
+                    ),
                     severity,
                 );
             }
         }
     }
 
-    fn check_content_against_pattern(&self, request: &ClientRegistrationRequest, pattern: &str) -> bool {
+    fn check_content_against_pattern(
+        &self,
+        request: &ClientRegistrationRequest,
+        pattern: &str,
+    ) -> bool {
         // Check if any content matches the pattern
         if let Ok(regex) = Regex::new(pattern) {
             if let Some(ref client_name) = request.client_name {
@@ -1119,9 +1204,9 @@ impl PolicyEnforcementEngine {
             IpAddr::V4(ipv4) => {
                 let octets = ipv4.octets();
                 // RFC 1918 private ranges
-                (octets[0] == 10) ||
-                (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31) ||
-                (octets[0] == 192 && octets[1] == 168)
+                (octets[0] == 10)
+                    || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+                    || (octets[0] == 192 && octets[1] == 168)
             }
             IpAddr::V6(_) => {
                 // IPv6 private ranges (simplified)
@@ -1158,7 +1243,12 @@ impl PolicyEnforcementResult {
         }
     }
 
-    pub fn add_violation(&mut self, violation_type: PolicyViolationType, message: String, severity: PolicySeverity) {
+    pub fn add_violation(
+        &mut self,
+        violation_type: PolicyViolationType,
+        message: String,
+        severity: PolicySeverity,
+    ) {
         let violation = PolicyViolation {
             violation_type,
             message,
@@ -1177,7 +1267,8 @@ impl PolicyEnforcementResult {
     }
 
     pub fn get_violation_summary(&self) -> String {
-        self.violations.iter()
+        self.violations
+            .iter()
             .map(|v| v.message.clone())
             .collect::<Vec<_>>()
             .join("; ")
@@ -1253,7 +1344,10 @@ impl Default for ClientRegistrationPolicyEngine {
                         ("logo_uri".to_string(), 2048),
                     ]),
                     content_filters: vec![],
-                    allowed_logo_mime_types: vec!["image/png".to_string(), "image/jpeg".to_string()],
+                    allowed_logo_mime_types: vec![
+                        "image/png".to_string(),
+                        "image/jpeg".to_string(),
+                    ],
                 },
                 cryptographic_policies: CryptographicPolicy {
                     allowed_signing_algorithms: vec!["RS256".to_string(), "ES256".to_string()],

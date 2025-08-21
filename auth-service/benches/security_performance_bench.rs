@@ -323,7 +323,10 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
     // Setup
     let rate_limiter = Arc::new(ShardedRateLimiter::new(RateLimitConfig::default()));
     let cache = rt.block_on(async {
-        let config = CacheConfig { use_redis: false, ..Default::default() };
+        let config = CacheConfig {
+            use_redis: false,
+            ..Default::default()
+        };
         Arc::new(Cache::new(config).await.unwrap())
     });
 
@@ -354,7 +357,10 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
 
             // 4. Cache token
             let cache_key = format!("token:{}", token);
-            cache.set(&cache_key, &metadata, Some(Duration::from_secs(3600))).await.unwrap();
+            cache
+                .set(&cache_key, &metadata, Some(Duration::from_secs(3600)))
+                .await
+                .unwrap();
 
             black_box(Ok(token))
         });
@@ -377,7 +383,10 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
                 });
 
                 let cache_key = format!("token:{}", token);
-                cache.set(&cache_key, &metadata, Some(Duration::from_secs(3600))).await.unwrap();
+                cache
+                    .set(&cache_key, &metadata, Some(Duration::from_secs(3600)))
+                    .await
+                    .unwrap();
                 tokens.push(token);
             }
             tokens

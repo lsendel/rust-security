@@ -6,7 +6,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[derive(Debug)]
 pub struct Migration {
@@ -31,41 +31,46 @@ pub struct SqlStore {
 impl SqlStore {
     pub async fn new(database_url: &str) -> Result<Self, Box<dyn StdError + Send + Sync>> {
         info!("Initializing PostgreSQL connection pool");
-        
+
         // Configure connection pool with optimal settings
         let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(50)                    // Max connections in pool
-            .min_connections(5)                     // Minimum connections to maintain
+            .max_connections(50) // Max connections in pool
+            .min_connections(5) // Minimum connections to maintain
             .max_lifetime(Duration::from_secs(1800)) // 30 minutes connection lifetime
-            .idle_timeout(Duration::from_secs(600))  // 10 minutes idle timeout
+            .idle_timeout(Duration::from_secs(600)) // 10 minutes idle timeout
             .acquire_timeout(Duration::from_secs(10)) // 10 seconds acquire timeout
-            .test_before_acquire(true)              // Test connections before use
+            .test_before_acquire(true) // Test connections before use
             .connect(database_url)
             .await
             .map_err(|e| {
                 error!("Failed to connect to PostgreSQL: {}", e);
                 e
             })?;
-        
+
         info!("PostgreSQL connection pool initialized successfully");
-        Ok(Self { pool: Arc::new(pool) })
+        Ok(Self {
+            pool: Arc::new(pool),
+        })
     }
 
     pub async fn run_migrations(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
         info!("Running database migrations");
-        
+
         // Create migration tracking table first
         self.create_migration_table().await?;
-        
+
         let migrations = self.get_migrations();
         let applied_migrations = self.get_applied_migrations().await?;
-        
+
         for migration in migrations {
             if !applied_migrations.contains(&migration.version) {
-                info!("Applying migration {}: {}", migration.version, migration.description);
-                
+                info!(
+                    "Applying migration {}: {}",
+                    migration.version, migration.description
+                );
+
                 let mut tx = self.pool.begin().await?;
-                
+
                 // Execute migration SQL
                 for query in &migration.queries {
                     sqlx::query(query).execute(&mut *tx).await.map_err(|e| {
@@ -73,43 +78,45 @@ impl SqlStore {
                         e
                     })?;
                 }
-                
+
                 // Record migration as applied
                 sqlx::query("INSERT INTO schema_migrations (version, description, applied_at) VALUES ($1, $2, NOW())")
                     .bind(&migration.version)
                     .bind(&migration.description)
                     .execute(&mut *tx)
                     .await?;
-                
+
                 tx.commit().await?;
                 info!("Migration {} applied successfully", migration.version);
             } else {
                 info!("Migration {} already applied, skipping", migration.version);
             }
         }
-        
+
         info!("All migrations completed successfully");
         Ok(())
     }
-    
+
     async fn create_migration_table(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
         sqlx::query(
             r#"CREATE TABLE IF NOT EXISTS schema_migrations (
                 version VARCHAR(255) PRIMARY KEY,
                 description VARCHAR(255) NOT NULL,
                 applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-            )"#
-        ).execute(&*self.pool).await?;
+            )"#,
+        )
+        .execute(&*self.pool)
+        .await?;
         Ok(())
     }
-    
+
     async fn get_applied_migrations(&self) -> Result<Vec<String>, Box<dyn StdError + Send + Sync>> {
         let rows = sqlx::query("SELECT version FROM schema_migrations ORDER BY version")
             .fetch_all(&*self.pool)
             .await?;
         Ok(rows.into_iter().map(|row| row.get("version")).collect())
     }
-    
+
     fn get_migrations(&self) -> Vec<Migration> {
         vec![
             Migration {
@@ -235,19 +242,24 @@ impl SqlStore {
             },
         ]
     }
-    
+
     pub async fn cleanup_expired_data(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
         info!("Running expired data cleanup");
-        
+
         let tokens_deleted: (i32,) = sqlx::query_as("SELECT cleanup_expired_tokens()")
-            .fetch_one(&*self.pool).await?;
+            .fetch_one(&*self.pool)
+            .await?;
         let codes_deleted: (i32,) = sqlx::query_as("SELECT cleanup_expired_auth_codes()")
-            .fetch_one(&*self.pool).await?;
+            .fetch_one(&*self.pool)
+            .await?;
         let refresh_deleted: (i32,) = sqlx::query_as("SELECT cleanup_expired_refresh_tokens()")
-            .fetch_one(&*self.pool).await?;
-            
-        info!("Cleanup completed: {} tokens, {} auth codes, {} refresh tokens removed", 
-              tokens_deleted.0, codes_deleted.0, refresh_deleted.0);
+            .fetch_one(&*self.pool)
+            .await?;
+
+        info!(
+            "Cleanup completed: {} tokens, {} auth codes, {} refresh tokens removed",
+            tokens_deleted.0, codes_deleted.0, refresh_deleted.0
+        );
         Ok(())
     }
 }
@@ -334,8 +346,12 @@ impl Store for SqlStore {
             };
 
             if parsed_filter.attribute == "active" {
-                let bool_val: bool =
-                    parsed_filter.value.as_deref().unwrap_or("false").parse().map_err(|_| {
+                let bool_val: bool = parsed_filter
+                    .value
+                    .as_deref()
+                    .unwrap_or("false")
+                    .parse()
+                    .map_err(|_| {
                         Box::<dyn StdError + Send + Sync>::from(anyhow!(
                             "Invalid boolean value for 'active' filter"
                         ))
@@ -380,7 +396,10 @@ impl Store for SqlStore {
         Ok(user.clone())
     }
     async fn delete_user(&self, id: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
-        sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&*self.pool).await?;
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(id)
+            .execute(&*self.pool)
+            .await?;
         Ok(())
     }
 
@@ -544,7 +563,10 @@ impl Store for SqlStore {
     }
     async fn delete_group(&self, id: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // The ON DELETE CASCADE in the schema will handle cleaning up group_members
-        sqlx::query("DELETE FROM groups WHERE id = $1").bind(id).execute(&*self.pool).await?;
+        sqlx::query("DELETE FROM groups WHERE id = $1")
+            .bind(id)
+            .execute(&*self.pool)
+            .await?;
         Ok(())
     }
 
@@ -727,18 +749,22 @@ impl Store for SqlStore {
     }
 
     async fn get_metrics(&self) -> Result<common::StoreMetrics, Box<dyn StdError + Send + Sync>> {
-        let users_total: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(&*self.pool).await?;
-        let groups_total: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM groups").fetch_one(&*self.pool).await?;
-        let tokens_total: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM tokens").fetch_one(&*self.pool).await?;
+        let users_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+            .fetch_one(&*self.pool)
+            .await?;
+        let groups_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM groups")
+            .fetch_one(&*self.pool)
+            .await?;
+        let tokens_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tokens")
+            .fetch_one(&*self.pool)
+            .await?;
         let active_tokens: (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM tokens WHERE active = true")
                 .fetch_one(&*self.pool)
                 .await?;
-        let auth_codes_total: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM auth_codes").fetch_one(&*self.pool).await?;
+        let auth_codes_total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM auth_codes")
+            .fetch_one(&*self.pool)
+            .await?;
 
         Ok(common::StoreMetrics {
             users_total: users_total.0 as u64,

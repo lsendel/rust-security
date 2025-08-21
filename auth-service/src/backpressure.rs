@@ -120,13 +120,19 @@ static REQUESTS_TOTAL: Lazy<IntCounter> =
     Lazy::new(|| register_int_counter!("auth_requests_total", "Total number of requests").unwrap());
 
 static REQUESTS_REJECTED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
-    register_int_counter!("auth_requests_rejected_total", "Total number of rejected requests")
-        .unwrap()
+    register_int_counter!(
+        "auth_requests_rejected_total",
+        "Total number of rejected requests"
+    )
+    .unwrap()
 });
 
 static CONCURRENT_REQUESTS: Lazy<IntGauge> = Lazy::new(|| {
-    register_int_gauge!("auth_concurrent_requests", "Current number of concurrent requests")
-        .unwrap()
+    register_int_gauge!(
+        "auth_concurrent_requests",
+        "Current number of concurrent requests"
+    )
+    .unwrap()
 });
 
 static REQUEST_BODY_SIZE: Lazy<Histogram> = Lazy::new(|| {
@@ -134,7 +140,11 @@ static REQUEST_BODY_SIZE: Lazy<Histogram> = Lazy::new(|| {
 });
 
 static REQUEST_DURATION: Lazy<Histogram> = Lazy::new(|| {
-    register_histogram!("auth_request_duration_seconds", "Request duration in seconds").unwrap()
+    register_histogram!(
+        "auth_request_duration_seconds",
+        "Request duration in seconds"
+    )
+    .unwrap()
 });
 
 static QUEUE_DEPTH: Lazy<IntGauge> = Lazy::new(|| {
@@ -177,8 +187,9 @@ impl BackpressureState {
         // Check per-IP limit
         {
             let mut counters = self.per_ip_counters.lock().unwrap();
-            let ip_counter =
-                counters.entry(client_ip.to_string()).or_insert_with(|| AtomicUsize::new(0));
+            let ip_counter = counters
+                .entry(client_ip.to_string())
+                .or_insert_with(|| AtomicUsize::new(0));
 
             let ip_concurrent = ip_counter.load(Ordering::Relaxed);
             if ip_concurrent >= self.config.max_concurrent_per_ip {
@@ -233,8 +244,9 @@ impl BackpressureState {
 
         // Increment per-IP counter
         let mut counters = self.per_ip_counters.lock().unwrap();
-        let ip_counter =
-            counters.entry(client_ip.to_string()).or_insert_with(|| AtomicUsize::new(0));
+        let ip_counter = counters
+            .entry(client_ip.to_string())
+            .or_insert_with(|| AtomicUsize::new(0));
         ip_counter.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -338,7 +350,9 @@ pub async fn backpressure_middleware(
 
     match result {
         Ok(response) => Ok(response),
-        Err(_) => Err(AuthError::TimeoutError { operation: "request_processing".to_string() }),
+        Err(_) => Err(AuthError::TimeoutError {
+            operation: "request_processing".to_string(),
+        }),
     }
 }
 
@@ -445,10 +459,22 @@ mod tests {
     fn test_request_body_limits() {
         let config = BackpressureConfig::default();
 
-        assert_eq!(get_request_body_limit("/oauth/token", &config), config.oauth_request_limit);
-        assert_eq!(get_request_body_limit("/scim/Users", &config), config.scim_request_limit);
-        assert_eq!(get_request_body_limit("/admin/metrics", &config), config.admin_request_limit);
-        assert_eq!(get_request_body_limit("/health", &config), config.default_request_limit);
+        assert_eq!(
+            get_request_body_limit("/oauth/token", &config),
+            config.oauth_request_limit
+        );
+        assert_eq!(
+            get_request_body_limit("/scim/Users", &config),
+            config.scim_request_limit
+        );
+        assert_eq!(
+            get_request_body_limit("/admin/metrics", &config),
+            config.admin_request_limit
+        );
+        assert_eq!(
+            get_request_body_limit("/health", &config),
+            config.default_request_limit
+        );
     }
 
     #[tokio::test]

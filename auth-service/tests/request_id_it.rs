@@ -44,7 +44,10 @@ async fn request_id_propagation() {
         .unwrap();
 
     assert!(res.status().is_success());
-    assert_eq!(res.headers().get("x-request-id"), Some(&HeaderValue::from_str(test_id).unwrap()));
+    assert_eq!(
+        res.headers().get("x-request-id"),
+        Some(&HeaderValue::from_str(test_id).unwrap())
+    );
 }
 
 #[tokio::test]

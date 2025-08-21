@@ -146,19 +146,27 @@ pub async fn validate_config(
     // Validate the configuration (this is a simplified validation)
     // In a real implementation, we would use the ConfigReloadManager's validation
     match parsed_config.validate() {
-        Ok(()) => {
-            Ok(Json(ConfigValidationResponse { valid: true, errors: vec![], warnings: vec![] }))
-        }
+        Ok(()) => Ok(Json(ConfigValidationResponse {
+            valid: true,
+            errors: vec![],
+            warnings: vec![],
+        })),
         Err(validation_errors) => {
             let errors = validation_errors
                 .field_errors()
                 .iter()
                 .flat_map(|(field, errors)| {
-                    errors.iter().map(move |error| format!("Field '{}': {}", field, error.code))
+                    errors
+                        .iter()
+                        .map(move |error| format!("Field '{}': {}", field, error.code))
                 })
                 .collect();
 
-            Ok(Json(ConfigValidationResponse { valid: false, errors, warnings: vec![] }))
+            Ok(Json(ConfigValidationResponse {
+                valid: false,
+                errors,
+                warnings: vec![],
+            }))
         }
     }
 }
@@ -238,7 +246,11 @@ mod tests {
         AppConfig {
             bind_addr: "127.0.0.1:8080".to_string(),
             redis_url: Some("redis://localhost:6379".to_string()),
-            oidc_providers: OidcProviders { google: None, microsoft: None, github: None },
+            oidc_providers: OidcProviders {
+                google: None,
+                microsoft: None,
+                github: None,
+            },
             security: SecurityConfig {
                 jwt_access_token_ttl_seconds: 3600,
                 jwt_refresh_token_ttl_seconds: 86400,
@@ -305,7 +317,11 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::builder().method(Method::GET).uri("/status").body(Body::empty()).unwrap(),
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/status")
+                    .body(Body::empty())
+                    .unwrap(),
             )
             .await
             .unwrap();
@@ -321,7 +337,11 @@ mod tests {
 
         let response = router
             .oneshot(
-                Request::builder().method(Method::GET).uri("/schema").body(Body::empty()).unwrap(),
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/schema")
+                    .body(Body::empty())
+                    .unwrap(),
             )
             .await
             .unwrap();

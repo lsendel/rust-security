@@ -137,7 +137,11 @@ async fn list_users(
     let total = users.len();
     let start = p.start_index.unwrap_or(1).saturating_sub(1);
     let count = p.count.unwrap_or(50);
-    let slice = users.into_iter().skip(start).take(count).collect::<Vec<_>>();
+    let slice = users
+        .into_iter()
+        .skip(start)
+        .take(count)
+        .collect::<Vec<_>>();
 
     Ok(Json(ListResponse {
         schemas: vec!["urn:ietf:params:scim:api:messages:2.0:ListResponse".to_string()],
@@ -177,7 +181,11 @@ async fn list_groups(
     let total = groups.len();
     let start = p.start_index.unwrap_or(1).saturating_sub(1);
     let count = p.count.unwrap_or(50);
-    let slice = groups.into_iter().skip(start).take(count).collect::<Vec<_>>();
+    let slice = groups
+        .into_iter()
+        .skip(start)
+        .take(count)
+        .collect::<Vec<_>>();
 
     Ok(Json(ListResponse {
         schemas: vec!["urn:ietf:params:scim:api:messages:2.0:ListResponse".to_string()],
@@ -221,7 +229,9 @@ async fn bulk_operations(
         });
     }
     if request.operations.len() > MAX_BULK_OPERATIONS {
-        return Err(AuthError::InvalidRequest { reason: "Too many operations".to_string() });
+        return Err(AuthError::InvalidRequest {
+            reason: "Too many operations".to_string(),
+        });
     }
 
     let mut response_operations = Vec::new();

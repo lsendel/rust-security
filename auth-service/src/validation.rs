@@ -563,7 +563,10 @@ fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
     }
 
     // Allow digits, spaces, hyphens, parentheses, and + for international format
-    if !phone.chars().all(|c| c.is_ascii_digit() || " -+()".contains(c)) {
+    if !phone
+        .chars()
+        .all(|c| c.is_ascii_digit() || " -+()".contains(c))
+    {
         return Err(ValidationError::new("phone_invalid_chars"));
     }
 
@@ -636,7 +639,10 @@ impl From<ValidationErrors> for ValidationResult {
             error_map.insert(field.to_string(), error_messages);
         }
 
-        ValidationResult { valid: false, errors: Some(error_map) }
+        ValidationResult {
+            valid: false,
+            errors: Some(error_map),
+        }
     }
 }
 
@@ -645,7 +651,10 @@ pub trait ValidatedDto: Validate + Sized {
     /// Validate the DTO and return a structured result
     fn validate_dto(&self) -> ValidationResult {
         match self.validate() {
-            Ok(()) => ValidationResult { valid: true, errors: None },
+            Ok(()) => ValidationResult {
+                valid: true,
+                errors: None,
+            },
             Err(errors) => errors.into(),
         }
     }
