@@ -37,7 +37,7 @@ pub async fn token_introspect(
     if let Some(token_data) = state.store.read().await.get_token(&request.token) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         if token_data.active && token_data.expires_at > now {

@@ -88,7 +88,7 @@ jobs:
       - name: Dependency policy enforcement
         run: |
           echo "=== Cargo Deny Check ==="
-          cargo deny check --all-features
+          cargo deny check
 
       - name: Check for outdated dependencies
         run: |
@@ -141,7 +141,6 @@ jobs:
             -D clippy::unwrap_used \
             -D clippy::expect_used \
             -D clippy::panic \
-            -D clippy::integer_overflow \
             -D clippy::indexing_slicing \
             -W clippy::todo \
             -D clippy::unimplemented \

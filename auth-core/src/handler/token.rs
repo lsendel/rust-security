@@ -37,7 +37,7 @@ pub async fn client_credentials(
     let expires_in = 3600; // 1 hour
     let expires_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs()
         + expires_in;
 

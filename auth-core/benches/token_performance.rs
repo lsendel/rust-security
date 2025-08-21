@@ -5,6 +5,9 @@
 //! - Configuration operations
 //! - Method calls
 
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+
 use auth_core::prelude::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use tokio::runtime::Runtime;

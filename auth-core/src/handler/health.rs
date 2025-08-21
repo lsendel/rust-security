@@ -14,7 +14,7 @@ pub async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
             "version": crate::VERSION,
             "uptime": std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs()
         })),
     )

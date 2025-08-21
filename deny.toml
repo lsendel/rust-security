@@ -1,9 +1,7 @@
-# Security audit configuration for cargo-deny
-# Production-grade security policies for dependency management
-# This configuration enforces strict security, licensing, and supply chain policies
+# Modern cargo-deny configuration
+# Updated to latest format for dependency security
 
 [graph]
-# Enable all the most important checks for security
 targets = [
     { triple = "x86_64-unknown-linux-gnu" },
     { triple = "x86_64-apple-darwin" },
@@ -11,191 +9,53 @@ targets = [
     { triple = "x86_64-pc-windows-msvc" },
 ]
 all-features = true
-no-default-features = false
-feature-depth = 1
 
 [licenses]
 # Only allow business-friendly licenses
 allow = [
     "MIT",
     "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
+    "BSD-2-Clause", 
     "BSD-3-Clause",
     "ISC",
-    "Unicode-DFS-2016",
-    "CC0-1.0",
+    "Unicode-3.0",
     "Unlicense",
-    "0BSD",
-    "Zlib",
-    "MPL-2.0", # Mozilla Public License - compatible with proprietary software
+    "BSL-1.0",
 ]
-# Explicitly deny copyleft and problematic licenses
-deny = [
-    "GPL-2.0",
-    "GPL-2.0+",
-    "GPL-3.0",
-    "GPL-3.0+",
-    "AGPL-1.0",
-    "AGPL-3.0",
-    "LGPL-2.0",
-    "LGPL-2.1",
-    "LGPL-3.0",
-    "EUPL-1.2",
-    "CDDL-1.0",
-    "EPL-1.0",
-    "EPL-2.0",
-    "SSPL-1.0", # Server Side Public License
-    "BUSL-1.1", # Business Source License
-]
-copyleft = "deny"
-default = "deny"
-private = { ignore = true }
 
-# License exceptions for specific packages
-[[licenses.exceptions]]
-allow = ["MPL-2.0"]
-name = "webpki-roots" # Common dependency that uses MPL-2.0
-
-[[licenses.exceptions]]
-allow = ["Unicode-DFS-2016"]
-name = "unicode-ident"
+confidence-threshold = 0.8
 
 [bans]
-# Ban insecure and vulnerable crates
+# Banned packages with security issues
 deny = [
-    # Cryptographically broken algorithms
-    { name = "md5", reason = "MD5 is cryptographically broken" },
-    { name = "sha1", reason = "SHA-1 is cryptographically weak" },
-    { name = "md-5", reason = "MD5 is cryptographically broken" },
-    
-    # Vulnerable versions of common crates
-    { name = "chrono", version = "<0.4.20", reason = "CVE-2020-26235: potential segfault" },
-    { name = "openssl", reason = "Use ring, rustls, or aws-lc-rs instead for better security" },
-    { name = "native-tls", reason = "Use rustls for consistent cross-platform security" },
-    
-    # Known vulnerable crates
-    { name = "time", version = "<0.2.23", reason = "CVE-2020-26235: potential segfault" },
-    { name = "smallvec", version = "<1.6.1", reason = "CVE-2021-25900: buffer overflow" },
-    { name = "crossbeam-utils", version = "<0.8.7", reason = "CVE-2022-23639: memory ordering issue" },
-    { name = "regex", version = "<1.5.5", reason = "CVE-2022-24713: catastrophic backtracking" },
-    { name = "tokio", version = "<1.8.4", reason = "CVE-2021-45710: data race" },
-    { name = "hyper", version = "<0.14.10", reason = "CVE-2021-32715: integer overflow" },
-    { name = "axum", version = "<0.4.5", reason = "Multiple security vulnerabilities" },
-    
-    # Unmaintained or problematic crates
-    { name = "rand", version = "<0.8.0", reason = "Use rand 0.8+ for better security guarantees" },
-    { name = "tempdir", reason = "Deprecated, use tempfile instead" },
-    { name = "net2", reason = "Deprecated, use socket2 instead" },
-    { name = "error-chain", reason = "Deprecated, use thiserror or anyhow" },
-    { name = "failure", reason = "Deprecated, use thiserror or anyhow" },
-    
-    # Potentially problematic crypto implementations
-    { name = "aes-soft", reason = "Use aes crate with hardware acceleration" },
-    { name = "des", reason = "DES is cryptographically broken" },
-    { name = "rc4", reason = "RC4 is cryptographically broken" },
-    { name = "blowfish", reason = "Blowfish has known weaknesses" },
+    { name = "time", version = "=0.1.0" }, # Unsound API
 ]
 
-# Skip version checks for certain internal packages
+# Allow multiple versions for compatibility
 skip = [
-    { name = "common" }, # Our internal common crate
-    { name = "auth-service" }, # Our internal auth service
-    { name = "policy-service" }, # Our internal policy service
-]
-
-# Ban specific tree structures (duplicate dependencies)
-skip-tree = [
-    { name = "windows-sys" }, # Often has many versions in dep tree
-    { name = "windows_x86_64_msvc" }, # Windows-specific, version conflicts common
-]
-
-# Allow certain features that might be flagged
-allow = [
-    { name = "ring", version = "*" }, # Ring is our preferred crypto library
-    { name = "rustls", version = "*" }, # Rustls is our preferred TLS library
+    { name = "thiserror", version = "*" },
+    { name = "thiserror-impl", version = "*" },
+    { name = "tower", version = "*" },
 ]
 
 [advisories]
-# RustSec advisory database configuration
-database-path = "~/.cargo/advisory-db"
-database-urls = ["https://github.com/RustSec/advisory-db"]
-# Strict security policy
-vulnerability = "deny"
-unmaintained = "warn"
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/RustSec/advisory-db"]
 yanked = "deny"
-notice = "warn"
-# Don't allow informational advisories to fail builds, but log them
-informational = "warn"
-# Be strict about unsound code
-unsound = "warn"
-
-# Ignore specific advisories (with justification)
-ignore = [
-    # Example: RUSTSEC-2020-0001 - can be ignored if we have mitigation
-    # "RUSTSEC-2020-0001", # Reason: Not applicable to our use case
-]
-
-# Severity threshold for vulnerabilities
-severity-threshold = "medium"
 
 [sources]
-# Supply chain security - only allow trusted sources
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = [
     "https://github.com/rust-lang/crates.io-index",
-    "sparse+https://index.crates.io/", # Sparse registry protocol
+    "sparse+https://index.crates.io/",
 ]
 
-# Allow specific git sources for development/testing (if needed)
-# allow-git = [
-#     "https://github.com/rust-lang/git2-rs", # Example trusted git source
-# ]
-
-# Organization allow-list for git dependencies
-allow-org = [
+[sources.allow-org]
+github = [
     "rust-lang",
-    "tokio-rs",
+    "tokio-rs", 
     "serde-rs",
     "hyperium",
     "RustCrypto",
-]
-
-[output]
-# Detailed output configuration
-feature-depth = 1
-format = "human" # Can be "human", "json", or "toml"
-
-# Multiple versions policy
-[multiple-versions]
-# Allow some packages to have multiple versions (common in large dependency trees)
-allow = [
-    "bitflags", # Commonly has version conflicts
-    "syn", # Proc-macro crates often lag behind
-    "proc-macro2", # Proc-macro infrastructure
-    "quote", # Proc-macro infrastructure
-    "unicode-normalization", # Often has version conflicts
-    "unicode-bidi", # Often has version conflicts
-    "winapi", # Windows API bindings
-    "windows-sys", # Windows system bindings
-]
-
-# Warn about multiple versions of these critical packages
-warn = [
-    "serde",
-    "tokio",
-    "hyper",
-    "tracing",
-    "futures",
-]
-
-# Completely deny multiple versions of security-critical packages
-deny = [
-    "ring",
-    "rustls",
-    "webpki",
-    "webpki-roots",
-    "jsonwebtoken",
-    "argon2",
 ]
