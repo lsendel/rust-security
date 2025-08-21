@@ -36,7 +36,7 @@ aes = "0.8"
 aes-gcm = "0.10"
 
 # Database
-sqlx = { version = "0.8", features = ["postgres", "chrono", "uuid"] }
+sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid"], default-features = false }
 deadpool = "0.12"
 
 # Redis
@@ -46,7 +46,7 @@ deadpool-redis = "0.18"
 # Monitoring
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-prometheus = "0.13"
+prometheus = "0.14"
 
 # UUID
 uuid = { version = "1.0", features = ["v4", "serde"] }
@@ -61,7 +61,7 @@ reqwest = { version = "0.12", features = ["json"] }
 config = "0.14"
 
 # Validation
-validator = { version = "0.18", features = ["derive"] }
+validator = { version = "0.19", features = ["derive"] }
 
 # CLI
 clap = { version = "4.0", features = ["derive"] }
@@ -143,7 +143,7 @@ tracing-opentelemetry = "0.24"
 tokio-metrics = "0.3"
 metrics = "0.23"
 metrics-prometheus = "0.7"
-pprof = "0.13"
+pprof = "0.15"
 
 # Templating
 handlebars = "6.0"
