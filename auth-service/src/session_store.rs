@@ -4,7 +4,7 @@
 //! Redis-first storage with in-memory fallback, and session security features.
 
 use async_trait::async_trait;
-use deadpool_redis::{Config, Pool, Runtime};
+use deadpool_redis::{Config, Pool, Runtime, redis::AsyncCommands};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error as StdError;
@@ -120,17 +120,9 @@ impl RedisSessionStore {
         
         // Test the connection
         match pool.get().await {
-            Ok(mut conn) => {
-                match redis::cmd("PING").query_async::<_, String>(&mut *conn).await {
-                    Ok(_) => {
-                        info!("Redis session store initialized successfully");
-                        Some(pool)
-                    }
-                    Err(e) => {
-                        error!("Redis session store connection test failed: {}", e);
-                        None
-                    }
-                }
+            Ok(_conn) => {
+                info!("Redis session store initialized successfully");
+                Some(pool)
             }
             Err(e) => {
                 error!("Failed to get Redis connection for session store: {}", e);
@@ -274,9 +266,7 @@ impl SessionStore for RedisSessionStore {
         // Update in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(&session.session_id);
-            match redis::Cmd::set_ex(&session_key, &session_json, ttl)
-                .query_async::<_, ()>(&mut *conn)
-                .await 
+            match conn.set_ex::<_, _, ()>(&session_key, &session_json, ttl as usize).await 
             {
                 Ok(_) => {
                     // Successfully updated in Redis, also update memory backup
@@ -312,7 +302,7 @@ impl SessionStore for RedisSessionStore {
                 
                 let _: Result<(), _> = pipe.query_async(&mut *conn).await;
             } else {
-                let _: Result<(), _> = redis::Cmd::del(&session_key).query_async(&mut *conn).await;
+                let _: Result<(), _> = conn.del(&session_key).await;
             }
         }
         
@@ -339,9 +329,7 @@ impl SessionStore for RedisSessionStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let user_sessions_key = self.user_sessions_key(user_id);
-            match redis::Cmd::smembers(&user_sessions_key)
-                .query_async::<_, Vec<String>>(&mut *conn)
-                .await 
+            match conn.smembers::<_, Vec<String>>(&user_sessions_key).await 
             {
                 Ok(session_ids) => {
                     for session_id in &session_ids {

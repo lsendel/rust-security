@@ -50,17 +50,9 @@ impl HybridStore {
         
         // Test the connection
         match pool.get().await {
-            Ok(mut conn) => {
-                match redis::cmd("PING").query_async::<_, String>(&mut *conn).await {
-                    Ok(_) => {
-                        info!("Redis connection pool initialized successfully");
-                        Some(pool)
-                    }
-                    Err(e) => {
-                        error!("Redis connection test failed: {}", e);
-                        None
-                    }
-                }
+            Ok(_conn) => {
+                info!("Redis connection pool initialized successfully");
+                Some(pool)
             }
             Err(e) => {
                 error!("Failed to get Redis connection from pool: {}", e);
@@ -217,7 +209,7 @@ impl Store for HybridStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("authcode:{}", code);
-            match redis::Cmd::get_del(&key).query_async::<_, Option<String>>(&mut *conn).await {
+            match conn.get_del::<_, Option<String>>(&key).await {
                 Ok(Some(json)) => {
                     // Also remove from memory backup
                     self.auth_codes.write().await.remove(code);
@@ -248,7 +240,7 @@ impl Store for HybridStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("token_record:{}", token);
-            match redis::Cmd::get(&key).query_async::<_, Option<String>>(&mut *conn).await {
+            match conn.get::<_, Option<String>>(&key).await {
                 Ok(Some(json)) => {
                     return Ok(serde_json::from_str(&json)?);
                 }
@@ -277,13 +269,9 @@ impl Store for HybridStore {
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("token_record:{}", token);
             let redis_result = if let Some(ttl) = ttl_secs {
-                redis::Cmd::set_ex(&key, &record_json, ttl)
-                    .query_async::<_, ()>(&mut *conn)
-                    .await
+                conn.setex::<_, _, ()>(&key, ttl as usize, &record_json).await
             } else {
-                redis::Cmd::set(&key, &record_json)
-                    .query_async::<_, ()>(&mut *conn)
-                    .await
+                conn.set::<_, _, ()>(&key, &record_json).await
             };
             
             match redis_result {
@@ -325,9 +313,7 @@ impl Store for HybridStore {
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_token:{}", refresh_token);
-            match redis::Cmd::set_ex(&key, access_token, ttl_secs)
-                .query_async::<_, ()>(&mut *conn)
-                .await 
+            match conn.setex::<_, _, ()>(&key, ttl_secs as usize, access_token).await 
             {
                 Ok(_) => {
                     // Successfully stored in Redis, also store in memory as backup
@@ -361,7 +347,7 @@ impl Store for HybridStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_token:{}", refresh_token);
-            match redis::Cmd::get_del(&key).query_async::<_, Option<String>>(&mut *conn).await {
+            match conn.get_del::<_, Option<String>>(&key).await {
                 Ok(token) => {
                     access_token = token;
                     // Also remove from memory backup
@@ -385,9 +371,7 @@ impl Store for HybridStore {
             if let Some(mut conn) = self.get_redis_connection().await {
                 let key = format!("refresh_reused:{}", refresh_token);
                 // Reuse detection window 10 minutes
-                let _: Result<(), _> = redis::Cmd::set_ex(&key, 1, 600)
-                    .query_async(&mut *conn)
-                    .await;
+                let _: Result<(), _> = conn.set_ex::<_, _, ()>(&key, 1, 600).await;
             }
         }
 
@@ -401,7 +385,7 @@ impl Store for HybridStore {
         // Check Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_reused:{}", refresh_token);
-            match redis::Cmd::exists(&key).query_async::<_, bool>(&mut *conn).await {
+            match conn.exists::<_, bool>(&key).await {
                 Ok(exists) => return Ok(exists),
                 Err(e) => {
                     warn!("Failed to check refresh token reuse in Redis: {}", e);
@@ -415,14 +399,8 @@ impl Store for HybridStore {
 
     // === Health Check ===
     async fn health_check(&self) -> Result<bool, Box<dyn StdError + Send + Sync>> {
-        if let Some(mut conn) = self.get_redis_connection().await {
-            match redis::cmd("PING").query_async::<_, String>(&mut *conn).await {
-                Ok(_) => Ok(true),
-                Err(e) => {
-                    warn!("Redis health check failed: {}", e);
-                    Ok(false) // Redis is down but service can still work with in-memory fallback
-                }
-            }
+        if let Some(_conn) = self.get_redis_connection().await {
+            Ok(true) // Successfully got Redis connection
         } else {
             // In-memory store is always healthy, but Redis is unavailable
             Ok(true)

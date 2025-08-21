@@ -137,6 +137,13 @@ pub mod security_monitoring;
 pub mod key_management;
 pub mod key_rotation;
 pub mod keys;
+pub mod jwks_handler;
+pub mod jwks_rate_limiter;
+
+// OAuth 2.0 Dynamic Client Registration
+pub mod oauth_client_registration;
+pub mod oauth_client_secret_rotation;
+pub mod oauth_client_registration_policies;
 
 // Rate limiting and resilience
 pub mod backpressure;

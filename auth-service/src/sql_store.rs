@@ -40,8 +40,7 @@ impl SqlStore {
                 .max_lifetime(Duration::from_secs(1800)) // 30 minutes connection lifetime
                 .idle_timeout(Duration::from_secs(600))  // 10 minutes idle timeout
                 .acquire_timeout(Duration::from_secs(10)) // 10 seconds acquire timeout
-                .test_before_acquire(true)              // Test connections before use
-                .max_overflow(10),                      // Allow burst connections
+                .test_before_acquire(true),             // Test connections before use
             database_url.parse()?
         ).await.map_err(|e| {
             error!("Failed to connect to PostgreSQL: {}", e);
