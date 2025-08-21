@@ -390,7 +390,9 @@ mod standard_tests {
         for _ in 0..10 {
             let client_id = strategy.new_tree(&mut runner).unwrap().current();
             assert!(client_id.len() <= 50);
-            assert!(client_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-'));
+            assert!(client_id
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-'));
         }
     }
 

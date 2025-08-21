@@ -5,7 +5,9 @@ use auth_core::server::AuthServer;
 
 #[test]
 fn test_server_creation() {
-    let server = AuthServer::minimal().with_client("test_client", "test_secret").build();
+    let server = AuthServer::minimal()
+        .with_client("test_client", "test_secret")
+        .build();
 
     assert!(server.build().is_ok());
 }

@@ -84,7 +84,9 @@ fn bench_builder_pattern(c: &mut Criterion) {
     let mut group = c.benchmark_group("builder_pattern");
 
     // Benchmark builder creation
-    group.bench_function("builder_creation", |b| b.iter(|| black_box(AuthServer::minimal())));
+    group.bench_function("builder_creation", |b| {
+        b.iter(|| black_box(AuthServer::minimal()))
+    });
 
     // Benchmark adding clients
     group.bench_function("add_single_client", |b| {
@@ -109,5 +111,10 @@ fn bench_builder_pattern(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_server_creation, bench_server_methods, bench_builder_pattern);
+criterion_group!(
+    benches,
+    bench_server_creation,
+    bench_server_methods,
+    bench_builder_pattern
+);
 criterion_main!(benches);

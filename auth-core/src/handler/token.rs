@@ -22,7 +22,11 @@ pub async fn client_credentials(
     }
 
     // Validate client
-    let client = state.config.clients.get(&request.client_id).ok_or(AuthError::InvalidClient)?;
+    let client = state
+        .config
+        .clients
+        .get(&request.client_id)
+        .ok_or(AuthError::InvalidClient)?;
 
     if client.client_secret != request.client_secret {
         return Err(AuthError::InvalidClient);
@@ -31,9 +35,11 @@ pub async fn client_credentials(
     // Generate token
     let token = generate_random_token();
     let expires_in = 3600; // 1 hour
-    let expires_at =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-            + expires_in;
+    let expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + expires_in;
 
     // Store token
     let token_data = TokenData {

@@ -30,7 +30,12 @@ pub struct ServerConfig {
 
 impl Default for ServerConfig {
     fn default() -> Self {
-        Self { clients: HashMap::new(), rate_limit: 100, cors_enabled: true, jwt_secret: None }
+        Self {
+            clients: HashMap::new(),
+            rate_limit: 100,
+            cors_enabled: true,
+            jwt_secret: None,
+        }
     }
 }
 
@@ -49,7 +54,10 @@ impl AuthServer {
 
     /// Create a new server with custom configuration
     pub fn with_config(config: ServerConfig) -> Self {
-        Self { config, store: Arc::new(RwLock::new(MemoryStore::new())) }
+        Self {
+            config,
+            store: Arc::new(RwLock::new(MemoryStore::new())),
+        }
     }
 
     /// Build method for compatibility with tests
@@ -91,11 +99,14 @@ impl AuthServer {
     /// Create the Axum router with all endpoints
     fn create_router(self) -> Router<AppState> {
         let cors_enabled = self.config.cors_enabled;
-        let state = AppState { config: self.config, store: self.store };
+        let state = AppState {
+            config: self.config,
+            store: self.store,
+        };
 
         let mut router = Router::new()
             .route("/health", get(health::health_check))
-            .route("/healthz", get(health::health_check)) // k8s style  
+            .route("/healthz", get(health::health_check)) // k8s style
             .route("/ready", get(health::readiness_check));
 
         #[cfg(feature = "client-credentials")]
@@ -122,7 +133,9 @@ pub struct AuthServerBuilder {
 
 impl AuthServerBuilder {
     fn new() -> Self {
-        Self { config: ServerConfig::default() }
+        Self {
+            config: ServerConfig::default(),
+        }
     }
 
     /// Add an OAuth client

@@ -17,7 +17,9 @@ pub struct TokenData {
 
 impl MemoryStore {
     pub fn new() -> Self {
-        Self { tokens: HashMap::new() }
+        Self {
+            tokens: HashMap::new(),
+        }
     }
 
     pub fn store_token(&mut self, token: &str, data: TokenData) {
@@ -29,8 +31,10 @@ impl MemoryStore {
     }
 
     pub fn cleanup_expired(&mut self) {
-        let now =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         self.tokens.retain(|_, data| data.expires_at > now);
     }
