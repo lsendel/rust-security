@@ -38,7 +38,9 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Build services
-        run: cargo build --release --workspace
+        run: |
+          # Build only the binaries we need for E2E testing
+          cargo build --release --bin auth-service --bin policy-service
 
       - name: Start services
         run: |
