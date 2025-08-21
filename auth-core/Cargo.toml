@@ -9,7 +9,7 @@ keywords = ["oauth2", "authentication", "jwt", "security"]
 categories = ["authentication", "web-programming::http-server"]
 
 [features]
-default = ["client-credentials", "dep:serde_json"]
+default = ["client-credentials"]
 
 # Core OAuth flows
 client-credentials = []
@@ -23,7 +23,7 @@ opaque-tokens = []
 
 # Storage backends  
 memory-store = []
-file-store = ["dep:serde_json"]
+file-store = []
 
 # Minimal dependencies for core functionality
 [dependencies]
@@ -38,7 +38,7 @@ hyper-util = { version = "0.1", features = ["server-auto"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", optional = true }
+serde_json = "1.0"
 
 # Error handling
 anyhow = "1.0"

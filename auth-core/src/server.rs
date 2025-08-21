@@ -35,6 +35,7 @@ impl Default for ServerConfig {
 }
 
 /// The main OAuth 2.0 server
+#[derive(Clone)]
 pub struct AuthServer {
     config: ServerConfig,
     store: Arc<RwLock<MemoryStore>>,
