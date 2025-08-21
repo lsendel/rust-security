@@ -1,0 +1,122 @@
+name: Auto-format Code
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/*.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-format:
+    name: Auto-format Rust Code
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-auto-format-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check if formatting is needed
+        id: format-check
+        run: |
+          if ! cargo fmt --all -- --check; then
+            echo "needs_formatting=true" >> $GITHUB_OUTPUT
+            echo "Code needs formatting"
+          else
+            echo "needs_formatting=false" >> $GITHUB_OUTPUT
+            echo "Code is already properly formatted"
+          fi
+
+      - name: Auto-format code
+        if: steps.format-check.outputs.needs_formatting == 'true'
+        run: |
+          echo "Auto-formatting Rust code..."
+          cargo fmt --all
+          
+          # Check if any files were changed
+          if git diff --quiet; then
+            echo "No changes after formatting"
+            exit 0
+          fi
+
+      - name: Commit formatting changes
+        if: steps.format-check.outputs.needs_formatting == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "style: auto-format code with rustfmt
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+          
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+          
+          git push origin ${{ github.head_ref }}
+
+      - name: Comment on PR
+        if: steps.format-check.outputs.needs_formatting == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🤖 **Auto-formatted code**: I automatically formatted your Rust code with `rustfmt` to maintain consistency. Please pull the latest changes before continuing development.\n\n```bash\ngit pull origin ${{ github.head_ref }}\n```'
+            });
+
+  format-check:
+    name: Format Check (for main branch)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: |
+          if ! cargo fmt --all -- --check; then
+            echo "❌ Code formatting check failed!"
+            echo "Please run 'cargo fmt --all' to fix formatting issues"
+            exit 1
+          fi
+          echo "✅ All code is properly formatted"

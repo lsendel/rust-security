@@ -1,0 +1,55 @@
+#!/bin/bash
+# Pre-commit hook to automatically format Rust code
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check if this is a Rust project
+if [ ! -f "Cargo.toml" ]; then
+    echo "Not a Rust project, skipping Rust checks"
+    exit 0
+fi
+
+# Get list of staged Rust files
+STAGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.rs$' || true)
+
+if [ -z "$STAGED_RS_FILES" ]; then
+    echo "No Rust files staged, skipping Rust checks"
+    exit 0
+fi
+
+echo "Staged Rust files: $STAGED_RS_FILES"
+
+# Format all Rust code
+echo "Running cargo fmt..."
+cargo fmt --all
+
+# Check if formatting changed any staged files
+FORMATTED_FILES=$(git diff --name-only $STAGED_RS_FILES || true)
+
+if [ ! -z "$FORMATTED_FILES" ]; then
+    echo "The following files were reformatted:"
+    echo "$FORMATTED_FILES"
+    echo ""
+    echo "Please stage the reformatted files and commit again:"
+    echo "  git add $FORMATTED_FILES"
+    exit 1
+fi
+
+# Run clippy on staged files
+echo "Running cargo clippy..."
+if ! cargo clippy --all-targets --all-features -- -D warnings; then
+    echo "Clippy found issues. Please fix them before committing."
+    exit 1
+fi
+
+# Check compilation
+echo "Running cargo check..."
+if ! cargo check; then
+    echo "Code does not compile. Please fix compilation errors before committing."
+    exit 1
+fi
+
+echo "All pre-commit checks passed!"
+exit 0

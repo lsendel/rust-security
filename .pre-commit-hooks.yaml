@@ -1,0 +1,27 @@
+# Pre-commit hooks for rust-security project
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        description: Format Rust code with rustfmt
+        entry: cargo fmt
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        
+      - id: cargo-clippy
+        name: cargo clippy  
+        description: Lint Rust code with clippy
+        entry: cargo clippy -- -D warnings
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        
+      - id: cargo-check
+        name: cargo check
+        description: Check Rust code compilation
+        entry: cargo check
+        language: system
+        files: \.rs$
+        pass_filenames: false
