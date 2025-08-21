@@ -1,0 +1,68 @@
+[package]
+name = "auth-core"
+version = "1.0.0"
+edition = "2021"
+description = "Minimal OAuth 2.0 server implementation in Rust"
+license = "Apache-2.0"
+repository = "https://github.com/rust-security/auth-service"
+keywords = ["oauth2", "authentication", "jwt", "security"]
+categories = ["authentication", "web-programming::http-server"]
+
+[features]
+default = ["client-credentials", "dep:serde_json"]
+
+# Core OAuth flows
+client-credentials = []
+authorization-code = ["dep:url"]
+refresh-tokens = []
+device-flow = []
+
+# Token types
+jwt = ["dep:jsonwebtoken"]
+opaque-tokens = []
+
+# Storage backends  
+memory-store = []
+file-store = ["dep:serde_json"]
+
+# Minimal dependencies for core functionality
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+tower = { version = "0.4", features = ["util", "make"] }
+tower-http = { version = "0.5", features = ["cors"] }
+tower-service = "0.3"
+hyper = { version = "1.0", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["server-auto"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Cryptography (minimal)
+rand = "0.8"
+sha2 = "0.10"
+
+# Optional dependencies
+jsonwebtoken = { version = "9.0", optional = true }
+url = { version = "2.0", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
+proptest = "1.0"
+futures = "0.3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[example]]
+name = "minimal_server"
+required-features = ["client-credentials", "jwt"]
+
+[[bench]]
+name = "token_performance"
+harness = false

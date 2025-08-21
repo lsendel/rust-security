@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create application state
     let app_state = AppState {
-        store,
+        store: store.clone(),
         session_store: session_store.clone(),
         client_credentials: cfg.client_credentials.clone(),
         allowed_scopes: cfg.allowed_scopes.clone(),

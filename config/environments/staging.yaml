@@ -1,0 +1,80 @@
+# Staging Environment Configuration
+# This configuration is used for staging deployments
+
+server:
+  bind_addr: "0.0.0.0:8080"
+  environment: "staging"
+  
+security:
+  jwt_access_token_ttl_seconds: 3600  # 1 hour
+  jwt_refresh_token_ttl_seconds: 86400  # 24 hours
+  rsa_key_size: 2048
+  session_ttl_seconds: 7200  # 2 hours
+  allowed_origins:
+    - "https://staging.company.com"
+    - "https://api-staging.company.com"
+  max_request_body_size: 10485760  # 10MB
+  
+rate_limiting:
+  requests_per_minute_global: 10000
+  requests_per_minute_per_ip: 100
+  oauth_requests_per_minute: 30
+  admin_requests_per_minute: 20
+  enable_banlist: true
+  enable_allowlist: false
+  
+monitoring:
+  metrics_enabled: true
+  tracing_enabled: true
+  tracing_sample_rate: 0.1  # Sample 10% of requests
+  health_check_interval_seconds: 30
+  
+features:
+  mfa_enabled: true
+  oauth_enabled: true
+  scim_enabled: true
+  audit_logging: true
+  session_recording: false  # Disabled in staging
+  
+database:
+  max_connections: 20
+  min_connections: 5
+  connection_timeout_seconds: 10
+  idle_timeout_seconds: 600
+  max_lifetime_seconds: 1800
+  
+redis:
+  max_connections: 10
+  connection_timeout_seconds: 5
+  
+logging:
+  level: "info"
+  format: "json"
+  include_timestamp: true
+  include_target: true
+  include_thread_id: false
+  
+oauth:
+  authorization_code_ttl_seconds: 600  # 10 minutes
+  implicit_token_ttl_seconds: 3600  # 1 hour
+  client_credentials_ttl_seconds: 3600  # 1 hour
+  refresh_token_ttl_seconds: 2592000  # 30 days
+  
+policy:
+  cache_ttl_seconds: 300  # 5 minutes
+  evaluation_timeout_ms: 100
+  max_policy_size_bytes: 1048576  # 1MB
+  
+chaos_engineering:
+  enabled: false  # Disabled in staging by default
+  
+compliance:
+  audit_retention_days: 90
+  pii_redaction_enabled: true
+  gdpr_mode: true
+  
+performance:
+  connection_pool_size: 50
+  worker_threads: 4
+  async_runtime_threads: 8
+  max_concurrent_requests: 1000

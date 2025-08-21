@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth 2.0 API Playground - Rust Security Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+
+        .left-panel {
+            padding: 30px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+        }
+
+        .right-panel {
+            padding: 30px;
+            background: #fff;
+        }
+
+        .endpoint-section {
+            margin-bottom: 30px;
+        }
+
+        .endpoint-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #4285f4;
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #4285f4;
+            box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 133, 244, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .response-section {
+            margin-top: 20px;
+        }
+
+        .response-section h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .response-box {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            min-height: 200px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .success {
+            border-left: 4px solid #34a853;
+            background: #f0f8f0;
+        }
+
+        .error {
+            border-left: 4px solid #ea4335;
+            background: #fef0f0;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            width: auto;
+            margin-top: 0;
+        }
+
+        .tab.active {
+            color: #4285f4;
+            border-bottom-color: #4285f4;
+            background: #f8f9fa;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .quick-start {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .quick-start h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .code-snippet {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4285f4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 OAuth 2.0 API Playground</h1>
+            <p>Interactive testing environment for the Rust Security Platform</p>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="quick-start">
+                    <h4>🚀 Quick Start</h4>
+                    <p>Make sure your auth server is running:</p>
+                    <div class="code-snippet">cargo run --bin auth-server</div>
+                    <p>Server URL: <strong id="server-url">http://localhost:8080</strong></p>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('token')">Get Token</button>
+                    <button class="tab" onclick="switchTab('validate')">Validate</button>
+                    <button class="tab" onclick="switchTab('introspect')">Introspect</button>
+                </div>
+
+                <!-- Token Endpoint -->
+                <div id="token-content" class="tab-content active">
+                    <div class="endpoint-section">
+                        <h3>🎫 Client Credentials Grant</h3>
+                        <form id="token-form">
+                            <div class="form-group">
+                                <label for="server-url-input">Server URL:</label>
+                                <input type="url" id="server-url-input" value="http://localhost:8080" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="client-id">Client ID:</label>
+                                <input type="text" id="client-id" value="demo" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="client-secret">Client Secret:</label>
+                                <input type="password" id="client-secret" value="demo-secret" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="scope">Scope (optional):</label>
+                                <input type="text" id="scope" placeholder="read write admin">
+                            </div>
+                            <button type="submit">🚀 Request Access Token</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Validate Endpoint -->
+                <div id="validate-content" class="tab-content">
+                    <div class="endpoint-section">
+                        <h3>✅ Token Validation</h3>
+                        <form id="validate-form">
+                            <div class="form-group">
+                                <label for="validate-server-url">Server URL:</label>
+                                <input type="url" id="validate-server-url" value="http://localhost:8080" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="validate-token">Access Token:</label>
+                                <textarea id="validate-token" rows="3" placeholder="Paste your access token here..." required></textarea>
+                            </div>
+                            <button type="submit">✅ Validate Token</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Introspect Endpoint -->
+                <div id="introspect-content" class="tab-content">
+                    <div class="endpoint-section">
+                        <h3>🔍 Token Introspection</h3>
+                        <form id="introspect-form">
+                            <div class="form-group">
+                                <label for="introspect-server-url">Server URL:</label>
+                                <input type="url" id="introspect-server-url" value="http://localhost:8080" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="introspect-token">Access Token:</label>
+                                <textarea id="introspect-token" rows="3" placeholder="Paste your access token here..." required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="introspect-client-id">Client ID:</label>
+                                <input type="text" id="introspect-client-id" value="demo" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="introspect-client-secret">Client Secret:</label>
+                                <input type="password" id="introspect-client-secret" value="demo-secret" required>
+                            </div>
+                            <button type="submit">🔍 Introspect Token</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="response-section">
+                    <h4>📋 Response</h4>
+                    <div id="response-box" class="response-box">
+                        Welcome to the OAuth 2.0 API Playground! 
+                        
+Select an endpoint from the left panel and click the button to test the API.
+
+This playground helps you:
+• Test OAuth 2.0 flows interactively
+• Understand request/response formats  
+• Debug authentication issues
+• Learn the API before integration
+
+Ready to get started? Try requesting an access token! 🚀
+                    </div>
+                </div>
+
+                <div class="response-section" style="margin-top: 30px;">
+                    <h4>📖 Quick Reference</h4>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; font-size: 14px;">
+                        <p><strong>Default Test Credentials:</strong></p>
+                        <p>• Client ID: <code>demo</code></p>
+                        <p>• Client Secret: <code>demo-secret</code></p>
+                        <p>• Server: <code>http://localhost:8080</code></p>
+                        <br>
+                        <p><strong>Common Scopes:</strong></p>
+                        <p>• <code>read</code> - Read access</p>
+                        <p>• <code>write</code> - Write access</p>
+                        <p>• <code>admin</code> - Admin access</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = '';
+
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-content').classList.add('active');
+            
+            // Add active class to selected tab
+            event.target.classList.add('active');
+        }
+
+        function updateResponse(data, isError = false, isLoading = false) {
+            const responseBox = document.getElementById('response-box');
+            
+            if (isLoading) {
+                responseBox.innerHTML = '<div class="loading"></div>Processing request...';
+                responseBox.className = 'response-box';
+                return;
+            }
+            
+            responseBox.className = `response-box ${isError ? 'error' : 'success'}`;
+            
+            if (typeof data === 'object') {
+                responseBox.textContent = JSON.stringify(data, null, 2);
+            } else {
+                responseBox.textContent = data;
+            }
+        }
+
+        async function makeRequest(url, options) {
+            updateResponse('', false, true);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        ...options.headers
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    updateResponse(data, false);
+                    return data;
+                } else {
+                    updateResponse(data, true);
+                    return null;
+                }
+            } catch (error) {
+                updateResponse({
+                    error: 'network_error',
+                    error_description: `Failed to connect to server: ${error.message}`,
+                    details: 'Make sure the auth server is running and accessible'
+                }, true);
+                return null;
+            }
+        }
+
+        // Token form handler
+        document.getElementById('token-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const serverUrl = document.getElementById('server-url-input').value;
+            const clientId = document.getElementById('client-id').value;
+            const clientSecret = document.getElementById('client-secret').value;
+            const scope = document.getElementById('scope').value;
+            
+            const body = new URLSearchParams({
+                grant_type: 'client_credentials',
+                client_id: clientId,
+                client_secret: clientSecret
+            });
+            
+            if (scope) {
+                body.append('scope', scope);
+            }
+            
+            const data = await makeRequest(`${serverUrl}/oauth2/token`, {
+                method: 'POST',
+                body: body
+            });
+            
+            if (data && data.access_token) {
+                currentToken = data.access_token;
+                // Auto-fill token in other tabs
+                document.getElementById('validate-token').value = currentToken;
+                document.getElementById('introspect-token').value = currentToken;
+            }
+        });
+
+        // Validate form handler
+        document.getElementById('validate-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const serverUrl = document.getElementById('validate-server-url').value;
+            const token = document.getElementById('validate-token').value;
+            
+            await makeRequest(`${serverUrl}/oauth2/validate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: ''
+            });
+        });
+
+        // Introspect form handler
+        document.getElementById('introspect-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const serverUrl = document.getElementById('introspect-server-url').value;
+            const token = document.getElementById('introspect-token').value;
+            const clientId = document.getElementById('introspect-client-id').value;
+            const clientSecret = document.getElementById('introspect-client-secret').value;
+            
+            const body = new URLSearchParams({
+                token: token,
+                client_id: clientId,
+                client_secret: clientSecret
+            });
+            
+            await makeRequest(`${serverUrl}/oauth2/introspect`, {
+                method: 'POST',
+                body: body
+            });
+        });
+
+        // Auto-update server URLs
+        document.getElementById('server-url-input').addEventListener('input', (e) => {
+            const url = e.target.value;
+            document.getElementById('validate-server-url').value = url;
+            document.getElementById('introspect-server-url').value = url;
+            document.getElementById('server-url').textContent = url;
+        });
+    </script>
+</body>
+</html>

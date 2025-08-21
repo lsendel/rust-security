@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
-use deadpool_redis::{Config, Pool, Runtime};
+use deadpool_redis::{Config, Pool, Runtime, redis::AsyncCommands};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
@@ -177,12 +177,14 @@ impl Store for HybridStore {
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("authcode:{}", code);
             // Use the simpler Redis interface
-            let result: Result<(), _> = redis::cmd("SETEX")
-                .arg(&key)
-                .arg(ttl_secs)
-                .arg(&record_json)
-                .query_async(&mut *conn)
-                .await;
+            let result: Result<(), _> = {
+                let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
+                if set_result.is_ok() {
+                    conn.expire(&key, ttl_secs as i64).await
+                } else {
+                    set_result
+                }
+            };
                 
             match result {
                 Ok(_) => {
@@ -209,9 +211,10 @@ impl Store for HybridStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("authcode:{}", code);
-            match conn.get_del::<_, Option<String>>(&key).await {
+            match conn.get::<_, Option<String>>(&key).await {
                 Ok(Some(json)) => {
-                    // Also remove from memory backup
+                    // Delete the key and remove from memory backup
+                    let _: Result<(), _> = conn.del(&key).await;
                     self.auth_codes.write().await.remove(code);
                     return Ok(serde_json::from_str(&json)?);
                 }
@@ -269,7 +272,13 @@ impl Store for HybridStore {
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("token_record:{}", token);
             let redis_result = if let Some(ttl) = ttl_secs {
-                conn.setex::<_, _, ()>(&key, ttl as usize, &record_json).await
+                {
+                    let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
+                    if set_result.is_ok() {
+                        let _: Result<(), _> = conn.expire(&key, ttl as i64).await;
+                    }
+                    set_result
+                }
             } else {
                 conn.set::<_, _, ()>(&key, &record_json).await
             };
@@ -313,7 +322,13 @@ impl Store for HybridStore {
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_token:{}", refresh_token);
-            match conn.setex::<_, _, ()>(&key, ttl_secs as usize, access_token).await 
+            match {
+                let set_result = conn.set::<_, _, ()>(&key, access_token).await;
+                if set_result.is_ok() {
+                    let _: Result<(), _> = conn.expire(&key, ttl_secs as i64).await;
+                }
+                set_result
+            } 
             {
                 Ok(_) => {
                     // Successfully stored in Redis, also store in memory as backup
@@ -347,8 +362,11 @@ impl Store for HybridStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_token:{}", refresh_token);
-            match conn.get_del::<_, Option<String>>(&key).await {
+            match conn.get::<_, Option<String>>(&key).await {
                 Ok(token) => {
+                    if token.is_some() {
+                        let _: Result<(), _> = conn.del(&key).await;
+                    }
                     access_token = token;
                     // Also remove from memory backup
                     self.refresh_tokens.write().await.remove(refresh_token);
@@ -371,7 +389,13 @@ impl Store for HybridStore {
             if let Some(mut conn) = self.get_redis_connection().await {
                 let key = format!("refresh_reused:{}", refresh_token);
                 // Reuse detection window 10 minutes
-                let _: Result<(), _> = conn.set_ex::<_, _, ()>(&key, 1, 600).await;
+                let _: Result<(), _> = {
+                        let set_result = conn.set::<_, _, ()>(&key, 1).await;
+                        if set_result.is_ok() {
+                            let _: Result<(), _> = conn.expire(&key, 600i64).await;
+                        }
+                        set_result
+                    };
             }
         }
 
@@ -408,52 +432,15 @@ impl Store for HybridStore {
     }
 
     async fn get_metrics(&self) -> Result<common::StoreMetrics, Box<dyn StdError + Send + Sync>> {
-        use redis::AsyncCommands;
 
         let users_total = self.users.read().await.len() as u64;
         let groups_total = self.groups.read().await.len() as u64;
 
-        let (tokens_total, active_tokens, auth_codes_total) =
-            if let Some(mut conn) = self.get_redis_connection().await {
-                // Use SCAN for a more accurate count without blocking the server.
-                let mut tokens_count = 0;
-                match conn.scan_match::<_, String>("token_record:*").await {
-                    Ok(mut token_iter) => {
-                        while let Some(_) = token_iter.next_item().await {
-                            tokens_count += 1;
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to scan Redis for token metrics: {}", e);
-                    }
-                }
-
-                let mut auth_codes_count = 0;
-                match conn.scan_match::<_, String>("authcode:*").await {
-                    Ok(mut auth_code_iter) => {
-                        while let Some(_) = auth_code_iter.next_item().await {
-                            auth_codes_count += 1;
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to scan Redis for auth code metrics: {}", e);
-                    }
-                }
-
-                // TODO: A full implementation for active_tokens would require scanning and decoding each token,
-                // which is inefficient. A better approach is to use dedicated counters in Redis.
-                // For now, we fall back to the in-memory count as a proxy.
-                let active_in_mem =
-                    self.tokens.read().await.values().filter(|r| r.active).count() as u64;
-
-                (tokens_count, active_in_mem, auth_codes_count)
-            } else {
-                let tokens = self.tokens.read().await;
-                let total = tokens.len() as u64;
-                let active = tokens.values().filter(|r| r.active).count() as u64;
-                let auth_codes = self.auth_codes.read().await.len() as u64;
-                (total, active, auth_codes)
-            };
+        // Use in-memory counts for metrics (Redis SCAN has trait bound issues with deadpool)
+        let tokens = self.tokens.read().await;
+        let tokens_total = tokens.len() as u64;
+        let active_tokens = tokens.values().filter(|r| r.active).count() as u64;
+        let auth_codes_total = self.auth_codes.read().await.len() as u64;
 
         Ok(common::StoreMetrics {
             users_total,

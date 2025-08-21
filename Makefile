@@ -1,219 +1,238 @@
-# Rust Security Workspace Development Makefile
-# Provides convenient commands for common development tasks
+# Rust Security Platform - Makefile
+# Simplifies common development and testing tasks
 
-.PHONY: help build test check lint security audit clean install format docs
+.PHONY: help build test clean doc fmt lint security bench all
 
-# Default target
+# Default target - show help
 help:
-	@echo "Rust Security Workspace - Development Commands"
+	@echo "Rust Security Platform - Development Commands"
 	@echo ""
-	@echo "Common Commands:"
-	@echo "  make build      - Build all workspace crates"
-	@echo "  make test       - Run all tests"
-	@echo "  make check      - Fast compile check"
-	@echo "  make lint       - Run clippy linting"
-	@echo "  make format     - Format all code"
+	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Security Commands:"
-	@echo "  make security   - Run all security checks"
-	@echo "  make audit      - Audit dependencies for vulnerabilities"
-	@echo "  make deny       - Check dependency licenses and sources"
+	@echo "Quick Start:"
+	@echo "  make build          - Build all components"
+	@echo "  make test           - Run all tests"
+	@echo "  make run            - Run minimal auth-core server"
 	@echo ""
-	@echo "Development Commands:"
-	@echo "  make clean      - Clean build artifacts"
-	@echo "  make install    - Install development tools"
-	@echo "  make docs       - Generate documentation"
-	@echo "  make examples   - Run all examples"
+	@echo "Development:"
+	@echo "  make fmt            - Format code"
+	@echo "  make lint           - Run clippy linter"
+	@echo "  make check          - Format check + lint"
+	@echo "  make doc            - Generate documentation"
+	@echo "  make clean          - Clean build artifacts"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test-quick     - Run quick unit tests only"
+	@echo "  make test-security  - Run security test suite"
+	@echo "  make test-coverage  - Generate test coverage report"
+	@echo "  make test-property  - Run property-based tests"
+	@echo "  make bench          - Run performance benchmarks"
+	@echo "  make test-all       - Run complete test suite"
+	@echo ""
+	@echo "Build Profiles:"
+	@echo "  make build-minimal  - Build minimal auth-core"
+	@echo "  make build-standard - Build with standard features"
+	@echo "  make build-enterprise - Build with all features"
+	@echo ""
+	@echo "Security:"
+	@echo "  make audit          - Run security audit"
+	@echo "  make sec-check      - Complete security validation"
+	@echo ""
+	@echo "CI/CD:"
+	@echo "  make ci             - Run CI validation locally"
+	@echo "  make release        - Build release artifacts"
 
-# Development setup
-install:
-	@echo "Installing development tools..."
-	cargo install cargo-audit
-	cargo install cargo-deny
-	cargo install cargo-outdated
-	cargo install cargo-edit
-	cargo install cargo-sweep
-	cargo install cargo-watch
-	cargo install --locked cargo-mutants
-	rustup component add clippy rustfmt
-
-# Build commands
+# Build targets
 build:
-	@echo "Building workspace..."
-	cargo build --workspace
+	@echo "🔨 Building all components..."
+	@cargo build --workspace --all-features
 
-build-release:
-	@echo "Building workspace in release mode..."
-	cargo build --workspace --release
+build-minimal:
+	@echo "🚀 Building minimal auth-core..."
+	@cd auth-core && cargo build --release --no-default-features --features client-credentials
 
-check:
-	@echo "Checking workspace..."
-	cargo check --workspace
+build-standard:
+	@echo "🏭 Building standard profile..."
+	@./scripts/build-profiles.sh standard
 
-# Testing commands
+build-enterprise:
+	@echo "🏢 Building enterprise profile..."
+	@./scripts/build-profiles.sh enterprise
+
+# Run targets
+run:
+	@echo "🚀 Starting minimal auth-core server..."
+	@cd auth-core && cargo run --example minimal_server
+
+run-docker:
+	@echo "🐳 Running in Docker..."
+	@docker-compose up -d
+
+# Testing targets
 test:
-	@echo "Running tests..."
-	cargo test --workspace
+	@echo "🧪 Running all tests..."
+	@cargo test --workspace --all-features
 
-test-ignored:
-	@echo "Running ignored tests..."
-	cargo test --workspace -- --ignored
+test-quick:
+	@echo "⚡ Running quick tests..."
+	@cargo test --lib --bins
 
 test-security:
-	@echo "Running security-focused tests..."
-	cargo test --workspace --features threat-hunting,post-quantum
+	@echo "🔒 Running security tests..."
+	@cargo test --workspace security
+	@cargo test --workspace integration_security
+	@cargo test --workspace owasp
 
-# Code quality commands
+test-coverage:
+	@echo "📊 Generating test coverage..."
+	@cargo llvm-cov --workspace --all-features --html --output-dir coverage
+	@echo "Coverage report generated at: coverage/index.html"
+
+test-property:
+	@echo "🎲 Running property-based tests..."
+	@PROPTEST_CASES=1000 cargo test --workspace property
+
+bench:
+	@echo "📈 Running benchmarks..."
+	@./scripts/run-benchmarks.sh all
+
+test-all: test test-security test-property bench
+	@echo "✅ Complete test suite finished"
+
+# Code quality targets
+fmt:
+	@echo "✨ Formatting code..."
+	@cargo fmt --all
+
+fmt-check:
+	@echo "🔍 Checking code formatting..."
+	@cargo fmt --all --check
+
 lint:
-	@echo "Running clippy..."
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	@echo "🔍 Running clippy..."
+	@cargo clippy --workspace --all-features --all-targets -- -D warnings
 
-lint-security:
-	@echo "Running security-focused lints..."
-	cargo clippy --workspace --all-targets --all-features -- \
-		-D clippy::unwrap_used \
-		-D clippy::expect_used \
-		-D clippy::panic \
-		-D clippy::integer_overflow \
-		-D clippy::indexing_slicing
-
-format:
-	@echo "Formatting code..."
-	cargo fmt --all
-
-format-check:
-	@echo "Checking code formatting..."
-	cargo fmt --all -- --check
-
-# Security commands
-security: audit deny lint-security
-	@echo "All security checks completed"
-
-audit:
-	@echo "Auditing dependencies for vulnerabilities..."
-	cargo audit
-
-deny:
-	@echo "Checking dependencies with cargo-deny..."
-	cargo deny check
-
-outdated:
-	@echo "Checking for outdated dependencies..."
-	cargo outdated --workspace
+check: fmt-check lint
+	@echo "✅ Code quality checks passed"
 
 # Documentation
-docs:
-	@echo "Generating documentation..."
-	cargo doc --workspace --no-deps --open
+doc:
+	@echo "📚 Generating documentation..."
+	@cargo doc --workspace --all-features --no-deps --open
 
-docs-private:
-	@echo "Generating documentation with private items..."
-	cargo doc --workspace --no-deps --document-private-items
+doc-private:
+	@echo "📚 Generating documentation (including private items)..."
+	@cargo doc --workspace --all-features --no-deps --document-private-items --open
 
-# Examples
-examples:
-	@echo "Running simple auth client example..."
-	cd examples/simple-auth-client && cargo run
-	@echo "Building axum integration example..."
-	cd examples/axum-integration-example && cargo build
+# Security targets
+audit:
+	@echo "🔒 Running security audit..."
+	@cargo audit
 
-# Development workflow
-dev-setup: install
-	@echo "Setting up development environment..."
-	git config core.hooksPath .githooks
-	chmod +x .githooks/*
+deny:
+	@echo "🚫 Checking dependencies..."
+	@cargo deny check
 
-watch:
-	@echo "Starting development watch mode..."
-	cargo watch -x check -x test
+sec-check: audit deny test-security
+	@echo "✅ Security validation complete"
 
-watch-tests:
-	@echo "Watching tests..."
-	cargo watch -x "test --workspace"
-
-# Performance and profiling
-bench:
-	@echo "Running benchmarks..."
-	cargo bench --workspace --features benchmarks
-
-profile:
-	@echo "Building with profiling..."
-	cargo build --workspace --profile release-with-debug
-
-# Maintenance commands
+# Clean targets
 clean:
-	@echo "Cleaning build artifacts..."
-	cargo clean
-	@echo "Sweeping unused build files..."
-	cargo sweep --time 7
+	@echo "🧹 Cleaning build artifacts..."
+	@cargo clean
+	@rm -rf coverage/
+	@rm -rf benchmark-results/
 
 clean-all: clean
-	@echo "Cleaning all artifacts including dependencies..."
-	rm -rf target/
-	rm -rf Cargo.lock
+	@echo "🧹 Deep cleaning..."
+	@rm -rf target/
+	@rm -rf auth-core/target/
+	@rm -rf auth-service/target/
+	@find . -name "*.profraw" -delete
+
+# CI/CD targets
+ci: fmt-check lint test test-security
+	@echo "✅ CI validation passed"
+
+ci-extensive: ci test-property bench test-coverage
+	@echo "✅ Extensive CI validation passed"
+
+release:
+	@echo "📦 Building release artifacts..."
+	@cargo build --release --workspace --all-features
+	@mkdir -p release-artifacts
+	@cp target/release/auth-core release-artifacts/ 2>/dev/null || true
+	@cp target/release/auth-service release-artifacts/ 2>/dev/null || true
+	@echo "Release artifacts in: release-artifacts/"
+
+# Development helpers
+watch:
+	@echo "👁️ Watching for changes..."
+	@cargo watch -x check -x test -x run
+
+todo:
+	@echo "📝 Finding TODOs..."
+	@grep -r "TODO\|FIXME\|XXX" --include="*.rs" --include="*.toml" --include="*.md" .
+
+loc:
+	@echo "📏 Lines of code:"
+	@tokei
+
+deps:
+	@echo "🌳 Dependency tree:"
+	@cargo tree
 
 update:
-	@echo "Updating dependencies..."
-	cargo update
+	@echo "⬆️ Updating dependencies..."
+	@cargo update
 
-upgrade:
-	@echo "Upgrading dependencies to latest versions..."
-	cargo upgrade --workspace
+# Installation targets
+install-tools:
+	@echo "🔧 Installing development tools..."
+	@cargo install cargo-watch
+	@cargo install cargo-audit
+	@cargo install cargo-deny
+	@cargo install cargo-llvm-cov
+	@cargo install cargo-criterion
+	@cargo install tokei
+	@echo "✅ Development tools installed"
 
-# CI/CD simulation
-ci-check: format-check lint test audit deny
-	@echo "CI checks completed successfully"
+# Docker targets
+docker-build:
+	@echo "🐳 Building Docker image..."
+	@docker build -t rust-security-auth .
 
-ci-build: build-release test
-	@echo "CI build completed successfully"
+docker-run: docker-build
+	@echo "🐳 Running Docker container..."
+	@docker run -p 8080:8080 rust-security-auth
 
-# Red team exercises (when compilation issues are resolved)
-red-team:
-	@echo "Running red team exercises..."
-	cd red-team-exercises && cargo run
+docker-compose:
+	@echo "🐳 Starting with docker-compose..."
+	@docker-compose up
 
-compliance:
-	@echo "Running compliance tools..."
-	cd compliance-tools && cargo run --bin compliance-report-generator
+# Utility targets
+.PHONY: version
+version:
+	@echo "Rust Security Platform"
+	@echo "Rust version: $$(rustc --version)"
+	@echo "Cargo version: $$(cargo --version)"
+	@echo "Git commit: $$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+	@echo "Git branch: $$(git branch --show-current 2>/dev/null || echo 'unknown')"
 
-# Individual service commands
-auth-service:
-	@echo "Building auth-service..."
-	cargo build -p auth-service
+# Performance profiling
+profile:
+	@echo "🔬 Running performance profiling..."
+	@cargo build --release
+	@valgrind --tool=callgrind target/release/auth-core || echo "Valgrind not available"
 
-policy-service:
-	@echo "Building policy-service..."
-	cargo build -p policy-service
+# Quick development cycle
+dev: fmt test-quick
+	@echo "✅ Quick development checks passed"
 
-# Feature-specific builds
-build-optimizations:
-	@echo "Building with optimizations..."
-	cargo build -p auth-service --features optimizations
+# Full validation before commit
+pre-commit: fmt-check lint test test-security
+	@echo "✅ Ready to commit"
 
-build-threat-hunting:
-	@echo "Building with threat hunting features..."
-	cargo build -p auth-service --features threat-hunting
-
-build-post-quantum:
-	@echo "Building with post-quantum crypto..."
-	cargo build -p auth-service --features post-quantum
-
-# Development utilities
-loc:
-	@echo "Counting lines of code..."
-	find . -name "*.rs" -not -path "./target/*" | xargs wc -l | tail -1
-
-deps-tree:
-	@echo "Showing dependency tree..."
-	cargo tree
-
-deps-graph:
-	@echo "Generating dependency graph..."
-	cargo depgraph --workspace-only | dot -Tpng > deps.png
-	@echo "Dependency graph saved to deps.png"
-
-# Quick development shortcuts
-q-check: check
-q-test: test
-q-lint: lint
-q-fmt: format
+# Default target
+all: clean build test doc
+	@echo "✅ Full build and test complete"

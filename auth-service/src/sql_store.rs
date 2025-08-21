@@ -33,19 +33,19 @@ impl SqlStore {
         info!("Initializing PostgreSQL connection pool");
         
         // Configure connection pool with optimal settings
-        let pool = PgPool::connect_with(
-            sqlx::postgres::PgPoolOptions::new()
-                .max_connections(50)                    // Max connections in pool
-                .min_connections(5)                     // Minimum connections to maintain
-                .max_lifetime(Duration::from_secs(1800)) // 30 minutes connection lifetime
-                .idle_timeout(Duration::from_secs(600))  // 10 minutes idle timeout
-                .acquire_timeout(Duration::from_secs(10)) // 10 seconds acquire timeout
-                .test_before_acquire(true),             // Test connections before use
-            database_url.parse()?
-        ).await.map_err(|e| {
-            error!("Failed to connect to PostgreSQL: {}", e);
-            e
-        })?;
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(50)                    // Max connections in pool
+            .min_connections(5)                     // Minimum connections to maintain
+            .max_lifetime(Duration::from_secs(1800)) // 30 minutes connection lifetime
+            .idle_timeout(Duration::from_secs(600))  // 10 minutes idle timeout
+            .acquire_timeout(Duration::from_secs(10)) // 10 seconds acquire timeout
+            .test_before_acquire(true)              // Test connections before use
+            .connect(database_url)
+            .await
+            .map_err(|e| {
+                error!("Failed to connect to PostgreSQL: {}", e);
+                e
+            })?;
         
         info!("PostgreSQL connection pool initialized successfully");
         Ok(Self { pool: Arc::new(pool) })

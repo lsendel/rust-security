@@ -167,19 +167,17 @@ impl SessionStore for RedisSessionStore {
             let user_sessions_key = self.user_sessions_key(&session.user_id);
             
             // Store session data with TTL
-            let result1: Result<(), _> = redis::cmd("SETEX")
-                .arg(&session_key)
-                .arg(ttl)
-                .arg(&session_json)
-                .query_async(&mut *conn)
-                .await;
+            let result1: Result<(), _> = {
+                let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
+                if set_result.is_ok() {
+                    conn.expire(&session_key, ttl as i64).await
+                } else {
+                    set_result
+                }
+            };
                 
             // Add to user sessions set
-            let result2: Result<(), _> = redis::cmd("SADD")
-                .arg(&user_sessions_key)
-                .arg(&session.session_id)
-                .query_async(&mut *conn)
-                .await;
+            let result2: Result<(), _> = conn.sadd(&user_sessions_key, &session.session_id).await;
             
             match (result1, result2) {
                 (Ok(_), Ok(_)) => {
@@ -217,7 +215,7 @@ impl SessionStore for RedisSessionStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(session_id);
-            match redis::cmd("GET").arg(&session_key).query_async::<_, Option<String>>(&mut *conn).await {
+            match conn.get::<_, Option<String>>(&session_key).await {
                 Ok(Some(json)) => {
                     let mut session: SessionData = serde_json::from_str(&json)?;
                     if session.is_expired() {
@@ -266,7 +264,13 @@ impl SessionStore for RedisSessionStore {
         // Update in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(&session.session_id);
-            match conn.set_ex::<_, _, ()>(&session_key, &session_json, ttl as usize).await 
+            match {
+                let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
+                if set_result.is_ok() {
+                    let _: Result<(), _> = conn.expire(&session_key, ttl as i64).await;
+                }
+                set_result
+            } 
             {
                 Ok(_) => {
                     // Successfully updated in Redis, also update memory backup
@@ -295,12 +299,9 @@ impl SessionStore for RedisSessionStore {
             if let Some(session_data) = &session {
                 let user_sessions_key = self.user_sessions_key(&session_data.user_id);
                 
-                // Use Redis pipeline for atomic operations
-                let mut pipe = redis::pipe();
-                pipe.del(&session_key);
-                pipe.srem(&user_sessions_key, session_id);
-                
-                let _: Result<(), _> = pipe.query_async(&mut *conn).await;
+                // Delete session and remove from user sessions set
+                let _: Result<(), _> = conn.del(&session_key).await;
+                let _: Result<(), _> = conn.srem(&user_sessions_key, session_id).await;
             } else {
                 let _: Result<(), _> = conn.del(&session_key).await;
             }
@@ -329,8 +330,7 @@ impl SessionStore for RedisSessionStore {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let user_sessions_key = self.user_sessions_key(user_id);
-            match conn.smembers::<_, Vec<String>>(&user_sessions_key).await 
-            {
+            match conn.smembers::<_, Vec<String>>(&user_sessions_key).await {
                 Ok(session_ids) => {
                     for session_id in &session_ids {
                         if let Ok(Some(session)) = self.get_session(session_id).await {

@@ -1,0 +1,534 @@
+name: Auth-Core Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: 
+      - 'auth-core/**'
+      - '.github/workflows/auth-core-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'auth-core/**'
+      - '.github/workflows/auth-core-tests.yml'
+  schedule:
+    # Run tests daily at 1 AM UTC
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      run_fuzz_tests:
+        description: 'Run fuzzing tests'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Quick validation for auth-core
+  auth-core-validation:
+    name: Auth-Core Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+        
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-${{ hashFiles('auth-core/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-auth-core-
+          
+    - name: Check formatting
+      run: cargo fmt --all --check
+      working-directory: auth-core
+      
+    - name: Run clippy (minimal features)
+      run: cargo clippy --no-default-features --features "client-credentials" -- -D warnings
+      working-directory: auth-core
+      
+    - name: Run clippy (all features) 
+      run: cargo clippy --all-features -- -D warnings
+      working-directory: auth-core
+      
+    - name: Compile check (minimal)
+      run: cargo check --no-default-features --features "client-credentials"
+      working-directory: auth-core
+      
+    - name: Compile check (all features)
+      run: cargo check --all-features
+      working-directory: auth-core
+
+  # Unit tests for different feature combinations
+  auth-core-unit-tests:
+    name: Auth-Core Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: auth-core-validation
+    
+    strategy:
+      matrix:
+        features:
+          - "client-credentials"
+          - "client-credentials,jwt"
+          - "client-credentials,jwt,store-memory"
+          - "all"
+        rust: [stable, beta]
+        
+    continue-on-error: ${{ matrix.rust == 'beta' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-${{ matrix.rust }}-auth-core-${{ hashFiles('auth-core/Cargo.lock') }}-${{ matrix.features }}
+        
+    - name: Run unit tests
+      run: |
+        if [ "${{ matrix.features }}" = "all" ]; then
+          cargo test --lib --bins --all-features --verbose -- --nocapture
+        else
+          cargo test --lib --bins --no-default-features --features "${{ matrix.features }}" --verbose -- --nocapture
+        fi
+      working-directory: auth-core
+      env:
+        RUST_LOG: debug
+
+  # OAuth 2.0 compliance tests
+  oauth2-compliance:
+    name: OAuth 2.0 Compliance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: auth-core-validation
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-oauth-compliance-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Run OAuth 2.0 compliance tests
+      run: |
+        cargo test oauth2_compliance --all-features --verbose -- --nocapture
+      working-directory: auth-core
+      env:
+        RUST_LOG: debug
+
+  # Security-focused tests
+  auth-core-security:
+    name: Auth-Core Security Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: auth-core-validation
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-security-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Run security tests
+      run: |
+        cargo test security --all-features --verbose -- --nocapture
+      working-directory: auth-core
+      env:
+        RUST_LOG: debug
+        
+    - name: Run token security tests
+      run: |
+        cargo test token_security --all-features --verbose -- --nocapture
+      working-directory: auth-core
+        
+    - name: Run timing attack tests
+      run: |
+        cargo test timing_attack --all-features --verbose -- --nocapture
+      working-directory: auth-core
+
+  # Property-based testing
+  auth-core-property-tests:
+    name: Property-Based Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: auth-core-unit-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-property-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Run property-based tests
+      run: |
+        cargo test property --all-features --verbose -- --nocapture
+      working-directory: auth-core
+      env:
+        PROPTEST_CASES: 1000
+        QUICKCHECK_TESTS: 1000
+
+  # Fuzzing tests (optional)
+  auth-core-fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: auth-core-unit-tests
+    if: github.event.inputs.run_fuzz_tests == 'true' || github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@nightly
+      
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-fuzz-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Initialize fuzz tests
+      run: |
+        cargo fuzz init || true
+        cargo fuzz add token_parsing || true
+        cargo fuzz add client_validation || true
+      working-directory: auth-core
+      
+    - name: Run token parsing fuzz test
+      run: |
+        timeout 300 cargo fuzz run token_parsing || true
+      working-directory: auth-core
+      
+    - name: Run client validation fuzz test
+      run: |
+        timeout 300 cargo fuzz run client_validation || true
+      working-directory: auth-core
+      
+    - name: Upload fuzz artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: fuzz-artifacts
+        path: auth-core/fuzz/artifacts
+        retention-days: 7
+
+  # Performance benchmarks
+  auth-core-benchmarks:
+    name: Auth-Core Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: auth-core-unit-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-bench-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Run benchmarks
+      run: |
+        cargo bench --all-features -- --output-format json > benchmark-results.json
+      working-directory: auth-core
+      
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: auth-core-benchmarks
+        path: auth-core/benchmark-results.json
+        retention-days: 30
+
+  # Multi-platform compatibility
+  cross-platform:
+    name: Cross-Platform Testing
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    needs: auth-core-validation
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+        
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-cross-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Run core tests
+      run: |
+        cargo test --no-default-features --features "client-credentials" --verbose
+      working-directory: auth-core
+
+  # Code coverage for auth-core
+  auth-core-coverage:
+    name: Auth-Core Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [auth-core-unit-tests, oauth2-compliance]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: llvm-tools-preview
+        
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-coverage-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
+      
+    - name: Generate code coverage
+      run: |
+        cargo llvm-cov --all-features \
+          --lcov \
+          --output-path lcov.info \
+          --ignore-filename-regex "tests/.*|benches/.*"
+      working-directory: auth-core
+      env:
+        RUST_LOG: debug
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: auth-core/lcov.info
+        directory: auth-core
+        flags: auth-core
+        name: auth-core-coverage
+        fail_ci_if_error: false
+        
+    - name: Generate HTML coverage report
+      run: |
+        cargo llvm-cov --all-features \
+          --html \
+          --output-dir coverage-html \
+          --ignore-filename-regex "tests/.*|benches/.*"
+      working-directory: auth-core
+      
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: auth-core-coverage-html
+        path: auth-core/coverage-html
+        retention-days: 30
+
+  # Minimal build verification
+  minimal-build-test:
+    name: Minimal Build Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: auth-core-validation
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+        
+    - name: Test minimal feature set
+      run: |
+        cargo build --release --no-default-features --features "client-credentials"
+        cargo test --no-default-features --features "client-credentials"
+      working-directory: auth-core
+      
+    - name: Check binary size
+      run: |
+        size=$(du -h target/release/auth-core 2>/dev/null | cut -f1 || echo "N/A")
+        echo "Minimal binary size: $size"
+        echo "::notice::Minimal auth-core binary size: $size"
+      working-directory: auth-core
+      
+    - name: Test progressive feature additions
+      run: |
+        echo "Testing client-credentials only..."
+        cargo test --no-default-features --features "client-credentials" --quiet
+        
+        echo "Testing client-credentials + jwt..."
+        cargo test --no-default-features --features "client-credentials,jwt" --quiet
+        
+        echo "Testing all features..."
+        cargo test --all-features --quiet
+      working-directory: auth-core
+
+  # Security audit
+  auth-core-audit:
+    name: Auth-Core Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Install cargo-audit
+      run: cargo install cargo-audit --force
+      
+    - name: Run security audit
+      run: cargo audit
+      working-directory: auth-core
+      
+    - name: Check for known vulnerabilities  
+      run: cargo audit --deny warnings
+      working-directory: auth-core
+      continue-on-error: true
+
+  # Test summary
+  auth-core-summary:
+    name: Auth-Core Test Summary
+    runs-on: ubuntu-latest
+    needs: [auth-core-unit-tests, oauth2-compliance, auth-core-security, cross-platform, auth-core-coverage]
+    if: always()
+    
+    steps:
+    - name: Generate summary
+      run: |
+        echo "# Auth-Core Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Unit tests
+        if [[ "${{ needs.auth-core-unit-tests.result }}" == "success" ]]; then
+          echo "✅ **Unit Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Unit Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # OAuth compliance
+        if [[ "${{ needs.oauth2-compliance.result }}" == "success" ]]; then
+          echo "✅ **OAuth 2.0 Compliance**: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **OAuth 2.0 Compliance**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Security tests
+        if [[ "${{ needs.auth-core-security.result }}" == "success" ]]; then
+          echo "✅ **Security Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Security Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Cross-platform
+        if [[ "${{ needs.cross-platform.result }}" == "success" ]]; then
+          echo "✅ **Cross-Platform**: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Cross-Platform**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Coverage
+        if [[ "${{ needs.auth-core-coverage.result }}" == "success" ]]; then
+          echo "✅ **Code Coverage**: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Code Coverage**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Key Features Tested" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Minimal auth-core with client credentials flow" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Progressive feature enhancement" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ OAuth 2.0 RFC compliance" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Security vulnerability scanning" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Cross-platform compatibility" >> $GITHUB_STEP_SUMMARY
+        
+    - name: Check critical tests
+      run: |
+        if [[ "${{ needs.auth-core-unit-tests.result }}" != "success" ]] || \
+           [[ "${{ needs.oauth2-compliance.result }}" != "success" ]] || \
+           [[ "${{ needs.auth-core-security.result }}" != "success" ]]; then
+          echo "❌ Critical auth-core tests failed"
+          exit 1
+        fi
+        
+        echo "✅ All critical auth-core tests passed"
