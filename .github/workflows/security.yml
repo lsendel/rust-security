@@ -62,7 +62,7 @@ jobs:
 
           # Supply chain security tools
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.1.0
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin v1.0.0
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin v0.98.0
 
           # Install OSV Scanner
           go install github.com/google/osv-scanner/cmd/osv-scanner@v1.8.0
