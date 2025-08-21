@@ -1,0 +1,129 @@
+name: Auth-Core Simple CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: 
+      - 'auth-core/**'
+      - '.github/workflows/auth-core-simple.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'auth-core/**'
+      - '.github/workflows/auth-core-simple.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Quick validation
+  validate:
+    name: Validate auth-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+        
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-auth-core-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Check formatting
+      run: cargo fmt --check
+      working-directory: auth-core
+      
+    - name: Run clippy
+      run: cargo clippy -- -D warnings
+      working-directory: auth-core
+      
+    - name: Check compilation
+      run: cargo check
+      working-directory: auth-core
+
+  # Run actual tests
+  test:
+    name: Test auth-core
+    runs-on: ${{ matrix.os }}
+    needs: validate
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable, nightly]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          auth-core/target
+        key: ${{ runner.os }}-${{ matrix.rust }}-auth-core-${{ hashFiles('auth-core/Cargo.lock') }}
+        
+    - name: Build
+      run: cargo build --all-features
+      working-directory: auth-core
+      
+    - name: Run tests
+      run: cargo test --all-features
+      working-directory: auth-core
+      
+    - name: Run benchmarks (compile only)
+      run: cargo bench --no-run
+      working-directory: auth-core
+
+  # Check duplicate code analysis issue
+  duplicate-analysis:
+    name: Duplicate Code Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Install jscpd
+      run: npm install -g jscpd
+      
+    - name: Run duplicate code analysis
+      run: |
+        jscpd auth-core/src \
+          --min-lines 5 \
+          --min-tokens 30 \
+          --threshold 10 \
+          --reporters html,json \
+          --output ./jscpd-report \
+          --ignore "**/target/**,**/tests/**" \
+          --formats rust || true
+      continue-on-error: true
+      
+    - name: Upload duplicate code report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: duplicate-code-report
+        path: ./jscpd-report
