@@ -1,5 +1,5 @@
 //! Property-based tests for auth-core using proptest
-//! 
+//!
 //! These tests verify that our code behaves correctly across
 //! a wide range of generated inputs and edge cases.
 
@@ -32,20 +32,20 @@ proptest! {
         )
     ) {
         let mut server_builder = AuthServer::minimal();
-        
+
         // Add all clients
         for (client_id, client_secret) in &client_configs {
             server_builder = server_builder.with_client(client_id, client_secret);
         }
-        
+
         // Building should always succeed with valid inputs
         let result = server_builder.build();
         prop_assert!(result.is_ok(), "Failed to build server with valid clients");
-        
+
         // All clients should be registered
         let server = result.unwrap();
         for (client_id, _) in &client_configs {
-            prop_assert!(server.has_client(client_id), 
+            prop_assert!(server.has_client(client_id),
                 "Client {} not found in server", client_id);
         }
     }
@@ -91,39 +91,39 @@ proptest! {
             server_handle.abort();
 
             prop_assert!(response.is_ok(), "Failed to send token request");
-            
+
             let response = response.unwrap();
-            
+
             if response.status() == 200 {
                 let token_data: serde_json::Value = response.json().await.unwrap();
-                
+
                 // Token must be present and non-empty
                 let access_token = token_data.get("access_token").unwrap().as_str().unwrap();
                 prop_assert!(!access_token.is_empty(), "Access token is empty");
-                prop_assert!(access_token.starts_with("auth_core_"), 
+                prop_assert!(access_token.starts_with("auth_core_"),
                     "Access token has wrong prefix: {}", access_token);
-                prop_assert!(access_token.len() > 30, 
+                prop_assert!(access_token.len() > 30,
                     "Access token too short: {}", access_token.len());
-                
+
                 // Token type must be Bearer
                 prop_assert_eq!(token_data.get("token_type").unwrap(), "Bearer");
-                
+
                 // Expires in must be positive
                 let expires_in = token_data.get("expires_in").unwrap().as_u64().unwrap();
                 prop_assert!(expires_in > 0, "Token expires_in must be positive");
                 prop_assert!(expires_in <= 86400, "Token expires_in too large: {}", expires_in);
-                
+
                 // If scope was provided, it should be returned
                 if let Some(ref original_scope) = scope {
                     if !original_scope.trim().is_empty() {
                         let returned_scope = token_data.get("scope");
-                        prop_assert!(returned_scope.is_some(), 
+                        prop_assert!(returned_scope.is_some(),
                             "Scope not returned when provided: {}", original_scope);
                     }
                 }
             } else {
                 // For invalid requests, should get proper error response
-                prop_assert!(response.status().as_u16() >= 400, 
+                prop_assert!(response.status().as_u16() >= 400,
                     "Expected error status, got: {}", response.status());
             }
         });
@@ -151,7 +151,7 @@ proptest! {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
             let client = reqwest::Client::new();
-            
+
             let response = client
                 .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
                 .form(&[
@@ -165,13 +165,13 @@ proptest! {
             server_handle.abort();
 
             prop_assert!(response.is_ok(), "Server crashed on malformed input");
-            
+
             let response = response.unwrap();
-            
+
             // Should never return 500 (server error) - always handle gracefully
             prop_assert!(response.status().as_u16() < 500,
                 "Server error on malformed input: status={}", response.status());
-            
+
             // Should return valid JSON error response
             if response.status().as_u16() >= 400 {
                 if let Ok(body) = response.text().await {
@@ -218,13 +218,13 @@ proptest! {
                     .await;
 
                 prop_assert!(response.is_ok(), "Token request failed");
-                
+
                 let response = response.unwrap();
                 prop_assert_eq!(response.status(), 200, "Token request returned error");
-                
+
                 let token_data: serde_json::Value = response.json().await.unwrap();
                 let access_token = token_data.get("access_token").unwrap().as_str().unwrap();
-                
+
                 // Each token must be unique
                 prop_assert!(!tokens.contains(access_token),
                     "Duplicate token generated: {}", access_token);
@@ -245,12 +245,12 @@ proptest! {
         rt.block_on(async {
             let mut server_builder = AuthServer::minimal()
                 .with_client(&client_id, &client_secret);
-            
+
             // Add all scopes to server
             for scope in &scopes {
                 server_builder = server_builder.with_scope(scope);
             }
-            
+
             let server = server_builder.build().expect("Failed to build server");
 
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -262,10 +262,10 @@ proptest! {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
             let client = reqwest::Client::new();
-            
+
             if !scopes.is_empty() {
                 let requested_scope = scopes.join(" ");
-                
+
                 let response = client
                     .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
                     .form(&[
@@ -278,20 +278,20 @@ proptest! {
                     .await;
 
                 prop_assert!(response.is_ok(), "Scope request failed");
-                
+
                 let response = response.unwrap();
                 prop_assert_eq!(response.status(), 200, "Scope request returned error");
-                
+
                 let token_data: serde_json::Value = response.json().await.unwrap();
-                
+
                 // Should return granted scopes
                 if let Some(granted_scope) = token_data.get("scope") {
                     let granted_scope_str = granted_scope.as_str().unwrap();
-                    
+
                     // Each requested scope should be in the granted scopes
                     for scope in &scopes {
                         prop_assert!(granted_scope_str.contains(scope),
-                            "Requested scope '{}' not granted. Granted: '{}'", 
+                            "Requested scope '{}' not granted. Granted: '{}'",
                             scope, granted_scope_str);
                     }
                 }
@@ -311,11 +311,11 @@ proptest! {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
             let mut server_builder = AuthServer::minimal();
-            
+
             for (client_id, client_secret) in &client_pairs {
                 server_builder = server_builder.with_client(client_id, client_secret);
             }
-            
+
             let server = server_builder.build().expect("Failed to build server");
 
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -332,10 +332,10 @@ proptest! {
                 let client_pair = &client_pairs[i % client_pairs.len()];
                 let (client_id, client_secret) = client_pair.clone();
                 let addr = addr;
-                
+
                 let handle = tokio::spawn(async move {
                     let client = reqwest::Client::new();
-                    
+
                     client
                         .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
                         .form(&[
@@ -356,7 +356,7 @@ proptest! {
 
             for result in results {
                 if let Ok(Ok((status, request_id))) = result {
-                    prop_assert!(status < 500, 
+                    prop_assert!(status < 500,
                         "Server error in concurrent request {}: status={}", request_id, status);
                     if status == 200 {
                         success_count += 1;
@@ -366,8 +366,8 @@ proptest! {
 
             // Most requests should succeed in concurrent scenario
             let success_rate = success_count as f64 / num_concurrent as f64;
-            prop_assert!(success_rate > 0.8, 
-                "Poor concurrent performance: {}/{} requests succeeded", 
+            prop_assert!(success_rate > 0.8,
+                "Poor concurrent performance: {}/{} requests succeeded",
                 success_count, num_concurrent);
 
             server_handle.abort();
@@ -386,7 +386,7 @@ mod standard_tests {
     fn test_client_id_strategy_generates_valid_ids() {
         let strategy = client_id_strategy();
         let mut runner = proptest::test_runner::TestRunner::default();
-        
+
         for _ in 0..10 {
             let client_id = strategy.new_tree(&mut runner).unwrap().current();
             assert!(client_id.len() <= 50);
@@ -398,13 +398,13 @@ mod standard_tests {
     fn test_client_secret_strategy_generates_secure_secrets() {
         let strategy = client_secret_strategy();
         let mut runner = proptest::test_runner::TestRunner::default();
-        
+
         for _ in 0..10 {
             let secret = strategy.new_tree(&mut runner).unwrap().current();
             assert!(secret.len() >= 8 && secret.len() <= 128);
-            assert!(secret.chars().all(|c| 
-                c.is_alphanumeric() || c == '_' || c == '.' || c == '-'
-            ));
+            assert!(secret
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '-'));
         }
     }
 }

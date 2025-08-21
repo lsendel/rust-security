@@ -51,16 +51,12 @@ impl IntoResponse for AuthError {
             AuthError::InvalidClient => {
                 (StatusCode::UNAUTHORIZED, "invalid_client", "Client authentication failed")
             }
-            AuthError::InvalidGrantType(ref _grant_type) => (
-                StatusCode::BAD_REQUEST,
-                "unsupported_grant_type",
-                "Grant type is not supported",
-            ),
-            AuthError::InvalidScope(ref _scope) => (
-                StatusCode::BAD_REQUEST,
-                "invalid_scope", 
-                "Scope is not valid",
-            ),
+            AuthError::InvalidGrantType(ref _grant_type) => {
+                (StatusCode::BAD_REQUEST, "unsupported_grant_type", "Grant type is not supported")
+            }
+            AuthError::InvalidScope(ref _scope) => {
+                (StatusCode::BAD_REQUEST, "invalid_scope", "Scope is not valid")
+            }
             AuthError::InvalidToken => (
                 StatusCode::UNAUTHORIZED,
                 "invalid_token",

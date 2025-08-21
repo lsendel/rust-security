@@ -1,5 +1,5 @@
-//! Performance benchmarks for auth-core 
-//! 
+//! Performance benchmarks for auth-core
+//!
 //! Simplified benchmarks focusing on core functionality:
 //! - Server creation and building
 //! - Configuration operations
@@ -22,7 +22,7 @@ fn bench_server_creation(c: &mut Criterion) {
                     AuthServer::minimal()
                         .with_client("bench_client", "bench_secret")
                         .build()
-                        .expect("Failed to build server")
+                        .expect("Failed to build server"),
                 )
             })
         })
@@ -40,7 +40,7 @@ fn bench_server_creation(c: &mut Criterion) {
                         .with_client("client4", "secret4")
                         .with_client("client5", "secret5")
                         .build()
-                        .expect("Failed to build server")
+                        .expect("Failed to build server"),
                 )
             })
         })
@@ -62,17 +62,11 @@ fn bench_server_methods(c: &mut Criterion) {
     let mut group = c.benchmark_group("server_methods");
 
     // Benchmark server cloning
-    group.bench_function("clone_server", |b| {
-        b.iter(|| {
-            black_box(server.clone())
-        })
-    });
+    group.bench_function("clone_server", |b| b.iter(|| black_box(server.clone())));
 
     // Benchmark build method
     group.bench_function("build_method", |b| {
-        b.iter(|| {
-            black_box(server.clone().build().expect("Build should work"))
-        })
+        b.iter(|| black_box(server.clone().build().expect("Build should work")))
     });
 
     // Benchmark into_make_service method
@@ -90,20 +84,11 @@ fn bench_builder_pattern(c: &mut Criterion) {
     let mut group = c.benchmark_group("builder_pattern");
 
     // Benchmark builder creation
-    group.bench_function("builder_creation", |b| {
-        b.iter(|| {
-            black_box(AuthServer::minimal())
-        })
-    });
+    group.bench_function("builder_creation", |b| b.iter(|| black_box(AuthServer::minimal())));
 
     // Benchmark adding clients
     group.bench_function("add_single_client", |b| {
-        b.iter(|| {
-            black_box(
-                AuthServer::minimal()
-                    .with_client("client", "secret")
-            )
-        })
+        b.iter(|| black_box(AuthServer::minimal().with_client("client", "secret")))
     });
 
     // Benchmark configuration methods
@@ -116,7 +101,7 @@ fn bench_builder_pattern(c: &mut Criterion) {
                     .with_rate_limit(100)
                     .with_jwt_secret("test-secret")
                     .with_token_ttl(3600)
-                    .with_scope("read")
+                    .with_scope("read"),
             )
         })
     });
@@ -124,10 +109,5 @@ fn bench_builder_pattern(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(
-    benches,
-    bench_server_creation,
-    bench_server_methods,
-    bench_builder_pattern
-);
+criterion_group!(benches, bench_server_creation, bench_server_methods, bench_builder_pattern);
 criterion_main!(benches);

@@ -51,17 +51,17 @@ impl AuthServer {
     pub fn with_config(config: ServerConfig) -> Self {
         Self { config, store: Arc::new(RwLock::new(MemoryStore::new())) }
     }
-    
+
     /// Build method for compatibility with tests
     pub fn build(self) -> Result<Self> {
         Ok(self)
     }
-    
+
     /// Expect method for compatibility with tests  
     pub fn expect(self, _msg: &str) -> Self {
         self
     }
-    
+
     /// Convert to make service for compatibility with tests
     pub fn into_make_service(self) -> Self {
         self
@@ -79,12 +79,12 @@ impl AuthServer {
 
         let _listener = tokio::net::TcpListener::bind(addr).await?;
         println!("🚀 Server listening on {}", addr);
-        
+
         // Simplified serving - just indicate server is ready
         // In a real implementation, you'd need proper serving logic here
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         println!("✅ Server would be serving requests...");
-        
+
         Ok(())
     }
 
@@ -156,13 +156,13 @@ impl AuthServerBuilder {
         self.config.jwt_secret = Some(secret.to_string());
         self
     }
-    
+
     /// Set token TTL for testing (stub implementation)
     pub fn with_token_ttl(self, _ttl_seconds: u64) -> Self {
         // Note: This is a stub for test compatibility
         self
     }
-    
+
     /// Set scope (stub implementation - maps to with_cors for compatibility)
     pub fn with_scope(self, _scope: &str) -> Self {
         // Note: This is a stub for test compatibility

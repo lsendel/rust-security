@@ -3,10 +3,7 @@
 use axum::{extract::State, response::Json, Form};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    error::Result,
-    server::AppState,
-};
+use crate::{error::Result, server::AppState};
 
 #[derive(Debug, Deserialize)]
 pub struct IntrospectRequest {
