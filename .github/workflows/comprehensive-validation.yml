@@ -29,9 +29,12 @@ jobs:
         run: |
           echo "🔍 Checking for missing source files..."
           
-          # Check that all mod declarations have corresponding files
+          # Check that all mod declarations have corresponding files (skip inline modules)
           find . -name "*.rs" -exec grep -l "^pub mod\|^mod " {} \; | while read file; do
-            grep "^pub mod\|^mod " "$file" | sed 's/^pub mod\|^mod //; s/;//' | while read module; do
+            grep "^pub mod\|^mod " "$file" | grep -v "{" | sed 's/^pub mod\|^mod //; s/;//' | while read module; do
+              # Skip empty lines
+              [ -z "$module" ] && continue
+              
               module_file=$(dirname "$file")/"$module".rs
               if [ ! -f "$module_file" ]; then
                 echo "❌ Missing module file: $module_file (declared in $file)"
@@ -298,13 +301,6 @@ jobs:
           if [ -n "$workflows_without_timeout" ]; then
             echo "⚠️  Workflows without timeout specifications:"
             echo "$workflows_without_timeout"
-          fi
-          
-          # Check for jscpd configuration issues
-          if grep -q "\-\-formats" .github/workflows/*.yml; then
-            echo "❌ Found deprecated jscpd --formats flag"
-            echo "Replace with --pattern flag for newer jscpd versions"
-            exit 1
           fi
           
           # Check for workspace build commands that might fail
