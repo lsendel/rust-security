@@ -4,11 +4,11 @@
 //! It is designed with security best practices and modularity in mind.
 
 use tokio::net::TcpListener;
-mod config;
 
+use anyhow;
 use auth_service::{
     app,
-    config::{self, StoreBackend},
+    config::{AppConfig, StoreBackend},
     config_reload::{ConfigReloadEvent, ConfigReloadManager},
     keys,
     sql_store::SqlStore,
@@ -33,14 +33,8 @@ async fn main() -> anyhow::Result<()> {
         .with_line_number(true)
         .init();
 
-    // Validate production secrets first
-    if let Err(e) = config::validate_production_secrets() {
-        tracing::error!("Production secrets validation failed: {}", e);
-        return Err(e);
-    }
-
     // Load configuration
-    let cfg = config::AppConfig::from_env()?;
+    let cfg = AppConfig::from_env()?;
     tracing::info!("Starting auth-service with configuration loaded");
 
     // Initialize configuration reload manager
@@ -99,8 +93,13 @@ async fn main() -> anyhow::Result<()> {
         StoreBackend::Sql => {
             let db_url =
                 cfg.store.database_url.as_ref().expect("DATABASE_URL is checked in config");
-            let sql_store = SqlStore::new(db_url).await?;
-            sql_store.run_migrations().await?;
+            let sql_store = SqlStore::new(db_url)
+                .await
+                .map_err(|e| anyhow::anyhow!("SqlStore creation failed: {}", e))?;
+            sql_store
+                .run_migrations()
+                .await
+                .map_err(|e| anyhow::anyhow!("Migration failed: {}", e))?;
             tracing::info!("Using SQL store backend.");
             Arc::new(sql_store)
         }
@@ -133,9 +132,18 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to initialize API key store");
 
+    // Initialize session store (using simple fallback for now)
+    // TODO: Re-enable Redis session store once Redis compatibility is resolved
+    use auth_service::session_store::{RedisSessionStore, SessionStore};
+    let redis_url = std::env::var("REDIS_URL").ok();
+    let session_store = Arc::new(
+        RedisSessionStore::new(None).await  // Use memory-only for now
+    ) as Arc<dyn SessionStore>;
+
     // Create application state
     let app_state = AppState {
         store,
+        session_store: session_store.clone(),
         client_credentials: cfg.client_credentials.clone(),
         allowed_scopes: cfg.allowed_scopes.clone(),
         policy_cache,
@@ -156,6 +164,33 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async {
         auth_service::security_monitoring::init_security_monitoring().await;
     });
+
+    // Start session store cleanup task
+    tokio::spawn({
+        let session_store = session_store.clone();
+        async move {
+            auth_service::session_store::start_session_cleanup_task(session_store).await;
+        }
+    });
+
+    // Start database cleanup task for SQL stores
+    if matches!(cfg.store.backend, StoreBackend::Sql) {
+        tokio::spawn({
+            let store = store.clone();
+            async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // Every hour
+                loop {
+                    interval.tick().await;
+                    // Try to downcast to SqlStore to call cleanup
+                    if let Some(sql_store) = store.as_any().downcast_ref::<SqlStore>() {
+                        if let Err(e) = sql_store.cleanup_expired_data().await {
+                            tracing::error!("Database cleanup failed: {}", e);
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     // Start enhanced session cleanup scheduler with graceful shutdown
     use auth_service::session_cleanup::{

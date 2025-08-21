@@ -1,0 +1,185 @@
+# AlertManager Rules for Rust Security Platform
+# Critical security alerts and operational monitoring
+
+groups:
+  - name: security.critical
+    rules:
+      # Authentication Failures
+      - alert: HighAuthenticationFailureRate
+        expr: rate(auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          component: auth-service
+        annotations:
+          summary: "High authentication failure rate detected"
+          description: "Authentication failure rate is {{ $value }} failures/sec over the last 5 minutes"
+          
+      # Brute Force Detection
+      - alert: PossibleBruteForceAttack
+        expr: rate(auth_failures_total[1m]) > 50
+        for: 30s
+        labels:
+          severity: critical
+          component: auth-service
+        annotations:
+          summary: "Possible brute force attack detected"
+          description: "Extremely high authentication failure rate: {{ $value }} failures/sec"
+          
+      # Token Validation Failures
+      - alert: HighTokenValidationFailures
+        expr: rate(token_validation_failures_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          component: auth-service
+        annotations:
+          summary: "High token validation failure rate"
+          description: "Token validation failures: {{ $value }} failures/sec"
+          
+      # Policy Evaluation Errors
+      - alert: PolicyEvaluationErrors
+        expr: rate(policy_evaluation_errors_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: critical
+          component: policy-service
+        annotations:
+          summary: "Policy evaluation errors detected"
+          description: "Policy evaluation error rate: {{ $value }} errors/sec"
+
+  - name: security.operational
+    rules:
+      # Service Availability
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.instance }} is down"
+          description: "Service {{ $labels.instance }} has been down for more than 30 seconds"
+          
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s"
+          
+      # Memory Usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+          
+      # Redis Connection Issues
+      - alert: RedisConnectionFailures
+        expr: rate(redis_connection_errors_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis connection failures detected"
+          description: "Redis connection error rate: {{ $value }} errors/sec"
+
+  - name: security.anomalies
+    rules:
+      # Unusual Login Patterns
+      - alert: UnusualLoginActivity
+        expr: (rate(successful_logins_total[1h]) - rate(successful_logins_total[1h] offset 24h)) / rate(successful_logins_total[1h] offset 24h) > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: auth-service
+        annotations:
+          summary: "Unusual login activity detected"
+          description: "Login rate is {{ $value | humanizePercentage }} higher than usual"
+          
+      # Geographic Anomalies
+      - alert: SuspiciousGeographicActivity
+        expr: increase(logins_from_new_countries_total[1h]) > 5
+        for: 0s
+        labels:
+          severity: warning
+          component: auth-service
+        annotations:
+          summary: "Suspicious geographic login activity"
+          description: "{{ $value }} logins from new countries in the last hour"
+          
+      # API Rate Limiting
+      - alert: RateLimitingTriggered
+        expr: rate(rate_limit_exceeded_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: warning
+          component: auth-service
+        annotations:
+          summary: "Rate limiting frequently triggered"
+          description: "Rate limits exceeded {{ $value }} times/sec"
+
+  - name: infrastructure.health
+    rules:
+      # Database Connectivity
+      - alert: DatabaseConnectionFailure
+        expr: database_connections_failed_total > 0
+        for: 30s
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection failures"
+          description: "{{ $value }} database connection failures detected"
+          
+      # Certificate Expiration
+      - alert: CertificateExpiringSoon
+        expr: (ssl_certificate_expiry_timestamp - time()) / 86400 < 30
+        for: 0s
+        labels:
+          severity: warning
+          component: tls
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "Certificate expires in {{ $value }} days"
+          
+      # Disk Space
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space usage is {{ $value | humanizePercentage }}"
+
+# Additional security-specific alerts for chaos engineering
+  - name: chaos.security
+    rules:
+      # Chaos Engineering Failures
+      - alert: ChaosExperimentSecurityImpact
+        expr: chaos_experiment_security_violations_total > 0
+        for: 0s
+        labels:
+          severity: critical
+          component: chaos-engineering
+        annotations:
+          summary: "Chaos experiment caused security violations"
+          description: "{{ $value }} security violations during chaos experiments"
+          
+      # Circuit Breaker Trips
+      - alert: CircuitBreakerTripped
+        expr: circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker tripped"
+          description: "Circuit breaker {{ $labels.service }} is open"

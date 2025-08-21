@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: rust-security
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: auth-service

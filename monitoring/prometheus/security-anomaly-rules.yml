@@ -1,0 +1,373 @@
+# Advanced Security Anomaly Detection Rules
+# These rules detect security threats, performance issues, and business logic violations
+
+groups:
+  - name: auth_security_anomalies
+    rules:
+      # Authentication Failure Spikes
+      - alert: AuthFailureSpike
+        expr: |
+          (
+            sum(rate(auth_authentication_attempts_detailed_total{result="failure"}[5m])) by (client_id)
+            /
+            sum(rate(auth_authentication_attempts_detailed_total[5m])) by (client_id)
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: auth-service
+        annotations:
+          summary: "High authentication failure rate for client {{ $labels.client_id }}"
+          description: "Client {{ $labels.client_id }} has {{ $value | humanizePercentage }} authentication failure rate over 5 minutes"
+          runbook_url: "https://runbooks.company.com/auth-failure-spike"
+          dashboard_url: "https://grafana.company.com/d/auth-service"
+
+      - alert: AuthFailureCriticalSpike
+        expr: |
+          (
+            sum(rate(auth_authentication_attempts_detailed_total{result="failure"}[5m])) by (client_id)
+            /
+            sum(rate(auth_authentication_attempts_detailed_total[5m])) by (client_id)
+          ) > 0.8
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          service: auth-service
+          page: "true"
+        annotations:
+          summary: "Critical authentication failure rate for client {{ $labels.client_id }}"
+          description: "Client {{ $labels.client_id }} has {{ $value | humanizePercentage }} authentication failure rate - possible attack"
+
+      # Suspicious Token Activity
+      - alert: TokenRevocationAnomaly
+        expr: |
+          sum(rate(auth_token_revocation_total{reason!="user_logout"}[10m])) by (client_id)
+          > 
+          10 * avg_over_time(
+            sum(rate(auth_token_revocation_total{reason!="user_logout"}[10m])) by (client_id)[1h:10m]
+          )
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+          service: auth-service
+        annotations:
+          summary: "Unusual token revocation activity for client {{ $labels.client_id }}"
+          description: "Token revocations are {{ $value }}x higher than normal for client {{ $labels.client_id }}"
+
+      - alert: UnknownClientIDSpike
+        expr: |
+          sum(rate(auth_http_requests_total{client_id="unknown"}[5m]))
+          >
+          5 * avg_over_time(sum(rate(auth_http_requests_total{client_id="unknown"}[5m]))[1h:5m])
+        for: 3m
+        labels:
+          severity: warning
+          category: security
+          service: auth-service
+        annotations:
+          summary: "Spike in requests from unknown client IDs"
+          description: "Requests from unknown clients are {{ $value }}x higher than baseline"
+
+      # MFA Bypass Attempts
+      - alert: MFABypassAttempts
+        expr: |
+          sum(rate(auth_mfa_operations_total{operation="challenge", result="failure"}[10m])) > 0
+          and
+          sum(rate(auth_authentication_attempts_detailed_total{result="success"}[10m])) > 0
+        for: 1m
+        labels:
+          severity: high
+          category: security
+          service: auth-service
+        annotations:
+          summary: "Potential MFA bypass attempts detected"
+          description: "Failed MFA challenges followed by successful authentications"
+
+      # Geographic Anomalies (requires geo data in logs)
+      - alert: GeographicAnomalyAuth
+        expr: |
+          count by (client_id) (
+            count by (client_id, ip_address) (
+              auth_authentication_attempts_detailed_total{result="success"}
+            ) > 0
+          ) > 3
+        for: 15m
+        labels:
+          severity: warning
+          category: security
+          service: auth-service
+        annotations:
+          summary: "Multiple geographic locations for client {{ $labels.client_id }}"
+          description: "Client {{ $labels.client_id }} authenticated from {{ $value }} different locations"
+
+  - name: policy_security_anomalies
+    rules:
+      # Policy Evaluation Anomalies
+      - alert: PolicyEvaluationErrorSpike
+        expr: |
+          sum(rate(policy_evaluation_errors_total[5m])) by (error_type)
+          >
+          5 * avg_over_time(sum(rate(policy_evaluation_errors_total[5m])) by (error_type)[1h:5m])
+        for: 3m
+        labels:
+          severity: warning
+          category: security
+          service: policy-service
+        annotations:
+          summary: "Policy evaluation error spike: {{ $labels.error_type }}"
+          description: "Policy errors of type {{ $labels.error_type }} are {{ $value }}x higher than normal"
+
+      # Authorization Decision Anomalies
+      - alert: UnusualDenyRate
+        expr: |
+          (
+            sum(rate(policy_authorization_requests_total{decision="Deny"}[10m]))
+            /
+            sum(rate(policy_authorization_requests_total[10m]))
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+          service: policy-service
+        annotations:
+          summary: "Unusually high authorization denial rate"
+          description: "{{ $value | humanizePercentage }} of authorization requests are being denied"
+
+      - alert: SuspiciousResourceAccess
+        expr: |
+          sum(rate(policy_authorization_requests_total{decision="Allow"}[10m])) by (resource_type, principal_type)
+          >
+          10 * avg_over_time(
+            sum(rate(policy_authorization_requests_total{decision="Allow"}[10m])) by (resource_type, principal_type)[1h:10m]
+          )
+        for: 10m
+        labels:
+          severity: warning
+          category: security
+          service: policy-service
+        annotations:
+          summary: "Suspicious resource access pattern"
+          description: "{{ $labels.principal_type }} accessing {{ $labels.resource_type }} at {{ $value }}x normal rate"
+
+      # Policy Tampering Detection
+      - alert: PolicyReloadFailure
+        expr: |
+          sum(rate(policy_reload_total{result="failure"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          service: policy-service
+        annotations:
+          summary: "Policy reload failures detected"
+          description: "Policy reloads are failing - possible tampering or corruption"
+
+  - name: business_logic_anomalies
+    rules:
+      # Abnormal Business Patterns
+      - alert: TokenLifecycleAnomaly
+        expr: |
+          (
+            sum(rate(auth_token_issuance_total{result="success"}[10m]))
+            /
+            sum(rate(auth_token_validation_total{result="success"}[10m]))
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+          service: auth-service
+        annotations:
+          summary: "Unusual token issuance to validation ratio"
+          description: "Token issuance rate is {{ $value }}x validation rate"
+
+      - alert: PolicyComplexityIncrease
+        expr: |
+          avg_over_time(policy_policies_evaluated_per_request[10m])
+          >
+          2 * avg_over_time(policy_policies_evaluated_per_request[1h])
+        for: 10m
+        labels:
+          severity: info
+          category: performance
+          service: policy-service
+        annotations:
+          summary: "Policy evaluation complexity has increased"
+          description: "Average policies per request: {{ $value }}"
+
+  - name: performance_anomalies
+    rules:
+      # Latency Anomalies
+      - alert: AuthLatencyAnomaly
+        expr: |
+          histogram_quantile(0.95, sum(rate(auth_http_request_duration_seconds_bucket[5m])) by (le))
+          >
+          2 * histogram_quantile(0.95, sum(rate(auth_http_request_duration_seconds_bucket[5m]) offset 1h) by (le))
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: auth-service
+        annotations:
+          summary: "Auth service latency anomaly"
+          description: "P95 latency {{ $value }}s is 2x higher than 1 hour ago"
+
+      - alert: PolicyLatencyAnomaly
+        expr: |
+          histogram_quantile(0.95, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le))
+          >
+          2 * histogram_quantile(0.95, sum(rate(policy_authorization_duration_seconds_bucket[5m] offset 1h)) by (le))
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+          service: policy-service
+        annotations:
+          summary: "Policy authorization latency anomaly"
+          description: "P95 authorization latency {{ $value }}s is 2x higher than 1 hour ago"
+
+      # Cache Performance Degradation
+      - alert: CacheHitRateDropped
+        expr: |
+          (
+            sum(rate(auth_cache_operations_total{result="hit"}[10m]))
+            /
+            sum(rate(auth_cache_operations_total[10m]))
+          ) < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: auth-service
+        annotations:
+          summary: "Cache hit rate degradation"
+          description: "Cache hit rate dropped to {{ $value | humanizePercentage }}"
+
+  - name: infrastructure_anomalies
+    rules:
+      # Connection Health Issues
+      - alert: ConnectionHealthDegraded
+        expr: |
+          sum(auth_connection_health{status="healthy"}) by (connection_type)
+          <
+          count(auth_connection_health) by (connection_type)
+        for: 2m
+        labels:
+          severity: warning
+          category: infrastructure
+          service: auth-service
+        annotations:
+          summary: "Connection health degraded for {{ $labels.connection_type }}"
+          description: "Some {{ $labels.connection_type }} connections are unhealthy"
+
+      # Resource Exhaustion
+      - alert: MemoryUsageHigh
+        expr: |
+          auth_system_resources{resource_type="memory", unit="bytes"} > 1e9  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+          service: auth-service
+        annotations:
+          summary: "High memory usage in auth service"
+          description: "Memory usage: {{ $value | humanizeBytes }}"
+
+      - alert: BackgroundTaskFailures
+        expr: |
+          sum(rate(auth_background_task_total{result="failure"}[10m])) by (task_type) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+          service: auth-service
+        annotations:
+          summary: "Background task failures: {{ $labels.task_type }}"
+          description: "Background task {{ $labels.task_type }} is failing"
+
+  - name: slo_violations
+    rules:
+      # SLO Violation Tracking
+      - alert: AuthAvailabilitySLOViolation
+        expr: |
+          (
+            1 - (
+              sum(rate(auth_http_requests_total{status_code!~"5.."}[5m]))
+              /
+              sum(rate(auth_http_requests_total[5m]))
+            )
+          ) > 0.001  # 0.1% error rate threshold
+        for: 2m
+        labels:
+          severity: warning
+          category: slo
+          service: auth-service
+          slo_type: availability
+        annotations:
+          summary: "Auth service availability SLO violation"
+          description: "Error rate {{ $value | humanizePercentage }} exceeds 0.1% threshold"
+
+      - alert: AuthLatencySLOViolation
+        expr: |
+          histogram_quantile(0.99, sum(rate(auth_http_request_duration_seconds_bucket[5m])) by (le)) > 0.1
+        for: 1m
+        labels:
+          severity: warning
+          category: slo
+          service: auth-service
+          slo_type: latency
+        annotations:
+          summary: "Auth service latency SLO violation"
+          description: "P99 latency {{ $value }}s exceeds 100ms threshold"
+
+      - alert: PolicyAuthorizationSLOViolation
+        expr: |
+          histogram_quantile(0.95, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le)) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: slo
+          service: policy-service
+          slo_type: latency
+        annotations:
+          summary: "Policy authorization latency SLO violation"
+          description: "P95 authorization latency {{ $value }}s exceeds 50ms threshold"
+
+  - name: error_budget_burn
+    rules:
+      # Error Budget Burn Rate Alerts
+      - alert: ErrorBudgetBurnRateHigh
+        expr: |
+          (
+            sum(rate(auth_slo_violations_total[1h]))
+            /
+            (30 * 24)  # 30 days in hours
+          ) > 14.4  # 2% of monthly budget in 1 hour
+        for: 5m
+        labels:
+          severity: page
+          category: slo
+          service: auth-service
+        annotations:
+          summary: "High error budget burn rate"
+          description: "Burning through error budget at {{ $value }}x normal rate"
+
+      - alert: ErrorBudgetBurnRateMedium
+        expr: |
+          (
+            sum(rate(auth_slo_violations_total[6h]))
+            /
+            (30 * 24 / 6)  # 30 days worth in 6 hour windows
+          ) > 6  # 5% of monthly budget in 6 hours
+        for: 15m
+        labels:
+          severity: ticket
+          category: slo
+          service: auth-service
+        annotations:
+          summary: "Medium error budget burn rate"
+          description: "Error budget burning at {{ $value }}x normal rate over 6 hours"

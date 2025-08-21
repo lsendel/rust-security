@@ -1,0 +1,197 @@
+# Network Chaos Experiments for Rust Security Platform
+# Tests network resilience and fault tolerance
+
+# Network Latency Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: auth-service-network-latency
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "network-latency"
+    target-service: "auth-service"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  delay:
+    latency: 200ms
+    correlation: "25"
+    jitter: 10ms
+  duration: 5m
+  scheduler:
+    cron: "@weekly"
+    historyLimit: 5
+  
+---
+
+# Network Packet Loss Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: policy-service-packet-loss
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "packet-loss"
+    target-service: "policy-service"
+    severity: "high"
+    automation: "enabled"
+spec:
+  action: loss
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: policy-service
+  loss:
+    loss: "10%"
+    correlation: "25"
+  duration: 3m
+  scheduler:
+    cron: "0 2 * * 1"  # Every Monday at 2 AM
+    historyLimit: 10
+
+---
+
+# Network Bandwidth Limit Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: redis-bandwidth-limit
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "bandwidth-limit"
+    target-service: "redis"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  action: bandwidth
+  mode: all
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: redis
+  bandwidth:
+    rate: "1mbps"
+    limit: 20971520
+    buffer: 10000
+  duration: 4m
+  scheduler:
+    cron: "0 3 * * 2"  # Every Tuesday at 3 AM
+
+---
+
+# Network Partition Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: service-partition-test
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "partition"
+    target-service: "all-services"
+    severity: "critical"
+    automation: "manual"  # Requires manual approval
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      tier: backend
+  direction: both
+  duration: 2m
+  # No scheduler - manual execution only
+
+---
+
+# DNS Failure Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: DNSChaos
+metadata:
+  name: dns-resolution-failure
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "dns-failure"
+    target-service: "auth-service"
+    severity: "high"
+    automation: "enabled"
+spec:
+  action: error
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  patterns:
+    - "policy-service.*"
+    - "redis.*"
+  duration: 1m
+  scheduler:
+    cron: "0 4 * * 3"  # Every Wednesday at 4 AM
+
+---
+
+# Network Duplicate Packets
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: duplicate-packets-test
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "duplicate"
+    target-service: "auth-service"
+    severity: "low"
+    automation: "enabled"
+spec:
+  action: duplicate
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  duplicate:
+    duplicate: "25%"
+    correlation: "25"
+  duration: 3m
+  scheduler:
+    cron: "0 5 * * 4"  # Every Thursday at 5 AM
+
+---
+
+# Network Corruption Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: packet-corruption-test
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "corrupt"
+    target-service: "policy-service"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  action: corrupt
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: policy-service
+  corrupt:
+    corrupt: "1%"
+    correlation: "25"
+  duration: 2m
+  scheduler:
+    cron: "0 6 * * 5"  # Every Friday at 6 AM

@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-engineering
+  labels:
+    security.rust-security.com/monitoring: "enabled"
+    chaos-mesh.org/inject: "enabled"
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+  annotations:
+    security.rust-security.com/chaos-testing: "true"
+    security.rust-security.com/environment: "non-production"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chaos-engineering-config
+  namespace: chaos-engineering
+data:
+  safety-guardrails.yaml: |
+    safety:
+      max_concurrent_experiments: 3
+      allowed_namespaces:
+        - rust-security-dev
+        - rust-security-staging
+      forbidden_namespaces:
+        - rust-security-prod
+        - kube-system
+        - istio-system
+      max_experiment_duration: "30m"
+      recovery_timeout: "5m"
+      monitoring_required: true
+    
+    guardrails:
+      network:
+        max_packet_loss: 50
+        max_latency_ms: 5000
+        max_bandwidth_limit: "10Mbps"
+      
+      pod:
+        max_kill_percentage: 50
+        min_healthy_replicas: 1
+        memory_stress_limit: "80%"
+        cpu_stress_limit: "80%"
+      
+      io:
+        max_io_delay_ms: 1000
+        max_io_error_percentage: 30
+      
+      dns:
+        max_dns_failure_percentage: 50
+    
+    notifications:
+      webhook_url: "http://alertmanager.monitoring.svc.cluster.local:9093/api/v1/alerts"
+      slack_webhook: "${SLACK_WEBHOOK_URL}"
+      email_alerts: true

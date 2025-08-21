@@ -1,0 +1,275 @@
+# Pod Chaos Experiments for Rust Security Platform
+# Tests pod resilience and service recovery
+
+# Pod Kill Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: auth-service-pod-kill
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "pod-kill"
+    target-service: "auth-service"
+    severity: "high"
+    automation: "enabled"
+spec:
+  action: pod-kill
+  mode: random-max-percent
+  value: "50%"
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  duration: 30s
+  scheduler:
+    cron: "0 1 * * 1-5"  # Weekdays at 1 AM
+    historyLimit: 7
+
+---
+
+# Pod Failure Experiment (Pause Container)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: policy-service-pod-failure
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "pod-failure"
+    target-service: "policy-service"
+    severity: "high"
+    automation: "enabled"
+spec:
+  action: pod-failure
+  mode: fixed-percent
+  value: "33%"
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: policy-service
+  duration: 2m
+  scheduler:
+    cron: "15 1 * * 1-5"  # Weekdays at 1:15 AM
+
+---
+
+# Container Kill Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: redis-container-kill
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "container-kill"
+    target-service: "redis"
+    severity: "critical"
+    automation: "enabled"
+spec:
+  action: container-kill
+  mode: one
+  containerNames:
+    - redis
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: redis
+  scheduler:
+    cron: "30 1 * * 2,4"  # Tuesday and Thursday at 1:30 AM
+
+---
+
+# Pod Memory Stress Test
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: auth-service-memory-stress
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "memory-stress"
+    target-service: "auth-service"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  stressors:
+    memory:
+      size: 256MB
+      workers: 1
+  duration: 3m
+  scheduler:
+    cron: "0 2 * * 1,3,5"  # Monday, Wednesday, Friday at 2 AM
+
+---
+
+# Pod CPU Stress Test
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: policy-service-cpu-stress
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "cpu-stress"
+    target-service: "policy-service"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: policy-service
+  stressors:
+    cpu:
+      workers: 2
+      load: 80
+  duration: 4m
+  scheduler:
+    cron: "15 2 * * 2,4,6"  # Tuesday, Thursday, Saturday at 2:15 AM
+
+---
+
+# IO Delay Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: redis-io-delay
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "io-delay"
+    target-service: "redis"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  action: delay
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: redis
+  volumePath: /data
+  path: /data/**/*
+  delay: 100ms
+  percent: 50
+  duration: 2m
+  scheduler:
+    cron: "30 2 * * 1,3,5"
+
+---
+
+# IO Fault Injection
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: auth-service-io-fault
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "io-fault"
+    target-service: "auth-service"
+    severity: "high"
+    automation: "enabled"
+spec:
+  action: fault
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  volumePath: /tmp
+  path: /tmp/**/*
+  errno: 5  # EIO (I/O error)
+  percent: 10
+  duration: 1m
+  scheduler:
+    cron: "45 2 * * 2,4"
+
+---
+
+# Disk Fill Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: IOChaos
+metadata:
+  name: disk-fill-test
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "disk-fill"
+    target-service: "auth-service"
+    severity: "critical"
+    automation: "manual"  # Requires approval
+spec:
+  action: fault
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  volumePath: /tmp
+  path: /tmp/**/*
+  errno: 28  # ENOSPC (No space left on device)
+  percent: 100
+  duration: 30s
+  # Manual execution only for critical experiments
+
+---
+
+# JVM Exception Injection (for future Java components)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: JVMChaos
+metadata:
+  name: java-service-exception
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "jvm-exception"
+    target-service: "java-service"
+    severity: "medium"
+    automation: "disabled"  # Future use
+spec:
+  action: exception
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      runtime: java
+  class: "com.example.Service"
+  method: "processRequest"
+  exception: "java.lang.RuntimeException"
+  duration: 1m
+  # Disabled until Java services are added
+
+---
+
+# Time Chaos Experiment
+apiVersion: chaos-mesh.org/v1alpha1
+kind: TimeChaos
+metadata:
+  name: time-skew-test
+  namespace: chaos-engineering
+  labels:
+    experiment-type: "time-chaos"
+    target-service: "auth-service"
+    severity: "low"
+    automation: "enabled"
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - rust-security-dev
+    labelSelectors:
+      app: auth-service
+  timeOffset: "-10m"  # Set time back by 10 minutes
+  clockIds:
+    - CLOCK_REALTIME
+  duration: 2m
+  scheduler:
+    cron: "0 3 * * 7"  # Sunday at 3 AM

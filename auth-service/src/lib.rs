@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::pii_protection::redact_log;
 
+use argon2::PasswordVerifier;
 use axum::{
     extract::{Form, Path, Query, State},
     http::StatusCode,
@@ -20,7 +21,6 @@ use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
-use argon2::PasswordVerifier;
 use tower_http::{
     cors::CorsLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
@@ -103,6 +103,7 @@ pub mod mfa;
 pub mod otp_provider;
 pub mod session_cleanup;
 pub mod session_manager;
+pub mod session_store;
 // pub mod token_store; // Replaced by store
 pub mod webauthn;
 
@@ -119,6 +120,7 @@ pub mod scim_rbac;
 // Security modules
 pub mod admin_middleware;
 pub mod auth_failure_logging;
+pub mod business_metrics;
 pub mod metrics;
 #[cfg(test)]
 pub mod pii_audit_tests;
@@ -716,6 +718,7 @@ use common::{Store, TokenRecord};
 #[derive(Clone)]
 pub struct AppState {
     pub store: Arc<dyn Store>,
+    pub session_store: Arc<dyn crate::session_store::SessionStore>,
     pub client_credentials: HashMap<String, String>,
     pub allowed_scopes: Vec<String>,
     pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
@@ -838,7 +841,7 @@ pub async fn authorize_check(
             "id": principal_id,
             "attrs": {}
         });
-        (principal, req.context.unwrap_or_else(|| serde_json::json!({})))
+        (principal, serde_json::json!({}))
     } else if auth_header.starts_with("sk_live_") {
         // API Key-based authentication
         let api_key_str = auth_header;
@@ -856,7 +859,7 @@ pub async fn authorize_check(
                     "id": api_key.client_id,
                     "attrs": {}
                 });
-                let mut api_key_context = req.context.unwrap_or_else(|| serde_json::json!({}));
+                let mut api_key_context = serde_json::json!({});
                 if let Some(permissions) = api_key.permissions {
                     let perms: Vec<&str> = permissions.split(',').collect();
                     api_key_context["permissions"] = serde_json::json!(perms);
@@ -1484,8 +1487,8 @@ pub async fn oauth_authorize(
         redirect_uri: auth_code.redirect_uri.clone(),
         nonce: None, // Not handled in this flow currently
         scope: auth_code.scope.clone().unwrap_or_default(),
-        pkce_challenge: auth_code.pkce_challenge.clone(),
-        pkce_method: auth_code.pkce_challenge_method.clone(),
+        pkce_challenge: auth_code.code_challenge.clone(),
+        pkce_method: auth_code.code_challenge_method.clone(),
         user_id: None, // Not handled in this flow currently
         exp: auth_code.expires_at,
     };
@@ -2000,10 +2003,10 @@ pub async fn issue_token(
             }
 
             // Issue tokens
-            let make_id_token = auth_code.scope.as_ref().is_some_and(|s| s.contains("openid"));
+            let make_id_token = auth_code.scope.contains("openid");
             let res = issue_new_token(
                 &state,
-                auth_code.scope.clone(),
+                Some(auth_code.scope.clone()),
                 Some(auth_code.client_id.clone()),
                 make_id_token,
                 None,
@@ -2025,7 +2028,7 @@ pub async fn issue_token(
                         ),
                         (
                             "has_scope".to_string(),
-                            serde_json::Value::Bool(auth_code.scope.is_some()),
+                            serde_json::Value::Bool(!auth_code.scope.is_empty()),
                         ),
                         (
                             "had_pkce".to_string(),
@@ -2041,7 +2044,7 @@ pub async fn issue_token(
                 "authorization_code_exchanged",
                 serde_json::json!({
                     "client_id": auth_code.client_id,
-                    "has_scope": auth_code.scope.is_some(),
+                    "has_scope": !auth_code.scope.is_empty(),
                     "had_pkce": auth_code.pkce_challenge.is_some(),
                     "request_id": headers.get("x-request-id").and_then(|v| v.to_str().ok())
                 }),

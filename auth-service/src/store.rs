@@ -1,20 +1,24 @@
-use std::error::Error as StdError;
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
+use deadpool_redis::{Config, Pool, Runtime};
 use std::collections::HashMap;
+use std::error::Error as StdError;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
+use tracing::{info, warn, error};
 
 // This new struct encapsulates all storage logic.
 // It maintains the original behavior: in-memory for users/groups,
 // and a hybrid in-memory/Redis for tokens and auth codes.
 #[derive(Clone)]
 pub struct HybridStore {
-    // Redis connection, optional
-    redis: Option<redis::aio::ConnectionManager>,
-    // In-memory stores
+    // Redis connection pool with deadpool for high performance
+    redis_pool: Option<Pool>,
+    // In-memory stores for users/groups (will migrate to SQL in production)
     users: Arc<RwLock<HashMap<String, ScimUser>>>,
     groups: Arc<RwLock<HashMap<String, ScimGroup>>>,
+    // Fallback in-memory stores for when Redis is unavailable
     auth_codes: Arc<RwLock<HashMap<String, String>>>,
     tokens: Arc<RwLock<HashMap<String, TokenRecord>>>,
     refresh_tokens: Arc<RwLock<HashMap<String, String>>>, // Maps refresh_token -> access_token
@@ -23,19 +27,10 @@ pub struct HybridStore {
 
 impl HybridStore {
     pub async fn new() -> Self {
-        let redis_url = std::env::var("REDIS_URL").ok();
-        let redis = if let Some(url) = redis_url {
-            if let Ok(client) = redis::Client::open(url) {
-                client.get_connection_manager().await.ok()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
+        let redis_pool = Self::create_redis_pool().await;
+        
         Self {
-            redis,
+            redis_pool,
             users: Arc::new(RwLock::new(HashMap::new())),
             groups: Arc::new(RwLock::new(HashMap::new())),
             auth_codes: Arc::new(RwLock::new(HashMap::new())),
@@ -44,20 +39,69 @@ impl HybridStore {
             refresh_reuse_markers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+    
+    async fn create_redis_pool() -> Option<Pool> {
+        let redis_url = std::env::var("REDIS_URL").ok()?;
+        
+        info!("Initializing Redis connection pool");
+        
+        let config = Config::from_url(&redis_url);
+        let pool = config.create_pool(Some(Runtime::Tokio1)).ok()?;
+        
+        // Test the connection
+        match pool.get().await {
+            Ok(mut conn) => {
+                match redis::cmd("PING").query_async::<_, String>(&mut *conn).await {
+                    Ok(_) => {
+                        info!("Redis connection pool initialized successfully");
+                        Some(pool)
+                    }
+                    Err(e) => {
+                        error!("Redis connection test failed: {}", e);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to get Redis connection from pool: {}", e);
+                None
+            }
+        }
+    }
 
-    fn redis_conn(&self) -> Option<redis::aio::ConnectionManager> {
-        self.redis.clone()
+    async fn get_redis_connection(&self) -> Option<deadpool_redis::Connection> {
+        match &self.redis_pool {
+            Some(pool) => {
+                match pool.get().await {
+                    Ok(conn) => Some(conn),
+                    Err(e) => {
+                        warn!("Failed to get Redis connection from pool: {}", e);
+                        None
+                    }
+                }
+            }
+            None => None,
+        }
     }
 }
 
 #[async_trait]
 impl Store for HybridStore {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     // === User Management (In-Memory) ===
-    async fn get_user(&self, id: &str) -> Result<Option<ScimUser>, Box<dyn StdError + Send + Sync>> {
+    async fn get_user(
+        &self,
+        id: &str,
+    ) -> Result<Option<ScimUser>, Box<dyn StdError + Send + Sync>> {
         Ok(self.users.read().await.get(id).cloned())
     }
 
-    async fn create_user(&self, user: &ScimUser) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
+    async fn create_user(
+        &self,
+        user: &ScimUser,
+    ) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
         let mut u = user.clone();
         if u.id.is_empty() {
             u.id = uuid::Uuid::new_v4().to_string();
@@ -66,13 +110,19 @@ impl Store for HybridStore {
         Ok(u)
     }
 
-    async fn list_users(&self, _filter: Option<&str>) -> Result<Vec<ScimUser>, Box<dyn StdError + Send + Sync>> {
+    async fn list_users(
+        &self,
+        _filter: Option<&str>,
+    ) -> Result<Vec<ScimUser>, Box<dyn StdError + Send + Sync>> {
         // Note: The original filter logic was complex and tied to the handler.
         // For this refactoring, we'll return all users and expect filtering to happen at a higher level.
         Ok(self.users.read().await.values().cloned().collect())
     }
 
-    async fn update_user(&self, user: &ScimUser) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
+    async fn update_user(
+        &self,
+        user: &ScimUser,
+    ) -> Result<ScimUser, Box<dyn StdError + Send + Sync>> {
         self.users.write().await.insert(user.id.clone(), user.clone());
         Ok(user.clone())
     }
@@ -83,11 +133,17 @@ impl Store for HybridStore {
     }
 
     // === Group Management (In-Memory) ===
-    async fn get_group(&self, id: &str) -> Result<Option<ScimGroup>, Box<dyn StdError + Send + Sync>> {
+    async fn get_group(
+        &self,
+        id: &str,
+    ) -> Result<Option<ScimGroup>, Box<dyn StdError + Send + Sync>> {
         Ok(self.groups.read().await.get(id).cloned())
     }
 
-    async fn create_group(&self, group: &ScimGroup) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
+    async fn create_group(
+        &self,
+        group: &ScimGroup,
+    ) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
         let mut g = group.clone();
         if g.id.is_empty() {
             g.id = uuid::Uuid::new_v4().to_string();
@@ -96,11 +152,17 @@ impl Store for HybridStore {
         Ok(g)
     }
 
-    async fn list_groups(&self, _filter: Option<&str>) -> Result<Vec<ScimGroup>, Box<dyn StdError + Send + Sync>> {
+    async fn list_groups(
+        &self,
+        _filter: Option<&str>,
+    ) -> Result<Vec<ScimGroup>, Box<dyn StdError + Send + Sync>> {
         Ok(self.groups.read().await.values().cloned().collect())
     }
 
-    async fn update_group(&self, group: &ScimGroup) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
+    async fn update_group(
+        &self,
+        group: &ScimGroup,
+    ) -> Result<ScimGroup, Box<dyn StdError + Send + Sync>> {
         self.groups.write().await.insert(group.id.clone(), group.clone());
         Ok(group.clone())
     }
@@ -118,39 +180,60 @@ impl Store for HybridStore {
         ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let record_json = serde_json::to_string(record)?;
-        // In-memory
-        self.auth_codes.write().await.insert(code.to_string(), record_json.clone());
-        // Redis if available
-        if let Some(mut conn) = self.redis_conn() {
+        
+        // Store in Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("authcode:{}", code);
-            let _: () = redis::Cmd::set_ex(&key, record_json, ttl_secs)
-                .query_async(&mut conn)
-                .await
-                .unwrap_or(());
+            // Use the simpler Redis interface
+            let result: Result<(), _> = redis::cmd("SETEX")
+                .arg(&key)
+                .arg(ttl_secs)
+                .arg(&record_json)
+                .query_async(&mut *conn)
+                .await;
+                
+            match result {
+                Ok(_) => {
+                    // Successfully stored in Redis, also store in memory as backup
+                    self.auth_codes.write().await.insert(code.to_string(), record_json);
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Failed to store auth code in Redis: {}", e);
+                }
+            }
         }
+        
+        // Fallback to in-memory storage
+        warn!("Storing auth code in memory as fallback");
+        self.auth_codes.write().await.insert(code.to_string(), record_json);
         Ok(())
     }
 
-    async fn consume_auth_code(&self, code: &str) -> Result<Option<AuthCodeRecord>, Box<dyn StdError + Send + Sync>> {
-        let record_json: Option<String> = {
-            // Try Redis first
-            if let Some(mut conn) = self.redis_conn() {
-                let key = format!("authcode:{}", code);
-                let val: Option<String> =
-                    redis::Cmd::get_del(&key).query_async(&mut conn).await.ok();
-                if val.is_some() {
-                    val
-                } else {
-                    // Fallback to in-memory
-                    self.auth_codes.write().await.remove(code)
+    async fn consume_auth_code(
+        &self,
+        code: &str,
+    ) -> Result<Option<AuthCodeRecord>, Box<dyn StdError + Send + Sync>> {
+        // Try Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
+            let key = format!("authcode:{}", code);
+            match redis::Cmd::get_del(&key).query_async::<_, Option<String>>(&mut *conn).await {
+                Ok(Some(json)) => {
+                    // Also remove from memory backup
+                    self.auth_codes.write().await.remove(code);
+                    return Ok(serde_json::from_str(&json)?);
                 }
-            } else {
-                // In-memory only
-                self.auth_codes.write().await.remove(code)
+                Ok(None) => {
+                    // Not found in Redis, try memory fallback
+                }
+                Err(e) => {
+                    warn!("Failed to consume auth code from Redis: {}", e);
+                }
             }
-        };
-
-        if let Some(json) = record_json {
+        }
+        
+        // Fallback to in-memory storage
+        if let Some(json) = self.auth_codes.write().await.remove(code) {
             Ok(serde_json::from_str(&json)?)
         } else {
             Ok(None)
@@ -158,15 +241,26 @@ impl Store for HybridStore {
     }
 
     // === Token Management (Hybrid) ===
-    async fn get_token_record(&self, token: &str) -> Result<Option<TokenRecord>, Box<dyn StdError + Send + Sync>> {
-        // Try Redis first
-        if let Some(mut conn) = self.redis_conn() {
+    async fn get_token_record(
+        &self,
+        token: &str,
+    ) -> Result<Option<TokenRecord>, Box<dyn StdError + Send + Sync>> {
+        // Try Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("token_record:{}", token);
-            let val: Option<String> = redis::Cmd::get(&key).query_async(&mut conn).await.ok();
-            if let Some(json) = val {
-                return Ok(serde_json::from_str(&json)?);
+            match redis::Cmd::get(&key).query_async::<_, Option<String>>(&mut *conn).await {
+                Ok(Some(json)) => {
+                    return Ok(serde_json::from_str(&json)?);
+                }
+                Ok(None) => {
+                    // Not found in Redis, try memory fallback
+                }
+                Err(e) => {
+                    warn!("Failed to get token record from Redis: {}", e);
+                }
             }
         }
+        
         // Fallback to in-memory
         Ok(self.tokens.read().await.get(token).cloned())
     }
@@ -177,23 +271,43 @@ impl Store for HybridStore {
         record: &TokenRecord,
         ttl_secs: Option<u64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // In-memory
-        self.tokens.write().await.insert(token.to_string(), record.clone());
-        // Redis if available
-        if let Some(mut conn) = self.redis_conn() {
+        let record_json = serde_json::to_string(record)?;
+        
+        // Store in Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("token_record:{}", token);
-            let record_json = serde_json::to_string(record)?;
-            if let Some(ttl) = ttl_secs {
-                let _: () =
-                    redis::Cmd::set_ex(&key, record_json, ttl).query_async(&mut conn).await?;
+            let redis_result = if let Some(ttl) = ttl_secs {
+                redis::Cmd::set_ex(&key, &record_json, ttl)
+                    .query_async::<_, ()>(&mut *conn)
+                    .await
             } else {
-                let _: () = redis::Cmd::set(&key, record_json).query_async(&mut conn).await?;
+                redis::Cmd::set(&key, &record_json)
+                    .query_async::<_, ()>(&mut *conn)
+                    .await
+            };
+            
+            match redis_result {
+                Ok(_) => {
+                    // Successfully stored in Redis, also store in memory as backup
+                    self.tokens.write().await.insert(token.to_string(), record.clone());
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Failed to store token record in Redis: {}", e);
+                }
             }
         }
+        
+        // Fallback to in-memory storage
+        warn!("Storing token record in memory as fallback");
+        self.tokens.write().await.insert(token.to_string(), record.clone());
         Ok(())
     }
 
-    async fn revoke_token(&self, token: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn revoke_token(
+        &self,
+        token: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(mut record) = self.get_token_record(token).await? {
             record.active = false;
             self.set_token_record(token, &record, None).await?;
@@ -208,59 +322,109 @@ impl Store for HybridStore {
         access_token: &str,
         ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
-        // In-memory
+        // Store in Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
+            let key = format!("refresh_token:{}", refresh_token);
+            match redis::Cmd::set_ex(&key, access_token, ttl_secs)
+                .query_async::<_, ()>(&mut *conn)
+                .await 
+            {
+                Ok(_) => {
+                    // Successfully stored in Redis, also store in memory as backup
+                    self.refresh_tokens
+                        .write()
+                        .await
+                        .insert(refresh_token.to_string(), access_token.to_string());
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("Failed to store refresh token in Redis: {}", e);
+                }
+            }
+        }
+        
+        // Fallback to in-memory storage
+        warn!("Storing refresh token in memory as fallback");
         self.refresh_tokens
             .write()
             .await
             .insert(refresh_token.to_string(), access_token.to_string());
-        // Redis
-        if let Some(mut conn) = self.redis_conn() {
-            let key = format!("refresh_token:{}", refresh_token);
-            let _: () =
-                redis::Cmd::set_ex(&key, access_token, ttl_secs).query_async(&mut conn).await?;
-        }
         Ok(())
     }
 
-    async fn consume_refresh_token(&self, refresh_token: &str) -> Result<Option<String>, Box<dyn StdError + Send + Sync>> {
-        let access_token: Option<String> = {
-            if let Some(mut conn) = self.redis_conn() {
-                let key = format!("refresh_token:{}", refresh_token);
-                redis::Cmd::get_del(&key).query_async(&mut conn).await.ok()
-            } else {
-                self.refresh_tokens.write().await.remove(refresh_token)
+    async fn consume_refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<Option<String>, Box<dyn StdError + Send + Sync>> {
+        let mut access_token: Option<String> = None;
+        
+        // Try Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
+            let key = format!("refresh_token:{}", refresh_token);
+            match redis::Cmd::get_del(&key).query_async::<_, Option<String>>(&mut *conn).await {
+                Ok(token) => {
+                    access_token = token;
+                    // Also remove from memory backup
+                    self.refresh_tokens.write().await.remove(refresh_token);
+                }
+                Err(e) => {
+                    warn!("Failed to consume refresh token from Redis: {}", e);
+                }
             }
-        };
+        }
+        
+        // Fallback to in-memory storage if Redis failed or returned None
+        if access_token.is_none() {
+            access_token = self.refresh_tokens.write().await.remove(refresh_token);
+        }
 
         if access_token.is_some() {
-            // Mark as reused
+            // Mark as reused for security monitoring
             self.refresh_reuse_markers.write().await.insert(refresh_token.to_string(), ());
-            if let Some(mut conn) = self.redis_conn() {
+            
+            if let Some(mut conn) = self.get_redis_connection().await {
                 let key = format!("refresh_reused:{}", refresh_token);
                 // Reuse detection window 10 minutes
-                let _: () = redis::Cmd::set_ex(&key, 1, 600).query_async(&mut conn).await?;
+                let _: Result<(), _> = redis::Cmd::set_ex(&key, 1, 600)
+                    .query_async(&mut *conn)
+                    .await;
             }
         }
 
         Ok(access_token)
     }
 
-    async fn is_refresh_reused(&self, refresh_token: &str) -> Result<bool, Box<dyn StdError + Send + Sync>> {
-        if let Some(mut conn) = self.redis_conn() {
+    async fn is_refresh_reused(
+        &self,
+        refresh_token: &str,
+    ) -> Result<bool, Box<dyn StdError + Send + Sync>> {
+        // Check Redis first (primary storage)
+        if let Some(mut conn) = self.get_redis_connection().await {
             let key = format!("refresh_reused:{}", refresh_token);
-            Ok(redis::Cmd::exists(&key).query_async(&mut conn).await?)
-        } else {
-            Ok(self.refresh_reuse_markers.read().await.contains_key(refresh_token))
+            match redis::Cmd::exists(&key).query_async::<_, bool>(&mut *conn).await {
+                Ok(exists) => return Ok(exists),
+                Err(e) => {
+                    warn!("Failed to check refresh token reuse in Redis: {}", e);
+                }
+            }
         }
+        
+        // Fallback to in-memory check
+        Ok(self.refresh_reuse_markers.read().await.contains_key(refresh_token))
     }
 
     // === Health Check ===
     async fn health_check(&self) -> Result<bool, Box<dyn StdError + Send + Sync>> {
-        if let Some(mut conn) = self.redis_conn() {
-            let result: Result<String, _> = redis::cmd("PING").query_async(&mut conn).await;
-            Ok(result.is_ok())
+        if let Some(mut conn) = self.get_redis_connection().await {
+            match redis::cmd("PING").query_async::<_, String>(&mut *conn).await {
+                Ok(_) => Ok(true),
+                Err(e) => {
+                    warn!("Redis health check failed: {}", e);
+                    Ok(false) // Redis is down but service can still work with in-memory fallback
+                }
+            }
         } else {
-            // In-memory store is always healthy
+            // In-memory store is always healthy, but Redis is unavailable
             Ok(true)
         }
     }
@@ -272,22 +436,30 @@ impl Store for HybridStore {
         let groups_total = self.groups.read().await.len() as u64;
 
         let (tokens_total, active_tokens, auth_codes_total) =
-            if let Some(mut conn) = self.redis_conn() {
+            if let Some(mut conn) = self.get_redis_connection().await {
                 // Use SCAN for a more accurate count without blocking the server.
                 let mut tokens_count = 0;
-                {
-                    let mut token_iter: redis::AsyncIter<'_, String> =
-                        conn.scan_match("token_record:*").await?;
-                    while let Some(_) = token_iter.next_item().await {
-                        tokens_count += 1;
+                match conn.scan_match::<_, String>("token_record:*").await {
+                    Ok(mut token_iter) => {
+                        while let Some(_) = token_iter.next_item().await {
+                            tokens_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to scan Redis for token metrics: {}", e);
                     }
                 }
 
-                let mut auth_code_iter: redis::AsyncIter<'_, String> =
-                    conn.scan_match("authcode:*").await?;
                 let mut auth_codes_count = 0;
-                while let Some(_) = auth_code_iter.next_item().await {
-                    auth_codes_count += 1;
+                match conn.scan_match::<_, String>("authcode:*").await {
+                    Ok(mut auth_code_iter) => {
+                        while let Some(_) = auth_code_iter.next_item().await {
+                            auth_codes_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to scan Redis for auth code metrics: {}", e);
+                    }
                 }
 
                 // TODO: A full implementation for active_tokens would require scanning and decoding each token,

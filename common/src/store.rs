@@ -11,6 +11,8 @@ use std::error::Error;
 /// users, groups, tokens, and authorization codes.
 #[async_trait]
 pub trait Store: Send + Sync {
+    /// Support for downcasting to concrete store types
+    fn as_any(&self) -> &dyn std::any::Any;
     // === User Management (SCIM) ===
     async fn get_user(&self, id: &str) -> Result<Option<ScimUser>, Box<dyn Error + Send + Sync>>;
     async fn create_user(&self, user: &ScimUser) -> Result<ScimUser, Box<dyn Error + Send + Sync>>;

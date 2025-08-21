@@ -1,0 +1,284 @@
+# Enhanced Alertmanager Configuration
+# Intelligent alert routing, noise reduction, and escalation
+
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@security-platform.company.com'
+  smtp_auth_username: 'alerts@security-platform.company.com'
+  smtp_auth_password_file: '/etc/alertmanager/smtp_password'
+  
+  # Slack webhook for general alerts
+  slack_api_url_file: '/etc/alertmanager/slack_webhook'
+  
+  # PagerDuty integration key for critical alerts
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates for alert formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Alert routing tree
+route:
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'web.hook'
+  
+  routes:
+    # Critical security alerts - immediate page
+    - match:
+        severity: critical
+        category: security
+      receiver: 'security-critical'
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 5m
+      continue: true
+
+    # High severity security alerts
+    - match:
+        severity: high
+        category: security
+      receiver: 'security-high'
+      group_wait: 30s
+      group_interval: 2m
+      repeat_interval: 30m
+      continue: true
+
+    # SLO violations with error budget burn rate context
+    - match:
+        category: slo
+      receiver: 'slo-violations'
+      group_by: ['slo_type', 'service']
+      group_wait: 1m
+      group_interval: 5m
+      repeat_interval: 1h
+      routes:
+        - match:
+            severity: page
+        receiver: 'slo-critical'
+        group_wait: 0s
+        repeat_interval: 15m
+
+    # Business logic anomalies
+    - match:
+        category: business
+      receiver: 'business-alerts'
+      group_interval: 10m
+      repeat_interval: 4h
+
+    # Performance anomalies
+    - match:
+        category: performance
+      receiver: 'performance-alerts'
+      group_interval: 5m
+      repeat_interval: 2h
+
+    # Infrastructure alerts
+    - match:
+        category: infrastructure
+      receiver: 'infrastructure-alerts'
+      group_interval: 3m
+      repeat_interval: 1h
+
+    # Development and testing alerts (lower priority)
+    - match:
+        environment: dev
+      receiver: 'dev-alerts'
+      group_interval: 15m
+      repeat_interval: 24h
+
+# Inhibition rules to reduce noise
+inhibit_rules:
+  # If auth service is down, don't alert on individual endpoints
+  - source_match:
+      alertname: AuthServiceDown
+    target_match:
+      service: auth-service
+    equal: ['service']
+
+  # If there's a critical SLO violation, don't alert on warning level
+  - source_match:
+      severity: critical
+      category: slo
+    target_match:
+      severity: warning
+      category: slo
+    equal: ['service', 'slo_type']
+
+  # If there's a database connection issue, don't alert on cache misses
+  - source_match:
+      alertname: ConnectionHealthDegraded
+      connection_type: database
+    target_match:
+      alertname: CacheHitRateDropped
+    equal: ['service']
+
+  # If there's a policy compilation error, don't alert on evaluation errors
+  - source_match:
+      alertname: PolicyReloadFailure
+    target_match:
+      alertname: PolicyEvaluationErrorSpike
+    equal: ['service']
+
+# Receiver definitions
+receivers:
+  - name: 'web.hook'
+    webhook_configs:
+      - url: 'http://webhook-service:8080/alerts'
+        send_resolved: true
+
+  # Critical security alerts - multi-channel notification
+  - name: 'security-critical'
+    pagerduty_configs:
+      - service_key_file: '/etc/alertmanager/pagerduty_security_key'
+        description: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        details:
+          severity: '{{ .CommonLabels.severity }}'
+          service: '{{ .CommonLabels.service }}'
+          alertname: '{{ .CommonLabels.alertname }}'
+          runbook: '{{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}'
+        client: 'Security Platform Alertmanager'
+        client_url: 'https://alertmanager.company.com'
+    
+    slack_configs:
+      - api_url_file: '/etc/alertmanager/slack_security_webhook'
+        channel: '#security-critical'
+        title: '🚨 CRITICAL SECURITY ALERT'
+        text: >
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          *Dashboard:* {{ .Annotations.dashboard_url }}
+          {{ end }}
+        color: 'danger'
+        send_resolved: true
+
+    email_configs:
+      - to: 'security-team@company.com,soc@company.com'
+        subject: '[CRITICAL] Security Alert: {{ .CommonLabels.alertname }}'
+        body: |
+          Critical security alert detected in {{ .CommonLabels.service }}:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          
+          Labels:
+          {{ range .Labels.SortedPairs }}  - {{ .Name }}: {{ .Value }}
+          {{ end }}
+          
+          Runbook: {{ .Annotations.runbook_url }}
+          Dashboard: {{ .Annotations.dashboard_url }}
+          {{ end }}
+        headers:
+          Priority: 'urgent'
+
+  # High severity security alerts
+  - name: 'security-high'
+    slack_configs:
+      - channel: '#security-alerts'
+        title: '⚠️ High Priority Security Alert'
+        text: >
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        color: 'warning'
+
+    email_configs:
+      - to: 'security-team@company.com'
+        subject: '[HIGH] Security Alert: {{ .CommonLabels.alertname }}'
+
+  # SLO violation alerts with context
+  - name: 'slo-violations'
+    slack_configs:
+      - channel: '#sre-alerts'
+        title: '📊 SLO Violation - {{ .CommonLabels.service }}'
+        text: >
+          {{ range .Alerts }}
+          *SLO Type:* {{ .Labels.slo_type }}
+          *Service:* {{ .Labels.service }}
+          *Issue:* {{ .Annotations.summary }}
+          *Impact:* {{ .Annotations.description }}
+          *Error Budget:* Review dashboard for burn rate
+          {{ end }}
+        color: '#ff9800'
+
+  - name: 'slo-critical'
+    pagerduty_configs:
+      - service_key_file: '/etc/alertmanager/pagerduty_sre_key'
+        description: 'Critical SLO violation: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        severity: 'critical'
+
+    slack_configs:
+      - channel: '#sre-critical'
+        title: '🔥 CRITICAL SLO VIOLATION'
+        text: >
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *SLO:* {{ .Labels.slo_type }}
+          *Issue:* {{ .Annotations.summary }}
+          *Error Budget Burn:* CRITICAL - Immediate action required
+          {{ end }}
+        color: 'danger'
+
+  # Business logic alerts
+  - name: 'business-alerts'
+    slack_configs:
+      - channel: '#product-alerts'
+        title: '📈 Business Logic Anomaly'
+        text: >
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Anomaly:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+        color: '#2196F3'
+
+  # Performance alerts
+  - name: 'performance-alerts'
+    slack_configs:
+      - channel: '#platform-alerts'
+        title: '⚡ Performance Anomaly'
+        text: >
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+        color: '#FF5722'
+
+  # Infrastructure alerts
+  - name: 'infrastructure-alerts'
+    slack_configs:
+      - channel: '#infrastructure-alerts'
+        title: '🔧 Infrastructure Issue'
+        text: >
+          {{ range .Alerts }}
+          *Component:* {{ .Labels.service }}
+          *Issue:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+        color: '#607D8B'
+
+    email_configs:
+      - to: 'platform-team@company.com'
+        subject: '[INFRA] {{ .CommonLabels.alertname }}'
+
+  # Development environment alerts (low noise)
+  - name: 'dev-alerts'
+    slack_configs:
+      - channel: '#dev-alerts'
+        title: '🛠️ Development Alert'
+        text: >
+          {{ range .Alerts }}
+          *Environment:* {{ .Labels.environment }}
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          {{ end }}
+        color: 'good'

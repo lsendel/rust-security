@@ -429,20 +429,18 @@ impl Default for MetricsRegistry {
 /// Global metrics registry instance
 pub static METRICS: Lazy<MetricsRegistry> = Lazy::new(MetricsRegistry::new);
 
-/// Metrics middleware for Axum that automatically tracks HTTP requests
+/// Advanced metrics middleware with high-cardinality protection
 pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     let start_time = Instant::now();
     let method = req.method().clone();
-    let path =
-        req.extensions().get::<MatchedPath>().map(|p| p.as_str()).unwrap_or("unknown").to_string();
+    let path = req
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|p| normalize_path_for_cardinality(p.as_str()))
+        .unwrap_or("unknown".to_string());
 
-    // Extract client ID from headers or set as "unknown"
-    let client_id = req
-        .headers()
-        .get("client-id")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string();
+    // Extract client ID with cardinality protection
+    let client_id = extract_client_id_with_protection(&req);
 
     // Track request size
     let request_size = req
@@ -499,6 +497,16 @@ pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     }
 
     // Log detailed request info for debugging
+    // Record SLO metrics
+    let latency_slo_violation = duration.as_millis() > 100; // 100ms SLO
+    if latency_slo_violation {
+        METRICS
+            .security_violations_total
+            .with_label_values(&["slo_violation", "warning", &client_id, &path])
+            .inc();
+    }
+
+    // Log detailed request info for debugging
     debug!(
         method = %method,
         path = %path,
@@ -507,10 +515,39 @@ pub async fn metrics_middleware(req: Request, next: Next) -> Response {
         client_id = %client_id,
         request_size = %request_size,
         response_size = %response_size,
+        slo_violation = %latency_slo_violation,
         "HTTP request processed"
     );
 
     response
+}
+
+/// Extract client ID with cardinality protection
+fn extract_client_id_with_protection(req: &Request) -> String {
+    match req.headers().get("client-id").and_then(|v| v.to_str().ok()) {
+        Some(id) if is_valid_client_id(id) => id.to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+/// Validate client ID to prevent cardinality explosion
+fn is_valid_client_id(id: &str) -> bool {
+    id.len() <= 50 && id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Normalize path for metrics to prevent cardinality explosion
+fn normalize_path_for_cardinality(path: &str) -> String {
+    // Replace UUIDs and other variable parts with placeholders
+    let uuid_pattern = regex::Regex::new(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+    )
+    .unwrap();
+    let numeric_pattern = regex::Regex::new(r"/\d+").unwrap();
+
+    let normalized = uuid_pattern.replace_all(path, "{uuid}");
+    let normalized = numeric_pattern.replace_all(&normalized, "/{id}");
+
+    normalized.to_string()
 }
 
 /// Prometheus metrics endpoint handler

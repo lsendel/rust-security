@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: auth-service
+  namespace: rust-security
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: rust-security
+  name: auth-service-role
+rules:
+# Allow reading ConfigMaps for configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Allow reading Secrets for credentials
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+# Allow reading own Pod info for health checks
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+  resourceNames: ["auth-service"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: auth-service-binding
+  namespace: rust-security
+subjects:
+- kind: ServiceAccount
+  name: auth-service
+  namespace: rust-security
+roleRef:
+  kind: Role
+  name: auth-service-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: auth-service-cluster-role
+rules:
+# Allow reading cluster-wide resources for monitoring
+- apiGroups: [""]
+  resources: ["nodes", "nodes/metrics"]
+  verbs: ["get", "list"]
+# Allow reading metrics from other services
+- apiGroups: [""]
+  resources: ["services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: auth-service-cluster-binding
+subjects:
+- kind: ServiceAccount
+  name: auth-service
+  namespace: rust-security
+roleRef:
+  kind: ClusterRole
+  name: auth-service-cluster-role
+  apiGroup: rbac.authorization.k8s.io

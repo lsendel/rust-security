@@ -1,6 +1,6 @@
-use sqlx::prelude::*;
-use sqlx::{Sqlite, SqlitePool, migrate};
 use sqlx::migrate::MigrateDatabase;
+use sqlx::prelude::*;
+use sqlx::{migrate, Sqlite, SqlitePool};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -92,12 +92,10 @@ impl ApiKeyStore {
     }
 
     pub async fn get_api_key_by_prefix(&self, prefix: &str) -> Result<Option<ApiKey>, ApiKeyError> {
-        let api_key = sqlx::query_as::<_, ApiKey>(
-            "SELECT * FROM api_keys WHERE prefix = $1"
-        )
-        .bind(prefix)
-        .fetch_optional(&self.pool)
-        .await?;
+        let api_key = sqlx::query_as::<_, ApiKey>("SELECT * FROM api_keys WHERE prefix = $1")
+            .bind(prefix)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(api_key)
     }
@@ -113,12 +111,10 @@ impl ApiKeyStore {
     }
 
     pub async fn revoke_api_key(&self, prefix: &str) -> Result<(), ApiKeyError> {
-        let result = sqlx::query(
-            "UPDATE api_keys SET status = 'revoked' WHERE prefix = $1"
-        )
-        .bind(prefix)
-        .execute(&self.pool)
-        .await?;
+        let result = sqlx::query("UPDATE api_keys SET status = 'revoked' WHERE prefix = $1")
+            .bind(prefix)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(ApiKeyError::NotFound);
@@ -128,13 +124,11 @@ impl ApiKeyStore {
     }
 
     pub async fn update_last_used(&self, key_id: i64) -> Result<(), ApiKeyError> {
-        sqlx::query(
-            "UPDATE api_keys SET last_used_at = $1 WHERE id = $2"
-        )
-        .bind(chrono::Utc::now())
-        .bind(key_id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("UPDATE api_keys SET last_used_at = $1 WHERE id = $2")
+            .bind(chrono::Utc::now())
+            .bind(key_id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

@@ -1,0 +1,442 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Policy Service - Authorization & Performance",
+    "description": "Comprehensive monitoring for Cedar Policy Service with authorization tracking, policy evaluation metrics, and SLO monitoring",
+    "tags": ["policy-service", "authorization", "cedar", "slo"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "schemaVersion": 39,
+    "version": 1,
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "variables": [
+      {
+        "name": "decision",
+        "type": "query",
+        "query": "label_values(policy_authorization_requests_total, decision)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true
+      }
+    ],
+    "panels": [
+      {
+        "id": 1,
+        "title": "Policy Service SLO Dashboard",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_http_requests_total{status_code!~\"5..\"}[5m])) / sum(rate(policy_http_requests_total[5m]))",
+            "legendFormat": "Availability SLO",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95 Auth Latency (s)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(policy_evaluation_errors_total[5m])) / sum(rate(policy_authorization_requests_total[5m]))",
+            "legendFormat": "Error Rate",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 0.99},
+                {"color": "green", "value": 0.999}
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "P95 Auth Latency (s)"},
+              "properties": [
+                {"id": "unit", "value": "s"},
+                {"id": "thresholds", "value": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 0.025},
+                    {"color": "red", "value": 0.05}
+                  ]
+                }}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "Authorization Decisions",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_authorization_requests_total{decision=~\"$decision\"}[5m])) by (decision)",
+            "legendFormat": "{{decision}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "pieType": "donut",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Allow"},
+              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Deny"},
+              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 3,
+        "title": "Authorization Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_authorization_requests_total[5m])) by (decision)",
+            "legendFormat": "{{decision}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Requests/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {"show": true, "values": true, "current": true}
+      },
+      {
+        "id": 4,
+        "title": "Authorization Latency Distribution",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 4},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P90",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95",
+            "refId": "C"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {"label": "Seconds", "min": 0},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 0.05, "colorMode": "critical", "op": "gt", "fill": false, "line": true}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Policy Evaluation Metrics",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_policies_evaluated_per_request[5m]))",
+            "legendFormat": "Policies Evaluated",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(policy_evaluation_errors_total[5m])) by (error_type)",
+            "legendFormat": "Errors - {{error_type}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Rate", "min": 0},
+          {"show": false}
+        ],
+        "seriesOverrides": [
+          {
+            "alias": "/Errors.*/",
+            "yAxis": 2,
+            "color": "red"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Entity Operations",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_entity_operations_total[5m])) by (operation, result)",
+            "legendFormat": "{{operation}} - {{result}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Operations/sec", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Principal/Action/Resource Analysis",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(policy_authorization_requests_total[5m])) by (principal_type, action_type, resource_type))",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [{"desc": true, "displayName": "Value"}]
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "auto"
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Policy Compilation Status",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 20},
+        "targets": [
+          {
+            "expr": "sum(policy_active_policies) by (policy_type)",
+            "legendFormat": "{{policy_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Security Violations & Anomalies",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 20},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_security_violations_total[5m])) by (violation_type)",
+            "legendFormat": "Violations - {{violation_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(policy_authorization_anomalies_total[5m])) by (anomaly_type)",
+            "legendFormat": "Anomalies - {{anomaly_type}}",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Events/sec", "min": 0},
+          {"show": false}
+        ],
+        "seriesOverrides": [
+          {
+            "alias": "/Violations.*/",
+            "color": "red"
+          },
+          {
+            "alias": "/Anomalies.*/",
+            "color": "orange"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "HTTP Request Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_http_requests_total[5m])) by (method, status_code)",
+            "legendFormat": "{{method}} {{status_code}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Requests/sec", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Memory and CPU Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "policy_memory_usage_bytes{component=\"policy_engine\"}",
+            "legendFormat": "Memory Usage",
+            "refId": "A"
+          },
+          {
+            "expr": "policy_cpu_usage_percent{component=\"policy_engine\"}",
+            "legendFormat": "CPU Usage %",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Bytes/Percent", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "SLO Error Budget Tracking",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "(\n  1 - (\n    sum(rate(policy_http_requests_total{status_code!~\"5..\"}[1h]))\n    /\n    sum(rate(policy_http_requests_total[1h]))\n  )\n) * 24 * 30",
+            "legendFormat": "Availability Error Budget Burn (days/day)",
+            "refId": "A"
+          },
+          {
+            "expr": "(\n  histogram_quantile(0.95, sum(rate(policy_authorization_duration_seconds_bucket[1h])) by (le)) > 0.05\n) * 24 * 30",
+            "legendFormat": "Latency Error Budget Burn (days/day)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(policy_slo_violations_total[1h])) * 24",
+            "legendFormat": "SLO Violations per day",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {"label": "Error Budget Consumption", "min": 0},
+          {"show": false}
+        ],
+        "thresholds": [
+          {"value": 14.4, "colorMode": "critical", "op": "gt", "fill": false, "line": true, "yAxis": "left"},
+          {"value": 6, "colorMode": "warning", "op": "gt", "fill": false, "line": true, "yAxis": "left"}
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Entity Cache Performance",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 44},
+        "targets": [
+          {
+            "expr": "sum(rate(policy_entity_cache_operations{result=\"hit\"}[5m])) / sum(rate(policy_entity_cache_operations[5m]))",
+            "refId": "A"
+          }
+        ],
+        "valueName": "current",
+        "format": "percentunit",
+        "thresholds": "0.8,0.9",
+        "colorBackground": true,
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 1,
+          "thresholdLabels": false,
+          "thresholdMarkers": true
+        }
+      },
+      {
+        "id": 14,
+        "title": "Policy Reload Events",
+        "type": "graph",
+        "gridPos": {"h": 4, "w": 18, "x": 6, "y": 44},
+        "targets": [
+          {
+            "expr": "sum(increase(policy_reload_total[1h])) by (result)",
+            "legendFormat": "{{result}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Reloads/hour", "min": 0},
+          {"show": false}
+        ],
+        "bars": true,
+        "lines": false
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "Policy Deployments",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "changes(policy_reload_total[1d])",
+          "iconColor": "purple",
+          "type": "tags"
+        },
+        {
+          "name": "High Error Rate",
+          "datasource": "prometheus",
+          "enable": true,
+          "expr": "rate(policy_evaluation_errors_total[5m]) > 0.1",
+          "iconColor": "red",
+          "type": "alert"
+        }
+      ]
+    }
+  }
+}

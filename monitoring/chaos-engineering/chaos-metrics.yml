@@ -1,0 +1,118 @@
+# Chaos Engineering and Security Testing Metrics Configuration
+# Prometheus rules for monitoring chaos experiments and security tests
+
+groups:
+  - name: chaos-engineering
+    interval: 30s
+    rules:
+      # Chaos Experiment Health
+      - alert: ChaosExperimentFailed
+        expr: chaos_mesh_experiments{status="failed"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: chaos-engineering
+        annotations:
+          summary: "Chaos experiment failed"
+          description: "Chaos experiment {{ $labels.experiment_name }} has failed in namespace {{ $labels.namespace }}"
+          runbook_url: "https://chaos-engineering.rust-security.com/runbooks/experiment-failure"
+
+      - alert: ChaosExperimentStuck
+        expr: chaos_mesh_experiments{status="injecting"} and on(experiment_name) (time() - chaos_mesh_experiment_start_time) > 3600
+        for: 5m
+        labels:
+          severity: warning
+          component: chaos-engineering
+        annotations:
+          summary: "Chaos experiment stuck"
+          description: "Chaos experiment {{ $labels.experiment_name }} has been running for over 1 hour"
+
+      # Service Resilience During Chaos
+      - alert: ServiceAvailabilityDuringChaos
+        expr: (avg_over_time(up{job=~"auth-service|policy-service"}[5m]) < 0.9) and on() chaos_mesh_experiments{status="injecting"} > 0
+        for: 2m
+        labels:
+          severity: critical
+          component: resilience
+        annotations:
+          summary: "Service availability degraded during chaos experiment"
+          description: "Service {{ $labels.job }} availability is {{ $value | humanizePercentage }} during chaos injection"
+
+      - alert: ResponseTimeDegradationDuringChaos
+        expr: (histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=~"auth-service|policy-service"}[5m])) > 5) and on() chaos_mesh_experiments{status="injecting"} > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: resilience
+        annotations:
+          summary: "Response time degraded during chaos experiment"
+          description: "Service {{ $labels.job }} 95th percentile response time is {{ $value }}s during chaos injection"
+
+      - alert: ErrorRateSpikeDuringChaos
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1) and on() chaos_mesh_experiments{status="injecting"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: resilience
+        annotations:
+          summary: "Error rate spike during chaos experiment"
+          description: "Service {{ $labels.job }} error rate is {{ $value | humanizePercentage }} during chaos injection"
+
+      # Recovery Validation
+      - alert: SlowRecoveryAfterChaos
+        expr: time() - chaos_mesh_experiment_end_time > 300 and (up{job=~"auth-service|policy-service"} < 1 or histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=~"auth-service|policy-service"}[5m])) > 2)
+        for: 1m
+        labels:
+          severity: warning
+          component: resilience
+        annotations:
+          summary: "Slow recovery after chaos experiment"
+          description: "Service {{ $labels.job }} has not recovered to baseline performance 5 minutes after chaos experiment ended"
+
+  - name: security-testing
+    interval: 15s
+    rules:
+      # Attack Detection Metrics
+      - record: attack_detection_rate_5m
+        expr: rate(security_events_detected_total[5m]) / rate(security_attacks_total[5m])
+
+      - record: false_positive_rate_5m
+        expr: rate(security_false_positives_total[5m]) / rate(security_events_detected_total[5m])
+
+      - record: attack_success_rate_5m
+        expr: rate(security_attacks_successful_total[5m]) / rate(security_attacks_total[5m])
+
+      # Real-time Attack Alerts
+      - alert: CredentialStuffingAttack
+        expr: rate(auth_failures_total[1m]) > 10 and rate(auth_failures_total[1m]) / rate(auth_attempts_total[1m]) > 0.9
+        for: 30s
+        labels:
+          severity: warning
+          component: security
+          attack_type: credential-stuffing
+        annotations:
+          summary: "Potential credential stuffing attack detected"
+          description: "High authentication failure rate: {{ $value }} failures per second"
+
+      - alert: BruteForceAttack
+        expr: rate(auth_failures_total{source_ip=~".+"}[5m]) by (source_ip) > 5
+        for: 1m
+        labels:
+          severity: warning
+          component: security
+          attack_type: brute-force
+        annotations:
+          summary: "Brute force attack detected"
+          description: "IP {{ $labels.source_ip }} has {{ $value }} failed authentication attempts per second"
+
+      - alert: SQLInjectionAttempt
+        expr: rate(sql_injection_attempts_total[1m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          component: security
+          attack_type: sql-injection
+        annotations:
+          summary: "SQL injection attempt detected"
+          description: "{{ $value }} SQL injection attempts detected per second on {{ $labels.endpoint }}"
+

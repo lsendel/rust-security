@@ -44,9 +44,8 @@ pub struct ClientMetadata {
 }
 
 // Global CLIENT_AUTHENTICATOR instance
-static CLIENT_AUTHENTICATOR: Lazy<Mutex<ClientAuthenticator>> = Lazy::new(|| {
-    Mutex::new(ClientAuthenticator::new())
-});
+static CLIENT_AUTHENTICATOR: Lazy<Mutex<ClientAuthenticator>> =
+    Lazy::new(|| Mutex::new(ClientAuthenticator::new()));
 
 impl ClientAuthenticator {
     pub fn new() -> Self {

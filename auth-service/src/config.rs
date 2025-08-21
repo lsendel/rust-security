@@ -499,6 +499,7 @@ impl AppConfig {
             features: FeatureFlags::default(),
             oauth: OAuthConfig::default(),
             scim: ScimConfig::default(),
+            store: StoreConfig::default(),
         })
     }
 }

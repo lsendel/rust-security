@@ -1,0 +1,51 @@
+[package]
+name = "input-validation-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.input-validation]
+path = ".."
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "scim_filter"
+path = "fuzz_targets/scim_filter.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "oauth_params"
+path = "fuzz_targets/oauth_params.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "jwt_tokens"
+path = "fuzz_targets/jwt_tokens.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "input_validation"
+path = "fuzz_targets/input_validation.rs"
+test = false
+doc = false

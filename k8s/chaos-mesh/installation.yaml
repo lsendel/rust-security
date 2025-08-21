@@ -1,0 +1,196 @@
+# Chaos Mesh Installation with Security Controls
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-controller-manager
+  namespace: chaos-engineering
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-controller-manager-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "persistentvolumeclaims", "services", "endpoints"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["chaos-mesh.org"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-controller-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-controller-manager-role
+subjects:
+- kind: ServiceAccount
+  name: chaos-controller-manager
+  namespace: chaos-engineering
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaos-controller-manager
+  namespace: chaos-engineering
+  labels:
+    app: chaos-controller-manager
+    security.rust-security.com/component: "chaos-controller"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaos-controller-manager
+  template:
+    metadata:
+      labels:
+        app: chaos-controller-manager
+        security.rust-security.com/component: "chaos-controller"
+    spec:
+      serviceAccountName: chaos-controller-manager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: manager
+        image: chaostech/chaos-mesh:v2.6.0
+        command:
+        - /manager
+        args:
+        - --metrics-addr=0.0.0.0:10080
+        - --enable-pprof=false
+        - --leader-elect=true
+        - --security-mode=true
+        - --cluster-scoped=false
+        - --target-namespace=rust-security-dev,rust-security-staging
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: TZ
+          value: UTC
+        - name: CHAOS_MESH_VERSION
+          value: v2.6.0
+        ports:
+        - containerPort: 10080
+          name: metrics
+          protocol: TCP
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+          readOnly: false
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cert
+        secret:
+          secretName: chaos-mesh-cert
+          defaultMode: 420
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chaos-controller-manager-metrics
+  namespace: chaos-engineering
+  labels:
+    app: chaos-controller-manager
+    security.rust-security.com/metrics: "enabled"
+spec:
+  ports:
+  - name: metrics
+    port: 10080
+    targetPort: 10080
+  selector:
+    app: chaos-controller-manager
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chaos-controller-network-policy
+  namespace: chaos-engineering
+spec:
+  podSelector:
+    matchLabels:
+      app: chaos-controller-manager
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 10080
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: chaos-engineering
+    ports:
+    - protocol: TCP
+      port: 9443
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53

@@ -1,0 +1,84 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-network-policy
+  namespace: rust-security
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow ingress from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: rust-security
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow egress to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow egress to PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow egress to policy service
+  - to:
+    - podSelector:
+        matchLabels:
+          app: policy-service
+    ports:
+    - protocol: TCP
+      port: 8081
+  # Allow egress to external APIs (HTTPS)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: rust-security
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress

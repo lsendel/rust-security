@@ -1,0 +1,171 @@
+# Service Level Objectives (SLO) Definitions
+# This file defines SLOs for the Rust Security Platform services
+# Error budgets are calculated based on these definitions
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slo-definitions
+  namespace: monitoring
+data:
+  auth-service-slos.yaml: |
+    # Authentication Service SLOs
+    slos:
+      - name: auth_availability_slo
+        description: "Auth service availability SLO"
+        service: auth-service
+        sli: |
+          sum(rate(auth_http_requests_total{status_code!~"5.."}[5m])) 
+          / 
+          sum(rate(auth_http_requests_total[5m]))
+        target: 0.999  # 99.9% availability
+        error_budget_period: 30d  # Monthly error budget
+        burn_rate_alerts:
+          - severity: page
+            threshold: 14.4  # 2% budget burn in 1 hour
+            window: 1h
+          - severity: ticket
+            threshold: 6  # 5% budget burn in 6 hours
+            window: 6h
+
+      - name: auth_latency_slo
+        description: "Auth service latency SLO - P99 < 100ms"
+        service: auth-service
+        sli: |
+          histogram_quantile(0.99, 
+            sum(rate(auth_http_request_duration_seconds_bucket{endpoint!="/metrics"}[5m])) by (le)
+          )
+        target: 0.1  # 100ms
+        operator: "<"
+        error_budget_period: 30d
+        burn_rate_alerts:
+          - severity: page
+            threshold: 14.4
+            window: 1h
+          - severity: ticket
+            threshold: 6
+            window: 6h
+
+      - name: token_operation_latency_slo
+        description: "Token operations latency SLO - P95 < 50ms"
+        service: auth-service
+        sli: |
+          histogram_quantile(0.95,
+            sum(rate(auth_token_operation_duration_seconds_bucket[5m])) by (le)
+          )
+        target: 0.05  # 50ms
+        operator: "<"
+        error_budget_period: 30d
+
+      - name: auth_error_rate_slo
+        description: "Authentication error rate SLO - < 0.1%"
+        service: auth-service
+        sli: |
+          sum(rate(auth_authentication_attempts_detailed_total{result="failure"}[5m]))
+          /
+          sum(rate(auth_authentication_attempts_detailed_total[5m]))
+        target: 0.001  # 0.1%
+        operator: "<"
+        error_budget_period: 30d
+
+  policy-service-slos.yaml: |
+    # Policy Service SLOs
+    slos:
+      - name: policy_availability_slo
+        description: "Policy service availability SLO"
+        service: policy-service
+        sli: |
+          sum(rate(policy_http_requests_total{status_code!~"5.."}[5m]))
+          /
+          sum(rate(policy_http_requests_total[5m]))
+        target: 0.999  # 99.9% availability
+        error_budget_period: 30d
+        burn_rate_alerts:
+          - severity: page
+            threshold: 14.4
+            window: 1h
+          - severity: ticket
+            threshold: 6
+            window: 6h
+
+      - name: policy_authorization_latency_slo
+        description: "Policy authorization latency SLO - P95 < 50ms"
+        service: policy-service
+        sli: |
+          histogram_quantile(0.95,
+            sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le)
+          )
+        target: 0.05  # 50ms
+        operator: "<"
+        error_budget_period: 30d
+
+      - name: policy_authorization_accuracy_slo
+        description: "Policy authorization accuracy SLO - < 0.01% errors"
+        service: policy-service
+        sli: |
+          sum(rate(policy_evaluation_errors_total[5m]))
+          /
+          sum(rate(policy_authorization_requests_total[5m]))
+        target: 0.0001  # 0.01%
+        operator: "<"
+        error_budget_period: 30d
+
+  business-slos.yaml: |
+    # Business Logic SLOs
+    slos:
+      - name: end_to_end_auth_flow_slo
+        description: "End-to-end authentication flow SLO - P99 < 200ms"
+        service: auth-flow
+        sli: |
+          # Composite SLI combining auth + policy service latencies
+          histogram_quantile(0.99,
+            sum(rate(auth_http_request_duration_seconds_bucket{endpoint="/v1/token"}[5m])) by (le)
+          ) +
+          histogram_quantile(0.99,
+            sum(rate(policy_authorization_duration_seconds_bucket[5m])) by (le)
+          )
+        target: 0.2  # 200ms total
+        operator: "<"
+        error_budget_period: 30d
+
+      - name: security_event_processing_slo
+        description: "Security events processed within 5 minutes"
+        service: security-monitoring
+        sli: |
+          # Percentage of security events processed within 5 minutes
+          sum(rate(auth_anomaly_detection_total{action_taken!="none"}[5m]))
+          /
+          sum(rate(auth_security_violations_total[5m]))
+        target: 0.95  # 95% of events processed
+        error_budget_period: 30d
+
+  infrastructure-slos.yaml: |
+    # Infrastructure SLOs
+    slos:
+      - name: redis_availability_slo
+        description: "Redis availability SLO"
+        service: redis
+        sli: |
+          up{job="redis-exporter"}
+        target: 0.999  # 99.9% availability
+        error_budget_period: 30d
+
+      - name: database_query_latency_slo
+        description: "Database query latency SLO - P99 < 500ms"
+        service: database
+        sli: |
+          histogram_quantile(0.99,
+            sum(rate(redis_command_duration_seconds_bucket[5m])) by (le)
+          )
+        target: 0.5  # 500ms
+        operator: "<"
+        error_budget_period: 30d
+
+      - name: container_resource_utilization_slo
+        description: "Container CPU utilization SLO - < 80%"
+        service: infrastructure
+        sli: |
+          avg(rate(container_cpu_usage_seconds_total[5m])) by (container)
+        target: 0.8  # 80%
+        operator: "<"
+        error_budget_period: 30d

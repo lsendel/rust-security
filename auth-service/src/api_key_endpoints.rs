@@ -48,7 +48,8 @@ async fn revoke_api_key(
 async fn list_api_keys(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ApiKeyDetails>>, AuthError> {
-    let keys = state.api_key_store
+    let keys = state
+        .api_key_store
         .list_api_keys()
         .await
         .map_err(|e| internal_error(&format!("Failed to list API keys: {}", e)))?;
@@ -60,13 +61,24 @@ async fn get_api_key(
     State(state): State<AppState>,
     Path(prefix): Path<String>,
 ) -> Result<Json<ApiKeyDetails>, AuthError> {
-    let api_key = state.api_key_store
+    let api_key = state
+        .api_key_store
         .get_api_key_by_prefix(&prefix)
         .await
         .map_err(|e| internal_error(&format!("Failed to get API key: {}", e)))?
         .ok_or(AuthError::NotFound { resource: "API Key".to_string() })?;
 
-    Ok(Json(api_key))
+    let details = ApiKeyDetails {
+        id: api_key.id,
+        prefix: api_key.prefix,
+        client_id: api_key.client_id,
+        permissions: api_key.permissions,
+        created_at: api_key.created_at,
+        expires_at: api_key.expires_at,
+        last_used_at: api_key.last_used_at,
+        status: api_key.status,
+    };
+    Ok(Json(details))
 }
 
 async fn create_api_key(
@@ -91,7 +103,8 @@ async fn create_api_key(
         .to_string();
 
     // 4. Store the hashed key, prefix, client_id, and other metadata in the database.
-    let key_details = state.api_key_store
+    let key_details = state
+        .api_key_store
         .create_api_key(
             &payload.client_id,
             prefix,

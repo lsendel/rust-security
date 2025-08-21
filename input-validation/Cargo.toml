@@ -1,0 +1,107 @@
+[package]
+name = "input-validation"
+version = "0.1.0"
+edition = "2021"
+description = "Comprehensive input validation and fuzzing framework for Rust Security Platform"
+authors = ["Rust Security Platform Team"]
+license = "MIT OR Apache-2.0"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Core dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+url = { workspace = true }
+regex = { workspace = true }
+fancy-regex = { workspace = true }
+anyhow = { workspace = true }
+
+# Validation framework
+validator = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Web framework integration
+axum = { workspace = true }
+http = { workspace = true }
+bytes = { workspace = true }
+
+# Security
+secrecy = { workspace = true }
+constant_time_eq = { workspace = true }
+zeroize = { workspace = true }
+
+# Performance
+dashmap = { workspace = true }
+rayon = { workspace = true, optional = true }
+indexmap = { workspace = true }
+
+# String processing
+aho-corasick = { workspace = true }
+
+# Collections
+bloomfilter = { workspace = true }
+probabilistic-collections = { workspace = true }
+
+# Fuzzing dependencies
+arbitrary = { workspace = true, features = ["derive"], optional = true }
+
+# Rate limiting and DoS protection
+tower = { workspace = true }
+
+# Metrics
+prometheus = { workspace = true, optional = true }
+
+# Property testing
+proptest = { workspace = true, optional = true }
+quickcheck = { workspace = true, optional = true }
+
+# Additional dependencies
+fastrand = { workspace = true }
+base64 = { workspace = true }
+urlencoding = { workspace = true }
+
+# CLI dependencies
+clap = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Testing
+tokio-test = { workspace = true }
+quickcheck_macros = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true }
+
+# Fuzzing
+arbitrary = { workspace = true }
+libfuzzer-sys = { workspace = true }
+
+[features]
+default = ["validation", "sanitization", "rate-limiting"]
+validation = []
+sanitization = []
+rate-limiting = []
+fuzzing = ["arbitrary", "clap"]
+property-testing = ["proptest", "quickcheck"]
+performance = ["rayon"]
+metrics = ["prometheus"]
+
+[[bench]]
+name = "validation_benchmarks"
+harness = false
+
+[lib]
+name = "input_validation"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fuzz-runner"
+path = "src/bin/fuzz_runner.rs"
+required-features = ["fuzzing"]

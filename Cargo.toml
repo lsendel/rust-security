@@ -1,15 +1,18 @@
 [workspace]
+resolver = "2"
 members = [
     "common",
-    "auth-service",
+    "auth-service", 
     "policy-service",
     "examples/axum-integration-example",
     "examples/simple-auth-client",
     "compliance-tools",
     "red-team-exercises",
     "tests",
+    "input-validation",
+    "chaos-engineering",
+    "security-testing",
 ]
-resolver = "2"
 
 
 [workspace.dependencies]
@@ -30,6 +33,9 @@ http = "1.0"
 bytes = "1.0"
 url = "2.5"
 urlencoding = "2.1"
+fastrand = "2.1"
+libfuzzer-sys = "0.4"
+clap = { version = "4.5", features = ["derive"] }
 
 # Web framework dependencies
 axum = { version = "0.7", features = ["macros"] }
@@ -188,7 +194,7 @@ futures = "0.3"
 [workspace.lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
-rust_2018_idioms = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
 unreachable_pub = "warn"
 # Security-focused lints
 non_ascii_idents = "deny"
@@ -204,10 +210,10 @@ unused_import_braces = "warn"
 unused_qualifications = "warn"
 
 [workspace.lints.clippy]
-all = "warn"
-pedantic = "warn"
-nursery = "warn"
-cargo = "warn"
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
 # Security-focused clippy lints
 # integer_overflow = "deny" # Not a valid clippy lint
 panic = "deny"
@@ -273,7 +279,6 @@ debug = 1
 debug-assertions = true
 overflow-checks = true
 lto = false
-panic = 'unwind'
 incremental = true
 codegen-units = 512
 rpath = false
@@ -291,8 +296,9 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package."syn"]
 opt-level = 3
-[profile.dev.package."serde_derive"]
-opt-level = 3
+# Kubernetes dependencies
+kube = "0.90"
+k8s-openapi = { version = "0.22", features = ["latest"] }
 
-# Security patches to exclude vulnerable dependencies
-# Disable ML features by not including vulnerable dependencies in default builds
+# Additional security testing dependencies  
+jsonwebtoken = "9.0"

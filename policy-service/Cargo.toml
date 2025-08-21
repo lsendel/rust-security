@@ -20,6 +20,8 @@ utoipa = { workspace = true }
 dotenvy = { workspace = true }
 cedar-policy-core = { workspace = true }
 thiserror = { workspace = true }
+prometheus = { workspace = true }
+once_cell = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }

@@ -92,12 +92,13 @@ impl ConfigReloadManager {
                 // Wait for SIGHUP signal on Unix systems
                 #[cfg(unix)]
                 {
-                    if let Err(e) = signal::unix::signal(signal::unix::SignalKind::hangup())
+                    if signal::unix::signal(signal::unix::SignalKind::hangup())
                         .expect("Failed to register SIGHUP handler")
                         .recv()
                         .await
+                        .is_none()
                     {
-                        error!("Error receiving SIGHUP signal: {}", e);
+                        error!("Error receiving SIGHUP signal: signal stream ended");
                         continue;
                     }
                 }
@@ -476,30 +477,32 @@ mod tests {
                 jaeger_endpoint: None,
             },
             features: FeatureFlags {
-                mfa_enabled: true,
-                scim_enabled: true,
-                oidc_enabled: true,
-                advanced_logging: true,
-                performance_monitoring: true,
-                threat_hunting: false,
                 soar_integration: false,
+                google_oidc: true,
+                microsoft_oidc: true,
+                github_oidc: true,
+                webauthn: true,
+                scim_v2: true,
+                advanced_mfa: true,
+                threat_detection: false,
+                policy_engine: true,
             },
             oauth: OAuthConfig {
                 authorization_code_ttl_seconds: 600,
-                device_code_ttl_seconds: 600,
-                pkce_required: true,
-                refresh_token_rotation: true,
+                max_authorization_codes_per_client: 10,
+                enforce_pkce: true,
+                require_state_parameter: true,
+                strict_redirect_validation: true,
+                allowed_redirect_schemes: vec!["https".to_string(), "http".to_string()],
             },
             scim: ScimConfig {
-                base_url: "http://localhost:8080/scim/v2".to_string(),
-                max_results: 100,
-                case_exact: false,
+                enabled: true,
+                max_filter_length: 1000,
+                max_results_per_page: 100,
+                default_results_per_page: 20,
             },
             store: StoreConfig {
                 backend: StoreBackend::Hybrid,
-                connection_pool_size: 10,
-                connection_timeout_seconds: 30,
-                max_idle_connections: 5,
                 database_url: None,
             },
             client_credentials: HashMap::from([
@@ -509,7 +512,7 @@ mod tests {
             allowed_scopes: vec!["read".to_string(), "write".to_string()],
             jwt_secret: "test-secret".to_string(),
             token_expiry_seconds: 3600,
-            rate_limit_oauth_requests_per_minute: 60,
+            rate_limit_requests_per_minute: 60,
         }
     }
 

@@ -131,10 +131,7 @@ pub enum AuthError {
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        AuthError::InternalError {
-            error_id: Uuid::new_v4(),
-            context: err.to_string(),
-        }
+        AuthError::InternalError { error_id: Uuid::new_v4(), context: err.to_string() }
     }
 }
 
