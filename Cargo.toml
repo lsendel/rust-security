@@ -1,9 +1,16 @@
 [workspace]
 members = [
     "auth-core",
+    "auth-service", 
+    "policy-service",
 ]
 
 resolver = "2"
+
+[workspace.lints]
+rust.unused_crate_dependencies = "warn"
+rust.unused_imports = "warn" 
+rust.dead_code = "warn"
 
 [workspace.dependencies]
 # Core async runtime
@@ -79,9 +86,15 @@ zeroize = "1.8"
 
 # Web/HTTP additional
 http = "1.0"
-tower-http = { version = "0.5", features = ["cors", "fs"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 urlencoding = "2.1"
 url = "2.5"
+
+# Policy engine
+cedar-policy = "4.0"
+
+# API documentation
+utoipa = { version = "5.0", features = ["axum_extras"] }
 
 # Crypto additional  
 argon2 = "0.5"
@@ -114,8 +127,8 @@ ndarray = "0.16"
 nalgebra = "0.33"
 
 # Post-quantum crypto
-pqcrypto-mlkem = "0.7"
-pqcrypto-mldsa = "0.6"
+pqcrypto-mlkem = "0.1"
+pqcrypto-mldsa = "0.1"
 
 # Cloud integrations
 aws-config = "1.0"
@@ -141,9 +154,10 @@ lettre = "0.11"
 
 # Performance
 mimalloc = "0.1"
-jemalloc = "0.5"
+tikv-jemalloc-ctl = "0.5"
+jemalloc-sys = "0.5"
 rayon = "1.0"
-simd = "0.8"
+packed_simd_2 = "0.3"
 
 # Compression
 lz4_flex = "0.11"
@@ -192,14 +206,13 @@ serde_yaml = "0.9"
 libfuzzer-sys = "0.4"
 
 # Documentation
-utoipa = "5.0"
+# Duplicate removed - defined above
 utoipa-swagger-ui = "8.0"
 
 # Web server
 axum-server = "0.7"
 
-# Policy engine
-cedar-policy = "4.0"
+# Policy engine (duplicate removed - defined above)
 cedar-policy-core = "4.0"
 
 # TypeScript compiler

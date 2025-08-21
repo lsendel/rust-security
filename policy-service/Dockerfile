@@ -1,21 +1,24 @@
-# syntax=docker/dockerfile:1
+# Multi-stage build for policy-service
+FROM rust:1.83-bookworm AS builder
 
-FROM rust:1-bookworm AS chef
-RUN cargo install cargo-chef --locked
 WORKDIR /app
 
-FROM chef AS planner
-COPY ../../Cargo.toml ./Cargo.toml
-COPY . ./policy-service
-RUN cargo chef prepare --recipe-path recipe.json
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
-COPY ../../Cargo.toml ./Cargo.toml
-COPY . ./policy-service
-RUN cargo build -p policy-service --release
+# Copy workspace files from root context
+COPY Cargo.toml Cargo.lock ./
+COPY auth-core/ ./auth-core/
+COPY auth-service/ ./auth-service/
+COPY policy-service/ ./policy-service/
 
+# Build the policy-service binary
+RUN cargo build --release --bin policy-service
+
+# Runtime stage
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /app/target/release/policy-service /usr/local/bin/policy-service
 USER 65532:65532

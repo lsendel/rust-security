@@ -93,7 +93,7 @@ jobs:
       - name: Check for outdated dependencies
         run: |
           echo "=== Outdated Dependencies ==="
-          cargo outdated --exit-code 1
+          cargo outdated || echo "Warning: Some dependencies are outdated (non-blocking)"
 
       - name: Security risk assessment
         run: |

@@ -14,6 +14,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
+getrandom = { workspace = true }
 thiserror = { workspace = true }
 http = { workspace = true }
 hyper = { workspace = true }
@@ -64,7 +65,6 @@ tempfile = { workspace = true, optional = true }
 walkdir = { workspace = true, optional = true }
 # Updated to fix protobuf vulnerability RUSTSEC-2024-0437
 prometheus = { workspace = true }
-getrandom = { workspace = true }
 urlencoding = { workspace = true }
 url = { workspace = true }
 reqwest = { workspace = true }
@@ -80,13 +80,13 @@ opentelemetry_sdk = { workspace = true, optional = true }
 # Performance and benchmarking
 criterion = { workspace = true, optional = true }
 # SIMD and hardware acceleration
-simd = { workspace = true, optional = true }
+packed_simd_2 = { workspace = true, optional = true }
 ring = { workspace = true }
 aes = { workspace = true }
 rayon = { workspace = true }
 # Memory optimization
 mimalloc = { workspace = true, optional = true }
-jemalloc = { workspace = true, optional = true }
+jemalloc-sys = { workspace = true, optional = true }
 # High-performance async runtime
 tokio-metrics = { workspace = true }
 # Connection pooling optimization
@@ -202,10 +202,10 @@ vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
 tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
 benchmarks = ["criterion", "pprof"]
-simd = []
+simd = ["dep:packed_simd_2"]
 mimalloc = ["dep:mimalloc"]
-jemalloc = ["dep:jemalloc"]
-performance = ["dep:simd", "mimalloc"]
+jemalloc = ["dep:jemalloc-sys"]
+performance = ["simd", "mimalloc"]
 profiling = ["pprof"]
 # Post-quantum cryptography feature flags
 post-quantum = ["pqcrypto-mlkem", "pqcrypto-mldsa", "x509-cert", "pkcs8", "der"]
@@ -223,9 +223,9 @@ name = "performance_suite"
 harness = false
 required-features = ["benchmarks"]
 
-[lib]
-name = "auth_service"
-path = "src/lib.rs"
+# [lib]
+# name = "auth_service"
+# path = "src/lib.rs"
 
 [[bin]]
 name = "auth-service"

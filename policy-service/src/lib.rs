@@ -117,7 +117,7 @@ pub async fn authorize(
     let context = Context::from_json_value(body.context, None)
         .map_err(|e| PolicyError::Parse(format!("Failed to parse context: {}", e)))?;
 
-    let request = Request::new(Some(principal), Some(action), Some(resource), context, None)
+    let request = Request::new(principal, action, resource, context, None)
         .map_err(|e| {
             PolicyError::Parse(format!("Failed to create authorization request: {}", e))
         })?;
