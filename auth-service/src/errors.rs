@@ -307,6 +307,7 @@ impl IntoResponse for AuthError {
         response
     }
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub error: String,
     pub error_description: String,
