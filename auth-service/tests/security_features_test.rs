@@ -112,7 +112,7 @@ async fn test_pkce_functions() {
     };
 
     // Test code verifier generation
-    let verifier = generate_code_verifier();
+    let verifier = generate_code_verifier().expect("Failed to generate code verifier");
     assert!(verifier.len() >= 43);
     assert!(verifier.len() <= 128);
     assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric()
@@ -122,12 +122,12 @@ async fn test_pkce_functions() {
         || c == '~'));
 
     // Test code challenge generation
-    let challenge = generate_code_challenge(&verifier);
+    let challenge = generate_code_challenge(&verifier).expect("Failed to generate code challenge");
     assert!(!challenge.is_empty());
 
     // Test verification
-    assert!(verify_code_challenge(&verifier, &challenge));
-    assert!(!verify_code_challenge("wrong_verifier", &challenge));
+    assert!(verify_code_challenge(&verifier, &challenge).unwrap_or(false));
+    assert!(!verify_code_challenge("wrong_verifier", &challenge).unwrap_or(true));
 }
 
 #[tokio::test]

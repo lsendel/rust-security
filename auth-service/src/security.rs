@@ -2,7 +2,6 @@ use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
 use base64::Engine as _;
 use once_cell::sync::Lazy;
-use sha2::Sha256;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;

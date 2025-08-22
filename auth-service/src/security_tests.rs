@@ -313,12 +313,17 @@ mod security_tests {
     /// Test secure random generation
     #[test]
     fn test_secure_random_generation() {
-        let rng = ring::rand::SystemRandom::new();
+        use ring::rand::{SecureRandom, SystemRandom};
+        let rng = SystemRandom::new();
 
         // Generate multiple random values
-        let random1 = rng.generate_bytes(32).unwrap();
-        let random2 = rng.generate_bytes(32).unwrap();
-        let random3 = rng.generate_bytes(32).unwrap();
+        let mut random1 = [0u8; 32];
+        let mut random2 = [0u8; 32];
+        let mut random3 = [0u8; 32];
+        
+        rng.fill(&mut random1).unwrap();
+        rng.fill(&mut random2).unwrap();
+        rng.fill(&mut random3).unwrap();
 
         // Should all be different
         assert_ne!(random1, random2);
@@ -334,7 +339,7 @@ mod security_tests {
     /// Test session ID generation security
     #[test]
     fn test_session_id_generation_security() {
-        let rng = ring::rand::SystemRandom::new();
+        let rng = TestSecureRandom::new();
 
         // Generate multiple session IDs
         let id1 = rng.generate_session_id().unwrap();
@@ -427,7 +432,7 @@ mod security_tests {
         // no unsafe blocks are used in our security implementations
 
         // Generate some secure random data
-        let rng = ring::rand::SystemRandom::new();
+        let rng = TestSecureRandom::new();
         let data = rng.generate_bytes(1024).unwrap();
 
         // Process it through our security functions
@@ -442,12 +447,12 @@ mod security_tests {
 
 /// Security utilities for testing
 #[cfg(test)]
-pub struct SecureRandom {
+pub struct TestSecureRandom {
     rng: ring::rand::SystemRandom,
 }
 
 #[cfg(test)]
-impl SecureRandom {
+impl TestSecureRandom {
     pub fn new() -> Self {
         Self {
             rng: ring::rand::SystemRandom::new(),
@@ -455,6 +460,7 @@ impl SecureRandom {
     }
 
     pub fn generate_bytes(&self, len: usize) -> Result<Vec<u8>, &'static str> {
+        use ring::rand::SecureRandom;
         let mut bytes = vec![0u8; len];
         self.rng
             .fill(&mut bytes)
@@ -463,6 +469,7 @@ impl SecureRandom {
     }
 
     pub fn generate_session_id(&self) -> Result<String, &'static str> {
+        use base64::Engine;
         let bytes = self.generate_bytes(32)?;
         Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
     }

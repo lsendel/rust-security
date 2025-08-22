@@ -75,7 +75,8 @@ async fn test_pkce_authorization_code_flow() {
         .unwrap();
 
     // Step 1: Generate PKCE parameters (normally done by client)
-    let code_verifier = auth_service::security::generate_code_verifier();
+    let code_verifier = auth_service::security::generate_code_verifier()
+        .expect("Failed to generate code verifier");
     let code_challenge = auth_service::security::generate_code_challenge(&code_verifier)
         .expect("Failed to generate code challenge");
 
@@ -172,8 +173,10 @@ async fn test_pkce_validation_failure() {
         .unwrap();
 
     // Step 1: Generate PKCE parameters
-    let code_verifier = auth_service::security::generate_code_verifier();
-    let code_challenge = auth_service::security::generate_code_challenge(&code_verifier);
+    let code_verifier = auth_service::security::generate_code_verifier()
+        .expect("Failed to generate code verifier");
+    let code_challenge = auth_service::security::generate_code_challenge(&code_verifier)
+        .expect("Failed to generate code challenge");
 
     // Step 2: Authorization request
     let auth_url = format!(
@@ -195,7 +198,8 @@ async fn test_pkce_validation_failure() {
         .expect("Authorization code should be present");
 
     // Step 3: Try to exchange with wrong code verifier
-    let wrong_verifier = auth_service::security::generate_code_verifier();
+    let wrong_verifier = auth_service::security::generate_code_verifier()
+        .expect("Failed to generate wrong verifier");
 
     let token_response = client
         .post(format!("{}/oauth/token", base))
