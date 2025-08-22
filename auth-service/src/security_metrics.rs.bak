@@ -336,7 +336,7 @@ impl Default for SecurityMetrics {
                     prometheus::HistogramOpts::new("auth_duration_seconds_fallback", "Fallback metric"),
                     &["status"],
                 ).unwrap_or_else(|_| HistogramVec::new(prometheus::HistogramOpts::new("fallback", ""), &[""]).unwrap()),
-                token_validation_duration_seconds: Histogram::with_opts(prometheus::HistogramOpts::new("token_validation_duration_seconds_fallback", "Fallback metric")).unwrap(),
+                token_validation_duration_seconds: Histogram::new("token_validation_duration_seconds_fallback".into(), "Fallback metric".into()).unwrap(),
             }
         })
     }

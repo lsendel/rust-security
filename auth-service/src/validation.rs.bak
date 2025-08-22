@@ -29,7 +29,7 @@ pub struct TokenRequest {
     #[validate(length(max = 255))]
     pub client_id: Option<String>,
 
-    #[validate(length(max = 128))]
+    #[validate(length(max = 512))]
     pub client_secret: Option<String>,
 
     #[validate(length(max = 1024))]
@@ -391,7 +391,7 @@ pub struct TokenIntrospectionRequest {
     #[validate(length(max = 255))]
     pub client_id: Option<String>,
 
-    #[validate(length(max = 128))]
+    #[validate(length(max = 512))]
     pub client_secret: Option<String>,
 }
 
