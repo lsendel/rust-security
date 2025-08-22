@@ -1,5 +1,6 @@
 use crate::mfa::errors::{MfaError, MfaResult};
 use crate::mfa::storage::MfaStorage;
+use rand::RngCore;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -426,7 +427,7 @@ impl WebAuthnMfa {
 
     fn generate_challenge(&self) -> String {
         let mut challenge = vec![0u8; 32];
-        getrandom::getrandom(&mut challenge).expect("Failed to generate challenge");
+        rand::thread_rng().fill_bytes(&mut challenge);
         base64::encode_config(&challenge, base64::URL_SAFE_NO_PAD)
     }
 

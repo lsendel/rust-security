@@ -73,7 +73,7 @@ pub enum SameSite {
 }
 
 /// Session data structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Session {
     pub id: String,
     pub user_id: String,

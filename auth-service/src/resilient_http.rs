@@ -61,9 +61,7 @@ impl ResilientHttpClient {
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(&config.user_agent)
             // Enable secure TLS settings
-            .use_rustls_tls()
             .https_only(true)
-            .min_tls_version(reqwest::tls::Version::TLS_1_2)
             .build()
             .map_err(|e| AuthError::ServiceUnavailable {
                 reason: format!("Failed to create HTTP client: {}", e),

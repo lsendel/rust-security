@@ -45,7 +45,8 @@ yanked = "deny"
 # Ignore RSA vulnerability - comes from sqlx-mysql which we don't use in production
 # Only postgres and sqlite are used
 ignore = [
-    "RUSTSEC-2024-0436"   # paste unmaintained - used only in optional ML features
+    "RUSTSEC-2024-0436",   # paste unmaintained - used only in optional ML features
+    "RUSTSEC-2023-0071"    # RSA Marvin attack - comes from sqlx-mysql which we don't use (only postgres/sqlite)
 ]
 
 [sources]

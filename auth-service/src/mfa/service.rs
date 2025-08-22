@@ -12,6 +12,7 @@ use crate::mfa::{
 use axum::extract::{Request, State};
 use axum::http::HeaderMap;
 use axum::Json;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -457,7 +458,7 @@ impl HighPerformanceMfaService {
             let mut code = String::new();
             for _ in 0..10 {
                 let mut byte = [0u8; 1];
-                getrandom::getrandom(&mut byte).expect("Failed to generate random byte");
+                rand::thread_rng().fill_bytes(&mut byte);
                 let char_index = byte[0] as usize % alphabet.len();
                 code.push(alphabet[char_index] as char);
             }

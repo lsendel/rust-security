@@ -7,6 +7,7 @@ use opentelemetry::{
     KeyValue,
 };
 use opentelemetry_jaeger::new_agent_pipeline;
+use rand::RngCore;
 use std::env;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -270,14 +271,14 @@ fn parse_traceparent(traceparent: &str) -> Result<TraceContext, &'static str> {
 /// Generate a new 32-character trace ID
 pub fn generate_trace_id() -> String {
     let mut bytes = [0u8; 16];
-    getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes");
+    rand::thread_rng().fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 
 /// Generate a new 16-character span ID
 pub fn generate_span_id() -> String {
     let mut bytes = [0u8; 8];
-    getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes");
+    rand::thread_rng().fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 

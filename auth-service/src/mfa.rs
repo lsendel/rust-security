@@ -4,6 +4,7 @@ use axum::{extract::State, Json};
 use data_encoding::BASE32;
 use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
+use rand::RngCore;
 use redis;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
@@ -321,7 +322,7 @@ pub async fn totp_register(
     // 20-byte random secret
     let secret = {
         let mut bytes = vec![0u8; 20];
-        getrandom::getrandom(&mut bytes).expect("random");
+        rand::thread_rng().fill_bytes(&mut bytes);
         bytes
     };
     let secret_b32 = BASE32.encode(&secret);
@@ -484,7 +485,7 @@ pub async fn totp_generate_backup_codes(
     let alphabet = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no lookalikes
     for _ in 0..8 {
         let mut b = [0u8; 10];
-        getrandom::getrandom(&mut b).expect("random");
+        rand::thread_rng().fill_bytes(&mut b);
         let code: String = b
             .iter()
             .map(|x| alphabet[(*x as usize) % alphabet.len()] as char)
@@ -536,7 +537,7 @@ fn verify_otp(code: &str, hash: &str) -> bool {
 
 fn generate_otp_code() -> String {
     let mut bytes = [0u8; 4];
-    getrandom::getrandom(&mut bytes).expect("random");
+    rand::thread_rng().fill_bytes(&mut bytes);
     let num = u32::from_be_bytes(bytes) % 1_000_000; // 6 digits
     format!("{:06}", num)
 }

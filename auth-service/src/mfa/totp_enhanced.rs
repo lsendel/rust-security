@@ -1,4 +1,5 @@
 use hmac::{Hmac, Mac};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
@@ -269,7 +270,7 @@ impl EnhancedTotpGenerator {
 
     pub fn generate_secret() -> Vec<u8> {
         let mut secret = vec![0u8; 32]; // 256-bit secret for better security
-        getrandom::getrandom(&mut secret).expect("Failed to generate random secret");
+        rand::thread_rng().fill_bytes(&mut secret);
         secret
     }
 

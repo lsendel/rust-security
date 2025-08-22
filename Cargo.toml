@@ -36,7 +36,7 @@ aes = "0.8"
 aes-gcm = "0.10"
 
 # Database
-sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros"], default-features = false }
+sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros", "runtime-tokio-rustls"], default-features = false }
 deadpool = "0.12"
 
 # Redis

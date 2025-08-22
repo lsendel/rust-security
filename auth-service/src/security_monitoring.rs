@@ -24,7 +24,7 @@ pub struct SecurityAlert {
     pub resolution_notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum SecurityAlertType {
     AuthenticationFailure,
     RateLimitExceeded,
@@ -38,7 +38,9 @@ pub enum SecurityAlertType {
     SystemIntegrity,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, utoipa::ToSchema,
+)]
 pub enum AlertSeverity {
     Low,
     Medium,
@@ -46,7 +48,7 @@ pub enum AlertSeverity {
     Critical,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SecurityThreshold {
     pub metric_name: String,
     pub threshold_value: f64,
@@ -56,7 +58,7 @@ pub struct SecurityThreshold {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct MonitoringConfig {
     pub enabled: bool,
     pub alert_retention_days: u64,
@@ -65,7 +67,7 @@ pub struct MonitoringConfig {
     pub thresholds: Vec<SecurityThreshold>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct NotificationEndpoint {
     pub name: String,
     pub endpoint_type: NotificationType,
@@ -75,7 +77,7 @@ pub struct NotificationEndpoint {
     pub min_severity: AlertSeverity,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum NotificationType {
     Webhook,
     Slack,
