@@ -2,6 +2,9 @@
 
 use auth_core::prelude::*;
 use serde_json::Value;
+use tower::ServiceExt; // oneshot
+use axum::http::{Request, StatusCode};
+use axum::body::{Body, to_bytes};
 
 #[tokio::test]
 async fn test_owasp_a1_injection_attacks() {
@@ -10,15 +13,7 @@ async fn test_owasp_a1_injection_attacks() {
         .build()
         .expect("Failed to build server");
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let server_handle = tokio::spawn(async move {
-        let _router = server.into_make_service();
-        drop(listener);
-    });
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let client = reqwest::Client::new();
+    let mut router = server.into_router().into_service();
 
     let sql_injection_payloads = vec![
         "'; DROP TABLE clients; --",
@@ -29,24 +24,26 @@ async fn test_owasp_a1_injection_attacks() {
     ];
 
     for payload in sql_injection_payloads {
-        let response = client
-            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-            .form(&[
-                ("grant_type", "client_credentials"),
-                ("client_id", payload),
-                ("client_secret", "test_secret"),
-            ])
-            .send()
-            .await
-            .expect("Failed to send SQL injection test");
+        let body = format!(
+            "grant_type=client_credentials&client_id={}&client_secret=test_secret",
+            urlencoding::encode(payload)
+        );
+        let request = Request::builder()
+            .method("POST")
+            .uri("/oauth/token")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(body))
+            .unwrap();
+        let response = router.clone().oneshot(request).await.unwrap();
 
         assert!(
-            response.status() == 401,
+            response.status() == StatusCode::UNAUTHORIZED,
             "SQL injection vulnerability with payload: {}",
             payload
         );
 
-        let response_text = response.text().await.unwrap_or_default();
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap_or_default();
+        let response_text = String::from_utf8_lossy(&bytes);
         let error_json: serde_json::Result<Value> = serde_json::from_str(&response_text);
         assert!(
             error_json.is_ok(),
@@ -54,8 +51,6 @@ async fn test_owasp_a1_injection_attacks() {
             payload
         );
     }
-
-    server_handle.abort();
 }
 
 #[tokio::test]
@@ -65,15 +60,7 @@ async fn test_owasp_a2_broken_authentication() {
         .build()
         .expect("Failed to build server");
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let server_handle = tokio::spawn(async move {
-        let _router = server.into_make_service();
-        drop(listener);
-    });
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let client = reqwest::Client::new();
+    let mut router = server.into_router().into_service();
 
     let bypass_attempts = vec![
         ("", ""),
@@ -260,18 +247,16 @@ async fn test_owasp_a6_security_misconfiguration() {
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let client = reqwest::Client::new();
 
-    let response = client
-        .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-        .form(&[
-            ("grant_type", "client_credentials"),
-            ("client_id", "test_client"),
-            ("client_secret", "test_secret"),
-        ])
-        .send()
-        .await
-        .expect("Failed to send security header test");
+    let body = "grant_type=client_credentials&client_id=test_client&client_secret=test_secret";
+    let request = Request::builder()
+        .method("POST")
+        .uri("/oauth/token")
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
 
-    let headers = response.headers();
+    let headers = response.headers().clone();
     assert!(
         headers.contains_key("content-type"),
         "Missing Content-Type header"
@@ -289,51 +274,19 @@ async fn test_owasp_a6_security_misconfiguration() {
 
     let methods = vec!["GET", "PUT", "DELETE", "PATCH", "HEAD"];
     for method in methods {
-        let response = match method {
-            "GET" => {
-                client
-                    .get(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-                    .send()
-                    .await
-            }
-            "PUT" => {
-                client
-                    .put(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-                    .send()
-                    .await
-            }
-            "DELETE" => {
-                client
-                    .delete(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-                    .send()
-                    .await
-            }
-            "PATCH" => {
-                client
-                    .patch(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-                    .send()
-                    .await
-            }
-            "HEAD" => {
-                client
-                    .head(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-                    .send()
-                    .await
-            }
-            _ => continue,
-        };
-
-        if let Ok(resp) = response {
-            assert_eq!(
-                resp.status(),
-                405,
-                "{} method should not be allowed",
-                method
-            );
-        }
+        let request = Request::builder()
+            .method(method)
+            .uri("/oauth/token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = router.clone().oneshot(request).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::METHOD_NOT_ALLOWED,
+            "{} method should not be allowed",
+            method
+        );
     }
-
-    server_handle.abort();
 }
 
 #[tokio::test]

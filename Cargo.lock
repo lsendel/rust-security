@@ -326,6 +326,7 @@ dependencies = [
  "tower-http 0.5.2",
  "tower-service",
  "url",
+ "urlencoding",
 ]
 
 [[package]]

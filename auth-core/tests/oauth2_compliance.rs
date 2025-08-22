@@ -2,6 +2,9 @@
 
 use auth_core::prelude::*;
 use serde_json::Value;
+use tower::ServiceExt; // oneshot
+use axum::body::{to_bytes, Body};
+use axum::http::Request;
 use tower::ServiceExt; // for oneshot
 
 #[tokio::test]
@@ -12,18 +15,18 @@ async fn test_client_credentials_flow_rfc6749_section_4_4() {
         .expect("Failed to build server");
 
     // Build router and hit it directly (no network)
-    let mut router = server.into_router();
+    let mut svc = server.into_router().into_service();
     let body = "grant_type=client_credentials&client_id=test_client&client_secret=test_secret";
-    let request = axum::http::Request::builder()
+    let request = Request::builder()
         .method("POST")
         .uri("/oauth/token")
         .header("content-type", "application/x-www-form-urlencoded")
-        .body(axum::body::Body::from(body.to_string()))
+        .body(Body::from(body.to_string()))
         .unwrap();
-    let response = router.oneshot(request).await.unwrap();
+    let response = svc.oneshot(request).await.unwrap();
     assert_eq!(response.status(), axum::http::StatusCode::OK);
 
-    let bytes = hyper::body::to_bytes(response.into_body()).await.unwrap();
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let token_response: Value = serde_json::from_slice(&bytes).expect("Failed to parse JSON");
     assert!(token_response.get("access_token").is_some());
     assert_eq!(token_response.get("token_type").unwrap(), "Bearer");
@@ -37,7 +40,7 @@ async fn test_client_credentials_flow_rfc6749_section_4_4() {
     assert!(access_token.starts_with("auth_core_"));
     assert!(access_token.len() > 32);
 
-    server_handle.abort();
+    // no runtime server spawned in this test
 }
 
 #[tokio::test]
