@@ -1,6 +1,6 @@
-use thiserror::Error;
 use regex::Regex;
 use std::collections::HashSet;
+use thiserror::Error;
 
 // SCIM Filter parsing structures, now public for sharing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,11 +163,12 @@ fn detect_injection_attempts(input: &str) -> bool {
     }
 
     // Check for common injection indicators
-    if input_lower.contains("/*") || 
-       input_lower.contains("*/") || 
-       input_lower.contains("--") ||
-       input_lower.contains("xp_") ||
-       input_lower.contains("sp_") {
+    if input_lower.contains("/*")
+        || input_lower.contains("*/")
+        || input_lower.contains("--")
+        || input_lower.contains("xp_")
+        || input_lower.contains("sp_")
+    {
         return true;
     }
 
@@ -189,7 +190,9 @@ mod tests {
     #[test]
     fn test_sql_injection_detection() {
         assert!(parse_scim_filter("userName eq \"john'; DROP TABLE users;--\"").is_err());
-        assert!(parse_scim_filter("userName eq \"john UNION SELECT password FROM users\"").is_err());
+        assert!(
+            parse_scim_filter("userName eq \"john UNION SELECT password FROM users\"").is_err()
+        );
         assert!(parse_scim_filter("userName eq \"john' OR '1'='1\"").is_err());
     }
 

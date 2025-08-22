@@ -395,7 +395,9 @@ pub async fn add_api_security_headers(request: Request, next: Next) -> Response 
     // Prevent caching of API responses
     headers.insert(
         "Cache-Control",
-        "no-store, no-cache, must-revalidate, private, max-age=0".parse().unwrap(),
+        "no-store, no-cache, must-revalidate, private, max-age=0"
+            .parse()
+            .unwrap(),
     );
 
     // Secure CORS headers for API (restrictive by default)
@@ -423,10 +425,7 @@ pub async fn add_api_security_headers(request: Request, next: Next) -> Response 
     );
 
     // Ensure credentials are not allowed by default
-    headers.insert(
-        "Access-Control-Allow-Credentials",
-        "false".parse().unwrap(),
-    );
+    headers.insert("Access-Control-Allow-Credentials", "false".parse().unwrap());
 
     response
 }
@@ -515,7 +514,10 @@ mod tests {
         assert!(headers.contains_key("Cache-Control"));
         assert!(headers.contains_key("Access-Control-Allow-Origin"));
         assert!(headers.contains_key("Access-Control-Allow-Methods"));
-        assert_eq!(headers.get("Access-Control-Allow-Credentials").unwrap(), "false");
+        assert_eq!(
+            headers.get("Access-Control-Allow-Credentials").unwrap(),
+            "false"
+        );
     }
 
     #[tokio::test]
@@ -524,7 +526,7 @@ mod tests {
         assert!(config.csp.contains("object-src 'none'"));
         assert!(config.csp.contains("base-uri 'self'"));
         assert!(config.csp.contains("form-action 'self'"));
-        
+
         let prod_config = SecurityHeadersConfig::production();
         assert!(prod_config.csp.contains("upgrade-insecure-requests"));
         assert!(prod_config.csp.contains("frame-ancestors 'none'"));

@@ -569,8 +569,8 @@ fn generate_default_secret() -> String {
             );
 
             // Generate a random secret for development
-            use rand::RngCore;
             use rand::rngs::OsRng;
+            use rand::RngCore;
             let mut random_bytes = vec![0u8; 32];
             OsRng.fill_bytes(&mut random_bytes);
             base64::engine::general_purpose::STANDARD.encode(random_bytes)

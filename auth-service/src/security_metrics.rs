@@ -282,69 +282,113 @@ impl Default for SecurityMetrics {
                 auth_attempts_total: IntCounterVec::new(
                     Opts::new("auth_attempts_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 auth_failures_total: IntCounterVec::new(
                     Opts::new("auth_failures_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 auth_success_total: IntCounterVec::new(
                     Opts::new("auth_success_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 tokens_issued_total: IntCounterVec::new(
                     Opts::new("tokens_issued_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 tokens_revoked_total: IntCounterVec::new(
                     Opts::new("tokens_revoked_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
-                token_binding_violations_total: IntCounter::new("token_binding_violations_total_fallback", "Fallback metric").unwrap(),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                token_binding_violations_total: IntCounter::new(
+                    "token_binding_violations_total_fallback",
+                    "Fallback metric",
+                )
+                .unwrap(),
                 token_introspection_total: IntCounterVec::new(
                     Opts::new("token_introspection_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 security_events_total: IntCounterVec::new(
                     Opts::new("security_events_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 input_validation_failures_total: IntCounterVec::new(
-                    Opts::new("input_validation_failures_total_fallback", "Fallback metric"),
+                    Opts::new(
+                        "input_validation_failures_total_fallback",
+                        "Fallback metric",
+                    ),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 rate_limit_hits_total: IntCounterVec::new(
                     Opts::new("rate_limit_hits_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
-                request_signature_failures_total: IntCounter::new("request_signature_failures_total_fallback", "Fallback metric").unwrap(),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                request_signature_failures_total: IntCounter::new(
+                    "request_signature_failures_total_fallback",
+                    "Fallback metric",
+                )
+                .unwrap(),
                 mfa_attempts_total: IntCounterVec::new(
                     Opts::new("mfa_attempts_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
                 mfa_failures_total: IntCounterVec::new(
                     Opts::new("mfa_failures_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
-                backup_codes_used_total: IntCounter::new("backup_codes_used_total_fallback", "Fallback metric").unwrap(),
-                active_sessions: IntGauge::new("active_sessions_fallback", "Fallback metric").unwrap(),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                backup_codes_used_total: IntCounter::new(
+                    "backup_codes_used_total_fallback",
+                    "Fallback metric",
+                )
+                .unwrap(),
+                active_sessions: IntGauge::new("active_sessions_fallback", "Fallback metric")
+                    .unwrap(),
                 suspicious_activity_total: IntCounterVec::new(
                     Opts::new("suspicious_activity_total_fallback", "Fallback metric"),
                     &["status"],
-                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
-                security_headers_applied_total: IntCounter::new("security_headers_applied_total_fallback", "Fallback metric").unwrap(),
+                )
+                .unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                security_headers_applied_total: IntCounter::new(
+                    "security_headers_applied_total_fallback",
+                    "Fallback metric",
+                )
+                .unwrap(),
                 auth_duration_seconds: HistogramVec::new(
-                    prometheus::HistogramOpts::new("auth_duration_seconds_fallback", "Fallback metric"),
+                    prometheus::HistogramOpts::new(
+                        "auth_duration_seconds_fallback",
+                        "Fallback metric",
+                    ),
                     &["status"],
-                ).unwrap_or_else(|_| HistogramVec::new(prometheus::HistogramOpts::new("fallback", ""), &[""]).unwrap()),
-                token_validation_duration_seconds: Histogram::with_opts(prometheus::HistogramOpts::new("token_validation_duration_seconds_fallback", "Fallback metric")).unwrap(),
+                )
+                .unwrap_or_else(|_| {
+                    HistogramVec::new(prometheus::HistogramOpts::new("fallback", ""), &[""])
+                        .unwrap()
+                }),
+                token_validation_duration_seconds: Histogram::with_opts(
+                    prometheus::HistogramOpts::new(
+                        "token_validation_duration_seconds_fallback",
+                        "Fallback metric",
+                    ),
+                )
+                .unwrap(),
             }
         })
     }
 }
 
 /// Global security metrics instance - use Result-based initialization
-pub static SECURITY_METRICS: Lazy<SecurityMetrics> =
-    Lazy::new(|| SecurityMetrics::default());
+pub static SECURITY_METRICS: Lazy<SecurityMetrics> = Lazy::new(|| SecurityMetrics::default());
 
 /// Helper macro for recording security events
 #[macro_export]

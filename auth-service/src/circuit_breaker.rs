@@ -102,7 +102,9 @@ impl CircuitBreaker {
     }
 
     pub fn state(&self) -> CircuitState {
-        self.state.state.lock()
+        self.state
+            .state
+            .lock()
             .map(|state| *state)
             .unwrap_or_else(|e| {
                 tracing::error!("Failed to acquire circuit breaker state lock: {}", e);
@@ -161,7 +163,10 @@ impl CircuitBreaker {
             CircuitState::Closed => Ok(()),
             CircuitState::Open => {
                 // Check if we should transition to half-open
-                let next_attempt = self.state.next_attempt.lock()
+                let next_attempt = self
+                    .state
+                    .next_attempt
+                    .lock()
                     .map(|guard| *guard)
                     .unwrap_or_else(|e| {
                         tracing::error!("Failed to acquire next_attempt lock: {}", e);
@@ -263,7 +268,9 @@ impl CircuitBreaker {
                 if let Ok(mut next_attempt) = self.state.next_attempt.lock() {
                     *next_attempt = Instant::now() + self.config.recovery_timeout;
                 } else {
-                    tracing::error!("Failed to acquire next_attempt lock during transition to open");
+                    tracing::error!(
+                        "Failed to acquire next_attempt lock during transition to open"
+                    );
                 }
 
                 tracing::warn!(
