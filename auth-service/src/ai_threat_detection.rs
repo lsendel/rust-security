@@ -159,7 +159,7 @@ impl AiThreatDetector {
         let processing_time = start_time.elapsed().as_millis() as u64;
 
         let threat_types = threat_classification.threat_types.clone();
-        
+
         let assessment = ThreatAssessment {
             risk_level: risk_level.clone(),
             confidence,
@@ -715,7 +715,7 @@ impl AiThreatDetector {
         let standard_headers = ["user-agent", "accept", "accept-language"];
         standard_headers
             .iter()
-            .filter(|header| !headers.contains_key(header))
+            .filter(|&header| !headers.contains_key(&header.to_string()))
             .count()
     }
 

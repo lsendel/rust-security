@@ -203,8 +203,7 @@ impl SecureSessionManager {
         if now > session.expires_at {
             let user_id = session.user_id.clone();
             sessions.remove(session_id);
-            self.cleanup_user_session(&user_id, session_id)
-                .await;
+            self.cleanup_user_session(&user_id, session_id).await;
             return Err(SessionError::SessionExpired);
         }
 
@@ -213,8 +212,7 @@ impl SecureSessionManager {
         if idle_duration.num_seconds() > self.config.max_idle_time_seconds as i64 {
             let user_id = session.user_id.clone();
             sessions.remove(session_id);
-            self.cleanup_user_session(&user_id, session_id)
-                .await;
+            self.cleanup_user_session(&user_id, session_id).await;
             return Err(SessionError::SessionIdleTimeout);
         }
 
@@ -230,8 +228,7 @@ impl SecureSessionManager {
 
             let user_id = session.user_id.clone();
             sessions.remove(session_id);
-            self.cleanup_user_session(&user_id, session_id)
-                .await;
+            self.cleanup_user_session(&user_id, session_id).await;
             return Err(SessionError::SessionHijackingDetected);
         }
 
@@ -247,8 +244,7 @@ impl SecureSessionManager {
 
                 let user_id = session.user_id.clone();
                 sessions.remove(session_id);
-                self.cleanup_user_session(&user_id, session_id)
-                    .await;
+                self.cleanup_user_session(&user_id, session_id).await;
                 return Err(SessionError::SessionHijackingDetected);
             }
         }

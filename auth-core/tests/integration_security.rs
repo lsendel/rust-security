@@ -1,13 +1,17 @@
 #![cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
+use auth_core::{
+    client::ClientConfig,
+    server::{AppState, ServerConfig},
+    store::MemoryStore,
+};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use auth_core::{client::ClientConfig, server::{AppState, ServerConfig}, store::MemoryStore};
-use serde_json::Value;
 use tower::ServiceExt; // oneshot
 
 #[tokio::test]
@@ -62,8 +66,25 @@ async fn test_owasp_a1_injection_attacks() {
 #[tokio::test]
 async fn test_owasp_a2_broken_authentication() {
     let mut clients = HashMap::new();
-    clients.insert("valid_client".to_string(), ClientConfig { client_id: "valid_client".into(), client_secret: "secure_secret".into(), grant_types: vec!["client_credentials".into()], scopes: vec!["default".into()] });
-    let state = AppState { config: ServerConfig { clients, rate_limit: 100, cors_enabled: true, jwt_secret: None, protected_routes: vec![] }, store: Arc::new(RwLock::new(MemoryStore::new())) };
+    clients.insert(
+        "valid_client".to_string(),
+        ClientConfig {
+            client_id: "valid_client".into(),
+            client_secret: "secure_secret".into(),
+            grant_types: vec!["client_credentials".into()],
+            scopes: vec!["default".into()],
+        },
+    );
+    let state = AppState {
+        config: ServerConfig {
+            clients,
+            rate_limit: 100,
+            cors_enabled: true,
+            jwt_secret: None,
+            protected_routes: vec![],
+        },
+        store: Arc::new(RwLock::new(MemoryStore::new())),
+    };
 
     let bypass_attempts = vec![
         ("", ""),
@@ -79,9 +100,20 @@ async fn test_owasp_a2_broken_authentication() {
     for (client_id, client_secret) in bypass_attempts {
         let res = auth_core::handler::token::client_credentials(
             axum::extract::State(state.clone()),
-            axum::Form(TokenRequest { grant_type: "client_credentials".into(), client_id: client_id.into(), client_secret: client_secret.into(), scope: None })
-        ).await;
-        assert!(res.is_err(), "Authentication bypass with: '{}'/'{}'", client_id, client_secret);
+            axum::Form(TokenRequest {
+                grant_type: "client_credentials".into(),
+                client_id: client_id.into(),
+                client_secret: client_secret.into(),
+                scope: None,
+            }),
+        )
+        .await;
+        assert!(
+            res.is_err(),
+            "Authentication bypass with: '{}'/'{}'",
+            client_id,
+            client_secret
+        );
     }
 }
 

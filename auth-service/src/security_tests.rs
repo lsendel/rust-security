@@ -313,7 +313,7 @@ mod security_tests {
     /// Test secure random generation
     #[test]
     fn test_secure_random_generation() {
-        let rng = SecureRandom::new();
+        let rng = ring::rand::SystemRandom::new();
 
         // Generate multiple random values
         let random1 = rng.generate_bytes(32).unwrap();
@@ -334,7 +334,7 @@ mod security_tests {
     /// Test session ID generation security
     #[test]
     fn test_session_id_generation_security() {
-        let rng = SecureRandom::new();
+        let rng = ring::rand::SystemRandom::new();
 
         // Generate multiple session IDs
         let id1 = rng.generate_session_id().unwrap();
@@ -427,7 +427,7 @@ mod security_tests {
         // no unsafe blocks are used in our security implementations
 
         // Generate some secure random data
-        let rng = SecureRandom::new();
+        let rng = ring::rand::SystemRandom::new();
         let data = rng.generate_bytes(1024).unwrap();
 
         // Process it through our security functions

@@ -1,12 +1,12 @@
 #![cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
-use axum::body::to_bytes;
 use auth_core::{
     client::ClientConfig,
     server::{AppState, ServerConfig},
     store::MemoryStore,
 };
+use axum::body::to_bytes;
 use axum::{extract::State, response::IntoResponse, Form};
 use serde_json::Value;
 use std::collections::HashMap;

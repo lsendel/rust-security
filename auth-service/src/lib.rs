@@ -632,9 +632,7 @@ async fn extract_user_from_token(
     // Enforce token binding if present
     if let Some(binding) = &record.token_binding {
         let (client_ip, user_agent) = crate::security::extract_client_info(headers);
-        match crate::security::validate_token_binding(binding, &client_ip, &user_agent)
-            
-        {
+        match crate::security::validate_token_binding(binding, &client_ip, &user_agent) {
             Ok(true) => {} // Token binding is valid
             Ok(false) => {
                 return Err(AuthError::InvalidToken {
@@ -1244,18 +1242,16 @@ async fn evaluate_policy_remote(
         .get("x-policy-url")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(
-            || match std::env::var("POLICY_SERVICE_URL") {
-                Ok(v) if !v.trim().is_empty() => v,
-                _ => {
-                    if std::env::var("TEST_MODE").ok().as_deref() == Some("1") {
-                        "http://127.0.0.1:8081".to_string()
-                    } else {
-                        "".to_string()
-                    }
+        .unwrap_or_else(|| match std::env::var("POLICY_SERVICE_URL") {
+            Ok(v) if !v.trim().is_empty() => v,
+            _ => {
+                if std::env::var("TEST_MODE").ok().as_deref() == Some("1") {
+                    "http://127.0.0.1:8081".to_string()
+                } else {
+                    "".to_string()
                 }
-            },
-        );
+            }
+        });
 
     let url = if policy_base.is_empty() {
         String::new()
@@ -1416,9 +1412,7 @@ pub async fn admin_health(
     // Note: This would require a reference to the session manager from app state
 
     // Aggregate health status
-    let overall_status = if store_health.get("status").and_then(|s| s.as_str())
-        == Some("healthy")
-    {
+    let overall_status = if store_health.get("status").and_then(|s| s.as_str()) == Some("healthy") {
         "healthy"
     } else {
         "degraded"
@@ -1530,24 +1524,22 @@ pub async fn introspect(
     use crate::metrics::METRICS;
     let start_time = std::time::Instant::now();
     // In TEST_MODE, allow introspection without client authentication to simplify integration tests
-    if std::env::var("TEST_MODE") {
+    if std::env::var("TEST_MODE").is_ok() {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) = if let Some(auth_header) = headers
-            .get(axum::http::header::AUTHORIZATION)
-            
-        {
-            let header_val = auth_header.to_str().unwrap_or("");
-            if let Some(b64) = header_val.strip_prefix("Basic ") {
-                if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD
-                    .decode(b64)
-                    
-                {
-                    if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
-                        let mut parts = pair.splitn(2, ':');
-                        (
-                            parts.next().map(|s| s.to_string()),
-                            parts.next().map(|s| s.to_string()),
-                        )
+        let (cid_opt, csec_opt) =
+            if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+                let header_val = auth_header.to_str().unwrap_or("");
+                if let Some(b64) = header_val.strip_prefix("Basic ") {
+                    if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
+                            let mut parts = pair.splitn(2, ':');
+                            (
+                                parts.next().map(|s| s.to_string()),
+                                parts.next().map(|s| s.to_string()),
+                            )
+                        } else {
+                            (None, None)
+                        }
                     } else {
                         (None, None)
                     }
@@ -1556,10 +1548,7 @@ pub async fn introspect(
                 }
             } else {
                 (None, None)
-            }
-        } else {
-            (None, None)
-        };
+            };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
         if state.client_credentials.get(&client_id) != Some(&client_secret) {
@@ -1784,9 +1773,7 @@ pub async fn oauth_authorize(
 
     // Validate scope
     if let Some(scope) = &req.scope {
-        if !validate_scope(scope, &state.allowed_scopes)
-            
-        {
+        if !validate_scope(scope, &state.allowed_scopes) {
             return Err(AuthError::InvalidScope {
                 scope: scope.clone(),
             });
@@ -1852,19 +1839,11 @@ pub async fn oauth_authorize(
     .with_detail("has_pkce".to_string(), req.code_challenge.is_some())
     .with_detail("response_type".to_string(), req.response_type.clone());
 
-    if let Some(user_agent) = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        
-    {
+    if let Some(user_agent) = headers.get("user-agent").and_then(|v| v.to_str().ok()) {
         event = event.with_user_agent(user_agent.to_string());
     }
 
-    if let Some(request_id) = headers
-        .get("x-request-id")
-        .and_then(|v| v.to_str().ok())
-        
-    {
+    if let Some(request_id) = headers.get("x-request-id").and_then(|v| v.to_str().ok()) {
         event = event.with_request_id(request_id.to_string());
     }
 
@@ -1994,28 +1973,18 @@ pub async fn issue_token(
     match form.grant_type.as_str() {
         "client_credentials" => {
             // Allow either form credentials or HTTP Basic Authorization
-            let (cid_opt, csec_opt) =
-                if form.client_id.is_some() || form.client_secret.is_some() {
-                    (form.client_id.clone(), form.client_secret.clone())
-                } else if let Some(auth_header) = headers
-                    .get(axum::http::header::AUTHORIZATION)
-                    
-                {
-                    let header_val = auth_header.to_str().unwrap_or("");
-                    if let Some(b64) = header_val.strip_prefix("Basic ") {
-                        if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD
-                            .decode(b64)
-                            
-                        {
-                            if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
-                                let mut parts = pair.splitn(2, ':');
-                                (
-                                    parts.next().map(|s| s.to_string()),
-                                    parts.next().map(|s| s.to_string()),
-                                )
-                            } else {
-                                (None, None)
-                            }
+            let (cid_opt, csec_opt) = if form.client_id.is_some() || form.client_secret.is_some() {
+                (form.client_id.clone(), form.client_secret.clone())
+            } else if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+                let header_val = auth_header.to_str().unwrap_or("");
+                if let Some(b64) = header_val.strip_prefix("Basic ") {
+                    if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
+                            let mut parts = pair.splitn(2, ':');
+                            (
+                                parts.next().map(|s| s.to_string()),
+                                parts.next().map(|s| s.to_string()),
+                            )
                         } else {
                             (None, None)
                         }
@@ -2024,7 +1993,10 @@ pub async fn issue_token(
                     }
                 } else {
                     (None, None)
-                };
+                }
+            } else {
+                (None, None)
+            };
 
             let client_id = cid_opt.as_ref().ok_or(AuthError::MissingClientId)?;
             let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
@@ -2204,13 +2176,7 @@ pub async fn issue_token(
                 .as_ref()
                 .ok_or(AuthError::MissingRefreshToken)?;
             // Detect refresh token reuse
-            if state
-                .store
-                .is_refresh_reused(rt)
-                .await
-                .unwrap_or(false)
-                
-            {
+            if state.store.is_refresh_reused(rt).await.unwrap_or(false) {
                 SecurityLogger::log_token_operation(
                     "refresh",
                     "refresh_token",
@@ -2375,16 +2341,17 @@ pub async fn issue_token(
                         reason: "invalid code_challenge_method".to_string(),
                     })?;
 
-                if crate::security::validate_pkce_params(
+                match crate::security::validate_pkce_params(
                     code_verifier,
                     stored_challenge,
                     challenge_method,
-                )
-                
-                {
-                    return Err(AuthError::InvalidRequest {
-                        reason: "PKCE validation failed".to_string(),
-                    });
+                ) {
+                    Ok(true) => {} // PKCE validation passed
+                    Ok(false) | Err(_) => {
+                        return Err(AuthError::InvalidRequest {
+                            reason: "PKCE validation failed".to_string(),
+                        });
+                    }
                 }
             }
 
@@ -2536,11 +2503,7 @@ pub async fn userinfo(
 
     // Enforce required scopes (at least "openid")
     if let Some(scope) = &rec.scope {
-        if !scope
-            .split_whitespace()
-            .any(|s| s == "openid")
-            
-        {
+        if !scope.split_whitespace().any(|s| s == "openid") {
             return Err(AuthError::UnauthorizedClient {
                 client_id: "insufficient_scope".to_string(),
             });
@@ -2571,19 +2534,11 @@ pub async fn userinfo(
         event = event.with_user_id(sub.clone());
     }
 
-    if let Some(user_agent) = headers
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        
-    {
+    if let Some(user_agent) = headers.get("user-agent").and_then(|v| v.to_str().ok()) {
         event = event.with_user_agent(user_agent.to_string());
     }
 
-    if let Some(request_id) = headers
-        .get("x-request-id")
-        .and_then(|v| v.to_str().ok())
-        
-    {
+    if let Some(request_id) = headers.get("x-request-id").and_then(|v| v.to_str().ok()) {
         event = event.with_request_id(request_id.to_string());
     }
 
@@ -2782,22 +2737,20 @@ pub async fn revoke_token(
     // In TEST_MODE, bypass client authentication to simplify integration tests
     if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) = if let Some(auth_header) = headers
-            .get(axum::http::header::AUTHORIZATION)
-            
-        {
-            let header_val = auth_header.to_str().unwrap_or("");
-            if let Some(b64) = header_val.strip_prefix("Basic ") {
-                if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD
-                    .decode(b64)
-                    
-                {
-                    if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
-                        let mut parts = pair.splitn(2, ':');
-                        (
-                            parts.next().map(|s| s.to_string()),
-                            parts.next().map(|s| s.to_string()),
-                        )
+        let (cid_opt, csec_opt) =
+            if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+                let header_val = auth_header.to_str().unwrap_or("");
+                if let Some(b64) = header_val.strip_prefix("Basic ") {
+                    if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                        if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
+                            let mut parts = pair.splitn(2, ':');
+                            (
+                                parts.next().map(|s| s.to_string()),
+                                parts.next().map(|s| s.to_string()),
+                            )
+                        } else {
+                            (None, None)
+                        }
                     } else {
                         (None, None)
                     }
@@ -2806,10 +2759,7 @@ pub async fn revoke_token(
                 }
             } else {
                 (None, None)
-            }
-        } else {
-            (None, None)
-        };
+            };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
         if state.client_credentials.get(&client_id) != Some(&client_secret) {
