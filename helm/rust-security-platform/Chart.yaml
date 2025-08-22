@@ -1,0 +1,34 @@
+apiVersion: v2
+name: rust-security-platform
+description: Enterprise-grade authentication and authorization platform built with Rust
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/your-org/rust-security-platform
+sources:
+  - https://github.com/your-org/rust-security-platform
+maintainers:
+  - name: Security Team
+    email: security@yourorg.com
+keywords:
+  - authentication
+  - authorization
+  - security
+  - rust
+  - oauth
+  - saml
+annotations:
+  category: Security
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "17.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: prometheus
+    version: "15.x.x"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: monitoring.prometheus.enabled

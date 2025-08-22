@@ -1,0 +1,214 @@
+# Default values for rust-security-platform
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: "ghcr.io"
+  imagePullSecrets: []
+  storageClass: ""
+
+# Auth Service Configuration
+authService:
+  enabled: true
+  replicaCount: 3
+  
+  image:
+    repository: your-org/rust-security-platform
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+    annotations: {}
+  
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: auth.yourdomain.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: auth-tls
+        hosts:
+          - auth.yourdomain.com
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Policy Service Configuration
+policyService:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: your-org/rust-security-platform
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8081
+  
+  resources:
+    limits:
+      cpu: 300m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# Database Configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "changeme"
+    database: "rust_security"
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+# Redis Configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "changeme"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 128Mi
+
+# Monitoring Configuration
+monitoring:
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+  
+  grafana:
+    enabled: true
+    adminPassword: "changeme"
+    dashboards:
+      enabled: true
+
+# Security Configuration
+security:
+  networkPolicies:
+    enabled: true
+  
+  podSecurityPolicy:
+    enabled: true
+  
+  rbac:
+    create: true
+  
+  serviceAccount:
+    create: true
+    annotations: {}
+
+# Configuration
+config:
+  # JWT Configuration
+  jwt:
+    secret: "your-jwt-secret-here"
+    expirationHours: 24
+  
+  # OAuth Configuration
+  oauth:
+    google:
+      clientId: ""
+      clientSecret: ""
+    github:
+      clientId: ""
+      clientSecret: ""
+  
+  # SAML Configuration
+  saml:
+    enabled: false
+    entityId: ""
+    ssoUrl: ""
+    certificate: ""
+  
+  # Rate Limiting
+  rateLimit:
+    enabled: true
+    requestsPerMinute: 100
+    burstSize: 20
+  
+  # Logging
+  logging:
+    level: "info"
+    format: "json"
+  
+  # Tracing
+  tracing:
+    enabled: true
+    jaegerEndpoint: ""
+    samplingRate: 0.1
+
+# External Dependencies
+externalDatabase:
+  enabled: false
+  host: ""
+  port: 5432
+  database: "rust_security"
+  username: "postgres"
+  password: ""
+
+externalRedis:
+  enabled: false
+  host: ""
+  port: 6379
+  password: ""
+
+# Backup Configuration
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  retention: "30d"
+  storage:
+    type: "s3"
+    bucket: ""
+    region: ""

@@ -70,3 +70,23 @@ perf.data
 perf.data.old
 *.prof
 *.trace
+
+# Generated reports and summaries
+*_SUMMARY.md
+*_REPORT.md
+*_FIXES*.md
+*_STATUS*.md
+dependency-report-*.md
+linker_fix_log.txt
+
+# Backup files
+*.backup
+*.backup.*
+*.bak
+*.bak[0-9]
+
+# Node.js (for frontend components)
+node_modules/
+package-lock.json
+dist/
+.eslintrc.json

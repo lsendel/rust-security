@@ -1,0 +1,722 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Daily security scan at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  RUST_VERSION: 1.75.0
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  HELM_VERSION: v3.13.0
+  COSIGN_VERSION: v2.2.2
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+  actions: read
+  pull-requests: read
+
+jobs:
+  # ============================================================================
+  # SECURITY SCANNING
+  # ============================================================================
+  
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Run GitLeaks secret scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run TruffleHog secret scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified --max-depth=50
+
+      - name: Upload security results
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: security-scan-results
+          path: |
+            gitleaks-report.json
+            trufflehog-results.json
+
+  # ============================================================================
+  # DEPENDENCY AUDIT
+  # ============================================================================
+  
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        run: |
+          cargo audit --json > audit-report.json
+          cargo audit
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+
+      - name: Run cargo deny check
+        run: cargo deny check
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: dependency-audit-results
+          path: audit-report.json
+
+      - name: Generate SBOM
+        run: |
+          cargo install cargo-cyclonedx
+          cargo cyclonedx --format json --output-file sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: sbom
+          path: sbom.json
+
+  # ============================================================================
+  # CODE QUALITY & LINTING
+  # ============================================================================
+  
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy with security lints
+        run: |
+          cargo clippy --all-targets --all-features -- \
+            -D warnings \
+            -D clippy::unwrap_used \
+            -D clippy::expect_used \
+            -D clippy::panic \
+            -D clippy::indexing_slicing \
+            -D clippy::integer_overflow \
+            -W clippy::pedantic \
+            -W clippy::nursery \
+            -W clippy::cargo
+
+      - name: Run cargo-tarpaulin for code coverage
+        run: |
+          cargo install cargo-tarpaulin
+          cargo tarpaulin --out xml --output-dir coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
+        with:
+          file: ./coverage/cobertura.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  # ============================================================================
+  # BUILD & TEST
+  # ============================================================================
+  
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, nightly]
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --all-features
+
+      - name: Run unit tests
+        run: cargo test --all-features --no-fail-fast
+
+      - name: Run integration tests
+        run: cargo test --test '*' --all-features
+
+      - name: Run doc tests
+        run: cargo test --doc --all-features
+
+      - name: Build documentation
+        run: cargo doc --no-deps --all-features
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: build-artifacts-${{ matrix.os }}-${{ matrix.rust }}
+          path: |
+            target/release/auth-service
+            target/release/policy-service
+
+  # ============================================================================
+  # SECURITY TESTING
+  # ============================================================================
+  
+  security-testing:
+    name: Security Testing
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Run fuzz tests
+        run: |
+          cd auth-service
+          cargo fuzz run scim_filter_parser -- -max_total_time=300 || true
+          cargo fuzz run oauth_parser -- -max_total_time=300 || true
+        continue-on-error: true
+
+      - name: Run security integration tests
+        run: |
+          cargo test --test security_test --all-features
+          cargo test --test threat_hunting_integration_test --all-features
+
+      - name: SAST with Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/rust
+            p/owasp-top-ten
+
+      - name: Upload security test results
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: security-test-results
+          path: |
+            fuzz/artifacts/
+            semgrep-results.sarif
+
+  # ============================================================================
+  # CONTAINER BUILD & SCAN
+  # ============================================================================
+  
+  container-build:
+    name: Container Build & Scan
+    runs-on: ubuntu-latest
+    needs: [security-scan, dependency-audit, code-quality]
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@2b51285047da1547ffb1b2203d8be4c0af6b1f20
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build container image
+        id: build
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0
+        with:
+          context: .
+          file: ./security/configs/Dockerfile.security
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/image.tar
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@d43c1f16c00cfd3978dde6c07f4bbcf9eb6993ca
+        with:
+          input: /tmp/image.tar
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@e675ced7a7522a761fc9c8eb26682c8b27c42b2b
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Grype vulnerability scanner
+        uses: anchore/scan-action@3343cc5e622aca2a8c085862117563aa9a4e91d5
+        with:
+          path: /tmp/image.tar
+          fail-build: true
+          severity-cutoff: high
+
+      - name: Run Docker Bench Security
+        run: |
+          docker run --rm --net host --pid host --userns host --cap-add audit_control \
+            -v /etc:/etc:ro \
+            -v /usr/bin/containerd:/usr/bin/containerd:ro \
+            -v /usr/bin/runc:/usr/bin/runc:ro \
+            -v /usr/lib/systemd:/usr/lib/systemd:ro \
+            -v /var/lib:/var/lib:ro \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            docker/docker-bench-security
+
+      - name: Push container image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0
+        with:
+          context: .
+          file: ./security/configs/Dockerfile.security
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ============================================================================
+  # CONTAINER SIGNING
+  # ============================================================================
+  
+  container-sign:
+    name: Sign Container Image
+    runs-on: ubuntu-latest
+    needs: [container-build]
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign container image with Cosign
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign --yes \
+            --annotations "repo=${{ github.repository }}" \
+            --annotations "workflow=${{ github.workflow }}" \
+            --annotations "ref=${{ github.sha }}" \
+            ${{ needs.container-build.outputs.image-tag }}@${{ needs.container-build.outputs.image-digest }}
+
+      - name: Verify container signature
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign verify \
+            --annotations "repo=${{ github.repository }}" \
+            ${{ needs.container-build.outputs.image-tag }}@${{ needs.container-build.outputs.image-digest }}
+
+  # ============================================================================
+  # HELM CHART VALIDATION
+  # ============================================================================
+  
+  helm-validation:
+    name: Helm Chart Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Lint Helm charts
+        run: |
+          helm lint helm/auth-service
+          helm lint helm/policy-service
+
+      - name: Template Helm charts
+        run: |
+          helm template auth-service helm/auth-service > auth-service-manifest.yaml
+          helm template policy-service helm/policy-service > policy-service-manifest.yaml
+
+      - name: Validate Kubernetes manifests with Kubeconform
+        run: |
+          curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          ./kubeconform -summary -output json auth-service-manifest.yaml
+          ./kubeconform -summary -output json policy-service-manifest.yaml
+
+      - name: Security scan with Kubesec
+        run: |
+          curl -sSL https://kubesec.io/auth-service-manifest.yaml
+          curl -sSL https://kubesec.io/policy-service-manifest.yaml
+
+      - name: Policy validation with OPA
+        run: |
+          docker run --rm -v $(pwd):/project openpolicyagent/opa test /project/policies/kubernetes/
+
+      - name: Package Helm charts
+        run: |
+          helm package helm/auth-service
+          helm package helm/policy-service
+
+      - name: Upload Helm packages
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: helm-charts
+          path: |
+            *.tgz
+
+  # ============================================================================
+  # PERFORMANCE TESTING
+  # ============================================================================
+  
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up test environment
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 30  # Wait for services to start
+
+      - name: Run load tests with K6
+        run: |
+          docker run --rm -i --network=host \
+            -v $(pwd)/scripts/performance/load-tests:/scripts \
+            grafana/k6 run /scripts/auth-service-k6.js \
+            --out json=/tmp/k6-results.json \
+            --vus 10 --duration 60s
+
+      - name: Analyze performance results
+        run: |
+          python3 scripts/performance/analyze_results.py /tmp/k6-results.json
+
+      - name: Check performance budgets
+        run: |
+          ./scripts/performance/performance-budget-monitor.sh check auth-service /tmp/k6-results.json
+
+      - name: Upload performance results
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: performance-results
+          path: |
+            /tmp/k6-results.json
+            performance-report.html
+
+  # ============================================================================
+  # DEPLOYMENT TO STAGING
+  # ============================================================================
+  
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [container-sign, helm-validation, security-testing]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging.rust-security.example.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@901a10e89ea615cf61f57ac05cecdf23e7de06d8
+
+      - name: Set up Kubernetes config
+        run: |
+          echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install auth-service helm/auth-service \
+            --namespace rust-security-staging \
+            --create-namespace \
+            --set image.tag=${{ needs.container-build.outputs.image-tag }} \
+            --set image.digest=${{ needs.container-build.outputs.image-digest }} \
+            --wait --timeout 10m
+
+      - name: Run smoke tests
+        run: |
+          kubectl run smoke-test --rm -i --restart=Never \
+            --namespace rust-security-staging \
+            --image=curlimages/curl:latest -- \
+            curl -f http://auth-service:8080/health
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/auth-service -n rust-security-staging
+          kubectl get pods -n rust-security-staging
+
+  # ============================================================================
+  # SECURITY COMPLIANCE CHECK
+  # ============================================================================
+  
+  compliance-check:
+    name: Security Compliance Check
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run CIS Kubernetes Benchmark
+        run: |
+          docker run --rm -v $(pwd):/project \
+            aquasec/kube-bench:latest \
+            --config-dir /project/configs/kube-bench
+
+      - name: Run Compliance as Code
+        run: |
+          docker run --rm -v $(pwd):/project \
+            openscap/openscap:latest \
+            xccdf eval --profile xccdf_org.ssgproject.content_profile_cis \
+            /project/compliance/kubernetes-cis.xml
+
+      - name: NIST 800-53 compliance check
+        run: |
+          python3 scripts/compliance/nist-800-53-check.py
+
+      - name: Generate compliance report
+        run: |
+          python3 scripts/compliance/generate-report.py \
+            --framework cis,nist,owasp \
+            --output compliance-report.html
+
+      - name: Upload compliance report
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: compliance-report
+          path: compliance-report.html
+
+  # ============================================================================
+  # DEPLOYMENT TO PRODUCTION
+  # ============================================================================
+  
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, compliance-check, performance-test]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://rust-security.example.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@901a10e89ea615cf61f57ac05cecdf23e7de06d8
+
+      - name: Set up Kubernetes config
+        run: |
+          echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+
+      - name: Create backup
+        run: |
+          kubectl create job backup-$(date +%s) \
+            --from=cronjob/database-backup \
+            -n rust-security
+
+      - name: Deploy with Helm (Blue-Green)
+        run: |
+          # Deploy to green environment
+          helm upgrade --install auth-service-green helm/auth-service \
+            --namespace rust-security \
+            --set image.tag=${{ needs.container-build.outputs.image-tag }} \
+            --set image.digest=${{ needs.container-build.outputs.image-digest }} \
+            --set deployment.strategy=blue-green \
+            --set deployment.color=green \
+            --wait --timeout 10m
+
+          # Run validation
+          kubectl run validation --rm -i --restart=Never \
+            --namespace rust-security \
+            --image=curlimages/curl:latest -- \
+            curl -f http://auth-service-green:8080/health
+
+          # Switch traffic to green
+          kubectl patch service auth-service \
+            -n rust-security \
+            -p '{"spec":{"selector":{"color":"green"}}}'
+
+          # Wait and monitor
+          sleep 60
+
+          # If successful, remove blue deployment
+          helm uninstall auth-service-blue -n rust-security || true
+
+      - name: Verify production deployment
+        run: |
+          kubectl rollout status deployment/auth-service-green -n rust-security
+          kubectl get pods -n rust-security
+
+      - name: Update monitoring
+        run: |
+          curl -X POST ${{ secrets.MONITORING_WEBHOOK }} \
+            -H "Content-Type: application/json" \
+            -d '{"deployment":"production","version":"${{ needs.container-build.outputs.image-tag }}"}'
+
+  # ============================================================================
+  # POST-DEPLOYMENT VALIDATION
+  # ============================================================================
+  
+  post-deployment-validation:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: success()
+    steps:
+      - name: Run E2E tests
+        run: |
+          npm install -g @playwright/test
+          npx playwright test tests/e2e/
+
+      - name: Security validation
+        run: |
+          # Run OWASP ZAP scan
+          docker run -t owasp/zap2docker-stable zap-baseline.py \
+            -t https://rust-security.example.com \
+            -r zap-report.html
+
+      - name: Performance validation
+        run: |
+          # Run lighthouse audit
+          npm install -g lighthouse
+          lighthouse https://rust-security.example.com \
+            --output html --output-path lighthouse-report.html
+
+      - name: Create GitHub release
+        if: github.ref == 'refs/heads/main'
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            ## Changes
+            - Automated deployment from ${{ github.sha }}
+            
+            ## Security
+            - Container signed with Cosign
+            - Security scans passed
+            - Compliance checks passed
+            
+            ## Artifacts
+            - Container: ${{ needs.container-build.outputs.image-tag }}
+            - SBOM: See artifacts
+          draft: false
+          prerelease: false
+
+      - name: Send notification
+        if: always()
+        uses: 8398a7/action-slack@28ba43ae48961b90ced0e7496c2f616b1b435c82
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment completed'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
