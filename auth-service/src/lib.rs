@@ -92,6 +92,7 @@ pub mod config_endpoints;
 pub mod config_reload;
 pub mod crypto_unified;
 pub mod errors;
+pub mod secrets_manager;
 pub mod sql_store;
 pub mod store;
 pub mod validation;

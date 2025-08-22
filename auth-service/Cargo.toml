@@ -207,6 +207,8 @@ mimalloc = ["dep:mimalloc"]
 jemalloc = ["dep:jemalloc-sys"]
 performance = ["simd", "mimalloc"]
 profiling = ["pprof"]
+# Secrets management feature flags
+secrets-vault-aws = ["aws", "vault"]
 # Post-quantum cryptography feature flags
 post-quantum = ["pqcrypto-mlkem", "pqcrypto-mldsa", "x509-cert", "pkcs8", "der"]
 hybrid-crypto = ["post-quantum", "p256", "p384", "ed25519-dalek", "x25519-dalek"]
