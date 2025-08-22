@@ -66,7 +66,10 @@ impl StepExecutor for ScriptExecutor {
                             SecurityEventType::AdminAction,
                             SecuritySeverity::Medium,
                             "soar_executor".to_string(),
-                            format!("Script executed: {} (exit code: {})", script_type, exit_code),
+                            format!(
+                                "Script executed: {} (exit code: {})",
+                                script_type, exit_code
+                            ),
                         )
                         .with_actor("soar_system".to_string())
                         .with_action("soar_execute".to_string())
@@ -81,7 +84,10 @@ impl StepExecutor for ScriptExecutor {
                     outputs.insert("exit_code".to_string(), Value::Number(exit_code.into()));
                     outputs.insert("stdout".to_string(), Value::String(stdout));
                     outputs.insert("stderr".to_string(), Value::String(stderr));
-                    outputs.insert("script_type".to_string(), Value::String(script_type.clone()));
+                    outputs.insert(
+                        "script_type".to_string(),
+                        Value::String(script_type.clone()),
+                    );
 
                     if exit_code != 0 {
                         return Err(StepError {
@@ -154,7 +160,7 @@ impl ScriptExecutor {
         // For security, we'll simulate script execution rather than actually executing
         // In a production environment, this would need proper sandboxing
         warn!("Script execution is simulated for security reasons");
-        
+
         tokio::time::sleep(Duration::from_millis(100)).await; // Simulate execution time
 
         // Simulate successful execution
@@ -253,12 +259,19 @@ impl StepExecutor for HttpRequestExecutor {
                             SecurityEventType::AdminAction,
                             SecuritySeverity::Low,
                             "soar_executor".to_string(),
-                            format!("HTTP {} request to {} completed (status: {})", method, url, status_code),
+                            format!(
+                                "HTTP {} request to {} completed (status: {})",
+                                method, url, status_code
+                            ),
                         )
                         .with_actor("soar_system".to_string())
                         .with_action("soar_execute".to_string())
                         .with_target("soar_playbook".to_string())
-                        .with_outcome(if status_code < 400 { "success" } else { "failure" })
+                        .with_outcome(if status_code < 400 {
+                            "success"
+                        } else {
+                            "failure"
+                        })
                         .with_reason("HTTP request step completed".to_string())
                         .with_detail("method".to_string(), method.clone())
                         .with_detail("url".to_string(), url.clone())

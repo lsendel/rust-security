@@ -113,7 +113,6 @@ jobs:
       
       - name: Run clippy on ${{ matrix.package }}
         run: cargo clippy -p ${{ matrix.package }} --all-targets -- -D warnings
-        continue-on-error: true
 
   security-audit:
     name: Security Audit
@@ -135,7 +134,6 @@ jobs:
       
       - name: Run security audit
         run: cargo audit --deny warnings
-        continue-on-error: true
 
   dependency-check:
     name: Dependency Check
@@ -157,7 +155,6 @@ jobs:
       
       - name: Run dependency check
         run: cargo deny check
-        continue-on-error: true
 
   build-summary:
     name: Build Summary

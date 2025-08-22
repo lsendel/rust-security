@@ -1,10 +1,10 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::info;
-use serde::{Deserialize, Serialize};
 
 /// Advanced security analyzer with ML-based threat detection
 #[derive(Debug, Clone)]
@@ -36,18 +36,18 @@ pub struct SecurityMetrics {
     pub attacks_blocked: u64,
     pub false_positives: u64,
     pub detection_accuracy: f64,
-    
+
     /// Attack type breakdown
     pub brute_force_attempts: u64,
     pub credential_stuffing_attempts: u64,
     pub sql_injection_attempts: u64,
     pub xss_attempts: u64,
     pub csrf_attempts: u64,
-    
+
     /// Geographic threat distribution
     pub threats_by_country: HashMap<String, u64>,
     pub high_risk_ips: Vec<IpAddr>,
-    
+
     /// Temporal patterns
     pub peak_attack_hours: Vec<u8>,
     pub attack_frequency_trend: f64,
@@ -297,7 +297,7 @@ impl SecurityAnalyzer {
         device: &str,
     ) -> ThreatAssessment {
         let models = self.models.read().await;
-        
+
         if let Some(baseline) = models.user_behavior_model.baselines.get(user_id) {
             let mut anomaly_score = 0.0;
             let mut indicators = Vec::new();
@@ -306,8 +306,10 @@ impl SecurityAnalyzer {
             let hour = login_time
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_secs() / 3600 % 24;
-            
+                .as_secs()
+                / 3600
+                % 24;
+
             if !baseline.typical_login_hours.contains(&(hour as u8)) {
                 anomaly_score += 0.3;
                 indicators.push(format!("Unusual login time: {}:00", hour));
@@ -325,7 +327,8 @@ impl SecurityAnalyzer {
                 indicators.push(format!("New device: {}", device));
             }
 
-            let recommended_action = if anomaly_score > models.user_behavior_model.anomaly_threshold {
+            let recommended_action = if anomaly_score > models.user_behavior_model.anomaly_threshold
+            {
                 SecurityAction::Challenge
             } else {
                 SecurityAction::Monitor
@@ -360,7 +363,7 @@ impl SecurityAnalyzer {
     /// Update threat models with new data
     pub async fn update_models(&self, training_data: &[TrainingData]) {
         let mut models = self.models.write().await;
-        
+
         info!(
             training_samples = training_data.len(),
             "Updating threat detection models"
@@ -405,25 +408,40 @@ impl SecurityAnalyzer {
     async fn is_suspicious_user_agent(&self, user_agent: &str) -> bool {
         // Check for common bot patterns, suspicious tools, etc.
         let suspicious_patterns = [
-            "sqlmap", "nikto", "nmap", "masscan", "zap", "burp",
-            "python-requests", "curl/", "wget/", "bot", "crawler",
+            "sqlmap",
+            "nikto",
+            "nmap",
+            "masscan",
+            "zap",
+            "burp",
+            "python-requests",
+            "curl/",
+            "wget/",
+            "bot",
+            "crawler",
         ];
 
-        suspicious_patterns.iter().any(|pattern| {
-            user_agent.to_lowercase().contains(pattern)
-        })
+        suspicious_patterns
+            .iter()
+            .any(|pattern| user_agent.to_lowercase().contains(pattern))
     }
 
     async fn analyze_request_path(&self, path: &str) -> bool {
         // Check for SQL injection patterns
         let sql_patterns = [
-            "union select", "drop table", "insert into", "delete from",
-            "' or '1'='1", "' or 1=1", "admin'--", "' union",
+            "union select",
+            "drop table",
+            "insert into",
+            "delete from",
+            "' or '1'='1",
+            "' or 1=1",
+            "admin'--",
+            "' union",
         ];
 
-        sql_patterns.iter().any(|pattern| {
-            path.to_lowercase().contains(pattern)
-        })
+        sql_patterns
+            .iter()
+            .any(|pattern| path.to_lowercase().contains(pattern))
     }
 
     async fn analyze_headers(&self, headers: &HashMap<String, String>) -> f64 {
@@ -454,14 +472,20 @@ impl SecurityAnalyzer {
 
         // XSS detection
         let xss_patterns = ["<script", "javascript:", "onerror=", "onload="];
-        if xss_patterns.iter().any(|pattern| body.to_lowercase().contains(pattern)) {
+        if xss_patterns
+            .iter()
+            .any(|pattern| body.to_lowercase().contains(pattern))
+        {
             threat_score += 0.6;
             threat_types.push(ThreatType::CrossSiteScripting);
         }
 
         // SQL injection detection
         let sql_patterns = ["union select", "drop table", "' or '"];
-        if sql_patterns.iter().any(|pattern| body.to_lowercase().contains(pattern)) {
+        if sql_patterns
+            .iter()
+            .any(|pattern| body.to_lowercase().contains(pattern))
+        {
             threat_score += 0.7;
             threat_types.push(ThreatType::SqlInjection);
         }
@@ -473,7 +497,7 @@ impl SecurityAnalyzer {
         // Simple confidence calculation based on number of indicators
         let base_confidence = 0.5;
         let indicator_weight = 0.1;
-        
+
         (base_confidence + (indicators.len() as f64 * indicator_weight)).min(1.0)
     }
 }
@@ -564,15 +588,11 @@ mod tests {
         let analyzer = SecurityAnalyzer::new();
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
         let headers = HashMap::new();
-        
-        let assessment = analyzer.analyze_request(
-            ip,
-            "Mozilla/5.0",
-            "/api/users",
-            &headers,
-            None,
-        ).await;
-        
+
+        let assessment = analyzer
+            .analyze_request(ip, "Mozilla/5.0", "/api/users", &headers, None)
+            .await;
+
         assert!(assessment.threat_score >= 0.0);
         assert!(assessment.confidence >= 0.0);
     }
@@ -581,14 +601,11 @@ mod tests {
     async fn test_user_behavior_analysis() {
         let analyzer = SecurityAnalyzer::new();
         let now = SystemTime::now();
-        
-        let assessment = analyzer.analyze_user_behavior(
-            "user123",
-            now,
-            "New York",
-            "Chrome/91.0",
-        ).await;
-        
+
+        let assessment = analyzer
+            .analyze_user_behavior("user123", now, "New York", "Chrome/91.0")
+            .await;
+
         // New user should have low threat score
         assert!(assessment.threat_score < 0.5);
     }

@@ -78,6 +78,15 @@ opentelemetry_sdk = { workspace = true, optional = true }
 # SIMD and hardware acceleration (removed due to compatibility issues)
 # packed_simd_2 = { workspace = true, optional = true }
 ring = { workspace = true }
+
+# Additional missing dependencies identified during compilation
+ipnetwork = "0.20"
+fastrand = { workspace = true }
+opentelemetry-otlp = "0.16"
+x509-parser = "0.16"
+rustls = "0.23"
+webpki-roots = "0.26"
+rayon = { workspace = true }
 # High-performance async runtime
 # Connection pooling optimization
 deadpool-redis = { workspace = true, optional = true }

@@ -64,7 +64,10 @@ impl ResponseAutomationEngine {
     }
 
     /// Trigger automatic response for an alert
-    pub async fn trigger_auto_response(&self, alert: SecurityAlert) -> Result<Option<String>, ResponseError> {
+    pub async fn trigger_auto_response(
+        &self,
+        alert: SecurityAlert,
+    ) -> Result<Option<String>, ResponseError> {
         debug!("Evaluating auto-response for alert: {}", alert.id);
 
         if !self.config.enabled {
@@ -80,7 +83,7 @@ impl ResponseAutomationEngine {
 
         // Find matching auto-response rules
         let matching_rules = self.find_matching_rules(&alert).await?;
-        
+
         if matching_rules.is_empty() {
             debug!("No matching auto-response rules found");
             return Ok(None);
@@ -100,7 +103,10 @@ impl ResponseAutomationEngine {
     }
 
     /// Add auto-response rule
-    pub async fn add_auto_response_rule(&self, rule: AutoResponseRule) -> Result<(), ResponseError> {
+    pub async fn add_auto_response_rule(
+        &self,
+        rule: AutoResponseRule,
+    ) -> Result<(), ResponseError> {
         let mut rules = self.auto_response_rules.write().await;
         rules.push(rule);
         info!("Added new auto-response rule");
@@ -117,7 +123,8 @@ impl ResponseAutomationEngine {
 
     /// Get response execution history
     pub async fn get_response_history(&self) -> Vec<ResponseExecution> {
-        self.response_history.iter()
+        self.response_history
+            .iter()
             .map(|entry| entry.value().clone())
             .collect()
     }
@@ -135,8 +142,9 @@ impl ResponseAutomationEngine {
         }
 
         // Check allowed threat types
-        if !self.config.allowed_threat_types.is_empty() &&
-           !self.config.allowed_threat_types.contains(&alert.alert_type) {
+        if !self.config.allowed_threat_types.is_empty()
+            && !self.config.allowed_threat_types.contains(&alert.alert_type)
+        {
             return Ok(false);
         }
 
@@ -154,7 +162,10 @@ impl ResponseAutomationEngine {
     }
 
     /// Find matching auto-response rules for an alert
-    async fn find_matching_rules(&self, alert: &SecurityAlert) -> Result<Vec<AutoResponseRule>, ResponseError> {
+    async fn find_matching_rules(
+        &self,
+        alert: &SecurityAlert,
+    ) -> Result<Vec<AutoResponseRule>, ResponseError> {
         let rules = self.auto_response_rules.read().await;
         let mut matching_rules = Vec::new();
 
@@ -174,7 +185,11 @@ impl ResponseAutomationEngine {
     }
 
     /// Check if a rule matches an alert
-    async fn rule_matches_alert(&self, rule: &AutoResponseRule, alert: &SecurityAlert) -> Result<bool, ResponseError> {
+    async fn rule_matches_alert(
+        &self,
+        rule: &AutoResponseRule,
+        alert: &SecurityAlert,
+    ) -> Result<bool, ResponseError> {
         for condition in &rule.conditions {
             if !self.evaluate_trigger_condition(condition, alert).await {
                 return Ok(false);
@@ -184,18 +199,25 @@ impl ResponseAutomationEngine {
     }
 
     /// Evaluate a trigger condition against an alert
-    async fn evaluate_trigger_condition(&self, condition: &TriggerCondition, alert: &SecurityAlert) -> bool {
+    async fn evaluate_trigger_condition(
+        &self,
+        condition: &TriggerCondition,
+        alert: &SecurityAlert,
+    ) -> bool {
         let field_value = self.get_alert_field_value(alert, &condition.field);
-        
+
         match &condition.operator {
             ConditionOperator::Equals => {
-                field_value.map(|v| serde_json::Value::String(v.to_string())) == Some(condition.value.clone())
+                field_value.map(|v| serde_json::Value::String(v.to_string()))
+                    == Some(condition.value.clone())
             }
             ConditionOperator::NotEquals => {
-                field_value.map(|v| serde_json::Value::String(v.to_string())) != Some(condition.value.clone())
+                field_value.map(|v| serde_json::Value::String(v.to_string()))
+                    != Some(condition.value.clone())
             }
             ConditionOperator::Contains => {
-                if let (Some(field_val), Some(search_val)) = (field_value, condition.value.as_str()) {
+                if let (Some(field_val), Some(search_val)) = (field_value, condition.value.as_str())
+                {
                     field_val.contains(search_val)
                 } else {
                     false
@@ -204,7 +226,7 @@ impl ResponseAutomationEngine {
             ConditionOperator::GreaterThan => {
                 if let (Some(field_val), Some(threshold)) = (
                     field_value.and_then(|v| v.parse::<f64>().ok()),
-                    condition.value.as_f64()
+                    condition.value.as_f64(),
                 ) {
                     field_val > threshold
                 } else {
@@ -245,12 +267,18 @@ impl ResponseAutomationEngine {
     }
 
     /// Check execution limits for a rule
-    async fn check_execution_limits(&self, rule: &AutoResponseRule, alert: &SecurityAlert) -> Result<bool, ResponseError> {
+    async fn check_execution_limits(
+        &self,
+        rule: &AutoResponseRule,
+        alert: &SecurityAlert,
+    ) -> Result<bool, ResponseError> {
         let time_window = chrono::Duration::minutes(rule.time_window_minutes as i64);
         let window_start = Utc::now() - time_window;
 
         // Count executions in time window
-        let execution_count = self.response_history.iter()
+        let execution_count = self
+            .response_history
+            .iter()
             .filter(|entry| {
                 let execution = entry.value();
                 execution.rule_id == rule.id && execution.executed_at >= window_start
@@ -267,8 +295,11 @@ impl ResponseAutomationEngine {
         alert: &SecurityAlert,
     ) -> Result<String, ResponseError> {
         let execution_id = Uuid::new_v4().to_string();
-        
-        info!("Executing auto-response rule: {} for alert: {}", rule.name, alert.id);
+
+        info!(
+            "Executing auto-response rule: {} for alert: {}",
+            rule.name, alert.id
+        );
 
         // Create execution record
         let execution = ResponseExecution {
@@ -281,7 +312,8 @@ impl ResponseAutomationEngine {
             result: ExecutionResult::Pending,
         };
 
-        self.response_history.insert(execution_id.clone(), execution);
+        self.response_history
+            .insert(execution_id.clone(), execution);
 
         // Update cooldown tracker
         let cooldown_key = self.generate_cooldown_key(alert);
@@ -333,46 +365,65 @@ impl ResponseAutomationEngine {
 
         // This is a simplified implementation
         // In a real system, this would trigger workflow execution
-        
+
         debug!("Executing response actions for rule: {}", rule.name);
-        
+
         // Simulate response actions based on alert type
         match alert.alert_type {
             SecurityAlertType::SuspiciousLogin => {
-                outputs.insert("action_taken".to_string(), 
-                    serde_json::Value::String("User account locked".to_string()));
-                outputs.insert("duration_minutes".to_string(), 
-                    serde_json::Value::Number(30.into()));
+                outputs.insert(
+                    "action_taken".to_string(),
+                    serde_json::Value::String("User account locked".to_string()),
+                );
+                outputs.insert(
+                    "duration_minutes".to_string(),
+                    serde_json::Value::Number(30.into()),
+                );
             }
             SecurityAlertType::MalwareDetected => {
-                outputs.insert("action_taken".to_string(), 
-                    serde_json::Value::String("IP address blocked".to_string()));
-                outputs.insert("quarantine_applied".to_string(), 
-                    serde_json::Value::Bool(true));
+                outputs.insert(
+                    "action_taken".to_string(),
+                    serde_json::Value::String("IP address blocked".to_string()),
+                );
+                outputs.insert(
+                    "quarantine_applied".to_string(),
+                    serde_json::Value::Bool(true),
+                );
             }
             SecurityAlertType::DataExfiltration => {
-                outputs.insert("action_taken".to_string(), 
-                    serde_json::Value::String("Network access restricted".to_string()));
-                outputs.insert("incident_created".to_string(), 
-                    serde_json::Value::Bool(true));
+                outputs.insert(
+                    "action_taken".to_string(),
+                    serde_json::Value::String("Network access restricted".to_string()),
+                );
+                outputs.insert(
+                    "incident_created".to_string(),
+                    serde_json::Value::Bool(true),
+                );
             }
             _ => {
-                outputs.insert("action_taken".to_string(), 
-                    serde_json::Value::String("Alert escalated".to_string()));
+                outputs.insert(
+                    "action_taken".to_string(),
+                    serde_json::Value::String("Alert escalated".to_string()),
+                );
             }
         }
 
-        outputs.insert("execution_time".to_string(), 
-            serde_json::Value::String(Utc::now().to_rfc3339()));
-        outputs.insert("rule_id".to_string(), 
-            serde_json::Value::String(rule.id.clone()));
+        outputs.insert(
+            "execution_time".to_string(),
+            serde_json::Value::String(Utc::now().to_rfc3339()),
+        );
+        outputs.insert(
+            "rule_id".to_string(),
+            serde_json::Value::String(rule.id.clone()),
+        );
 
         Ok(outputs)
     }
 
     /// Generate cooldown key for an alert
     fn generate_cooldown_key(&self, alert: &SecurityAlert) -> String {
-        format!("{}_{:?}_{}", 
+        format!(
+            "{}_{:?}_{}",
             alert.source_ip.as_deref().unwrap_or("unknown"),
             alert.alert_type,
             alert.user_id.as_deref().unwrap_or("unknown")
@@ -386,9 +437,9 @@ impl ResponseAutomationEngine {
 
         loop {
             interval.tick().await;
-            
+
             let cutoff_time = Utc::now() - chrono::Duration::days(30); // Keep 30 days of history
-            
+
             // Remove old executions
             let mut removed_count = 0;
             self.response_history.retain(|_, execution| {
@@ -402,7 +453,8 @@ impl ResponseAutomationEngine {
 
             // Clean up old cooldown entries
             let cooldown_cutoff = Utc::now() - chrono::Duration::hours(24);
-            self.cooldown_tracker.retain(|_, timestamp| *timestamp > cooldown_cutoff);
+            self.cooldown_tracker
+                .retain(|_, timestamp| *timestamp > cooldown_cutoff);
 
             if removed_count > 0 {
                 debug!("Cleaned up {} old response executions", removed_count);
@@ -468,4 +520,14 @@ pub trait ResponseAction {
     ) -> Result<HashMap<String, serde_json::Value>, ResponseError>;
 
     fn get_action_type(&self) -> String;
+}
+
+// Missing type definitions
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ExecutionResult {
+    Pending,
+    Success { outputs: std::collections::HashMap<String, serde_json::Value> },
+    Failure { error: String, details: Option<String> },
+    Timeout,
+    Cancelled,
 }

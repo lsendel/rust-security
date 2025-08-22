@@ -1,8 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
-use serde::{Deserialize, Serialize};
 
 /// Advanced performance optimizer with adaptive algorithms
 #[derive(Debug, Clone)]
@@ -92,12 +92,12 @@ impl PerformanceOptimizer {
     /// Record request performance
     pub async fn record_request(&self, duration: Duration, success: bool) {
         let mut metrics = self.metrics.write().await;
-        
+
         // Update latency metrics (simplified - would use proper percentile calculation)
         if duration < metrics.latency_p50 || metrics.latency_p50 == Duration::ZERO {
             metrics.latency_p50 = duration;
         }
-        
+
         // Update error rates
         if !success {
             metrics.error_rate = (metrics.error_rate * 0.95) + 0.05; // Exponential moving average
@@ -138,7 +138,8 @@ impl PerformanceOptimizer {
 
             // Auto-optimize connection pool
             if config.max_connections < 100 {
-                config.max_connections = ((config.max_connections as f64) * 1.2) as u32;
+                let increased = (config.max_connections as f64 * 1.2).round() as u32;
+                config.max_connections = increased.max(config.max_connections + 1);
                 info!(
                     new_max_connections = config.max_connections,
                     "Auto-increased connection pool size"
@@ -147,7 +148,8 @@ impl PerformanceOptimizer {
         }
 
         // Analyze error rates
-        if metrics.error_rate > 0.01 { // 1% error rate threshold
+        if metrics.error_rate > 0.01 {
+            // 1% error rate threshold
             recommendations.push(OptimizationRecommendation {
                 category: OptimizationCategory::Reliability,
                 severity: if metrics.error_rate > 0.05 {
@@ -165,7 +167,8 @@ impl PerformanceOptimizer {
         }
 
         // Analyze cache performance
-        if metrics.cache_hit_rate < 0.8 { // 80% hit rate threshold
+        if metrics.cache_hit_rate < 0.8 {
+            // 80% hit rate threshold
             recommendations.push(OptimizationRecommendation {
                 category: OptimizationCategory::Caching,
                 severity: Severity::Info,
@@ -210,7 +213,7 @@ impl PerformanceOptimizer {
     /// Perform trend analysis
     pub async fn analyze_trends(&self) -> TrendAnalysis {
         let history = self.history.read().await;
-        
+
         // Simplified trend analysis (would use proper statistical methods)
         if history.hourly_metrics.len() < 2 {
             return TrendAnalysis {
@@ -224,7 +227,8 @@ impl PerformanceOptimizer {
         let recent = &history.hourly_metrics[history.hourly_metrics.len() - 1];
         let previous = &history.hourly_metrics[history.hourly_metrics.len() - 2];
 
-        let latency_change = recent.latency_p95.as_millis() as f64 - previous.latency_p95.as_millis() as f64;
+        let latency_change =
+            recent.latency_p95.as_millis() as f64 - previous.latency_p95.as_millis() as f64;
         let latency_change_percent = latency_change / previous.latency_p95.as_millis() as f64;
 
         let direction = if latency_change_percent > 0.1 {
@@ -349,19 +353,19 @@ pub async fn performance_monitoring_middleware(
         let optimizer = optimizer.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
-            
+
             loop {
                 interval.tick().await;
-                
+
                 // Analyze performance and get recommendations
                 let recommendations = optimizer.analyze_and_optimize().await;
-                
+
                 if !recommendations.is_empty() {
                     info!(
                         recommendation_count = recommendations.len(),
                         "Performance optimization recommendations generated"
                     );
-                    
+
                     for rec in recommendations {
                         match rec.severity {
                             Severity::Critical => {
@@ -406,14 +410,18 @@ mod tests {
     #[tokio::test]
     async fn test_performance_optimizer() {
         let optimizer = PerformanceOptimizer::new();
-        
+
         // Record some requests
-        optimizer.record_request(Duration::from_millis(50), true).await;
-        optimizer.record_request(Duration::from_millis(200), false).await;
-        
+        optimizer
+            .record_request(Duration::from_millis(50), true)
+            .await;
+        optimizer
+            .record_request(Duration::from_millis(200), false)
+            .await;
+
         let metrics = optimizer.get_metrics().await;
         assert!(metrics.error_rate > 0.0);
-        
+
         let recommendations = optimizer.analyze_and_optimize().await;
         assert!(!recommendations.is_empty());
     }
@@ -422,7 +430,7 @@ mod tests {
     async fn test_trend_analysis() {
         let optimizer = PerformanceOptimizer::new();
         let trend = optimizer.analyze_trends().await;
-        
+
         // With no history, should be stable
         matches!(trend.direction, TrendDirection::Stable);
     }

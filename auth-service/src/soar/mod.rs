@@ -6,16 +6,14 @@
 //! - Integration with external security tools
 //! - Threat intelligence correlation
 
-pub mod core;
 pub mod case_management;
-pub mod workflow;
+pub mod core;
 pub mod executors;
+pub mod workflow;
 
-// Re-export main types
-pub use core::{SoarEngine, SoarConfig};
+// Re-export available types
 pub use case_management::{CaseManager, Case, CaseStatus};
-pub use workflow::{WorkflowEngine, WorkflowDefinition};
-pub use executors::{ExecutorRegistry, ResponseExecutor};
+pub use core::*;
 
 /// SOAR service version
 pub const SOAR_VERSION: &str = env!("CARGO_PKG_VERSION");

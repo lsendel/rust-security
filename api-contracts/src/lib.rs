@@ -97,7 +97,7 @@ fn validate_api_config(config: &ApiConfig) -> Result<(), ContractError> {
 
     // Ensure service endpoints are valid URLs
     for (service, endpoint) in &config.service_endpoints {
-        if let Err(_) = url::Url::parse(endpoint) {
+        if url::Url::parse(endpoint).is_err() {
             return Err(ContractError::InvalidConfiguration(format!(
                 "Invalid endpoint URL for service {}: {}",
                 service, endpoint

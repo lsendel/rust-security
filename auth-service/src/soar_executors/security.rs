@@ -290,20 +290,20 @@ impl TokenRevokeExecutor {
         // Implementation for user-specific token revocation by type
         // This would interact with the token store to revoke specific tokens
         info!("Revoking {} tokens for user {}", token_type, user_id);
-        
+
         // Simulate token revocation
         // In a real implementation, this would:
         // 1. Query the store for tokens matching user_id and token_type
         // 2. Mark them as revoked or delete them
         // 3. Return the count of revoked tokens
-        
+
         Ok(1) // Simulated count
     }
 
     async fn revoke_all_user_tokens(&self, user_id: &str) -> Result<u32, StepError> {
         // Implementation for revoking all tokens for a specific user
         info!("Revoking all tokens for user {}", user_id);
-        
+
         // Simulate token revocation
         Ok(5) // Simulated count
     }
@@ -311,7 +311,7 @@ impl TokenRevokeExecutor {
     async fn revoke_tokens_by_type(&self, token_type: &str) -> Result<u32, StepError> {
         // Implementation for revoking all tokens of a specific type
         warn!("Revoking all {} tokens system-wide", token_type);
-        
+
         // Simulate token revocation
         Ok(10) // Simulated count
     }
@@ -319,7 +319,7 @@ impl TokenRevokeExecutor {
     async fn revoke_all_tokens(&self) -> Result<u32, StepError> {
         // Implementation for revoking ALL tokens (very dangerous operation)
         warn!("Revoking ALL tokens system-wide - this is a drastic action");
-        
+
         // Simulate token revocation
         Ok(100) // Simulated count
     }

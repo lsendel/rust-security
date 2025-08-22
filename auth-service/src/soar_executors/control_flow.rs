@@ -26,7 +26,7 @@ impl DecisionExecutor {
     ) -> Result<bool, StepError> {
         // Simple condition evaluation
         // In a production system, this would use a proper expression evaluator
-        
+
         // Handle simple boolean conditions
         if let Some(value) = context.get(condition) {
             return Ok(value.as_bool().unwrap_or(false));
@@ -38,7 +38,7 @@ impl DecisionExecutor {
             if parts.len() == 2 {
                 let key = parts[0].trim();
                 let expected_value = parts[1].trim();
-                
+
                 if let Some(actual_value) = context.get(key) {
                     let actual_str = match actual_value {
                         Value::String(s) => s.clone(),
@@ -98,7 +98,10 @@ impl StepExecutor for DecisionExecutor {
 
         let mut outputs = HashMap::new();
         outputs.insert("decision_result".to_string(), Value::Bool(result));
-        outputs.insert("condition".to_string(), Value::String(condition.to_string()));
+        outputs.insert(
+            "condition".to_string(),
+            Value::String(condition.to_string()),
+        );
 
         // Add branch information
         if result {

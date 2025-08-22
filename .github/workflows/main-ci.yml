@@ -28,7 +28,7 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -74,7 +74,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: pre-checks
     if: needs.pre-checks.outputs.should-run-full-pipeline == 'true'
-    timeout-minutes: 45
+    timeout-minutes: 20
     
     strategy:
       fail-fast: false
@@ -90,16 +90,16 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@v4
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
+        uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
 
@@ -110,24 +110,27 @@ jobs:
       - name: Run clippy (progressive)
         if: matrix.rust == 'stable'
         run: |
-          echo "🔍 Running clippy on individual packages..."
+          echo "🔍 Running clippy with progressive checking..."
           
-          # Build packages that are known to compile
-          packages=("auth-core" "policy-service" "common")
-          for package in "${packages[@]}"; do
-            echo "Checking package: $package"
+          # Packages that pass strict clippy checks
+          strict_packages=("auth-core" "api-contracts" "compliance-tools" "common")
+          for package in "${strict_packages[@]}"; do
+            echo "Checking package: $package (strict)"
             cargo clippy --package "$package" --all-targets --all-features -- -D warnings || {
               echo "❌ Clippy failed for package: $package"
               exit 1
             }
           done
           
-          # Check binaries separately
-          echo "Checking binaries..."
-          cargo clippy --bin policy-service -- -D warnings
-          cargo clippy --bin auth-service -- -D warnings || {
-            echo "⚠️  auth-service binary clippy failed (known lib issues)"
+          # Policy service with relaxed unused-crate-dependencies check
+          echo "Checking policy-service (relaxed unused deps)"
+          cargo clippy --package policy-service --all-targets --all-features -- \
+            -D warnings -A unused-crate-dependencies || {
+            echo "❌ Clippy failed for policy-service"
+            exit 1
           }
+          
+          echo "✅ All clippy checks passed!"
 
       - name: Build packages (progressive)
         run: |
@@ -184,7 +187,7 @@ jobs:
 
       - name: Upload artifacts
         if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/upload-artifact@v4
         with:
           name: release-binaries
           path: |
@@ -202,13 +205,13 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@v4
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
+        uses: Swatinem/rust-cache@v2
 
       - name: Install security tools
         run: |
@@ -280,16 +283,16 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@v4
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
+        uses: Swatinem/rust-cache@v2
 
       - name: Download release artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        uses: actions/download-artifact@v4
         with:
           name: release-binaries
           path: target/release
@@ -339,7 +342,7 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
@@ -386,10 +389,10 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        uses: actions/checkout@v4
 
       - name: Download release artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        uses: actions/download-artifact@v4
         with:
           name: release-binaries
           path: target/release

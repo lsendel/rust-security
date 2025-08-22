@@ -1125,7 +1125,9 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
         IndicatorType::NetworkPattern => "network",
         IndicatorType::TimePattern => "time",
     }
+}
 
+impl ThreatIntelligenceService {
     /// Synchronize a threat feed by downloading and processing indicators
     async fn synchronize_threat_feed(
         &self,

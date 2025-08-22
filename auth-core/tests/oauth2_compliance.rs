@@ -90,7 +90,7 @@ async fn test_invalid_grant_type_error_rfc6749_section_5_2() {
         scope: None,
     };
     let res = auth_core::handler::token::client_credentials(State(state), Form(bad)).await;
-    let err = res.err().expect("expected unsupported_grant_type error");
+    let err = res.expect_err("expected unsupported_grant_type error");
     let resp = err.into_response();
     assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
     let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();

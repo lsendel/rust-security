@@ -16,6 +16,14 @@ use tokio as _;
 use tower_http as _;
 use tracing_subscriber as _;
 
+// Dev dependencies used in tests (acknowledged to prevent clippy warnings)
+#[cfg(test)]
+use futures as _;
+#[cfg(test)]
+use reqwest as _;
+#[cfg(test)]
+use tempfile as _;
+
 use axum::{
     extract::State,
     http::{self, StatusCode},

@@ -64,6 +64,12 @@ pub struct ResponseMetadata {
     pub rate_limit: Option<RateLimitMetadata>,
 }
 
+impl Default for ResponseMetadata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResponseMetadata {
     pub fn new() -> Self {
         Self {

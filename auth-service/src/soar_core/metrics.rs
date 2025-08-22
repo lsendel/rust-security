@@ -72,7 +72,9 @@ impl SoarMetrics {
         execution_time_ms: u64,
         success: bool,
     ) -> Result<(), MetricsError> {
-        let mut metrics = self.workflow_metrics.entry(playbook_id.to_string())
+        let mut metrics = self
+            .workflow_metrics
+            .entry(playbook_id.to_string())
             .or_insert_with(|| WorkflowMetrics {
                 playbook_id: playbook_id.to_string(),
                 total_executions: 0,
@@ -94,10 +96,12 @@ impl SoarMetrics {
 
         // Update average execution time
         let total_time = metrics.avg_execution_time_ms * (metrics.total_executions - 1) as f64;
-        metrics.avg_execution_time_ms = (total_time + execution_time_ms as f64) / metrics.total_executions as f64;
+        metrics.avg_execution_time_ms =
+            (total_time + execution_time_ms as f64) / metrics.total_executions as f64;
 
         // Update success rate
-        metrics.success_rate = (metrics.successful_executions as f64 / metrics.total_executions as f64) * 100.0;
+        metrics.success_rate =
+            (metrics.successful_executions as f64 / metrics.total_executions as f64) * 100.0;
 
         Ok(())
     }
@@ -105,14 +109,20 @@ impl SoarMetrics {
     /// Record alert processing
     pub async fn record_alert_processed(&self, alert: &SecurityAlert) -> Result<(), MetricsError> {
         let mut metrics = self.alert_metrics.lock().await;
-        
+
         metrics.total_alerts += 1;
-        
+
         // Update alerts by severity
-        *metrics.alerts_by_severity.entry(alert.severity.clone()).or_insert(0) += 1;
-        
+        *metrics
+            .alerts_by_severity
+            .entry(alert.severity.clone())
+            .or_insert(0) += 1;
+
         // Update alerts by type
-        *metrics.alerts_by_type.entry(alert.alert_type.clone()).or_insert(0) += 1;
+        *metrics
+            .alerts_by_type
+            .entry(alert.alert_type.clone())
+            .or_insert(0) += 1;
 
         Ok(())
     }
@@ -134,7 +144,7 @@ impl SoarMetrics {
     /// Record case creation
     pub async fn record_case_created(&self, severity: AlertSeverity) -> Result<(), MetricsError> {
         let mut metrics = self.case_metrics.lock().await;
-        
+
         metrics.total_cases += 1;
         *metrics.cases_by_severity.entry(severity).or_insert(0) += 1;
         *metrics.cases_by_status.entry(CaseStatus::New).or_insert(0) += 1;
@@ -149,14 +159,14 @@ impl SoarMetrics {
         new_status: CaseStatus,
     ) -> Result<(), MetricsError> {
         let mut metrics = self.case_metrics.lock().await;
-        
+
         // Decrease old status count
         if let Some(count) = metrics.cases_by_status.get_mut(&old_status) {
             if *count > 0 {
                 *count -= 1;
             }
         }
-        
+
         // Increase new status count
         *metrics.cases_by_status.entry(new_status).or_insert(0) += 1;
 
@@ -164,25 +174,38 @@ impl SoarMetrics {
     }
 
     /// Record case response time
-    pub async fn record_case_response_time(&self, response_time_minutes: f64) -> Result<(), MetricsError> {
+    pub async fn record_case_response_time(
+        &self,
+        response_time_minutes: f64,
+    ) -> Result<(), MetricsError> {
         let mut metrics = self.case_metrics.lock().await;
-        
+
         // Update average response time
         let total_cases_with_response = metrics.total_cases.max(1);
-        let total_time = metrics.avg_time_to_response_minutes * (total_cases_with_response - 1) as f64;
-        metrics.avg_time_to_response_minutes = (total_time + response_time_minutes) / total_cases_with_response as f64;
+        let total_time =
+            metrics.avg_time_to_response_minutes * (total_cases_with_response - 1) as f64;
+        metrics.avg_time_to_response_minutes =
+            (total_time + response_time_minutes) / total_cases_with_response as f64;
 
         Ok(())
     }
 
     /// Record case resolution time
-    pub async fn record_case_resolution_time(&self, resolution_time_hours: f64) -> Result<(), MetricsError> {
+    pub async fn record_case_resolution_time(
+        &self,
+        resolution_time_hours: f64,
+    ) -> Result<(), MetricsError> {
         let mut metrics = self.case_metrics.lock().await;
-        
+
         // Update average resolution time
-        let resolved_cases = metrics.cases_by_status.get(&CaseStatus::Resolved).unwrap_or(&0) + 1;
+        let resolved_cases = metrics
+            .cases_by_status
+            .get(&CaseStatus::Resolved)
+            .unwrap_or(&0)
+            + 1;
         let total_time = metrics.avg_time_to_resolution_hours * (resolved_cases - 1) as f64;
-        metrics.avg_time_to_resolution_hours = (total_time + resolution_time_hours) / resolved_cases as f64;
+        metrics.avg_time_to_resolution_hours =
+            (total_time + resolution_time_hours) / resolved_cases as f64;
 
         Ok(())
     }
@@ -190,7 +213,7 @@ impl SoarMetrics {
     /// Record SLA breach
     pub async fn record_sla_breach(&self) -> Result<(), MetricsError> {
         let mut metrics = self.case_metrics.lock().await;
-        
+
         // Calculate SLA breach rate
         let total_cases = metrics.total_cases.max(1);
         let breaches = (metrics.sla_breach_rate * total_cases as f64 / 100.0) + 1.0;
@@ -205,18 +228,22 @@ impl SoarMetrics {
         integration_id: &str,
         metrics: IntegrationMetrics,
     ) -> Result<(), MetricsError> {
-        self.integration_metrics.insert(integration_id.to_string(), metrics);
+        self.integration_metrics
+            .insert(integration_id.to_string(), metrics);
         Ok(())
     }
 
     /// Get workflow metrics
     pub async fn get_workflow_metrics(&self, playbook_id: &str) -> Option<WorkflowMetrics> {
-        self.workflow_metrics.get(playbook_id).map(|entry| entry.value().clone())
+        self.workflow_metrics
+            .get(playbook_id)
+            .map(|entry| entry.value().clone())
     }
 
     /// Get all workflow metrics
     pub async fn get_all_workflow_metrics(&self) -> HashMap<String, WorkflowMetrics> {
-        self.workflow_metrics.iter()
+        self.workflow_metrics
+            .iter()
             .map(|entry| (entry.key().clone(), entry.value().clone()))
             .collect()
     }
@@ -237,8 +264,13 @@ impl SoarMetrics {
     }
 
     /// Get integration metrics
-    pub async fn get_integration_metrics(&self, integration_id: &str) -> Option<IntegrationMetrics> {
-        self.integration_metrics.get(integration_id).map(|entry| entry.value().clone())
+    pub async fn get_integration_metrics(
+        &self,
+        integration_id: &str,
+    ) -> Option<IntegrationMetrics> {
+        self.integration_metrics
+            .get(integration_id)
+            .map(|entry| entry.value().clone())
     }
 
     /// Get performance metrics
@@ -272,7 +304,7 @@ impl SoarMetrics {
 
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.update_system_metrics().await {
                 error!("Failed to update system metrics: {}", e);
             }
@@ -282,23 +314,25 @@ impl SoarMetrics {
     /// Update system metrics
     async fn update_system_metrics(&self) -> Result<(), MetricsError> {
         let mut metrics = self.system_metrics.lock().await;
-        
+
         // Update uptime (simplified - would use actual system uptime)
         metrics.uptime_seconds += 60;
-        
+
         // Update active workflows count
         metrics.active_workflows = self.workflow_metrics.len() as u64;
-        
+
         // Update integration health
-        let healthy_integrations = self.integration_metrics.iter()
+        let healthy_integrations = self
+            .integration_metrics
+            .iter()
             .filter(|entry| {
                 entry.value().error_rate < 5.0 // Less than 5% error rate
             })
             .count() as u64;
-        
+
         metrics.healthy_integrations = healthy_integrations;
         metrics.total_integrations = self.integration_metrics.len() as u64;
-        
+
         // Simulate resource usage (in real implementation, would collect actual metrics)
         metrics.memory_usage_mb = 512.0 + (rand::random::<f64>() * 100.0);
         metrics.cpu_usage_percent = 10.0 + (rand::random::<f64>() * 20.0);
@@ -314,8 +348,10 @@ impl SoarMetrics {
         success: bool,
     ) -> Result<(), MetricsError> {
         let mut metrics = self.performance_metrics.lock().await;
-        
-        let operation_metrics = metrics.operations.entry(operation.to_string())
+
+        let operation_metrics = metrics
+            .operations
+            .entry(operation.to_string())
             .or_insert_with(|| OperationMetrics {
                 operation_name: operation.to_string(),
                 total_operations: 0,
@@ -342,8 +378,10 @@ impl SoarMetrics {
         operation_metrics.max_duration_ms = operation_metrics.max_duration_ms.max(duration_ms);
 
         // Update average duration
-        let total_time = operation_metrics.avg_duration_ms * (operation_metrics.total_operations - 1) as f64;
-        operation_metrics.avg_duration_ms = (total_time + duration_ms as f64) / operation_metrics.total_operations as f64;
+        let total_time =
+            operation_metrics.avg_duration_ms * (operation_metrics.total_operations - 1) as f64;
+        operation_metrics.avg_duration_ms =
+            (total_time + duration_ms as f64) / operation_metrics.total_operations as f64;
 
         Ok(())
     }
@@ -449,4 +487,14 @@ impl Default for SystemMetrics {
             cpu_usage_percent: 0.0,
         }
     }
+}
+
+// Missing type definitions
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct AlertMetrics {
+    pub total_alerts: u64,
+    pub processed_alerts: u64,
+    pub escalated_alerts: u64,
+    pub resolved_alerts: u64,
+    pub average_processing_time_ms: f64,
 }

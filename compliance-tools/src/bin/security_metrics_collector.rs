@@ -2,7 +2,6 @@ use chrono::Utc;
 use clap::{Arg, Command};
 use compliance_tools::{ComplianceError, MetricStatus, Result, SecurityMetric};
 use std::collections::HashMap;
-use tokio;
 
 // Unused dependencies (required by workspace but not used in this binary)
 use anyhow as _;
@@ -208,8 +207,7 @@ impl MetricsCollector {
 }
 
 fn output_json(metrics: &[SecurityMetric]) -> Result<()> {
-    let json =
-        serde_json::to_string_pretty(metrics).map_err(|e| ComplianceError::Serialization(e))?;
+    let json = serde_json::to_string_pretty(metrics).map_err(ComplianceError::Serialization)?;
     println!("{}", json);
     Ok(())
 }

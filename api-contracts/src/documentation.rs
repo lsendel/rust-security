@@ -62,7 +62,7 @@ pub enum SecurityScheme {
         location: ApiKeyLocation,
     },
     OAuth2 {
-        flows: OAuth2Flows,
+        flows: Box<OAuth2Flows>,
     },
     OpenIdConnect {
         open_id_connect_url: String,
@@ -157,7 +157,7 @@ impl DocumentationManager {
             for server in &config.servers {
                 docs.push_str(&format!("- **{}**: {}\n", server.description, server.url));
             }
-            docs.push_str("\n");
+            docs.push('\n');
         }
 
         // Add authentication section
@@ -170,28 +170,28 @@ impl DocumentationManager {
                         scheme,
                         bearer_format,
                     } => {
-                        docs.push_str(&format!("- **Type**: HTTP\n"));
+                        docs.push_str("- **Type**: HTTP\n");
                         docs.push_str(&format!("- **Scheme**: {}\n", scheme));
                         if let Some(format) = bearer_format {
                             docs.push_str(&format!("- **Bearer Format**: {}\n", format));
                         }
                     }
                     SecurityScheme::ApiKey { name, location } => {
-                        docs.push_str(&format!("- **Type**: API Key\n"));
+                        docs.push_str("- **Type**: API Key\n");
                         docs.push_str(&format!("- **Name**: {}\n", name));
                         docs.push_str(&format!("- **Location**: {:?}\n", location));
                     }
                     SecurityScheme::OAuth2 { flows: _ } => {
-                        docs.push_str(&format!("- **Type**: OAuth2\n"));
+                        docs.push_str("- **Type**: OAuth2\n");
                     }
                     SecurityScheme::OpenIdConnect {
                         open_id_connect_url,
                     } => {
-                        docs.push_str(&format!("- **Type**: OpenID Connect\n"));
+                        docs.push_str("- **Type**: OpenID Connect\n");
                         docs.push_str(&format!("- **URL**: {}\n", open_id_connect_url));
                     }
                 }
-                docs.push_str("\n");
+                docs.push('\n');
             }
         }
 
@@ -247,7 +247,7 @@ impl Default for OpenApiConfig {
                 (
                     "oauth2".to_string(),
                     SecurityScheme::OAuth2 {
-                        flows: OAuth2Flows {
+                        flows: Box::new(OAuth2Flows {
                             authorization_code: Some(OAuth2Flow {
                                 authorization_url: Some(
                                     "https://auth.rust-security.example.com/oauth2/authorize"
@@ -281,7 +281,7 @@ impl Default for OpenApiConfig {
                             }),
                             implicit: None,
                             password: None,
-                        },
+                        }),
                     },
                 ),
             ]),

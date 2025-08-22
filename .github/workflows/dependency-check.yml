@@ -24,10 +24,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@v4
       
     - name: Setup Rust
-      uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+      uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy
         
@@ -82,10 +82,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@v4
       
     - name: Setup Rust
-      uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+      uses: dtolnay/rust-toolchain@stable
       
     - name: Install cargo-outdated
       run: cargo install cargo-outdated --locked
@@ -144,10 +144,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@v4
       
     - name: Setup Rust
-      uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+      uses: dtolnay/rust-toolchain@stable
       
     - name: Cache dependencies
       uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2

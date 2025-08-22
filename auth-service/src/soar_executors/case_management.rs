@@ -148,11 +148,7 @@ impl StepExecutor for CaseUpdateExecutor {
             info!("Updating case: {}", case_id);
 
             // Update case fields
-            match self
-                .case_manager_client
-                .update_case(case_id, fields)
-                .await
-            {
+            match self.case_manager_client.update_case(case_id, fields).await {
                 Ok(updated_case) => {
                     // Add note if specified
                     if let Some(note) = add_note {
@@ -183,7 +179,10 @@ impl StepExecutor for CaseUpdateExecutor {
 
                     let mut outputs = HashMap::new();
                     outputs.insert("case_id".to_string(), Value::String(case_id.clone()));
-                    outputs.insert("updated_case".to_string(), serde_json::to_value(updated_case)?);
+                    outputs.insert(
+                        "updated_case".to_string(),
+                        serde_json::to_value(updated_case)?,
+                    );
                     outputs.insert("note_added".to_string(), Value::Bool(add_note.is_some()));
 
                     Ok(outputs)

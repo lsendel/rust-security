@@ -1,0 +1,315 @@
+# Production Monitoring Configuration
+# Enhanced monitoring setup for Rust Security Platform
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: rust-security
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093
+    
+    scrape_configs:
+      # Auth Service Metrics
+      - job_name: 'auth-service'
+        static_configs:
+          - targets: ['auth-service:8080']
+        metrics_path: /metrics
+        scrape_interval: 10s
+        scrape_timeout: 5s
+        
+      # Policy Service Metrics  
+      - job_name: 'policy-service'
+        static_configs:
+          - targets: ['policy-service:8081']
+        metrics_path: /metrics
+        scrape_interval: 10s
+        
+      # Compliance Tools Metrics
+      - job_name: 'compliance-tools'
+        static_configs:
+          - targets: ['compliance-service:8082']
+        metrics_path: /metrics
+        scrape_interval: 30s
+        
+      # Infrastructure Metrics
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alerting-rules
+  namespace: rust-security
+data:
+  auth-service.yml: |
+    groups:
+      - name: auth-service
+        rules:
+          # High Error Rate
+          - alert: AuthServiceHighErrorRate
+            expr: rate(http_requests_total{job="auth-service",status=~"5.."}[5m]) > 0.01
+            for: 2m
+            labels:
+              severity: critical
+              service: auth-service
+            annotations:
+              summary: "Auth service error rate is above 1%"
+              description: "Error rate is {{ $value | humanizePercentage }}"
+              
+          # High Latency
+          - alert: AuthServiceHighLatency
+            expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="auth-service"}[5m])) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+              service: auth-service
+            annotations:
+              summary: "Auth service P95 latency is above 100ms"
+              description: "P95 latency is {{ $value }}s"
+              
+          # Failed Authentication Attempts
+          - alert: HighFailedAuthAttempts
+            expr: rate(auth_attempts_total{status="failed"}[5m]) > 10
+            for: 1m
+            labels:
+              severity: warning
+              service: auth-service
+            annotations:
+              summary: "High number of failed authentication attempts"
+              description: "{{ $value }} failed attempts per second"
+              
+          # JWT Token Validation Failures
+          - alert: JWTValidationFailures
+            expr: rate(jwt_validation_total{status="failed"}[5m]) > 5
+            for: 2m
+            labels:
+              severity: critical
+              service: auth-service
+            annotations:
+              summary: "High JWT validation failure rate"
+              description: "{{ $value }} JWT validation failures per second"
+
+      - name: policy-service
+        rules:
+          # Policy Evaluation Latency
+          - alert: PolicyEvaluationHighLatency
+            expr: histogram_quantile(0.95, rate(policy_evaluation_duration_seconds_bucket[5m])) > 0.01
+            for: 3m
+            labels:
+              severity: warning
+              service: policy-service
+            annotations:
+              summary: "Policy evaluation P95 latency above 10ms"
+              description: "P95 latency is {{ $value }}s"
+              
+          # Policy Cache Miss Rate
+          - alert: PolicyCacheHighMissRate
+            expr: rate(policy_cache_misses_total[5m]) / rate(policy_cache_requests_total[5m]) > 0.2
+            for: 5m
+            labels:
+              severity: warning
+              service: policy-service
+            annotations:
+              summary: "Policy cache miss rate above 20%"
+              description: "Cache miss rate is {{ $value | humanizePercentage }}"
+
+      - name: infrastructure
+        rules:
+          # High Memory Usage
+          - alert: HighMemoryUsage
+            expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.8
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Container memory usage above 80%"
+              description: "Memory usage is {{ $value | humanizePercentage }}"
+              
+          # High CPU Usage
+          - alert: HighCPUUsage
+            expr: rate(container_cpu_usage_seconds_total[5m]) / container_spec_cpu_quota * 100 > 70
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Container CPU usage above 70%"
+              description: "CPU usage is {{ $value }}%"
+              
+          # Pod Restart Rate
+          - alert: HighPodRestartRate
+            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+            for: 0m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod is restarting frequently"
+              description: "Pod {{ $labels.pod }} is restarting"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: rust-security
+data:
+  auth-service-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Rust Security Platform - Auth Service",
+        "panels": [
+          {
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{job=\"auth-service\"}[5m])",
+                "legendFormat": "{{method}} {{status}}"
+              }
+            ]
+          },
+          {
+            "title": "Response Time",
+            "type": "graph", 
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+                "legendFormat": "P50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+                "legendFormat": "P95"
+              },
+              {
+                "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+                "legendFormat": "P99"
+              }
+            ]
+          },
+          {
+            "title": "Authentication Success Rate",
+            "type": "singlestat",
+            "targets": [
+              {
+                "expr": "rate(auth_attempts_total{status=\"success\"}[5m]) / rate(auth_attempts_total[5m])",
+                "legendFormat": "Success Rate"
+              }
+            ]
+          },
+          {
+            "title": "Active Sessions",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "active_sessions_total",
+                "legendFormat": "Active Sessions"
+              }
+            ]
+          },
+          {
+            "title": "JWT Operations",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(jwt_operations_total[5m])",
+                "legendFormat": "{{operation}}"
+              }
+            ]
+          },
+          {
+            "title": "Database Connections",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "database_connections_active",
+                "legendFormat": "Active"
+              },
+              {
+                "expr": "database_connections_idle", 
+                "legendFormat": "Idle"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: rust-security
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.45.0
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: config
+          mountPath: /etc/prometheus
+        - name: rules
+          mountPath: /etc/prometheus/rules
+        args:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus'
+          - '--web.console.libraries=/etc/prometheus/console_libraries'
+          - '--web.console.templates=/etc/prometheus/consoles'
+          - '--storage.tsdb.retention.time=30d'
+          - '--web.enable-lifecycle'
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: config
+        configMap:
+          name: prometheus-config
+      - name: rules
+        configMap:
+          name: alerting-rules
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: rust-security
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - port: 9090
+    targetPort: 9090
+  type: ClusterIP

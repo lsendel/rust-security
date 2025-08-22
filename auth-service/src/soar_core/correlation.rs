@@ -64,7 +64,10 @@ impl AlertCorrelationEngine {
     }
 
     /// Process an incoming alert for correlation
-    pub async fn process_alert(&self, alert: SecurityAlert) -> Result<Option<CorrelationResult>, CorrelationError> {
+    pub async fn process_alert(
+        &self,
+        alert: SecurityAlert,
+    ) -> Result<Option<CorrelationResult>, CorrelationError> {
         debug!("Processing alert for correlation: {}", alert.id);
 
         // Add alert to cache
@@ -86,7 +89,10 @@ impl AlertCorrelationEngine {
     }
 
     /// Add correlation rule
-    pub async fn add_correlation_rule(&self, rule: CorrelationRule) -> Result<(), CorrelationError> {
+    pub async fn add_correlation_rule(
+        &self,
+        rule: CorrelationRule,
+    ) -> Result<(), CorrelationError> {
         let mut rules = self.correlation_rules.write().await;
         rules.push(rule);
         info!("Added new correlation rule");
@@ -103,7 +109,8 @@ impl AlertCorrelationEngine {
 
     /// Get correlation results
     pub async fn get_correlation_results(&self) -> Vec<CorrelationResult> {
-        self.correlation_results.iter()
+        self.correlation_results
+            .iter()
             .map(|entry| entry.value().clone())
             .collect()
     }
@@ -116,8 +123,9 @@ impl AlertCorrelationEngine {
     /// Add alert to correlation cache
     async fn add_alert_to_cache(&self, alert: SecurityAlert) {
         let cache_key = self.generate_cache_key(&alert);
-        
-        self.alert_cache.entry(cache_key)
+
+        self.alert_cache
+            .entry(cache_key)
             .or_insert_with(Vec::new)
             .push(alert);
 
@@ -128,13 +136,17 @@ impl AlertCorrelationEngine {
     }
 
     /// Correlate an alert with existing alerts
-    async fn correlate_alert(&self, alert: &SecurityAlert) -> Result<Option<CorrelationResult>, CorrelationError> {
+    async fn correlate_alert(
+        &self,
+        alert: &SecurityAlert,
+    ) -> Result<Option<CorrelationResult>, CorrelationError> {
         let rules = self.correlation_rules.read().await;
-        
+
         for rule in rules.iter() {
             if let Some(correlation) = self.apply_correlation_rule(alert, rule).await? {
                 // Store correlation result
-                self.correlation_results.insert(correlation.id.clone(), correlation.clone());
+                self.correlation_results
+                    .insert(correlation.id.clone(), correlation.clone());
                 return Ok(Some(correlation));
             }
         }
@@ -148,7 +160,10 @@ impl AlertCorrelationEngine {
         alert: &SecurityAlert,
         rule: &CorrelationRule,
     ) -> Result<Option<CorrelationResult>, CorrelationError> {
-        debug!("Applying correlation rule: {} to alert: {}", rule.name, alert.id);
+        debug!(
+            "Applying correlation rule: {} to alert: {}",
+            rule.name, alert.id
+        );
 
         // Get time window for correlation
         let time_window = Duration::minutes(rule.time_window_minutes as i64);
@@ -157,14 +172,17 @@ impl AlertCorrelationEngine {
 
         // Find related alerts in time window
         let mut related_alerts = Vec::new();
-        
+
         for cache_entry in self.alert_cache.iter() {
             for cached_alert in cache_entry.value() {
-                if cached_alert.id != alert.id &&
-                   cached_alert.timestamp >= window_start &&
-                   cached_alert.timestamp <= window_end {
-                    
-                    if self.check_correlation_conditions(alert, cached_alert, &rule.conditions).await {
+                if cached_alert.id != alert.id
+                    && cached_alert.timestamp >= window_start
+                    && cached_alert.timestamp <= window_end
+                {
+                    if self
+                        .check_correlation_conditions(alert, cached_alert, &rule.conditions)
+                        .await
+                    {
                         related_alerts.push(cached_alert.clone());
                     }
                 }
@@ -213,7 +231,10 @@ impl AlertCorrelationEngine {
         conditions: &[CorrelationCondition],
     ) -> bool {
         for condition in conditions {
-            if !self.evaluate_correlation_condition(alert1, alert2, condition).await {
+            if !self
+                .evaluate_correlation_condition(alert1, alert2, condition)
+                .await
+            {
                 return false;
             }
         }
@@ -229,14 +250,14 @@ impl AlertCorrelationEngine {
     ) -> bool {
         match &condition.correlation_type {
             CorrelationType::ExactMatch => {
-                self.get_alert_field_value(alert1, &condition.field) ==
-                self.get_alert_field_value(alert2, &condition.field)
+                self.get_alert_field_value(alert1, &condition.field)
+                    == self.get_alert_field_value(alert2, &condition.field)
             }
             CorrelationType::SimilarValues => {
                 // Implement similarity matching
                 let val1 = self.get_alert_field_value(alert1, &condition.field);
                 let val2 = self.get_alert_field_value(alert2, &condition.field);
-                
+
                 if let (Some(v1), Some(v2)) = (val1, val2) {
                     self.calculate_similarity(v1, v2) >= condition.threshold.unwrap_or(0.8)
                 } else {
@@ -249,7 +270,8 @@ impl AlertCorrelationEngine {
             }
             CorrelationType::IpAddressRange => {
                 // Implement IP range correlation
-                self.correlate_ip_addresses(alert1, alert2, &condition.field).await
+                self.correlate_ip_addresses(alert1, alert2, &condition.field)
+                    .await
             }
             CorrelationType::UserBehavior => {
                 // Implement user behavior correlation
@@ -283,7 +305,7 @@ impl AlertCorrelationEngine {
         // Simple Levenshtein distance-based similarity
         let distance = levenshtein_distance(val1, val2);
         let max_len = val1.len().max(val2.len());
-        
+
         if max_len == 0 {
             1.0
         } else {
@@ -292,18 +314,28 @@ impl AlertCorrelationEngine {
     }
 
     /// Correlate IP addresses (check if they're in the same subnet)
-    async fn correlate_ip_addresses(&self, alert1: &SecurityAlert, alert2: &SecurityAlert, field: &str) -> bool {
+    async fn correlate_ip_addresses(
+        &self,
+        alert1: &SecurityAlert,
+        alert2: &SecurityAlert,
+        field: &str,
+    ) -> bool {
         let ip1 = self.get_alert_field_value(alert1, field);
         let ip2 = self.get_alert_field_value(alert2, field);
-        
+
         if let (Some(ip1_str), Some(ip2_str)) = (ip1, ip2) {
             // Simple subnet check (same /24 network)
-            if let (Ok(ip1_addr), Ok(ip2_addr)) = (ip1_str.parse::<std::net::IpAddr>(), ip2_str.parse::<std::net::IpAddr>()) {
+            if let (Ok(ip1_addr), Ok(ip2_addr)) = (
+                ip1_str.parse::<std::net::IpAddr>(),
+                ip2_str.parse::<std::net::IpAddr>(),
+            ) {
                 match (ip1_addr, ip2_addr) {
                     (std::net::IpAddr::V4(ipv4_1), std::net::IpAddr::V4(ipv4_2)) => {
                         let octets1 = ipv4_1.octets();
                         let octets2 = ipv4_2.octets();
-                        octets1[0] == octets2[0] && octets1[1] == octets2[1] && octets1[2] == octets2[2]
+                        octets1[0] == octets2[0]
+                            && octets1[1] == octets2[1]
+                            && octets1[2] == octets2[2]
                     }
                     _ => false,
                 }
@@ -316,7 +348,11 @@ impl AlertCorrelationEngine {
     }
 
     /// Correlate user behavior patterns
-    async fn correlate_user_behavior(&self, alert1: &SecurityAlert, alert2: &SecurityAlert) -> bool {
+    async fn correlate_user_behavior(
+        &self,
+        alert1: &SecurityAlert,
+        alert2: &SecurityAlert,
+    ) -> bool {
         // Check if alerts involve the same user
         if let (Some(user1), Some(user2)) = (&alert1.user_id, &alert2.user_id) {
             user1 == user2
@@ -326,21 +362,29 @@ impl AlertCorrelationEngine {
     }
 
     /// Calculate confidence score for correlation
-    async fn calculate_confidence_score(&self, related_alerts: &[SecurityAlert], rule: &CorrelationRule) -> u8 {
+    async fn calculate_confidence_score(
+        &self,
+        related_alerts: &[SecurityAlert],
+        rule: &CorrelationRule,
+    ) -> u8 {
         let mut score = 50u8; // Base score
-        
+
         // Increase score based on number of related alerts
         score += (related_alerts.len() * 10).min(30) as u8;
-        
+
         // Increase score based on rule priority
         score += (rule.priority * 5).min(20);
-        
+
         // Cap at 100
         score.min(100)
     }
 
     /// Calculate risk score for correlation
-    async fn calculate_risk_score(&self, primary_alert: &SecurityAlert, related_alerts: &[SecurityAlert]) -> u8 {
+    async fn calculate_risk_score(
+        &self,
+        primary_alert: &SecurityAlert,
+        related_alerts: &[SecurityAlert],
+    ) -> u8 {
         let mut score = match primary_alert.severity {
             AlertSeverity::Critical => 90,
             AlertSeverity::High => 70,
@@ -364,7 +408,8 @@ impl AlertCorrelationEngine {
 
     /// Generate cache key for alert grouping
     fn generate_cache_key(&self, alert: &SecurityAlert) -> String {
-        format!("{}_{:?}_{:?}", 
+        format!(
+            "{}_{:?}_{:?}",
             alert.source_ip.as_deref().unwrap_or("unknown"),
             alert.alert_type,
             alert.severity
@@ -378,14 +423,17 @@ impl AlertCorrelationEngine {
 
         loop {
             interval.tick().await;
-            
-            let cutoff_time = Utc::now() - Duration::minutes(self.config.correlation_window_minutes as i64 * 2);
-            
+
+            let cutoff_time =
+                Utc::now() - Duration::minutes(self.config.correlation_window_minutes as i64 * 2);
+
             // Remove old alerts
             let mut removed_count = 0;
             for mut entry in self.alert_cache.iter_mut() {
                 let initial_len = entry.value().len();
-                entry.value_mut().retain(|alert| alert.timestamp > cutoff_time);
+                entry
+                    .value_mut()
+                    .retain(|alert| alert.timestamp > cutoff_time);
                 removed_count += initial_len - entry.value().len();
             }
 
@@ -393,7 +441,10 @@ impl AlertCorrelationEngine {
             self.alert_cache.retain(|_, alerts| !alerts.is_empty());
 
             if removed_count > 0 {
-                debug!("Cleaned up {} old alerts from correlation cache", removed_count);
+                debug!(
+                    "Cleaned up {} old alerts from correlation cache",
+                    removed_count
+                );
             }
         }
     }
@@ -401,7 +452,7 @@ impl AlertCorrelationEngine {
     /// Clean up cache when it gets too large
     async fn cleanup_cache(&self) {
         let target_size = self.config.max_correlation_cache_size * 3 / 4; // Reduce to 75%
-        
+
         while self.alert_cache.len() > target_size {
             // Remove oldest cache entries
             if let Some(entry) = self.alert_cache.iter().next() {
@@ -455,7 +506,7 @@ pub enum CorrelationError {
 fn levenshtein_distance(s1: &str, s2: &str) -> usize {
     let len1 = s1.chars().count();
     let len2 = s2.chars().count();
-    
+
     if len1 == 0 {
         return len2;
     }
@@ -477,7 +528,11 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 
     for i in 1..=len1 {
         for j in 1..=len2 {
-            let cost = if s1_chars[i - 1] == s2_chars[j - 1] { 0 } else { 1 };
+            let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             matrix[i][j] = (matrix[i - 1][j] + 1)
                 .min(matrix[i][j - 1] + 1)
                 .min(matrix[i - 1][j - 1] + cost);

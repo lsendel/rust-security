@@ -14,7 +14,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-
 #[tokio::test]
 async fn test_owasp_a1_injection_attacks() {
     let mut clients = HashMap::new();
@@ -58,13 +57,23 @@ async fn test_owasp_a1_injection_attacks() {
         )
         .await;
 
-        assert!(res.is_err(), "SQL injection vulnerability with payload: {}", payload);
+        assert!(
+            res.is_err(),
+            "SQL injection vulnerability with payload: {}",
+            payload
+        );
 
         let response = res.err().unwrap().into_response();
-        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap_or_default();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap_or_default();
         let response_text = String::from_utf8_lossy(&bytes);
         let error_json: serde_json::Result<Value> = serde_json::from_str(&response_text);
-        assert!(error_json.is_ok(), "Invalid JSON response to injection: {}", payload);
+        assert!(
+            error_json.is_ok(),
+            "Invalid JSON response to injection: {}",
+            payload
+        );
     }
 }
 
@@ -155,7 +164,11 @@ async fn test_owasp_a3_sensitive_data_exposure() {
     let error_inducing_requests = vec![
         ("invalid", "test_client", "wrong"),
         ("client_credentials", "", ""),
-        ("client_credentials", "nonexistent", "super_secret_password_123"),
+        (
+            "client_credentials",
+            "nonexistent",
+            "super_secret_password_123",
+        ),
     ];
 
     for (grant_type, client_id, client_secret) in error_inducing_requests {
@@ -173,12 +186,16 @@ async fn test_owasp_a3_sensitive_data_exposure() {
         let response_text = match res {
             Ok(json) => {
                 let resp = json.into_response();
-                let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap_or_default();
+                let bytes = to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap_or_default();
                 String::from_utf8_lossy(&bytes).to_string()
             }
             Err(err) => {
                 let resp = err.into_response();
-                let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap_or_default();
+                let bytes = to_bytes(resp.into_body(), usize::MAX)
+                    .await
+                    .unwrap_or_default();
                 String::from_utf8_lossy(&bytes).to_string()
             }
         };

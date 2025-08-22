@@ -3,8 +3,8 @@ mod security_tests {
     use crate::jwt_secure::create_secure_jwt_validation;
     use crate::rate_limit_secure::{RateLimitConfig, SecureRateLimiter};
     use crate::security::{
-        generate_code_challenge, generate_code_verifier, verify_code_challenge, generate_request_signature,
-        verify_request_signature, generate_token_binding,
+        generate_code_challenge, generate_code_verifier, generate_request_signature,
+        generate_token_binding, verify_code_challenge, verify_request_signature,
     };
     use crate::session_secure::*;
     use crate::validation_secure::*;
@@ -19,7 +19,7 @@ mod security_tests {
         let binding1 = generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap();
 
         // Add small delay to ensure different timestamp
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::thread::sleep(std::time::Duration::from_secs(1));
 
         let binding2 = generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap();
 
@@ -249,7 +249,6 @@ mod security_tests {
             .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
             .await;
     }
-    }
 
     /// Test suspicious activity detection
     #[tokio::test]
@@ -454,26 +453,27 @@ mod security_tests {
         rng: ring::rand::SystemRandom,
     }
 
-#[cfg(test)]
-impl TestSecureRandom {
-    pub fn new() -> Self {
-        Self {
-            rng: ring::rand::SystemRandom::new(),
+    #[cfg(test)]
+    impl TestSecureRandom {
+        pub fn new() -> Self {
+            Self {
+                rng: ring::rand::SystemRandom::new(),
+            }
         }
-    }
 
-    pub fn generate_bytes(&self, len: usize) -> Result<Vec<u8>, &'static str> {
-        use ring::rand::SecureRandom;
-        let mut bytes = vec![0u8; len];
-        self.rng
-            .fill(&mut bytes)
-            .map_err(|_| "Random generation failed")?;
-        Ok(bytes)
-    }
+        pub fn generate_bytes(&self, len: usize) -> Result<Vec<u8>, &'static str> {
+            use ring::rand::SecureRandom;
+            let mut bytes = vec![0u8; len];
+            self.rng
+                .fill(&mut bytes)
+                .map_err(|_| "Random generation failed")?;
+            Ok(bytes)
+        }
 
-    pub fn generate_session_id(&self) -> Result<String, &'static str> {
-        use base64::Engine;
-        let bytes = self.generate_bytes(32)?;
-        Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+        pub fn generate_session_id(&self) -> Result<String, &'static str> {
+            use base64::Engine;
+            let bytes = self.generate_bytes(32)?;
+            Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+        }
     }
 }

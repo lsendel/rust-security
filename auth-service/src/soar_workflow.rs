@@ -1940,3 +1940,13 @@ impl ToString for StepType {
         }
     }
 }
+
+// Missing type definitions
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct WorkflowMetrics {
+    pub total_executions: u64,
+    pub successful_executions: u64,
+    pub failed_executions: u64,
+    pub average_duration_ms: f64,
+    pub last_execution: Option<chrono::DateTime<chrono::Utc>>,
+}

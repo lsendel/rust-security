@@ -11,7 +11,6 @@ use compliance_tools::{
     reporting::{AuditSummary, ComplianceReportData, ReportRenderer},
     *,
 };
-use serde_json;
 use std::path::PathBuf;
 use tracing::{error, info, warn};
 
@@ -229,11 +228,11 @@ struct ComplianceReporter {
 
 impl ComplianceReporter {
     async fn new(config: ComplianceConfig) -> Result<Self> {
-        let prometheus_client = if let Some(url) = &config.data_sources.prometheus_url {
-            Some(PrometheusClient::new(url.clone()))
-        } else {
-            None
-        };
+        let prometheus_client = config
+            .data_sources
+            .prometheus_url
+            .as_ref()
+            .map(|url| PrometheusClient::new(url.clone()));
 
         let metrics_collector = MetricsCollector::new(&config).await?;
 

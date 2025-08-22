@@ -2,10 +2,10 @@
 //!
 //! Handles security incident cases, their lifecycle, and associated workflows.
 
-pub mod manager;
-pub mod types;
-pub mod storage;
 pub mod analytics;
+pub mod manager;
+pub mod storage;
+pub mod types;
 
 pub use manager::{CaseManager, CaseManagerConfig, CaseUpdate, CaseFilter};
 pub use types::{

@@ -107,7 +107,10 @@ impl StepExecutorRegistry {
     }
 
     /// Remove executor
-    pub fn remove_executor(&mut self, step_type: &str) -> Option<Arc<dyn StepExecutor + Send + Sync>> {
+    pub fn remove_executor(
+        &mut self,
+        step_type: &str,
+    ) -> Option<Arc<dyn StepExecutor + Send + Sync>> {
         self.executors.remove(step_type)
     }
 

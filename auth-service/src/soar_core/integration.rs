@@ -29,7 +29,9 @@ pub struct IntegrationFramework {
 
 impl IntegrationFramework {
     /// Create a new integration framework
-    pub async fn new(configs: HashMap<String, IntegrationConfig>) -> Result<Self, IntegrationError> {
+    pub async fn new(
+        configs: HashMap<String, IntegrationConfig>,
+    ) -> Result<Self, IntegrationError> {
         let framework = Self {
             integrations: Arc::new(DashMap::new()),
             health_status: Arc::new(DashMap::new()),
@@ -40,17 +42,20 @@ impl IntegrationFramework {
         // Initialize integrations from config
         for (id, config) in configs {
             framework.integrations.insert(id.clone(), config);
-            
+
             // Initialize metrics
-            framework.metrics.insert(id.clone(), IntegrationMetrics {
-                integration_name: id.clone(),
-                total_requests: 0,
-                successful_requests: 0,
-                failed_requests: 0,
-                avg_response_time_ms: 0.0,
-                last_request: None,
-                error_rate: 0.0,
-            });
+            framework.metrics.insert(
+                id.clone(),
+                IntegrationMetrics {
+                    integration_name: id.clone(),
+                    total_requests: 0,
+                    successful_requests: 0,
+                    failed_requests: 0,
+                    avg_response_time_ms: 0.0,
+                    last_request: None,
+                    error_rate: 0.0,
+                },
+            );
         }
 
         Ok(framework)
@@ -95,7 +100,9 @@ impl IntegrationFramework {
         let start_time = std::time::Instant::now();
 
         // Get integration
-        let integration = self.active_integrations.get(integration_id)
+        let integration = self
+            .active_integrations
+            .get(integration_id)
             .ok_or_else(|| IntegrationError {
                 code: "INTEGRATION_NOT_FOUND".to_string(),
                 message: format!("Integration not found: {}", integration_id),
@@ -108,7 +115,8 @@ impl IntegrationFramework {
 
         // Update metrics
         let duration = start_time.elapsed();
-        self.update_metrics(integration_id, &result, duration.as_millis() as f64).await;
+        self.update_metrics(integration_id, &result, duration.as_millis() as f64)
+            .await;
 
         result
     }
@@ -143,13 +151,19 @@ impl IntegrationFramework {
     }
 
     /// Get integration metrics
-    pub async fn get_integration_metrics(&self, integration_id: &str) -> Option<IntegrationMetrics> {
-        self.metrics.get(integration_id).map(|entry| entry.value().clone())
+    pub async fn get_integration_metrics(
+        &self,
+        integration_id: &str,
+    ) -> Option<IntegrationMetrics> {
+        self.metrics
+            .get(integration_id)
+            .map(|entry| entry.value().clone())
     }
 
     /// Get all integration metrics
     pub async fn get_all_metrics(&self) -> HashMap<String, IntegrationMetrics> {
-        self.metrics.iter()
+        self.metrics
+            .iter()
             .map(|entry| (entry.key().clone(), entry.value().clone()))
             .collect()
     }
@@ -161,14 +175,15 @@ impl IntegrationFramework {
 
         loop {
             interval.tick().await;
-            
+
             for entry in self.active_integrations.iter() {
                 let integration_id = entry.key().clone();
                 let integration = entry.value();
 
                 match integration.health_check().await {
                     Ok(health_info) => {
-                        self.health_status.insert(integration_id.clone(), health_info);
+                        self.health_status
+                            .insert(integration_id.clone(), health_info);
                     }
                     Err(error) => {
                         let health_info = IntegrationHealthInfo {
@@ -187,7 +202,7 @@ impl IntegrationFramework {
                             consecutive_failures: 1,
                             metadata: HashMap::new(),
                         };
-                        
+
                         self.health_status.insert(integration_id, health_info);
                     }
                 }
@@ -217,10 +232,12 @@ impl IntegrationFramework {
 
             // Update average response time
             let total_time = metrics.avg_response_time_ms * (metrics.total_requests - 1) as f64;
-            metrics.avg_response_time_ms = (total_time + response_time_ms) / metrics.total_requests as f64;
+            metrics.avg_response_time_ms =
+                (total_time + response_time_ms) / metrics.total_requests as f64;
 
             // Update error rate
-            metrics.error_rate = (metrics.failed_requests as f64 / metrics.total_requests as f64) * 100.0;
+            metrics.error_rate =
+                (metrics.failed_requests as f64 / metrics.total_requests as f64) * 100.0;
         }
     }
 }
@@ -308,16 +325,32 @@ impl Integration for SiemIntegration {
         context: &HashMap<String, serde_json::Value>,
     ) -> Result<HashMap<String, serde_json::Value>, IntegrationError> {
         match action {
-            StepAction::QuerySiem { query, time_range, max_results } => {
+            StepAction::QuerySiem {
+                query,
+                time_range,
+                max_results,
+            } => {
                 debug!("Executing SIEM query: {}", query);
-                
+
                 // Simulate SIEM query execution
                 let mut results = HashMap::new();
-                results.insert("query_executed".to_string(), serde_json::Value::String(query.clone()));
-                results.insert("time_range".to_string(), serde_json::Value::String(time_range.clone()));
-                results.insert("max_results".to_string(), serde_json::Value::Number((*max_results).into()));
-                results.insert("results_count".to_string(), serde_json::Value::Number(42.into()));
-                
+                results.insert(
+                    "query_executed".to_string(),
+                    serde_json::Value::String(query.clone()),
+                );
+                results.insert(
+                    "time_range".to_string(),
+                    serde_json::Value::String(time_range.clone()),
+                );
+                results.insert(
+                    "max_results".to_string(),
+                    serde_json::Value::Number((*max_results).into()),
+                );
+                results.insert(
+                    "results_count".to_string(),
+                    serde_json::Value::Number(42.into()),
+                );
+
                 Ok(results)
             }
             _ => Err(IntegrationError {
@@ -325,18 +358,18 @@ impl Integration for SiemIntegration {
                 message: format!("SIEM integration does not support action: {:?}", action),
                 details: None,
                 retryable: false,
-            })
+            }),
         }
     }
 
     async fn health_check(&self) -> Result<IntegrationHealthInfo, IntegrationError> {
         let start_time = std::time::Instant::now();
-        
+
         // Simulate health check
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        
+
         let response_time = start_time.elapsed().as_millis() as u64;
-        
+
         Ok(IntegrationHealthInfo {
             integration_id: self.config.id.clone(),
             status: IntegrationHealth {
@@ -385,15 +418,31 @@ impl Integration for EdrIntegration {
         _context: &HashMap<String, serde_json::Value>,
     ) -> Result<HashMap<String, serde_json::Value>, IntegrationError> {
         match action {
-            StepAction::BlockIp { ip_address, duration_minutes, reason } => {
+            StepAction::BlockIp {
+                ip_address,
+                duration_minutes,
+                reason,
+            } => {
                 debug!("Blocking IP via EDR: {}", ip_address);
-                
+
                 let mut results = HashMap::new();
-                results.insert("ip_blocked".to_string(), serde_json::Value::String(ip_address.clone()));
-                results.insert("duration_minutes".to_string(), serde_json::Value::Number((*duration_minutes).into()));
-                results.insert("reason".to_string(), serde_json::Value::String(reason.clone()));
-                results.insert("block_id".to_string(), serde_json::Value::String(Uuid::new_v4().to_string()));
-                
+                results.insert(
+                    "ip_blocked".to_string(),
+                    serde_json::Value::String(ip_address.clone()),
+                );
+                results.insert(
+                    "duration_minutes".to_string(),
+                    serde_json::Value::Number((*duration_minutes).into()),
+                );
+                results.insert(
+                    "reason".to_string(),
+                    serde_json::Value::String(reason.clone()),
+                );
+                results.insert(
+                    "block_id".to_string(),
+                    serde_json::Value::String(Uuid::new_v4().to_string()),
+                );
+
                 Ok(results)
             }
             _ => Err(IntegrationError {
@@ -401,18 +450,18 @@ impl Integration for EdrIntegration {
                 message: format!("EDR integration does not support action: {:?}", action),
                 details: None,
                 retryable: false,
-            })
+            }),
         }
     }
 
     async fn health_check(&self) -> Result<IntegrationHealthInfo, IntegrationError> {
         let start_time = std::time::Instant::now();
-        
+
         // Simulate health check
         tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-        
+
         let response_time = start_time.elapsed().as_millis() as u64;
-        
+
         Ok(IntegrationHealthInfo {
             integration_id: self.config.id.clone(),
             status: IntegrationHealth {
@@ -461,14 +510,27 @@ impl Integration for FirewallIntegration {
         _context: &HashMap<String, serde_json::Value>,
     ) -> Result<HashMap<String, serde_json::Value>, IntegrationError> {
         match action {
-            StepAction::BlockIp { ip_address, duration_minutes, reason } => {
+            StepAction::BlockIp {
+                ip_address,
+                duration_minutes,
+                reason,
+            } => {
                 debug!("Blocking IP via firewall: {}", ip_address);
-                
+
                 let mut results = HashMap::new();
-                results.insert("firewall_rule_created".to_string(), serde_json::Value::Bool(true));
-                results.insert("blocked_ip".to_string(), serde_json::Value::String(ip_address.clone()));
-                results.insert("rule_id".to_string(), serde_json::Value::String(Uuid::new_v4().to_string()));
-                
+                results.insert(
+                    "firewall_rule_created".to_string(),
+                    serde_json::Value::Bool(true),
+                );
+                results.insert(
+                    "blocked_ip".to_string(),
+                    serde_json::Value::String(ip_address.clone()),
+                );
+                results.insert(
+                    "rule_id".to_string(),
+                    serde_json::Value::String(Uuid::new_v4().to_string()),
+                );
+
                 Ok(results)
             }
             _ => Err(IntegrationError {
@@ -476,18 +538,18 @@ impl Integration for FirewallIntegration {
                 message: format!("Firewall integration does not support action: {:?}", action),
                 details: None,
                 retryable: false,
-            })
+            }),
         }
     }
 
     async fn health_check(&self) -> Result<IntegrationHealthInfo, IntegrationError> {
         let start_time = std::time::Instant::now();
-        
+
         // Simulate health check
         tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-        
+
         let response_time = start_time.elapsed().as_millis() as u64;
-        
+
         Ok(IntegrationHealthInfo {
             integration_id: self.config.id.clone(),
             status: IntegrationHealth {
@@ -532,4 +594,12 @@ pub struct HealthMetrics {
 
     /// Last check timestamp
     pub last_check: DateTime<Utc>,
+}
+
+// Missing type definitions
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum IntegrationHealth {
+    Healthy,
+    Unhealthy,
+    Unknown,
 }

@@ -56,25 +56,27 @@ impl SoarCore {
     /// Create a new SOAR core instance
     pub async fn new(config: SoarConfig) -> Result<Self, SoarError> {
         let (event_tx, event_rx) = mpsc::channel(1000);
-        
+
         let workflow_engine = Arc::new(super::workflow::WorkflowEngine::new().await?);
-        let correlation_engine = Arc::new(super::correlation::AlertCorrelationEngine::new(
-            config.correlation_config.clone()
-        ).await?);
-        let response_engine = Arc::new(super::response::ResponseAutomationEngine::new(
-            config.auto_response_config.clone()
-        ).await?);
-        let integration_framework = Arc::new(super::integration::IntegrationFramework::new(
-            config.integrations.clone()
-        ).await?);
+        let correlation_engine = Arc::new(
+            super::correlation::AlertCorrelationEngine::new(config.correlation_config.clone())
+                .await?,
+        );
+        let response_engine = Arc::new(
+            super::response::ResponseAutomationEngine::new(config.auto_response_config.clone())
+                .await?,
+        );
+        let integration_framework = Arc::new(
+            super::integration::IntegrationFramework::new(config.integrations.clone()).await?,
+        );
         let metrics_collector = Arc::new(super::metrics::SoarMetrics::new().await?);
-        
+
         let case_manager = Arc::new(CaseManager::new(config.case_management.clone()).await?);
         let security_logger = Arc::new(SecurityLogger::new().await?);
-        
+
         let mut template_engine = Handlebars::new();
         template_engine.set_strict_mode(true);
-        
+
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             workflow_engine,
@@ -140,15 +142,17 @@ impl SoarCore {
         debug!("Processing security alert: {}", alert.id);
 
         // Log the alert
-        self.security_logger.log_event(SecurityEvent {
-            id: Uuid::new_v4().to_string(),
-            timestamp: Utc::now(),
-            event_type: SecurityEventType::AlertReceived,
-            severity: SecuritySeverity::from(alert.severity.clone()),
-            source: "soar_core".to_string(),
-            message: format!("Alert received: {}", alert.title),
-            metadata: Some(serde_json::to_value(&alert)?),
-        }).await?;
+        self.security_logger
+            .log_event(SecurityEvent {
+                id: Uuid::new_v4().to_string(),
+                timestamp: Utc::now(),
+                event_type: SecurityEventType::AlertReceived,
+                severity: SecuritySeverity::from(alert.severity.clone()),
+                source: "soar_core".to_string(),
+                message: format!("Alert received: {}", alert.title),
+                metadata: Some(serde_json::to_value(&alert)?),
+            })
+            .await?;
 
         // Send to correlation engine
         self.correlation_engine.process_alert(alert.clone()).await?;
@@ -160,11 +164,15 @@ impl SoarCore {
 
         // Create case if configured
         if self.should_create_case(&alert).await? {
-            self.case_manager.create_case_from_alert(alert.clone()).await?;
+            self.case_manager
+                .create_case_from_alert(alert.clone())
+                .await?;
         }
 
         // Update metrics
-        self.metrics_collector.record_alert_processed(&alert).await?;
+        self.metrics_collector
+            .record_alert_processed(&alert)
+            .await?;
 
         Ok(())
     }
@@ -179,7 +187,9 @@ impl SoarCore {
         debug!("Triggering playbook: {}", playbook_id);
 
         let config = self.config.read().await;
-        let playbook = config.playbooks.get(playbook_id)
+        let playbook = config
+            .playbooks
+            .get(playbook_id)
             .ok_or_else(|| SoarError::PlaybookNotFound(playbook_id.to_string()))?
             .clone();
         drop(config);
@@ -201,39 +211,50 @@ impl SoarCore {
             approval_requests: Vec::new(),
         };
 
-        self.active_workflows.insert(instance_id.clone(), workflow_instance);
+        self.active_workflows
+            .insert(instance_id.clone(), workflow_instance);
 
         // Execute workflow
-        self.workflow_engine.execute_workflow(playbook, inputs, context).await?;
+        self.workflow_engine
+            .execute_workflow(playbook, inputs, context)
+            .await?;
 
         // Log workflow trigger
-        self.security_logger.log_event(SecurityEvent {
-            id: Uuid::new_v4().to_string(),
-            timestamp: Utc::now(),
-            event_type: SecurityEventType::WorkflowTriggered,
-            severity: SecuritySeverity::Info,
-            source: "soar_core".to_string(),
-            message: format!("Playbook triggered: {}", playbook_id),
-            metadata: Some(serde_json::json!({
-                "playbook_id": playbook_id,
-                "instance_id": instance_id,
-                "inputs": inputs
-            })),
-        }).await?;
+        self.security_logger
+            .log_event(SecurityEvent {
+                id: Uuid::new_v4().to_string(),
+                timestamp: Utc::now(),
+                event_type: SecurityEventType::WorkflowTriggered,
+                severity: SecuritySeverity::Info,
+                source: "soar_core".to_string(),
+                message: format!("Playbook triggered: {}", playbook_id),
+                metadata: Some(serde_json::json!({
+                    "playbook_id": playbook_id,
+                    "instance_id": instance_id,
+                    "inputs": inputs
+                })),
+            })
+            .await?;
 
         Ok(instance_id)
     }
 
     /// Get workflow status
-    pub async fn get_workflow_status(&self, instance_id: &str) -> Result<WorkflowStatus, SoarError> {
-        let workflow = self.active_workflows.get(instance_id)
+    pub async fn get_workflow_status(
+        &self,
+        instance_id: &str,
+    ) -> Result<WorkflowStatus, SoarError> {
+        let workflow = self
+            .active_workflows
+            .get(instance_id)
             .ok_or_else(|| SoarError::WorkflowNotFound(instance_id.to_string()))?;
         Ok(workflow.status.clone())
     }
 
     /// Get active workflows
     pub async fn get_active_workflows(&self) -> Vec<WorkflowInstance> {
-        self.active_workflows.iter()
+        self.active_workflows
+            .iter()
             .map(|entry| entry.value().clone())
             .collect()
     }
@@ -242,7 +263,7 @@ impl SoarCore {
     pub async fn update_config(&self, new_config: SoarConfig) -> Result<(), SoarError> {
         let mut config = self.config.write().await;
         *config = new_config;
-        
+
         info!("SOAR configuration updated");
         Ok(())
     }
@@ -276,7 +297,7 @@ impl SoarCore {
     /// Process events from the event queue
     async fn process_events(&self) {
         let mut receiver = self.event_receiver.lock().await;
-        
+
         while let Some(event) = receiver.recv().await {
             if let Err(e) = self.handle_event(event).await {
                 error!("Error processing SOAR event: {}", e);
@@ -317,7 +338,7 @@ impl SoarCore {
     /// Check if an alert should trigger auto-response
     async fn should_auto_respond(&self, alert: &SecurityAlert) -> Result<bool, SoarError> {
         let config = self.config.read().await;
-        
+
         if !config.auto_response_config.enabled {
             return Ok(false);
         }
@@ -328,8 +349,12 @@ impl SoarCore {
         }
 
         // Check allowed threat types
-        if !config.auto_response_config.allowed_threat_types.is_empty() &&
-           !config.auto_response_config.allowed_threat_types.contains(&alert.alert_type) {
+        if !config.auto_response_config.allowed_threat_types.is_empty()
+            && !config
+                .auto_response_config
+                .allowed_threat_types
+                .contains(&alert.alert_type)
+        {
             return Ok(false);
         }
 
@@ -339,16 +364,16 @@ impl SoarCore {
     /// Trigger automatic response for an alert
     async fn trigger_auto_response(&self, alert: SecurityAlert) -> Result<(), SoarError> {
         debug!("Triggering auto-response for alert: {}", alert.id);
-        
+
         self.response_engine.trigger_auto_response(alert).await?;
-        
+
         Ok(())
     }
 
     /// Check if a case should be created for an alert
     async fn should_create_case(&self, alert: &SecurityAlert) -> Result<bool, SoarError> {
         let config = self.config.read().await;
-        
+
         if !config.case_management.auto_create_cases {
             return Ok(false);
         }
@@ -374,7 +399,7 @@ impl SoarCore {
             if let Some(mut workflow) = self.active_workflows.get_mut(instance_id) {
                 workflow.status = WorkflowStatus::Failed;
                 workflow.ended_at = Some(Utc::now());
-                
+
                 if let Some(error_data) = event.data.get("error") {
                     if let Ok(error) = serde_json::from_value::<WorkflowError>(error_data.clone()) {
                         workflow.error = Some(error);

@@ -304,7 +304,7 @@ impl SbomGenerator {
 
     fn get_project_name(&self) -> Result<String> {
         let output = ProcessCommand::new("cargo")
-            .args(&["metadata", "--format-version", "1"])
+            .args(["metadata", "--format-version", "1"])
             .current_dir(&self.project_root)
             .output()
             .map_err(|e| anyhow!("Failed to run cargo metadata: {}", e))?;
@@ -349,7 +349,7 @@ impl SbomGenerator {
 
     fn parse_dependencies(&self) -> Result<Vec<CargoPackage>> {
         let output = ProcessCommand::new("cargo")
-            .args(&["metadata", "--format-version", "1"])
+            .args(["metadata", "--format-version", "1"])
             .current_dir(&self.project_root)
             .output()
             .map_err(|e| anyhow!("Failed to run cargo metadata: {}", e))?;

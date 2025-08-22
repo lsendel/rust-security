@@ -44,7 +44,9 @@ pub use registry::StepExecutorRegistry;
 // Re-export commonly used executors
 pub use case_management::{CaseUpdateExecutor, TicketCreateExecutor};
 pub use control_flow::{DecisionExecutor, WaitExecutor};
-pub use notification::{EmailNotificationExecutor, SlackNotificationExecutor, WebhookNotificationExecutor};
+pub use notification::{
+    EmailNotificationExecutor, SlackNotificationExecutor, WebhookNotificationExecutor,
+};
 pub use query::{DatabaseQueryExecutor, SiemQueryExecutor};
 pub use script::{HttpRequestExecutor, ScriptExecutor};
 pub use security::{AccountLockExecutor, IpBlockExecutor, TokenRevokeExecutor};

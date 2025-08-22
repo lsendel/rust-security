@@ -68,9 +68,9 @@ pub struct PerformanceMetrics {
 impl Default for PerformanceThresholds {
     fn default() -> Self {
         Self {
-            max_latency_ms: 100, // 100ms P95 target
-            max_memory_mb: 512,  // 512MB memory limit
-            max_connections: 1000, // 1000 concurrent connections
+            max_latency_ms: 100,        // 100ms P95 target
+            max_memory_mb: 512,         // 512MB memory limit
+            max_connections: 1000,      // 1000 concurrent connections
             error_rate_threshold: 0.01, // 1% error rate threshold
         }
     }
@@ -95,31 +95,27 @@ impl PerformanceMonitor {
         let request_latency = Histogram::with_opts(
             prometheus::HistogramOpts::new(
                 "auth_request_duration_seconds",
-                "Request duration in seconds"
+                "Request duration in seconds",
             )
-            .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0])
+            .buckets(vec![
+                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+            ]),
         )?;
 
-        let request_count = Counter::with_opts(
-            prometheus::Opts::new(
-                "auth_requests_total",
-                "Total number of authentication requests"
-            )
-        )?;
+        let request_count = Counter::with_opts(prometheus::Opts::new(
+            "auth_requests_total",
+            "Total number of authentication requests",
+        ))?;
 
-        let active_connections = IntGauge::with_opts(
-            prometheus::Opts::new(
-                "auth_active_connections",
-                "Number of active connections"
-            )
-        )?;
+        let active_connections = IntGauge::with_opts(prometheus::Opts::new(
+            "auth_active_connections",
+            "Number of active connections",
+        ))?;
 
-        let memory_usage = IntGauge::with_opts(
-            prometheus::Opts::new(
-                "auth_memory_usage_bytes",
-                "Memory usage in bytes"
-            )
-        )?;
+        let memory_usage = IntGauge::with_opts(prometheus::Opts::new(
+            "auth_memory_usage_bytes",
+            "Memory usage in bytes",
+        ))?;
 
         registry.register(Box::new(request_latency.clone()))?;
         registry.register(Box::new(request_count.clone()))?;
@@ -269,7 +265,9 @@ impl PerformanceMonitor {
         use prometheus::Encoder;
         let encoder = prometheus::TextEncoder::new();
         let metric_families = self.registry.gather();
-        encoder.encode_to_string(&metric_families).unwrap_or_default()
+        encoder
+            .encode_to_string(&metric_families)
+            .unwrap_or_default()
     }
 
     /// Update performance thresholds
@@ -328,7 +326,9 @@ mod tests {
 
         // Record failures to trigger circuit breaker
         for _ in 0..5 {
-            monitor.record_request(Duration::from_millis(100), false).await;
+            monitor
+                .record_request(Duration::from_millis(100), false)
+                .await;
         }
 
         // Circuit should be open
@@ -345,7 +345,9 @@ mod tests {
 
         // Record successes to close circuit
         for _ in 0..5 {
-            monitor.record_request(Duration::from_millis(50), true).await;
+            monitor
+                .record_request(Duration::from_millis(50), true)
+                .await;
         }
 
         assert!(monitor.is_request_allowed().await);
@@ -356,9 +358,15 @@ mod tests {
         let monitor = PerformanceMonitor::new().unwrap();
 
         // Record some requests
-        monitor.record_request(Duration::from_millis(50), true).await;
-        monitor.record_request(Duration::from_millis(75), true).await;
-        monitor.record_request(Duration::from_millis(100), true).await;
+        monitor
+            .record_request(Duration::from_millis(50), true)
+            .await;
+        monitor
+            .record_request(Duration::from_millis(75), true)
+            .await;
+        monitor
+            .record_request(Duration::from_millis(100), true)
+            .await;
 
         let metrics = monitor.get_metrics().await.unwrap();
         assert!(metrics.avg_latency_ms > 0.0);

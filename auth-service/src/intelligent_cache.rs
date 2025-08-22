@@ -1,16 +1,16 @@
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, info};
-use serde::{Deserialize, Serialize};
 
 /// Intelligent cache with predictive prefetching and adaptive algorithms
 #[derive(Debug, Clone)]
 pub struct IntelligentCache<K, V>
 where
-    K: Clone + Eq + Hash + Send + Sync + 'static,
+    K: Clone + Eq + Hash + Send + Sync + std::fmt::Debug + 'static,
     V: Clone + Send + Sync + 'static,
 {
     /// Cache storage with metadata
@@ -98,10 +98,10 @@ pub struct CacheConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EvictionPolicy {
-    LRU,  // Least Recently Used
-    LFU,  // Least Frequently Used
-    TLRU, // Time-aware LRU
-    ARC,  // Adaptive Replacement Cache
+    LRU,         // Least Recently Used
+    LFU,         // Least Frequently Used
+    TLRU,        // Time-aware LRU
+    ARC,         // Adaptive Replacement Cache
     Intelligent, // ML-based eviction
 }
 
@@ -202,21 +202,21 @@ pub struct CacheMetrics {
     pub hits: u64,
     pub misses: u64,
     pub hit_rate: f64,
-    
+
     /// Performance metrics
     pub avg_access_time: Duration,
     pub p95_access_time: Duration,
     pub p99_access_time: Duration,
-    
+
     /// Size metrics
     pub current_entries: usize,
     pub current_size: usize,
     pub max_size_reached: bool,
-    
+
     /// Eviction statistics
     pub evictions: u64,
     pub eviction_reasons: HashMap<String, u64>,
-    
+
     /// Prefetch statistics
     pub prefetch_requests: u64,
     pub prefetch_hits: u64,
@@ -242,11 +242,11 @@ where
     /// Get value from cache
     pub async fn get(&self, key: &K) -> Option<V> {
         let start_time = Instant::now();
-        
+
         // Check cache
         let mut storage = self.storage.write().await;
         let mut metrics = self.metrics.write().await;
-        
+
         if let Some(entry) = storage.entries.get(key) {
             // Check if entry is expired
             if self.is_expired(&entry.metadata).await {
@@ -256,47 +256,47 @@ where
             }
 
             let value = entry.value.clone();
-            
+
             // Update access metadata (get mutable reference after cloning value)
             if let Some(entry) = storage.entries.get_mut(key) {
                 entry.metadata.last_accessed = SystemTime::now();
                 entry.metadata.access_count += 1;
             }
-            
-            // Update LRU order
-            if let Some(pos) = storage.lru_order.iter().position(|k| k == key) {
+
+            // Update LRU order and frequency without aliasing
+            let pos_opt = storage.lru_order.iter().position(|k| k == key);
+            if let Some(pos) = pos_opt {
                 storage.lru_order.remove(pos);
             }
             storage.lru_order.push_back(key.clone());
-            
-            // Update frequency
-            *storage.frequency.entry(key.clone()).or_insert(0) += 1;
-            
+            let freq = storage.frequency.entry(key.clone()).or_insert(0);
+            *freq += 1;
+
             // Update metrics
             metrics.hits += 1;
             metrics.hit_rate = metrics.hits as f64 / (metrics.hits + metrics.misses) as f64;
             metrics.avg_access_time = start_time.elapsed();
-            
+
             // Record access event
             drop(storage); // Release storage lock
             drop(metrics); // Release metrics lock
             let mut analyzer = self.analyzer.write().await;
             analyzer.record_access(key.clone(), AccessType::Hit).await;
-            
+
             // Trigger predictive prefetching
             self.trigger_prefetch(key).await;
-            
+
             Some(value)
         } else {
             metrics.misses += 1;
             metrics.hit_rate = metrics.hits as f64 / (metrics.hits + metrics.misses) as f64;
-            
+
             // Record miss event
             drop(storage); // Release storage lock
             drop(metrics); // Release metrics lock
             let mut analyzer = self.analyzer.write().await;
             analyzer.record_access(key.clone(), AccessType::Miss).await;
-            
+
             None
         }
     }
@@ -305,16 +305,17 @@ where
     pub async fn put(&self, key: K, value: V, ttl: Option<Duration>) -> Result<(), CacheError> {
         let mut storage = self.storage.write().await;
         let config = self.config.read().await;
-        
+
         // Calculate entry size (simplified)
         let entry_size = std::mem::size_of::<V>();
-        
+
         // Check if we need to evict entries
-        while storage.current_size + entry_size > config.max_size 
-            || storage.entries.len() >= config.max_entries {
+        while storage.current_size + entry_size > config.max_size
+            || storage.entries.len() >= config.max_entries
+        {
             self.evict_entry(&mut storage, &config).await?;
         }
-        
+
         // Create cache entry
         let entry = CacheEntry {
             value,
@@ -328,38 +329,38 @@ where
                 tags: Vec::new(),
             },
         };
-        
+
         // Insert entry
         storage.entries.insert(key.clone(), entry);
         storage.lru_order.push_back(key.clone());
         storage.current_size += entry_size;
-        
+
         // Update metrics
         let mut metrics = self.metrics.write().await;
         metrics.current_entries = storage.entries.len();
         metrics.current_size = storage.current_size;
-        
+
         Ok(())
     }
 
     /// Remove entry from cache
     pub async fn remove(&self, key: &K) -> Option<V> {
         let mut storage = self.storage.write().await;
-        
+
         if let Some(entry) = storage.entries.remove(key) {
             // Update LRU order
             if let Some(pos) = storage.lru_order.iter().position(|k| k == key) {
                 storage.lru_order.remove(pos);
             }
-            
+
             // Update size
             storage.current_size -= entry.metadata.size;
-            
+
             // Update metrics
             let mut metrics = self.metrics.write().await;
             metrics.current_entries = storage.entries.len();
             metrics.current_size = storage.current_size;
-            
+
             Some(entry.value)
         } else {
             None
@@ -373,7 +374,7 @@ where
         storage.lru_order.clear();
         storage.frequency.clear();
         storage.current_size = 0;
-        
+
         let mut metrics = self.metrics.write().await;
         metrics.current_entries = 0;
         metrics.current_size = 0;
@@ -391,16 +392,16 @@ where
         Fut: std::future::Future<Output = Option<V>> + Send,
     {
         let config = self.config.read().await;
-        
+
         if !config.warming_config.enabled {
             return Ok(());
         }
-        
+
         info!(
             keys_count = config.warming_config.warm_keys.len(),
             "Starting cache warm-up"
         );
-        
+
         for key_str in &config.warming_config.warm_keys {
             if let Some(_value) = loader(key_str.clone()).await {
                 // Convert string key to K (this is simplified - would need proper conversion)
@@ -408,7 +409,7 @@ where
                 debug!(key = key_str, "Warmed up cache entry");
             }
         }
-        
+
         info!("Cache warm-up completed");
         Ok(())
     }
@@ -429,17 +430,17 @@ where
         config: &CacheConfig,
     ) -> Result<(), CacheError> {
         let key_to_evict = match config.eviction_policy {
-            EvictionPolicy::LRU => {
-                storage.lru_order.front().cloned()
-            }
-            EvictionPolicy::LFU => {
-                storage.frequency.iter()
-                    .min_by_key(|(_, &freq)| freq)
-                    .map(|(key, _)| key.clone())
-            }
+            EvictionPolicy::LRU => storage.lru_order.front().cloned(),
+            EvictionPolicy::LFU => storage
+                .frequency
+                .iter()
+                .min_by_key(|(_, &freq)| freq)
+                .map(|(key, _)| key.clone()),
             EvictionPolicy::TLRU => {
                 // Time-aware LRU: consider both recency and TTL
-                storage.entries.iter()
+                storage
+                    .entries
+                    .iter()
                     .min_by_key(|(_, entry)| entry.metadata.last_accessed)
                     .map(|(key, _)| key.clone())
             }
@@ -457,12 +458,15 @@ where
                 }
                 storage.frequency.remove(&key);
                 storage.current_size -= entry.metadata.size;
-                
+
                 // Update metrics
                 let mut metrics = self.metrics.write().await;
                 metrics.evictions += 1;
-                *metrics.eviction_reasons.entry("size_limit".to_string()).or_insert(0) += 1;
-                
+                *metrics
+                    .eviction_reasons
+                    .entry("size_limit".to_string())
+                    .or_insert(0) += 1;
+
                 info!(evicted_key = ?key, "Evicted cache entry");
             }
         }
@@ -472,20 +476,21 @@ where
 
     async fn trigger_prefetch(&self, _accessed_key: &K) {
         let config = self.config.read().await;
-        
+
         if !config.enable_prefetching {
             return;
         }
-        
+
         let mut prefetcher = self.prefetcher.write().await;
-        
+
         // Simple prefetch logic - would be more sophisticated in practice
         if prefetcher.success_rate > config.prefetch_threshold {
             // Predict next keys based on access patterns
             if let Some(predictions) = prefetcher.models.get("markov") {
                 let predictions_clone = predictions.predictions.clone();
-                drop(predictions); // Release immutable borrow
-                
+                // predictions immutable ref ends here
+                drop(predictions);
+
                 for (key, probability) in predictions_clone {
                     if probability > config.prefetch_threshold {
                         prefetcher.prefetch_queue.push_back(PrefetchRequest {
@@ -526,18 +531,21 @@ where
             timestamp: SystemTime::now(),
             access_type,
         };
-        
+
         self.access_history.push_back(event);
-        
+
         // Keep only recent history (last 1000 events)
         if self.access_history.len() > 1000 {
             self.access_history.pop_front();
         }
-        
+
         // Update temporal patterns
         if let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) {
             let hour = (duration.as_secs() / 3600 % 24) as u8;
-            self.temporal_patterns.entry(hour).or_insert_with(Vec::new).push(key);
+            self.temporal_patterns
+                .entry(hour)
+                .or_insert_with(Vec::new)
+                .push(key);
         }
     }
 }
@@ -618,12 +626,15 @@ mod tests {
     async fn test_intelligent_cache() {
         let config = CacheConfig::default();
         let cache = IntelligentCache::<String, String>::new(config);
-        
+
         // Test put and get
-        cache.put("key1".to_string(), "value1".to_string(), None).await.unwrap();
+        cache
+            .put("key1".to_string(), "value1".to_string(), None)
+            .await
+            .unwrap();
         let value = cache.get(&"key1".to_string()).await;
         assert_eq!(value, Some("value1".to_string()));
-        
+
         // Test metrics
         let metrics = cache.get_metrics().await;
         assert_eq!(metrics.hits, 1);
@@ -634,18 +645,27 @@ mod tests {
     async fn test_cache_eviction() {
         let mut config = CacheConfig::default();
         config.max_entries = 2;
-        
+
         let cache = IntelligentCache::<String, String>::new(config);
-        
+
         // Fill cache beyond capacity
-        cache.put("key1".to_string(), "value1".to_string(), None).await.unwrap();
-        cache.put("key2".to_string(), "value2".to_string(), None).await.unwrap();
-        cache.put("key3".to_string(), "value3".to_string(), None).await.unwrap();
-        
+        cache
+            .put("key1".to_string(), "value1".to_string(), None)
+            .await
+            .unwrap();
+        cache
+            .put("key2".to_string(), "value2".to_string(), None)
+            .await
+            .unwrap();
+        cache
+            .put("key3".to_string(), "value3".to_string(), None)
+            .await
+            .unwrap();
+
         // First key should be evicted
         let value1 = cache.get(&"key1".to_string()).await;
         assert_eq!(value1, None);
-        
+
         // Other keys should still exist
         let value2 = cache.get(&"key2".to_string()).await;
         let value3 = cache.get(&"key3".to_string()).await;

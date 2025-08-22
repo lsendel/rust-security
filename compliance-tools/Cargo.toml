@@ -59,8 +59,8 @@ sha2 = { workspace = true }
 # Date/time parsing
 regex = { workspace = true }
 
-# Redis for caching
-redis = { workspace = true, optional = true }
+# Redis for caching (currently unused but kept for future features)
+# redis = { workspace = true, optional = true }
 
 # Common utilities
 common = { path = "../common" }
@@ -70,20 +70,20 @@ serde_yaml = "0.9"
 clap = { version = "4.0", features = ["derive"] }
 csv = "1.3"
 config = "0.14"
-printpdf = { version = "0.7", optional = true }
+# printpdf = { version = "0.7", optional = true }  # Currently unused
 calamine = "0.25"
-rust_xlsxwriter = { version = "0.76", optional = true }
+# rust_xlsxwriter = { version = "0.76", optional = true }  # Currently unused
 pulldown-cmark = "0.12"
 moka = { version = "0.12", features = ["future"] }
 # polars = { version = "0.44", features = ["lazy", "temporal", "json"] } # Temporarily disabled due to RUSTSEC-2025-0003 and RUSTSEC-2025-0020
 
 [dev-dependencies]
-tokio-test = { workspace = true }
-wiremock = { workspace = true }
+# tokio-test = { workspace = true }  # Currently unused
+# wiremock = { workspace = true }  # Currently unused
 
 [features]
 default = ["prometheus-metrics"]
 prometheus-metrics = []
-pdf-reports = ["printpdf"]
-excel-reports = ["dep:rust_xlsxwriter"]
-redis-cache = ["redis"]
+# pdf-reports = ["printpdf"]  # Disabled until needed
+# excel-reports = ["dep:rust_xlsxwriter"]  # Disabled until needed
+# redis-cache = ["redis"]  # Disabled until needed

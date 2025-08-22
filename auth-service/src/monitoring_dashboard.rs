@@ -234,7 +234,7 @@ impl MonitoringDashboard {
     /// Create a new monitoring dashboard
     pub fn new() -> Self {
         let alert_manager = AlertManager::new();
-        
+
         Self {
             health_metrics: Arc::new(RwLock::new(HealthMetrics::default())),
             security_events: Arc::new(RwLock::new(SecurityEventTracker::default())),
@@ -247,7 +247,7 @@ impl MonitoringDashboard {
     pub async fn update_health(&self, metrics: HealthMetrics) {
         let mut health = self.health_metrics.write().await;
         *health = metrics;
-        
+
         // Check for health-based alerts
         self.alert_manager.check_health_alerts(&health).await;
     }
@@ -255,7 +255,7 @@ impl MonitoringDashboard {
     /// Record a security event
     pub async fn record_security_event(&self, event: SecurityEvent) {
         let mut tracker = self.security_events.write().await;
-        
+
         // Update counters based on event type
         match event.event_type {
             SecurityEventType::FailedAuthentication => tracker.failed_auth_attempts += 1,
@@ -279,7 +279,7 @@ impl MonitoringDashboard {
     pub async fn update_performance(&self, analytics: PerformanceAnalytics) {
         let mut perf = self.performance_analytics.write().await;
         *perf = analytics;
-        
+
         // Check for performance-based alerts
         self.alert_manager.check_performance_alerts(&perf).await;
     }
@@ -294,7 +294,7 @@ impl MonitoringDashboard {
         let system_info = SystemInfo {
             version: env!("CARGO_PKG_VERSION").to_string(),
             build_time: "2024-01-01T00:00:00Z".to_string(), // Would be set at build time
-            rust_version: "1.75.0".to_string(), // Would be detected at runtime
+            rust_version: "1.75.0".to_string(),             // Would be detected at runtime
             environment: std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()),
             node_id: "node-1".to_string(), // Would be unique per instance
         };
@@ -311,8 +311,9 @@ impl MonitoringDashboard {
     /// Generate dashboard HTML
     pub async fn generate_dashboard_html(&self) -> Result<String> {
         let data = self.get_dashboard_data().await?;
-        
-        Ok(format!(r#"
+
+        Ok(format!(
+            r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -413,25 +414,55 @@ impl MonitoringDashboard {
 </html>
         "#,
             // Health metrics
-            if data.health.health_score >= 80 { "good" } else if data.health.health_score >= 60 { "warning" } else { "critical" },
+            if data.health.health_score >= 80 {
+                "good"
+            } else if data.health.health_score >= 60 {
+                "warning"
+            } else {
+                "critical"
+            },
             data.health.health_score,
-            if data.health.database_healthy { "healthy" } else { "unhealthy" },
-            if data.health.database_healthy { "Healthy" } else { "Unhealthy" },
-            if data.health.redis_healthy { "healthy" } else { "unhealthy" },
-            if data.health.redis_healthy { "Healthy" } else { "Unhealthy" },
+            if data.health.database_healthy {
+                "healthy"
+            } else {
+                "unhealthy"
+            },
+            if data.health.database_healthy {
+                "Healthy"
+            } else {
+                "Unhealthy"
+            },
+            if data.health.redis_healthy {
+                "healthy"
+            } else {
+                "unhealthy"
+            },
+            if data.health.redis_healthy {
+                "Healthy"
+            } else {
+                "Unhealthy"
+            },
             data.health.memory_usage_percent,
             data.health.cpu_usage_percent,
-            
             // Security events
-            if data.security.failed_auth_attempts + data.security.suspicious_activities < 10 { "good" } else { "warning" },
+            if data.security.failed_auth_attempts + data.security.suspicious_activities < 10 {
+                "good"
+            } else {
+                "warning"
+            },
             data.security.failed_auth_attempts + data.security.suspicious_activities,
             data.security.failed_auth_attempts,
             data.security.blocked_ips,
             data.security.rate_limit_violations,
             data.security.jwt_failures,
-            
             // Performance
-            if data.performance.avg_response_time_ms < 100.0 { "good" } else if data.performance.avg_response_time_ms < 500.0 { "warning" } else { "critical" },
+            if data.performance.avg_response_time_ms < 100.0 {
+                "good"
+            } else if data.performance.avg_response_time_ms < 500.0 {
+                "warning"
+            } else {
+                "critical"
+            },
             data.performance.avg_response_time_ms as u64,
             data.performance.p95_response_time_ms,
             data.performance.p99_response_time_ms,
@@ -439,29 +470,44 @@ impl MonitoringDashboard {
             data.performance.peak_rps,
             data.performance.error_rate_percent,
             data.performance.cache_hit_rate,
-            
             // Request statistics
             data.performance.total_requests,
             data.performance.successful_requests,
-            if data.performance.total_requests > 0 { (data.performance.successful_requests as f64 / data.performance.total_requests as f64) * 100.0 } else { 0.0 },
+            if data.performance.total_requests > 0 {
+                (data.performance.successful_requests as f64
+                    / data.performance.total_requests as f64)
+                    * 100.0
+            } else {
+                0.0
+            },
             data.performance.failed_requests,
-            if data.performance.total_requests > 0 { (data.performance.failed_requests as f64 / data.performance.total_requests as f64) * 100.0 } else { 0.0 },
-            
+            if data.performance.total_requests > 0 {
+                (data.performance.failed_requests as f64 / data.performance.total_requests as f64)
+                    * 100.0
+            } else {
+                0.0
+            },
             // Alerts
             if data.alerts.is_empty() {
                 "<div style='color: #27ae60;'>✅ No active alerts</div>".to_string()
             } else {
-                data.alerts.iter().map(|alert| {
-                    let class = match alert.severity {
-                        AlertSeverity::Critical => "alert-critical",
-                        AlertSeverity::Error => "alert-critical",
-                        AlertSeverity::Warning => "alert-warning",
-                        AlertSeverity::Info => "alert-info",
-                    };
-                    format!("<div class='alert {}'><strong>{}</strong>: {}</div>", class, alert.title, alert.description)
-                }).collect::<Vec<_>>().join("")
+                data.alerts
+                    .iter()
+                    .map(|alert| {
+                        let class = match alert.severity {
+                            AlertSeverity::Critical => "alert-critical",
+                            AlertSeverity::Error => "alert-critical",
+                            AlertSeverity::Warning => "alert-warning",
+                            AlertSeverity::Info => "alert-info",
+                        };
+                        format!(
+                            "<div class='alert {}'><strong>{}</strong>: {}</div>",
+                            class, alert.title, alert.description
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("")
             },
-            
             // System info
             data.system_info.version,
             data.system_info.environment,
@@ -474,7 +520,7 @@ impl MonitoringDashboard {
 impl AlertManager {
     pub fn new() -> Self {
         let mut alert_rules = Vec::new();
-        
+
         // Default alert rules
         alert_rules.push(AlertRule {
             id: "high_error_rate".to_string(),
@@ -515,7 +561,9 @@ impl AlertManager {
 
         for rule in rules.iter() {
             let should_trigger = match &rule.condition {
-                AlertCondition::HighMemoryUsage(threshold) => health.memory_usage_percent > *threshold,
+                AlertCondition::HighMemoryUsage(threshold) => {
+                    health.memory_usage_percent > *threshold
+                }
                 AlertCondition::HighCpuUsage(threshold) => health.cpu_usage_percent > *threshold,
                 AlertCondition::ServiceDown(service) => {
                     if service == "database" {
@@ -556,8 +604,12 @@ impl AlertManager {
 
         for rule in rules.iter() {
             let should_trigger = match &rule.condition {
-                AlertCondition::HighErrorRate(threshold) => performance.error_rate_percent > *threshold,
-                AlertCondition::HighLatency(threshold) => performance.avg_response_time_ms > *threshold,
+                AlertCondition::HighErrorRate(threshold) => {
+                    performance.error_rate_percent > *threshold
+                }
+                AlertCondition::HighLatency(threshold) => {
+                    performance.avg_response_time_ms > *threshold
+                }
                 _ => false,
             };
 
@@ -598,7 +650,7 @@ mod tests {
     async fn test_dashboard_creation() {
         let dashboard = MonitoringDashboard::new();
         let data = dashboard.get_dashboard_data().await.unwrap();
-        
+
         assert_eq!(data.health.health_score, 100);
         assert_eq!(data.security.failed_auth_attempts, 0);
         assert_eq!(data.performance.total_requests, 0);
@@ -607,7 +659,7 @@ mod tests {
     #[tokio::test]
     async fn test_security_event_recording() {
         let dashboard = MonitoringDashboard::new();
-        
+
         let event = SecurityEvent {
             timestamp: current_timestamp(),
             event_type: SecurityEventType::FailedAuthentication,
@@ -619,7 +671,7 @@ mod tests {
         };
 
         dashboard.record_security_event(event).await;
-        
+
         let data = dashboard.get_dashboard_data().await.unwrap();
         assert_eq!(data.security.failed_auth_attempts, 1);
         assert_eq!(data.security.recent_events.len(), 1);
@@ -629,7 +681,7 @@ mod tests {
     async fn test_dashboard_html_generation() {
         let dashboard = MonitoringDashboard::new();
         let html = dashboard.generate_dashboard_html().await.unwrap();
-        
+
         assert!(html.contains("Rust Security Platform"));
         assert!(html.contains("System Health"));
         assert!(html.contains("Security Events"));

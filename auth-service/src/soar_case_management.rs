@@ -4086,3 +4086,37 @@ impl Default for CaseManagementMetrics {
         }
     }
 }
+
+// Missing type definitions
+#[derive(Debug, Clone)]
+pub struct SlaTracker {
+    pub id: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl SlaTracker {
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            created_at: chrono::Utc::now(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum TimelineEntryType {
+    CaseCreated,
+    CaseStatusChanged,
+    CaseAssigned,
+    EvidenceAdded,
+    CommentAdded,
+    WorkflowExecuted,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum EvidenceData {
+    FilePath(String),
+    Url(String),
+    Text(String),
+    Binary(Vec<u8>),
+}

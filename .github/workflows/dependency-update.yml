@@ -33,7 +33,7 @@ jobs:
       is-dependency-update: ${{ steps.check-pr.outputs.is-dependency-update }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -75,7 +75,7 @@ jobs:
     if: needs.detect-changes.outputs.rust-changed == 'true' || github.event_name == 'schedule'
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -83,7 +83,7 @@ jobs:
           components: clippy
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
+        uses: Swatinem/rust-cache@v2
         with:
           shared-key: "security-audit"
 
@@ -122,7 +122,7 @@ jobs:
           exit 1
 
       - name: Upload audit results
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-audit-results
@@ -141,16 +141,16 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust-version }}
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
+        uses: Swatinem/rust-cache@v2
         with:
           shared-key: "build-test-${{ matrix.rust-version }}"
 
@@ -177,13 +177,13 @@ jobs:
     if: needs.detect-changes.outputs.is-dependency-update == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
+        uses: Swatinem/rust-cache@v2
 
       - name: Install criterion
         run: cargo install cargo-criterion --locked
@@ -202,7 +202,7 @@ jobs:
           echo "Performance benchmarks completed. No significant regressions detected." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: auth-service/benchmark-results.json
@@ -216,7 +216,7 @@ jobs:
     if: needs.detect-changes.outputs.docker-changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3
@@ -247,7 +247,7 @@ jobs:
     if: needs.detect-changes.outputs.javascript-changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4
@@ -283,13 +283,13 @@ jobs:
     if: needs.detect-changes.outputs.rust-changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2
+        uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-license
         run: cargo install cargo-license --locked
@@ -315,7 +315,7 @@ jobs:
           cargo cyclonedx --format json --output-pattern target/sbom-{name}-{version}.json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4
+        uses: actions/upload-artifact@v4
         with:
           name: sbom-artifacts
           path: target/sbom-*.json

@@ -2,7 +2,7 @@ use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
 use base64::Engine as _;
 use once_cell::sync::Lazy;
-use ring::{digest, hmac, rand::{SecureRandom, SystemRandom}};
+use ring::{digest, hmac, rand::{SecureRandom as RingSecureRandom, SystemRandom}};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;

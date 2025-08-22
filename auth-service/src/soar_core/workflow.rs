@@ -41,13 +41,12 @@ impl WorkflowEngine {
         let mut template_engine = Handlebars::new();
         template_engine.set_strict_mode(true);
 
-        let security_logger = Arc::new(SecurityLogger::new().await
-            .map_err(|e| WorkflowError {
-                code: "LOGGER_INIT_ERROR".to_string(),
-                message: format!("Failed to initialize security logger: {}", e),
-                details: None,
-                failed_step: None,
-            })?);
+        let security_logger = Arc::new(SecurityLogger::new().await.map_err(|e| WorkflowError {
+            code: "LOGGER_INIT_ERROR".to_string(),
+            message: format!("Failed to initialize security logger: {}", e),
+            details: None,
+            failed_step: None,
+        })?);
 
         let engine = Self {
             active_workflows: Arc::new(DashMap::new()),
@@ -81,13 +80,14 @@ impl WorkflowEngine {
     /// Stop the workflow engine
     pub async fn stop(&self) -> Result<(), WorkflowError> {
         info!("Stopping workflow engine");
-        
+
         // Cancel all active workflows
         for workflow in self.active_workflows.iter() {
             let mut instance = workflow.value().clone();
             instance.status = WorkflowStatus::Cancelled;
             instance.ended_at = Some(Utc::now());
-            self.active_workflows.insert(workflow.key().clone(), instance);
+            self.active_workflows
+                .insert(workflow.key().clone(), instance);
         }
 
         info!("Workflow engine stopped successfully");
@@ -102,8 +102,11 @@ impl WorkflowEngine {
         context: HashMap<String, serde_json::Value>,
     ) -> Result<String, WorkflowError> {
         let instance_id = Uuid::new_v4().to_string();
-        
-        debug!("Starting workflow execution: {} ({})", playbook.name, instance_id);
+
+        debug!(
+            "Starting workflow execution: {} ({})",
+            playbook.name, instance_id
+        );
 
         // Create workflow instance
         let workflow_instance = WorkflowInstance {
@@ -121,7 +124,8 @@ impl WorkflowEngine {
             approval_requests: Vec::new(),
         };
 
-        self.active_workflows.insert(instance_id.clone(), workflow_instance);
+        self.active_workflows
+            .insert(instance_id.clone(), workflow_instance);
 
         // Create execution request
         let (response_tx, response_rx) = oneshot::channel();
@@ -140,30 +144,35 @@ impl WorkflowEngine {
         }
 
         // Log workflow start
-        self.security_logger.log_event(SecurityEvent {
-            id: Uuid::new_v4().to_string(),
-            timestamp: Utc::now(),
-            event_type: SecurityEventType::WorkflowTriggered,
-            severity: SecuritySeverity::Info,
-            source: "workflow_engine".to_string(),
-            message: format!("Workflow execution started: {}", instance_id),
-            metadata: Some(serde_json::json!({
-                "instance_id": instance_id,
-                "playbook_id": playbook.id
-            })),
-        }).await.map_err(|e| WorkflowError {
-            code: "LOGGING_ERROR".to_string(),
-            message: format!("Failed to log workflow start: {}", e),
-            details: None,
-            failed_step: None,
-        })?;
+        self.security_logger
+            .log_event(SecurityEvent {
+                id: Uuid::new_v4().to_string(),
+                timestamp: Utc::now(),
+                event_type: SecurityEventType::WorkflowTriggered,
+                severity: SecuritySeverity::Info,
+                source: "workflow_engine".to_string(),
+                message: format!("Workflow execution started: {}", instance_id),
+                metadata: Some(serde_json::json!({
+                    "instance_id": instance_id,
+                    "playbook_id": playbook.id
+                })),
+            })
+            .await
+            .map_err(|e| WorkflowError {
+                code: "LOGGING_ERROR".to_string(),
+                message: format!("Failed to log workflow start: {}", e),
+                details: None,
+                failed_step: None,
+            })?;
 
         Ok(instance_id)
     }
 
     /// Get workflow instance
     pub async fn get_workflow_instance(&self, instance_id: &str) -> Option<WorkflowInstance> {
-        self.active_workflows.get(instance_id).map(|entry| entry.value().clone())
+        self.active_workflows
+            .get(instance_id)
+            .map(|entry| entry.value().clone())
     }
 
     /// Cancel workflow
@@ -171,7 +180,7 @@ impl WorkflowEngine {
         if let Some(mut workflow) = self.active_workflows.get_mut(instance_id) {
             workflow.status = WorkflowStatus::Cancelled;
             workflow.ended_at = Some(Utc::now());
-            
+
             info!("Workflow cancelled: {}", instance_id);
             Ok(())
         } else {
@@ -205,7 +214,7 @@ impl WorkflowEngine {
             if let Some(request) = request {
                 // Execute workflow
                 let result = self.execute_workflow_instance(request).await;
-                
+
                 // Update metrics
                 {
                     let mut metrics = self.metrics.lock().await;
@@ -258,7 +267,10 @@ impl WorkflowEngine {
             }
 
             // Check conditions
-            if !self.evaluate_step_conditions(step, &execution_context).await {
+            if !self
+                .evaluate_step_conditions(step, &execution_context)
+                .await
+            {
                 debug!("Skipping step {} due to unmet conditions", step.id);
                 continue;
             }
@@ -267,7 +279,7 @@ impl WorkflowEngine {
             match self.execute_step(step, &execution_context).await {
                 Ok(result) => {
                     step_results.insert(step.id.clone(), result.clone());
-                    
+
                     // Update execution context with step outputs
                     for (key, value) in result.outputs {
                         execution_context.variables.insert(key, value);
@@ -275,7 +287,7 @@ impl WorkflowEngine {
                 }
                 Err(error) => {
                     execution_context.error_history.push(error.clone());
-                    
+
                     // Handle error based on step configuration
                     if !step.error_handling.continue_on_error {
                         // Workflow failed
@@ -303,7 +315,7 @@ impl WorkflowEngine {
 
         // Workflow completed successfully
         let duration = start_time.elapsed();
-        
+
         if let Some(mut workflow) = self.active_workflows.get_mut(&instance_id) {
             workflow.status = WorkflowStatus::Completed;
             workflow.ended_at = Some(Utc::now());
@@ -320,24 +332,27 @@ impl WorkflowEngine {
         };
 
         // Log completion
-        self.security_logger.log_event(SecurityEvent {
-            id: Uuid::new_v4().to_string(),
-            timestamp: Utc::now(),
-            event_type: SecurityEventType::WorkflowCompleted,
-            severity: SecuritySeverity::Info,
-            source: "workflow_engine".to_string(),
-            message: format!("Workflow completed: {}", instance_id),
-            metadata: Some(serde_json::json!({
-                "instance_id": instance_id,
-                "duration_ms": duration.as_millis(),
-                "status": "completed"
-            })),
-        }).await.map_err(|e| WorkflowError {
-            code: "LOGGING_ERROR".to_string(),
-            message: format!("Failed to log workflow completion: {}", e),
-            details: None,
-            failed_step: None,
-        })?;
+        self.security_logger
+            .log_event(SecurityEvent {
+                id: Uuid::new_v4().to_string(),
+                timestamp: Utc::now(),
+                event_type: SecurityEventType::WorkflowCompleted,
+                severity: SecuritySeverity::Info,
+                source: "workflow_engine".to_string(),
+                message: format!("Workflow completed: {}", instance_id),
+                metadata: Some(serde_json::json!({
+                    "instance_id": instance_id,
+                    "duration_ms": duration.as_millis(),
+                    "status": "completed"
+                })),
+            })
+            .await
+            .map_err(|e| WorkflowError {
+                code: "LOGGING_ERROR".to_string(),
+                message: format!("Failed to log workflow completion: {}", e),
+                details: None,
+                failed_step: None,
+            })?;
 
         Ok(result)
     }
@@ -354,7 +369,9 @@ impl WorkflowEngine {
         let step_type = format!("{:?}", step.step_type);
 
         // Get step executor
-        let executor = self.step_executors.get(&step_type)
+        let executor = self
+            .step_executors
+            .get(&step_type)
             .ok_or_else(|| StepError {
                 code: "EXECUTOR_NOT_FOUND".to_string(),
                 message: format!("No executor found for step type: {}", step_type),
@@ -381,7 +398,7 @@ impl WorkflowEngine {
                 }
                 Err(error) => {
                     retry_count += 1;
-                    
+
                     if retry_count >= max_retries || !error.retryable {
                         return Ok(StepResult {
                             step_id: step.id.clone(),
@@ -395,9 +412,8 @@ impl WorkflowEngine {
                     }
 
                     // Wait before retry
-                    let delay = std::time::Duration::from_secs(
-                        step.retry_config.delay_seconds as u64
-                    );
+                    let delay =
+                        std::time::Duration::from_secs(step.retry_config.delay_seconds as u64);
                     tokio::time::sleep(delay).await;
                 }
             }
@@ -443,18 +459,14 @@ impl WorkflowEngine {
         context: &ExecutionContext,
     ) -> bool {
         let field_value = context.variables.get(&condition.field);
-        
+
         match &condition.operator {
-            ConditionOperator::Equals => {
-                field_value == Some(&condition.value)
-            }
-            ConditionOperator::NotEquals => {
-                field_value != Some(&condition.value)
-            }
+            ConditionOperator::Equals => field_value == Some(&condition.value),
+            ConditionOperator::NotEquals => field_value != Some(&condition.value),
             ConditionOperator::Contains => {
                 if let (Some(field_val), Some(search_val)) = (
                     field_value.and_then(|v| v.as_str()),
-                    condition.value.as_str()
+                    condition.value.as_str(),
                 ) {
                     field_val.contains(search_val)
                 } else {
@@ -472,14 +484,12 @@ impl WorkflowEngine {
     /// Register default step executors
     async fn register_default_executors(&self) -> Result<(), WorkflowError> {
         // Register basic executors
-        self.step_executors.insert(
-            "Action".to_string(),
-            Box::new(ActionStepExecutor::new())
-        );
-        
+        self.step_executors
+            .insert("Action".to_string(), Box::new(ActionStepExecutor::new()));
+
         self.step_executors.insert(
             "Notification".to_string(),
-            Box::new(NotificationStepExecutor::new())
+            Box::new(NotificationStepExecutor::new()),
         );
 
         Ok(())
@@ -527,19 +537,44 @@ impl StepExecutor for ActionStepExecutor {
         debug!("Executing action step: {}", step.id);
 
         match &step.action {
-            StepAction::BlockIp { ip_address, duration_minutes, reason } => {
+            StepAction::BlockIp {
+                ip_address,
+                duration_minutes,
+                reason,
+            } => {
                 // Implementation for blocking IP
                 let mut outputs = HashMap::new();
-                outputs.insert("blocked_ip".to_string(), serde_json::Value::String(ip_address.clone()));
-                outputs.insert("duration".to_string(), serde_json::Value::Number((*duration_minutes).into()));
-                outputs.insert("reason".to_string(), serde_json::Value::String(reason.clone()));
+                outputs.insert(
+                    "blocked_ip".to_string(),
+                    serde_json::Value::String(ip_address.clone()),
+                );
+                outputs.insert(
+                    "duration".to_string(),
+                    serde_json::Value::Number((*duration_minutes).into()),
+                );
+                outputs.insert(
+                    "reason".to_string(),
+                    serde_json::Value::String(reason.clone()),
+                );
                 Ok(outputs)
             }
-            StepAction::SendNotification { notification_type, recipients, subject, message, priority } => {
+            StepAction::SendNotification {
+                notification_type,
+                recipients,
+                subject,
+                message,
+                priority,
+            } => {
                 // Implementation for sending notification
                 let mut outputs = HashMap::new();
-                outputs.insert("notification_sent".to_string(), serde_json::Value::Bool(true));
-                outputs.insert("recipients_count".to_string(), serde_json::Value::Number(recipients.len().into()));
+                outputs.insert(
+                    "notification_sent".to_string(),
+                    serde_json::Value::Bool(true),
+                );
+                outputs.insert(
+                    "recipients_count".to_string(),
+                    serde_json::Value::Number(recipients.len().into()),
+                );
                 Ok(outputs)
             }
             _ => {
@@ -574,9 +609,15 @@ impl StepExecutor for NotificationStepExecutor {
 
         // Basic notification implementation
         let mut outputs = HashMap::new();
-        outputs.insert("notification_sent".to_string(), serde_json::Value::Bool(true));
-        outputs.insert("timestamp".to_string(), serde_json::Value::String(Utc::now().to_rfc3339()));
-        
+        outputs.insert(
+            "notification_sent".to_string(),
+            serde_json::Value::Bool(true),
+        );
+        outputs.insert(
+            "timestamp".to_string(),
+            serde_json::Value::String(Utc::now().to_rfc3339()),
+        );
+
         Ok(outputs)
     }
 

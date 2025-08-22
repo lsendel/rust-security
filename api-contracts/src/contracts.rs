@@ -195,7 +195,7 @@ pub struct AuthenticationRequest {
 pub enum AuthenticationMethod {
     Password,
     OAuth,
-    SAML,
+    Saml,
     MultiFactorAuthentication,
 }
 
@@ -204,8 +204,8 @@ pub enum AuthenticationMethod {
 pub enum AuthenticationCredentials {
     Password { username: String, password: String },
     OAuth { code: String, redirect_uri: String },
-    SAML { assertion: String },
-    MFA { token: String, factor: String },
+    Saml { assertion: String },
+    Mfa { token: String, factor: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,8 +384,8 @@ pub struct PolicyDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PolicyLanguage {
     Cedar,
-    XACML,
-    OPA,
+    Xacml,
+    Opa,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

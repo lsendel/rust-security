@@ -1362,3 +1362,14 @@ impl DeduplicationEngine {
         format!("{:x}", hasher.finish())
     }
 }
+
+// Missing type definitions
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum CorrelationActionType {
+    CreateIncident,
+    EscalateAlert,
+    BlockIp,
+    QuarantineUser,
+    SendNotification,
+    ExecuteWorkflow,
+}

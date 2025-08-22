@@ -39,18 +39,20 @@ pub mod types;
 pub mod workflow;
 
 // Re-export main types and interfaces
-pub use engine::{SoarCore, SoarError, SoarHealthStatus, HealthStatus};
+pub use engine::{HealthStatus, SoarCore, SoarError, SoarHealthStatus};
 pub use types::*;
 
 // Re-export commonly used items from submodules
-pub use correlation::{AlertCorrelationEngine, CorrelationError, CorrelationMetrics, CorrelationResult};
-pub use integration::{
-    Integration, IntegrationFramework, IntegrationManager, 
-    HealthMetrics, SiemIntegration, EdrIntegration, FirewallIntegration
+pub use correlation::{
+    AlertCorrelationEngine, CorrelationError, CorrelationMetrics, CorrelationResult,
 };
-pub use metrics::{SoarMetrics, MetricsError, MetricsSummary, PerformanceMetrics};
+pub use integration::{
+    EdrIntegration, FirewallIntegration, HealthMetrics, Integration, IntegrationFramework,
+    IntegrationManager, SiemIntegration,
+};
+pub use metrics::{MetricsError, MetricsSummary, PerformanceMetrics, SoarMetrics};
 pub use response::{ResponseAutomationEngine, ResponseError, ResponseMetrics};
-pub use workflow::{WorkflowEngine, StepExecutor, WorkflowEngineMetrics};
+pub use workflow::{StepExecutor, WorkflowEngine, WorkflowEngineMetrics};
 
 // Type aliases for convenience
 pub type SoarEngine = SoarCore;
