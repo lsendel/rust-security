@@ -1,8 +1,6 @@
-use hmac::{Hmac, Mac};
+use crate::crypto_unified::UnifiedHmac;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use sha1::Sha1;
-use sha2::{Sha256, Sha512};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -229,22 +227,13 @@ impl EnhancedTotpGenerator {
 
         let hash = match self.config.algorithm {
             TotpAlgorithm::SHA1 => {
-                let mut mac = Hmac::<Sha1>::new_from_slice(secret)
-                    .map_err(|e| TotpError::HmacError(e.to_string()))?;
-                mac.update(&counter_bytes);
-                mac.finalize().into_bytes().to_vec()
+                UnifiedHmac::hmac_sha1_legacy(secret, &counter_bytes)
             }
             TotpAlgorithm::SHA256 => {
-                let mut mac = Hmac::<Sha256>::new_from_slice(secret)
-                    .map_err(|e| TotpError::HmacError(e.to_string()))?;
-                mac.update(&counter_bytes);
-                mac.finalize().into_bytes().to_vec()
+                UnifiedHmac::hmac_sha256(secret, &counter_bytes)
             }
             TotpAlgorithm::SHA512 => {
-                let mut mac = Hmac::<Sha512>::new_from_slice(secret)
-                    .map_err(|e| TotpError::HmacError(e.to_string()))?;
-                mac.update(&counter_bytes);
-                mac.finalize().into_bytes().to_vec()
+                UnifiedHmac::hmac_sha512(secret, &counter_bytes)
             }
         };
 

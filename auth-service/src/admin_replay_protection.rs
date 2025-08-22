@@ -218,18 +218,13 @@ impl ReplayProtection {
         nonce: &str,
         timestamp: u64,
     ) -> String {
-        use hmac::{Hmac, Mac};
-        use sha2::Sha256;
+        use crate::crypto_unified::UnifiedHmac;
+        use base64::{Engine as _, engine::general_purpose};
 
         let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
+        let hmac_result = UnifiedHmac::hmac_sha256(secret.as_bytes(), message.as_bytes());
         
-        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
-            .expect("HMAC can take key of any size");
-        mac.update(message.as_bytes());
-        
-        let result = mac.finalize();
-        use base64::{Engine as _, engine::general_purpose};
-        general_purpose::STANDARD.encode(result.into_bytes())
+        general_purpose::STANDARD.encode(hmac_result)
     }
 
     /// Verify HMAC signature
@@ -241,11 +236,18 @@ impl ReplayProtection {
         timestamp: u64,
         provided_signature: &str,
     ) -> bool {
-        let expected = Self::create_signature(secret, method, path, nonce, timestamp);
+        use crate::crypto_unified::UnifiedHmac;
+        use base64::{Engine as _, engine::general_purpose};
+
+        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
         
-        // Constant-time comparison
-        use subtle::ConstantTimeEq;
-        expected.as_bytes().ct_eq(provided_signature.as_bytes()).into()
+        // Decode the provided signature
+        let Ok(provided_bytes) = general_purpose::STANDARD.decode(provided_signature) else {
+            return false;
+        };
+        
+        // Use ring's constant-time HMAC verification
+        UnifiedHmac::verify_hmac_sha256(secret.as_bytes(), message.as_bytes(), &provided_bytes)
     }
 }
 

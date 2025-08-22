@@ -6,7 +6,7 @@
 
 use ring::{
     aead::{self, Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM, CHACHA20_POLY1305},
-    digest::{self, SHA256, SHA512},
+    digest::{self, SHA1_FOR_LEGACY_USE_ONLY, SHA256, SHA512},
     hmac,
     rand::{SecureRandom, SystemRandom},
 };
@@ -281,6 +281,14 @@ impl UnifiedCryptoManager {
 pub struct UnifiedHasher;
 
 impl UnifiedHasher {
+    /// SHA-1 hash (for legacy use only - TOTP compatibility)
+    /// 
+    /// ⚠️  WARNING: SHA-1 is cryptographically broken for general use.
+    /// This should only be used for TOTP compatibility where required by RFC 6238.
+    pub fn sha1_legacy(data: &[u8]) -> Vec<u8> {
+        digest::digest(&SHA1_FOR_LEGACY_USE_ONLY, data).as_ref().to_vec()
+    }
+
     /// SHA-256 hash
     pub fn sha256(data: &[u8]) -> Vec<u8> {
         digest::digest(&SHA256, data).as_ref().to_vec()
@@ -305,6 +313,15 @@ impl UnifiedHasher {
 pub struct UnifiedHmac;
 
 impl UnifiedHmac {
+    /// HMAC-SHA1 (for legacy use only - TOTP compatibility)
+    /// 
+    /// ⚠️  WARNING: SHA-1 is cryptographically broken for general use.
+    /// This should only be used for TOTP compatibility where required by RFC 6238.
+    pub fn hmac_sha1_legacy(key: &[u8], data: &[u8]) -> Vec<u8> {
+        let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, key);
+        hmac::sign(&key, data).as_ref().to_vec()
+    }
+
     /// HMAC-SHA256
     pub fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA256, key);
@@ -315,6 +332,12 @@ impl UnifiedHmac {
     pub fn hmac_sha512(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA512, key);
         hmac::sign(&key, data).as_ref().to_vec()
+    }
+
+    /// Verify HMAC-SHA1 in constant time (for legacy use only)
+    pub fn verify_hmac_sha1_legacy(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
+        let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, key);
+        hmac::verify(&key, data, expected_hmac).is_ok()
     }
 
     /// Verify HMAC-SHA256 in constant time
@@ -432,13 +455,16 @@ mod tests {
         let key = b"secret_key";
         let data = b"test data";
         
+        let hmac1 = UnifiedHmac::hmac_sha1_legacy(key, data);
         let hmac256 = UnifiedHmac::hmac_sha256(key, data);
         let hmac512 = UnifiedHmac::hmac_sha512(key, data);
         
+        assert_eq!(hmac1.len(), 20);  // HMAC-SHA1 output length
         assert_eq!(hmac256.len(), 32); // HMAC-SHA256 output length
         assert_eq!(hmac512.len(), 64); // HMAC-SHA512 output length
         
         // Verification should work
+        assert!(UnifiedHmac::verify_hmac_sha1_legacy(key, data, &hmac1));
         assert!(UnifiedHmac::verify_hmac_sha256(key, data, &hmac256));
         assert!(UnifiedHmac::verify_hmac_sha512(key, data, &hmac512));
         
