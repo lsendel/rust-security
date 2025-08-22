@@ -90,6 +90,7 @@ async fn metrics_handler() -> Response {
 pub mod config;
 pub mod config_endpoints;
 pub mod config_reload;
+pub mod crypto_unified;
 pub mod errors;
 pub mod sql_store;
 pub mod store;
