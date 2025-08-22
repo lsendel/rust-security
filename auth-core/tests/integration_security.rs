@@ -1,10 +1,10 @@
 #![cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
 use serde_json::Value;
 use tower::ServiceExt; // oneshot
-use axum::http::{Request, StatusCode};
-use axum::body::{Body, to_bytes};
 
 #[tokio::test]
 async fn test_owasp_a1_injection_attacks() {
@@ -42,7 +42,9 @@ async fn test_owasp_a1_injection_attacks() {
             payload
         );
 
-        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap_or_default();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap_or_default();
         let response_text = String::from_utf8_lossy(&bytes);
         let error_json: serde_json::Result<Value> = serde_json::from_str(&response_text);
         assert!(

@@ -9,14 +9,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[cfg(feature = "introspection")]
+use crate::handler::introspect;
 use crate::{
     client::ClientConfig,
     error::Result,
     handler::{health, token},
     store::MemoryStore,
 };
-#[cfg(feature = "introspection")]
-use crate::handler::introspect;
 
 /// Main OAuth 2.0 server configuration
 #[derive(Debug, Clone)]

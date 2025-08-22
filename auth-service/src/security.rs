@@ -19,69 +19,75 @@ static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
         // Generate a cryptographically secure salt
         let mut salt = [0u8; 32];
         use ring::rand::{SecureRandom, SystemRandom};
-        SystemRandom::new().fill(&mut salt).expect("Failed to generate salt");
+        SystemRandom::new()
+            .fill(&mut salt)
+            .expect("Failed to generate salt");
         hex::encode(salt)
     })
 });
 
 /// Generate a token binding value from client information using secure practices
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<String, &'static str> {
-    use ring::{hmac, rand::{SecureRandom, SystemRandom}};
-    
+    use ring::{
+        hmac,
+        rand::{SecureRandom, SystemRandom},
+    };
+
     let salt = TOKEN_BINDING_SALT.as_bytes();
-    
+
     // Use HMAC-SHA256 for secure binding
     let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
     let mut ctx = hmac::Context::with_key(&key);
-    
+
     ctx.update(client_ip.as_bytes());
     ctx.update(b"|"); // Separator to prevent collision attacks
     ctx.update(user_agent.as_bytes());
     ctx.update(b"|");
     ctx.update(&chrono::Utc::now().timestamp().to_be_bytes()); // Add timestamp
-    
+
     let tag = ctx.sign();
     Ok(base64::engine::general_purpose::STANDARD.encode(tag.as_ref()))
 }
 
 /// Validate token binding to ensure token is used from the same client
 pub fn validate_token_binding(
-    stored_binding: &str, 
-    client_ip: &str, 
-    user_agent: &str
+    stored_binding: &str,
+    client_ip: &str,
+    user_agent: &str,
 ) -> Result<bool, &'static str> {
-    use ring::{hmac, constant_time};
-    
+    use ring::{constant_time, hmac};
+
     // Decode the stored binding
     let stored_bytes = base64::engine::general_purpose::STANDARD
         .decode(stored_binding)
         .map_err(|_| "Invalid token binding format")?;
-    
+
     // For validation, we need to check against recent timestamps (5 minute window)
     let now = chrono::Utc::now().timestamp();
-    
+
     // Check multiple recent timestamps to account for clock skew
-    for offset in 0..=300 { // 5 minutes
+    for offset in 0..=300 {
+        // 5 minutes
         let test_timestamp = now - offset;
-        
+
         let salt = TOKEN_BINDING_SALT.as_bytes();
         let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
         let mut ctx = hmac::Context::with_key(&key);
-        
+
         ctx.update(client_ip.as_bytes());
         ctx.update(b"|");
         ctx.update(user_agent.as_bytes());
         ctx.update(b"|");
         ctx.update(&test_timestamp.to_be_bytes());
-        
+
         let expected_tag = ctx.sign();
-        
+
         // Use constant-time comparison to prevent timing attacks
         if constant_time::verify_slices_are_equal(&stored_bytes, expected_tag.as_ref()).is_ok() {
             return Ok(true);
         }
     }
-    
+
     Ok(false)
 }
 
@@ -89,16 +95,16 @@ pub fn validate_token_binding(
 /// Generate a cryptographically secure code verifier for PKCE
 pub fn generate_code_verifier() -> Result<String, &'static str> {
     use ring::rand::{SecureRandom, SystemRandom};
-    
+
     // Use cryptographically secure random generator
     let mut bytes = [0u8; 32]; // 256 bits of entropy
     SystemRandom::new()
         .fill(&mut bytes)
         .map_err(|_| "Random generation failed")?;
-    
+
     // Encode using URL-safe base64 without padding
     let mut verifier = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-    
+
     // Ensure minimum length requirement (43-128 characters per RFC 7636)
     while verifier.len() < 43 {
         let mut additional = [0u8; 8];
@@ -107,7 +113,7 @@ pub fn generate_code_verifier() -> Result<String, &'static str> {
             .map_err(|_| "Random generation failed")?;
         verifier.push_str(&base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(additional));
     }
-    
+
     // Truncate to maximum length
     verifier.truncate(128);
     Ok(verifier)
@@ -116,26 +122,30 @@ pub fn generate_code_verifier() -> Result<String, &'static str> {
 /// Generate a code challenge from a code verifier using SHA256
 pub fn generate_code_challenge(code_verifier: &str) -> Result<String, &'static str> {
     use ring::digest;
-    
+
     if code_verifier.len() < 43 || code_verifier.len() > 128 {
         return Err("Invalid code verifier length");
     }
-    
+
     let digest = digest::digest(&digest::SHA256, code_verifier.as_bytes());
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest.as_ref()))
 }
 
 /// Verify a code verifier against a code challenge with timing attack protection
-pub fn verify_code_challenge(code_verifier: &str, code_challenge: &str) -> Result<bool, &'static str> {
+pub fn verify_code_challenge(
+    code_verifier: &str,
+    code_challenge: &str,
+) -> Result<bool, &'static str> {
     use ring::constant_time;
-    
+
     let computed_challenge = generate_code_challenge(code_verifier)?;
-    
+
     // Use constant-time comparison to prevent timing attacks
     Ok(constant_time::verify_slices_are_equal(
         computed_challenge.as_bytes(),
         code_challenge.as_bytes(),
-    ).is_ok())
+    )
+    .is_ok())
 }
 
 /// PKCE challenge methods - Only S256 is supported for security
@@ -182,16 +192,16 @@ pub fn generate_request_signature(
     secret: &str,
 ) -> Result<String, &'static str> {
     use ring::hmac;
-    
+
     if secret.len() < 32 {
         return Err("Signing secret too weak (minimum 32 characters)");
     }
-    
+
     let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
-    
+
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let signature = hmac::sign(&key, message.as_bytes());
-    
+
     Ok(base64::engine::general_purpose::STANDARD.encode(signature.as_ref()))
 }
 
@@ -204,35 +214,34 @@ pub fn verify_request_signature(
     signature: &str,
     secret: &str,
 ) -> Result<bool, &'static str> {
-    use ring::{hmac, constant_time};
-    
+    use ring::{constant_time, hmac};
+
     // Check timestamp window (prevent replay attacks)
     let now = chrono::Utc::now().timestamp();
     let time_diff = (now - timestamp).abs();
-    
+
     if time_diff > REQUEST_TIMESTAMP_WINDOW_SECONDS {
         return Err("Request timestamp outside valid window");
     }
-    
+
     if secret.len() < 32 {
         return Err("Signing secret too weak");
     }
-    
+
     let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let expected_signature = hmac::sign(&key, message.as_bytes());
-    
+
     let provided_signature = base64::engine::general_purpose::STANDARD
         .decode(signature)
         .map_err(|_| "Invalid signature format")?;
-    
-    // Use constant-time comparison to prevent timing attacks
-    Ok(constant_time::verify_slices_are_equal(
-        expected_signature.as_ref(),
-        &provided_signature,
-    ).is_ok())
-}
 
+    // Use constant-time comparison to prevent timing attacks
+    Ok(
+        constant_time::verify_slices_are_equal(expected_signature.as_ref(), &provided_signature)
+            .is_ok(),
+    )
+}
 
 /// Middleware for request signature validation
 pub async fn validate_request_signature(

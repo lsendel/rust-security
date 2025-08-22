@@ -1,10 +1,10 @@
 #![cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
-use serde_json::Value;
-use tower::ServiceExt; // oneshot
 use axum::body::{to_bytes, Body};
 use axum::http::Request;
+use serde_json::Value;
+use tower::ServiceExt; // oneshot
 use tower::ServiceExt; // for oneshot
 
 #[tokio::test]

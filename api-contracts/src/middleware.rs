@@ -17,7 +17,7 @@ use crate::{
     context::UserContext,
     errors::{ApiError, VersioningError},
     versioning::VersionManager,
-    ApiVersion, RequestContext, ContextPropagation,
+    ApiVersion, ContextPropagation, RequestContext,
 };
 
 /// API versioning middleware

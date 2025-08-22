@@ -21,7 +21,9 @@ pub mod middleware;
 pub mod types;
 pub mod versioning;
 
-pub use context::{ContextPropagation, ContextPropagationConfig, RequestContext, ServiceContext, UserContext};
+pub use context::{
+    ContextPropagation, ContextPropagationConfig, RequestContext, ServiceContext, UserContext,
+};
 pub use contracts::{AuthServiceContract, PolicyServiceContract, ServiceContract};
 pub use errors::{ApiError, ContractError, VersioningError};
 pub use middleware::{ApiVersioningMiddleware, ContextPropagationMiddleware};
@@ -45,8 +47,6 @@ pub struct ApiConfig {
     /// Context propagation settings
     pub context_propagation: ContextPropagationConfig,
 }
-
-
 
 impl Default for ApiConfig {
     fn default() -> Self {
