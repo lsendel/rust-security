@@ -493,7 +493,7 @@ impl Default for BasicConnectionPoolConfig {
 #[cfg(feature = "enhanced-session-store")]
 pub struct BasicConnectionPoolManager {
     redis_pool: Option<Pool>,
-    config: BasicConnectionPoolConfig,
+    _config: BasicConnectionPoolConfig,
 }
 
 #[cfg(feature = "enhanced-session-store")]
@@ -504,7 +504,7 @@ impl BasicConnectionPoolManager {
         
         Ok(Self {
             redis_pool: Some(pool),
-            config,
+            _config: config,
         })
     }
 
@@ -632,7 +632,7 @@ impl SessionStore for EnhancedRedisSessionStore {
         session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis with retry mechanism
-        let session_clone = session.clone();
+        let _session_clone = session.clone();
         let result = self
             .with_redis_retry(|| {
                 // In a real implementation, this would contain the actual Redis operations
@@ -680,7 +680,7 @@ impl SessionStore for EnhancedRedisSessionStore {
         session_id: &str,
     ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first with retry
-        let session_id_clone = session_id.to_string();
+        let _session_id_clone = session_id.to_string();
         let redis_result = self
             .with_redis_retry(|| {
                 // Simulate retrieving session from Redis
@@ -703,7 +703,7 @@ impl SessionStore for EnhancedRedisSessionStore {
         session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Similar implementation to create_session but for updates
-        let session_clone = session.clone();
+        let _session_clone = session.clone();
         let result = self
             .with_redis_retry(|| {
                 Ok::<(), Box<dyn StdError + Send + Sync>>(())
@@ -725,7 +725,7 @@ impl SessionStore for EnhancedRedisSessionStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Get session first to clean up user index
         if let Ok(Some(session)) = self.get_session(session_id).await {
-            let session_id_clone = session_id.to_string();
+            let _session_id_clone = session_id.to_string();
             let _result = self
                 .with_redis_retry(|| {
                     Ok::<(), Box<dyn StdError + Send + Sync>>(())

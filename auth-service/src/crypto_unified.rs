@@ -94,7 +94,7 @@ pub struct UnifiedCryptoManager {
     current_key: Arc<RwLock<CryptoKey>>,
     old_keys: Arc<RwLock<HashMap<u32, CryptoKey>>>,
     rng: SystemRandom,
-    default_algorithm: SymmetricAlgorithm,
+    _default_algorithm: SymmetricAlgorithm,
     key_rotation_interval: chrono::Duration,
 }
 
@@ -106,7 +106,7 @@ impl UnifiedCryptoManager {
             current_key: Arc::new(RwLock::new(key)),
             old_keys: Arc::new(RwLock::new(HashMap::new())),
             rng: SystemRandom::new(),
-            default_algorithm: algorithm,
+            _default_algorithm: algorithm,
             key_rotation_interval: chrono::Duration::days(30),
         })
     }
@@ -146,7 +146,7 @@ impl UnifiedCryptoManager {
                 current_key: Arc::new(RwLock::new(key)),
                 old_keys: Arc::new(RwLock::new(HashMap::new())),
                 rng: SystemRandom::new(),
-                default_algorithm: algorithm,
+                _default_algorithm: algorithm,
                 key_rotation_interval: chrono::Duration::days(30),
             })
         } else {

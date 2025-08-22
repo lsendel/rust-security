@@ -15,7 +15,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use validator::Validate;
 
 /// Configuration management state
@@ -32,7 +32,7 @@ pub struct ConfigState {
 /// This endpoint should be protected by admin middleware and request signing.
 pub async fn reload_config(
     State(state): State<ConfigState>,
-    Json(request): Json<ConfigReloadRequest>,
+    Json(_request): Json<ConfigReloadRequest>,
 ) -> Result<Json<ConfigReloadResponse>, StatusCode> {
     info!("Configuration reload requested via HTTP endpoint");
 
@@ -71,7 +71,7 @@ pub async fn config_status(
     State(state): State<ConfigState>,
 ) -> Result<Json<ConfigStatus>, StatusCode> {
     let version = state.reload_manager.get_version().await;
-    let config = state.reload_manager.get_config().await;
+    let _config = state.reload_manager.get_config().await;
 
     // Determine configuration source
     let source = std::env::var("CONFIG_FILE")
@@ -126,7 +126,7 @@ pub async fn rollback_config(
 ///
 /// Validates a configuration without applying it.
 pub async fn validate_config(
-    State(state): State<ConfigState>,
+    State(_state): State<ConfigState>,
     Json(config): Json<serde_json::Value>,
 ) -> Result<Json<ConfigValidationResponse>, StatusCode> {
     info!("Configuration validation requested via HTTP endpoint");
