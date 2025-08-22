@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "auth-core",
-    "auth-service", 
+    "auth-service",
     "policy-service",
     "common",
     "api-contracts",
@@ -22,15 +22,20 @@ resolver = "2"
 
 [workspace.lints]
 rust.unused_crate_dependencies = "warn"
-rust.unused_imports = "warn" 
+rust.unused_imports = "warn"
 rust.dead_code = "warn"
+rust.unsafe_code = "forbid"
+clippy.all = "warn"
+clippy.pedantic = "warn"
+clippy.cargo = "warn"
+clippy.nursery = "warn"
 
 [workspace.dependencies]
 # Core async runtime
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.41", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
-tower = { version = "0.4", features = ["util"] }
-hyper = { version = "1.0" }
+tower = { version = "0.5", features = ["util"] }
+hyper = { version = "1.5" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -38,11 +43,11 @@ serde_json = "1.0"
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Cryptography
-jsonwebtoken = "9.0"
-rand = "0.8.5"
+jsonwebtoken = "9.3"
+rand = "0.8"
 sha2 = "0.10"
 sha1 = "0.10"
 aes = "0.8"
@@ -62,7 +67,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 prometheus = "0.14"
 
 # UUID
-uuid = { version = "1.0", features = ["v4", "serde"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
 
 # Time handling
 chrono = { version = "0.4", features = ["serde"] }
@@ -77,46 +82,43 @@ config = "0.14"
 validator = { version = "0.19", features = ["derive"] }
 
 # CLI
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 
 # Additional common dependencies
 async-trait = "0.1"
 base64 = "0.22"
-bytes = "1.0"
+bytes = "1.8"
 constant_time_eq = "0.3"
-dashmap = "6.0"
-data-encoding = "2.0"
+dashmap = "6.1"
+data-encoding = "2.6"
 dotenvy = "0.15"
 envy = "0.4"
 futures = "0.3"
 hex = "0.4"
 hmac = "0.12"
-lazy_static = "1.5"
-num_cpus = "1.0"
-once_cell = "1.21"
+once_cell = "1.20"
 secrecy = "0.10"
-subtle = "2.5"
+subtle = "2.6"
 zeroize = "1.8"
 
 # Web/HTTP additional
-http = "1.0"
-tower-http = { version = "0.5", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
+http = "1.1"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 urlencoding = "2.1"
 url = "2.5"
 
 # Policy engine
-cedar-policy = "4.0"
+cedar-policy = "4.2"
 
 # API documentation
-utoipa = { version = "5.0", features = ["axum_extras"] }
+utoipa = { version = "5.1", features = ["axum_extras"] }
 
-# Crypto additional  
+# Crypto additional
 argon2 = "0.5"
-bcrypt = "0.15"
+bcrypt = "0.16"
 chacha20poly1305 = "0.10"
 ring = "0.17"
-rustls-pemfile = "2.0"
-# rsa = "0.9"  # Removed due to RUSTSEC-2023-0071 security vulnerability  
+rustls-pemfile = "2.2"
 ed25519-dalek = "2.1"
 x25519-dalek = "2.0"
 p256 = "0.13"
@@ -124,23 +126,23 @@ p384 = "0.13"
 
 # Development/Testing
 criterion = { version = "0.5", features = ["html_reports"] }
-proptest = "1.0"
+proptest = "1.5"
 quickcheck = "1.0"
 quickcheck_macros = "1.0"
-tempfile = "3.0"
+tempfile = "3.13"
 tokio-test = "0.4"
 wiremock = "0.6"
-arbitrary = "1.0"
+arbitrary = "1.4"
 
 # Storage/DB additional
 bb8 = "0.8"
 bb8-redis = "0.16"
-rmp-serde = "1.0"
-bincode = "1.0"
+rmp-serde = "1.3"
+bincode = "1.3"
 
 # ML/Advanced features
 smartcore = "0.3"
-ndarray = "0.16" 
+ndarray = "0.16"
 nalgebra = "0.33"
 
 # Post-quantum crypto
@@ -148,55 +150,50 @@ pqcrypto-mlkem = "0.1"
 pqcrypto-mldsa = "0.1"
 
 # Cloud integrations
-aws-config = "1.0"
-aws-sdk-secretsmanager = "1.0"
+aws-config = "1.5"
+aws-sdk-secretsmanager = "1.48"
 vaultrs = "0.7"
 
 # Monitoring/telemetry
-opentelemetry = "0.23"
+opentelemetry = "0.22"
 opentelemetry-jaeger = "0.22"
-opentelemetry_sdk = "0.23"
-tracing-opentelemetry = "0.24"
+opentelemetry_sdk = "0.22"
+tracing-opentelemetry = "0.22"
 tokio-metrics = "0.3"
-metrics = "0.23"
-metrics-prometheus = "0.7"
-pprof = "0.15"
+metrics = "0.24"
+metrics-prometheus = "0.8"
 
 # Templating
-handlebars = "6.0"
-tera = "1.0"
+handlebars = "6.2"
+tera = "1.20"
 
 # Email
 lettre = "0.11"
 
 # Performance
 mimalloc = "0.1"
-tikv-jemalloc-ctl = "0.5"
-jemalloc-sys = "0.5"
-rayon = "1.0"
-# packed_simd_2 = "0.3"  # Removed due to Rust compatibility issues
+rayon = "1.10"
 
 # Compression
 lz4_flex = "0.11"
 
 # Filesystem/memory mapping
 memmap2 = "0.9"
-walkdir = "2.0"
+walkdir = "2.5"
 
 # Search/pattern matching
-aho-corasick = "1.0"
+aho-corasick = "1.1"
+regex = "1.11"
 fancy-regex = "0.13"
-regex = "1.0"
 
 # Networking/geo
-ipnet = "2.0"
+ipnet = "2.10"
 geo = "0.28"
 geoutils = "0.5"
 
-# Data structures  
-indexmap = "2.0"
+# Data structures
+indexmap = "2.6"
 bloomfilter = "1.0"
-probabilistic-collections = "0.7"
 petgraph = "0.6"
 
 # Async/concurrency
@@ -219,102 +216,94 @@ rcgen = "0.13"
 toml = "0.8"
 serde_yaml = "0.9"
 
-# Fuzzing
-libfuzzer-sys = "0.4"
-
 # Documentation
-# Duplicate removed - defined above
-utoipa-swagger-ui = "8.0"
+utoipa-swagger-ui = "8.1"
 
 # Web server
 axum-server = "0.7"
 
-# Policy engine (duplicate removed - defined above)
-cedar-policy-core = "4.0"
-
-# TypeScript compiler
-tsc = "0.1"
+# Policy engine core
+cedar-policy-core = "4.2"
 
 # Random number generation
-fastrand = "2.0"
-getrandom = { version = "0.3", features = ["std"] }
+fastrand = "2.2"
+getrandom = { version = "0.2", features = ["std"] }
 
-# WebAssembly/ML
+# Lazy initialization
+lazy_static = "1.5"
+
+# System info
+num_cpus = "1.16"
+
+# Probabilistic data structures
+probabilistic-collections = "0.7"
+
+# Profiling
+pprof = "0.13"
+
+# TypeScript (placeholder, not a real crate - commenting out)
+# tsc = "0.1"
+
+# Additional network/TLS dependencies
+ipnetwork = "0.20"
+opentelemetry-otlp = "0.15"
+x509-parser = "0.16"
+rustls = "0.23"
+webpki-roots = "0.26"
 
 [profile.dev]
-# Faster builds for development
 opt-level = 1
 debug = true
 incremental = true
+split-debuginfo = "unpacked"
 
 [profile.release]
-# Optimized for production
 opt-level = 3
 debug = false
-lto = true
+lto = "fat"
 codegen-units = 1
 panic = "abort"
+strip = true
 
 [profile.test]
-# Optimized for testing
 opt-level = 1
 debug = true
 
+[profile.bench]
+opt-level = 3
+debug = false
+lto = true
+
 # Feature organization
 [workspace.metadata.features]
-# Core features - minimal OAuth functionality
 core = [
     "oauth2-client-credentials",
-    "jwt-tokens", 
+    "jwt-tokens",
     "memory-store",
     "rate-limiting-basic"
 ]
 
-# Standard features - common enterprise needs
 standard = [
     "oauth2-authorization-code",
-    "oauth2-refresh-tokens", 
+    "oauth2-refresh-tokens",
     "postgresql-store",
     "redis-sessions",
     "mfa-totp",
     "prometheus-metrics"
 ]
 
-# Enterprise features - advanced security
 enterprise = [
     "mfa-webauthn",
     "saml-federation",
-    "soar-integration", 
+    "soar-integration",
     "threat-detection",
     "multi-tenancy",
     "audit-compliance"
 ]
 
-# Experimental features
 experimental = [
     "post-quantum-crypto",
     "ml-threat-detection",
     "chaos-engineering",
     "zero-trust-networking"
 ]
-
-# Build profiles for different use cases
-[workspace.metadata.profiles]
-
-[workspace.metadata.profiles.minimal]
-description = "Minimal OAuth server for development"
-features = ["core"]
-size_estimate = "< 10MB"
-build_time = "< 2 minutes"
-
-[workspace.metadata.profiles.production]
-description = "Production-ready with monitoring"
-features = ["core", "standard"]
-size_estimate = "< 50MB"
-build_time = "< 5 minutes"
-
-[workspace.metadata.profiles.enterprise]
-description = "Full enterprise feature set"
-features = ["core", "standard", "enterprise"]
-size_estimate = "< 150MB"
-build_time = "< 15 minutes"

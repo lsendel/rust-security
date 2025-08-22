@@ -23,16 +23,16 @@ sha2 = "0.10"
 hmac = "0.12"
 url = "2.5"
 redis = "0.26"
-prometheus = "0.14"  
+prometheus = "0.14"
 hyper = { version = "1.0", features = ["full"] }
 urlencoding = "2.1"
 async-trait = "0.1"
 
 # Optional dependencies with security fixes
-pprof = { version = "0.13", optional = true }  # Updated version
+pprof = { workspace = true, optional = true }
 criterion = { version = "0.5", optional = true }
 
-# Non-workspace dependencies  
+# Non-workspace dependencies
 clap = { version = "4.0", features = ["derive"] }
 futures = "0.3"
 pem = "3.0"
@@ -68,4 +68,4 @@ hickory-resolver = "0.24"  # Replacement for trust-dns-resolver
 
 [features]
 default = []
-benchmarks = ["criterion", "pprof"]
+benchmarks = ["criterion", "pprof2"]

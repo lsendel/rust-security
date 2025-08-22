@@ -1,5 +1,5 @@
 [toolchain]
-channel = "stable"
-components = ["rustfmt", "clippy", "rust-src", "rust-analyzer"]
-targets = ["x86_64-unknown-linux-gnu"]
+channel = "1.82.0"  # Latest stable as of August 2025
+components = ["rustfmt", "clippy", "rust-src", "rust-analyzer", "llvm-tools-preview"]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"]
 profile = "default"
