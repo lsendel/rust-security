@@ -32,8 +32,8 @@ validator = { workspace = true }
 secrecy = { workspace = true }
 argon2 = { workspace = true }
 jsonwebtoken = { workspace = true }
-# Using jsonwebtoken for RSA operations (more secure than direct RSA usage)
-# Removed vulnerable rsa crate (RUSTSEC-2023-0071)
+# RSA key generation for JWKS rotation - using latest secure version
+rsa = { workspace = true }
 chrono = { workspace = true }
 envy = { workspace = true }
 hmac = { workspace = true }

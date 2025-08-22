@@ -1,3 +1,4 @@
+use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
 use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::{errors::AuthError, AppState};
@@ -8,7 +9,15 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::OnceCell;
+
+/// Global replay protection instance
+static REPLAY_PROTECTION: OnceCell<Arc<ReplayProtection>> = OnceCell::const_new();
+
+/// Global rate limiter instance
+static RATE_LIMITER: OnceCell<Arc<AdminRateLimiter>> = OnceCell::const_new();
 
 /// Admin authentication middleware configuration
 #[derive(Debug, Clone)]
@@ -21,6 +30,10 @@ pub struct AdminAuthConfig {
     pub max_timestamp_skew: u64,
     /// Rate limiting for admin endpoints
     pub rate_limit_per_minute: u32,
+    /// Replay protection time window in seconds
+    pub replay_time_window: u64,
+    /// Redis URL for distributed replay protection
+    pub redis_url: Option<String>,
 }
 
 impl Default for AdminAuthConfig {
@@ -33,8 +46,28 @@ impl Default for AdminAuthConfig {
             signing_secret: std::env::var("REQUEST_SIGNING_SECRET").ok(),
             max_timestamp_skew: 300, // 5 minutes
             rate_limit_per_minute: 100,
+            replay_time_window: 300, // 5 minutes
+            redis_url: std::env::var("REDIS_URL").ok(),
         }
     }
+}
+
+/// Initialize replay protection and rate limiter
+async fn init_security_components(config: &AdminAuthConfig) {
+    // Initialize replay protection
+    let replay_protection = Arc::new(ReplayProtection::new(
+        config.redis_url.as_deref(),
+        config.replay_time_window,
+        config.max_timestamp_skew,
+    ));
+    let _ = REPLAY_PROTECTION.set(replay_protection);
+
+    // Initialize rate limiter
+    let rate_limiter = Arc::new(AdminRateLimiter::new(
+        config.rate_limit_per_minute,
+        60, // 1 minute window
+    ));
+    let _ = RATE_LIMITER.set(rate_limiter);
 }
 
 /// Admin authentication middleware for protecting admin endpoints
@@ -48,8 +81,66 @@ pub async fn admin_auth_middleware(
     let path = request.uri().path();
     let method = request.method().as_str();
 
+    // Initialize security components if not already done
+    init_security_components(&config).await;
+
     // Extract client IP for audit logging
     let client_ip = extract_client_ip(&headers);
+
+    // Extract admin key from Bearer token for rate limiting
+    let admin_key = match extract_admin_key(&headers, &state).await {
+        Ok(key) => key,
+        Err(auth_error) => {
+            return handle_auth_failure(auth_error, method, path, &client_ip, &headers);
+        }
+    };
+
+    // Apply rate limiting per admin key
+    if let Some(rate_limiter) = RATE_LIMITER.get() {
+        if let Err(_) = rate_limiter.check_rate_limit(&admin_key) {
+            tracing::warn!(
+                admin_key = redact_log(&admin_key),
+                method = method,
+                path = path,
+                client_ip = client_ip.as_deref(),
+                "Admin rate limit exceeded"
+            );
+
+            let mut event = SecurityEvent {
+                event_id: uuid::Uuid::new_v4().to_string(),
+                timestamp: chrono::Utc::now(),
+                event_type: SecurityEventType::SecurityViolation,
+                severity: SecuritySeverity::High,
+                source: "admin_middleware".to_string(),
+                description: "Admin rate limit exceeded".to_string(),
+                actor: Some(admin_key.clone()),
+                action: Some(format!("{} {}", method, path)),
+                target: Some(path.to_string()),
+                outcome: "failure".to_string(),
+                reason: Some("rate_limit_exceeded".to_string()),
+                correlation_id: extract_correlation_id(&headers),
+                ip_address: client_ip.clone(),
+                user_agent: extract_user_agent(&headers),
+                client_id: None,
+                user_id: None,
+                request_id: extract_correlation_id(&headers),
+                session_id: None,
+                details: std::collections::HashMap::new(),
+                resource: None,
+                risk_score: Some(90),
+                location: None,
+                device_fingerprint: None,
+                http_method: Some(method.to_string()),
+                http_status: Some(429),
+                request_path: Some(path.to_string()),
+                response_time_ms: None,
+            };
+            SecurityLogger::log_event(&event);
+
+            let rate_limit_error = AuthError::RateLimitExceeded;
+            return handle_auth_failure(rate_limit_error, method, path, &client_ip, &headers);
+        }
+    }
 
     // Verify Bearer token and admin scope
     match require_admin_scope(&headers, &state).await {
@@ -93,49 +184,10 @@ pub async fn admin_auth_middleware(
             };
             SecurityLogger::log_event(&event);
 
-            // If request signing is required, validate the signature
+            // If request signing is required, validate the signature with replay protection
             if config.require_request_signing {
-                if let Err(e) = validate_request_signature(&headers, &config, method, path).await {
-                    // Log failed signature verification
-                    let mut event = SecurityEvent {
-                        event_id: uuid::Uuid::new_v4().to_string(),
-                        timestamp: chrono::Utc::now(),
-                        event_type: SecurityEventType::SecurityViolation,
-                        severity: SecuritySeverity::High,
-                        source: "admin_middleware".to_string(),
-                        description: format!(
-                            "Admin request signature validation failed: {}",
-                            redact_log(&e.to_string())
-                        ),
-                        actor: Some("admin_user".to_string()),
-                        action: Some(format!("{} {}", method, path)),
-                        target: Some(path.to_string()),
-                        outcome: "failure".to_string(),
-                        reason: Some("invalid_signature".to_string()),
-                        correlation_id: extract_correlation_id(&headers),
-                        ip_address: client_ip.clone(),
-                        user_agent: extract_user_agent(&headers),
-                        client_id: None,
-                        user_id: None,
-                        request_id: extract_correlation_id(&headers),
-                        session_id: None,
-                        details: std::collections::HashMap::new(),
-                        resource: None,
-                        risk_score: Some(85),
-                        location: None,
-                        device_fingerprint: None,
-                        http_method: Some(method.to_string()),
-                        http_status: Some(400),
-                        request_path: Some(path.to_string()),
-                        response_time_ms: None,
-                    };
-                    SecurityLogger::log_event(&event);
-
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        format!("Request signature validation failed: {}", e),
-                    )
-                        .into_response());
+                if let Err(e) = validate_request_with_replay_protection(&headers, &config, method, path).await {
+                    return handle_auth_failure(e, method, path, &client_ip, &headers);
                 }
             }
 
@@ -143,54 +195,61 @@ pub async fn admin_auth_middleware(
             Ok(next.run(request).await)
         }
         Err(auth_error) => {
-            tracing::warn!(
-                error = %redact_log(&auth_error.to_string()),
-                method = method,
-                path = path,
-                client_ip = client_ip.as_deref(),
-                "Admin authentication failed"
-            );
-
-            // Log failed authentication attempt
-            let mut details = std::collections::HashMap::new();
-            details.insert(
-                "auth_error".to_string(),
-                serde_json::json!(redact_log(&auth_error.to_string())),
-            );
-
-            let mut event = SecurityEvent {
-                event_id: uuid::Uuid::new_v4().to_string(),
-                timestamp: chrono::Utc::now(),
-                event_type: SecurityEventType::AuthenticationFailure,
-                severity: SecuritySeverity::Medium,
-                source: "admin_middleware".to_string(),
-                description: format!("Admin authentication failed for {} {}", method, path),
-                actor: Some("unknown".to_string()),
-                action: Some(format!("{} {}", method, path)),
-                target: Some(path.to_string()),
-                outcome: "failure".to_string(),
-                reason: Some("invalid_or_missing_admin_token".to_string()),
-                correlation_id: extract_correlation_id(&headers),
-                ip_address: client_ip,
-                user_agent: extract_user_agent(&headers),
-                client_id: None,
-                user_id: None,
-                request_id: extract_correlation_id(&headers),
-                session_id: None,
-                details,
-                resource: None,
-                risk_score: Some(75),
-                location: None,
-                device_fingerprint: None,
-                http_method: Some(method.to_string()),
-                http_status: Some(401),
-                request_path: Some(path.to_string()),
-                response_time_ms: None,
-            };
-            SecurityLogger::log_event(&event);
-
-            Err(auth_error.into_response())
+            return handle_auth_failure(auth_error, method, path, &client_ip, &headers);
         }
+    }
+}
+
+/// Extract admin key from Bearer token for rate limiting and logging
+async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<String, AuthError> {
+    // Extract bearer token
+    let auth = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = auth
+        .strip_prefix("Bearer ")
+        .ok_or_else(|| AuthError::InvalidToken {
+            reason: "Missing or malformed authorization header".to_string(),
+        })?;
+
+    if token.is_empty() {
+        return Err(AuthError::InvalidToken {
+            reason: "Empty bearer token".to_string(),
+        });
+    }
+
+    // Validate token and extract record
+    let record =
+        state
+            .store
+            .get_token_record(token)
+            .await?
+            .ok_or_else(|| AuthError::InvalidToken {
+                reason: "Token not found or invalid".to_string(),
+            })?;
+
+    // Check if token is active
+    if !record.active {
+        return Err(AuthError::InvalidToken {
+            reason: "Token is inactive".to_string(),
+        });
+    }
+
+    // Check for admin scope
+    match record.scope {
+        Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
+            // Return a hash of the token for use as admin key (for privacy)
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(token.as_bytes());
+            let result = hasher.finalize();
+            Ok(format!("admin_{}", hex::encode(&result[..8]))) // Use first 8 bytes as key
+        }
+        _ => Err(AuthError::Forbidden {
+            reason: "Insufficient privileges: admin scope required".to_string(),
+        }),
     }
 }
 
@@ -243,7 +302,74 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
     }
 }
 
-/// Validate request signature for high-security admin operations
+/// Validate request with replay protection and signature verification
+async fn validate_request_with_replay_protection(
+    headers: &HeaderMap,
+    config: &AdminAuthConfig,
+    method: &str,
+    path: &str,
+) -> Result<(), AuthError> {
+    let Some(signing_secret) = &config.signing_secret else {
+        return Err(AuthError::ConfigurationError {
+            field: "signing_secret".to_string(),
+            reason: "Request signing is required but no signing secret is configured".to_string(),
+        });
+    };
+
+    // Extract new headers for replay protection
+    let nonce = headers
+        .get("X-Request-Nonce")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AuthError::InvalidRequest {
+            reason: "Missing X-Request-Nonce header".to_string(),
+        })?;
+
+    let timestamp_str = headers
+        .get("X-Request-Timestamp")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AuthError::InvalidRequest {
+            reason: "Missing X-Request-Timestamp header".to_string(),
+        })?;
+
+    let signature = headers
+        .get("X-Request-Signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| AuthError::InvalidRequest {
+            reason: "Missing X-Request-Signature header".to_string(),
+        })?;
+
+    // Parse timestamp
+    let timestamp: u64 = timestamp_str
+        .parse()
+        .map_err(|_| AuthError::InvalidRequest {
+            reason: "Invalid timestamp format".to_string(),
+        })?;
+
+    // Verify signature using SHA-256
+    if !ReplayProtection::verify_signature(
+        signing_secret,
+        method,
+        path,
+        nonce,
+        timestamp,
+        signature,
+    ) {
+        return Err(AuthError::InvalidRequest {
+            reason: "Invalid request signature".to_string(),
+        });
+    }
+
+    // Apply replay protection
+    if let Some(replay_protection) = REPLAY_PROTECTION.get() {
+        replay_protection
+            .validate_request(nonce, timestamp, signature)
+            .await?
+    }
+
+    Ok(())
+}
+
+/// Legacy validate request signature function (now deprecated)
 async fn validate_request_signature(
     headers: &HeaderMap,
     config: &AdminAuthConfig,
@@ -306,6 +432,123 @@ async fn validate_request_signature(
     }
 
     Ok(())
+}
+
+/// Handle authentication failures with proper logging and response
+fn handle_auth_failure(
+    auth_error: AuthError,
+    method: &str,
+    path: &str,
+    client_ip: &Option<String>,
+    headers: &HeaderMap,
+) -> Result<Response, impl IntoResponse> {
+    tracing::warn!(
+        error = %redact_log(&auth_error.to_string()),
+        method = method,
+        path = path,
+        client_ip = client_ip.as_deref(),
+        "Admin authentication failed"
+    );
+
+    // Log failed authentication attempt
+    let mut details = std::collections::HashMap::new();
+    details.insert(
+        "auth_error".to_string(),
+        serde_json::json!(redact_log(&auth_error.to_string())),
+    );
+
+    let mut event = SecurityEvent {
+        event_id: uuid::Uuid::new_v4().to_string(),
+        timestamp: chrono::Utc::now(),
+        event_type: SecurityEventType::AuthenticationFailure,
+        severity: SecuritySeverity::Medium,
+        source: "admin_middleware".to_string(),
+        description: format!("Admin authentication failed for {} {}", method, path),
+        actor: Some("unknown".to_string()),
+        action: Some(format!("{} {}", method, path)),
+        target: Some(path.to_string()),
+        outcome: "failure".to_string(),
+        reason: Some("invalid_or_missing_admin_token".to_string()),
+        correlation_id: extract_correlation_id(headers),
+        ip_address: client_ip.clone(),
+        user_agent: extract_user_agent(headers),
+        client_id: None,
+        user_id: None,
+        request_id: extract_correlation_id(headers),
+        session_id: None,
+        details,
+        resource: None,
+        risk_score: Some(75),
+        location: None,
+        device_fingerprint: None,
+        http_method: Some(method.to_string()),
+        http_status: Some(401),
+        request_path: Some(path.to_string()),
+        response_time_ms: None,
+    };
+    SecurityLogger::log_event(&event);
+
+    Err(auth_error.into_response())
+}
+
+/// Handle signature validation failures with proper logging and response
+fn handle_signature_failure(
+    error: AuthError,
+    method: &str,
+    path: &str,
+    client_ip: &Option<String>,
+    headers: &HeaderMap,
+) -> Result<Response, impl IntoResponse> {
+    // Determine the appropriate status code based on error type
+    let (status_code, reason) = match &error {
+        AuthError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "rate_limit_exceeded"),
+        _ => (StatusCode::UNAUTHORIZED, "invalid_signature_or_replay"),
+    };
+
+    tracing::warn!(
+        error = %redact_log(&error.to_string()),
+        method = method,
+        path = path,
+        client_ip = client_ip.as_deref(),
+        "Admin request validation failed"
+    );
+
+    // Log failed signature verification
+    let mut event = SecurityEvent {
+        event_id: uuid::Uuid::new_v4().to_string(),
+        timestamp: chrono::Utc::now(),
+        event_type: SecurityEventType::SecurityViolation,
+        severity: SecuritySeverity::High,
+        source: "admin_middleware".to_string(),
+        description: format!(
+            "Admin request validation failed: {}",
+            redact_log(&error.to_string())
+        ),
+        actor: Some("admin_user".to_string()),
+        action: Some(format!("{} {}", method, path)),
+        target: Some(path.to_string()),
+        outcome: "failure".to_string(),
+        reason: Some(reason.to_string()),
+        correlation_id: extract_correlation_id(headers),
+        ip_address: client_ip.clone(),
+        user_agent: extract_user_agent(headers),
+        client_id: None,
+        user_id: None,
+        request_id: extract_correlation_id(headers),
+        session_id: None,
+        details: std::collections::HashMap::new(),
+        resource: None,
+        risk_score: Some(85),
+        location: None,
+        device_fingerprint: None,
+        http_method: Some(method.to_string()),
+        http_status: Some(status_code.as_u16()),
+        request_path: Some(path.to_string()),
+        response_time_ms: None,
+    };
+    SecurityLogger::log_event(&event);
+
+    Err((status_code, format!("Request validation failed: {}", error)).into_response())
 }
 
 /// Calculate HMAC-SHA256 signature
@@ -424,6 +667,7 @@ mod tests {
         let config = AdminAuthConfig::default();
         assert_eq!(config.max_timestamp_skew, 300);
         assert_eq!(config.rate_limit_per_minute, 100);
+        assert_eq!(config.replay_time_window, 300);
         assert!(!config.require_request_signing);
     }
 
@@ -447,5 +691,46 @@ mod tests {
         headers.remove("x-real-ip");
         headers.insert("cf-connecting-ip", "1.2.3.4".parse().unwrap());
         assert_eq!(extract_client_ip(&headers), Some("1.2.3.4".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_replay_protection_integration() {
+        use crate::admin_replay_protection::ReplayProtection;
+        
+        let config = AdminAuthConfig {
+            require_request_signing: true,
+            signing_secret: Some("test_secret_key".to_string()),
+            max_timestamp_skew: 300,
+            rate_limit_per_minute: 100,
+            replay_time_window: 300,
+            redis_url: None,
+        };
+
+        let mut headers = HeaderMap::new();
+        let nonce = ReplayProtection::generate_nonce();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        let signature = ReplayProtection::create_signature(
+            "test_secret_key",
+            "POST",
+            "/admin/test",
+            &nonce,
+            timestamp,
+        );
+
+        headers.insert("X-Request-Nonce", nonce.parse().unwrap());
+        headers.insert("X-Request-Timestamp", timestamp.to_string().parse().unwrap());
+        headers.insert("X-Request-Signature", signature.parse().unwrap());
+
+        // First request should succeed
+        let result = validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
+        assert!(result.is_ok());
+
+        // Replay should fail
+        let result2 = validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
+        assert!(result2.is_err());
     }
 }

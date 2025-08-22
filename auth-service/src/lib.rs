@@ -119,6 +119,7 @@ pub mod scim_rbac;
 
 // Security modules
 pub mod admin_middleware;
+pub mod admin_replay_protection;
 pub mod auth_failure_logging;
 pub mod business_metrics;
 pub mod metrics;
@@ -136,6 +137,7 @@ pub mod security_monitoring;
 // Key management
 pub mod jwks_handler;
 pub mod jwks_rate_limiter;
+pub mod jwks_rotation;
 pub mod key_management;
 pub mod key_rotation;
 pub mod keys;
