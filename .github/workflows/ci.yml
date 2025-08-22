@@ -154,7 +154,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Download release artifacts
-        uses: actions/download-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/download-artifact@v4
         with:
           name: release-binaries-ubuntu-latest-stable
           path: target/release
@@ -228,7 +228,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Download release artifacts
-        uses: actions/download-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        uses: actions/download-artifact@v4
         with:
           name: release-binaries-ubuntu-latest-stable
           path: target/release
@@ -274,6 +274,30 @@ jobs:
       - name: Run jscpd
         run: |
           npx jscpd@3.5.10 --config .jscpd.json
+
+  auth_core_compliance_tests:
+    name: auth-core Compliance/Security Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build_and_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
+
+      - name: Run auth-core compliance tests (gated)
+        env:
+          RUST_LOG: debug
+        run: |
+          cargo test -p auth-core --features compliance-tests -- --nocapture --test-threads=1
 
   db_migrations:
     name: DB Migration Verification (Postgres)
