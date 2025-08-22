@@ -1,3 +1,7 @@
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+
 [workspace]
 members = [
     "auth-core",
