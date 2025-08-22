@@ -627,7 +627,7 @@ impl AiThreatDetector {
         let content_lower = content.to_lowercase();
         patterns
             .iter()
-            .filter(|pattern| content_lower.contains(pattern))
+            .filter(|pattern| content_lower.contains(*pattern))
             .count()
     }
 
@@ -648,7 +648,7 @@ impl AiThreatDetector {
         let content_lower = content.to_lowercase();
         patterns
             .iter()
-            .filter(|pattern| content_lower.contains(pattern))
+            .filter(|pattern| content_lower.contains(*pattern))
             .count()
     }
 
@@ -672,7 +672,7 @@ impl AiThreatDetector {
 
         patterns
             .iter()
-            .filter(|pattern| content.contains(pattern))
+            .filter(|pattern| content.contains(*pattern))
             .count()
     }
 
@@ -680,7 +680,7 @@ impl AiThreatDetector {
         let patterns = ["../", "..\\", "%2e%2e", "%252e%252e", "....//"];
         patterns
             .iter()
-            .filter(|pattern| content.contains(pattern))
+            .filter(|pattern| content.contains(*pattern))
             .count()
     }
 
@@ -713,7 +713,7 @@ impl AiThreatDetector {
         let standard_headers = ["user-agent", "accept", "accept-language"];
         standard_headers
             .iter()
-            .filter(|header| !headers.contains_key(*header))
+            .filter(|header| !headers.contains_key(header.as_str()))
             .count()
     }
 

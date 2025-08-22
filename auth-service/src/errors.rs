@@ -284,13 +284,16 @@ impl IntoResponse for AuthError {
         let mut error_response = ErrorResponse {
             error: error_code.to_string(),
             error_description: user_message.to_string(),
+            error_uri: None,
             error_id: None,
+            correlation_id: None,
+            details: None,
         };
 
         // Only include error_id for internal errors to help with debugging
         if log_details {
             if let AuthError::InternalError { error_id, .. } = &self {
-                error_response.error_id = Some(*error_id);
+                error_response.error_id = Some(error_id.to_string());
             }
         }
 
@@ -476,12 +479,12 @@ mod tests {
 
     #[test]
     fn test_redact_error() {
-        assert!(redact_error("user@example.com").contains("u****@example.com"));
-        assert!(redact_error("555-123-4567").contains("****4567"));
+        assert!(redact_log("user@example.com").contains("u****@example.com"));
+        assert!(redact_log("555-123-4567").contains("****4567"));
         assert!(
-            redact_error("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED")
+            redact_log("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED")
         );
-        assert_eq!(redact_error("normal text"), "normal text");
+        assert_eq!(redact_log("normal text"), "normal text");
     }
 
     #[test]

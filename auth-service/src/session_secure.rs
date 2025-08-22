@@ -1,3 +1,4 @@
+use base64::Engine;
 use chrono::{DateTime, Duration, Utc};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
@@ -161,7 +162,7 @@ impl SecureSessionManager {
         // Store session
         {
             let mut sessions = self.sessions.write().await;
-            sessions.insert(session_id.clone(), session_data);
+            sessions.insert(session_id.clone(), session_data.clone());
         }
 
         // Track user sessions

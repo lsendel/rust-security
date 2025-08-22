@@ -437,7 +437,7 @@ fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigE
     // Require request signing in production
     config.security.request_signing_secret = Some(
         env::var("REQUEST_SIGNING_SECRET")
-            .map_err(|_| ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET"))?,
+            .map_err(|_| ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET".to_string()))?,
     );
 
     // Validate signing secret strength

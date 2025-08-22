@@ -36,7 +36,7 @@ pub fn create_secure_jwt_validation() -> Validation {
     validation.validate_exp = true;
     validation.validate_nbf = true;
     validation.validate_aud = true;
-    validation.validate_iss = true;
+    validation.validate_exp = true;
 
     // Set required claims
     validation.required_spec_claims = HashSet::from([
