@@ -182,7 +182,7 @@ impl ReplayProtection {
         let key = format!("admin:nonce:{}", nonce);
         
         // Store with expiry
-        conn.set_ex(&key, timestamp, expiry).await?;
+        conn.set_ex::<_, _, ()>(&key, timestamp, expiry).await?;
         Ok(())
     }
 

@@ -2,6 +2,7 @@
 name = "auth-service"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 [lints]
 workspace = true
@@ -23,7 +24,7 @@ tower-http = { workspace = true }
 bytes = { workspace = true }
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
-redis = { workspace = true }
+redis = { workspace = true, optional = true }
 utoipa = { workspace = true }
 # Swagger UI is optional; enable with `--features docs`
 utoipa-swagger-ui = { workspace = true, optional = true }
@@ -93,7 +94,7 @@ tokio-metrics = { workspace = true }
 bb8 = { workspace = true }
 bb8-redis = { workspace = true }
 deadpool = { workspace = true }
-deadpool-redis = { workspace = true }
+deadpool-redis = { workspace = true, optional = true }
 # Optimized serialization
 rmp-serde = { workspace = true }
 bincode = { workspace = true }
@@ -195,7 +196,7 @@ arbitrary = { workspace = true }
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-default = ["fast-build", "api-keys"]  # Development-optimized defaults, ML features disabled for security
+default = ["fast-build", "api-keys", "enhanced-session-store"]  # Development-optimized defaults, ML features disabled for security
 fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
@@ -219,6 +220,7 @@ advanced-analytics = ["threat-hunting", "ml-enhanced", "dep:tsc", "dep:memmap2",
 optimizations = []
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]
 api-keys = ["dep:sqlx"]
+enhanced-session-store = ["dep:redis", "dep:deadpool-redis"]
 
 [[bench]]
 name = "performance_suite"

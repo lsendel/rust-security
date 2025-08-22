@@ -548,7 +548,7 @@ impl KeyStorage for RedisKeyStorage {
         redis::pipe()
             .set(&redis_key, key_json)
             .expire(&redis_key, ttl)
-            .query_async(&mut conn)
+            .query_async::<()>(&mut conn)
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
@@ -606,7 +606,7 @@ impl KeyStorage for RedisKeyStorage {
             })?;
 
         let redis_key = format!("{}{}", self.key_prefix, kid);
-        conn.del(&redis_key)
+        conn.del::<_, ()>(&redis_key)
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
@@ -650,7 +650,7 @@ impl KeyStorage for RedisKeyStorage {
                     context: format!("Failed to serialize updated key: {}", e)
                 })?;
 
-            conn.set(&redis_key, updated_json)
+            conn.set::<_, _, ()>(&redis_key, updated_json)
                 .await
                 .map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),

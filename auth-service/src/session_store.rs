@@ -629,7 +629,7 @@ impl EnhancedRedisSessionStore {
 impl SessionStore for EnhancedRedisSessionStore {
     async fn create_session(
         &self,
-        session: SessionData,
+        session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis with retry mechanism
         let session_clone = session.clone();
@@ -700,7 +700,7 @@ impl SessionStore for EnhancedRedisSessionStore {
 
     async fn update_session(
         &self,
-        session: SessionData,
+        session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Similar implementation to create_session but for updates
         let session_clone = session.clone();
@@ -713,7 +713,7 @@ impl SessionStore for EnhancedRedisSessionStore {
         if result.is_err() {
             // Fallback to memory
             let mut memory = self.memory_fallback.write().await;
-            memory.insert(session.session_id.clone(), session);
+            memory.insert(session.session_id.clone(), session.clone());
         }
 
         Ok(())

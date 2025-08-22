@@ -57,7 +57,7 @@ pub enum SecretsError {
     ValidationError(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SecretBackend {
     /// AWS Secrets Manager - recommended for AWS environments
     AwsSecretsManager,
