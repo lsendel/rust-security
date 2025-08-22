@@ -1,6 +1,13 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+// Explicitly acknowledge unused dependencies that are part of future functionality
+use cedar_policy_core as _;
+use dotenvy as _;
+use reqwest as _;
+use tokio as _;
+use tracing_subscriber as _;
+
 use axum::{
     extract::State,
     http::{self, StatusCode},

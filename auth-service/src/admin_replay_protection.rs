@@ -204,9 +204,10 @@ impl ReplayProtection {
     /// Generate a secure nonce
     pub fn generate_nonce() -> String {
         use rand::RngCore;
+        use base64::{Engine as _, engine::general_purpose};
         let mut bytes = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut bytes);
-        base64::encode(&bytes)
+        general_purpose::STANDARD.encode(&bytes)
     }
 
     /// Create HMAC signature for request
@@ -227,7 +228,8 @@ impl ReplayProtection {
         mac.update(message.as_bytes());
         
         let result = mac.finalize();
-        base64::encode(result.into_bytes())
+        use base64::{Engine as _, engine::general_purpose};
+        general_purpose::STANDARD.encode(result.into_bytes())
     }
 
     /// Verify HMAC signature

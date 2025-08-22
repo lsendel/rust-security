@@ -3,23 +3,24 @@
 //! This module provides metrics collection for Cedar policy evaluation,
 //! authorization decisions, cache operations, and service health.
 
-use std::sync::Arc;
+use std::sync::Arc as _;
 use std::time::{Duration, Instant};
 
 use axum::{
     extract::{MatchedPath, Request},
-    http::{Method, StatusCode},
+    http::{Method as _, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use once_cell::sync::Lazy;
 use prometheus::{
-    Encoder, Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts,
+    Encoder, Histogram as _, HistogramOpts, HistogramVec, IntCounter as _, IntCounterVec, IntGauge, Opts,
     Registry, TextEncoder,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info as _, warn as _};
 
 /// Core metrics registry for policy service observability
+#[allow(dead_code)]
 pub struct PolicyMetricsRegistry {
     /// Prometheus registry for all metrics
     pub registry: Registry,

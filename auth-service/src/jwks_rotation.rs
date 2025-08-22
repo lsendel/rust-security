@@ -414,14 +414,16 @@ pub struct JwkKey {
 }
 
 // Helper functions to extract RSA components
-fn extract_modulus(public_key: &str) -> String {
+fn extract_modulus(_public_key: &str) -> String {
     // In production, properly parse the PEM and extract modulus
-    base64::encode("placeholder_modulus")
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD.encode("placeholder_modulus")
 }
 
-fn extract_exponent(public_key: &str) -> String {
+fn extract_exponent(_public_key: &str) -> String {
     // In production, properly parse the PEM and extract exponent
-    base64::encode("AQAB")  // Common RSA exponent
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD.encode("AQAB")  // Common RSA exponent
 }
 
 /// In-memory key storage for testing
