@@ -490,11 +490,12 @@ impl Default for SystemMetrics {
 }
 
 // Missing type definitions
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AlertMetrics {
     pub total_alerts: u64,
-    pub processed_alerts: u64,
-    pub escalated_alerts: u64,
-    pub resolved_alerts: u64,
-    pub average_processing_time_ms: f64,
+    pub alerts_by_severity: HashMap<String, u64>,
+    pub alerts_by_type: HashMap<String, u64>,
+    pub correlated_alerts: u64,
+    pub auto_responded_alerts: u64,
+    pub avg_processing_time_ms: f64,
 }

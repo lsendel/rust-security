@@ -1,4 +1,4 @@
-//! SOAR Alert Correlation Engine
+use async_trait::async_trait;//! SOAR Alert Correlation Engine
 //!
 //! This module provides sophisticated alert correlation capabilities including:
 //! - Pattern-based correlation rules

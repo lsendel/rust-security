@@ -1,4 +1,4 @@
-//! SOAR Workflow Orchestration Engine
+use async_trait::async_trait;//! SOAR Workflow Orchestration Engine
 //!
 //! This module provides the workflow execution engine for security playbooks,
 //! including step execution, dependency management, approval handling, and error recovery.
@@ -1942,11 +1942,13 @@ impl ToString for StepType {
 }
 
 // Missing type definitions
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WorkflowMetrics {
+    pub playbook_id: String,
     pub total_executions: u64,
     pub successful_executions: u64,
     pub failed_executions: u64,
-    pub average_duration_ms: f64,
+    pub avg_execution_time_ms: f64,
     pub last_execution: Option<chrono::DateTime<chrono::Utc>>,
+    pub success_rate: f64,
 }

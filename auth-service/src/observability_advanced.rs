@@ -236,22 +236,33 @@ impl ObservabilityManager {
 
     /// Setup distributed tracing
     async fn setup_tracing(config: &ObservabilityConfig) -> Result<Box<dyn Tracer + Send + Sync>, ObservabilityError> {
-        let tracer = opentelemetry_jaeger::new_agent_pipeline()
-            .with_service_name(&config.service_name)
-            .with_trace_config(
-                trace::config()
-                    .with_sampler(Sampler::TraceIdRatioBased(config.sampling_rate))
-                    .with_id_generator(RandomIdGenerator::default())
-                    .with_resource(Resource::new(vec![
-                        KeyValue::new("service.name", config.service_name.clone()),
-                        KeyValue::new("service.version", config.service_version.clone()),
-                        KeyValue::new("deployment.environment", config.environment.clone()),
-                    ]))
-            )
-            .install_batch(opentelemetry_sdk::runtime::Tokio)
-            .map_err(|e| ObservabilityError::TracingSetupFailed(e.to_string()))?;
+        #[cfg(feature = "opentelemetry")]
+        {
+            let tracer = opentelemetry_jaeger::new_agent_pipeline()
+                .with_service_name(&config.service_name)
+                .with_trace_config(
+                    trace::config()
+                        .with_sampler(Sampler::TraceIdRatioBased(config.sampling_rate))
+                        .with_id_generator(RandomIdGenerator::default())
+                        .with_resource(Resource::new(vec![
+                            KeyValue::new("service.name", config.service_name.clone()),
+                            KeyValue::new("service.version", config.service_version.clone()),
+                            KeyValue::new("deployment.environment", config.environment.clone()),
+                        ]))
+                )
+                .install_batch(opentelemetry_sdk::runtime::Tokio)
+                .map_err(|e| ObservabilityError::TracingSetupFailed(e.to_string()))?;
 
-        Ok(Box::new(tracer))
+            return Ok(Box::new(tracer));
+        }
+
+        #[cfg(not(feature = "opentelemetry"))]
+        {
+            // Provide a no-op tracer when opentelemetry is not enabled
+            struct NoopTracer;
+            impl Tracer for NoopTracer {}
+            return Ok(Box::new(NoopTracer));
+        }
     }
 
     /// Start a new span with comprehensive context

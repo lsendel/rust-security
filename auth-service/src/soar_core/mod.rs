@@ -56,4 +56,4 @@ pub use workflow::{StepExecutor, WorkflowEngine, WorkflowEngineMetrics};
 
 // Type aliases for convenience
 pub type SoarEngine = SoarCore;
-pub type ResponseAction = response::ResponseAction;
+pub type ResponseAction = Box<dyn response::ResponseAction + Send + Sync>;

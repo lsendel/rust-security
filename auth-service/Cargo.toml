@@ -175,7 +175,8 @@ wiremock = { workspace = true }
 
 [features]
 ml-basic = ["threat-hunting", "smartcore", "ndarray"]
-default = ["fast-build", "api-keys", "enhanced-session-store", "crypto"]  # Development-optimized defaults, ML features disabled for security
+ml-enhanced = ["ml-basic", "advanced-analytics", "nalgebra", "petgraph"]  # Added missing feature
+default = ["fast-build", "api-keys", "enhanced-session-store", "crypto", "tracing", "threat-hunting"]  # Development-optimized defaults, ML features disabled for security
 fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]

@@ -1,4 +1,3 @@
-use bb8_redis::{bb8, RedisConnectionManager, RedisMultiplexedConnection};
 use dashmap::DashMap;
 use deadpool_redis::{
     Config as RedisConfig, Connection as RedisConnection, Pool as RedisPool, Runtime,
@@ -134,8 +133,7 @@ pub struct PoolStatistics {
 /// Optimized connection pool manager with security-focused features
 pub struct OptimizedConnectionPool {
     redis_pool: RedisPool,
-    bb8_pool: Arc<bb8::Pool<RedisConnectionManager>>,
-    multiplexed_pool: Option<Arc<RwLock<Vec<RedisMultiplexedConnection>>>>,
+    multiplexed_pool: Option<Arc<RwLock<Vec<RedisConnection>>>>,
     config: ConnectionPoolConfig,
     circuit_breaker: Arc<RwLock<CircuitBreaker>>,
     statistics: Arc<RwLock<PoolStatistics>>,

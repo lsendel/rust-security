@@ -234,6 +234,7 @@ pub struct IntelligenceQuery {
     pub indicator_type: IndicatorType,
     pub context: Option<SecurityEvent>,
     pub priority: QueryPriority,
+    #[cfg(feature = "flume")]
     pub response_channel: Option<flume::Sender<ThreatIntelligenceMatch>>,
 }
 

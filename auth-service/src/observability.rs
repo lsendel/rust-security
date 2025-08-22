@@ -233,7 +233,18 @@ impl ObservabilityProvider {
     fn init_tracing_subscriber() -> SecurityResult<()> {
         use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-        let telemetry_layer = tracing_opentelemetry::layer()
+        #[allow(unused_variables)]
+        let telemetry_layer = {
+            #[cfg(feature = "opentelemetry" )]
+            {
+                tracing_opentelemetry::layer()
+            }
+            #[cfg(not(feature = "opentelemetry"))]
+            {
+                // Fallback no-op layer when feature not enabled
+                tracing_subscriber::layer::Identity::new()
+            }
+        }
             .with_tracer(global::tracer("auth-service"));
 
         let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -570,7 +581,7 @@ impl TracingUtils {
 /// Middleware for automatic HTTP request tracing
 pub async fn tracing_middleware<B>(
     req: axum::http::Request<B>,
-    next: axum::middleware::Next<B>,
+    next: axum::middleware::Next,
 ) -> axum::response::Response {
     let start_time = SystemTime::now();
     let method = req.method().to_string();

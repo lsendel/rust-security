@@ -37,6 +37,7 @@ pub enum SecurityEventType {
     SuspiciousActivity,
     MfaAttempt,
     MfaFailure,
+    SystemEvent,
     ConfigurationChange,
     SystemError,
     AccessDenied,

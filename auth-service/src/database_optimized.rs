@@ -1,4 +1,3 @@
-use bb8_redis::{bb8, RedisConnectionManager};
 use dashmap::DashMap;
 use deadpool_redis::{Config as RedisConfig, Pool as RedisPool, Runtime};
 use once_cell::sync::Lazy;

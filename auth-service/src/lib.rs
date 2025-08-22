@@ -2,6 +2,15 @@
 //! 
 //! Enterprise-grade authentication service with comprehensive security features.
 
+use std::sync::Arc;
+use crate::store::HybridStore;
+
+/// Application state shared across handlers
+#[derive(Clone)]
+pub struct AppState {
+    pub store: Arc<HybridStore>,
+}
+
 // Re-export core functionality
 pub use lib::core::*;
 
@@ -21,6 +30,7 @@ pub mod config_static;
 mod config_tests;
 pub mod crypto_unified;
 pub mod errors;
+pub use errors::{internal_error, AuthError};
 pub mod secrets_manager;
 pub mod sql_store;
 pub mod store;

@@ -8,6 +8,8 @@
 //! - Collaboration and communication tools
 //! - Reporting and analytics
 
+use async_trait::async_trait;
+
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use crate::soar_core::*;
@@ -20,6 +22,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, instrument, warn};
+use std::collections::VecDeque;
 use uuid::Uuid;
 
 /// Comprehensive case management system
@@ -643,6 +646,7 @@ pub struct AccessLoggingConfig {
 }
 
 /// Evidence storage trait
+#[async_trait]
 pub trait EvidenceStorage {
     async fn store_evidence(
         &self,
@@ -3168,6 +3172,7 @@ pub enum EventPriority {
 }
 
 /// Event processor trait
+#[async_trait]
 pub trait EventProcessor {
     async fn process_event(&self, event: &DispatchEvent) -> Result<(), ProcessingError>;
     fn get_supported_event_types(&self) -> Vec<UpdateType>;
@@ -3262,6 +3267,7 @@ pub struct CaseManagementMetrics {
 }
 
 /// Workflow client trait for integration
+#[async_trait]
 pub trait WorkflowClient {
     async fn trigger_workflow(
         &self,

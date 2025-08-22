@@ -4,11 +4,9 @@
 //! and network security policies following industry best practices.
 
 use rustls::{
-    Certificate, ClientConfig, PrivateKey, ServerConfig,
-    cipher_suite::{TLS13_AES_256_GCM_SHA384, TLS13_CHACHA20_POLY1305_SHA256},
-    version::{TLS12, TLS13},
-    SupportedCipherSuite, SupportedProtocolVersion,
+    ClientConfig, ServerConfig, SupportedCipherSuite, SupportedProtocolVersion,
 };
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{
     fs::File,
@@ -233,8 +231,8 @@ impl CertificateManager {
     }
     
     /// Check certificate expiration
-    fn validate_certificate_expiration(&self, cert: &Certificate, index: usize) -> SecurityResult<()> {
-        let parsed_cert = x509_parser::parse_x509_certificate(&cert.0)
+    fn validate_certificate_expiration(&self, cert: &CertificateDer, index: usize) -> SecurityResult<()> {
+        let parsed_cert = x509_parser::parse_x509_certificate(cert.as_ref())
             .map_err(|_| SecurityError::CryptographicFailure)?
             .1;
         
@@ -260,7 +258,7 @@ impl CertificateManager {
     }
     
     /// Validate certificate chain integrity
-    fn validate_chain_integrity(&self, _cert_chain: &[Certificate]) -> SecurityResult<()> {
+    fn validate_chain_integrity(&self, _cert_chain: &[CertificateDer]) -> SecurityResult<()> {
         // TODO: Implement full chain validation
         // This would include:
         // - Verifying signatures
@@ -395,8 +393,8 @@ pub fn security_headers() -> Vec<(&'static str, &'static str)> {
 
 fn convert_cipher_suites(suites: &[TlsCipherSuite]) -> Vec<SupportedCipherSuite> {
     suites.iter().map(|suite| match suite {
-        TlsCipherSuite::Tls13Aes256GcmSha384 => TLS13_AES_256_GCM_SHA384,
-        TlsCipherSuite::Tls13Chacha20Poly1305Sha256 => TLS13_CHACHA20_POLY1305_SHA256,
+        TlsCipherSuite::Tls13Aes256GcmSha384 => rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
+        TlsCipherSuite::Tls13Chacha20Poly1305Sha256 => rustls::cipher_suite::TLS13_CHACHA20_POLY1305_SHA256,
         TlsCipherSuite::Tls13Aes128GcmSha256 => rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
         TlsCipherSuite::Tls12EcdheEcdsaWithAes256GcmSha384 => rustls::cipher_suite::TLS12_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
         TlsCipherSuite::Tls12EcdheRsaWithAes256GcmSha384 => rustls::cipher_suite::TLS12_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
@@ -423,39 +421,30 @@ fn load_ca_certificates(ca_cert_path: Option<&str>) -> SecurityResult<rustls::Ro
             .map_err(|_| SecurityError::CryptographicFailure)?;
         
         for cert in ca_certs {
-            root_store.add(&Certificate(cert))
+            root_store.add(cert)
                 .map_err(|_| SecurityError::CryptographicFailure)?;
         }
     } else {
         // Use system root certificates
-        root_store.add_server_trust_anchors(
-            webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
-                rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-                    ta.subject,
-                    ta.spki,
-                    ta.name_constraints,
-                )
-            })
-        );
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     }
     
     Ok(root_store)
 }
 
-fn load_certificate_chain(cert_path: &str) -> SecurityResult<Vec<Certificate>> {
+fn load_certificate_chain(cert_path: &str) -> SecurityResult<Vec<CertificateDer>> {
     let cert_file = File::open(cert_path)
         .map_err(|_| SecurityError::Configuration)?;
     let mut cert_reader = BufReader::new(cert_file);
     let cert_chain = certs(&mut cert_reader)
         .map_err(|_| SecurityError::CryptographicFailure)?
         .into_iter()
-        .map(Certificate)
         .collect();
     
     Ok(cert_chain)
 }
 
-fn load_private_key(key_path: &str) -> SecurityResult<PrivateKey> {
+fn load_private_key(key_path: &str) -> SecurityResult<PrivateKeyDer> {
     let key_file = File::open(key_path)
         .map_err(|_| SecurityError::Configuration)?;
     let mut key_reader = BufReader::new(key_file);
@@ -464,13 +453,13 @@ fn load_private_key(key_path: &str) -> SecurityResult<PrivateKey> {
     
     keys.into_iter()
         .next()
-        .map(PrivateKey)
+        .map(PrivateKeyDer::from)
         .ok_or(SecurityError::CryptographicFailure)
 }
 
 fn load_client_cert_verifier(ca_cert_path: Option<&str>) -> SecurityResult<Arc<dyn rustls::server::ClientCertVerifier>> {
     let root_store = load_ca_certificates(ca_cert_path)?;
-    Ok(rustls::server::WebPkiClientVerifier::new(root_store, None))
+    Ok(rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store)).build().map_err(|_| SecurityError::CryptographicFailure)?)
 }
 
 fn asn1_time_to_system_time(asn1_time: x509_parser::time::ASN1Time) -> Option<SystemTime> {

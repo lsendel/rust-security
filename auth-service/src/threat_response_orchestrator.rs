@@ -1,4 +1,4 @@
-use crate::threat_types::*;
+use async_trait::async_trait;use crate::threat_types::*;
 use chrono::{DateTime, Duration, Utc};
 use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
@@ -357,7 +357,9 @@ pub enum NotificationPriority {
 }
 
 /// External integration trait
-pub trait ExternalIntegration {
+#[async_trait]
+#[async_trait]
+pub trait ExternalIntegration: Send + Sync {
     async fn execute_action(
         &self,
         action: &MitigationAction,
