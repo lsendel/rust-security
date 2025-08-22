@@ -1,10 +1,17 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-// Explicitly acknowledge unused dependencies that are part of future functionality
+// Explicitly acknowledge unused dependencies that are part of future functionality  
+use cedar_policy as _;
 use cedar_policy_core as _;
 use dotenvy as _;
+use once_cell as _;
+use prometheus as _;
+use serde as _;
+use serde_json as _;
+use thiserror as _;
 use tokio as _;
+use tower_http as _;
 use tracing_subscriber as _;
 
 use axum::{
