@@ -32,6 +32,8 @@ async fn spawn_auth_app() -> String {
     std::env::set_var("DISABLE_RATE_LIMIT", "1");
 
     let app = app(AppState {
+        store: Arc::new(auth_service::store::HybridStore::new().await),
+        session_store: Arc::new(auth_service::session_store::RedisSessionStore::new(None).await),
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
@@ -43,6 +45,17 @@ async fn spawn_auth_app() -> String {
             auth_service::backpressure::BackpressureState::new(
                 auth_service::backpressure::BackpressureConfig::default(),
             ),
+        ),
+        api_key_store: auth_service::api_key_store::ApiKeyStore::new(":memory:")
+            .await
+            .unwrap(),
+        jwks_manager: Arc::new(
+            auth_service::jwks_rotation::JwksManager::new(
+                auth_service::jwks_rotation::KeyRotationConfig::default(),
+                Arc::new(auth_service::jwks_rotation::InMemoryKeyStorage::new()),
+            )
+            .await
+            .unwrap(),
         ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });

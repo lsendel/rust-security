@@ -3,8 +3,6 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
-use std::time::Duration;
-use url::Url;
 use validator::Validate;
 
 // Raw configuration structure for legacy env loading
@@ -65,7 +63,7 @@ pub struct AppConfig {
     pub rate_limit_requests_per_minute: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, Default)]
 pub struct OidcProviders {
     pub google: Option<OidcProvider>,
     pub microsoft: Option<OidcProvider>,
@@ -239,16 +237,6 @@ impl Default for StoreConfig {
     }
 }
 
-impl Default for OidcProviders {
-    fn default() -> Self {
-        Self {
-            google: None,
-            microsoft: None,
-            github: None,
-        }
-    }
-}
-
 impl Default for SecurityConfig {
     fn default() -> Self {
         Self {
@@ -337,7 +325,7 @@ impl Default for ScimConfig {
 
 impl StoreConfig {
     pub fn from_env() -> Result<Self, anyhow::Error> {
-        let backend_str = env::var("STORE_BACKEND").unwrap_or_else(|_| "hybrid".to_string());
+        let backend_str = env::var("STORE_BACKEND").unwrap_or("hybrid".to_string());
         let backend = match backend_str.to_lowercase().as_str() {
             "sql" => StoreBackend::Sql,
             _ => StoreBackend::Hybrid,
@@ -414,7 +402,7 @@ impl AppConfig {
         }
 
         // Legacy fields for backward compatibility
-        config.jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "legacy".to_string());
+        config.jwt_secret = env::var("JWT_SECRET").unwrap_or("legacy".to_string());
         config.token_expiry_seconds = env::var("TOKEN_EXPIRY_SECONDS")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -436,9 +424,7 @@ impl AppConfig {
         let raw = envy::from_env::<RawConfig>()
             .context("Failed to parse configuration from environment")?;
 
-        let bind_addr = raw
-            .bind_addr
-            .unwrap_or_else(|| "127.0.0.1:8080".to_string());
+        let bind_addr = raw.bind_addr.unwrap_or("127.0.0.1:8080".to_string());
 
         // Validate bind address format
         if bind_addr.parse::<std::net::SocketAddr>().is_err() {
@@ -543,7 +529,7 @@ fn generate_default_secret() -> String {
 
     // Check if we're in production environment
     let is_production = env::var("ENVIRONMENT")
-        .unwrap_or_else(|_| "development".to_string())
+        .unwrap_or("development".to_string())
         .to_lowercase()
         == "production";
 
@@ -658,7 +644,7 @@ fn validate_secret_strength(secret: &str, secret_name: &str) -> Result<()> {
 /// Validates all secrets at startup
 pub fn validate_production_secrets() -> Result<()> {
     let is_production = env::var("ENVIRONMENT")
-        .unwrap_or_else(|_| "development".to_string())
+        .unwrap_or("development".to_string())
         .to_lowercase()
         == "production";
 

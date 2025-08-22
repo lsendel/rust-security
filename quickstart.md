@@ -1,115 +1,285 @@
+# Rust Security Platform - Quick Start Guide
+
+Get the Rust Security Platform up and running in just a few minutes!
+
+## 🚀 30-Second Demo
+
+The fastest way to see the platform in action:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/rust-security-platform.git
+cd rust-security-platform
+
+# Run the quick start script
+./scripts/setup/quick-start.sh
+
+# Select option 4 for demo mode
+# Visit http://localhost:8080 when ready
+```
+
+## 📋 Prerequisites
+
+Before you begin, ensure you have:
+
+- **Rust 1.75+** - Install via [rustup.rs](https://rustup.rs/)
+- **Docker & Docker Compose** - For containerized services
+- **Git** - For version control
+- **curl or wget** - For testing APIs
+
+### System Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **RAM** | 4GB | 8GB+ |
+| **CPU** | 2 cores | 4+ cores |
+| **Storage** | 10GB | 20GB+ |
+| **OS** | Linux, macOS, Windows WSL2 | Any modern OS |
+
+## 🏃‍♂️ Quick Start Options
+
+Choose your preferred setup method:
+
+### Option 1: Development Mode (Full Features)
+```bash
+./scripts/setup/quick-start.sh
+# Select option 1: Developer mode
+
+# Services will be available at:
+# • Auth Service: http://localhost:8080
+# • Policy Service: http://localhost:8081
+# • Grafana Dashboard: http://localhost:3000
+# • Prometheus Metrics: http://localhost:9090
+```
+
+### Option 2: Docker Compose (Recommended for Testing)
+```bash
+# Start all services with Docker
+docker-compose up -d
+
+# Check service health
+docker-compose ps
+
+# View logs
+docker-compose logs -f auth-service
+```
+
+### Option 3: Manual Setup (Advanced Users)
+```bash
+# Install dependencies
+cargo build --release
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your configuration
+
+# Start Redis
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+# Run the auth service
+cargo run --bin auth-service
+
+# Run the policy service
+cargo run --bin policy-service
+```
+
+## 🧪 Verify Your Installation
+
+### Health Check
+```bash
+# Check auth service
+curl http://localhost:8080/health
+
+# Expected response:
+# {"status":"healthy","service":"auth-service","version":"1.0.0"}
+
+# Check policy service
+curl http://localhost:8081/health
+```
+
+### OAuth Token Test
+```bash
+# Get an access token
+curl -X POST "http://localhost:8080/oauth/token" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=demo_client" \
+  -d "client_secret=demo_secret"
+
+# Expected response:
+# {
+#   "access_token": "your_access_token",
+#   "token_type": "Bearer",
+#   "expires_in": 3600
+# }
+```
+
+### JWT Introspection Test
+```bash
+# Introspect the token
+curl -X POST "http://localhost:8080/oauth/introspect" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d "token=YOUR_ACCESS_TOKEN"
+```
+
+## 🎛️ Configuration
+
+### Basic Configuration
+Edit your `.env` file:
+
+```bash
+# Client credentials (format: client_id:client_secret)
+CLIENT_CREDENTIALS=demo_client:demo_secret;admin_client:admin_secret
+
+# JWT settings
+JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
+
+# Redis connection
+REDIS_URL=redis://localhost:6379
+
+# Rate limiting
+RATE_LIMIT_REQUESTS_PER_MINUTE=60
+
+# Logging
+RUST_LOG=info,auth_service=debug
+```
+
+### Advanced Configuration
+For production settings, see:
+- [Configuration Guide](./docs/configuration/README.md)
+- [Security Configuration](./docs/security/SECURITY_CONFIGURATION.md)
+- [Production Deployment](./docs/deployment/PRODUCTION_DEPLOYMENT.md)
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Client Apps   │    │   Web Frontend  │    │   Mobile Apps   │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │      Auth Service         │
+                    │   (OAuth 2.0, OIDC)      │
+                    └─────────────┬─────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │    Policy Service         │
+                    │   (Cedar Policies)        │
+                    └─────────────┬─────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │     Redis Store           │
+                    │  (Sessions, Cache)        │
+                    └───────────────────────────┘
+```
+
+## 🔧 Common Issues & Solutions
+
+### Issue: Redis Connection Failed
+```bash
+# Solution: Start Redis
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+# Or check if Redis is running
+redis-cli ping
+```
+
+### Issue: Port Already in Use
+```bash
+# Find what's using the port
+lsof -i :8080
+
+# Kill the process
+kill -9 <PID>
+
+# Or use different ports in .env
+PORT=8090
+```
+
+### Issue: Compilation Errors
+```bash
+# Update Rust toolchain
+rustup update
+
+# Clean build cache
+cargo clean
+cargo build
+```
+
+### Issue: Permission Denied
+```bash
+# Make scripts executable
+chmod +x scripts/setup/quick-start.sh
+
+# Or run with bash
+bash scripts/setup/quick-start.sh
+```
+
+## 📊 Monitoring & Observability
+
+Access the built-in monitoring:
+
+- **Grafana Dashboards**: http://localhost:3000
+  - Username: `admin`
+  - Password: `admin`
+- **Prometheus Metrics**: http://localhost:9090
+- **Application Logs**: `docker-compose logs -f`
+
+### Key Metrics to Watch
+- Authentication latency (P95 < 50ms)
+- Token validation rate
+- Error rates
+- Redis connection health
+
+## 🧪 Testing the Platform
+
+### Unit Tests
+```bash
+# Run all tests
+cargo test
+
+# Run with coverage
+cargo test --all-features
+
+# Run specific service tests
+cargo test -p auth-service
+```
+
+### Integration Tests
+```bash
+# End-to-end tests
+./scripts/test/run-e2e-tests.sh
+
+# Security tests
+./scripts/test/run-security-tests.sh
+
+# Performance tests
+./scripts/test/run-load-tests.sh
+```
+
+## 🚀 Next Steps
+
+1. **Explore the API**: Check out the [API Documentation](./docs/api/README.md)
+2. **Security Setup**: Review [Security Guidelines](./SECURITY.md)
+3. **Production Deployment**: See [Deployment Guide](./docs/deployment/README.md)
+4. **Integration**: Learn about [Integrations](./docs/integrations/README.md)
+5. **Contributing**: Read [Contributing Guidelines](./CONTRIBUTING.md)
+
+## 📚 Additional Resources
+
+- **Architecture Deep Dive**: [docs/architecture/README.md](./docs/architecture/README.md)
+- **Security Features**: [docs/security/README.md](./docs/security/README.md)
+- **Performance Tuning**: [docs/performance/README.md](./docs/performance/README.md)
+- **Troubleshooting**: [docs/troubleshooting/README.md](./docs/troubleshooting/README.md)
+
+## 💬 Getting Help
+
+- **Documentation**: Complete guides in the `docs/` directory
+- **Issues**: Report bugs on [GitHub Issues](https://github.com/your-org/rust-security-platform/issues)
+- **Discussions**: Community support on [GitHub Discussions](https://github.com/your-org/rust-security-platform/discussions)
+- **Security**: Email security@rust-security-platform.com for security issues
+
 ---
-title: Quickstart for GitHub Actions
-intro: 'Try out the core features of {% data variables.product.prodname_actions %} in minutes.'
-allowTitleToDifferFromFilename: true
-redirect_from:
-  - /actions/getting-started-with-github-actions/starting-with-preconfigured-workflow-templates
-  - /actions/quickstart
-  - /actions/getting-started-with-github-actions
-  - /actions/writing-workflows/quickstart
-versions:
-  fpt: '*'
-  ghes: '*'
-  ghec: '*'
-type: quick_start
-topics:
-  - Fundamentals
-shortTitle: Quickstart
----
 
-{% data reusables.actions.enterprise-github-hosted-runners %}
-
-## Introduction
-
-{% data reusables.actions.about-actions %} You can create workflows that run tests whenever you push a change to your repository, or that deploy merged pull requests to production.
-
-This quickstart guide shows you how to use the user interface of {% data variables.product.github %} to add a workflow that demonstrates some of the essential features of {% data variables.product.prodname_actions %}.
-
-{% data reusables.actions.workflow-templates-for-more-information %}
-
-For an overview of {% data variables.product.prodname_actions %} workflows, see [AUTOTITLE](/actions/using-workflows/about-workflows). If you want to learn about the various components that make up {% data variables.product.prodname_actions %}, see [AUTOTITLE](/actions/learn-github-actions/understanding-github-actions).
-
-## Using workflow templates
-
-{% data reusables.actions.workflow-template-overview %}
-
-{% data reusables.actions.workflow-templates-repo-link %}
-
-## Prerequisites
-
-This guide assumes that:
-* You have at least a basic knowledge of how to use {% data variables.product.prodname_dotcom %}. If you don't, you'll find it helpful to read some of the articles in the documentation for repositories and pull requests first. For example, see [AUTOTITLE](/repositories/creating-and-managing-repositories/quickstart-for-repositories), [AUTOTITLE](/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-branches), and [AUTOTITLE](/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests).
-* You have a repository on {% data variables.product.github %} where you can add files.
-* You have access to {% data variables.product.prodname_actions %}.
-
-  > [!NOTE] If the **{% octicon "play" aria-hidden="true" aria-label="play" %} Actions** tab is not displayed under the name of your repository on {% data variables.product.prodname_dotcom %}, it may be because Actions is disabled for the repository. For more information, see [AUTOTITLE](/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository).
-
-## Creating your first workflow
-
-1. In your repository on {% data variables.product.github %}, create a workflow file called `rust-linter.yml` in the `.github/workflows` directory. To do this:
-   * If the `.github/workflows` directory already exists, navigate to that directory on {% data variables.product.prodname_dotcom %}, click **Add file**, then click **Create new file**, and name the file `rust-linter.yml`.
-   * If your repository doesn't have a `.github/workflows` directory, go to the main page of the repository on {% data variables.product.prodname_dotcom %}, click **Add file**, then click **Create new file**, and name the file `.github/workflows/rust-linter.yml`. This creates the `.github` and `workflows` directories and the `rust-linter.yml` file in a single step.
-
-   > [!NOTE]
-   > For {% data variables.product.prodname_dotcom %} to discover any {% data variables.product.prodname_actions %} workflows in your repository, you must save the workflow files in a directory called `.github/workflows`.
-   >
-   > You can give the workflow file any name you like, but you must use `.yml` or `.yaml` as the file name extension. YAML is a markup language that's commonly used for configuration files.
-
-1. Copy the following YAML contents into the `rust-linter.yml` file:
-
-   ```yaml copy
-   name: Rust linter
-   run-name: {% raw %}${{ github.actor }}{% endraw %} is running a Rust linter 🦀
-   on: [push]
-   jobs:
-     Lint-Rust-Code:
-       runs-on: ubuntu-latest
-       steps:
-         - name: Check out repository code
-           uses: {% data reusables.actions.action-checkout %}
-         - name: Install Rust toolchain
-           uses: actions-rs/toolchain@v1
-           with:
-             toolchain: stable
-             components: clippy
-         - name: Run clippy
-           run: cargo clippy -- -D warnings
-   ```
-
-   This workflow uses [cargo clippy](https://github.com/rust-lang/rust-clippy), a linter for Rust, to check for common mistakes in the code. It is triggered on every push to the repository. The workflow has one job, `Lint-Rust-Code`, which runs on an Ubuntu runner. The job checks out the code, installs the Rust toolchain with clippy, and then runs clippy. You can learn more about the syntax of workflow files in [AUTOTITLE](/actions/using-workflows/about-workflows#understanding-the-workflow-file), and for an explanation of {% data variables.product.prodname_actions %} contexts, such as `{% raw %}${{ github.actor }}{% endraw %}`, see [AUTOTITLE](/actions/learn-github-actions/contexts).
-
-1. Click **Commit changes**.
-1. In the "Propose changes" dialog, select either the option to commit to the default branch or the option to create a new branch and start a pull request. Then click **Commit changes** or **Propose changes**.
-
-   ![Screenshot of the "Propose changes" dialog with the areas mentioned highlighted with an orange outline.](/assets/images/help/repository/actions-quickstart-commit-new-file.png)
-
-Committing the workflow file to a branch in your repository triggers the `push` event and runs your workflow.
-
-If you chose to start a pull request, you can continue and create the pull request, but this is not necessary for the purposes of this quickstart because the commit has still been made to a branch and will trigger the new workflow.
-
-## Viewing your workflow results
-
-{% data reusables.repositories.navigate-to-repo %}
-{% data reusables.repositories.actions-tab %}
-1. In the left sidebar, click the workflow you want to display, in this example "Rust linter."
-
-   ![Screenshot of the "Actions" page. The name of the example workflow, "Rust linter", is highlighted by a dark orange outline.](/assets/images/help/repository/actions-quickstart-workflow-sidebar.png)
-
-1. From the list of workflow runs, click the name of the run you want to see, in this example "USERNAME is testing out GitHub Actions."
-1. In the left sidebar of the workflow run page, under **Jobs**, click the **Lint-Rust-Code** job.
-
-   ![Screenshot of the "Workflow run" page. In the left sidebar, the "Lint-Rust-Code" job is highlighted with a dark orange outline.](/assets/images/help/repository/actions-quickstart-job.png)
-
-1. The log shows you how each of the steps was processed. Expand any of the steps to view its details.
-
-   ![Screenshot of steps run by the workflow.](/assets/images/help/repository/actions-quickstart-logs.png)
-
-   For example, you can see the list of files in your repository:
-
-   ![Screenshot of the "List files in the repository" step expanded to show the log output. The output for the step is highlighted with an orange outline.](/assets/images/help/repository/actions-quickstart-log-detail.png)
-
-The example workflow you just added is triggered each time code is pushed to the branch, and shows you how {% data variables.product.prodname_actions %} can work with the contents of your repository. For an in-depth tutorial, see [AUTOTITLE](/actions/learn-github-actions/understanding-github-actions).
-
-## Next steps
-
-{% data reusables.actions.onboarding-next-steps %}
+**🎉 Congratulations!** You now have the Rust Security Platform running locally. Start building secure authentication into your applications!

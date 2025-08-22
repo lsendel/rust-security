@@ -13,8 +13,7 @@ use axum::{
 };
 use once_cell::sync::Lazy;
 use prometheus::{
-    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts,
-    Registry, TextEncoder,
+    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
 use tracing::{debug, error};
 

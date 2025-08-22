@@ -428,10 +428,10 @@ impl StepExecutor for TokenRevokeExecutor {
                 .with_target("soar_playbook".to_string())
                 .with_outcome("success".to_string())
                 .with_reason("Token revocation step executed successfully".to_string())
-                .with_user_id(user_id.clone().unwrap_or_else(|| "all".to_string()))
+                .with_user_id(user_id.clone().unwrap_or("all".to_string()))
                 .with_detail(
                     "token_type".to_string(),
-                    token_type.clone().unwrap_or_else(|| "all".to_string()),
+                    token_type.clone().unwrap_or("all".to_string()),
                 )
                 .with_detail("revoked_count".to_string(), revoked_count),
             );

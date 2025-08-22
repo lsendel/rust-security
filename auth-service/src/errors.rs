@@ -1,6 +1,4 @@
-use crate::pii_protection::{
-    redact_error, redact_log, redact_pii_spi, DataClassification, PiiSpiRedactor,
-};
+use crate::pii_protection::{redact_error, redact_log, PiiSpiRedactor};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -554,7 +552,7 @@ impl From<anyhow::Error> for AuthError {
 
 /// Redact client ID to prevent information leakage while preserving some utility
 fn redact_client_id(client_id: &str) -> String {
-    let redactor = PiiSpiRedactor::new();
+    let _redactor = PiiSpiRedactor::new();
     // Use partial redaction for client IDs to maintain some utility for debugging
     if client_id.len() <= 8 {
         client_id.to_string()
@@ -564,6 +562,7 @@ fn redact_client_id(client_id: &str) -> String {
 }
 
 /// Enhanced PII/SPI redaction for error contexts
+#[allow(dead_code)]
 fn redact_error_with_context(input: &str, context: &str) -> String {
     let redactor = PiiSpiRedactor::new();
     let redacted = redactor.redact_error_message(input);

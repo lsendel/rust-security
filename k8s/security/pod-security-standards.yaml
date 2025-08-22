@@ -8,49 +8,70 @@ metadata:
     pod-security.kubernetes.io/warn: restricted
 
 ---
+# Pod Security Standards Configuration
+# Using namespace labels for Pod Security Standards (PSS) enforcement
+# This replaces the deprecated PodSecurityPolicy
 apiVersion: v1
-kind: SecurityContext
+kind: Namespace
 metadata:
-  name: auth-service-security-context
-spec:
-  runAsNonRoot: true
-  runAsUser: 10001
-  runAsGroup: 10001
-  fsGroup: 10001
-  allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
-  capabilities:
-    drop:
-    - ALL
-  seccompProfile:
-    type: RuntimeDefault
+  name: rust-security-secure
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    # Additional security labels
+    security.policy/level: high
+    security.policy/category: restricted
 
 ---
-apiVersion: policy/v1beta1
-kind: PodSecurityPolicy
+# Security Context Template ConfigMap for reference
+apiVersion: v1
+kind: ConfigMap
 metadata:
-  name: auth-service-psp
-spec:
-  privileged: false
-  allowPrivilegeEscalation: false
-  requiredDropCapabilities:
-    - ALL
-  volumes:
-    - 'configMap'
-    - 'emptyDir'
-    - 'projected'
-    - 'secret'
-    - 'downwardAPI'
-    - 'persistentVolumeClaim'
-  runAsUser:
-    rule: 'MustRunAsNonRoot'
-  runAsGroup:
-    rule: 'MustRunAs'
-    ranges:
-      - min: 10000
-        max: 65535
-  seLinux:
-    rule: 'RunAsAny'
-  fsGroup:
-    rule: 'RunAsAny'
-  readOnlyRootFilesystem: true
+  name: security-context-template
+  namespace: rust-security
+data:
+  template.yaml: |
+    # Template for secure container security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+        - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    
+    # Template for secure pod security context
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      runAsGroup: 10001
+      fsGroup: 10001
+      seccompProfile:
+        type: RuntimeDefault
+      sysctls: []
+
+---
+# Network Security Policy Template
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: network-security-template
+  namespace: rust-security
+data:
+  template.yaml: |
+    # Template for restrictive network policy
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: default-deny-all
+      namespace: rust-security
+    spec:
+      podSelector: {}
+      policyTypes:
+      - Ingress
+      - Egress

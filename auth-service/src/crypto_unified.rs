@@ -35,32 +35,26 @@ pub enum UnifiedCryptoError {
 }
 
 /// Supported symmetric encryption algorithms
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum SymmetricAlgorithm {
     /// AES-256-GCM - Hardware accelerated where available
+    #[default]
     Aes256Gcm,
     /// ChaCha20-Poly1305 - Pure software implementation, good for environments without AES-NI
     ChaCha20Poly1305,
 }
 
-impl Default for SymmetricAlgorithm {
-    fn default() -> Self {
-        // Default to AES-256-GCM for hardware acceleration
-        Self::Aes256Gcm
-    }
-}
-
 impl SymmetricAlgorithm {
     fn key_length(&self) -> usize {
         match self {
-            Self::Aes256Gcm => 32,      // 256 bits
+            Self::Aes256Gcm => 32,        // 256 bits
             Self::ChaCha20Poly1305 => 32, // 256 bits
         }
     }
 
     fn nonce_length(&self) -> usize {
         match self {
-            Self::Aes256Gcm => 12,       // 96 bits
+            Self::Aes256Gcm => 12,        // 96 bits
             Self::ChaCha20Poly1305 => 12, // 96 bits
         }
     }
@@ -124,9 +118,9 @@ impl UnifiedCryptoManager {
     /// Create manager from environment variable key
     pub fn from_env(algorithm: SymmetricAlgorithm) -> Result<Self, UnifiedCryptoError> {
         if let Ok(key_hex) = std::env::var("UNIFIED_ENCRYPTION_KEY") {
-            let key_bytes = hex::decode(key_hex)
-                .map_err(|_| UnifiedCryptoError::InvalidKeyFormat)?;
-            
+            let key_bytes =
+                hex::decode(key_hex).map_err(|_| UnifiedCryptoError::InvalidKeyFormat)?;
+
             if key_bytes.len() != algorithm.key_length() {
                 return Err(UnifiedCryptoError::InvalidKeyFormat);
             }
@@ -179,21 +173,25 @@ impl UnifiedCryptoManager {
     pub async fn encrypt(&self, plaintext: &[u8]) -> Result<EncryptedData, UnifiedCryptoError> {
         let current_key = self.current_key.read().await;
         let algorithm = current_key.algorithm;
-        
+
         // Generate random nonce
         let mut nonce_bytes = vec![0u8; algorithm.nonce_length()];
-        self.rng.fill(&mut nonce_bytes)
+        self.rng
+            .fill(&mut nonce_bytes)
             .map_err(|_| UnifiedCryptoError::RandomGenerationFailed)?;
-        
+
         let nonce = Nonce::try_assume_unique_for_key(&nonce_bytes)
             .map_err(|_| UnifiedCryptoError::EncryptionFailed("Invalid nonce".to_string()))?;
 
         // Create mutable copy for in-place encryption
         let mut in_out = plaintext.to_vec();
-        
-        current_key.key
+
+        current_key
+            .key
             .seal_in_place_append_tag(nonce, Aad::empty(), &mut in_out)
-            .map_err(|e| UnifiedCryptoError::EncryptionFailed(format!("Ring encryption failed: {:?}", e)))?;
+            .map_err(|e| {
+                UnifiedCryptoError::EncryptionFailed(format!("Ring encryption failed: {:?}", e))
+            })?;
 
         Ok(EncryptedData {
             ciphertext: in_out,
@@ -209,7 +207,8 @@ impl UnifiedCryptoManager {
             self.current_key.read().await.key.clone()
         } else {
             let old_keys = self.old_keys.read().await;
-            old_keys.get(&encrypted.key_version)
+            old_keys
+                .get(&encrypted.key_version)
                 .ok_or(UnifiedCryptoError::KeyNotFound(encrypted.key_version))?
                 .key
                 .clone()
@@ -220,10 +219,12 @@ impl UnifiedCryptoManager {
 
         // Create mutable copy for in-place decryption
         let mut ciphertext = encrypted.ciphertext.clone();
-        
+
         let plaintext = key
             .open_in_place(nonce, Aad::empty(), &mut ciphertext)
-            .map_err(|e| UnifiedCryptoError::DecryptionFailed(format!("Ring decryption failed: {:?}", e)))?;
+            .map_err(|e| {
+                UnifiedCryptoError::DecryptionFailed(format!("Ring decryption failed: {:?}", e))
+            })?;
 
         Ok(plaintext.to_vec())
     }
@@ -269,7 +270,7 @@ impl UnifiedCryptoManager {
         let cutoff = chrono::Utc::now() - max_age;
 
         old_keys.retain(|_, key| key.created_at > cutoff);
-        
+
         tracing::info!(
             "Cleaned up old encryption keys, {} keys remain",
             old_keys.len()
@@ -282,11 +283,13 @@ pub struct UnifiedHasher;
 
 impl UnifiedHasher {
     /// SHA-1 hash (for legacy use only - TOTP compatibility)
-    /// 
+    ///
     /// ⚠️  WARNING: SHA-1 is cryptographically broken for general use.
     /// This should only be used for TOTP compatibility where required by RFC 6238.
     pub fn sha1_legacy(data: &[u8]) -> Vec<u8> {
-        digest::digest(&SHA1_FOR_LEGACY_USE_ONLY, data).as_ref().to_vec()
+        digest::digest(&SHA1_FOR_LEGACY_USE_ONLY, data)
+            .as_ref()
+            .to_vec()
     }
 
     /// SHA-256 hash
@@ -314,7 +317,7 @@ pub struct UnifiedHmac;
 
 impl UnifiedHmac {
     /// HMAC-SHA1 (for legacy use only - TOTP compatibility)
-    /// 
+    ///
     /// ⚠️  WARNING: SHA-1 is cryptographically broken for general use.
     /// This should only be used for TOTP compatibility where required by RFC 6238.
     pub fn hmac_sha1_legacy(key: &[u8], data: &[u8]) -> Vec<u8> {
@@ -438,13 +441,13 @@ mod tests {
     #[test]
     fn test_unified_hashing() {
         let data = b"test data";
-        
+
         let hash256 = UnifiedHasher::sha256(data);
         let hash512 = UnifiedHasher::sha512(data);
-        
+
         assert_eq!(hash256.len(), 32); // SHA-256 output length
         assert_eq!(hash512.len(), 64); // SHA-512 output length
-        
+
         // Same input should produce same hash
         let hash256_again = UnifiedHasher::sha256(data);
         assert_eq!(hash256, hash256_again);
@@ -454,20 +457,20 @@ mod tests {
     fn test_unified_hmac() {
         let key = b"secret_key";
         let data = b"test data";
-        
+
         let hmac1 = UnifiedHmac::hmac_sha1_legacy(key, data);
         let hmac256 = UnifiedHmac::hmac_sha256(key, data);
         let hmac512 = UnifiedHmac::hmac_sha512(key, data);
-        
-        assert_eq!(hmac1.len(), 20);  // HMAC-SHA1 output length
+
+        assert_eq!(hmac1.len(), 20); // HMAC-SHA1 output length
         assert_eq!(hmac256.len(), 32); // HMAC-SHA256 output length
         assert_eq!(hmac512.len(), 64); // HMAC-SHA512 output length
-        
+
         // Verification should work
         assert!(UnifiedHmac::verify_hmac_sha1_legacy(key, data, &hmac1));
         assert!(UnifiedHmac::verify_hmac_sha256(key, data, &hmac256));
         assert!(UnifiedHmac::verify_hmac_sha512(key, data, &hmac512));
-        
+
         // Wrong key should fail verification
         let wrong_key = b"wrong_key";
         assert!(!UnifiedHmac::verify_hmac_sha256(wrong_key, data, &hmac256));
@@ -477,11 +480,11 @@ mod tests {
     fn test_unified_random() {
         let bytes1 = UnifiedRandom::generate_bytes(32).unwrap();
         let bytes2 = UnifiedRandom::generate_bytes(32).unwrap();
-        
+
         assert_eq!(bytes1.len(), 32);
         assert_eq!(bytes2.len(), 32);
         assert_ne!(bytes1, bytes2); // Should be different
-        
+
         let key = UnifiedRandom::generate_key().unwrap();
         assert_eq!(key.len(), 32);
     }
@@ -491,16 +494,16 @@ mod tests {
         // Test that we can't decrypt AES data with ChaCha manager and vice versa
         let aes_manager = UnifiedCryptoManager::new_aes().unwrap();
         let chacha_manager = UnifiedCryptoManager::new_chacha().unwrap();
-        
+
         let plaintext = b"test data";
-        
+
         let aes_encrypted = aes_manager.encrypt(plaintext).await.unwrap();
         let chacha_encrypted = chacha_manager.encrypt(plaintext).await.unwrap();
-        
+
         // Each should decrypt its own
         assert!(aes_manager.decrypt(&aes_encrypted).await.is_ok());
         assert!(chacha_manager.decrypt(&chacha_encrypted).await.is_ok());
-        
+
         // But not the other's (will fail due to key version mismatch)
         assert!(aes_manager.decrypt(&chacha_encrypted).await.is_err());
         assert!(chacha_manager.decrypt(&aes_encrypted).await.is_err());

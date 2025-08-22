@@ -8,11 +8,9 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::Lazy;
-use prometheus::{
-    Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry,
-};
+use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 /// Business metrics registry for auth service
 pub struct BusinessMetricsRegistry {

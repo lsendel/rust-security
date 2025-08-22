@@ -4,23 +4,12 @@ use crate::resilient_store::ResilientRedisConfig;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ResilienceConfig {
     pub redis: ResilientRedisConfig,
     pub oidc_providers: OidcProviderResilienceConfig,
     pub default_http: ResilientHttpConfig,
     pub external_apis: ExternalApiResilienceConfig,
-}
-
-impl Default for ResilienceConfig {
-    fn default() -> Self {
-        Self {
-            redis: ResilientRedisConfig::default(),
-            oidc_providers: OidcProviderResilienceConfig::default(),
-            default_http: ResilientHttpConfig::default(),
-            external_apis: ExternalApiResilienceConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

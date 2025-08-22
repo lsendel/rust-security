@@ -3,7 +3,12 @@
 //! Contains shared types, constants, metrics, and API definitions for authentication and security.
 //! All public items should be documented for maintainability and security.
 
+// Import dependencies available in production
+use futures as _;
+use tracing_subscriber as _;
+
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
 
 use crate::pii_protection::redact_log;
 
@@ -19,7 +24,6 @@ use base64::Engine as _;
 use once_cell::sync::Lazy;
 use prometheus::{Encoder, IntCounter, Registry, TextEncoder};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -89,7 +93,10 @@ async fn metrics_handler() -> Response {
 // Core modules
 pub mod config;
 pub mod config_endpoints;
+pub mod config_migration;
 pub mod config_reload;
+pub mod config_static;
+mod config_tests;
 pub mod crypto_unified;
 pub mod errors;
 pub mod secrets_manager;
@@ -265,26 +272,29 @@ pub async fn validate_jwt_with_jwks(
     token: &str,
 ) -> Result<enhanced_jwt_validation::JwtValidationResult, AuthError> {
     // Decode the JWT header to get the kid
-    let header = jsonwebtoken::decode_header(token)
-        .map_err(|e| AuthError::InvalidToken {
-            reason: format!("Invalid JWT header: {}", e),
-        })?;
+    let header = jsonwebtoken::decode_header(token).map_err(|e| AuthError::InvalidToken {
+        reason: format!("Invalid JWT header: {}", e),
+    })?;
 
     let kid = header.kid.ok_or_else(|| AuthError::InvalidToken {
         reason: "Missing kid in JWT header".to_string(),
     })?;
 
     // Get the decoding key from JWKS manager
-    let decoding_key = state.jwks_manager.get_decoding_key(&kid).await
+    let decoding_key = state
+        .jwks_manager
+        .get_decoding_key(&kid)
+        .await
         .map_err(|e| AuthError::InvalidToken {
             reason: format!("Failed to get decoding key: {}", e),
         })?;
 
     // Create enhanced validator with environment-based configuration
-    let validator = enhanced_jwt_validation::EnhancedJwtValidator::from_env()
-        .map_err(|e| AuthError::InvalidToken {
+    let validator = enhanced_jwt_validation::EnhancedJwtValidator::from_env().map_err(|e| {
+        AuthError::InvalidToken {
             reason: format!("Failed to create JWT validator: {}", e),
-        })?;
+        }
+    })?;
 
     // Perform comprehensive validation
     validator.validate_token(token, &decoding_key).await
@@ -296,25 +306,29 @@ pub async fn validate_oauth_access_token(
     token: &str,
 ) -> Result<enhanced_jwt_validation::JwtValidationResult, AuthError> {
     // Decode the JWT header to get the kid
-    let header = jsonwebtoken::decode_header(token)
-        .map_err(|e| AuthError::InvalidToken {
-            reason: format!("Invalid JWT header: {}", e),
-        })?;
+    let header = jsonwebtoken::decode_header(token).map_err(|e| AuthError::InvalidToken {
+        reason: format!("Invalid JWT header: {}", e),
+    })?;
 
     let kid = header.kid.ok_or_else(|| AuthError::InvalidToken {
         reason: "Missing kid in JWT header".to_string(),
     })?;
 
     // Get the decoding key from JWKS manager
-    let decoding_key = state.jwks_manager.get_decoding_key(&kid).await
+    let decoding_key = state
+        .jwks_manager
+        .get_decoding_key(&kid)
+        .await
         .map_err(|e| AuthError::InvalidToken {
             reason: format!("Failed to get decoding key: {}", e),
         })?;
 
     // Create OAuth-specific validator
-    let validator = enhanced_jwt_validation::create_oauth_access_token_validator()
-        .map_err(|e| AuthError::InvalidToken {
-            reason: format!("Failed to create OAuth validator: {}", e),
+    let validator =
+        enhanced_jwt_validation::create_oauth_access_token_validator().map_err(|e| {
+            AuthError::InvalidToken {
+                reason: format!("Failed to create OAuth validator: {}", e),
+            }
         })?;
 
     // Perform OAuth-specific validation
@@ -327,26 +341,29 @@ pub async fn validate_id_token(
     token: &str,
 ) -> Result<enhanced_jwt_validation::JwtValidationResult, AuthError> {
     // Decode the JWT header to get the kid
-    let header = jsonwebtoken::decode_header(token)
-        .map_err(|e| AuthError::InvalidToken {
-            reason: format!("Invalid JWT header: {}", e),
-        })?;
+    let header = jsonwebtoken::decode_header(token).map_err(|e| AuthError::InvalidToken {
+        reason: format!("Invalid JWT header: {}", e),
+    })?;
 
     let kid = header.kid.ok_or_else(|| AuthError::InvalidToken {
         reason: "Missing kid in JWT header".to_string(),
     })?;
 
     // Get the decoding key from JWKS manager
-    let decoding_key = state.jwks_manager.get_decoding_key(&kid).await
+    let decoding_key = state
+        .jwks_manager
+        .get_decoding_key(&kid)
+        .await
         .map_err(|e| AuthError::InvalidToken {
             reason: format!("Failed to get decoding key: {}", e),
         })?;
 
     // Create ID token validator
-    let validator = enhanced_jwt_validation::create_id_token_validator()
-        .map_err(|e| AuthError::InvalidToken {
+    let validator = enhanced_jwt_validation::create_id_token_validator().map_err(|e| {
+        AuthError::InvalidToken {
             reason: format!("Failed to create ID token validator: {}", e),
-        })?;
+        }
+    })?;
 
     // Perform ID token validation
     validator.validate_token(token, &decoding_key).await
@@ -355,9 +372,9 @@ pub async fn validate_id_token(
 /// Create a JWKS manager with the appropriate storage backend
 pub async fn create_jwks_manager() -> Result<Arc<crate::jwks_rotation::JwksManager>, AuthError> {
     let config = crate::jwks_rotation::KeyRotationConfig::default();
-    
+
     // Try to use Redis if available, fallback to in-memory
-    let storage: Arc<dyn crate::jwks_rotation::KeyStorage> = 
+    let storage: Arc<dyn crate::jwks_rotation::KeyStorage> =
         if let Ok(redis_url) = std::env::var("REDIS_URL") {
             match crate::jwks_rotation::RedisKeyStorage::new(&redis_url) {
                 Ok(redis_storage) => {
@@ -365,7 +382,10 @@ pub async fn create_jwks_manager() -> Result<Arc<crate::jwks_rotation::JwksManag
                     Arc::new(redis_storage)
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to initialize Redis storage, falling back to in-memory: {:?}", e);
+                    tracing::warn!(
+                        "Failed to initialize Redis storage, falling back to in-memory: {:?}",
+                        e
+                    );
                     Arc::new(crate::jwks_rotation::InMemoryKeyStorage::new())
                 }
             }
@@ -561,7 +581,7 @@ async fn extract_user_from_token(
     }
 
     // Get token record and validate
-    let record =
+    let _record =
         state
             .store
             .get_token_record(token)
@@ -911,6 +931,7 @@ pub async fn invalidate_user_sessions_endpoint(
 }
 
 use crate::api_key_store::ApiKeyStore;
+use crate::store::TokenStore;
 use common::{Store, TokenRecord};
 
 #[derive(Clone)]
@@ -923,6 +944,8 @@ pub struct AppState {
     pub backpressure_state: Arc<crate::backpressure::BackpressureState>,
     pub api_key_store: ApiKeyStore,
     pub jwks_manager: Arc<crate::jwks_rotation::JwksManager>,
+    pub token_store: TokenStore,
+    pub authorization_codes: Arc<RwLock<HashMap<String, String>>>,
 }
 
 // IntrospectionRecord is now common::TokenRecord, used by the Store trait.
@@ -1026,11 +1049,11 @@ pub async fn authorize_check(
         });
     }
 
-    let (principal, mut context) = if auth_header.starts_with("Bearer ") {
+    let (principal, _context) = if auth_header.starts_with("Bearer ") {
         // JWT-based authentication
         let token = auth_header.strip_prefix("Bearer ").unwrap();
         let rec_option = state.store.get_token_record(token).await?;
-        let rec = rec_option.unwrap_or_else(|| TokenRecord {
+        let rec = rec_option.unwrap_or(TokenRecord {
             active: false,
             sub: None,
             client_id: None,
@@ -1045,7 +1068,7 @@ pub async fn authorize_check(
                 reason: "inactive".to_string(),
             });
         }
-        let principal_id = rec.sub.clone().unwrap_or_else(|| "anonymous".to_string());
+        let principal_id = rec.sub.clone().unwrap_or("anonymous".to_string());
         let principal = serde_json::json!({
             "type": "User",
             "id": principal_id,
@@ -1095,7 +1118,7 @@ pub async fn authorize_check(
     };
 
     // Context: merge provided context or default empty object
-    let mut context = req.context.unwrap_or_else(|| serde_json::json!({}));
+    let mut context = req.context.unwrap_or(serde_json::json!({}));
     // Surface mfa flags for policy step-up decisions
     if let Some(required) = req.mfa_required {
         context["mfa_required"] = serde_json::json!(required);
@@ -1104,7 +1127,7 @@ pub async fn authorize_check(
         context["mfa_verified"] = serde_json::json!(verified);
     } else {
         // If not provided, attempt to resolve from token store (ephemeral session flag)
-        let auth = headers
+        let _auth = headers
             .get(axum::http::header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
@@ -1185,7 +1208,7 @@ async fn evaluate_policy_remote(
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        .unwrap_or(uuid::Uuid::new_v4().to_string());
 
     let payload = PolicyAuthorizeRequest {
         request_id,
@@ -1530,7 +1553,7 @@ pub async fn introspect(
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        .unwrap_or(uuid::Uuid::new_v4().to_string());
 
     // Input validation
     if let Err(e) = crate::security::validate_token_input(&body.token) {
@@ -1591,7 +1614,7 @@ pub async fn introspect(
 
     event = event.with_request_id(request_id);
 
-    SecurityLogger::log_event(&mut event);
+    SecurityLogger::log_event(&event);
 
     // Keep backward compatibility with old audit log
     audit(
@@ -1672,7 +1695,7 @@ pub async fn oauth_authorize(
     if let Err(validation_error) = validation_result {
         // Log security violation
         SecurityLogger::log_event(
-            &mut SecurityEvent::new(
+            &SecurityEvent::new(
                 SecurityEventType::SecurityViolation,
                 SecuritySeverity::Critical,
                 "auth-service".to_string(),
@@ -1698,7 +1721,7 @@ pub async fn oauth_authorize(
             if method == "plain" {
                 // Log potential downgrade attack attempt
                 SecurityLogger::log_event(
-                    &mut SecurityEvent::new(
+                    &SecurityEvent::new(
                         SecurityEventType::SecurityViolation,
                         SecuritySeverity::High,
                         "auth-service".to_string(),
@@ -1805,7 +1828,7 @@ pub async fn oauth_authorize(
         event = event.with_request_id(request_id.to_string());
     }
 
-    SecurityLogger::log_event(&mut event);
+    SecurityLogger::log_event(&event);
 
     audit(
         "authorization_code_issued",
@@ -1904,7 +1927,7 @@ pub async fn issue_token(
     State(state): State<AppState>,
     Form(form): Form<TokenRequest>,
 ) -> Result<Json<TokenResponse>, AuthError> {
-    use crate::metrics::{MetricsHelper, METRICS};
+    use crate::metrics::METRICS;
 
     // Start timing token issuance
     let start_time = std::time::Instant::now();
@@ -1926,7 +1949,7 @@ pub async fn issue_token(
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        .unwrap_or(uuid::Uuid::new_v4().to_string());
 
     match form.grant_type.as_str() {
         "client_credentials" => {
@@ -2497,7 +2520,7 @@ pub async fn userinfo(
         event = event.with_request_id(request_id.to_string());
     }
 
-    SecurityLogger::log_event(&mut event);
+    SecurityLogger::log_event(&event);
 
     // pull ephemeral mfa_verified flag if Redis-backed store is used (optional)
     let mfa_verified = false; // kept simple; policy step-up can rely on /mfa/session/verify
@@ -2560,7 +2583,12 @@ async fn store_access_token_metadata(
 }
 
 /// Helper function to create ID token if requested
-async fn create_id_token(state: &AppState, subject: Option<String>, now: i64, exp: i64) -> Option<String> {
+async fn create_id_token(
+    state: &AppState,
+    subject: Option<String>,
+    now: i64,
+    exp: i64,
+) -> Option<String> {
     subject.as_ref()?;
 
     // Use the new JWKS rotation manager for token signing
@@ -2572,7 +2600,9 @@ async fn create_id_token(state: &AppState, subject: Option<String>, now: i64, ex
         })
         .ok()?;
 
-    let encoding_key = state.jwks_manager.get_encoding_key()
+    let encoding_key = state
+        .jwks_manager
+        .get_encoding_key()
         .await
         .map_err(|e| {
             tracing::error!(error = %redact_log(&e.to_string()), "Failed to get encoding key");
@@ -2737,7 +2767,7 @@ pub async fn revoke_token(
                 serde_json::Value::String(
                     form.token_type_hint
                         .clone()
-                        .unwrap_or_else(|| "access_token".to_string()),
+                        .unwrap_or("access_token".to_string()),
                 ),
             )]
             .into(),
@@ -2779,8 +2809,7 @@ pub fn app(state: AppState) -> Router {
         }
         _ => {
             // Default to no origins unless explicitly configured
-            let layer = CorsLayer::new();
-            layer
+            CorsLayer::new()
         }
     };
 

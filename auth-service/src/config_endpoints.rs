@@ -240,7 +240,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Method, Request};
     use std::collections::HashMap;
-    use tower::ServiceExt;
+    use tower::util::ServiceExt;
 
     fn create_test_config() -> AppConfig {
         AppConfig {
@@ -262,43 +262,50 @@ mod tests {
                 max_request_body_size: 1048576,
             },
             rate_limiting: RateLimitConfig {
-                requests_per_minute: 60,
-                burst_size: 10,
-                per_ip_limit: Some(100),
-                per_client_limit: Some(1000),
-                cleanup_interval_seconds: 60,
+                requests_per_minute_global: 1000,
+                requests_per_minute_per_ip: 100,
+                oauth_requests_per_minute: 60,
+                admin_requests_per_minute: 10,
+                enable_banlist: false,
+                enable_allowlist: false,
+                banlist_ips: vec![],
+                allowlist_ips: vec![],
             },
             monitoring: MonitoringConfig {
-                metrics_enabled: true,
-                tracing_enabled: true,
-                health_check_interval_seconds: 30,
+                prometheus_metrics_enabled: true,
+                opentelemetry_enabled: true,
                 jaeger_endpoint: None,
+                metrics_scrape_interval_seconds: 30,
+                security_monitoring_enabled: true,
+                audit_logging_enabled: true,
             },
             features: FeatureFlags {
-                mfa_enabled: true,
-                scim_enabled: true,
-                oidc_enabled: true,
-                advanced_logging: true,
-                performance_monitoring: true,
-                threat_hunting: false,
                 soar_integration: false,
+                google_oidc: true,
+                microsoft_oidc: true,
+                github_oidc: true,
+                webauthn: true,
+                scim_v2: true,
+                advanced_mfa: true,
+                threat_detection: false,
+                policy_engine: true,
             },
             oauth: OAuthConfig {
                 authorization_code_ttl_seconds: 600,
-                device_code_ttl_seconds: 600,
-                pkce_required: true,
-                refresh_token_rotation: true,
+                max_authorization_codes_per_client: 10,
+                enforce_pkce: true,
+                require_state_parameter: true,
+                strict_redirect_validation: true,
+                allowed_redirect_schemes: vec!["https".to_string(), "http".to_string()],
             },
             scim: ScimConfig {
-                base_url: "http://localhost:8080/scim/v2".to_string(),
-                max_results: 100,
-                case_exact: false,
+                enabled: true,
+                max_filter_length: 100,
+                max_results_per_page: 100,
+                default_results_per_page: 20,
             },
             store: StoreConfig {
                 backend: StoreBackend::Hybrid,
-                connection_pool_size: 10,
-                connection_timeout_seconds: 30,
-                max_idle_connections: 5,
                 database_url: None,
             },
             client_credentials: HashMap::from([("client1".to_string(), "secret1".to_string())]),

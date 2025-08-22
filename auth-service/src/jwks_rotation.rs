@@ -1,12 +1,12 @@
 use crate::errors::AuthError;
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header};
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
-use redis::AsyncCommands;
+use tracing::{info, warn};
 
 /// Key rotation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,11 +26,11 @@ pub struct KeyRotationConfig {
 impl Default for KeyRotationConfig {
     fn default() -> Self {
         Self {
-            rotation_interval_days: 30,  // Rotate monthly
-            key_retention_days: 90,      // Keep old keys for 3 months
+            rotation_interval_days: 30, // Rotate monthly
+            key_retention_days: 90,     // Keep old keys for 3 months
             max_keys: 5,
-            algorithm: Algorithm::RS256,
-            key_size: 2048,
+            algorithm: Algorithm::EdDSA, // Use EdDSA instead of RS256 for better security
+            key_size: 256,               // Ed25519 key size
         }
     }
 }
@@ -65,11 +65,11 @@ pub struct CryptoKey {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum KeyStatus {
-    Active,    // Current signing key
-    Valid,     // Can be used for validation
-    Rotating,  // Being rotated out
-    Expired,   // No longer valid
-    Revoked,   // Manually revoked
+    Active,   // Current signing key
+    Valid,    // Can be used for validation
+    Rotating, // Being rotated out
+    Expired,  // No longer valid
+    Revoked,  // Manually revoked
 }
 
 /// JWKS (JSON Web Key Set) manager with automatic rotation
@@ -89,13 +89,13 @@ pub struct JwksManager {
 pub trait KeyStorage: Send + Sync {
     /// Store a key
     async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError>;
-    
+
     /// Load all keys
     async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError>;
-    
+
     /// Delete a key
     async fn delete_key(&self, kid: &str) -> Result<(), AuthError>;
-    
+
     /// Update key status
     async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError>;
 }
@@ -154,7 +154,9 @@ impl JwksManager {
     /// Get a key by kid for validation
     pub async fn get_key(&self, kid: &str) -> Option<CryptoKey> {
         let keys = self.keys.read().await;
-        keys.get(kid).filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid).cloned()
+        keys.get(kid)
+            .filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid)
+            .cloned()
     }
 
     /// Rotate keys - generate new key and mark old as rotating
@@ -177,7 +179,9 @@ impl JwksManager {
             if let Some(old_key) = keys.get_mut(old_kid) {
                 old_key.is_active = false;
                 old_key.status = KeyStatus::Rotating;
-                self.storage.update_key_status(old_kid, KeyStatus::Rotating).await?;
+                self.storage
+                    .update_key_status(old_kid, KeyStatus::Rotating)
+                    .await?;
             }
         }
 
@@ -222,45 +226,41 @@ impl JwksManager {
         })
     }
 
-    /// Generate RSA key pair
+    /// Generate EdDSA key pair (Ed25519 - more secure than RSA)
     fn generate_key_pair(&self) -> Result<(String, String), AuthError> {
-        use rsa::{RsaPrivateKey, RsaPublicKey};
-        use rsa::pkcs1::{EncodeRsaPrivateKey, EncodeRsaPublicKey, LineEnding};
+        use ed25519_dalek::SigningKey;
 
         let mut rng = rand::thread_rng();
-        let bits = self.config.key_size;
-        
-        let private_key = RsaPrivateKey::new(&mut rng, bits)
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to generate RSA key: {}", e)
-            })?;
-        
-        let public_key = RsaPublicKey::from(&private_key);
 
-        let private_pem = private_key
-            .to_pkcs1_pem(LineEnding::LF)
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to encode private key: {}", e)
-            })?
-            .to_string();
+        // Generate random 32 bytes for Ed25519 private key
+        let mut key_bytes = [0u8; 32];
+        rand::Rng::fill(&mut rng, &mut key_bytes);
 
-        let public_pem = public_key
-            .to_pkcs1_pem(LineEnding::LF)
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to encode public key: {}", e)
-            })?;
+        let signing_key = SigningKey::from_bytes(&key_bytes);
+        let verifying_key = signing_key.verifying_key();
 
-        Ok((public_pem, private_pem))
+        // Convert to PEM format using base64 engine
+        use base64::Engine;
+        let engine = base64::engine::general_purpose::STANDARD;
+
+        let private_pem = format!(
+            "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----",
+            engine.encode(signing_key.to_bytes())
+        );
+
+        let public_pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
+            engine.encode(verifying_key.to_bytes())
+        );
+
+        Ok((private_pem, public_pem))
     }
 
     /// Clean up expired keys
     async fn cleanup_expired_keys(&self) -> Result<(), AuthError> {
         let now = Utc::now();
         let mut keys = self.keys.write().await;
-        
+
         // Find expired keys
         let expired_kids: Vec<String> = keys
             .iter()
@@ -274,9 +274,9 @@ impl JwksManager {
                 .iter()
                 .map(|(kid, key)| (kid.clone(), key.created_at))
                 .collect();
-            
+
             sorted_keys.sort_by(|a, b| b.1.cmp(&a.1));
-            
+
             for (kid, _) in sorted_keys.iter().skip(self.config.max_keys) {
                 if !expired_kids.contains(kid) {
                     warn!("Removing old key due to max_keys limit: {}", kid);
@@ -297,7 +297,7 @@ impl JwksManager {
     /// Get JWKS for public endpoint
     pub async fn get_jwks(&self) -> JwksResponse {
         let keys = self.keys.read().await;
-        
+
         let jwks_keys: Vec<JwkKey> = keys
             .values()
             .filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid)
@@ -316,10 +316,12 @@ impl JwksManager {
 
     /// Create JWT header with current kid
     pub async fn create_jwt_header(&self) -> Result<Header, AuthError> {
-        let active_key = self.get_active_key().await
+        let active_key = self
+            .get_active_key()
+            .await
             .ok_or_else(|| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: "No active signing key".to_string()
+                context: "No active signing key".to_string(),
             })?;
 
         let mut header = Header::new(self.config.algorithm);
@@ -329,37 +331,40 @@ impl JwksManager {
 
     /// Get encoding key for signing
     pub async fn get_encoding_key(&self) -> Result<EncodingKey, AuthError> {
-        let active_key = self.get_active_key().await
+        let active_key = self
+            .get_active_key()
+            .await
             .ok_or_else(|| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: "No active signing key".to_string()
+                context: "No active signing key".to_string(),
             })?;
 
-        let private_key = active_key.private_key
+        let private_key = active_key
+            .private_key
             .ok_or_else(|| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: "Private key not available".to_string()
+                context: "Private key not available".to_string(),
             })?;
 
-        EncodingKey::from_rsa_pem(private_key.as_bytes())
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Invalid private key: {}", e)
-            })
+        EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| AuthError::InternalError {
+            error_id: uuid::Uuid::new_v4(),
+            context: format!("Invalid private key: {}", e),
+        })
     }
 
     /// Get decoding key for validation
     pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, AuthError> {
-        let key = self.get_key(kid).await
+        let key = self
+            .get_key(kid)
+            .await
             .ok_or_else(|| AuthError::InvalidToken {
-                reason: format!("Unknown kid: {}", kid)
+                reason: format!("Unknown kid: {}", kid),
             })?;
 
-        DecodingKey::from_rsa_pem(key.public_key.as_bytes())
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Invalid public key: {}", e)
-            })
+        DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| AuthError::InternalError {
+            error_id: uuid::Uuid::new_v4(),
+            context: format!("Invalid public key: {}", e),
+        })
     }
 
     /// Check if rotation is needed
@@ -374,14 +379,16 @@ impl JwksManager {
     /// Revoke a key immediately
     pub async fn revoke_key(&self, kid: &str) -> Result<(), AuthError> {
         let mut keys = self.keys.write().await;
-        
+
         if let Some(key) = keys.get_mut(kid) {
             key.status = KeyStatus::Revoked;
             key.is_active = false;
-            self.storage.update_key_status(kid, KeyStatus::Revoked).await?;
-            
+            self.storage
+                .update_key_status(kid, KeyStatus::Revoked)
+                .await?;
+
             warn!("Key revoked: {}", kid);
-            
+
             // If this was the active key, rotate immediately
             let active_kid = self.active_kid.read().await;
             if active_kid.as_ref() == Some(&kid.to_string()) {
@@ -390,7 +397,7 @@ impl JwksManager {
                 self.rotate_keys().await?;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -409,21 +416,21 @@ pub struct JwkKey {
     pub alg: String,
     #[serde(rename = "use")]
     pub use_: String,
-    pub n: String,  // RSA modulus
-    pub e: String,  // RSA exponent
+    pub n: String, // RSA modulus
+    pub e: String, // RSA exponent
 }
 
 // Helper functions to extract RSA components
 fn extract_modulus(_public_key: &str) -> String {
     // In production, properly parse the PEM and extract modulus
-    use base64::{Engine as _, engine::general_purpose};
+    use base64::{engine::general_purpose, Engine as _};
     general_purpose::STANDARD.encode("placeholder_modulus")
 }
 
 fn extract_exponent(_public_key: &str) -> String {
     // In production, properly parse the PEM and extract exponent
-    use base64::{Engine as _, engine::general_purpose};
-    general_purpose::STANDARD.encode("AQAB")  // Common RSA exponent
+    use base64::{engine::general_purpose, Engine as _};
+    general_purpose::STANDARD.encode("AQAB") // Common RSA exponent
 }
 
 /// In-memory key storage for testing
@@ -467,6 +474,173 @@ impl KeyStorage for InMemoryKeyStorage {
     }
 }
 
+/// Redis-backed key storage for distributed environments
+pub struct RedisKeyStorage {
+    client: redis::Client,
+    key_prefix: String,
+}
+
+impl RedisKeyStorage {
+    pub fn new(redis_url: &str) -> Result<Self, AuthError> {
+        let client = redis::Client::open(redis_url).map_err(|e| AuthError::InternalError {
+            error_id: uuid::Uuid::new_v4(),
+            context: format!("Failed to create Redis client: {}", e),
+        })?;
+
+        Ok(Self {
+            client,
+            key_prefix: "jwks:keys:".to_string(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl KeyStorage for RedisKeyStorage {
+    async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e),
+            })?;
+
+        let redis_key = format!("{}{}", self.key_prefix, key.kid);
+        let key_json = serde_json::to_string(key).map_err(|e| AuthError::InternalError {
+            error_id: uuid::Uuid::new_v4(),
+            context: format!("Failed to serialize key: {}", e),
+        })?;
+
+        // Store with expiration based on key expiry
+        let ttl = (key.expires_at.timestamp() - chrono::Utc::now().timestamp()).max(60);
+
+        redis::pipe()
+            .set(&redis_key, key_json)
+            .expire(&redis_key, ttl)
+            .query_async::<()>(&mut conn)
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to store key in Redis: {}", e),
+            })?;
+
+        Ok(())
+    }
+
+    async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e),
+            })?;
+
+        let pattern = format!("{}*", self.key_prefix);
+        let key_names: Vec<String> =
+            conn.keys(&pattern)
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to scan keys: {}", e),
+                })?;
+
+        let mut keys = Vec::new();
+        for key_name in key_names {
+            let key_json: Option<String> =
+                conn.get(&key_name)
+                    .await
+                    .map_err(|e| AuthError::InternalError {
+                        error_id: uuid::Uuid::new_v4(),
+                        context: format!("Failed to get key {}: {}", key_name, e),
+                    })?;
+
+            if let Some(json) = key_json {
+                match serde_json::from_str::<CryptoKey>(&json) {
+                    Ok(key) => keys.push(key),
+                    Err(e) => {
+                        warn!("Failed to deserialize key {}: {}", key_name, e);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        Ok(keys)
+    }
+
+    async fn delete_key(&self, kid: &str) -> Result<(), AuthError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e),
+            })?;
+
+        let redis_key = format!("{}{}", self.key_prefix, kid);
+        conn.del::<_, ()>(&redis_key)
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to delete key: {}", e),
+            })?;
+
+        Ok(())
+    }
+
+    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e),
+            })?;
+
+        let redis_key = format!("{}{}", self.key_prefix, kid);
+        let key_json: Option<String> =
+            conn.get(&redis_key)
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to get key for status update: {}", e),
+                })?;
+
+        if let Some(json) = key_json {
+            let mut key: CryptoKey =
+                serde_json::from_str(&json).map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to deserialize key: {}", e),
+                })?;
+
+            key.status = status;
+            if status != KeyStatus::Active {
+                key.is_active = false;
+            }
+
+            let updated_json =
+                serde_json::to_string(&key).map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to serialize updated key: {}", e),
+                })?;
+
+            conn.set::<_, _, ()>(&redis_key, updated_json)
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to update key status: {}", e),
+                })?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,163 +675,5 @@ mod tests {
         let jwks = manager.get_jwks().await;
         assert!(!jwks.keys.is_empty());
         assert!(jwks.keys[0].kid.starts_with("key_"));
-    }
-}
-
-/// Redis-backed key storage for distributed environments
-pub struct RedisKeyStorage {
-    client: redis::Client,
-    key_prefix: String,
-}
-
-impl RedisKeyStorage {
-    pub fn new(redis_url: &str) -> Result<Self, AuthError> {
-        let client = redis::Client::open(redis_url)
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to create Redis client: {}", e)
-            })?;
-        
-        Ok(Self {
-            client,
-            key_prefix: "jwks:keys:".to_string(),
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl KeyStorage for RedisKeyStorage {
-    async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError> {
-        let mut conn = self.client.get_multiplexed_async_connection()
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e)
-            })?;
-
-        let redis_key = format!("{}{}", self.key_prefix, key.kid);
-        let key_json = serde_json::to_string(key)
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to serialize key: {}", e)
-            })?;
-
-        // Store with expiration based on key expiry
-        let ttl = (key.expires_at.timestamp() - chrono::Utc::now().timestamp()).max(60);
-        
-        redis::pipe()
-            .set(&redis_key, key_json)
-            .expire(&redis_key, ttl)
-            .query_async::<()>(&mut conn)
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to store key in Redis: {}", e)
-            })?;
-
-        Ok(())
-    }
-
-    async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError> {
-        let mut conn = self.client.get_multiplexed_async_connection()
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e)
-            })?;
-
-        let pattern = format!("{}*", self.key_prefix);
-        let key_names: Vec<String> = conn.keys(&pattern)
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to scan keys: {}", e)
-            })?;
-
-        let mut keys = Vec::new();
-        for key_name in key_names {
-            let key_json: Option<String> = conn.get(&key_name)
-                .await
-                .map_err(|e| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to get key {}: {}", key_name, e)
-                })?;
-
-            if let Some(json) = key_json {
-                match serde_json::from_str::<CryptoKey>(&json) {
-                    Ok(key) => keys.push(key),
-                    Err(e) => {
-                        warn!("Failed to deserialize key {}: {}", key_name, e);
-                        continue;
-                    }
-                }
-            }
-        }
-
-        Ok(keys)
-    }
-
-    async fn delete_key(&self, kid: &str) -> Result<(), AuthError> {
-        let mut conn = self.client.get_multiplexed_async_connection()
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e)
-            })?;
-
-        let redis_key = format!("{}{}", self.key_prefix, kid);
-        conn.del::<_, ()>(&redis_key)
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to delete key: {}", e)
-            })?;
-
-        Ok(())
-    }
-
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError> {
-        let mut conn = self.client.get_multiplexed_async_connection()
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e)
-            })?;
-
-        let redis_key = format!("{}{}", self.key_prefix, kid);
-        let key_json: Option<String> = conn.get(&redis_key)
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to get key for status update: {}", e)
-            })?;
-
-        if let Some(json) = key_json {
-            let mut key: CryptoKey = serde_json::from_str(&json)
-                .map_err(|e| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to deserialize key: {}", e)
-                })?;
-
-            key.status = status;
-            if status != KeyStatus::Active {
-                key.is_active = false;
-            }
-
-            let updated_json = serde_json::to_string(&key)
-                .map_err(|e| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to serialize updated key: {}", e)
-                })?;
-
-            conn.set::<_, _, ()>(&redis_key, updated_json)
-                .await
-                .map_err(|e| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to update key status: {}", e)
-                })?;
-        }
-
-        Ok(())
     }
 }

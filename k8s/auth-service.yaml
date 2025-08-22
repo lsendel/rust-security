@@ -25,6 +25,7 @@ spec:
       containers:
       - name: auth-service
         image: auth-service:1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         env:
@@ -104,11 +105,14 @@ metadata:
   name: auth-service-ingress
   namespace: rust-security
   annotations:
-    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/rate-limit: "100"
     nginx.ingress.kubernetes.io/rate-limit-window: "1m"
 spec:
+  ingressClassName: nginx
   tls:
   - hosts:
     - auth.example.com

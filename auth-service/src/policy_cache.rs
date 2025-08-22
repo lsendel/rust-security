@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 use tracing::{error, info, instrument, warn};
 
 use crate::errors::AuthError;
-use crate::metrics::{MetricsHelper, METRICS};
+use crate::metrics::METRICS;
 
 /// Configuration for policy caching
 #[derive(Debug, Clone)]

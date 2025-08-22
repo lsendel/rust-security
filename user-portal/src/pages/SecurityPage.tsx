@@ -14,7 +14,7 @@ type VerifyMfaFormData = z.infer<typeof verifyMfaSchema>;
 
 const SecurityPage = () => {
   const { user: authUser } = useAuth();
-  const { data: scimUser, isLoading: isLoadingUser } = useUser(authUser?.sub);
+  const { data: scimUser, isLoading: isLoadingUser } = useUser(authUser?.sub || '');
   const registerMfa = useRegisterMfa();
   const verifyMfa = useVerifyMfa();
   const generateBackupCodes = useGenerateBackupCodes();

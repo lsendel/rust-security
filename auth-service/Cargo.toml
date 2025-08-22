@@ -15,10 +15,8 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
-getrandom = { workspace = true }
 thiserror = { workspace = true }
 http = { workspace = true }
-hyper = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 bytes = { workspace = true }
@@ -30,11 +28,12 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 # Security enhancements
 validator = { workspace = true }
-secrecy = { workspace = true }
 argon2 = { workspace = true }
+bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }
 # RSA key generation for JWKS rotation - using latest secure version
-rsa = { workspace = true }
+# rsa = { workspace = true }  # Removed due to RUSTSEC-2023-0071
+ed25519-dalek = { workspace = true, optional = true }
 chrono = { workspace = true }
 envy = { workspace = true }
 hmac = { workspace = true }
@@ -42,18 +41,16 @@ sha1 = { workspace = true }
 data-encoding = { workspace = true }
 sha2 = { workspace = true }
 # TLS/HTTPS support
-axum-server = { workspace = true }
-rcgen = { workspace = true }
 # Secret management
 async-trait = { workspace = true }
-aes-gcm = { workspace = true }
-chacha20poly1305 = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
 once_cell = { workspace = true }
 base64 = { workspace = true }
 # Configuration file parsing
 toml = { workspace = true }
+# Additional dependencies for features
+futures = { workspace = true }
 serde_yaml = { workspace = true }
 # Common workspace dependency
 common = { path = "../common" }
@@ -78,30 +75,15 @@ opentelemetry = { workspace = true, optional = true }
 opentelemetry-jaeger = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
-# Performance and benchmarking
-criterion = { workspace = true, optional = true }
 # SIMD and hardware acceleration
 packed_simd_2 = { workspace = true, optional = true }
 ring = { workspace = true }
-aes = { workspace = true }
-rayon = { workspace = true }
-# Memory optimization
-mimalloc = { workspace = true, optional = true }
-jemalloc-sys = { workspace = true, optional = true }
 # High-performance async runtime
-tokio-metrics = { workspace = true }
 # Connection pooling optimization
-bb8 = { workspace = true }
-bb8-redis = { workspace = true }
-deadpool = { workspace = true }
 deadpool-redis = { workspace = true, optional = true }
 # Optimized serialization
-rmp-serde = { workspace = true }
-bincode = { workspace = true }
 # Metrics and profiling
 pprof = { workspace = true, optional = true }
-metrics = { workspace = true }
-metrics-prometheus = { workspace = true }
 
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
@@ -114,7 +96,7 @@ nalgebra = { workspace = true, optional = true }
 # Graph analysis for attack pattern detection
 petgraph = { workspace = true, optional = true }
 # Time series analysis
-tsc = { workspace = true, optional = true }
+# tsc gated under target-specific dependencies below
 # Statistics and analytics
 statrs = { workspace = true, optional = true }
 # Advanced collections for threat correlation
@@ -149,16 +131,13 @@ pqcrypto-mldsa = { workspace = true, optional = true }
 # Hybrid cryptography support
 p256 = { workspace = true, optional = true }
 p384 = { workspace = true, optional = true }
-ed25519-dalek = { workspace = true, optional = true }
+# ed25519-dalek already included above
 x25519-dalek = { workspace = true, optional = true }
 # Certificate and PKI support for post-quantum
 x509-cert = { workspace = true, optional = true }
 pkcs8 = { workspace = true, optional = true }
 der = { workspace = true, optional = true }
 # Performance and security utilities
-constant_time_eq = { workspace = true }
-zeroize = { workspace = true }
-subtle = { workspace = true }
 
 vaultrs = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
@@ -171,11 +150,6 @@ tokio = { workspace = true }
 serde_json = { workspace = true }
 # Test dependencies
 uuid = { workspace = true }
-base64 = { workspace = true }
-hmac = { workspace = true }
-sha2 = { workspace = true }
-sha1 = { workspace = true }
-data-encoding = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
@@ -190,23 +164,20 @@ regex = { workspace = true }
 # Test utilities
 tempfile = { workspace = true }
 wiremock = { workspace = true }
-# Fuzzing
-arbitrary = { workspace = true }
 # Coverage and benchmarking in tests
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-default = ["fast-build", "api-keys", "enhanced-session-store"]  # Development-optimized defaults, ML features disabled for security
+default = ["fast-build", "api-keys", "enhanced-session-store", "crypto"]  # Development-optimized defaults, ML features disabled for security
 fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
 tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
-benchmarks = ["criterion", "pprof"]
+benchmarks = ["pprof"]
 simd = ["dep:packed_simd_2"]
-mimalloc = ["dep:mimalloc"]
-jemalloc = ["dep:jemalloc-sys"]
-performance = ["simd", "mimalloc"]
+performance = ["simd"]
+crypto = ["ed25519-dalek"]
 profiling = ["pprof"]
 # Secrets management feature flags
 secrets-vault-aws = ["aws", "vault"]
@@ -216,7 +187,7 @@ hybrid-crypto = ["post-quantum", "p256", "p384", "ed25519-dalek", "x25519-dalek"
 # Threat hunting feature flags
 threat-hunting = ["smartcore", "petgraph", "ndarray", "nalgebra", "geo", "statrs", "indexmap", "flume", "crossbeam"]
 ml-enhanced = ["threat-hunting", "candle-core", "candle-nn", "candle-transformers"]
-advanced-analytics = ["threat-hunting", "ml-enhanced", "dep:tsc", "dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]
+advanced-analytics = ["threat-hunting", "ml-enhanced", "dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]
 optimizations = []
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]
 api-keys = ["dep:sqlx"]
@@ -239,3 +210,7 @@ path = "src/main.rs"
 name = "api_key_management_it"
 path = "tests/api_key_management_it.rs"
 required-features = ["api-keys"]
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+# Time series counter uses x86-specific instructions; only include on x86_64 platforms.
+tsc = { workspace = true, optional = true }

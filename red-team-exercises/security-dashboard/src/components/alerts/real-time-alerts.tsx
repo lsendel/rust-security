@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SecurityAlert } from '@/types/security'
-import { formatRelativeTime, getSecurityColor } from '@/lib/utils'
+import { formatRelativeTime } from '@/lib/utils'
 
 interface RealTimeAlertsProps {
   alerts: SecurityAlert[]
@@ -42,14 +42,14 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
       }
       
       const result = await response.json()
-      console.log('Alert acknowledged successfully:', result)
+      console.warn('Alert acknowledged successfully:', result)
       
       // Update local state to reflect acknowledgment
       setDismissedAlerts(prev => new Set([...prev, alertId]))
       
       // Show success notification
       // You could use a toast library here
-      console.log(`Alert ${alertId} has been acknowledged`)
+      console.warn(`Alert ${alertId} has been acknowledged`)
       
     } catch (error) {
       console.error('Error acknowledging alert:', error)

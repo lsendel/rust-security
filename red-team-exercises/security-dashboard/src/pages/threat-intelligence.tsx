@@ -2,11 +2,9 @@ import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Target, 
-  Shield, 
   TrendingUp, 
   Globe, 
-  AlertTriangle, 
-  Activity,
+  AlertTriangle,
   Eye,
   Filter,
   Download,
@@ -26,7 +24,7 @@ import { ThreatActorProfiles } from '@/components/threat/threat-actor-profiles'
 import { RiskScoreMatrix } from '@/components/charts/risk-score-matrix'
 import { useThreatEvents } from '@/hooks/use-websocket'
 import { useQuery } from '@tanstack/react-query'
-import { formatNumber, formatRelativeTime, getSecurityColor } from '@/lib/utils'
+import { formatNumber, formatRelativeTime } from '@/lib/utils'
 
 export function ThreatIntelligence() {
   const [selectedFilter, setSelectedFilter] = useState('all')
@@ -36,7 +34,7 @@ export function ThreatIntelligence() {
   const threatEvents = useThreatEvents()
 
   // Fetch threat intelligence data
-  const { data: threatIntelData, refetch, isLoading } = useQuery({
+  const { data: _threatIntelData, refetch, isLoading: _isLoading } = useQuery({
     queryKey: ['threat-intelligence', selectedTimeRange],
     queryFn: async () => {
       const response = await fetch(`/api/threat-intelligence?timeRange=${selectedTimeRange}`)

@@ -337,7 +337,7 @@ impl SessionCleanupScheduler {
         &self,
         result: &mut CleanupCycleResult,
     ) -> Result<(), CleanupError> {
-        let mut last_error = None;
+        let mut _last_error = None;
 
         for attempt in 1..=self.config.retry_attempts {
             match self.execute_single_cleanup(result).await {
@@ -352,7 +352,7 @@ impl SessionCleanupScheduler {
                     return Ok(());
                 }
                 Err(e) => {
-                    last_error = Some(format!("{}", e));
+                    _last_error = Some(format!("{}", e));
                     warn!(
                         operation_id = result.operation_id,
                         attempt = attempt,

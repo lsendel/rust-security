@@ -20,8 +20,6 @@ This document outlines the security measures implemented in the Rust Security Wo
 - **RSA vulnerability (RUSTSEC-2023-0071)**: Present in unused MySQL connector, documented in deny.toml
 - **Unmaintained packages**: `paste` and `proc-macro-error` - low risk, monitoring for replacements
 
-This document outlines the security measures implemented in the Rust Security Workspace and provides guidelines for secure deployment and operation.
-
 ## Security Features
 
 ### 1. Authentication & Authorization

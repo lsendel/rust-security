@@ -8,7 +8,6 @@ use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
-use tracing::{debug, error, warn};
 
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::AuthError;
@@ -143,36 +142,32 @@ impl EnhancedJwtValidator {
         Self { config }
     }
 
-    /// Create validator with default configuration
-    pub fn default() -> Self {
-        Self::new(JwtValidationConfig::default())
-    }
-
     /// Create validator from environment variables
     pub fn from_env() -> Result<Self> {
         let mut config = JwtValidationConfig::default();
-        
+
         // Override with environment variables
         if let Ok(issuer) = std::env::var("JWT_REQUIRED_ISSUER") {
             config.required_issuer = Some(issuer);
         }
-        
+
         if let Ok(audiences) = std::env::var("JWT_ALLOWED_AUDIENCES") {
-            config.allowed_audiences = Some(
-                audiences.split(',').map(|s| s.trim().to_string()).collect()
+            config.allowed_audiences =
+                Some(audiences.split(',').map(|s| s.trim().to_string()).collect());
+        }
+
+        if let Ok(max_age) = std::env::var("JWT_MAX_AGE_SECONDS") {
+            config.max_token_age_seconds = Some(
+                max_age
+                    .parse()
+                    .map_err(|_| anyhow!("Invalid JWT_MAX_AGE_SECONDS value"))?,
             );
         }
-        
-        if let Ok(max_age) = std::env::var("JWT_MAX_AGE_SECONDS") {
-            config.max_token_age_seconds = Some(max_age.parse().map_err(|_| {
-                anyhow!("Invalid JWT_MAX_AGE_SECONDS value")
-            })?);
-        }
-        
+
         if let Ok(leeway) = std::env::var("JWT_LEEWAY_SECONDS") {
-            config.leeway_seconds = leeway.parse().map_err(|_| {
-                anyhow!("Invalid JWT_LEEWAY_SECONDS value")
-            })?;
+            config.leeway_seconds = leeway
+                .parse()
+                .map_err(|_| anyhow!("Invalid JWT_LEEWAY_SECONDS value"))?;
         }
 
         Ok(Self::new(config))
@@ -190,20 +185,19 @@ impl EnhancedJwtValidator {
             .as_secs() as i64;
 
         // Step 1: Decode header and perform algorithm validation
-        let header = jsonwebtoken::decode_header(token)
-            .map_err(|e| AuthError::InvalidToken {
-                reason: format!("Invalid JWT header: {}", e),
-            })?;
+        let header = jsonwebtoken::decode_header(token).map_err(|e| AuthError::InvalidToken {
+            reason: format!("Invalid JWT header: {}", e),
+        })?;
 
         self.validate_algorithm(&header.alg)?;
         self.validate_token_type(&header)?;
 
         // Step 2: Set up validation parameters
-        let mut validation = self.create_validation_params(&header.alg)?;
-        
+        let validation = self.create_validation_params(&header.alg)?;
+
         // Step 3: Decode and validate token structure
-        let token_data = jsonwebtoken::decode::<Value>(token, decoding_key, &validation)
-            .map_err(|e| {
+        let token_data =
+            jsonwebtoken::decode::<Value>(token, decoding_key, &validation).map_err(|e| {
                 self.log_validation_failure("JWT decode failed", &e.to_string());
                 AuthError::InvalidToken {
                     reason: format!("JWT validation failed: {}", e),
@@ -216,11 +210,8 @@ impl EnhancedJwtValidator {
         self.run_custom_validators(&token_data.claims)?;
 
         // Step 5: Create validation result with metadata
-        let validation_metadata = self.create_validation_metadata(
-            &header,
-            &token_data.claims,
-            validation_start,
-        )?;
+        let validation_metadata =
+            self.create_validation_metadata(&header, &token_data.claims, validation_start)?;
 
         let result = JwtValidationResult {
             claims: token_data.claims,
@@ -240,9 +231,7 @@ impl EnhancedJwtValidator {
                 algorithm, self.config.allowed_algorithms
             );
             self.log_validation_failure("Algorithm not allowed", &error_msg);
-            return Err(AuthError::InvalidToken {
-                reason: error_msg,
-            });
+            return Err(AuthError::InvalidToken { reason: error_msg });
         }
         Ok(())
     }
@@ -258,9 +247,7 @@ impl EnhancedJwtValidator {
                     token_type, required_type
                 );
                 self.log_validation_failure("Invalid token type", &error_msg);
-                return Err(AuthError::InvalidToken {
-                    reason: error_msg,
-                });
+                return Err(AuthError::InvalidToken { reason: error_msg });
             }
         }
         Ok(())
@@ -269,24 +256,29 @@ impl EnhancedJwtValidator {
     /// Create validation parameters based on configuration
     fn create_validation_params(&self, algorithm: &Algorithm) -> Result<Validation, AuthError> {
         let mut validation = Validation::new(*algorithm);
-        
+
         validation.validate_exp = self.config.validate_expiration;
         validation.validate_nbf = self.config.validate_not_before;
         validation.leeway = self.config.leeway_seconds;
-        
+
         // Set issuer validation
         if let Some(ref issuer) = self.config.required_issuer {
             validation.set_issuer(&[issuer]);
         }
-        
+
         // Set audience validation
         if let Some(ref audiences) = self.config.allowed_audiences {
             let audience_vec: Vec<&str> = audiences.iter().map(|s| s.as_str()).collect();
             validation.set_audience(&audience_vec);
         }
-        
+
         // Require specific claims
-        let required_claims: Vec<&str> = self.config.required_claims.iter().map(|s| s.as_str()).collect();
+        let required_claims: Vec<&str> = self
+            .config
+            .required_claims
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
         validation.set_required_spec_claims(&required_claims);
 
         Ok(validation)
@@ -298,9 +290,7 @@ impl EnhancedJwtValidator {
             if !claims.get(required_claim).is_some() {
                 let error_msg = format!("Missing required claim: {}", required_claim);
                 self.log_validation_failure("Missing required claim", &error_msg);
-                return Err(AuthError::InvalidToken {
-                    reason: error_msg,
-                });
+                return Err(AuthError::InvalidToken { reason: error_msg });
             }
         }
         Ok(())
@@ -317,9 +307,7 @@ impl EnhancedJwtValidator {
                         token_age, max_age
                     );
                     self.log_validation_failure("Token too old", &error_msg);
-                    return Err(AuthError::InvalidToken {
-                        reason: error_msg,
-                    });
+                    return Err(AuthError::InvalidToken { reason: error_msg });
                 }
             }
         }
@@ -336,9 +324,7 @@ impl EnhancedJwtValidator {
                         validator.claim_name, error
                     );
                     self.log_validation_failure("Custom validation failed", &error_msg);
-                    return Err(AuthError::InvalidToken {
-                        reason: error_msg,
-                    });
+                    return Err(AuthError::InvalidToken { reason: error_msg });
                 }
             }
         }
@@ -358,20 +344,24 @@ impl EnhancedJwtValidator {
         Ok(ValidationMetadata {
             algorithm_used: format!("{:?}", header.alg),
             key_id: header.kid.clone(),
-            issuer: claims.get("iss").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            audience: claims.get("aud").and_then(|v| {
-                match v {
-                    Value::String(s) => Some(vec![s.clone()]),
-                    Value::Array(arr) => Some(
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .collect()
-                    ),
-                    _ => None,
-                }
+            issuer: claims
+                .get("iss")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            audience: claims.get("aud").and_then(|v| match v {
+                Value::String(s) => Some(vec![s.clone()]),
+                Value::Array(arr) => Some(
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect(),
+                ),
+                _ => None,
             }),
-            subject: claims.get("sub").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            subject: claims
+                .get("sub")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
             expires_at: claims.get("exp").and_then(|v| v.as_i64()),
             issued_at,
             not_before: claims.get("nbf").and_then(|v| v.as_i64()),
@@ -394,10 +384,33 @@ impl EnhancedJwtValidator {
             .with_target("jwt_token".to_string())
             .with_outcome("success".to_string())
             .with_reason("JWT token passed all security validations".to_string())
-            .with_detail("algorithm".to_string(), result.validation_metadata.algorithm_used.clone())
-            .with_detail("issuer".to_string(), result.validation_metadata.issuer.clone().unwrap_or_default())
-            .with_detail("subject".to_string(), result.validation_metadata.subject.clone().unwrap_or_default())
-            .with_detail("token_age_seconds".to_string(), result.validation_metadata.token_age_seconds.unwrap_or_default()),
+            .with_detail(
+                "algorithm".to_string(),
+                result.validation_metadata.algorithm_used.clone(),
+            )
+            .with_detail(
+                "issuer".to_string(),
+                result
+                    .validation_metadata
+                    .issuer
+                    .clone()
+                    .unwrap_or_default(),
+            )
+            .with_detail(
+                "subject".to_string(),
+                result
+                    .validation_metadata
+                    .subject
+                    .clone()
+                    .unwrap_or_default(),
+            )
+            .with_detail(
+                "token_age_seconds".to_string(),
+                result
+                    .validation_metadata
+                    .token_age_seconds
+                    .unwrap_or_default(),
+            ),
         );
     }
 
@@ -429,14 +442,20 @@ impl EnhancedJwtValidator {
     }
 }
 
+impl Default for EnhancedJwtValidator {
+    fn default() -> Self {
+        Self::new(JwtValidationConfig::default())
+    }
+}
+
 /// Convenience function to create a validator for OAuth access tokens
 pub fn create_oauth_access_token_validator() -> Result<EnhancedJwtValidator, AuthError> {
     let mut config = JwtValidationConfig::default();
-    
+
     // OAuth-specific claims
     config.required_claims.insert("token_type".to_string());
     config.required_claims.insert("scope".to_string());
-    
+
     // Add custom validator for token_type
     config.custom_validators.push(CustomClaimValidator {
         claim_name: "token_type".to_string(),
@@ -446,7 +465,10 @@ pub fn create_oauth_access_token_validator() -> Result<EnhancedJwtValidator, Aut
                 if token_type == "access_token" {
                     Ok(())
                 } else {
-                    Err(format!("Expected token_type 'access_token', got '{}'", token_type))
+                    Err(format!(
+                        "Expected token_type 'access_token', got '{}'",
+                        token_type
+                    ))
                 }
             } else {
                 Err("token_type must be a string".to_string())
@@ -460,11 +482,11 @@ pub fn create_oauth_access_token_validator() -> Result<EnhancedJwtValidator, Aut
 /// Convenience function to create a validator for ID tokens
 pub fn create_id_token_validator() -> Result<EnhancedJwtValidator, AuthError> {
     let mut config = JwtValidationConfig::default();
-    
+
     // ID token specific claims
     config.required_claims.insert("aud".to_string());
     config.required_claims.insert("nonce".to_string());
-    
+
     // Shorter max age for ID tokens
     config.max_token_age_seconds = Some(60 * 60); // 1 hour
 
@@ -493,10 +515,10 @@ mod tests {
             ..Default::default()
         };
         let validator = EnhancedJwtValidator::new(config);
-        
+
         // Should pass
         assert!(validator.validate_algorithm(&Algorithm::RS256).is_ok());
-        
+
         // Should fail
         assert!(validator.validate_algorithm(&Algorithm::HS256).is_err());
     }

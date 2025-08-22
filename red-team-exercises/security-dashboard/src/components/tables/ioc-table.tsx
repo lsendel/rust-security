@@ -6,7 +6,7 @@ interface IOCTableProps {
   threats: ThreatEvent[]
 }
 
-export function IOCTable({ threats }: IOCTableProps) {
+export function IOCTable({ threats: _threats }: IOCTableProps) {
   return (
     <Card>
       <CardHeader>

@@ -25,15 +25,15 @@ services:
     environment:
       - RUST_LOG=debug,auth_service=trace
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=DEV_ONLY_NOT_FOR_PRODUCTION_INSECURE_JWT_SECRET_CHANGE_IMMEDIATELY
-      - CLIENT_CREDENTIALS=dev_client:DEV_ONLY_NOT_SECURE;admin_client:DEV_ONLY_NOT_SECURE
-      - ALLOWED_SCOPES=read,write,admin
-      - RATE_LIMIT_REQUESTS_PER_MINUTE=120
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_change_for_production}
+      - CLIENT_CREDENTIALS=${CLIENT_CREDENTIALS:-dev_client:dev_secret;admin_client:admin_secret}
+      - ALLOWED_SCOPES=${ALLOWED_SCOPES:-read,write,admin}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-120}
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -47,9 +47,9 @@ services:
     ports:
       - "8081:8080"
     environment:
-      - RUST_LOG=debug,policy_service=trace
+      - RUST_LOG=${RUST_LOG:-debug,policy_service=trace}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

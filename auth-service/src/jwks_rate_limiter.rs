@@ -18,9 +18,9 @@ use deadpool_redis::redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 /// Rate limit configuration for JWKS endpoints
 #[derive(Debug, Clone, Serialize, Deserialize)]

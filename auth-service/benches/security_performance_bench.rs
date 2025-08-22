@@ -30,10 +30,12 @@ fn bench_crypto_operations(c: &mut Criterion) {
             BenchmarkId::new("encrypt_aes_gcm", payload_size),
             payload_size,
             |b, _| {
-                b.to_async(&rt).iter(|| async {
-                    let crypto = get_crypto_engine();
-                    let result = crypto.encrypt_secure("benchmark_key", &payload).await;
-                    black_box(result)
+                b.iter(|| {
+                    rt.block_on(async {
+                        let crypto = get_crypto_engine();
+                        let result = crypto.encrypt_secure("benchmark_key", &payload).await;
+                        black_box(result)
+                    })
                 });
             },
         );
@@ -41,11 +43,13 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
     // Test password hashing performance
     group.bench_function("password_hash_argon2", |b| {
-        b.to_async(&rt).iter(|| async {
-            let crypto = get_crypto_engine();
-            let password = "secure_password_123!@#";
-            let result = crypto.hash_password_secure(password).await;
-            black_box(result)
+        b.iter(|| {
+            rt.block_on(async {
+                let crypto = get_crypto_engine();
+                let password = "secure_password_123!@#";
+                let result = crypto.hash_password_secure(password).await;
+                black_box(result)
+            })
         });
     });
 
@@ -57,10 +61,13 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
     group.bench_function("password_verify_argon2", |b| {
         let hash = password_hash.clone();
-        b.to_async(&rt).iter(|| async {
-            let crypto = get_crypto_engine();
-            let result = crypto.verify_password_secure("test_password", &hash).await;
-            black_box(result)
+        b.iter(|| {
+            rt.block_on(async {
+                let crypto = get_crypto_engine();
+                let result = crypto.verify_password_secure("test_password", &hash).await;
+                black_box(result)
+            })
+            })
         });
     });
 
@@ -71,7 +78,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
             let data = b"test data for hmac generation";
             let result = crypto.generate_hmac_secure("hmac_key", data);
             black_box(result)
-        });
+        })
     });
 
     // Test secure token generation
@@ -80,7 +87,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
             let crypto = get_crypto_engine();
             let result = crypto.generate_secure_token("tk");
             black_box(result)
-        });
+        })
     });
 
     // Test SIMD token validation if available
@@ -102,26 +109,27 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
 fn bench_rate_limiting(c: &mut Criterion) {
     let mut group = c.benchmark_group("rate_limiting");
+    
+    let rate_limiter = Arc::new(ShardedRateLimiter::new(RateLimitConfig {
+        requests_per_window: 1000,
+        window_duration_secs: 60,
+        burst_allowance: 50,
+        cleanup_interval_secs: 300,
+    }));
 
     // Test different concurrency levels
     for concurrent_clients in [1, 10, 50, 100, 500].iter() {
-        let rate_limiter = ShardedRateLimiter::new(RateLimitConfig {
-            requests_per_window: 1000,
-            window_duration_secs: 60,
-            burst_allowance: 50,
-            cleanup_interval_secs: 300,
-        });
-
         group.throughput(Throughput::Elements(*concurrent_clients as u64));
         group.bench_with_input(
             BenchmarkId::new("concurrent_rate_checks", concurrent_clients),
             concurrent_clients,
             |b, &concurrent_clients| {
+                let limiter = Arc::clone(&rate_limiter);
                 b.iter(|| {
                     let handles: Vec<_> = (0..concurrent_clients)
                         .map(|i| {
                             let client_key = format!("client_{}", i);
-                            let limiter = &rate_limiter;
+                            let limiter = Arc::clone(&limiter);
                             std::thread::spawn(move || limiter.check_rate_limit(&client_key))
                         })
                         .collect();
@@ -146,7 +154,7 @@ fn bench_rate_limiting(c: &mut Criterion) {
         b.iter(|| {
             let removed = rate_limiter.cleanup_stale_entries();
             black_box(removed)
-        });
+        })
     });
 
     group.finish();
@@ -178,28 +186,34 @@ fn bench_caching_operations(c: &mut Criterion) {
 
     // Test cache read performance
     group.bench_function("cache_read_hit", |b| {
-        b.to_async(&rt).iter(|| async {
-            let key = format!("key_{}", rand::random::<usize>() % 1000);
-            let result: Option<serde_json::Value> = cache.get(&key).await;
-            black_box(result)
+        b.iter(|| {
+            rt.block_on(async {
+                let key = format!("key_{}", rand::random::<usize>() % 1000);
+                let result: Option<serde_json::Value> = cache.get(&key).await;
+                black_box(result)
+            })
         });
     });
 
     group.bench_function("cache_read_miss", |b| {
-        b.to_async(&rt).iter(|| async {
-            let key = format!("missing_key_{}", rand::random::<usize>());
-            let result: Option<serde_json::Value> = cache.get(&key).await;
-            black_box(result)
+        b.iter(|| {
+            rt.block_on(async {
+                let key = format!("missing_key_{}", rand::random::<usize>());
+                let result: Option<serde_json::Value> = cache.get(&key).await;
+                black_box(result)
+            })
         });
     });
 
     // Test cache write performance
     group.bench_function("cache_write", |b| {
-        b.to_async(&rt).iter(|| async {
-            let key = format!("new_key_{}", rand::random::<usize>());
-            let value = json!({"test": "data", "timestamp": chrono::Utc::now().timestamp()});
-            let result = cache.set(&key, &value, None).await;
-            black_box(result)
+        b.iter(|| {
+            rt.block_on(async {
+                let key = format!("new_key_{}", rand::random::<usize>());
+                let value = json!({"test": "data", "timestamp": chrono::Utc::now().timestamp()});
+                let result = cache.set(&key, &value, None).await;
+                black_box(result)
+            })
         });
     });
 
@@ -210,24 +224,26 @@ fn bench_caching_operations(c: &mut Criterion) {
             BenchmarkId::new("concurrent_cache_ops", concurrent_ops),
             concurrent_ops,
             |b, &concurrent_ops| {
-                b.to_async(&rt).iter(|| async {
-                    let mut handles = Vec::new();
+                b.iter(|| {
+                    rt.block_on(async {
+                        let mut handles = Vec::new();
 
-                    for i in 0..concurrent_ops {
-                        let cache = &cache;
-                        let handle = tokio::spawn(async move {
-                            let key = format!("concurrent_key_{}", i);
-                            let value = json!({"operation": i, "timestamp": chrono::Utc::now().timestamp()});
-                            cache.set(&key, &value, None).await.unwrap();
+                        for i in 0..concurrent_ops {
+                            let cache = &cache;
+                            let handle = tokio::spawn(async move {
+                                let key = format!("concurrent_key_{}", i);
+                                let value = json!({"operation": i, "timestamp": chrono::Utc::now().timestamp()});
+                                cache.set(&key, &value, None).await.unwrap();
 
-                            let retrieved: Option<serde_json::Value> = cache.get(&key).await;
-                            retrieved
-                        });
-                        handles.push(handle);
-                    }
+                                let retrieved: Option<serde_json::Value> = cache.get(&key).await;
+                                retrieved
+                            });
+                            handles.push(handle);
+                        }
 
-                    let results: Vec<_> = futures::future::join_all(handles).await;
-                    black_box(results)
+                        let results: Vec<_> = futures::future::join_all(handles).await;
+                        black_box(results)
+                    });
                 });
             },
         );
@@ -253,15 +269,17 @@ fn bench_async_security_operations(c: &mut Criterion) {
 
     // Test single async operation
     group.bench_function("single_security_operation", |b| {
-        b.to_async(&rt).iter(|| async {
-            let result = executor
-                .execute_operation(async {
-                    // Simulate security validation
-                    tokio::time::sleep(Duration::from_millis(1)).await;
-                    Ok::<String, AsyncError>("validation_success".to_string())
-                })
-                .await;
-            black_box(result)
+        b.iter(|| {
+            rt.block_on(async {
+                let result = executor
+                    .execute_operation(async {
+                        // Simulate security validation
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                        Ok::<String, AsyncError>("validation_success".to_string())
+                    })
+                    .await;
+                black_box(result)
+            })
         });
     });
 
@@ -272,18 +290,20 @@ fn bench_async_security_operations(c: &mut Criterion) {
             BenchmarkId::new("batch_security_operations", batch_size),
             batch_size,
             |b, &batch_size| {
-                b.to_async(&rt).iter(|| async {
-                    let operations = (0..batch_size)
-                        .map(|i| async move {
-                            // Simulate different security operations
-                            let delay = Duration::from_millis(1 + (i % 5) as u64);
-                            tokio::time::sleep(delay).await;
-                            Ok::<String, AsyncError>(format!("operation_{}", i))
-                        })
-                        .collect();
+                b.iter(|| {
+                    rt.block_on(async {
+                        let operations = (0..batch_size)
+                            .map(|i| async move {
+                                // Simulate different security operations
+                                let delay = Duration::from_millis(1 + (i % 5) as u64);
+                                tokio::time::sleep(delay).await;
+                                Ok::<String, AsyncError>(format!("operation_{}", i))
+                            })
+                            .collect();
 
-                    let results = executor.execute_batch(operations).await;
-                    black_box(results)
+                        let results = executor.execute_batch(operations).await;
+                        black_box(results)
+                    });
                 });
             },
         );
@@ -291,23 +311,25 @@ fn bench_async_security_operations(c: &mut Criterion) {
 
     // Test with failure scenarios
     group.bench_function("async_operations_with_failures", |b| {
-        b.to_async(&rt).iter(|| async {
-            let operations = (0..50)
-                .map(|i| async move {
-                    if i % 10 == 0 {
-                        // Simulate failures for 10% of operations
-                        Err(AsyncError::OperationFailed {
-                            message: "Simulated failure".to_string(),
-                        })
-                    } else {
-                        tokio::time::sleep(Duration::from_millis(1)).await;
-                        Ok::<String, AsyncError>(format!("success_{}", i))
-                    }
-                })
-                .collect();
+        b.iter(|| {
+            rt.block_on(async {
+                let operations = (0..50)
+                    .map(|i| async move {
+                        if i % 10 == 0 {
+                            // Simulate failures for 10% of operations
+                            Err(AsyncError::OperationFailed {
+                                message: "Simulated failure".to_string(),
+                            })
+                        } else {
+                            tokio::time::sleep(Duration::from_millis(1)).await;
+                            Ok::<String, AsyncError>(format!("success_{}", i))
+                        }
+                    })
+                    .collect();
 
-            let results = executor.execute_batch(operations).await;
-            black_box(results)
+                let results = executor.execute_batch(operations).await;
+                black_box(results)
+            })
         });
     });
 
@@ -332,37 +354,39 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
 
     // Token generation + validation + caching pipeline
     group.bench_function("token_generation_pipeline", |b| {
-        b.to_async(&rt).iter(|| async {
-            let client_id = "bench_client";
+        b.iter(|| {
+            rt.block_on(async {
+                let client_id = "bench_client";
 
-            // 1. Check rate limit
-            let rate_result = rate_limiter.check_rate_limit(client_id);
-            if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } =
-                rate_result
-            {
-                return black_box(Err("Rate limited"));
-            }
+                // 1. Check rate limit
+                let rate_result = rate_limiter.check_rate_limit(client_id);
+                if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } =
+                    rate_result
+                {
+                    return black_box(Err("Rate limited"));
+                }
 
-            // 2. Generate secure token
-            let crypto = get_crypto_engine();
-            let token = crypto.generate_secure_token("tk").unwrap();
+                // 2. Generate secure token
+                let crypto = get_crypto_engine();
+                let token = crypto.generate_secure_token("tk").unwrap();
 
-            // 3. Create token metadata
-            let metadata = json!({
-                "client_id": client_id,
-                "scope": "read write",
-                "iat": chrono::Utc::now().timestamp(),
-                "exp": chrono::Utc::now().timestamp() + 3600
-            });
+                // 3. Create token metadata
+                let metadata = json!({
+                    "client_id": client_id,
+                    "scope": "read write",
+                    "iat": chrono::Utc::now().timestamp(),
+                    "exp": chrono::Utc::now().timestamp() + 3600
+                });
 
-            // 4. Cache token
-            let cache_key = format!("token:{}", token);
-            cache
-                .set(&cache_key, &metadata, Some(Duration::from_secs(3600)))
-                .await
-                .unwrap();
+                // 4. Cache token
+                let cache_key = format!("token:{}", token);
+                cache
+                    .set(&cache_key, &metadata, Some(Duration::from_secs(3600)))
+                    .await
+                    .unwrap();
 
-            black_box(Ok(token))
+                black_box(Ok(token))
+            })
         });
     });
 
@@ -392,31 +416,33 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
             tokens
         });
 
-        b.to_async(&rt).iter(|| async {
-            let token = &tokens[rand::random::<usize>() % tokens.len()];
+        b.iter(|| {
+            rt.block_on(async {
+                let token = &tokens[rand::random::<usize>() % tokens.len()];
 
-            // 1. Check rate limit
-            let rate_result = rate_limiter.check_rate_limit("introspect_client");
-            if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } =
-                rate_result
-            {
-                return black_box(Err("Rate limited"));
-            }
+                // 1. Check rate limit
+                let rate_result = rate_limiter.check_rate_limit("introspect_client");
+                if let auth_service::rate_limit_optimized::RateLimitResult::RateLimited { .. } =
+                    rate_result
+                {
+                    return black_box(Err("Rate limited"));
+                }
 
-            // 2. Lookup token in cache
-            let cache_key = format!("token:{}", token);
-            let metadata: Option<serde_json::Value> = cache.get(&cache_key).await;
+                // 2. Lookup token in cache
+                let cache_key = format!("token:{}", token);
+                let metadata: Option<serde_json::Value> = cache.get(&cache_key).await;
 
-            // 3. Validate token format
-            let crypto = get_crypto_engine();
-            let is_valid_format = token.starts_with("tk_") && token.len() > 10;
+                // 3. Validate token format
+                let crypto = get_crypto_engine();
+                let is_valid_format = token.starts_with("tk_") && token.len() > 10;
 
-            let result = match (metadata, is_valid_format) {
-                (Some(meta), true) => Ok(meta),
-                _ => Err("Invalid token"),
-            };
+                let result = match (metadata, is_valid_format) {
+                    (Some(meta), true) => Ok(meta),
+                    _ => Err("Invalid token"),
+                };
 
-            black_box(result)
+                black_box(result)
+            })
         });
     });
 
@@ -427,47 +453,49 @@ fn bench_token_operations_e2e(c: &mut Criterion) {
             BenchmarkId::new("concurrent_token_ops", concurrent_ops),
             concurrent_ops,
             |b, &concurrent_ops| {
-                b.to_async(&rt).iter(|| async {
-                    let mut handles = Vec::new();
+                b.iter(|| {
+                    rt.block_on(async {
+                        let mut handles = Vec::new();
 
-                    for i in 0..concurrent_ops {
-                        let rate_limiter = rate_limiter.clone();
-                        let cache = cache.clone();
+                        for i in 0..concurrent_ops {
+                            let rate_limiter = rate_limiter.clone();
+                            let cache = cache.clone();
 
-                        let handle = tokio::spawn(async move {
-                            // Mix of operations: 70% introspection, 30% generation
-                            if i % 10 < 7 {
-                                // Token introspection
-                                let client_id = format!("client_{}", i);
-                                rate_limiter.check_rate_limit(&client_id);
+                            let handle = tokio::spawn(async move {
+                                // Mix of operations: 70% introspection, 30% generation
+                                if i % 10 < 7 {
+                                    // Token introspection
+                                    let client_id = format!("client_{}", i);
+                                    rate_limiter.check_rate_limit(&client_id);
 
-                                let cache_key = format!("token:sample_{}", i);
-                                let result: Option<serde_json::Value> = cache.get(&cache_key).await;
-                                black_box(result)
-                            } else {
-                                // Token generation
-                                let client_id = format!("gen_client_{}", i);
-                                rate_limiter.check_rate_limit(&client_id);
+                                    let cache_key = format!("token:sample_{}", i);
+                                    let result: Option<serde_json::Value> = cache.get(&cache_key).await;
+                                    black_box(result)
+                                } else {
+                                    // Token generation
+                                    let client_id = format!("gen_client_{}", i);
+                                    rate_limiter.check_rate_limit(&client_id);
 
-                                let crypto = get_crypto_engine();
-                                let token = crypto.generate_secure_token("tk").unwrap();
+                                    let crypto = get_crypto_engine();
+                                    let token = crypto.generate_secure_token("tk").unwrap();
 
-                                let metadata = json!({
-                                    "client_id": client_id,
-                                    "scope": "read",
-                                    "iat": chrono::Utc::now().timestamp()
-                                });
+                                    let metadata = json!({
+                                        "client_id": client_id,
+                                        "scope": "read",
+                                        "iat": chrono::Utc::now().timestamp()
+                                    });
 
-                                let cache_key = format!("token:{}", token);
-                                cache.set(&cache_key, &metadata, None).await.unwrap();
-                                black_box(token)
-                            }
-                        });
-                        handles.push(handle);
-                    }
+                                    let cache_key = format!("token:{}", token);
+                                    cache.set(&cache_key, &metadata, None).await.unwrap();
+                                    black_box(token)
+                                }
+                            });
+                            handles.push(handle);
+                        }
 
-                    let results: Vec<_> = futures::future::join_all(handles).await;
-                    black_box(results)
+                        let results: Vec<_> = futures::future::join_all(handles).await;
+                        black_box(results)
+                    });
                 });
             },
         );
@@ -499,7 +527,7 @@ fn bench_memory_usage(c: &mut Criterion) {
             }
 
             black_box((dashmap.len(), hashmap.len()))
-        });
+        })
     });
 
     // Test Arc vs Rc performance
@@ -517,7 +545,7 @@ fn bench_memory_usage(c: &mut Criterion) {
             }
 
             black_box((arc_clones.len(), rc_clones.len()))
-        });
+        })
     });
 
     group.finish();

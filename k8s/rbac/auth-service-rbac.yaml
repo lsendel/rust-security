@@ -3,6 +3,10 @@ kind: ServiceAccount
 metadata:
   name: auth-service
   namespace: rust-security
+  annotations:
+    # Disable automatic token mounting for security
+    kubernetes.io/service-account-token: "false"
+automountServiceAccountToken: false
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -19,11 +23,10 @@ rules:
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "watch"]
-# Allow reading own Pod info for health checks
+# Allow reading own Pod info for health checks (using label selector instead of resourceNames)
 - apiGroups: [""]
   resources: ["pods"]
-  verbs: ["get"]
-  resourceNames: ["auth-service"]
+  verbs: ["get", "list"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -41,30 +44,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: auth-service-cluster-role
-rules:
-# Allow reading cluster-wide resources for monitoring
-- apiGroups: [""]
-  resources: ["nodes", "nodes/metrics"]
-  verbs: ["get", "list"]
-# Allow reading metrics from other services
-- apiGroups: [""]
-  resources: ["services", "endpoints"]
-  verbs: ["get", "list", "watch"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: auth-service-cluster-binding
-subjects:
-- kind: ServiceAccount
-  name: auth-service
-  namespace: rust-security
-roleRef:
-  kind: ClusterRole
-  name: auth-service-cluster-role
-  apiGroup: rbac.authorization.k8s.io
+# Removed overly permissive ClusterRole and ClusterRoleBinding
+# Auth service should not need cluster-wide permissions
+# If monitoring is needed, it should be handled by dedicated monitoring components

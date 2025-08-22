@@ -106,7 +106,7 @@ pub async fn admin_auth_middleware(
                 "Admin rate limit exceeded"
             );
 
-            let mut event = SecurityEvent {
+            let event = SecurityEvent {
                 event_id: uuid::Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now(),
                 event_type: SecurityEventType::SecurityViolation,
@@ -153,7 +153,7 @@ pub async fn admin_auth_middleware(
             );
 
             // Log successful admin access
-            let mut event = SecurityEvent {
+            let event = SecurityEvent {
                 event_id: uuid::Uuid::new_v4().to_string(),
                 timestamp: chrono::Utc::now(),
                 event_type: SecurityEventType::AdminAccess,
@@ -186,7 +186,9 @@ pub async fn admin_auth_middleware(
 
             // If request signing is required, validate the signature with replay protection
             if config.require_request_signing {
-                if let Err(e) = validate_request_with_replay_protection(&headers, &config, method, path).await {
+                if let Err(e) =
+                    validate_request_with_replay_protection(&headers, &config, method, path).await
+                {
                     return handle_auth_failure(e, method, path, &client_ip, &headers);
                 }
             }
@@ -370,6 +372,7 @@ async fn validate_request_with_replay_protection(
 }
 
 /// Legacy validate request signature function (now deprecated)
+#[allow(dead_code)]
 async fn validate_request_signature(
     headers: &HeaderMap,
     config: &AdminAuthConfig,
@@ -457,7 +460,7 @@ fn handle_auth_failure(
         serde_json::json!(redact_log(&auth_error.to_string())),
     );
 
-    let mut event = SecurityEvent {
+    let event = SecurityEvent {
         event_id: uuid::Uuid::new_v4().to_string(),
         timestamp: chrono::Utc::now(),
         event_type: SecurityEventType::AuthenticationFailure,
@@ -492,6 +495,7 @@ fn handle_auth_failure(
 }
 
 /// Handle signature validation failures with proper logging and response
+#[allow(dead_code)]
 fn handle_signature_failure(
     error: AuthError,
     method: &str,
@@ -514,7 +518,7 @@ fn handle_signature_failure(
     );
 
     // Log failed signature verification
-    let mut event = SecurityEvent {
+    let event = SecurityEvent {
         event_id: uuid::Uuid::new_v4().to_string(),
         timestamp: chrono::Utc::now(),
         event_type: SecurityEventType::SecurityViolation,
@@ -552,6 +556,7 @@ fn handle_signature_failure(
 }
 
 /// Calculate HMAC-SHA256 signature
+#[allow(dead_code)]
 fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, AuthError> {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
@@ -574,6 +579,7 @@ fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, AuthErro
 }
 
 /// Constant-time string comparison to prevent timing attacks
+#[allow(dead_code)]
 fn constant_time_compare(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
@@ -696,7 +702,7 @@ mod tests {
     #[tokio::test]
     async fn test_replay_protection_integration() {
         use crate::admin_replay_protection::ReplayProtection;
-        
+
         let config = AdminAuthConfig {
             require_request_signing: true,
             signing_secret: Some("test_secret_key".to_string()),
@@ -712,7 +718,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let signature = ReplayProtection::create_signature(
             "test_secret_key",
             "POST",
@@ -722,15 +728,20 @@ mod tests {
         );
 
         headers.insert("X-Request-Nonce", nonce.parse().unwrap());
-        headers.insert("X-Request-Timestamp", timestamp.to_string().parse().unwrap());
+        headers.insert(
+            "X-Request-Timestamp",
+            timestamp.to_string().parse().unwrap(),
+        );
         headers.insert("X-Request-Signature", signature.parse().unwrap());
 
         // First request should succeed
-        let result = validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
+        let result =
+            validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
         assert!(result.is_ok());
 
         // Replay should fail
-        let result2 = validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
+        let result2 =
+            validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
         assert!(result2.is_err());
     }
 }

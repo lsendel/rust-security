@@ -1,11 +1,14 @@
+use auth_service::jwks_rotation::{JwksManager, InMemoryKeyStorage};
+use auth_service::session_store::RedisSessionStore;
 use auth_service::{
-    app, sql_store::SqlStore, store::HybridStore, AppState, IntrospectRequest, IntrospectResponse,
+    app, api_key_store::ApiKeyStore, sql_store::SqlStore, store::{HybridStore, TokenStore}, AppState, IntrospectRequest, IntrospectResponse,
 };
-use common::Store;
+use ::common::Store;
 use reqwest::header::CONTENT_TYPE;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 
 async fn spawn_app(store: Arc<dyn Store>) -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -14,10 +17,21 @@ async fn spawn_app(store: Arc<dyn Store>) -> String {
     let mut client_credentials = HashMap::new();
     client_credentials.insert("test_client".to_string(), "test_secret".to_string());
 
+    let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
+    let session_store = Arc::new(RedisSessionStore::new(None).await)
+        as Arc<dyn auth_service::session_store::SessionStore>;
+    let jwks_manager = Arc::new(JwksManager::new(
+        Default::default(),
+        Arc::new(InMemoryKeyStorage::new())
+    ).await.unwrap());
+
     let app_state = AppState {
         store,
+        session_store,
+        token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials,
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
+        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),
         )),
@@ -26,6 +40,8 @@ async fn spawn_app(store: Arc<dyn Store>) -> String {
                 auth_service::backpressure::BackpressureConfig::default(),
             ),
         ),
+        api_key_store,
+        jwks_manager,
     };
 
     let app = app(app_state);

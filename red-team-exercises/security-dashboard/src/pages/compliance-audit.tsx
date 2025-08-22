@@ -2,17 +2,11 @@ import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Shield, 
-  CheckCircle, 
   AlertCircle, 
-  XCircle, 
   FileText, 
   Download,
   Calendar,
-  TrendingUp,
-  BarChart3,
-  Users,
-  Lock,
-  Eye
+  TrendingUp
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -25,7 +19,7 @@ import { ComplianceControlsMatrix } from '@/components/compliance/compliance-con
 import { PolicyAdherenceChart } from '@/components/charts/policy-adherence-chart'
 import { DataProtectionMetrics } from '@/components/metrics/data-protection-metrics'
 import { useQuery } from '@tanstack/react-query'
-import { formatNumber, formatPercentage, getComplianceStatus } from '@/lib/utils'
+import { formatPercentage, getComplianceStatus } from '@/lib/utils'
 
 interface ComplianceFramework {
   id: string
@@ -45,10 +39,10 @@ interface ComplianceFramework {
 
 export function ComplianceAudit() {
   const [selectedFramework, setSelectedFramework] = useState('SOC2')
-  const [selectedTimeRange, setSelectedTimeRange] = useState('30d')
+  const [selectedTimeRange, _setSelectedTimeRange] = useState('30d')
 
   // Fetch compliance data
-  const { data: complianceData, isLoading } = useQuery({
+  const { data: _complianceData, isLoading: _isLoading } = useQuery({
     queryKey: ['compliance-data', selectedTimeRange],
     queryFn: async () => {
       const response = await fetch(`/api/compliance?timeRange=${selectedTimeRange}`)
@@ -58,7 +52,7 @@ export function ComplianceAudit() {
   })
 
   // Mock compliance frameworks data
-  const frameworks: ComplianceFramework[] = [
+  const frameworks: ComplianceFramework[] = useMemo(() => [
     {
       id: 'SOC2',
       name: 'SOC 2 Type II',
@@ -99,7 +93,7 @@ export function ComplianceAudit() {
       status: 'compliant',
       controls: { total: 114, compliant: 101, partial: 10, nonCompliant: 3 }
     }
-  ]
+  ], [])
 
   const selectedFrameworkData = frameworks.find(f => f.id === selectedFramework)
 
@@ -247,7 +241,7 @@ export function ComplianceAudit() {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {frameworks.map((framework) => {
-                const { status, color } = getComplianceStatus(framework.overallScore)
+                const { status: _status, color } = getComplianceStatus(framework.overallScore)
                 return (
                   <Card 
                     key={framework.id}

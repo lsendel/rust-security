@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use url::Url;
 
 /// Comprehensive redirect URI validation for OAuth2 security
+#[allow(dead_code)]
 pub struct RedirectUriValidator {
     /// Registered redirect URIs for each client
     client_redirect_uris: std::collections::HashMap<String, HashSet<String>>,

@@ -1,4 +1,4 @@
-use crate::api_key_store::{ApiKey, ApiKeyDetails, ApiKeyStore};
+use crate::api_key_store::{ApiKey, ApiKeyDetails};
 use crate::errors::{internal_error, AuthError};
 use crate::AppState;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
@@ -23,7 +23,7 @@ pub struct CreateApiKeyResponse {
 
 use axum::extract::Path;
 
-use axum::routing::{delete, get};
+use axum::routing::get;
 
 pub fn router() -> Router<AppState> {
     Router::new()

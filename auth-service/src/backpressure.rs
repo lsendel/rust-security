@@ -105,7 +105,7 @@ impl BackpressureConfig {
 
         if let Ok(val) = std::env::var("LOAD_SHED_THRESHOLD") {
             if let Ok(threshold) = val.parse::<f64>() {
-                if threshold >= 0.0 && threshold <= 1.0 {
+                if (0.0..=1.0).contains(&threshold) {
                     config.load_shed_threshold = threshold;
                 }
             }
@@ -147,6 +147,7 @@ static REQUEST_DURATION: Lazy<Histogram> = Lazy::new(|| {
     .unwrap()
 });
 
+#[allow(dead_code)]
 static QUEUE_DEPTH: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!("auth_request_queue_depth", "Current request queue depth").unwrap()
 });
@@ -423,7 +424,7 @@ mod tests {
         assert_eq!(config.oauth_request_limit, 64 * 1024);
         assert_eq!(config.scim_request_limit, 512 * 1024);
         assert_eq!(config.max_concurrent_requests, 1000);
-        assert!(config.load_shed_threshold > 0.0 && config.load_shed_threshold <= 1.0);
+        assert!((0.0..=1.0).contains(&config.load_shed_threshold));
     }
 
     #[tokio::test]

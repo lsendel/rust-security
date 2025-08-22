@@ -13,6 +13,8 @@ async fn spawn_app() -> String {
     client_credentials.insert("test_client".to_string(), "test_secret".to_string());
 
     let app = app(AppState {
+        store: Arc::new(auth_service::store::HybridStore::new().await),
+        session_store: Arc::new(auth_service::session_store::RedisSessionStore::new(None).await),
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials,
         allowed_scopes: vec!["read".to_string(), "write".to_string()],
@@ -24,6 +26,17 @@ async fn spawn_app() -> String {
             auth_service::backpressure::BackpressureState::new(
                 auth_service::backpressure::BackpressureConfig::default(),
             ),
+        ),
+        api_key_store: auth_service::api_key_store::ApiKeyStore::new(":memory:")
+            .await
+            .unwrap(),
+        jwks_manager: Arc::new(
+            auth_service::jwks_rotation::JwksManager::new(
+                auth_service::jwks_rotation::KeyRotationConfig::default(),
+                Arc::new(auth_service::jwks_rotation::InMemoryKeyStorage::new()),
+            )
+            .await
+            .unwrap(),
         ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });

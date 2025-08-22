@@ -123,7 +123,11 @@ let server = AuthServer::standard()
 // Web app with session management
 let server = AuthServer::standard()
     .with_session_store(RedisStore::new("redis://localhost")?)
-    .with_cookie_settings(secure: true, http_only: true)
+    .with_cookie_settings(CookieSettings {
+        secure: true,
+        http_only: true,
+        ..Default::default()
+    })
     .build()?;
 ```
 

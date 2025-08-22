@@ -7,14 +7,9 @@
 //! - Error handling
 //! - Performance characteristics
 
-use policy_service::{
-    authorize, AuthorizeRequest, AppState,
-};
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{extract::State, Json};
 use cedar_policy::{Authorizer, Entities, PolicySet};
+use policy_service::{authorize, AppState, AuthorizeRequest};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -26,12 +21,12 @@ use once_cell as _;
 use prometheus as _;
 use reqwest as _;
 use serde as _;
+use tempfile as _;
 use thiserror as _;
 use tower_http as _;
 use tracing as _;
 use tracing_subscriber as _;
 use utoipa as _;
-use tempfile as _;
 
 /// Create test policies for authorization scenarios
 fn create_test_policies() -> String {
@@ -152,7 +147,8 @@ when {
     context has source_ip &&
     context.source_ip like "192.168.1.*"
 };
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Create test entities for authorization scenarios
@@ -287,14 +283,15 @@ fn create_test_entities() -> String {
             "attrs": {},
             "parents": []
         }
-    ]).to_string()
+    ])
+    .to_string()
 }
 
 /// Create a test AppState with policies and entities
 fn setup_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
     let policies_str = create_test_policies();
     let policies = policies_str.parse::<PolicySet>()?;
-    
+
     let entities_str = create_test_entities();
     let entities = Entities::from_json_str(&entities_str, None)?;
 
@@ -308,7 +305,7 @@ fn setup_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn test_user_can_read_own_profile() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-1".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -316,7 +313,7 @@ async fn test_user_can_read_own_profile() {
         resource: json!({"type": "Profile", "id": "alice"}),
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -324,7 +321,7 @@ async fn test_user_can_read_own_profile() {
 #[tokio::test]
 async fn test_user_cannot_read_other_profile() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-2".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -332,7 +329,7 @@ async fn test_user_cannot_read_other_profile() {
         resource: json!({"type": "Profile", "id": "bob"}),
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
 }
@@ -340,7 +337,7 @@ async fn test_user_cannot_read_other_profile() {
 #[tokio::test]
 async fn test_admin_can_read_any_profile() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-3".to_string(),
         principal: json!({"type": "User", "id": "bob"}), // Bob is an admin
@@ -348,7 +345,7 @@ async fn test_admin_can_read_any_profile() {
         resource: json!({"type": "Profile", "id": "alice"}),
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -356,7 +353,7 @@ async fn test_admin_can_read_any_profile() {
 #[tokio::test]
 async fn test_admin_can_write_any_profile() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-4".to_string(),
         principal: json!({"type": "User", "id": "bob"}), // Bob is an admin
@@ -364,7 +361,7 @@ async fn test_admin_can_write_any_profile() {
         resource: json!({"type": "Profile", "id": "alice"}),
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -372,7 +369,7 @@ async fn test_admin_can_write_any_profile() {
 #[tokio::test]
 async fn test_employee_can_read_public_documents() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-5".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -380,7 +377,7 @@ async fn test_employee_can_read_public_documents() {
         resource: json!({"type": "Document", "id": "doc4"}), // Public document
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -388,7 +385,7 @@ async fn test_employee_can_read_public_documents() {
 #[tokio::test]
 async fn test_employee_can_read_own_department_documents() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-6".to_string(),
         principal: json!({"type": "User", "id": "alice"}), // Alice is in engineering
@@ -396,7 +393,7 @@ async fn test_employee_can_read_own_department_documents() {
         resource: json!({"type": "Document", "id": "doc1"}), // Engineering document
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -404,7 +401,7 @@ async fn test_employee_can_read_own_department_documents() {
 #[tokio::test]
 async fn test_employee_cannot_read_other_department_documents() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-7".to_string(),
         principal: json!({"type": "User", "id": "alice"}), // Alice is in engineering
@@ -412,7 +409,7 @@ async fn test_employee_cannot_read_other_department_documents() {
         resource: json!({"type": "Document", "id": "doc2"}), // HR document
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
 }
@@ -420,7 +417,7 @@ async fn test_employee_cannot_read_other_department_documents() {
 #[tokio::test]
 async fn test_sensitive_document_denied_without_clearance() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-8".to_string(),
         principal: json!({"type": "User", "id": "alice"}), // Alice doesn't have top-secret clearance
@@ -428,7 +425,7 @@ async fn test_sensitive_document_denied_without_clearance() {
         resource: json!({"type": "Document", "id": "doc3"}), // Sensitive financial document
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
 }
@@ -436,7 +433,7 @@ async fn test_sensitive_document_denied_without_clearance() {
 #[tokio::test]
 async fn test_sensitive_document_allowed_with_clearance() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-9".to_string(),
         principal: json!({"type": "User", "id": "bob"}), // Bob has top-secret clearance
@@ -444,7 +441,7 @@ async fn test_sensitive_document_allowed_with_clearance() {
         resource: json!({"type": "Document", "id": "doc3"}), // Sensitive financial document
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -452,7 +449,7 @@ async fn test_sensitive_document_allowed_with_clearance() {
 #[tokio::test]
 async fn test_document_creation_with_context() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-10".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -460,7 +457,7 @@ async fn test_document_creation_with_context() {
         resource: json!({"type": "Document", "id": "new_doc"}),
         context: json!({"request_type": "document_creation", "department": "engineering"}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -468,7 +465,7 @@ async fn test_document_creation_with_context() {
 #[tokio::test]
 async fn test_document_creation_wrong_department() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-11".to_string(),
         principal: json!({"type": "User", "id": "alice"}), // Alice is in engineering
@@ -476,7 +473,7 @@ async fn test_document_creation_wrong_department() {
         resource: json!({"type": "Document", "id": "new_doc"}),
         context: json!({"request_type": "document_creation", "department": "hr"}), // Wrong department
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
 }
@@ -484,7 +481,7 @@ async fn test_document_creation_wrong_department() {
 #[tokio::test]
 async fn test_time_based_access_allowed() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-12".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -495,7 +492,7 @@ async fn test_time_based_access_allowed() {
             "source_ip": "192.168.1.100"
         }),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -503,7 +500,7 @@ async fn test_time_based_access_allowed() {
 #[tokio::test]
 async fn test_time_based_access_denied_outside_hours() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-13".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -514,7 +511,7 @@ async fn test_time_based_access_denied_outside_hours() {
             "source_ip": "192.168.1.100"
         }),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
 }
@@ -522,7 +519,7 @@ async fn test_time_based_access_denied_outside_hours() {
 #[tokio::test]
 async fn test_ip_based_access_denied() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-14".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -533,7 +530,7 @@ async fn test_ip_based_access_denied() {
             "source_ip": "10.0.0.100" // Outside allowed IP range
         }),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
 }
@@ -541,7 +538,7 @@ async fn test_ip_based_access_denied() {
 #[tokio::test]
 async fn test_invalid_action_error() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-15".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
@@ -549,7 +546,7 @@ async fn test_invalid_action_error() {
         resource: json!({"type": "Profile", "id": "alice"}),
         context: json!({}),
     };
-    
+
     let result = authorize(State(state), Json(request)).await;
     assert!(result.is_err());
 }
@@ -557,7 +554,7 @@ async fn test_invalid_action_error() {
 #[tokio::test]
 async fn test_invalid_principal_error() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let request = AuthorizeRequest {
         request_id: "test-16".to_string(),
         principal: json!({"invalid": "format"}), // Invalid principal format
@@ -565,7 +562,7 @@ async fn test_invalid_principal_error() {
         resource: json!({"type": "Profile", "id": "alice"}),
         context: json!({}),
     };
-    
+
     let result = authorize(State(state), Json(request)).await;
     assert!(result.is_err());
 }
@@ -573,10 +570,10 @@ async fn test_invalid_principal_error() {
 #[tokio::test]
 async fn test_performance_multiple_requests() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let start = std::time::Instant::now();
     let num_requests = 100;
-    
+
     for i in 0..num_requests {
         let request = AuthorizeRequest {
             request_id: format!("perf-test-{}", i),
@@ -585,28 +582,36 @@ async fn test_performance_multiple_requests() {
             resource: json!({"type": "Profile", "id": "alice"}),
             context: json!({}),
         };
-        
-        let response = authorize(State(state.clone()), Json(request)).await.unwrap();
+
+        let response = authorize(State(state.clone()), Json(request))
+            .await
+            .unwrap();
         assert_eq!(response.decision, "Allow");
     }
-    
+
     let duration = start.elapsed();
     let avg_duration = duration / num_requests;
-    
+
     // Each request should take less than 10ms on average
-    assert!(avg_duration.as_millis() < 10, "Authorization took too long: {:?} avg", avg_duration);
-    
-    println!("Performance test: {} requests in {:?} (avg: {:?})", 
-             num_requests, duration, avg_duration);
+    assert!(
+        avg_duration.as_millis() < 10,
+        "Authorization took too long: {:?} avg",
+        avg_duration
+    );
+
+    println!(
+        "Performance test: {} requests in {:?} (avg: {:?})",
+        num_requests, duration, avg_duration
+    );
 }
 
 #[tokio::test]
 async fn test_concurrent_authorization_requests() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     let mut handles = vec![];
     let num_concurrent = 50;
-    
+
     for i in 0..num_concurrent {
         let state_clone = state.clone();
         let handle = tokio::spawn(async move {
@@ -617,33 +622,40 @@ async fn test_concurrent_authorization_requests() {
                 resource: json!({"type": "Profile", "id": "alice"}),
                 context: json!({}),
             };
-            
+
             authorize(State(state_clone), Json(request)).await.unwrap()
         });
         handles.push(handle);
     }
-    
+
     let start = std::time::Instant::now();
     let results = futures::future::join_all(handles).await;
     let duration = start.elapsed();
-    
+
     // All requests should succeed
     assert_eq!(results.len(), num_concurrent);
     for result in results {
         let response = result.unwrap();
         assert_eq!(response.decision, "Allow");
     }
-    
+
     // Total time should be reasonable even with concurrent requests
-    assert!(duration.as_millis() < 1000, "Concurrent requests took too long: {:?}", duration);
-    
-    println!("Concurrent test: {} requests in {:?}", num_concurrent, duration);
+    assert!(
+        duration.as_millis() < 1000,
+        "Concurrent requests took too long: {:?}",
+        duration
+    );
+
+    println!(
+        "Concurrent test: {} requests in {:?}",
+        num_concurrent, duration
+    );
 }
 
-#[tokio::test] 
+#[tokio::test]
 async fn test_complex_policy_evaluation() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     // Test a complex scenario with multiple conditions
     let request = AuthorizeRequest {
         request_id: "complex-test".to_string(),
@@ -656,7 +668,7 @@ async fn test_complex_policy_evaluation() {
             "security_level": "high"
         }),
     };
-    
+
     // Charlie should be denied because he doesn't have top-secret clearance
     // even though it's his department's document
     let response = authorize(State(state), Json(request)).await.unwrap();
@@ -666,7 +678,7 @@ async fn test_complex_policy_evaluation() {
 #[tokio::test]
 async fn test_policy_conflict_resolution() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     // Test a case where permit and forbid policies might conflict
     // The forbid policy for sensitive documents should override department access
     let request = AuthorizeRequest {
@@ -676,7 +688,7 @@ async fn test_policy_conflict_resolution() {
         resource: json!({"type": "Document", "id": "doc3"}), // Sensitive document
         context: json!({}),
     };
-    
+
     // Should be denied due to forbid policy for sensitive documents
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Deny");
@@ -687,8 +699,10 @@ async fn test_policy_conflict_resolution() {
 async fn test_policy_loading_from_files() {
     // Test parsing policies and entities directly without changing environment
     let policies_str = "permit(principal, action, resource);";
-    let policies = policies_str.parse::<PolicySet>().expect("Should parse basic policy");
-    
+    let policies = policies_str
+        .parse::<PolicySet>()
+        .expect("Should parse basic policy");
+
     let entities_str = r#"[
   {
     "uid": {"type": "User", "id": "test"},
@@ -696,16 +710,16 @@ async fn test_policy_loading_from_files() {
     "parents": []
   }
 ]"#;
-    let entities = Entities::from_json_str(entities_str, None)
-        .expect("Should parse basic entities");
-    
+    let entities =
+        Entities::from_json_str(entities_str, None).expect("Should parse basic entities");
+
     // Test that we can create AppState
     let state = AppState {
         authorizer: Authorizer::new(),
         policies,
         entities,
     };
-    
+
     // Test a basic authorization with this state
     let request = AuthorizeRequest {
         request_id: "file-test".to_string(),
@@ -714,10 +728,10 @@ async fn test_policy_loading_from_files() {
         resource: json!({"type": "Resource", "id": "test"}),
         context: json!({}),
     };
-    
+
     let state_arc = Arc::new(state);
     let response = authorize(State(state_arc), Json(request)).await.unwrap();
-    
+
     // Should allow since we have a simple permit-all policy
     assert_eq!(response.decision, "Allow");
 }
@@ -725,7 +739,7 @@ async fn test_policy_loading_from_files() {
 #[tokio::test]
 async fn test_entity_hierarchy_access() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     // Test that user inherits permissions from their groups
     let request = AuthorizeRequest {
         request_id: "hierarchy-test".to_string(),
@@ -734,7 +748,7 @@ async fn test_entity_hierarchy_access() {
         resource: json!({"type": "Document", "id": "doc4"}), // Public document accessible to employees
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow");
 }
@@ -742,7 +756,7 @@ async fn test_entity_hierarchy_access() {
 #[tokio::test]
 async fn test_attribute_based_access() {
     let state = setup_test_app_state().expect("Failed to setup test state");
-    
+
     // Test access based on user attributes
     let request = AuthorizeRequest {
         request_id: "attribute-test".to_string(),
@@ -751,7 +765,7 @@ async fn test_attribute_based_access() {
         resource: json!({"type": "Document", "id": "doc3"}), // Sensitive document
         context: json!({}),
     };
-    
+
     let response = authorize(State(state), Json(request)).await.unwrap();
     assert_eq!(response.decision, "Allow"); // Bob has top-secret clearance
 }

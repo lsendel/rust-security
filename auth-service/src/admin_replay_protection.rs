@@ -3,9 +3,8 @@ use dashmap::DashMap;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, warn};
-use uuid::Uuid;
 
 /// Replay protection for admin requests
 /// Prevents replay attacks by tracking nonces and enforcing time windows
@@ -60,17 +59,14 @@ impl ReplayProtection {
         &self,
         nonce: &str,
         timestamp: u64,
-        signature: &str,
+        _signature: &str,
     ) -> Result<(), AuthError> {
         // Step 1: Validate timestamp is within acceptable window
         self.validate_timestamp(timestamp)?;
 
         // Step 2: Check if nonce has been used
         if self.is_nonce_used(nonce).await? {
-            warn!(
-                "Replay attack detected: nonce {} already used",
-                nonce
-            );
+            warn!("Replay attack detected: nonce {} already used", nonce);
             return Err(AuthError::InvalidRequest {
                 reason: "Request replay detected".to_string(),
             });
@@ -151,7 +147,10 @@ impl ReplayProtection {
 
         // Try Redis first
         if let Some(client) = &self.redis_client {
-            match self.store_redis_nonce(client, nonce, timestamp, expiry).await {
+            match self
+                .store_redis_nonce(client, nonce, timestamp, expiry)
+                .await
+            {
                 Ok(_) => {
                     // Also store locally for redundancy
                     self.local_cache.insert(nonce.to_string(), timestamp);
@@ -180,7 +179,7 @@ impl ReplayProtection {
     ) -> Result<(), redis::RedisError> {
         let mut conn = client.get_multiplexed_async_connection().await?;
         let key = format!("admin:nonce:{}", nonce);
-        
+
         // Store with expiry
         conn.set_ex::<_, _, ()>(&key, timestamp, expiry).await?;
         Ok(())
@@ -196,15 +195,14 @@ impl ReplayProtection {
         let expired_window = self.time_window + self.max_clock_skew;
 
         // Remove entries older than the time window
-        self.local_cache.retain(|_, timestamp| {
-            *timestamp + expired_window > now
-        });
+        self.local_cache
+            .retain(|_, timestamp| *timestamp + expired_window > now);
     }
 
     /// Generate a secure nonce
     pub fn generate_nonce() -> String {
+        use base64::{engine::general_purpose, Engine as _};
         use rand::RngCore;
-        use base64::{Engine as _, engine::general_purpose};
         let mut bytes = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut bytes);
         general_purpose::STANDARD.encode(&bytes)
@@ -219,11 +217,11 @@ impl ReplayProtection {
         timestamp: u64,
     ) -> String {
         use crate::crypto_unified::UnifiedHmac;
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
 
         let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
         let hmac_result = UnifiedHmac::hmac_sha256(secret.as_bytes(), message.as_bytes());
-        
+
         general_purpose::STANDARD.encode(hmac_result)
     }
 
@@ -237,15 +235,15 @@ impl ReplayProtection {
         provided_signature: &str,
     ) -> bool {
         use crate::crypto_unified::UnifiedHmac;
-        use base64::{Engine as _, engine::general_purpose};
+        use base64::{engine::general_purpose, Engine as _};
 
         let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
-        
+
         // Decode the provided signature
         let Ok(provided_bytes) = general_purpose::STANDARD.decode(provided_signature) else {
             return false;
         };
-        
+
         // Use ring's constant-time HMAC verification
         UnifiedHmac::verify_hmac_sha256(secret.as_bytes(), message.as_bytes(), &provided_bytes)
     }
@@ -280,11 +278,14 @@ impl AdminRateLimiter {
         let window_start = now - self.window_seconds;
 
         // Get or create request history
-        let mut entry = self.requests.entry(admin_key.to_string()).or_insert_with(Vec::new);
-        
+        let mut entry = self
+            .requests
+            .entry(admin_key.to_string())
+            .or_insert_with(Vec::new);
+
         // Remove old entries outside the window
         entry.retain(|timestamp| *timestamp > window_start);
-        
+
         // Check if limit exceeded
         if entry.len() >= self.max_requests as usize {
             warn!(
@@ -298,7 +299,7 @@ impl AdminRateLimiter {
 
         // Add current request
         entry.push(now);
-        
+
         Ok(())
     }
 
@@ -325,7 +326,7 @@ mod tests {
     #[tokio::test]
     async fn test_replay_protection() {
         let replay_protection = ReplayProtection::new(None, 300, 60);
-        
+
         let nonce = ReplayProtection::generate_nonce();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -353,9 +354,7 @@ mod tests {
         let nonce = "test_nonce";
         let timestamp = 1234567890;
 
-        let signature = ReplayProtection::create_signature(
-            secret, method, path, nonce, timestamp
-        );
+        let signature = ReplayProtection::create_signature(secret, method, path, nonce, timestamp);
 
         assert!(ReplayProtection::verify_signature(
             secret, method, path, nonce, timestamp, &signature
@@ -363,7 +362,12 @@ mod tests {
 
         // Wrong signature should fail
         assert!(!ReplayProtection::verify_signature(
-            secret, method, path, nonce, timestamp, "wrong_signature"
+            secret,
+            method,
+            path,
+            nonce,
+            timestamp,
+            "wrong_signature"
         ));
     }
 
@@ -384,7 +388,7 @@ mod tests {
     #[tokio::test]
     async fn test_timestamp_validation() {
         let replay_protection = ReplayProtection::new(None, 300, 60);
-        
+
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()

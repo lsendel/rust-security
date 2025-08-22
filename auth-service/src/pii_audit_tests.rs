@@ -1,10 +1,8 @@
-use crate::errors::{internal_error, AuthError};
+use crate::errors::AuthError;
 /// Automated tests to ensure no secrets or tokens are logged at any level
 /// This module provides comprehensive testing for PII/SPI redaction compliance
 use crate::pii_protection::{DataClassification, PiiSpiRedactor, SensitiveDataType};
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
-use regex::Regex;
-use std::collections::HashSet;
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Test data samples that should be redacted
 pub struct SensitiveTestData {
@@ -156,7 +154,6 @@ fn redactor() -> PiiSpiRedactor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{self, Write};
 
     #[test]
     fn test_error_message_redaction_compliance() {

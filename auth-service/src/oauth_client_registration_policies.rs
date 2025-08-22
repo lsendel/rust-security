@@ -3,13 +3,12 @@
 //! Implements comprehensive policy enforcement for OAuth 2.0 dynamic client registration
 //! including security policies, compliance validation, and administrative controls.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use std::collections::HashMap;
+use std::net::IpAddr;
+use tracing::debug;
 use url::Url;
 
 use crate::oauth_client_registration::{ClientRegistrationError, ClientRegistrationRequest};
@@ -473,6 +472,7 @@ pub struct ContentFilteringPolicy {
 }
 
 /// Policy enforcement engine
+#[allow(dead_code)]
 pub struct PolicyEnforcementEngine {
     policies: ClientRegistrationPolicyEngine,
     compiled_regex_cache: HashMap<String, Regex>,
@@ -767,7 +767,7 @@ impl PolicyEnforcementEngine {
     async fn check_rate_limiting_policies(
         &self,
         client_ip: Option<&str>,
-        result: &mut PolicyEnforcementResult,
+        _result: &mut PolicyEnforcementResult,
     ) -> Result<(), ClientRegistrationError> {
         // This would integrate with actual rate limiting implementation
         // For now, just add to result for demonstration
@@ -876,7 +876,7 @@ impl PolicyEnforcementEngine {
 
     fn enforce_domain_policy(
         &self,
-        uri: &str,
+        _uri: &str,
         url: &Url,
         policy: &DomainPolicy,
         result: &mut PolicyEnforcementResult,

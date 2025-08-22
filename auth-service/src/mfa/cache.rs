@@ -385,7 +385,7 @@ impl MultiLayerMfaCache {
         if let Some(mut conn) = self.redis.clone() {
             let patterns = vec![
                 format!("mfa:totp:{}", user_id),
-                format!("mfa:session:*"), // Would need more specific pattern in real implementation
+                "mfa:session:*".to_string(), // Would need more specific pattern in real implementation
             ];
 
             for pattern in patterns {

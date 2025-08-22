@@ -8,9 +8,17 @@ import React,
 } from 'react';
 import axios from 'axios';
 
+interface AuthUser {
+  sub: string;
+  email?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: any;
+  user: AuthUser | null;
+  token: string | null;
   login: () => void;
   logout: () => void;
   handleAuthentication: () => Promise<void>;
@@ -24,7 +32,7 @@ const REDIRECT_URI = 'http://localhost:3000/callback';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const base64urlencode = (a: ArrayBuffer) => {
-    return btoa(String.fromCharCode.apply(null, new Uint8Array(a)))
+    return btoa(String.fromCharCode(...new Uint8Array(a)))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
@@ -134,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, handleAuthentication }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, token, login, logout, handleAuthentication }}>
       {children}
     </AuthContext.Provider>
   );

@@ -84,7 +84,7 @@ impl IpRateLimitEntry {
     }
 
     /// Check if request should be allowed and update counters
-    fn check_and_update(&self, config: &PerIpRateLimitConfig, ip: &IpAddr) -> bool {
+    fn check_and_update(&self, config: &PerIpRateLimitConfig, _ip: &IpAddr) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -350,7 +350,7 @@ impl PerIpRateLimiter {
             event = event.with_detail("user_agent".to_string(), ua.to_string());
         }
 
-        SecurityLogger::log_event(&mut event);
+        SecurityLogger::log_event(&event);
     }
 }
 
@@ -412,7 +412,7 @@ pub async fn per_ip_rate_limit_middleware(
     } else {
         None
     }
-    .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
+    .unwrap_or("127.0.0.1".parse().unwrap());
 
     // Extract User-Agent for logging
     let user_agent = request

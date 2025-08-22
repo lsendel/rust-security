@@ -319,7 +319,7 @@ impl AdvancedRiskEngine {
     fn calculate_temporal_anomaly(&self, context: &AuthContext, patterns: &HistoricalAuthPattern) -> f64 {
         let current_time = context.current_time;
         let datetime = chrono::DateTime::from_timestamp(current_time as i64, 0)
-            .unwrap_or_else(|| chrono::Utc::now());
+            .unwrap_or(chrono::Utc::now());
 
         let hour = datetime.hour() as u8;
         let weekday = datetime.weekday().num_days_from_sunday() as u8;

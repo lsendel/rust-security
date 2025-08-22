@@ -4,7 +4,7 @@ import { LatLngBounds } from 'leaflet'
 import { ThreatEvent } from '@/types/security'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatRelativeTime, getSecurityColor } from '@/lib/utils'
+import { formatRelativeTime } from '@/lib/utils'
 import 'leaflet/dist/leaflet.css'
 
 interface ThreatMapProps {

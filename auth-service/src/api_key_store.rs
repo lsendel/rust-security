@@ -1,5 +1,5 @@
 use sqlx::migrate::MigrateDatabase;
-use sqlx::{migrate, Row, Sqlite, SqlitePool};
+use sqlx::{Sqlite, SqlitePool};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

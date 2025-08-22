@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::metrics::{MetricsHelper, METRICS};
+use crate::metrics::MetricsHelper;
 
 /// Configuration for rate limiting
 #[derive(Debug, Clone)]
@@ -76,26 +76,23 @@ impl RateLimitEntry {
         let window_duration = config.window_duration_secs;
 
         // Check if we need to reset the window
-        if now >= window_start + window_duration {
-            // Try to reset the window atomically
-            if self
+        if now >= window_start + window_duration
+            && self
                 .window_start
                 .compare_exchange_weak(window_start, now, Ordering::Relaxed, Ordering::Relaxed)
                 .is_ok()
-            {
-                // Successfully reset window
-                self.count.store(1, Ordering::Relaxed);
-                self.burst_tokens
-                    .store(config.burst_allowance, Ordering::Relaxed);
-                return RateLimitResult::Allowed;
-            }
-            // Another thread reset the window, fall through to normal check
+        {
+            // Successfully reset window
+            self.count.store(1, Ordering::Relaxed);
+            self.burst_tokens
+                .store(config.burst_allowance, Ordering::Relaxed);
+            return RateLimitResult::Allowed;
         }
 
         // Try to use burst tokens first
         let burst_tokens = self.burst_tokens.load(Ordering::Relaxed);
-        if burst_tokens > 0 {
-            if self
+        if burst_tokens > 0
+            && self
                 .burst_tokens
                 .compare_exchange_weak(
                     burst_tokens,
@@ -104,9 +101,8 @@ impl RateLimitEntry {
                     Ordering::Relaxed,
                 )
                 .is_ok()
-            {
-                return RateLimitResult::Allowed;
-            }
+        {
+            return RateLimitResult::Allowed;
         }
 
         // Check normal rate limit
@@ -244,19 +240,10 @@ static GLOBAL_RATE_LIMITER: Lazy<ShardedRateLimiter> = Lazy::new(|| {
 });
 
 /// Configuration for trusted proxies
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct TrustedProxyConfig {
     trusted_proxies: Vec<std::net::IpAddr>,
     trust_proxy_headers: bool,
-}
-
-impl Default for TrustedProxyConfig {
-    fn default() -> Self {
-        Self {
-            trusted_proxies: Vec::new(),
-            trust_proxy_headers: false,
-        }
-    }
 }
 
 /// Get trusted proxy configuration from environment
@@ -470,6 +457,12 @@ impl PerClientRateLimiter {
 #[derive(Clone)]
 pub struct EndpointRateLimiter {
     limiters: std::collections::HashMap<String, PerClientRateLimiter>,
+}
+
+impl Default for EndpointRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EndpointRateLimiter {

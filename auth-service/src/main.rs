@@ -1,6 +1,90 @@
 //! Minimal Auth Service for E2E Testing
 //! Simplified version for CI/CD and E2E tests
 
+// Acknowledge unused dependencies for future functionality
+#[allow(unused_imports)]
+use argon2 as _;
+#[allow(unused_imports)]
+use async_trait as _;
+#[allow(unused_imports)]
+use auth_service as _;
+#[allow(unused_imports)]
+use base64 as _;
+#[allow(unused_imports)]
+use bcrypt as _;
+#[allow(unused_imports)]
+use bytes as _;
+#[allow(unused_imports)]
+use chrono as _;
+#[allow(unused_imports)]
+use common as _;
+#[allow(unused_imports)]
+use dashmap as _;
+#[allow(unused_imports)]
+use data_encoding as _;
+#[allow(unused_imports)]
+use deadpool_redis as _;
+#[allow(unused_imports)]
+use dotenvy as _;
+#[allow(unused_imports)]
+use ed25519_dalek as _;
+#[allow(unused_imports)]
+use envy as _;
+#[allow(unused_imports)]
+use futures as _;
+#[allow(unused_imports)]
+use hex as _;
+#[allow(unused_imports)]
+use hmac as _;
+#[allow(unused_imports)]
+use http as _;
+#[allow(unused_imports)]
+use jsonwebtoken as _;
+#[allow(unused_imports)]
+use lazy_static as _;
+#[allow(unused_imports)]
+use num_cpus as _;
+#[allow(unused_imports)]
+use once_cell as _;
+#[allow(unused_imports)]
+use prometheus as _;
+#[allow(unused_imports)]
+use rand as _;
+#[allow(unused_imports)]
+use redis as _;
+#[allow(unused_imports)]
+use regex as _;
+#[allow(unused_imports)]
+use reqwest as _;
+#[allow(unused_imports)]
+use ring as _;
+#[allow(unused_imports)]
+use serde_json as _;
+#[allow(unused_imports)]
+use serde_yaml as _;
+#[allow(unused_imports)]
+use sha1 as _;
+#[allow(unused_imports)]
+use sha2 as _;
+#[allow(unused_imports)]
+use sqlx as _;
+#[allow(unused_imports)]
+use thiserror as _;
+#[allow(unused_imports)]
+use toml as _;
+#[allow(unused_imports)]
+use tower as _;
+#[allow(unused_imports)]
+use tower_http as _;
+#[allow(unused_imports)]
+use url as _;
+#[allow(unused_imports)]
+use urlencoding as _;
+#[allow(unused_imports)]
+use utoipa as _;
+#[allow(unused_imports)]
+use validator as _;
+
 use axum::{
     extract::Query,
     http::StatusCode,
@@ -99,14 +183,34 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    // Check for migration flag
+    if std::env::args().any(|arg| arg == "--migrate-config") {
+        tracing::info!("Running configuration migration...");
+        auth_service::config_migration::run_migration()?;
+        return Ok(());
+    }
+
+    // Initialize static configuration
+    let config_manager = auth_service::config_static::ConfigManager::new()?;
+    tracing::info!(
+        "Loaded static configuration for environment: {:?}",
+        config_manager.environment
+    );
+    tracing::info!(
+        "Server will bind to: {}",
+        config_manager.static_config.server.bind_addr
+    );
+
     let app = create_app();
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let addr = format!("0.0.0.0:{}", port);
+    // Use bind address from static config
+    let addr = &config_manager.static_config.server.bind_addr;
+    tracing::info!(
+        "Auth service starting on {} using static configuration",
+        addr
+    );
 
-    tracing::info!("Auth service starting on {}", addr);
-
-    let listener = TcpListener::bind(&addr).await?;
+    let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

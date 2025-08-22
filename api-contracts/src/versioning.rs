@@ -214,7 +214,7 @@ impl VersionManager {
         }
         
         let deprecation_date = Utc::now();
-        self.deprecated_versions.insert(version, deprecation_date);
+        self.deprecated_versions.insert(version.clone(), deprecation_date);
         
         tracing::info!("Version {} deprecated at {}", version, deprecation_date);
         Ok(())

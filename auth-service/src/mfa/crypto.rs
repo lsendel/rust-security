@@ -1,4 +1,6 @@
-use crate::crypto_unified::{UnifiedCryptoManager, UnifiedCryptoError, EncryptedData, SymmetricAlgorithm};
+use crate::crypto_unified::{
+    EncryptedData, SymmetricAlgorithm, UnifiedCryptoError, UnifiedCryptoManager,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,7 +38,6 @@ impl SecretManager {
         let crypto_manager = UnifiedCryptoManager::from_env(SymmetricAlgorithm::ChaCha20Poly1305)?;
         Ok(Self { crypto_manager })
     }
-
 
     /// Encrypt MFA secret data
     pub async fn encrypt_secret(&self, secret: &[u8]) -> Result<EncryptedSecret, CryptoError> {

@@ -6,12 +6,12 @@
 use anyhow::Result;
 use axum::response::IntoResponse;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
     business_metrics::BusinessMetricsRegistry,
     enhanced_observability::{
-        EnhancedObservability, ObservabilityConfig, SliConfig, observability_middleware
+        observability_middleware, EnhancedObservability, ObservabilityConfig, SliConfig,
     },
     metrics::MetricsRegistry,
     security_metrics::SecurityMetrics,
@@ -39,13 +39,13 @@ impl ObservabilitySystem {
         let metrics_registry = Arc::new(MetricsRegistry::new());
 
         // Initialize security metrics
-        let security_metrics = Arc::new(
-            SecurityMetrics::new()
-                .map_err(|_| AuthError::InternalError { 
+        let security_metrics =
+            Arc::new(
+                SecurityMetrics::new().map_err(|_| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: "Failed to initialize security metrics".to_string() 
-                })?
-        );
+                    context: "Failed to initialize security metrics".to_string(),
+                })?,
+            );
 
         // Initialize business metrics
         let business_metrics = Arc::new(BusinessMetricsRegistry::new());
@@ -62,10 +62,12 @@ impl ObservabilitySystem {
                 Arc::clone(&metrics_registry),
                 Arc::clone(&security_metrics),
                 Arc::clone(&business_metrics),
-            ).await.map_err(|e| AuthError::InternalError { 
+            )
+            .await
+            .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to initialize enhanced observability: {}", e) 
-            })?
+                context: format!("Failed to initialize enhanced observability: {}", e),
+            })?,
         );
 
         info!("Observability system initialized successfully");
@@ -111,11 +113,13 @@ impl ObservabilitySystem {
                     .unwrap_or(30),
                 custom_panels: std::env::var("CUSTOM_DASHBOARD_PANELS")
                     .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
-                    .unwrap_or_else(|_| vec![
-                        "authentication_flow".to_string(),
-                        "token_operations".to_string(),
-                        "security_events".to_string(),
-                    ]),
+                    .unwrap_or_else(|_| {
+                        vec![
+                            "authentication_flow".to_string(),
+                            "token_operations".to_string(),
+                            "security_events".to_string(),
+                        ]
+                    }),
             },
         }
     }
@@ -141,19 +145,23 @@ impl ObservabilitySystem {
                 .unwrap_or(5),
         }
     }
-
 }
 
 /// Standalone health check endpoint handler
 pub async fn health_check_handler(
-    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>
+    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    let health_status = observability.enhanced_observability.get_health_status().await;
-    
+    let health_status = observability
+        .enhanced_observability
+        .get_health_status()
+        .await;
+
     let status_code = match health_status.overall_health {
         crate::enhanced_observability::HealthCheckStatus::Healthy => axum::http::StatusCode::OK,
         crate::enhanced_observability::HealthCheckStatus::Degraded => axum::http::StatusCode::OK,
-        crate::enhanced_observability::HealthCheckStatus::Unhealthy => axum::http::StatusCode::SERVICE_UNAVAILABLE,
+        crate::enhanced_observability::HealthCheckStatus::Unhealthy => {
+            axum::http::StatusCode::SERVICE_UNAVAILABLE
+        }
     };
 
     (status_code, axum::Json(health_status))
@@ -161,15 +169,18 @@ pub async fn health_check_handler(
 
 /// Standalone metrics endpoint handler
 pub async fn metrics_handler(
-    axum::extract::State(_observability): axum::extract::State<Arc<ObservabilitySystem>>
+    axum::extract::State(_observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
     // For now, return a placeholder until we implement gather_metrics properly
-    (axum::http::StatusCode::OK, "# Metrics placeholder\n".to_string())
+    (
+        axum::http::StatusCode::OK,
+        "# Metrics placeholder\n".to_string(),
+    )
 }
 
 /// Standalone SLO status endpoint handler
 pub async fn slo_status_handler(
-    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>
+    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
     let slo_status = observability.enhanced_observability.get_slo_status().await;
     (axum::http::StatusCode::OK, axum::Json(slo_status))
@@ -177,37 +188,49 @@ pub async fn slo_status_handler(
 
 /// Standalone performance profiles endpoint handler
 pub async fn performance_profiles_handler(
-    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>
+    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    let profiles = observability.enhanced_observability.get_performance_profiles().await;
+    let profiles = observability
+        .enhanced_observability
+        .get_performance_profiles()
+        .await;
     (axum::http::StatusCode::OK, axum::Json(profiles))
 }
 
 /// Standalone active alerts endpoint handler
 pub async fn alerts_handler(
-    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>
+    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    let alerts = observability.enhanced_observability.get_active_alerts().await;
+    let alerts = observability
+        .enhanced_observability
+        .get_active_alerts()
+        .await;
     (axum::http::StatusCode::OK, axum::Json(alerts))
 }
 
 /// Standalone Grafana dashboard configuration handler
 pub async fn grafana_dashboard_handler(
-    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>
+    axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    match observability.enhanced_observability.export_metrics_for_grafana().await {
+    match observability
+        .enhanced_observability
+        .export_metrics_for_grafana()
+        .await
+    {
         Ok(dashboard) => (
             axum::http::StatusCode::OK,
             [(axum::http::header::CONTENT_TYPE, "application/json")],
-            dashboard
-        ).into_response(),
+            dashboard,
+        )
+            .into_response(),
         Err(e) => {
             tracing::warn!("Failed to export Grafana dashboard: {}", e);
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 [(axum::http::header::CONTENT_TYPE, "application/json")],
-                r#"{"error": "Failed to export dashboard"}"#
-            ).into_response()
+                r#"{"error": "Failed to export dashboard"}"#,
+            )
+                .into_response()
         }
     }
 }
@@ -218,7 +241,7 @@ impl ObservabilitySystem {
         &self,
         method: &str,
         success: bool,
-        user_id: Option<&str>,
+        _user_id: Option<&str>,
         duration: std::time::Duration,
         client_ip: Option<&str>,
     ) {
@@ -241,7 +264,10 @@ impl ObservabilitySystem {
                 "Authentication attempt failed".to_string(),
             )
             .with_detail("method".to_string(), method.to_string())
-            .with_detail("client_ip".to_string(), client_ip.unwrap_or("unknown").to_string());
+            .with_detail(
+                "client_ip".to_string(),
+                client_ip.unwrap_or("unknown").to_string(),
+            );
 
             self.enhanced_observability
                 .record_security_event(&security_event)
@@ -253,7 +279,7 @@ impl ObservabilitySystem {
     pub async fn record_token_operation(
         &self,
         operation: &str,
-        token_type: &str,
+        _token_type: &str,
         success: bool,
         duration: std::time::Duration,
     ) {
@@ -272,24 +298,32 @@ impl ObservabilitySystem {
     /// Graceful shutdown of observability system
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down observability system");
-        
+
         // Perform any cleanup needed
         // In a real implementation, you might want to flush metrics, close connections, etc.
-        
+
         info!("Observability system shutdown completed");
         Ok(())
     }
 }
 
 /// Add observability routes to router with state
-pub fn add_observability_routes(observability: Arc<ObservabilitySystem>) -> axum::Router<Arc<ObservabilitySystem>> {
+pub fn add_observability_routes(
+    observability: Arc<ObservabilitySystem>,
+) -> axum::Router<Arc<ObservabilitySystem>> {
     axum::Router::new()
         .route("/health", axum::routing::get(health_check_handler))
         .route("/metrics", axum::routing::get(metrics_handler))
         .route("/observability/slo", axum::routing::get(slo_status_handler))
-        .route("/observability/profiles", axum::routing::get(performance_profiles_handler))
+        .route(
+            "/observability/profiles",
+            axum::routing::get(performance_profiles_handler),
+        )
         .route("/observability/alerts", axum::routing::get(alerts_handler))
-        .route("/observability/dashboard", axum::routing::get(grafana_dashboard_handler))
+        .route(
+            "/observability/dashboard",
+            axum::routing::get(grafana_dashboard_handler),
+        )
         .with_state(observability)
         .layer(axum::middleware::from_fn(observability_middleware))
 }
@@ -297,7 +331,8 @@ pub fn add_observability_routes(observability: Arc<ObservabilitySystem>) -> axum
 /// Helper trait for adding observability to services
 pub trait ObservabilityAware {
     fn observability(&self) -> &ObservabilitySystem;
-    
+
+    #[allow(async_fn_in_trait)]
     async fn record_operation(
         &self,
         operation: &str,
@@ -337,6 +372,6 @@ mod tests {
     async fn test_observability_system_initialization() {
         // This test would require proper mocking of dependencies
         // In a real test environment, you'd set up test metrics registries
-        assert!(true); // Placeholder test
+        // TODO: Implement proper integration test when mocking infrastructure is available
     }
 }

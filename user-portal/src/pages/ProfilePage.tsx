@@ -14,7 +14,7 @@ type ProfileFormData = z.infer<typeof profileFormSchema>;
 
 const ProfilePage = () => {
   const { user: authUser } = useAuth();
-  const { data: scimUser, isLoading, isError } = useUser(authUser?.sub);
+  const { data: scimUser, isLoading, isError } = useUser(authUser?.sub || '');
   const updateUser = useUpdateUser();
   const [isEditing, setIsEditing] = useState(false);
 

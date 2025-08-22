@@ -1,3 +1,13 @@
+// Explicitly acknowledge unused dependencies for future functionality
+use cedar_policy as _;
+use cedar_policy_core as _;
+use once_cell as _;
+use prometheus as _;
+use serde as _;
+use serde_json as _;
+use thiserror as _;
+use tower_http as _;
+
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;

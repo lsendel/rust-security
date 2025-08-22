@@ -14,7 +14,7 @@
 The **Rust Security Platform** is a production-ready, enterprise-grade authentication and authorization system that rivals commercial solutions like Auth0, Okta, and AWS Cognito. Built from the ground up with **Rust's memory safety** and **performance advantages**, it provides:
 
 - 🔐 **Multi-protocol authentication** (OAuth 2.0, SAML, OIDC, Multi-Factor)
-- ⚡ **Sub-50ms global latency** with horizontal scaling
+- ⚡ **Sub-50ms global latency** with horizontal scaling (performance claims require validation in your environment)
 - 🛡️ **Zero-trust security architecture** with comprehensive threat modeling
 - 🏢 **Complete multi-tenant isolation** with namespace and data separation
 - 📊 **Enterprise observability** with distributed tracing and monitoring
@@ -31,8 +31,8 @@ The **Rust Security Platform** is a production-ready, enterprise-grade authentic
 - **Comprehensive security testing** with OWASP Top 10 coverage
 
 ### ⚡ **Performance & Scale**
-- **Sub-100ms P95 authentication latency** globally
-- **>1000 RPS sustained throughput** with horizontal scaling
+- **Sub-100ms P95 authentication latency** globally (benchmark in your environment)
+- **>1000 RPS sustained throughput** with horizontal scaling (validate with load testing)
 - **Zero-downtime deployments** with blue-green strategy
 - **Intelligent caching** with Redis for sessions and policies
 - **Performance budget automation** with regression detection
@@ -55,8 +55,8 @@ The **Rust Security Platform** is a production-ready, enterprise-grade authentic
 
 ### **30-Second Demo**
 ```bash
-# Clone and start the platform
-git clone https://github.com/your-org/rust-security-platform.git
+# Clone the repository
+git clone <your-repository-url>
 cd rust-security-platform
 
 # Run the quick start script
@@ -95,16 +95,16 @@ kubectl get pods -n rust-security
 ### **Quick Links**
 - 🚀 [**Getting Started**](./docs/getting-started.md) - Your first 15 minutes
 - 🏗️ [**Architecture Overview**](./docs/architecture/README.md) - System design and components
-- 🔐 [**Security Guide**](./docs/security/SECURITY_IMPLEMENTATION_GUIDE.md) - Security features and best practices
-- 📊 [**Operations Guide**](./docs/operations/OPERATIONS_GUIDE.md) - Production operations and monitoring
+- 🔐 [**Security Guide**](./docs/security/README.md) - Security features and best practices
+- 📊 [**Operations Guide**](./docs/operations/operations-guide.md) - Production operations and monitoring
 - 🔧 [**API Documentation**](./api-contracts/README.md) - Complete API reference
 
 ### **Developer Resources**
-- 💻 [Development Guide](./docs/development/DEVELOPER_GUIDE.md)
-- 🧪 [Testing Guide](./docs/testing/TESTING_GUIDE.md)
-- 🚀 [Deployment Guide](./docs/deployment/DEPLOYMENT_GUIDE.md)
-- 🔍 [Troubleshooting](./docs/troubleshooting/TROUBLESHOOTING_GUIDE.md)
-- 📋 [Runbooks](./runbooks/)
+- 💻 [Development Guide](./docs/development/README.md)
+- 🧪 [Testing Guide](./TESTING_GUIDE.md)
+- 🚀 [Deployment Guide](./docs/deployment/README.md)
+- 🔍 [Troubleshooting](./docs/troubleshooting/README.md)
+- 📋 [Testing Standards](./docs/TESTING_STANDARDS.md)
 
 ## 🏗️ Architecture
 
@@ -140,16 +140,16 @@ kubectl get pods -n rust-security
 ### **Authentication Methods**
 - **Password-based** with advanced security policies
 - **OAuth 2.0** with PKCE and state validation
-- **SAML 2.0** with assertion encryption
+- **SAML 2.0** with assertion encryption (implementation in progress)
 - **OpenID Connect** with JWT validation
-- **Multi-Factor Authentication** (TOTP, SMS, Email, Hardware tokens)
-- **Certificate-based** authentication for services
+- **Multi-Factor Authentication** (TOTP, SMS, Email, Hardware tokens - partial implementation)
+- **Certificate-based** authentication for services (planned)
 
 ### **Authorization Engine**
-- **Cedar Policy Language** for fine-grained access control
+- **Cedar Policy Language** for fine-grained access control (integration in progress)
 - **Attribute-Based Access Control (ABAC)** with rich context
 - **Role-Based Access Control (RBAC)** with inheritance
-- **Real-time policy evaluation** with <10ms latency
+- **Real-time policy evaluation** with <10ms latency (validate in your environment)
 - **Policy versioning** and rollback capabilities
 - **Conflict detection** and resolution
 
@@ -163,9 +163,11 @@ kubectl get pods -n rust-security
 
 ## 📊 Performance Benchmarks
 
+> **Note**: Performance benchmarks should be validated in your specific environment and use case. Results may vary based on hardware, network, and configuration.
+
 ### **Authentication Performance**
-| Metric | Value | Description |
-|--------|-------|-------------|
+| Metric | Target Value | Description |
+|--------|--------------|-------------|
 | **P50 Latency** | <25ms | Median authentication time |
 | **P95 Latency** | <50ms | 95th percentile authentication |
 | **P99 Latency** | <100ms | 99th percentile authentication |
@@ -173,8 +175,8 @@ kubectl get pods -n rust-security
 | **Concurrent Users** | 10,000+ | Simultaneous active sessions |
 
 ### **Resource Efficiency**
-| Resource | Usage | Description |
-|----------|-------|-------------|
+| Resource | Target Usage | Description |
+|----------|--------------|-------------|
 | **Memory** | <512MB | Per service instance |
 | **CPU** | <100m | Baseline CPU usage |
 | **Startup Time** | <5s | Cold start to ready |
@@ -219,38 +221,40 @@ kubectl get pods -n rust-security
 ## 🔗 Integrations
 
 ### **Identity Providers**
-- Active Directory / LDAP
-- Google Workspace
-- Microsoft Azure AD
-- AWS SSO
+- Active Directory / LDAP (planned)
+- Google Workspace (OAuth implementation)
+- Microsoft Azure AD (planned)
+- AWS SSO (planned)
 - Custom SAML/OIDC providers
 
 ### **Cloud Platforms**
 - Amazon Web Services (AWS)
-- Google Cloud Platform (GCP)
+- Google Cloud Platform (GCP) 
 - Microsoft Azure
 - Kubernetes (any distribution)
 - Docker Swarm
 
 ### **Monitoring & Observability**
 - Prometheus & Grafana
-- Datadog
-- New Relic
-- Splunk
+- Datadog (integration available)
+- New Relic (planned)
+- Splunk (planned)
 - ELK Stack
 
 ### **Development Tools**
 - GitHub Actions
-- GitLab CI/CD
-- Jenkins
+- GitLab CI/CD (planned)
+- Jenkins (planned)
 - ArgoCD
 - Terraform
 
 ## 🆚 Comparison with Commercial Solutions
 
+> **Disclaimer**: Comparisons are based on design targets and may not reflect actual performance in all environments. Please conduct your own benchmarks.
+
 | Feature | Rust Security Platform | Auth0 | Okta | AWS Cognito |
 |---------|------------------------|-------|------|-------------|
-| **Performance** | <50ms latency | ~100ms | ~150ms | ~80ms |
+| **Performance** | <50ms latency (target) | ~100ms | ~150ms | ~80ms |
 | **Security** | Memory-safe Rust | Standard | Standard | Standard |
 | **Customization** | Unlimited | Limited | Limited | Limited |
 | **Vendor Lock-in** | None | High | High | Medium |
@@ -295,7 +299,7 @@ We welcome contributions from the community! Here's how to get started:
 ### **Development Setup**
 ```bash
 # Clone your fork
-git clone https://github.com/your-username/rust-security-platform.git
+git clone <your-fork-url>
 cd rust-security-platform
 
 # Set up development environment
@@ -329,22 +333,14 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 ## 📞 Support & Community
 
 ### **Getting Help**
-- 📖 [Documentation](https://docs.rust-security-platform.com)
-- 💬 [Community Discussions](https://github.com/your-org/rust-security-platform/discussions)
+- 📖 [Documentation](./docs/)
 - 🐛 [Issue Tracker](https://github.com/your-org/rust-security-platform/issues)
-- 📧 [Security Issues](security@rust-security-platform.com)
-
-### **Enterprise Support**
-- 🏢 Professional services and consulting
-- 📞 24/7 support with SLA guarantees
-- 🎓 Training and certification programs
-- 🔧 Custom development and integrations
+- 📧 [Security Issues](mailto:security@yourorg.com)
 
 ### **Community**
-- 🗨️ [Discord Server](https://discord.gg/rust-security)
-- 🐦 [Twitter Updates](https://twitter.com/rust_security)
-- 📰 [Blog & Updates](https://blog.rust-security-platform.com)
-- 📺 [YouTube Channel](https://youtube.com/rust-security-platform)
+- 💬 [Discussions](https://github.com/your-org/rust-security-platform/discussions)
+- 📝 [Contributing Guide](./CONTRIBUTING.md)
+- 📋 [Code of Conduct](./CODE_OF_CONDUCT.md)
 
 ---
 
@@ -352,10 +348,11 @@ This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE
 
 ### **Get Started Today**
 ```bash
-curl -sSL https://get.rust-security-platform.com | bash
+# Clone and start the platform
+git clone <your-repository-url>
+cd rust-security-platform
+./scripts/setup/quick-start.sh
 ```
-
-**Or explore our [live demo](https://demo.rust-security-platform.com) to see it in action!**
 
 ---
 

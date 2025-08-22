@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use validator::{Validate, ValidationError};
+use regex;
 
 /// Standard API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,11 +284,11 @@ pub struct SearchRequest {
     pub query: Option<String>,
     
     /// Filters to apply
-    #[validate]
+    #[validate(length(max = 10))]
     pub filters: Vec<ApiFilter>,
     
     /// Pagination parameters
-    #[validate]
+    #[validate(nested)]
     pub pagination: PaginationRequest,
 }
 
@@ -303,7 +304,7 @@ pub struct HealthCheckRequest {
 
 /// Batch operation request
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
-pub struct BatchRequest<T> {
+pub struct BatchRequest<T: Serialize> {
     /// Items to process
     #[validate(length(min = 1, max = 100))]
     pub items: Vec<T>,

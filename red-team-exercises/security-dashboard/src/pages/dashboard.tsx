@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Shield, AlertTriangle, Activity, Users, Lock, Globe, BarChart3, Zap } from 'lucide-react'
+import { Shield, AlertTriangle, Activity, Users, Lock, Globe } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,6 @@ import { ComplianceOverview } from '@/components/compliance/compliance-overview'
 import { PerformanceMetrics } from '@/components/metrics/performance-metrics'
 import { useSecurityMetrics, useThreatEvents, useSecurityAlerts } from '@/hooks/use-websocket'
 import { useQuery } from '@tanstack/react-query'
-import { SecurityMetrics } from '@/types/security'
 import { formatNumber, formatPercentage } from '@/lib/utils'
 
 export function Dashboard() {
@@ -23,7 +22,7 @@ export function Dashboard() {
   const [selectedTimeRange, setSelectedTimeRange] = useState('1h')
 
   // Fetch initial dashboard data
-  const { data: dashboardOverview } = useQuery({
+  const { data: _dashboardOverview } = useQuery({
     queryKey: ['dashboard-overview', selectedTimeRange],
     queryFn: async () => {
       const response = await fetch(`/api/dashboard/overview?timeRange=${selectedTimeRange}`)

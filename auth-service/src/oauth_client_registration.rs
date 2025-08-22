@@ -8,7 +8,7 @@
 //! - Audit logging and monitoring
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -18,9 +18,8 @@ use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Pool, Postgres, Row};
-use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
@@ -992,6 +991,7 @@ impl IntoResponse for ClientRegistrationError {
 }
 
 /// Validation functions
+#[allow(dead_code)]
 fn validate_redirect_uris(uris: &[String]) -> Result<(), ValidationError> {
     for uri in uris {
         if let Err(_) = url::Url::parse(uri) {
@@ -1006,6 +1006,7 @@ fn validate_redirect_uris(uris: &[String]) -> Result<(), ValidationError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_response_types(types: &[String]) -> Result<(), ValidationError> {
     let valid_types = ["code", "token", "id_token"];
     for response_type in types {
@@ -1019,6 +1020,7 @@ fn validate_response_types(types: &[String]) -> Result<(), ValidationError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_grant_types(types: &[String]) -> Result<(), ValidationError> {
     let valid_types = [
         "authorization_code",
@@ -1038,6 +1040,7 @@ fn validate_grant_types(types: &[String]) -> Result<(), ValidationError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_contacts(contacts: &[String]) -> Result<(), ValidationError> {
     for contact in contacts {
         if !contact.contains('@') {
@@ -1047,6 +1050,7 @@ fn validate_contacts(contacts: &[String]) -> Result<(), ValidationError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     // Basic scope validation - space-separated tokens
     let parts: Vec<&str> = scope.split_whitespace().collect();

@@ -1686,7 +1686,7 @@ impl ApprovalManager {
             )
             .with_detail(
                 "comments".to_string(),
-                comments.unwrap_or_else(|| "None".to_string()),
+                comments.unwrap_or("None".to_string()),
             ),
         );
 

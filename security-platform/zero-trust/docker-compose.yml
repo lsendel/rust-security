@@ -31,15 +31,20 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass zt_redis_password
+    command: redis-server --requirepass ${REDIS_PASSWORD:-zt_redis_password}
     volumes:
       - redis_data:/data
     networks:
       - zero-trust-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", "${REDIS_PASSWORD:-zt_redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   # Zero Trust Proxy for service protection
   zero-trust-proxy:
-    image: envoyproxy/envoy:v1.27-latest
+    image: envoyproxy/envoy:v1.27.0
     ports:
       - "8080:8080"
       - "9901:9901"  # Admin interface

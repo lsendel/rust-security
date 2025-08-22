@@ -426,13 +426,14 @@ async fn test_version_compatibility() {
 
 ## 📚 Examples
 
-See the `examples/` directory for complete working examples:
+Complete working examples are available in the test files:
 
-- **Basic Usage**: Simple API with versioning
-- **Service Integration**: Auth and Policy service integration
-- **Context Propagation**: Distributed tracing example
-- **Migration Guide**: Upgrading from v1 to v2
-- **Error Handling**: Comprehensive error management
+- **Basic Usage**: See `tests/integration_tests.rs` for simple API with versioning
+- **Service Integration**: Auth and Policy service integration examples in integration tests
+- **Context Propagation**: Distributed tracing examples in middleware tests
+- **Error Handling**: Comprehensive error management examples in unit tests
+
+> **Note**: Standalone examples directory is planned for future releases
 
 ## 🔧 Configuration
 

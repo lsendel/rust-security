@@ -38,13 +38,13 @@ export function WebSocketProvider({ children, url }: WebSocketProviderProps) {
     })
 
     socketInstance.on('connect', () => {
-      console.log('WebSocket connected')
+      console.warn('WebSocket connected')
       setConnected(true)
       reconnectAttempts.current = 0
     })
 
     socketInstance.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason)
+      console.warn('WebSocket disconnected:', reason)
       setConnected(false)
       
       // Attempt to reconnect

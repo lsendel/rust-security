@@ -278,7 +278,7 @@ impl ScimAuthorizationManager {
                     });
                 }
             }
-            ScimOperation::UserPasswordReset { user_id } => {
+            ScimOperation::UserPasswordReset { user_id: _ } => {
                 // Password reset requires special handling
                 if !context.has_permission(&ScimPermission::UserPasswordReset) {
                     self.log_authorization_failure(context, operation, "password_reset_denied");

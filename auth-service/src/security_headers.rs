@@ -200,7 +200,7 @@ pub async fn add_configurable_security_headers(
     next: Next,
 ) -> Response {
     let mut response = next.run(request).await;
-    let headers_present = response.headers().contains_key("content-type");
+    let _headers_present = response.headers().contains_key("content-type");
     let headers = response.headers_mut();
 
     // Content Security Policy
@@ -467,7 +467,7 @@ mod tests {
         routing::get,
         Router,
     };
-    use tower::ServiceExt;
+    use tower::util::ServiceExt;
 
     async fn test_handler() -> &'static str {
         "test response"

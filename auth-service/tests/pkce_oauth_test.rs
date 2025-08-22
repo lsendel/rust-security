@@ -1,4 +1,8 @@
-use auth_service::{app, store::TokenStore, AppState};
+use auth_service::jwks_rotation::{JwksManager, InMemoryKeyStorage};
+use auth_service::session_store::RedisSessionStore;
+use auth_service::store::HybridStore;
+use auth_service::{app, api_key_store::ApiKeyStore, store::TokenStore, AppState};
+use ::common::Store;
 use reqwest::header::{CONTENT_TYPE, LOCATION};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -25,7 +29,18 @@ async fn spawn_app() -> String {
         "test_client:http://localhost:3000/callback",
     );
 
+    let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
+    let store = Arc::new(HybridStore::new().await) as Arc<dyn Store>;
+    let session_store = Arc::new(RedisSessionStore::new(None).await)
+        as Arc<dyn auth_service::session_store::SessionStore>;
+    let jwks_manager = Arc::new(JwksManager::new(
+        Default::default(),
+        Arc::new(InMemoryKeyStorage::new())
+    ).await.unwrap());
+
     let app = app(AppState {
+        store,
+        session_store,
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials,
         allowed_scopes: vec![
@@ -43,6 +58,8 @@ async fn spawn_app() -> String {
                 auth_service::backpressure::BackpressureConfig::default(),
             ),
         ),
+        api_key_store,
+        jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)

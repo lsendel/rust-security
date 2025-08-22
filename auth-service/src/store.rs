@@ -4,7 +4,6 @@ use deadpool_redis::{redis::AsyncCommands, Config, Pool, Runtime};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
@@ -470,5 +469,78 @@ impl Store for HybridStore {
             active_tokens,
             auth_codes_total,
         })
+    }
+}
+
+#[derive(Clone)]
+pub enum TokenStore {
+    InMemory(Arc<RwLock<HashMap<String, TokenRecord>>>),
+}
+
+impl TokenStore {
+    pub async fn set_active(
+        &self,
+        token: &str,
+        active: bool,
+        exp: Option<i64>,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        match self {
+            TokenStore::InMemory(store) => {
+                let mut tokens = store.write().await;
+                if let Some(record) = tokens.get_mut(token) {
+                    record.active = active;
+                    if let Some(exp_time) = exp {
+                        record.exp = Some(exp_time);
+                    }
+                } else {
+                    // Create new record
+                    tokens.insert(
+                        token.to_string(),
+                        TokenRecord {
+                            active,
+                            scope: None,
+                            client_id: None,
+                            exp,
+                            iat: Some(chrono::Utc::now().timestamp()),
+                            sub: None,
+                            token_binding: None,
+                            mfa_verified: false,
+                        },
+                    );
+                }
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn get_active(&self, token: &str) -> Result<bool, Box<dyn StdError + Send + Sync>> {
+        match self {
+            TokenStore::InMemory(store) => {
+                let tokens = store.read().await;
+                if let Some(record) = tokens.get(token) {
+                    // Check if token is expired
+                    if let Some(exp) = record.exp {
+                        let now = chrono::Utc::now().timestamp();
+                        Ok(record.active && exp > now)
+                    } else {
+                        Ok(record.active)
+                    }
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+
+    pub async fn revoke(&self, token: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        match self {
+            TokenStore::InMemory(store) => {
+                let mut tokens = store.write().await;
+                if let Some(record) = tokens.get_mut(token) {
+                    record.active = false;
+                }
+                Ok(())
+            }
+        }
     }
 }

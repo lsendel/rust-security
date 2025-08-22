@@ -1,4 +1,4 @@
-use crate::scim_filter::{parse_scim_filter, ScimFilterError, ScimOperator};
+use crate::scim_filter::{parse_scim_filter, ScimOperator};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
@@ -6,7 +6,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct Migration {

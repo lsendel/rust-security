@@ -47,7 +47,7 @@ spec:
                 values: ["us-west-2a", "us-west-2b", "us-west-2c"]
       containers:
       - name: auth-service
-        image: registry.company.com/rust-security/auth-service:latest
+        image: registry.company.com/rust-security/auth-service:1.0.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

@@ -587,7 +587,7 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     // Must be a valid URL or localhost
     if origin.starts_with("http://") || origin.starts_with("https://") {
         // Basic URL validation
-        if let Err(_) = url::Url::parse(origin) {
+        if url::Url::parse(origin).is_err() {
             return Err(ValidationError::new("origin_invalid_url"));
         }
     } else if origin.starts_with("localhost:") || origin == "localhost" {

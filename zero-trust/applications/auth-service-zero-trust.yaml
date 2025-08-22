@@ -38,6 +38,7 @@ spec:
       initContainers:
       - name: wait-for-spire
         image: busybox:1.36
+        imagePullPolicy: IfNotPresent
         command: ['sh', '-c', 'until [ -S /run/spire/sockets/spire-agent.sock ]; do echo "Waiting for SPIRE agent socket..."; sleep 2; done']
         volumeMounts:
         - name: spire-agent-socket
@@ -52,7 +53,8 @@ spec:
             - ALL
       containers:
       - name: auth-service
-        image: auth-service:zero-trust-latest
+        image: auth-service:zero-trust-v1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
           name: http

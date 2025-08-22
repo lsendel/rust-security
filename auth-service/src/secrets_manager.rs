@@ -31,7 +31,7 @@ use vaultrs::{
     kv2, Error as VaultError,
 };
 
-use crate::crypto_unified::{UnifiedCryptoManager, UnifiedCryptoError, EncryptedData};
+use crate::crypto_unified::{EncryptedData, UnifiedCryptoError, UnifiedCryptoManager};
 
 #[derive(Error, Debug)]
 pub enum SecretsError {
@@ -78,6 +78,7 @@ pub struct SecretMetadata {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CachedSecret {
     value: EncryptedData,
     metadata: SecretMetadata,
@@ -106,7 +107,10 @@ impl CircuitBreaker {
     fn is_open(&self) -> bool {
         if self.failure_count >= self.failure_threshold {
             if let Some(last_failure) = self.last_failure_time {
-                SystemTime::now().duration_since(last_failure).unwrap_or_default() < self.recovery_timeout
+                SystemTime::now()
+                    .duration_since(last_failure)
+                    .unwrap_or_default()
+                    < self.recovery_timeout
             } else {
                 true
             }
@@ -176,8 +180,8 @@ impl SecretsManager {
 
     /// Create a new SecretsManager with explicit configuration
     pub async fn new_with_config(config: SecretsManagerConfig) -> Result<Self, SecretsError> {
-        let crypto_manager = UnifiedCryptoManager::new_aes()
-            .map_err(|e| SecretsError::EncryptionError(e))?;
+        let crypto_manager =
+            UnifiedCryptoManager::new_aes().map_err(SecretsError::EncryptionError)?;
 
         let mut manager = Self {
             config: config.clone(),
@@ -196,7 +200,10 @@ impl SecretsManager {
         // Initialize backends based on configuration
         manager.init_backends().await?;
 
-        info!("SecretsManager initialized with backend: {:?}", config.default_backend);
+        info!(
+            "SecretsManager initialized with backend: {:?}",
+            config.default_backend
+        );
         Ok(manager)
     }
 
@@ -204,17 +211,18 @@ impl SecretsManager {
         let mut config = SecretsManagerConfig::default();
 
         // Detect backend based on environment
-        config.default_backend = if std::env::var("AWS_REGION").is_ok() && std::env::var("USE_AWS_SECRETS").is_ok() {
-            config.aws_region = std::env::var("AWS_REGION").ok();
-            SecretBackend::AwsSecretsManager
-        } else if std::env::var("VAULT_ADDR").is_ok() {
-            config.vault_address = std::env::var("VAULT_ADDR").ok();
-            config.vault_token = std::env::var("VAULT_TOKEN").ok();
-            config.vault_mount = std::env::var("VAULT_MOUNT").ok().or(config.vault_mount);
-            SecretBackend::Vault
-        } else {
-            SecretBackend::Environment
-        };
+        config.default_backend =
+            if std::env::var("AWS_REGION").is_ok() && std::env::var("USE_AWS_SECRETS").is_ok() {
+                config.aws_region = std::env::var("AWS_REGION").ok();
+                SecretBackend::AwsSecretsManager
+            } else if std::env::var("VAULT_ADDR").is_ok() {
+                config.vault_address = std::env::var("VAULT_ADDR").ok();
+                config.vault_token = std::env::var("VAULT_TOKEN").ok();
+                config.vault_mount = std::env::var("VAULT_MOUNT").ok().or(config.vault_mount);
+                SecretBackend::Vault
+            } else {
+                SecretBackend::Environment
+            };
 
         // Cache configuration
         if let Ok(ttl_str) = std::env::var("SECRETS_CACHE_TTL") {
@@ -230,15 +238,24 @@ impl SecretsManager {
         let mut breakers = self.circuit_breakers.write().await;
         breakers.insert(
             SecretBackend::AwsSecretsManager,
-            CircuitBreaker::new(self.config.circuit_breaker_threshold, self.config.circuit_breaker_timeout),
+            CircuitBreaker::new(
+                self.config.circuit_breaker_threshold,
+                self.config.circuit_breaker_timeout,
+            ),
         );
         breakers.insert(
             SecretBackend::Vault,
-            CircuitBreaker::new(self.config.circuit_breaker_threshold, self.config.circuit_breaker_timeout),
+            CircuitBreaker::new(
+                self.config.circuit_breaker_threshold,
+                self.config.circuit_breaker_timeout,
+            ),
         );
         breakers.insert(
             SecretBackend::Environment,
-            CircuitBreaker::new(self.config.circuit_breaker_threshold, self.config.circuit_breaker_timeout),
+            CircuitBreaker::new(
+                self.config.circuit_breaker_threshold,
+                self.config.circuit_breaker_timeout,
+            ),
         );
     }
 
@@ -279,31 +296,38 @@ impl SecretsManager {
         } else {
             region_provider.or_else("us-east-1")
         };
-        
+
         let config = aws_config::from_env().region(region_provider).load().await;
         self.aws_client = Some(SecretsManagerClient::new(&config));
-        
+
         info!("AWS Secrets Manager client initialized");
         Ok(())
     }
 
     #[cfg(feature = "vault")]
     async fn init_vault_backend(&mut self) -> Result<(), SecretsError> {
-        let vault_addr = self.config.vault_address.as_ref()
-            .ok_or_else(|| SecretsError::ConfigError("VAULT_ADDR not configured".to_string()))?;
-        
-        let vault_token = self.config.vault_token.as_ref()
-            .ok_or_else(|| SecretsError::ConfigError("VAULT_TOKEN not configured".to_string()))?;
+        let vault_addr =
+            self.config.vault_address.as_ref().ok_or_else(|| {
+                SecretsError::ConfigError("VAULT_ADDR not configured".to_string())
+            })?;
+
+        let vault_token =
+            self.config.vault_token.as_ref().ok_or_else(|| {
+                SecretsError::ConfigError("VAULT_TOKEN not configured".to_string())
+            })?;
 
         let settings = VaultClientSettingsBuilder::default()
             .address(vault_addr)
             .token(vault_token)
             .build()
-            .map_err(|e| SecretsError::VaultError(format!("Failed to build Vault settings: {}", e)))?;
+            .map_err(|e| {
+                SecretsError::VaultError(format!("Failed to build Vault settings: {}", e))
+            })?;
 
-        self.vault_client = Some(VaultClient::new(settings)
-            .map_err(|e| SecretsError::VaultError(format!("Failed to create Vault client: {}", e)))?);
-        
+        self.vault_client = Some(VaultClient::new(settings).map_err(|e| {
+            SecretsError::VaultError(format!("Failed to create Vault client: {}", e))
+        })?);
+
         info!("Vault client initialized for address: {}", vault_addr);
         Ok(())
     }
@@ -342,10 +366,16 @@ impl SecretsManager {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| SecretsError::SecretNotFound { name: name.to_string() }))
+        Err(last_error.unwrap_or(SecretsError::SecretNotFound {
+            name: name.to_string(),
+        }))
     }
 
-    async fn get_secret_from_backend(&self, name: &str, backend: &SecretBackend) -> Result<String, SecretsError> {
+    async fn get_secret_from_backend(
+        &self,
+        name: &str,
+        backend: &SecretBackend,
+    ) -> Result<String, SecretsError> {
         match backend {
             #[cfg(feature = "aws")]
             SecretBackend::AwsSecretsManager => self.get_from_aws(name).await,
@@ -353,15 +383,21 @@ impl SecretsManager {
             SecretBackend::Vault => self.get_from_vault(name).await,
             SecretBackend::Environment => self.get_from_env(name).await,
             #[cfg(not(feature = "aws"))]
-            SecretBackend::AwsSecretsManager => Err(SecretsError::ConfigError("AWS feature not enabled".to_string())),
+            SecretBackend::AwsSecretsManager => Err(SecretsError::ConfigError(
+                "AWS feature not enabled".to_string(),
+            )),
             #[cfg(not(feature = "vault"))]
-            SecretBackend::Vault => Err(SecretsError::ConfigError("Vault feature not enabled".to_string())),
+            SecretBackend::Vault => Err(SecretsError::ConfigError(
+                "Vault feature not enabled".to_string(),
+            )),
         }
     }
 
     #[cfg(feature = "aws")]
     async fn get_from_aws(&self, name: &str) -> Result<String, SecretsError> {
-        let client = self.aws_client.as_ref()
+        let client = self
+            .aws_client
+            .as_ref()
             .ok_or_else(|| SecretsError::AwsError("AWS client not initialized".to_string()))?;
 
         let result = client
@@ -371,18 +407,23 @@ impl SecretsManager {
             .await
             .map_err(|e| SecretsError::AwsError(format!("AWS API error: {}", e)))?;
 
-        result.secret_string()
-            .ok_or_else(|| SecretsError::AwsError("Secret value is binary, expected string".to_string()))
+        result
+            .secret_string()
+            .ok_or_else(|| {
+                SecretsError::AwsError("Secret value is binary, expected string".to_string())
+            })
             .map(|s| s.to_string())
     }
 
     #[cfg(feature = "vault")]
     async fn get_from_vault(&self, name: &str) -> Result<String, SecretsError> {
-        let client = self.vault_client.as_ref()
+        let client = self
+            .vault_client
+            .as_ref()
             .ok_or_else(|| SecretsError::VaultError("Vault client not initialized".to_string()))?;
 
         let mount = self.config.vault_mount.as_deref().unwrap_or("secret");
-        
+
         let secret: serde_json::Value = kv2::read(client, mount, name)
             .await
             .map_err(|e| SecretsError::VaultError(format!("Vault API error: {}", e)))?;
@@ -392,12 +433,16 @@ impl SecretsManager {
             .get("data")
             .and_then(|data| data.get("value"))
             .and_then(|value| value.as_str())
-            .ok_or_else(|| SecretsError::VaultError("Invalid secret format in Vault response".to_string()))
+            .ok_or_else(|| {
+                SecretsError::VaultError("Invalid secret format in Vault response".to_string())
+            })
             .map(|s| s.to_string())
     }
 
     async fn get_from_env(&self, name: &str) -> Result<String, SecretsError> {
-        std::env::var(name).map_err(|_| SecretsError::EnvError { name: name.to_string() })
+        std::env::var(name).map_err(|_| SecretsError::EnvError {
+            name: name.to_string(),
+        })
     }
 
     async fn get_from_cache(&self, name: &str) -> Result<Option<String>, SecretsError> {
@@ -406,9 +451,10 @@ impl SecretsManager {
             // Check if cache entry is still valid
             if cached.cached_at.elapsed().unwrap_or_default() < cached.ttl {
                 let decrypted = self.crypto_manager.decrypt(&cached.value).await?;
-                let value = String::from_utf8(decrypted)
-                    .map_err(|e| SecretsError::CacheError(format!("Invalid UTF-8 in cached secret: {}", e)))?;
-                
+                let value = String::from_utf8(decrypted).map_err(|e| {
+                    SecretsError::CacheError(format!("Invalid UTF-8 in cached secret: {}", e))
+                })?;
+
                 debug!("Cache hit for secret: {}", name);
                 return Ok(Some(value));
             } else {
@@ -418,15 +464,26 @@ impl SecretsManager {
         Ok(None)
     }
 
-    async fn cache_secret(&self, name: &str, value: &str, backend: &SecretBackend) -> Result<(), SecretsError> {
+    async fn cache_secret(
+        &self,
+        name: &str,
+        value: &str,
+        backend: &SecretBackend,
+    ) -> Result<(), SecretsError> {
         let encrypted = self.crypto_manager.encrypt(value.as_bytes()).await?;
-        
+
         let metadata = SecretMetadata {
             name: name.to_string(),
             backend: backend.clone(),
             version: None,
-            created_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
-            last_accessed: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            created_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            last_accessed: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             access_count: 1,
         };
 
@@ -438,18 +495,19 @@ impl SecretsManager {
         };
 
         let mut cache = self.cache.write().await;
-        
+
         // Implement cache size limit with LRU eviction
         if cache.len() >= self.config.max_cache_size {
             // Remove oldest entries
             let mut entries: Vec<_> = cache.iter().collect();
             entries.sort_by_key(|(_, v)| v.cached_at);
-            
-            let to_remove: Vec<_> = entries.iter()
+
+            let to_remove: Vec<_> = entries
+                .iter()
                 .take(cache.len() - self.config.max_cache_size + 1)
                 .map(|(k, _)| (*k).clone())
                 .collect();
-            
+
             for key in to_remove {
                 cache.remove(&key);
             }
@@ -462,7 +520,7 @@ impl SecretsManager {
 
     async fn is_circuit_breaker_open(&self, backend: &SecretBackend) -> bool {
         let breakers = self.circuit_breakers.read().await;
-        breakers.get(backend).map_or(false, |cb| cb.is_open())
+        breakers.get(backend).is_some_and(|cb| cb.is_open())
     }
 
     async fn record_backend_success(&self, backend: &SecretBackend) {
@@ -498,14 +556,14 @@ impl SecretsManager {
     /// Preload commonly used secrets into cache
     pub async fn preload_secrets(&self, secret_names: &[&str]) -> Result<(), SecretsError> {
         info!("Preloading {} secrets into cache", secret_names.len());
-        
+
         for &name in secret_names {
             match self.get_secret(name).await {
                 Ok(_) => debug!("Preloaded secret: {}", name),
                 Err(e) => warn!("Failed to preload secret '{}': {}", name, e),
             }
         }
-        
+
         Ok(())
     }
 }
@@ -540,7 +598,7 @@ impl SecretsManager {
     /// Get client credentials as a map
     pub async fn get_client_credentials(&self) -> Result<HashMap<String, String>, SecretsError> {
         let creds_str = self.get_secret("CLIENT_CREDENTIALS").await?;
-        
+
         // Parse client credentials in format: client1:secret1,client2:secret2
         let mut credentials = HashMap::new();
         for pair in creds_str.split(',') {
@@ -549,11 +607,13 @@ impl SecretsManager {
                 credentials.insert(parts[0].trim().to_string(), parts[1].trim().to_string());
             }
         }
-        
+
         if credentials.is_empty() {
-            return Err(SecretsError::ValidationError("No valid client credentials found".to_string()));
+            return Err(SecretsError::ValidationError(
+                "No valid client credentials found".to_string(),
+            ));
         }
-        
+
         Ok(credentials)
     }
 }
@@ -565,43 +625,43 @@ mod tests {
     #[tokio::test]
     async fn test_environment_backend() {
         std::env::set_var("TEST_SECRET", "test_value");
-        
+
         let config = SecretsManagerConfig {
             default_backend: SecretBackend::Environment,
             ..Default::default()
         };
-        
+
         let manager = SecretsManager::new_with_config(config).await.unwrap();
         let value = manager.get_secret("TEST_SECRET").await.unwrap();
-        
+
         assert_eq!(value, "test_value");
-        
+
         std::env::remove_var("TEST_SECRET");
     }
 
     #[tokio::test]
     async fn test_cache_functionality() {
         std::env::set_var("CACHE_TEST_SECRET", "cached_value");
-        
+
         let config = SecretsManagerConfig {
             default_backend: SecretBackend::Environment,
             cache_ttl: Duration::from_secs(10),
             ..Default::default()
         };
-        
+
         let manager = SecretsManager::new_with_config(config).await.unwrap();
-        
+
         // First call should hit the backend
         let value1 = manager.get_secret("CACHE_TEST_SECRET").await.unwrap();
         assert_eq!(value1, "cached_value");
-        
+
         // Second call should hit the cache
         let value2 = manager.get_secret("CACHE_TEST_SECRET").await.unwrap();
         assert_eq!(value2, "cached_value");
-        
+
         let stats = manager.get_cache_stats().await;
         assert_eq!(stats.get("cache_size"), Some(&1));
-        
+
         std::env::remove_var("CACHE_TEST_SECRET");
     }
 
@@ -611,10 +671,10 @@ mod tests {
             default_backend: SecretBackend::Environment,
             ..Default::default()
         };
-        
+
         let manager = SecretsManager::new_with_config(config).await.unwrap();
         let result = manager.get_secret("NONEXISTENT_SECRET").await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             SecretsError::EnvError { name } => assert_eq!(name, "NONEXISTENT_SECRET"),
@@ -626,21 +686,21 @@ mod tests {
     async fn test_convenience_methods() {
         std::env::set_var("JWT_SECRET", "jwt_test_secret");
         std::env::set_var("CLIENT_CREDENTIALS", "client1:secret1,client2:secret2");
-        
+
         let config = SecretsManagerConfig {
             default_backend: SecretBackend::Environment,
             ..Default::default()
         };
-        
+
         let manager = SecretsManager::new_with_config(config).await.unwrap();
-        
+
         let jwt_secret = manager.get_jwt_secret().await.unwrap();
         assert_eq!(jwt_secret, "jwt_test_secret");
-        
+
         let client_creds = manager.get_client_credentials().await.unwrap();
         assert_eq!(client_creds.get("client1"), Some(&"secret1".to_string()));
         assert_eq!(client_creds.get("client2"), Some(&"secret2".to_string()));
-        
+
         std::env::remove_var("JWT_SECRET");
         std::env::remove_var("CLIENT_CREDENTIALS");
     }

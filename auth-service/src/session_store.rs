@@ -498,17 +498,22 @@ pub struct BasicConnectionPoolManager {
 
 #[cfg(feature = "enhanced-session-store")]
 impl BasicConnectionPoolManager {
-    pub async fn new(redis_url: &str, config: BasicConnectionPoolConfig) -> Result<Self, Box<dyn StdError + Send + Sync>> {
+    pub async fn new(
+        redis_url: &str,
+        config: BasicConnectionPoolConfig,
+    ) -> Result<Self, Box<dyn StdError + Send + Sync>> {
         let redis_config = Config::from_url(redis_url);
         let pool = redis_config.create_pool(Some(Runtime::Tokio1))?;
-        
+
         Ok(Self {
             redis_pool: Some(pool),
             _config: config,
         })
     }
 
-    pub async fn get_connection(&self) -> Result<deadpool_redis::Connection, Box<dyn StdError + Send + Sync>> {
+    pub async fn get_connection(
+        &self,
+    ) -> Result<deadpool_redis::Connection, Box<dyn StdError + Send + Sync>> {
         match &self.redis_pool {
             Some(pool) => {
                 let conn = pool.get().await?;
@@ -572,7 +577,10 @@ impl EnhancedRedisSessionStore {
     }
 
     /// Execute Redis operation with retry and fallback
-    async fn with_redis_retry<F, T>(&self, operation: F) -> Result<T, Box<dyn StdError + Send + Sync>>
+    async fn with_redis_retry<F, T>(
+        &self,
+        operation: F,
+    ) -> Result<T, Box<dyn StdError + Send + Sync>>
     where
         F: Fn() -> T + Clone + Send + 'static,
         T: Send + 'static,
@@ -608,15 +616,17 @@ impl EnhancedRedisSessionStore {
     fn calculate_retry_delay(&self, attempt: u32) -> Duration {
         let delay_ms = self.retry_config.base_delay.as_millis() as f64
             * self.retry_config.exponential_base.powi(attempt as i32);
-        
+
         let delay = Duration::from_millis(delay_ms as u64);
         std::cmp::min(delay, self.retry_config.max_delay)
     }
 
+    #[allow(dead_code)]
     fn session_key(&self, session_id: &str) -> String {
         format!("auth:session:{}", session_id)
     }
 
+    #[allow(dead_code)]
     fn user_sessions_key(&self, user_id: &str) -> String {
         format!("auth:user_sessions:{}", user_id)
     }
@@ -705,9 +715,7 @@ impl SessionStore for EnhancedRedisSessionStore {
         // Similar implementation to create_session but for updates
         let _session_clone = session.clone();
         let result = self
-            .with_redis_retry(|| {
-                Ok::<(), Box<dyn StdError + Send + Sync>>(())
-            })
+            .with_redis_retry(|| Ok::<(), Box<dyn StdError + Send + Sync>>(()))
             .await;
 
         if result.is_err() {
@@ -727,9 +735,7 @@ impl SessionStore for EnhancedRedisSessionStore {
         if let Ok(Some(session)) = self.get_session(session_id).await {
             let _session_id_clone = session_id.to_string();
             let _result = self
-                .with_redis_retry(|| {
-                    Ok::<(), Box<dyn StdError + Send + Sync>>(())
-                })
+                .with_redis_retry(|| Ok::<(), Box<dyn StdError + Send + Sync>>(()))
                 .await;
 
             // Clean up memory fallback
@@ -755,7 +761,7 @@ impl SessionStore for EnhancedRedisSessionStore {
     ) -> Result<Vec<SessionData>, Box<dyn StdError + Send + Sync>> {
         let user_index = self.user_sessions_index.read().await;
         let session_ids = user_index.get(user_id).cloned().unwrap_or_default();
-        
+
         let mut sessions = Vec::new();
         for session_id in session_ids {
             if let Ok(Some(session)) = self.get_session(&session_id).await {
@@ -870,7 +876,7 @@ mod chaos_tests {
     async fn test_redis_outage_fallback() {
         // Create session store with fallback capability
         let store = RedisSessionStore::new(None).await;
-        
+
         let session = SessionData::new(
             "user123".to_string(),
             "client456".to_string(),
@@ -882,16 +888,16 @@ mod chaos_tests {
 
         // Should work with memory fallback when Redis is unavailable
         assert!(store.create_session(&session).await.is_ok());
-        
+
         let retrieved = store.get_session(&session.session_id).await.unwrap();
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().user_id, session.user_id);
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_session_cleanup_during_redis_outage() {
         let store = RedisSessionStore::new(None).await;
-        
+
         // Create expired session
         let mut expired_session = SessionData::new(
             "user789".to_string(),
@@ -901,18 +907,21 @@ mod chaos_tests {
             Some("TestAgent/1.0".to_string()),
             vec!["read".to_string()],
         );
-        
+
         // Manually set expiration to past
         expired_session.expires_at = 1234567890; // Way in the past
-        
+
         store.create_session(&expired_session).await.unwrap();
-        
+
         // Cleanup should work even during Redis outage
         let cleaned = store.cleanup_expired_sessions().await.unwrap();
         assert!(cleaned >= 1);
-        
+
         // Session should be gone
-        let retrieved = store.get_session(&expired_session.session_id).await.unwrap();
+        let retrieved = store
+            .get_session(&expired_session.session_id)
+            .await
+            .unwrap();
         assert!(retrieved.is_none());
     }
 
@@ -921,14 +930,14 @@ mod chaos_tests {
     async fn test_retry_mechanism() {
         // This test would use the enhanced store with actual retry logic
         // For now, we'll simulate the behavior
-        
+
         let retry_config = RetryConfig {
             max_retries: 3,
             base_delay: Duration::from_millis(10), // Faster for tests
             max_delay: Duration::from_millis(100),
             exponential_base: 2.0,
         };
-        
+
         // Test retry delay calculation
         let delays = (0..=retry_config.max_retries)
             .map(|attempt| {
@@ -937,7 +946,7 @@ mod chaos_tests {
                 Duration::from_millis(delay_ms as u64)
             })
             .collect::<Vec<_>>();
-        
+
         assert_eq!(delays[0], Duration::from_millis(10)); // base delay
         assert_eq!(delays[1], Duration::from_millis(20)); // 10 * 2^1
         assert_eq!(delays[2], Duration::from_millis(40)); // 10 * 2^2
@@ -966,15 +975,19 @@ mod chaos_tests {
                 let create_result = store_clone.create_session(&session).await;
                 let get_result = store_clone.get_session(&session.session_id).await;
                 let update_result = store_clone.update_session(&session).await;
-                
-                (create_result.is_ok(), get_result.is_ok(), update_result.is_ok())
+
+                (
+                    create_result.is_ok(),
+                    get_result.is_ok(),
+                    update_result.is_ok(),
+                )
             });
             handles.push(handle);
         }
 
         // Wait for all operations to complete
         let results = futures::future::join_all(handles).await;
-        
+
         // All operations should succeed
         for result in results {
             let (create_ok, get_ok, update_ok) = result.unwrap();
@@ -988,7 +1001,7 @@ mod chaos_tests {
     async fn test_user_session_management_resilience() {
         let store = RedisSessionStore::new(None).await;
         let user_id = "test_user_resilience";
-        
+
         // Create multiple sessions for the same user
         let session_ids = (0..5)
             .map(|i| {
@@ -1001,30 +1014,28 @@ mod chaos_tests {
                     vec!["read".to_string()],
                 );
                 let session_id = session.session_id.clone();
-                
+
                 // Create session (should work with memory fallback)
                 tokio::spawn({
                     let store = store.clone();
-                    async move {
-                        store.create_session(&session).await
-                    }
+                    async move { store.create_session(&session).await }
                 });
-                
+
                 session_id
             })
             .collect::<Vec<_>>();
 
         // Wait a bit for all sessions to be created
         sleep(Duration::from_millis(100)).await;
-        
+
         // Get user sessions - should work even during Redis outage
         let user_sessions = store.get_user_sessions(user_id).await.unwrap();
         assert!(!user_sessions.is_empty());
-        
+
         // Revoke all user sessions - should work with memory fallback
         let revoked_count = store.revoke_all_user_sessions(user_id).await.unwrap();
         assert!(revoked_count > 0);
-        
+
         // User should have no sessions left
         let remaining_sessions = store.get_user_sessions(user_id).await.unwrap();
         assert!(remaining_sessions.is_empty());

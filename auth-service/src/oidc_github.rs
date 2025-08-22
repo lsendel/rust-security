@@ -69,9 +69,7 @@ pub async fn github_callback(
 ) -> impl IntoResponse {
     // Check for OAuth errors first
     if let Some(error) = q.error {
-        let error_desc = q
-            .error_description
-            .unwrap_or_else(|| "Unknown error".to_string());
+        let error_desc = q.error_description.unwrap_or("Unknown error".to_string());
         return Json(serde_json::json!({
             "error": error,
             "error_description": error_desc,
@@ -122,7 +120,7 @@ pub async fn github_callback(
                         .get("id")
                         .and_then(|id| id.as_u64())
                         .map(|id| format!("github:{}", id))
-                        .unwrap_or_else(|| "unknown".to_string());
+                        .unwrap_or("unknown".to_string());
 
                     // Mint local tokens for the GitHub user
                     let scope = Some("openid profile email".to_string());
@@ -183,7 +181,7 @@ async fn exchange_code_for_token(
     if let Some(error) = token_response.error {
         let description = token_response
             .error_description
-            .unwrap_or_else(|| "Unknown error".to_string());
+            .unwrap_or("Unknown error".to_string());
         return Err(format!("GitHub OAuth error: {} - {}", error, description).into());
     }
 

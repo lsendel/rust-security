@@ -8,24 +8,23 @@
 //! - Security monitoring and anomaly detection
 //! - Operational dashboards and alerting
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime},
 };
 use tokio::{sync::RwLock, time::interval};
-use tracing::{debug, error, info, instrument, warn, Span};
 use tracing::Instrument;
+use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::{
     business_metrics::BusinessMetricsRegistry,
     metrics::MetricsRegistry,
+    security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity},
     security_metrics::SecurityMetrics,
-    security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity},
-    AuthError,
 };
 
 /// Service Level Indicators (SLIs) configuration
@@ -123,6 +122,7 @@ pub struct Alert {
 }
 
 /// Enhanced observability coordinator
+#[allow(dead_code)]
 pub struct EnhancedObservability {
     /// Service configuration
     config: ObservabilityConfig,
@@ -259,15 +259,12 @@ impl EnhancedObservability {
     }
 
     /// Background task for health checking
-    async fn health_check_task(
-        health_status: Arc<RwLock<HealthStatus>>,
-        interval_seconds: u64,
-    ) {
+    async fn health_check_task(health_status: Arc<RwLock<HealthStatus>>, interval_seconds: u64) {
         let mut interval = interval(Duration::from_secs(interval_seconds));
-        
+
         loop {
             interval.tick().await;
-            
+
             let mut checks = HashMap::new();
             let start_time = Instant::now();
 
@@ -275,7 +272,7 @@ impl EnhancedObservability {
             let db_health = Self::check_database_health().await;
             checks.insert("database".to_string(), db_health);
 
-            // Check Redis connectivity  
+            // Check Redis connectivity
             let redis_health = Self::check_redis_health().await;
             checks.insert("redis".to_string(), redis_health);
 
@@ -284,9 +281,15 @@ impl EnhancedObservability {
             checks.insert("external_services".to_string(), external_health);
 
             // Determine overall health
-            let overall_health = if checks.values().all(|h| h.status == HealthCheckStatus::Healthy) {
+            let overall_health = if checks
+                .values()
+                .all(|h| h.status == HealthCheckStatus::Healthy)
+            {
                 HealthCheckStatus::Healthy
-            } else if checks.values().any(|h| h.status == HealthCheckStatus::Unhealthy) {
+            } else if checks
+                .values()
+                .any(|h| h.status == HealthCheckStatus::Unhealthy)
+            {
                 HealthCheckStatus::Unhealthy
             } else {
                 HealthCheckStatus::Degraded
@@ -310,10 +313,10 @@ impl EnhancedObservability {
         interval_seconds: u64,
     ) {
         let mut interval = interval(Duration::from_secs(interval_seconds));
-        
+
         loop {
             interval.tick().await;
-            
+
             // Calculate current SLI metrics
             let availability = Self::calculate_availability().await;
             let latency_p95 = Self::calculate_latency_p95().await;
@@ -326,7 +329,7 @@ impl EnhancedObservability {
             // Update SLO status
             let mut status = slo_status.write().await;
             let previous_status = status.is_meeting_targets;
-            
+
             status.availability_percentage = availability;
             status.latency_p95_ms = latency_p95;
             status.error_rate_percentage = error_rate;
@@ -348,10 +351,10 @@ impl EnhancedObservability {
     /// Background task for alert management
     async fn alert_management_task(alerts: Arc<RwLock<HashMap<String, Alert>>>) {
         let mut interval = interval(Duration::from_secs(10));
-        
+
         loop {
             interval.tick().await;
-            
+
             // Process and manage alerts
             let mut alert_map = alerts.write().await;
             let mut resolved_alerts = Vec::new();
@@ -382,11 +385,12 @@ impl EnhancedObservability {
         success: bool,
     ) {
         let duration_ms = duration.as_millis() as f64;
-        
+
         // Update performance profile
         let mut profiles = self.performance_profiles.write().await;
-        let profile = profiles.entry(operation.to_string()).or_insert_with(|| {
-            PerformanceProfile {
+        let profile = profiles
+            .entry(operation.to_string())
+            .or_insert_with(|| PerformanceProfile {
                 operation: operation.to_string(),
                 avg_duration_ms: 0.0,
                 p95_duration_ms: 0.0,
@@ -395,8 +399,7 @@ impl EnhancedObservability {
                 call_count: 0,
                 error_count: 0,
                 timestamp: SystemTime::now(),
-            }
-        });
+            });
 
         profile.call_count += 1;
         if !success {
@@ -404,7 +407,9 @@ impl EnhancedObservability {
         }
 
         // Update duration statistics (simplified running average)
-        profile.avg_duration_ms = (profile.avg_duration_ms * (profile.call_count - 1) as f64 + duration_ms) / profile.call_count as f64;
+        profile.avg_duration_ms = (profile.avg_duration_ms * (profile.call_count - 1) as f64
+            + duration_ms)
+            / profile.call_count as f64;
         profile.max_duration_ms = profile.max_duration_ms.max(duration_ms);
         profile.timestamp = SystemTime::now();
 
@@ -416,7 +421,8 @@ impl EnhancedObservability {
                 &format!("Operation {} took {:.2}ms", operation, duration_ms),
                 duration_ms,
                 self.sli_config.latency_target_ms as f64,
-            ).await;
+            )
+            .await;
         }
     }
 
@@ -427,14 +433,16 @@ impl EnhancedObservability {
         SecurityLogger::log_event(event);
 
         // Check for security alert conditions
-        if event.severity == SecuritySeverity::Critical || event.severity == SecuritySeverity::High {
+        if event.severity == SecuritySeverity::Critical || event.severity == SecuritySeverity::High
+        {
             self.trigger_alert(
                 AlertSeverity::Critical,
                 "Security Event",
                 &format!("Security event: {}", event.description),
                 1.0,
                 0.0,
-            ).await;
+            )
+            .await;
         }
 
         // Update security metrics
@@ -460,7 +468,9 @@ impl EnhancedObservability {
 
     /// Get active alerts
     pub async fn get_active_alerts(&self) -> Vec<Alert> {
-        self.alerts.read().await
+        self.alerts
+            .read()
+            .await
             .values()
             .filter(|a| a.resolved_at.is_none())
             .cloned()
@@ -556,8 +566,8 @@ impl EnhancedObservability {
 
     /// Export metrics for external monitoring systems
     pub async fn export_metrics_for_grafana(&self) -> Result<String> {
-        let slo_status = self.get_slo_status().await;
-        let health_status = self.get_health_status().await;
+        let _slo_status = self.get_slo_status().await;
+        let _health_status = self.get_health_status().await;
         let profiles = self.get_performance_profiles().await;
 
         let dashboard = serde_json::json!({
@@ -577,8 +587,8 @@ impl EnhancedObservability {
                         "type": "graph",
                         "targets": profiles.keys().map(|op| {
                             serde_json::json!({
-                                "expr": format!("operation_duration_{}_{}", 
-                                    self.config.service_name.replace("-", "_"), 
+                                "expr": format!("operation_duration_{}_{}",
+                                    self.config.service_name.replace("-", "_"),
                                     op.replace(" ", "_")),
                                 "legendFormat": op
                             })
@@ -600,7 +610,7 @@ pub async fn observability_middleware(
     let start_time = Instant::now();
     let method = req.method().clone();
     let path = req.uri().path().to_string();
-    
+
     // Create span for this request
     let span = tracing::info_span!(
         "http_request",

@@ -239,7 +239,7 @@ where
     
     fn call(&mut self, mut request: Request) -> Self::Future {
         let state = self.state.clone();
-        let inner = self.inner.clone();
+        let mut inner = self.inner.clone();
         
         Box::pin(async move {
             let headers = request.headers();

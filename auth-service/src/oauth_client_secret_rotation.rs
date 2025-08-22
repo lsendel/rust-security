@@ -15,7 +15,6 @@ use sqlx::{Pool, Postgres, Row};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
-use uuid::Uuid;
 
 /// Client secret rotation policy
 #[derive(Debug, Clone, Serialize, Deserialize)]

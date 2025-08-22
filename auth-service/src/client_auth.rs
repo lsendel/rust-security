@@ -1,4 +1,3 @@
-use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::{internal_error, AuthError};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
@@ -292,6 +291,12 @@ impl ClientAuthenticator {
         }
 
         Ok(())
+    }
+}
+
+impl Default for ClientAuthenticator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -21,9 +21,12 @@ device-flow = []
 jwt = ["dep:jsonwebtoken"]
 opaque-tokens = []
 
-# Storage backends  
+# Storage backends
 memory-store = []
 file-store = []
+
+# Enable extended compliance and security tests (only compiled when explicitly enabled)
+compliance-tests = []
 
 # Minimal dependencies for core functionality
 [dependencies]

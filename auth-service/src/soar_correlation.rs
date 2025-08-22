@@ -507,7 +507,7 @@ pub struct DeduplicationConfig {
 }
 
 /// Correlation metrics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CorrelationMetrics {
     /// Total alerts processed
     pub total_alerts_processed: u64,
@@ -1360,21 +1360,5 @@ impl DeduplicationEngine {
         let mut hasher = DefaultHasher::new();
         combined.hash(&mut hasher);
         format!("{:x}", hasher.finish())
-    }
-}
-
-impl Default for CorrelationMetrics {
-    fn default() -> Self {
-        Self {
-            total_alerts_processed: 0,
-            total_correlations: 0,
-            correlations_by_type: HashMap::new(),
-            pattern_matches: 0,
-            statistical_correlations: 0,
-            ml_correlations: 0,
-            duplicates_suppressed: 0,
-            avg_processing_time_ms: 0.0,
-            last_correlation: None,
-        }
     }
 }

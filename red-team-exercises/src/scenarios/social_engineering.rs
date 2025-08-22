@@ -356,7 +356,7 @@ async fn physical_social_engineering(
 
     let session = framework.create_attack_session().await?;
     let mut physical_results = Vec::new();
-    let mut vulnerabilities_found = Vec::new();
+    let mut vulnerabilities_found: Vec<String> = Vec::new();
     let mut successful_attacks = 0;
 
     // Test badge/card-based authentication systems
@@ -437,7 +437,7 @@ async fn digital_pretexting_advanced(
 
     let session = framework.create_attack_session().await?;
     let mut pretexting_results = Vec::new();
-    let mut vulnerabilities_found = Vec::new();
+    let mut vulnerabilities_found: Vec<String> = Vec::new();
     let mut successful_attacks = 0;
 
     // Test technology-specific pretexting scenarios

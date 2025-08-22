@@ -8,45 +8,48 @@ metadata:
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted
 ---
-# Security Context Constraints for OpenShift
-apiVersion: security.openshift.io/v1
-kind: SecurityContextConstraints
-metadata:
-  name: auth-service-restricted
-allowHostDirVolumePlugin: false
-allowHostIPC: false
-allowHostNetwork: false
-allowHostPID: false
-allowHostPorts: false
-allowPrivilegeEscalation: false
-allowPrivilegedContainer: false
-allowedCapabilities: []
-defaultAddCapabilities: []
-fsGroup:
-  type: MustRunAs
-  ranges:
-  - min: 1000
-    max: 65535
-runAsUser:
-  type: MustRunAsNonRoot
-readOnlyRootFilesystem: true
-requiredDropCapabilities:
-- ALL
-seccompProfiles:
-- runtime/default
-seLinuxContext:
-  type: MustRunAs
-supplementalGroups:
-  type: RunAsAny
-volumes:
-- configMap
-- downwardAPI
-- emptyDir
-- persistentVolumeClaim
-- projected
-- secret
-users:
-- system:serviceaccount:auth-service:auth-service
+# Note: SecurityContextConstraints are OpenShift-specific
+# For standard Kubernetes, use Pod Security Standards with namespace labels
+# If running on OpenShift, uncomment and use the SCC definition below:
+#
+# apiVersion: security.openshift.io/v1
+# kind: SecurityContextConstraints
+# metadata:
+#   name: auth-service-restricted
+# allowHostDirVolumePlugin: false
+# allowHostIPC: false
+# allowHostNetwork: false
+# allowHostPID: false
+# allowHostPorts: false
+# allowPrivilegeEscalation: false
+# allowPrivilegedContainer: false
+# allowedCapabilities: []
+# defaultAddCapabilities: []
+# fsGroup:
+#   type: MustRunAs
+#   ranges:
+#   - min: 1000
+#     max: 65535
+# runAsUser:
+#   type: MustRunAsNonRoot
+# readOnlyRootFilesystem: true
+# requiredDropCapabilities:
+# - ALL
+# seccompProfiles:
+# - runtime/default
+# seLinuxContext:
+#   type: MustRunAs
+# supplementalGroups:
+#   type: RunAsAny
+# volumes:
+# - configMap
+# - downwardAPI
+# - emptyDir
+# - persistentVolumeClaim
+# - projected
+# - secret
+# users:
+# - system:serviceaccount:auth-service:auth-service
 ---
 # Deployment with Security Context
 apiVersion: apps/v1
@@ -107,8 +110,8 @@ spec:
                 values: ["spot", "preemptible"]
       containers:
       - name: auth-service
-        image: auth-service:latest
-        imagePullPolicy: Always
+        image: auth-service:1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
           name: http

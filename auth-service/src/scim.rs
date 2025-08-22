@@ -1,4 +1,3 @@
-use crate::pii_protection::redact_log;
 use crate::{AppState, AuthError};
 use axum::{
     extract::{Path, Query, State},
@@ -7,8 +6,6 @@ use axum::{
 };
 use common::{ScimGroup, ScimUser};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use thiserror::Error;
 
 // Note: ScimUser and ScimGroup are now in the `common` crate.
 // Note: ScimStore has been removed and replaced by the generic `Store` trait in AppState.
@@ -210,11 +207,16 @@ async fn get_group(
 // All related structs like BulkRequest, BulkResponse, etc., are kept for API compatibility.
 
 // Constants for bulk operations
+#[allow(dead_code)]
 const MAX_BULK_OPERATIONS: usize = 1000;
+#[allow(dead_code)]
 const BULK_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:BulkRequest";
+#[allow(dead_code)]
 const BULK_RESPONSE_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:BulkResponse";
+#[allow(dead_code)]
 const ERROR_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:Error";
 
+#[allow(dead_code)]
 async fn bulk_operations(
     State(state): State<AppState>,
     Json(request): Json<BulkRequest>,
@@ -263,6 +265,7 @@ async fn bulk_operations(
     Ok(Json(response))
 }
 
+#[allow(dead_code)]
 async fn process_single_operation(
     state: &AppState,
     operation: &BulkOperation,
@@ -383,6 +386,7 @@ async fn process_single_operation(
     }
 }
 
+#[allow(dead_code)]
 fn create_error_response(
     method: BulkOperationMethod,
     status: &str,

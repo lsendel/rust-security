@@ -3,6 +3,19 @@ members = [
     "auth-core",
     "auth-service", 
     "policy-service",
+    "common",
+    "api-contracts",
+    "compliance-tools"
+]
+
+exclude = [
+    "red-team-exercises",
+    "user-portal",
+    "security-platform",
+    "input-validation",
+    "chaos-engineering",
+    "security-testing",
+    "tests"
 ]
 
 resolver = "2"
@@ -16,7 +29,7 @@ rust.dead_code = "warn"
 # Core async runtime
 tokio = { version = "1.0", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
-tower = { version = "0.4" }
+tower = { version = "0.4", features = ["util"] }
 hyper = { version = "1.0" }
 
 # Serialization
@@ -40,7 +53,7 @@ sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "m
 deadpool = "0.12"
 
 # Redis
-redis = { version = "0.26", features = ["aio", "connection-manager"] }
+redis = { version = "0.27", features = ["aio", "connection-manager", "tokio-comp"] }
 deadpool-redis = "0.18"
 
 # Monitoring
@@ -99,11 +112,12 @@ utoipa = { version = "5.0", features = ["axum_extras"] }
 
 # Crypto additional  
 argon2 = "0.5"
+bcrypt = "0.15"
 chacha20poly1305 = "0.10"
 ring = "0.17"
-rsa = "0.9"
-x25519-dalek = "2.0"
+# rsa = "0.9"  # Removed due to RUSTSEC-2023-0071 security vulnerability  
 ed25519-dalek = "2.1"
+x25519-dalek = "2.0"
 p256 = "0.13"
 p384 = "0.13"
 

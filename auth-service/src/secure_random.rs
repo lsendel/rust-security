@@ -1,13 +1,14 @@
-use crate::{internal_error, AuthError};
+use crate::AuthError;
 use data_encoding::BASE64URL_NOPAD;
 use rand::RngCore;
 
 /// Cryptographically secure random number generator
+#[derive(Default)]
 pub struct SecureRandomGenerator;
 
 impl SecureRandomGenerator {
     pub fn new() -> Self {
-        Self
+        Self::default()
     }
 
     /// Generate cryptographically secure random bytes
@@ -99,12 +100,6 @@ impl SecureRandomGenerator {
     pub fn generate_api_key(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("ak_{}", BASE64URL_NOPAD.encode(&bytes)))
-    }
-}
-
-impl Default for SecureRandomGenerator {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

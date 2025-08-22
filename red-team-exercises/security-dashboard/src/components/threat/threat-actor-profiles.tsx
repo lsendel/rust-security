@@ -6,7 +6,7 @@ interface ThreatActorProfilesProps {
   threats: ThreatEvent[]
 }
 
-export function ThreatActorProfiles({ threats }: ThreatActorProfilesProps) {
+export function ThreatActorProfiles({ threats: _threats }: ThreatActorProfilesProps) {
   return (
     <Card>
       <CardHeader>

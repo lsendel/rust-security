@@ -18,7 +18,6 @@ import { format } from 'date-fns'
 import { SecurityMetrics } from '@/types/security'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
 
 interface AuthenticationFlowChartProps {
   data: SecurityMetrics[]

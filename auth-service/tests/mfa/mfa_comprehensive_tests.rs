@@ -407,7 +407,7 @@ async fn test_otp_rate_limiting() {
 
         if response.status() == 200 {
             let data: Value = response.json().await.unwrap();
-            if data["sent"] == true {
+            if data["sent"].as_bool().unwrap_or(false) {
                 successful_sends += 1;
             } else {
                 rate_limited_sends += 1;

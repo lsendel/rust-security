@@ -6,7 +6,6 @@
 use crate::config::{AppConfig, StoreBackend};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
 use tokio::signal;
@@ -430,25 +429,13 @@ pub struct ConfigStatus {
 }
 
 /// Configuration reload metrics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ConfigReloadMetrics {
     pub reload_attempts: u64,
     pub successful_reloads: u64,
     pub failed_reloads: u64,
     pub validation_failures: u64,
     pub last_reload_duration: Option<std::time::Duration>,
-}
-
-impl Default for ConfigReloadMetrics {
-    fn default() -> Self {
-        Self {
-            reload_attempts: 0,
-            successful_reloads: 0,
-            failed_reloads: 0,
-            validation_failures: 0,
-            last_reload_duration: None,
-        }
-    }
 }
 
 #[cfg(test)]

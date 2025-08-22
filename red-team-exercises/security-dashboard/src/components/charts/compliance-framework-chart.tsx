@@ -4,7 +4,7 @@ interface ComplianceFrameworkChartProps {
   frameworks: any[]
 }
 
-export function ComplianceFrameworkChart({ frameworks }: ComplianceFrameworkChartProps) {
+export function ComplianceFrameworkChart({ frameworks: _frameworks }: ComplianceFrameworkChartProps) {
   // Mock time series data for compliance scores
   const chartData = [
     { date: '2024-01-01', 'SOC 2': 92, 'PCI DSS': 85, 'GDPR': 89, 'ISO 27001': 87 },

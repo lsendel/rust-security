@@ -312,7 +312,7 @@ impl SecurityEvent {
         }
 
         // Protect details map values
-        for (key, value) in self.details.iter_mut() {
+        for (_key, value) in self.details.iter_mut() {
             if let Value::String(ref s) = value {
                 let redacted = redactor.redact_log_message(s);
                 *value = Value::String(redacted);
@@ -595,6 +595,12 @@ mod tests {
 
 /// Security logger for structured audit logging
 pub struct SecurityLogger;
+
+impl Default for SecurityLogger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl SecurityLogger {
     /// Create a new security logger instance

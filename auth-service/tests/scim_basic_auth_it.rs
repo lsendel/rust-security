@@ -1,5 +1,9 @@
-use auth_service::{app, store::TokenStore, AppState};
+use auth_service::jwks_rotation::{JwksManager, InMemoryKeyStorage};
+use auth_service::session_store::RedisSessionStore;
+use auth_service::store::HybridStore;
+use auth_service::{app, api_key_store::ApiKeyStore, store::TokenStore, AppState};
 use base64::Engine as _;
+use ::common::Store;
 use reqwest::Client;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,7 +16,18 @@ async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
 
+    let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
+    let store = Arc::new(HybridStore::new().await) as Arc<dyn Store>;
+    let session_store = Arc::new(RedisSessionStore::new(None).await)
+        as Arc<dyn auth_service::session_store::SessionStore>;
+    let jwks_manager = Arc::new(JwksManager::new(
+        Default::default(),
+        Arc::new(InMemoryKeyStorage::new())
+    ).await.unwrap());
+
     let app_state = AppState {
+        store,
+        session_store,
         token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
         client_credentials: HashMap::new(),
         allowed_scopes: vec![],
@@ -25,6 +40,8 @@ async fn spawn_app() -> String {
                 auth_service::backpressure::BackpressureConfig::default(),
             ),
         ),
+        api_key_store,
+        jwks_manager,
     };
 
     let router = app(app_state);

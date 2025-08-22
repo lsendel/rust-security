@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -8,7 +7,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  AreaChart,
   Area,
   ComposedChart,
   Bar,

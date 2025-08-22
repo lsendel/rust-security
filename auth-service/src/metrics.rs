@@ -12,24 +12,19 @@
 //! best practices for naming and labeling.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::{
     extract::{MatchedPath, Request},
-    http::{Method, StatusCode},
+    http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use once_cell::sync::Lazy;
 use prometheus::{
-    Encoder, Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts,
-    Registry, TextEncoder,
+    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
-use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
-
-use crate::security_metrics::SECURITY_METRICS;
+use tracing::{debug, error};
 
 /// Core metrics registry and collectors for comprehensive observability
 pub struct MetricsRegistry {
