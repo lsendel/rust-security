@@ -481,9 +481,7 @@ mod tests {
     fn test_redact_error() {
         assert!(redact_log("user@example.com").contains("u****@example.com"));
         assert!(redact_log("555-123-4567").contains("****4567"));
-        assert!(
-            redact_log("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED")
-        );
+        assert!(redact_log("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED"));
         assert_eq!(redact_log("normal text"), "normal text");
     }
 

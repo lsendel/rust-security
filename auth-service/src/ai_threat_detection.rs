@@ -90,7 +90,7 @@ pub enum RiskLevel {
     Critical = 4,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ThreatType {
     SqlInjection,
     XssAttack,
@@ -106,7 +106,7 @@ pub enum ThreatType {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ThreatAction {
     Block,
     Challenge,
@@ -713,7 +713,7 @@ impl AiThreatDetector {
         let standard_headers = ["user-agent", "accept", "accept-language"];
         standard_headers
             .iter()
-            .filter(|header| !headers.contains_key(header.as_str()))
+            .filter(|header| !headers.contains_key(header.as_ref()))
             .count()
     }
 

@@ -305,7 +305,7 @@ impl ZeroTrustEngine {
 
     /// Evaluate network trust
     async fn evaluate_network(&self, network: &NetworkContext) -> Result<f64> {
-        let mut score = 0.5; // Base score
+        let mut score: f64 = 0.5; // Base score
 
         // Network type
         match network.network_type {
@@ -346,7 +346,7 @@ impl ZeroTrustEngine {
     async fn evaluate_behavior(&self, user_id: &str, request: &AccessRequest) -> Result<f64> {
         let behavior_profile = self.behavior_analyzer.get_profile(user_id).await?;
 
-        let mut score = 0.5; // Base score
+        let mut score: f64 = 0.5; // Base score
 
         // Time-based patterns
         if self
@@ -381,7 +381,7 @@ impl ZeroTrustEngine {
 
     /// Evaluate contextual factors
     async fn evaluate_context(&self, request: &AccessRequest) -> Result<f64> {
-        let mut score = 0.5; // Base score
+        let mut score: f64 = 0.5; // Base score
 
         // Resource sensitivity
         match request.request.sensitivity_level {

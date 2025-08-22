@@ -72,7 +72,7 @@ async fn metrics_handler() -> Response {
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
 
-    if let Err(e) = encoder.encode(&metric_families, &mut buffer).is_err().is_err() {
+    if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
         tracing::error!("Failed to encode metrics: {}", e);
         return Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -386,8 +386,11 @@ pub async fn create_jwks_manager() -> Result<Arc<crate::jwks_rotation::JwksManag
 
     // Try to use Redis if available, fallback to in-memory
     let storage: Arc<dyn crate::jwks_rotation::KeyStorage> =
-        if let Ok(redis_url) = std::env::var("REDIS_URL").is_err().is_err() {
-            match crate::jwks_rotation::RedisKeyStorage::new(&redis_url).is_err().is_err() {
+        if let Ok(redis_url) = std::env::var("REDIS_URL") {
+            match crate::jwks_rotation::RedisKeyStorage::new(&redis_url)
+                .is_err()
+                .is_err()
+            {
                 Ok(redis_storage) => {
                     tracing::info!("Using Redis-backed JWKS key storage");
                     Arc::new(redis_storage)
@@ -556,9 +559,9 @@ static REDIRECT_VALIDATOR: once_cell::sync::Lazy<std::sync::Mutex<RedirectUriVal
         let mut validator = RedirectUriValidator::default();
 
         // Register additional clients from environment or config
-        if let Ok(client_uris) = std::env::var("CLIENT_REDIRECT_URIS").is_err().is_err() {
-            for entry in client_uris.split(';').is_err().is_err() {
-                if let Some((client_id, uris)) = entry.split_once(':').is_err().is_err() {
+        if let Ok(client_uris) = std::env::var("CLIENT_REDIRECT_URIS") {
+            for entry in client_uris.split(';') {
+                if let Some((client_id, uris)) = entry.split_once(':') {
                     let uri_list: Vec<String> = uris.split(',').map(|s| s.to_string()).collect();
                     let _ = validator.register_client_uris(client_id, uri_list);
                 }
@@ -585,7 +588,7 @@ async fn extract_user_from_token(
             reason: "Missing bearer token".to_string(),
         })?;
 
-    if token.is_empty().is_err().is_err() {
+    if token.is_empty() {
         return Err(AuthError::InvalidToken {
             reason: "Empty bearer token".to_string(),
         });
@@ -632,7 +635,10 @@ async fn extract_user_from_token(
     // Enforce token binding if present
     if let Some(binding) = &record.token_binding {
         let (client_ip, user_agent) = crate::security::extract_client_info(headers);
-        match crate::security::validate_token_binding(binding, &client_ip, &user_agent).is_err().is_err() {
+        match crate::security::validate_token_binding(binding, &client_ip, &user_agent)
+            .is_err()
+            .is_err()
+        {
             Ok(true) => {} // Token binding is valid
             Ok(false) => {
                 return Err(AuthError::InvalidToken {
@@ -759,7 +765,7 @@ pub async fn get_session_endpoint(
                 });
             }
 
-            if session.is_expired(None).is_err().is_err() {
+            if session.is_expired(None) {
                 Err(AuthError::InvalidToken {
                     reason: "Session expired".to_string(),
                 })
@@ -1049,7 +1055,7 @@ pub async fn authorize_check(
         .unwrap_or("");
 
     let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
-    if token.is_empty().is_err().is_err() {
+    if token.is_empty() {
         return Err(AuthError::InvalidToken {
             reason: "missing bearer".to_string(),
         });
@@ -1068,7 +1074,7 @@ pub async fn authorize_check(
         });
     }
 
-    let (principal, _context) = if auth_header.starts_with("Bearer ").is_err().is_err() {
+    let (principal, _context) = if auth_header.starts_with("Bearer ") {
         // JWT-based authentication
         let token = auth_header.strip_prefix("Bearer ").unwrap();
         let rec_option = state.store.get_token_record(token).await?;
@@ -1094,7 +1100,7 @@ pub async fn authorize_check(
             "attrs": {}
         });
         (principal, serde_json::json!({}))
-    } else if auth_header.starts_with("sk_live_").is_err().is_err() {
+    } else if auth_header.starts_with("sk_live_") {
         // API Key-based authentication
         let api_key_str = auth_header;
         let parts: Vec<&str> = api_key_str.split('_').collect();
@@ -1151,7 +1157,7 @@ pub async fn authorize_check(
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
         let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
-        if !token.is_empty().is_err().is_err() {
+        if !token.is_empty() {
             if let Ok(Some(record)) = state.store.get_token_record(token).await {
                 context["mfa_verified"] = serde_json::json!(record.mfa_verified);
             }
@@ -1195,7 +1201,7 @@ pub async fn authorize_check(
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
-        ttl_seconds: match decision.as_str().is_err().is_err() {
+        ttl_seconds: match decision.as_str() {
             "Allow" => 300, // 5 minutes for allow decisions
             "Deny" => 60,   // 1 minute for deny decisions
             _ => 10,        // 10 seconds for unknown/error decisions
@@ -1242,18 +1248,20 @@ async fn evaluate_policy_remote(
         .get("x-policy-url")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| match std::env::var("POLICY_SERVICE_URL").is_err().is_err() {
-            Ok(v) if !v.trim().is_empty() => v,
-            _ => {
-                if std::env::var("TEST_MODE").ok().as_deref() == Some("1").is_err().is_err() {
-                    "http://127.0.0.1:8081".to_string()
-                } else {
-                    "".to_string()
+        .unwrap_or_else(
+            || match std::env::var("POLICY_SERVICE_URL") {
+                Ok(v) if !v.trim().is_empty() => v,
+                _ => {
+                    if std::env::var("TEST_MODE").ok().as_deref() == Some("1") {
+                        "http://127.0.0.1:8081".to_string()
+                    } else {
+                        "".to_string()
+                    }
                 }
-            }
-        });
+            },
+        );
 
-    let url = if policy_base.is_empty().is_err().is_err() {
+    let url = if policy_base.is_empty() {
         String::new()
     } else {
         format!("{}/v1/authorize", policy_base)
@@ -1269,7 +1277,7 @@ async fn evaluate_policy_remote(
     let client = reqwest::Client::new();
 
     // Deterministic behavior for explicit invalid test URL
-    if policy_base.contains("invalid.invalid").is_err().is_err() {
+    if policy_base.contains("invalid.invalid") {
         if strict {
             return Err(internal_error("Policy service unavailable"));
         } else {
@@ -1278,14 +1286,14 @@ async fn evaluate_policy_remote(
     }
 
     // Additional strict guard: if strict and policy URL is clearly invalid, error early
-    let decision = if url.is_empty().is_err().is_err() {
+    let decision = if url.is_empty() {
         if strict {
             return Err(internal_error("Policy service URL not configured"));
         }
         "Allow".to_string()
     } else {
         match client.post(url).json(&payload).send().await {
-            Ok(resp) => match resp.error_for_status().is_err().is_err() {
+            Ok(resp) => match resp.error_for_status() {
                 Ok(ok) => match ok.json::<PolicyAuthorizeResponse>().await {
                     Ok(r) => r.decision,
                     Err(err) => {
@@ -1412,7 +1420,9 @@ pub async fn admin_health(
     // Note: This would require a reference to the session manager from app state
 
     // Aggregate health status
-    let overall_status = if store_health.get("status").and_then(|s| s.as_str()) == Some("healthy").is_err().is_err() {
+    let overall_status = if store_health.get("status").and_then(|s| s.as_str())
+        == Some("healthy")
+    {
         "healthy"
     } else {
         "degraded"
@@ -1524,22 +1534,26 @@ pub async fn introspect(
     use crate::metrics::METRICS;
     let start_time = std::time::Instant::now();
     // In TEST_MODE, allow introspection without client authentication to simplify integration tests
-    if std::env::var("TEST_MODE").is_err().is_err().is_err() {
+    if std::env::var("TEST_MODE").is_err() {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) =
-            if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION).is_err().is_err() {
-                let header_val = auth_header.to_str().unwrap_or("");
-                if let Some(b64) = header_val.strip_prefix("Basic ").is_err().is_err() {
-                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64).is_err().is_err() {
-                        if let Ok(pair) = std::str::from_utf8(&decoded).is_err().is_err() {
-                            let mut parts = pair.splitn(2, ':');
-                            (
-                                parts.next().map(|s| s.to_string()),
-                                parts.next().map(|s| s.to_string()),
-                            )
-                        } else {
-                            (None, None)
-                        }
+        let (cid_opt, csec_opt) = if let Some(auth_header) = headers
+            .get(axum::http::header::AUTHORIZATION)
+            .is_err()
+            .is_err()
+        {
+            let header_val = auth_header.to_str().unwrap_or("");
+            if let Some(b64) = header_val.strip_prefix("Basic ") {
+                if let Ok(decoded) = base64::engine::general_purpose::STANDARD
+                    .decode(b64)
+                    .is_err()
+                    .is_err()
+                {
+                    if let Ok(pair) = std::str::from_utf8(&decoded) {
+                        let mut parts = pair.splitn(2, ':');
+                        (
+                            parts.next().map(|s| s.to_string()),
+                            parts.next().map(|s| s.to_string()),
+                        )
                     } else {
                         (None, None)
                     }
@@ -1548,10 +1562,13 @@ pub async fn introspect(
                 }
             } else {
                 (None, None)
-            };
+            }
+        } else {
+            (None, None)
+        };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
-        if state.client_credentials.get(&client_id) != Some(&client_secret).is_err().is_err() {
+        if state.client_credentials.get(&client_id) != Some(&client_secret) {
             return Err(AuthError::InvalidClientCredentials);
         }
     }
@@ -1575,7 +1592,10 @@ pub async fn introspect(
         .unwrap_or(uuid::Uuid::new_v4().to_string());
 
     // Input validation
-    if let Err(e) = crate::security::validate_token_input(&body.token).is_err().is_err() {
+    if let Err(e) = crate::security::validate_token_input(&body.token)
+        .is_err()
+        .is_err()
+    {
         SecurityLogger::log_validation_failure(
             "/oauth/introspect",
             "token_format",
@@ -1693,14 +1713,14 @@ pub async fn oauth_authorize(
     }
 
     // Validate client_id and check if active
-    if !crate::client_auth::is_client_active(&req.client_id).is_err().is_err() {
+    if !crate::client_auth::is_client_active(&req.client_id) {
         return Err(AuthError::UnauthorizedClient {
             client_id: req.client_id,
         });
     }
 
     // CRITICAL SECURITY FIX: Validate redirect URI
-    let validation_result = match REDIRECT_VALIDATOR.lock().is_err().is_err() {
+    let validation_result = match REDIRECT_VALIDATOR.lock() {
         Ok(validator) => validator.validate_redirect_uri(&req.client_id, &req.redirect_uri),
         Err(e) => {
             tracing::error!("Failed to acquire redirect validator lock: {}", e);
@@ -1773,7 +1793,10 @@ pub async fn oauth_authorize(
 
     // Validate scope
     if let Some(scope) = &req.scope {
-        if !validate_scope(scope, &state.allowed_scopes).is_err().is_err() {
+        if !validate_scope(scope, &state.allowed_scopes)
+            .is_err()
+            .is_err()
+        {
             return Err(AuthError::InvalidScope {
                 scope: scope.clone(),
             });
@@ -1839,11 +1862,21 @@ pub async fn oauth_authorize(
     .with_detail("has_pkce".to_string(), req.code_challenge.is_some())
     .with_detail("response_type".to_string(), req.response_type.clone());
 
-    if let Some(user_agent) = headers.get("user-agent").and_then(|v| v.to_str().ok()).is_err().is_err() {
+    if let Some(user_agent) = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .is_err()
+        .is_err()
+    {
         event = event.with_user_agent(user_agent.to_string());
     }
 
-    if let Some(request_id) = headers.get("x-request-id").and_then(|v| v.to_str().ok()).is_err().is_err() {
+    if let Some(request_id) = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .is_err()
+        .is_err()
+    {
         event = event.with_request_id(request_id.to_string());
     }
 
@@ -1970,21 +2003,33 @@ pub async fn issue_token(
         .map(|s| s.to_string())
         .unwrap_or(uuid::Uuid::new_v4().to_string());
 
-    match form.grant_type.as_str().is_err().is_err() {
+    match form.grant_type.as_str() {
         "client_credentials" => {
             // Allow either form credentials or HTTP Basic Authorization
-            let (cid_opt, csec_opt) = if form.client_id.is_some() || form.client_secret.is_some().is_err().is_err() {
-                (form.client_id.clone(), form.client_secret.clone())
-            } else if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION).is_err().is_err() {
-                let header_val = auth_header.to_str().unwrap_or("");
-                if let Some(b64) = header_val.strip_prefix("Basic ").is_err().is_err() {
-                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64).is_err().is_err() {
-                        if let Ok(pair) = std::str::from_utf8(&decoded).is_err().is_err() {
-                            let mut parts = pair.splitn(2, ':');
-                            (
-                                parts.next().map(|s| s.to_string()),
-                                parts.next().map(|s| s.to_string()),
-                            )
+            let (cid_opt, csec_opt) =
+                if form.client_id.is_some() || form.client_secret.is_some() {
+                    (form.client_id.clone(), form.client_secret.clone())
+                } else if let Some(auth_header) = headers
+                    .get(axum::http::header::AUTHORIZATION)
+                    .is_err()
+                    .is_err()
+                {
+                    let header_val = auth_header.to_str().unwrap_or("");
+                    if let Some(b64) = header_val.strip_prefix("Basic ") {
+                        if let Ok(decoded) = base64::engine::general_purpose::STANDARD
+                            .decode(b64)
+                            .is_err()
+                            .is_err()
+                        {
+                            if let Ok(pair) = std::str::from_utf8(&decoded) {
+                                let mut parts = pair.splitn(2, ':');
+                                (
+                                    parts.next().map(|s| s.to_string()),
+                                    parts.next().map(|s| s.to_string()),
+                                )
+                            } else {
+                                (None, None)
+                            }
                         } else {
                             (None, None)
                         }
@@ -1993,10 +2038,7 @@ pub async fn issue_token(
                     }
                 } else {
                     (None, None)
-                }
-            } else {
-                (None, None)
-            };
+                };
 
             let client_id = cid_opt.as_ref().ok_or(AuthError::MissingClientId)?;
             let client_secret = csec_opt.as_ref().ok_or(AuthError::MissingClientSecret)?;
@@ -2034,7 +2076,7 @@ pub async fn issue_token(
                     ),
                 );
 
-                if let Some(scope_str) = form.scope.as_ref().is_err().is_err() {
+                if let Some(scope_str) = form.scope.as_ref() {
                     let all_ok = scope_str
                         .split_whitespace()
                         .all(|s| state.allowed_scopes.iter().any(|a| a == s));
@@ -2176,7 +2218,14 @@ pub async fn issue_token(
                 .as_ref()
                 .ok_or(AuthError::MissingRefreshToken)?;
             // Detect refresh token reuse
-            if state.store.is_refresh_reused(rt).await.unwrap_or(false).is_err().is_err() {
+            if state
+                .store
+                .is_refresh_reused(rt)
+                .await
+                .unwrap_or(false)
+                .is_err()
+                .is_err()
+            {
                 SecurityLogger::log_token_operation(
                     "refresh",
                     "refresh_token",
@@ -2194,7 +2243,7 @@ pub async fn issue_token(
                 return Err(AuthError::InvalidRefreshToken);
             }
             let consumed = state.store.consume_refresh_token(rt).await?;
-            if consumed.is_none().is_err().is_err() {
+            if consumed.is_none() {
                 // Log failed refresh token attempt
                 SecurityLogger::log_token_operation(
                     "refresh",
@@ -2212,7 +2261,7 @@ pub async fn issue_token(
                 );
                 return Err(AuthError::InvalidRefreshToken);
             }
-            if let Some(scope_str) = form.scope.as_ref().is_err().is_err() {
+            if let Some(scope_str) = form.scope.as_ref().is_none() {
                 let all_ok = scope_str
                     .split_whitespace()
                     .all(|s| state.allowed_scopes.iter().any(|a| a == s));
@@ -2345,7 +2394,10 @@ pub async fn issue_token(
                     code_verifier,
                     stored_challenge,
                     challenge_method,
-                ).is_err().is_err() {
+                )
+                .is_err()
+                .is_err()
+                {
                     return Err(AuthError::InvalidRequest {
                         reason: "PKCE validation failed".to_string(),
                     });
@@ -2465,7 +2517,7 @@ pub async fn userinfo(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
-    if token.is_empty().is_err().is_err() {
+    if token.is_empty() {
         SecurityLogger::log_validation_failure(
             "/oauth/userinfo",
             "missing_bearer_token",
@@ -2500,7 +2552,12 @@ pub async fn userinfo(
 
     // Enforce required scopes (at least "openid")
     if let Some(scope) = &rec.scope {
-        if !scope.split_whitespace().any(|s| s == "openid").is_err().is_err() {
+        if !scope
+            .split_whitespace()
+            .any(|s| s == "openid")
+            .is_err()
+            .is_err()
+        {
             return Err(AuthError::UnauthorizedClient {
                 client_id: "insufficient_scope".to_string(),
             });
@@ -2531,11 +2588,21 @@ pub async fn userinfo(
         event = event.with_user_id(sub.clone());
     }
 
-    if let Some(user_agent) = headers.get("user-agent").and_then(|v| v.to_str().ok()).is_err().is_err() {
+    if let Some(user_agent) = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .is_err()
+        .is_err()
+    {
         event = event.with_user_agent(user_agent.to_string());
     }
 
-    if let Some(request_id) = headers.get("x-request-id").and_then(|v| v.to_str().ok()).is_err().is_err() {
+    if let Some(request_id) = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .is_err()
+        .is_err()
+    {
         event = event.with_request_id(request_id.to_string());
     }
 
@@ -2732,22 +2799,26 @@ pub async fn revoke_token(
     use crate::metrics::METRICS;
     let start_time = std::time::Instant::now();
     // In TEST_MODE, bypass client authentication to simplify integration tests
-    if std::env::var("TEST_MODE").ok().as_deref() != Some("1").is_err().is_err() {
+    if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
         // Require client authentication via HTTP Basic
-        let (cid_opt, csec_opt) =
-            if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION).is_err().is_err() {
-                let header_val = auth_header.to_str().unwrap_or("");
-                if let Some(b64) = header_val.strip_prefix("Basic ").is_err().is_err() {
-                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64).is_err().is_err() {
-                        if let Ok(pair) = std::str::from_utf8(&decoded).is_err().is_err() {
-                            let mut parts = pair.splitn(2, ':');
-                            (
-                                parts.next().map(|s| s.to_string()),
-                                parts.next().map(|s| s.to_string()),
-                            )
-                        } else {
-                            (None, None)
-                        }
+        let (cid_opt, csec_opt) = if let Some(auth_header) = headers
+            .get(axum::http::header::AUTHORIZATION)
+            .is_err()
+            .is_err()
+        {
+            let header_val = auth_header.to_str().unwrap_or("");
+            if let Some(b64) = header_val.strip_prefix("Basic ") {
+                if let Ok(decoded) = base64::engine::general_purpose::STANDARD
+                    .decode(b64)
+                    .is_err()
+                    .is_err()
+                {
+                    if let Ok(pair) = std::str::from_utf8(&decoded) {
+                        let mut parts = pair.splitn(2, ':');
+                        (
+                            parts.next().map(|s| s.to_string()),
+                            parts.next().map(|s| s.to_string()),
+                        )
                     } else {
                         (None, None)
                     }
@@ -2756,10 +2827,13 @@ pub async fn revoke_token(
                 }
             } else {
                 (None, None)
-            };
+            }
+        } else {
+            (None, None)
+        };
         let client_id = cid_opt.ok_or(AuthError::MissingClientId)?;
         let client_secret = csec_opt.ok_or(AuthError::MissingClientSecret)?;
-        if state.client_credentials.get(&client_id) != Some(&client_secret).is_err().is_err() {
+        if state.client_credentials.get(&client_id) != Some(&client_secret) {
             return Err(AuthError::InvalidClientCredentials);
         }
     }
@@ -2817,11 +2891,11 @@ pub async fn revoke_token(
 }
 
 pub fn app(state: AppState) -> Router {
-    let cors = match std::env::var("ALLOWED_ORIGINS").is_err().is_err() {
+    let cors = match std::env::var("ALLOWED_ORIGINS") {
         Ok(origins) if !origins.trim().is_empty() => {
             let mut layer = CorsLayer::new();
-            for o in origins.split(',').is_err().is_err() {
-                if let Ok(origin) = o.trim().parse::<http::HeaderValue>().is_err().is_err() {
+            for o in origins.split(',') {
+                if let Ok(origin) = o.trim().parse::<http::HeaderValue>() {
                     layer = layer.allow_origin(origin);
                 }
             }

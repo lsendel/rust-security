@@ -224,7 +224,7 @@ impl AuthServerBuilder {
 }
 
 /// Very simple protected resource handler used in tests
-pub(crate) async fn protected_resource(headers: HeaderMap) -> StatusCode {
+pub async fn protected_resource(headers: HeaderMap) -> StatusCode {
     match headers.get("Authorization") {
         Some(value) => {
             let v = value.to_str().unwrap_or("");
@@ -238,7 +238,7 @@ pub(crate) async fn protected_resource(headers: HeaderMap) -> StatusCode {
     }
 }
 
-pub(crate) async fn method_not_allowed() -> StatusCode {
+pub async fn method_not_allowed() -> StatusCode {
     StatusCode::METHOD_NOT_ALLOWED
 }
 

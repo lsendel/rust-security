@@ -414,27 +414,18 @@ pub fn validate_text_input(
     field_name: &str,
 ) -> Result<String, ValidationError> {
     if input.is_empty() {
-        return Err(ValidationError::new(&format!(
-            "{} cannot be empty",
-            field_name
-        )));
+        return Err(ValidationError::new("Field cannot be empty"));
     }
 
     if input.len() > max_length {
-        return Err(ValidationError::new(&format!(
-            "{} exceeds maximum length",
-            field_name
-        )));
+        return Err(ValidationError::new("Field exceeds maximum length"));
     }
 
     // Check for dangerous patterns
     let input_lower = input.to_lowercase();
     for pattern in DANGEROUS_PATTERNS.iter() {
         if input_lower.contains(pattern) {
-            return Err(ValidationError::new(&format!(
-                "Invalid characters in {}",
-                field_name
-            )));
+            return Err(ValidationError::new("Invalid characters in field"));
         }
     }
 
