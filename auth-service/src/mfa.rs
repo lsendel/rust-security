@@ -321,8 +321,9 @@ pub async fn totp_register(
 ) -> Json<TotpRegisterResponse> {
     // 20-byte random secret
     let secret = {
+        use rand::rngs::OsRng;
         let mut bytes = vec![0u8; 20];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        OsRng.fill_bytes(&mut bytes);
         bytes
     };
     let secret_b32 = BASE32.encode(&secret);
@@ -485,7 +486,8 @@ pub async fn totp_generate_backup_codes(
     let alphabet = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no lookalikes
     for _ in 0..8 {
         let mut b = [0u8; 10];
-        rand::thread_rng().fill_bytes(&mut b);
+        use rand::rngs::OsRng;
+        OsRng.fill_bytes(&mut b);
         let code: String = b
             .iter()
             .map(|x| alphabet[(*x as usize) % alphabet.len()] as char)
@@ -536,8 +538,9 @@ fn verify_otp(code: &str, hash: &str) -> bool {
 }
 
 fn generate_otp_code() -> String {
+    use rand::rngs::OsRng;
     let mut bytes = [0u8; 4];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    OsRng.fill_bytes(&mut bytes);
     let num = u32::from_be_bytes(bytes) % 1_000_000; // 6 digits
     format!("{:06}", num)
 }

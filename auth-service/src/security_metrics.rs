@@ -83,8 +83,7 @@ impl SecurityMetrics {
         let security_events_total = IntCounterVec::new(
             Opts::new("security_events_total", "Total security events"),
             &["event_type", "severity", "source"],
-        )
-        .unwrap();
+        )?;
 
         let input_validation_failures_total = IntCounterVec::new(
             Opts::new(
@@ -92,38 +91,33 @@ impl SecurityMetrics {
                 "Total input validation failures",
             ),
             &["endpoint", "validation_type", "client_id"],
-        )
-        .unwrap();
+        )?;
 
         let rate_limit_hits_total = IntCounterVec::new(
             Opts::new("rate_limit_hits_total", "Total rate limit hits"),
             &["client_id", "ip_address", "endpoint"],
-        )
-        .unwrap();
+        )?;
 
         let request_signature_failures_total = IntCounter::new(
             "request_signature_failures_total",
             "Total request signature validation failures",
-        )
-        .unwrap();
+        )?;
 
         let mfa_attempts_total = IntCounterVec::new(
             Opts::new("mfa_attempts_total", "Total MFA attempts"),
             &["method", "client_id", "result"],
-        )
-        .unwrap();
+        )?;
 
         let mfa_failures_total = IntCounterVec::new(
             Opts::new("mfa_failures_total", "Total MFA failures"),
             &["method", "reason", "client_id"],
-        )
-        .unwrap();
+        )?;
 
         let backup_codes_used_total =
-            IntCounter::new("backup_codes_used_total", "Total backup codes used for MFA").unwrap();
+            IntCounter::new("backup_codes_used_total", "Total backup codes used for MFA")?;
 
         let active_sessions =
-            IntGauge::new("active_sessions", "Number of currently active sessions").unwrap();
+            IntGauge::new("active_sessions", "Number of currently active sessions")?;
 
         let suspicious_activity_total = IntCounterVec::new(
             Opts::new(
@@ -131,14 +125,12 @@ impl SecurityMetrics {
                 "Total suspicious activities detected",
             ),
             &["activity_type", "severity", "ip_address"],
-        )
-        .unwrap();
+        )?;
 
         let security_headers_applied_total = IntCounter::new(
             "security_headers_applied_total",
             "Total security headers applied to responses",
-        )
-        .unwrap();
+        )?;
 
         let auth_duration_seconds = HistogramVec::new(
             prometheus::HistogramOpts::new(
@@ -149,8 +141,7 @@ impl SecurityMetrics {
                 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
             ]),
             &["method", "result"],
-        )
-        .unwrap();
+        )?;
 
         let token_validation_duration_seconds = Histogram::with_opts(
             prometheus::HistogramOpts::new(
@@ -160,67 +151,28 @@ impl SecurityMetrics {
             .buckets(vec![
                 0.0001, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1,
             ]),
-        )
-        .unwrap();
+        )?;
 
         // Register all metrics
-        registry
-            .register(Box::new(auth_attempts_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(auth_failures_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(auth_success_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(tokens_issued_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(tokens_revoked_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(token_binding_violations_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(token_introspection_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(security_events_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(input_validation_failures_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(rate_limit_hits_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(request_signature_failures_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(mfa_attempts_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(mfa_failures_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(backup_codes_used_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(active_sessions.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(suspicious_activity_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(security_headers_applied_total.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(auth_duration_seconds.clone()))
-            .unwrap();
-        registry
-            .register(Box::new(token_validation_duration_seconds.clone()))
-            .unwrap();
+        registry.register(Box::new(auth_attempts_total.clone()))?;
+        registry.register(Box::new(auth_failures_total.clone()))?;
+        registry.register(Box::new(auth_success_total.clone()))?;
+        registry.register(Box::new(tokens_issued_total.clone()))?;
+        registry.register(Box::new(tokens_revoked_total.clone()))?;
+        registry.register(Box::new(token_binding_violations_total.clone()))?;
+        registry.register(Box::new(token_introspection_total.clone()))?;
+        registry.register(Box::new(security_events_total.clone()))?;
+        registry.register(Box::new(input_validation_failures_total.clone()))?;
+        registry.register(Box::new(rate_limit_hits_total.clone()))?;
+        registry.register(Box::new(request_signature_failures_total.clone()))?;
+        registry.register(Box::new(mfa_attempts_total.clone()))?;
+        registry.register(Box::new(mfa_failures_total.clone()))?;
+        registry.register(Box::new(backup_codes_used_total.clone()))?;
+        registry.register(Box::new(active_sessions.clone()))?;
+        registry.register(Box::new(suspicious_activity_total.clone()))?;
+        registry.register(Box::new(security_headers_applied_total.clone()))?;
+        registry.register(Box::new(auth_duration_seconds.clone()))?;
+        registry.register(Box::new(token_validation_duration_seconds.clone()))?;
 
         Ok(Self {
             registry,
@@ -322,13 +274,77 @@ impl SecurityMetrics {
 
 impl Default for SecurityMetrics {
     fn default() -> Self {
-        Self::new().expect("Failed to create default SecurityMetrics")
+        Self::new().unwrap_or_else(|e| {
+            tracing::error!("Failed to create default SecurityMetrics: {}", e);
+            // Return a minimal metrics instance with default registry
+            SecurityMetrics {
+                registry: Registry::new(),
+                auth_attempts_total: IntCounterVec::new(
+                    Opts::new("auth_attempts_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                auth_failures_total: IntCounterVec::new(
+                    Opts::new("auth_failures_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                auth_success_total: IntCounterVec::new(
+                    Opts::new("auth_success_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                tokens_issued_total: IntCounterVec::new(
+                    Opts::new("tokens_issued_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                tokens_revoked_total: IntCounterVec::new(
+                    Opts::new("tokens_revoked_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                token_binding_violations_total: IntCounter::new("token_binding_violations_total_fallback", "Fallback metric").unwrap(),
+                token_introspection_total: IntCounterVec::new(
+                    Opts::new("token_introspection_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                security_events_total: IntCounterVec::new(
+                    Opts::new("security_events_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                input_validation_failures_total: IntCounterVec::new(
+                    Opts::new("input_validation_failures_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                rate_limit_hits_total: IntCounterVec::new(
+                    Opts::new("rate_limit_hits_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                request_signature_failures_total: IntCounter::new("request_signature_failures_total_fallback", "Fallback metric").unwrap(),
+                mfa_attempts_total: IntCounterVec::new(
+                    Opts::new("mfa_attempts_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                mfa_failures_total: IntCounterVec::new(
+                    Opts::new("mfa_failures_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                backup_codes_used_total: IntCounter::new("backup_codes_used_total_fallback", "Fallback metric").unwrap(),
+                active_sessions: IntGauge::new("active_sessions_fallback", "Fallback metric").unwrap(),
+                suspicious_activity_total: IntCounterVec::new(
+                    Opts::new("suspicious_activity_total_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| IntCounterVec::new(Opts::new("fallback", ""), &[""]).unwrap()),
+                security_headers_applied_total: IntCounter::new("security_headers_applied_total_fallback", "Fallback metric").unwrap(),
+                auth_duration_seconds: HistogramVec::new(
+                    prometheus::HistogramOpts::new("auth_duration_seconds_fallback", "Fallback metric"),
+                    &["status"],
+                ).unwrap_or_else(|_| HistogramVec::new(prometheus::HistogramOpts::new("fallback", ""), &[""]).unwrap()),
+                token_validation_duration_seconds: Histogram::new("token_validation_duration_seconds_fallback".into(), "Fallback metric".into()).unwrap(),
+            }
+        })
     }
 }
 
-/// Global security metrics instance
+/// Global security metrics instance - use Result-based initialization
 pub static SECURITY_METRICS: Lazy<SecurityMetrics> =
-    Lazy::new(|| SecurityMetrics::new().expect("Failed to initialize security metrics"));
+    Lazy::new(|| SecurityMetrics::default());
 
 /// Helper macro for recording security events
 #[macro_export]

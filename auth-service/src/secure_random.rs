@@ -12,8 +12,9 @@ impl SecureRandomGenerator {
 
     /// Generate cryptographically secure random bytes
     pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, AuthError> {
+        use rand::rngs::OsRng;
         let mut bytes = vec![0u8; length];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        OsRng.fill_bytes(&mut bytes);
         Ok(bytes)
     }
 

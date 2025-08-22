@@ -366,7 +366,11 @@ pub async fn authenticate_client(
 pub fn get_client_metadata(client_id: &str) -> Option<ClientMetadata> {
     CLIENT_AUTHENTICATOR
         .lock()
-        .unwrap()
+        .map_err(|e| {
+            tracing::error!("Failed to acquire client authenticator lock: {}", e);
+            e
+        })
+        .ok()?
         .get_client_metadata(client_id)
         .cloned()
 }
@@ -375,8 +379,12 @@ pub fn get_client_metadata(client_id: &str) -> Option<ClientMetadata> {
 pub fn is_client_active(client_id: &str) -> bool {
     CLIENT_AUTHENTICATOR
         .lock()
-        .unwrap()
-        .is_client_active(client_id)
+        .map_err(|e| {
+            tracing::error!("Failed to acquire client authenticator lock: {}", e);
+            e
+        })
+        .map(|auth| auth.is_client_active(client_id))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

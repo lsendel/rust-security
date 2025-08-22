@@ -270,15 +270,17 @@ fn parse_traceparent(traceparent: &str) -> Result<TraceContext, &'static str> {
 
 /// Generate a new 32-character trace ID
 pub fn generate_trace_id() -> String {
+    use rand::rngs::OsRng;
     let mut bytes = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    OsRng.fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 
 /// Generate a new 16-character span ID
 pub fn generate_span_id() -> String {
+    use rand::rngs::OsRng;
     let mut bytes = [0u8; 8];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    OsRng.fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 

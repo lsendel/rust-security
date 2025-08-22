@@ -458,7 +458,8 @@ impl HighPerformanceMfaService {
             let mut code = String::new();
             for _ in 0..10 {
                 let mut byte = [0u8; 1];
-                rand::thread_rng().fill_bytes(&mut byte);
+                use rand::rngs::OsRng;
+                OsRng.fill_bytes(&mut byte);
                 let char_index = byte[0] as usize % alphabet.len();
                 code.push(alphabet[char_index] as char);
             }

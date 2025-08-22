@@ -269,8 +269,9 @@ impl EnhancedTotpGenerator {
     }
 
     pub fn generate_secret() -> Vec<u8> {
+        use rand::rngs::OsRng;
         let mut secret = vec![0u8; 32]; // 256-bit secret for better security
-        rand::thread_rng().fill_bytes(&mut secret);
+        OsRng.fill_bytes(&mut secret);
         secret
     }
 

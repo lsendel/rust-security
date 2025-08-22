@@ -102,7 +102,12 @@ impl CircuitBreaker {
     }
 
     pub fn state(&self) -> CircuitState {
-        *self.state.state.lock().unwrap()
+        self.state.state.lock()
+            .map(|state| *state)
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to acquire circuit breaker state lock: {}", e);
+                CircuitState::Open // Fail safe to open state
+            })
     }
 
     pub fn stats(&self) -> CircuitBreakerStats {
@@ -156,7 +161,12 @@ impl CircuitBreaker {
             CircuitState::Closed => Ok(()),
             CircuitState::Open => {
                 // Check if we should transition to half-open
-                let next_attempt = *self.state.next_attempt.lock().unwrap();
+                let next_attempt = self.state.next_attempt.lock()
+                    .map(|guard| *guard)
+                    .unwrap_or_else(|e| {
+                        tracing::error!("Failed to acquire next_attempt lock: {}", e);
+                        Instant::now() + Duration::from_secs(60) // Default to 1 minute from now
+                    });
                 if Instant::now() >= next_attempt {
                     self.transition_to_half_open();
                     Ok(())
@@ -247,46 +257,58 @@ impl CircuitBreaker {
     }
 
     fn transition_to_open(&self) {
-        let mut state = self.state.state.lock().unwrap();
-        if *state != CircuitState::Open {
-            *state = CircuitState::Open;
-            let mut next_attempt = self.state.next_attempt.lock().unwrap();
-            *next_attempt = Instant::now() + self.config.recovery_timeout;
+        if let Ok(mut state) = self.state.state.lock() {
+            if *state != CircuitState::Open {
+                *state = CircuitState::Open;
+                if let Ok(mut next_attempt) = self.state.next_attempt.lock() {
+                    *next_attempt = Instant::now() + self.config.recovery_timeout;
+                } else {
+                    tracing::error!("Failed to acquire next_attempt lock during transition to open");
+                }
 
-            tracing::warn!(
-                circuit_breaker = %self.name,
-                recovery_timeout = ?self.config.recovery_timeout,
-                "Circuit breaker opened"
-            );
+                tracing::warn!(
+                    circuit_breaker = %self.name,
+                    recovery_timeout = ?self.config.recovery_timeout,
+                    "Circuit breaker opened"
+                );
+            }
+        } else {
+            tracing::error!("Failed to acquire state lock during transition to open");
         }
     }
 
     fn transition_to_half_open(&self) {
-        let mut state = self.state.state.lock().unwrap();
-        if *state == CircuitState::Open {
-            *state = CircuitState::HalfOpen;
-            self.state.half_open_calls.store(0, Ordering::Relaxed);
-            self.state.success_count.store(0, Ordering::Relaxed);
+        if let Ok(mut state) = self.state.state.lock() {
+            if *state == CircuitState::Open {
+                *state = CircuitState::HalfOpen;
+                self.state.half_open_calls.store(0, Ordering::Relaxed);
+                self.state.success_count.store(0, Ordering::Relaxed);
 
-            tracing::info!(
-                circuit_breaker = %self.name,
-                "Circuit breaker transitioned to half-open"
-            );
+                tracing::info!(
+                    circuit_breaker = %self.name,
+                    "Circuit breaker transitioned to half-open"
+                );
+            }
+        } else {
+            tracing::error!("Failed to acquire state lock during transition to half-open");
         }
     }
 
     fn transition_to_closed(&self) {
-        let mut state = self.state.state.lock().unwrap();
-        if *state != CircuitState::Closed {
-            *state = CircuitState::Closed;
-            self.state.failure_count.store(0, Ordering::Relaxed);
-            self.state.success_count.store(0, Ordering::Relaxed);
-            self.state.half_open_calls.store(0, Ordering::Relaxed);
+        if let Ok(mut state) = self.state.state.lock() {
+            if *state != CircuitState::Closed {
+                *state = CircuitState::Closed;
+                self.state.failure_count.store(0, Ordering::Relaxed);
+                self.state.success_count.store(0, Ordering::Relaxed);
+                self.state.half_open_calls.store(0, Ordering::Relaxed);
 
-            tracing::info!(
-                circuit_breaker = %self.name,
-                "Circuit breaker closed"
-            );
+                tracing::info!(
+                    circuit_breaker = %self.name,
+                    "Circuit breaker closed"
+                );
+            }
+        } else {
+            tracing::error!("Failed to acquire state lock during transition to closed");
         }
     }
 }
@@ -368,7 +390,12 @@ impl RetryBackoff {
 
         // Add jitter to avoid thundering herd
         if self.config.jitter {
-            let jitter_ms = (delay.as_millis() as f64 * 0.1 * rand::random::<f64>()) as u64;
+            use rand::rngs::OsRng;
+            use rand::RngCore;
+            let mut bytes = [0u8; 8];
+            OsRng.fill_bytes(&mut bytes);
+            let random_f64 = f64::from_be_bytes(bytes) / (u64::MAX as f64);
+            let jitter_ms = (delay.as_millis() as f64 * 0.1 * random_f64) as u64;
             delay = Duration::from_millis(delay.as_millis() as u64 + jitter_ms);
         }
 

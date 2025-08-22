@@ -426,8 +426,9 @@ impl WebAuthnMfa {
     }
 
     fn generate_challenge(&self) -> String {
+        use rand::rngs::OsRng;
         let mut challenge = vec![0u8; 32];
-        rand::thread_rng().fill_bytes(&mut challenge);
+        OsRng.fill_bytes(&mut challenge);
         base64::encode_config(&challenge, base64::URL_SAFE_NO_PAD)
     }
 

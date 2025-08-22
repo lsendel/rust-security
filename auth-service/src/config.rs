@@ -336,7 +336,7 @@ impl Default for ScimConfig {
 }
 
 impl StoreConfig {
-    pub fn from_env() -> Self {
+    pub fn from_env() -> Result<Self, anyhow::Error> {
         let backend_str = env::var("STORE_BACKEND").unwrap_or_else(|_| "hybrid".to_string());
         let backend = match backend_str.to_lowercase().as_str() {
             "sql" => StoreBackend::Sql,
@@ -345,14 +345,15 @@ impl StoreConfig {
         let database_url = env::var("DATABASE_URL").ok();
 
         if backend == StoreBackend::Sql && database_url.is_none() {
-            // This is a critical configuration error, so we panic.
-            panic!("FATAL: `STORE_BACKEND` is set to `sql`, but `DATABASE_URL` is not set.");
+            return Err(anyhow::anyhow!(
+                "FATAL: `STORE_BACKEND` is set to `sql`, but `DATABASE_URL` is not set."
+            ));
         }
 
-        Self {
+        Ok(Self {
             backend,
             database_url,
-        }
+        })
     }
 }
 
@@ -396,7 +397,7 @@ impl AppConfig {
         config.scim = ScimConfig::default();
 
         // Store Configuration
-        config.store = StoreConfig::from_env();
+        config.store = StoreConfig::from_env()?;
 
         // Client credentials (required)
         config.client_credentials = if let Ok(creds) = env::var("CLIENT_CREDENTIALS") {
@@ -568,9 +569,10 @@ fn generate_default_secret() -> String {
             );
 
             // Generate a random secret for development
-            use rand::Rng;
-            let mut rng = rand::thread_rng();
-            let random_bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+            use rand::RngCore;
+            use rand::rngs::OsRng;
+            let mut random_bytes = vec![0u8; 32];
+            OsRng.fill_bytes(&mut random_bytes);
             base64::engine::general_purpose::STANDARD.encode(random_bytes)
         }
     }

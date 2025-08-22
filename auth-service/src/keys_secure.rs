@@ -166,19 +166,19 @@ impl SecureKeyManager {
     }
 
     async fn generate_development_key(&self) -> Result<String, KeyError> {
-        // Generate a temporary RSA key for development use only
-        // This is a placeholder - in practice you'd want to use a proper key generation library
-        const DEV_PRIVATE_KEY: &str = r#"-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEA36oM2JEF+XsEwYMJZy6whs67ZW1KRLiu+E4NYDiikQwG7pAj
-pYSNWGf6vYf1K2cPXUxlRJX6ab9F6E81S5b/9xKQ3u2DB3HHZLjY9Vk3OXjQgWun
-C2TFyP0pJHS1fEcRSTa5pUiBzvmVZtz89eR0JENOTpwc/pGt5UEweISgdzes2F6e
-fAIapE9xn7ggRw+lIfjq3mCn8nngJc+5+OpytGBMmBOl05aQgTjS+g2+Lq4xYdd4
-JD6haS8+DLfaLM2Drci/wD/cKkU6zqO+npmOyMFVMBaWwoZj7NWcmrvWC5vJubaJ
-AkpJ17uAEymw0OQDVxuj/QeAORSncNOArRvxwIDAQABAoIBAQC5oQbKk8D5r2Jn
-...
------END RSA PRIVATE KEY-----"#;
-
-        Ok(DEV_PRIVATE_KEY.to_string())
+        // For development, load from environment or generate ephemeral key
+        // NEVER use hardcoded keys in production
+        
+        // Try to load from DEV_PRIVATE_KEY environment variable first
+        if let Ok(dev_key) = std::env::var("DEV_PRIVATE_KEY") {
+            if !dev_key.trim().is_empty() {
+                return Ok(dev_key);
+            }
+        }
+        
+        // If no dev key provided, fail with informative error
+        // This forces developers to explicitly set development keys
+        return Err(KeyError::NoSecureKeySource);
     }
 
     async fn create_key_material(&self, private_key_pem: String, source: KeySource) -> Result<SecureKeyMaterial, KeyError> {
@@ -268,7 +268,7 @@ fn base64url(data: &[u8]) -> String {
 fn now_unix() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
         .as_secs()
 }
 
