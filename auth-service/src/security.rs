@@ -1,9 +1,8 @@
 use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
-#[allow(unused_imports)]
 use base64::Engine as _;
 use once_cell::sync::Lazy;
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
@@ -55,7 +54,7 @@ pub fn validate_token_binding(
     client_ip: &str,
     user_agent: &str,
 ) -> Result<bool, &'static str> {
-    use ring::{constant_time, hmac};
+    use ring::hmac;
 
     // Decode the stored binding
     let stored_bytes = base64::engine::general_purpose::STANDARD
@@ -82,8 +81,8 @@ pub fn validate_token_binding(
 
         let expected_tag = ctx.sign();
 
-        // Use constant-time comparison to prevent timing attacks
-        if constant_time::verify_slices_are_equal(&stored_bytes, expected_tag.as_ref()).is_ok() {
+        // Use secure HMAC verification to prevent timing attacks
+        if hmac::verify(&key, &stored_bytes, expected_tag.as_ref()).is_ok() {
             return Ok(true);
         }
     }
@@ -136,16 +135,20 @@ pub fn verify_code_challenge(
     code_verifier: &str,
     code_challenge: &str,
 ) -> Result<bool, &'static str> {
-    use ring::constant_time;
-
     let computed_challenge = generate_code_challenge(code_verifier)?;
 
-    // Use constant-time comparison to prevent timing attacks
-    Ok(constant_time::verify_slices_are_equal(
-        computed_challenge.as_bytes(),
-        code_challenge.as_bytes(),
-    )
-    .is_ok())
+    // Use secure string comparison to prevent timing attacks
+    // Compare byte by byte with constant time
+    if computed_challenge.len() != code_challenge.len() {
+        return Ok(false);
+    }
+
+    let mut result = 0u8;
+    for (a, b) in computed_challenge.bytes().zip(code_challenge.bytes()) {
+        result |= a ^ b;
+    }
+
+    Ok(result == 0)
 }
 
 /// PKCE challenge methods - Only S256 is supported for security
@@ -172,16 +175,13 @@ pub fn validate_pkce_params(
     code_verifier: &str,
     code_challenge: &str,
     method: CodeChallengeMethod,
-) -> bool {
+) -> Result<bool, &'static str> {
     match method {
         CodeChallengeMethod::S256 => verify_code_challenge(code_verifier, code_challenge),
     }
 }
 
 /// Request signing for critical operations
-use hmac::{Hmac, Mac};
-
-type HmacSha256 = Hmac<Sha256>;
 
 /// Generate a request signature using HMAC-SHA256
 pub fn generate_request_signature(
@@ -214,7 +214,7 @@ pub fn verify_request_signature(
     signature: &str,
     secret: &str,
 ) -> Result<bool, &'static str> {
-    use ring::{constant_time, hmac};
+    use ring::hmac;
 
     // Check timestamp window (prevent replay attacks)
     let now = chrono::Utc::now().timestamp();
@@ -236,11 +236,8 @@ pub fn verify_request_signature(
         .decode(signature)
         .map_err(|_| "Invalid signature format")?;
 
-    // Use constant-time comparison to prevent timing attacks
-    Ok(
-        constant_time::verify_slices_are_equal(expected_signature.as_ref(), &provided_signature)
-            .is_ok(),
-    )
+    // Use secure HMAC verification to prevent timing attacks
+    Ok(hmac::verify(&key, &provided_signature, expected_signature.as_ref()).is_ok())
 }
 
 /// Middleware for request signature validation

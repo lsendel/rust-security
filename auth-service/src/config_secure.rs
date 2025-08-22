@@ -263,21 +263,21 @@ impl Default for SecureSecurityConfig {
             jwt_access_token_ttl_seconds: 900,  // 15 minutes
             jwt_refresh_token_ttl_seconds: 86400, // 24 hours
             rsa_key_size: 4096, // Increased from 2048 for better security
-            
+
             // Request signing required in production
             request_signing_secret: None, // Must be set via environment
             request_timestamp_window_seconds: 300, // 5 minutes
-            
+
             // Secure session defaults
             session_ttl_seconds: 1800, // 30 minutes
             session_rotation_interval_seconds: 900, // 15 minutes
-            
+
             // Secure CORS defaults - empty by default, must be explicitly configured
             allowed_origins: vec![], // No origins allowed by default
-            
+
             // Secure request size limits
             max_request_body_size: 1024 * 1024, // 1MB
-            
+
             // Security headers with secure defaults
             security_headers: SecurityHeaders {
                 hsts_max_age: 31536000, // 1 year
@@ -287,7 +287,7 @@ impl Default for SecureSecurityConfig {
                 referrer_policy: ReferrerPolicy::StrictOriginWhenCrossOrigin,
                 csp: Some("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; media-src 'self'; frame-src 'none';".to_string()),
             },
-            
+
             // TLS configuration
             tls_config: TlsConfig {
                 min_version: "1.3".to_string(), // Require TLS 1.3
@@ -300,7 +300,7 @@ impl Default for SecureSecurityConfig {
                 cert_path: None,
                 key_path: None,
             },
-            
+
             // Strong password policy
             password_policy: PasswordPolicy {
                 min_length: 12, // Increased from 8
@@ -368,17 +368,15 @@ impl Default for SecureOAuthConfig {
             authorization_code_ttl_seconds: 600, // 10 minutes
             client_id_min_length: 16,
             client_secret_min_length: 32,
-            require_pkce: true, // Always require PKCE for security
-            require_state: true, // Always require state for CSRF protection
+            require_pkce: true,                // Always require PKCE for security
+            require_state: true,               // Always require state for CSRF protection
             require_nonce_for_id_tokens: true, // Always require nonce for ID tokens
             allowed_grant_types: vec![
                 "authorization_code".to_string(),
                 "client_credentials".to_string(),
                 "refresh_token".to_string(),
             ],
-            allowed_response_types: vec![
-                "code".to_string(),
-            ],
+            allowed_response_types: vec!["code".to_string()],
             allowed_scopes: vec![
                 "openid".to_string(),
                 "profile".to_string(),
@@ -393,7 +391,7 @@ impl Default for SecureOAuthConfig {
 /// Load secure configuration with environment-based hardening
 pub fn load_secure_config() -> Result<SecureAppConfig, ConfigError> {
     let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
-    
+
     let mut config = SecureAppConfig {
         bind_addr: env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_string()),
         redis_url: env::var("REDIS_URL").ok(),
@@ -405,27 +403,28 @@ pub fn load_secure_config() -> Result<SecureAppConfig, ConfigError> {
         oauth: SecureOAuthConfig::default(),
         oidc_providers: SecureOidcProviders::default(),
     };
-    
+
     // Environment-specific security hardening
     match environment.as_str() {
         "production" => {
             apply_production_security(&mut config)?;
-        },
+        }
         "staging" => {
             apply_staging_security(&mut config)?;
-        },
+        }
         _ => {
             apply_development_security(&mut config)?;
         }
     }
-    
+
     // Validate configuration
-    config.validate()
+    config
+        .validate()
         .map_err(|e| ConfigError::InvalidConfiguration(format!("Validation failed: {}", e)))?;
-    
+
     // Additional security validations
     validate_security_requirements(&config)?;
-    
+
     Ok(config)
 }
 
@@ -434,32 +433,34 @@ fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigE
     config.security.jwt_access_token_ttl_seconds = 600; // 10 minutes
     config.security.session_ttl_seconds = 1800; // 30 minutes
     config.security.session_rotation_interval_seconds = 600; // 10 minutes
-    
+
     // Require request signing in production
     config.security.request_signing_secret = Some(
         env::var("REQUEST_SIGNING_SECRET")
-            .map_err(|_| ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET"))?
+            .map_err(|_| ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET"))?,
     );
-    
+
     // Validate signing secret strength
     if let Some(ref secret) = config.security.request_signing_secret {
         if secret.len() < 32 {
-            return Err(ConfigError::WeakSecret("REQUEST_SIGNING_SECRET must be at least 32 characters"));
+            return Err(ConfigError::WeakSecret(
+                "REQUEST_SIGNING_SECRET must be at least 32 characters",
+            ));
         }
     }
-    
+
     // Require HTTPS in production
     if env::var("FORCE_HTTPS").unwrap_or_default() != "true" {
         return Err(ConfigError::InsecureConfiguration(
-            "HTTPS must be enabled in production (set FORCE_HTTPS=true)".to_string()
+            "HTTPS must be enabled in production (set FORCE_HTTPS=true)".to_string(),
         ));
     }
-    
+
     // Require explicit CORS configuration in production
     let cors_origins = env::var("ALLOWED_ORIGINS").unwrap_or_default();
     if cors_origins.is_empty() {
         return Err(ConfigError::InsecureConfiguration(
-            "ALLOWED_ORIGINS must be explicitly set in production".to_string()
+            "ALLOWED_ORIGINS must be explicitly set in production".to_string(),
         ));
     }
     config.security.allowed_origins = cors_origins
@@ -467,15 +468,15 @@ fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigE
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    
+
     // Disable debug features in production
     config.features.debug_endpoints_enabled = false;
     config.features.experimental_features_enabled = false;
-    
+
     // Stricter rate limiting in production
     config.rate_limiting.oauth_requests_per_minute = 5;
     config.rate_limiting.admin_requests_per_minute = 2;
-    
+
     Ok(())
 }
 
@@ -483,16 +484,16 @@ fn apply_staging_security(config: &mut SecureAppConfig) -> Result<(), ConfigErro
     // Staging security (slightly relaxed but still secure)
     config.security.jwt_access_token_ttl_seconds = 1800; // 30 minutes
     config.security.session_ttl_seconds = 3600; // 1 hour
-    
+
     // Allow some development origins in staging
     config.security.allowed_origins = vec![
         "https://staging.example.com".to_string(),
         "http://localhost:3000".to_string(),
     ];
-    
+
     // Disable experimental features in staging
     config.features.experimental_features_enabled = false;
-    
+
     Ok(())
 }
 
@@ -500,67 +501,80 @@ fn apply_development_security(config: &mut SecureAppConfig) -> Result<(), Config
     // Development (relaxed for testing but still reasonably secure)
     config.security.jwt_access_token_ttl_seconds = 3600; // 1 hour
     config.security.session_ttl_seconds = 7200; // 2 hours
-    
+
     config.security.allowed_origins = vec![
         "http://localhost:3000".to_string(),
         "http://localhost:8080".to_string(),
         "http://127.0.0.1:3000".to_string(),
     ];
-    
+
     // Allow debug endpoints in development
     config.features.debug_endpoints_enabled = true;
-    
+
     // More relaxed rate limiting for development
     config.rate_limiting.requests_per_minute_per_ip = 120;
     config.rate_limiting.oauth_requests_per_minute = 30;
-    
+
     Ok(())
 }
 
 fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), ConfigError> {
     // Validate RSA key size
     if config.security.rsa_key_size < 2048 {
-        return Err(ConfigError::WeakCrypto("RSA key size must be at least 2048 bits"));
+        return Err(ConfigError::WeakCrypto(
+            "RSA key size must be at least 2048 bits",
+        ));
     }
-    
+
     // Validate TTL values
     if config.security.jwt_access_token_ttl_seconds < 300 {
-        return Err(ConfigError::InvalidConfiguration("Access token TTL too short (minimum 5 minutes)"));
+        return Err(ConfigError::InvalidConfiguration(
+            "Access token TTL too short (minimum 5 minutes)",
+        ));
     }
-    
+
     if config.security.jwt_access_token_ttl_seconds > 86400 {
-        return Err(ConfigError::InvalidConfiguration("Access token TTL too long (maximum 24 hours)"));
+        return Err(ConfigError::InvalidConfiguration(
+            "Access token TTL too long (maximum 24 hours)",
+        ));
     }
-    
+
     if config.security.session_ttl_seconds < 900 {
-        return Err(ConfigError::InvalidConfiguration("Session TTL too short (minimum 15 minutes)"));
+        return Err(ConfigError::InvalidConfiguration(
+            "Session TTL too short (minimum 15 minutes)",
+        ));
     }
-    
+
     // Validate password policy
     if config.security.password_policy.min_length < 8 {
-        return Err(ConfigError::WeakCrypto("Password minimum length must be at least 8"));
+        return Err(ConfigError::WeakCrypto(
+            "Password minimum length must be at least 8",
+        ));
     }
-    
+
     // Validate rate limiting
     if config.rate_limiting.requests_per_minute_per_ip > 1000 {
-        return Err(ConfigError::InvalidConfiguration("Per-IP rate limit too high (maximum 1000)"));
+        return Err(ConfigError::InvalidConfiguration(
+            "Per-IP rate limit too high (maximum 1000)",
+        ));
     }
-    
+
     // Validate CORS origins format
     for origin in &config.security.allowed_origins {
         if origin == "*" {
             return Err(ConfigError::InsecureConfiguration(
-                "Wildcard CORS origin (*) is not allowed".to_string()
+                "Wildcard CORS origin (*) is not allowed".to_string(),
             ));
         }
-        
+
         if !origin.starts_with("http://") && !origin.starts_with("https://") {
-            return Err(ConfigError::InvalidConfiguration(
-                format!("Invalid CORS origin format: {}", origin)
-            ));
+            return Err(ConfigError::InvalidConfiguration(format!(
+                "Invalid CORS origin format: {}",
+                origin
+            )));
         }
     }
-    
+
     Ok(())
 }
 
@@ -571,7 +585,7 @@ mod tests {
     #[test]
     fn test_secure_defaults() {
         let config = SecureSecurityConfig::default();
-        
+
         // Verify secure defaults
         assert_eq!(config.jwt_access_token_ttl_seconds, 900); // 15 minutes
         assert_eq!(config.rsa_key_size, 4096); // Strong key size
@@ -585,7 +599,7 @@ mod tests {
         env::set_var("FORCE_HTTPS", "true");
         env::set_var("REQUEST_SIGNING_SECRET", "a".repeat(32));
         env::set_var("ALLOWED_ORIGINS", "https://example.com");
-        
+
         let result = load_secure_config();
         assert!(result.is_ok());
     }
@@ -594,7 +608,7 @@ mod tests {
     fn test_weak_secret_rejection() {
         env::set_var("ENVIRONMENT", "production");
         env::set_var("REQUEST_SIGNING_SECRET", "weak"); // Too short
-        
+
         let result = load_secure_config();
         assert!(matches!(result, Err(ConfigError::WeakSecret(_))));
     }

@@ -145,10 +145,21 @@ pub mod security_monitoring;
 
 // Enhanced JWT validation with comprehensive security constraints
 pub mod enhanced_jwt_validation;
+pub mod jwt_secure;
 
 // Enhanced comprehensive observability system
 pub mod enhanced_observability;
 pub mod observability_init;
+
+// Advanced security modules
+pub mod ai_threat_detection;
+pub mod config_secure;
+pub mod quantum_jwt;
+pub mod rate_limit_secure;
+pub mod security_tests;
+pub mod session_secure;
+pub mod validation_secure;
+pub mod zero_trust_auth;
 
 // Key management
 pub mod jwks_handler;
@@ -621,10 +632,18 @@ async fn extract_user_from_token(
     // Enforce token binding if present
     if let Some(binding) = &record.token_binding {
         let (client_ip, user_agent) = crate::security::extract_client_info(headers);
-        if !crate::security::validate_token_binding(binding, &client_ip, &user_agent) {
-            return Err(AuthError::InvalidToken {
-                reason: "Token binding mismatch".to_string(),
-            });
+        match crate::security::validate_token_binding(binding, &client_ip, &user_agent) {
+            Ok(true) => {} // Token binding is valid
+            Ok(false) => {
+                return Err(AuthError::InvalidToken {
+                    reason: "Token binding mismatch".to_string(),
+                });
+            }
+            Err(e) => {
+                return Err(AuthError::InvalidToken {
+                    reason: format!("Token binding validation error: {}", e),
+                });
+            }
         }
     }
 
@@ -2568,9 +2587,10 @@ async fn store_access_token_metadata(
         exp: Some(exp),
         iat: Some(now),
         sub: subject,
-        token_binding: Some(crate::security::generate_token_binding(
-            "unknown", "unknown",
-        )),
+        token_binding: Some(
+            crate::security::generate_token_binding("unknown", "unknown")
+                .unwrap_or_else(|_| "unknown".to_string()),
+        ),
         mfa_verified: false,
     };
 

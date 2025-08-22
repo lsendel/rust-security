@@ -1,9 +1,9 @@
+use chrono::{DateTime, Duration, Utc};
 use ring::rand::{SecureRandom, SystemRandom};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
 
 /// Secure session data with comprehensive security controls
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,14 +40,14 @@ pub struct SecureSessionConfig {
 impl Default for SecureSessionConfig {
     fn default() -> Self {
         Self {
-            ttl_seconds: 1800,                    // 30 minutes
-            rotation_interval_seconds: 900,       // 15 minutes
-            max_concurrent_sessions: 5,           // Limit concurrent sessions
-            require_ip_binding: true,             // Prevent session hijacking
-            require_user_agent_binding: true,     // Additional binding
-            max_idle_time_seconds: 600,           // 10 minutes idle timeout
-            secure_cookies: true,                 // HTTPS only
-            same_site_strict: true,               // CSRF protection
+            ttl_seconds: 1800,                // 30 minutes
+            rotation_interval_seconds: 900,   // 15 minutes
+            max_concurrent_sessions: 5,       // Limit concurrent sessions
+            require_ip_binding: true,         // Prevent session hijacking
+            require_user_agent_binding: true, // Additional binding
+            max_idle_time_seconds: 600,       // 10 minutes idle timeout
+            secure_cookies: true,             // HTTPS only
+            same_site_strict: true,           // CSRF protection
         }
     }
 }
@@ -191,7 +191,7 @@ impl SecureSessionManager {
         user_agent: &str,
     ) -> Result<SecureSessionData, SessionError> {
         let mut sessions = self.sessions.write().await;
-        
+
         let session = sessions
             .get_mut(session_id)
             .ok_or(SessionError::SessionNotFound)?;
@@ -201,7 +201,8 @@ impl SecureSessionManager {
         // Check expiration
         if now > session.expires_at {
             sessions.remove(session_id);
-            self.cleanup_user_session(&session.user_id, session_id).await;
+            self.cleanup_user_session(&session.user_id, session_id)
+                .await;
             return Err(SessionError::SessionExpired);
         }
 
@@ -209,7 +210,8 @@ impl SecureSessionManager {
         let idle_duration = now - session.last_accessed;
         if idle_duration.num_seconds() > self.config.max_idle_time_seconds as i64 {
             sessions.remove(session_id);
-            self.cleanup_user_session(&session.user_id, session_id).await;
+            self.cleanup_user_session(&session.user_id, session_id)
+                .await;
             return Err(SessionError::SessionIdleTimeout);
         }
 
@@ -222,9 +224,10 @@ impl SecureSessionManager {
                 user_id = %session.user_id,
                 "Session IP mismatch detected - possible hijacking attempt"
             );
-            
+
             sessions.remove(session_id);
-            self.cleanup_user_session(&session.user_id, session_id).await;
+            self.cleanup_user_session(&session.user_id, session_id)
+                .await;
             return Err(SessionError::SessionHijackingDetected);
         }
 
@@ -237,9 +240,10 @@ impl SecureSessionManager {
                     user_id = %session.user_id,
                     "Session user agent mismatch detected"
                 );
-                
+
                 sessions.remove(session_id);
-                self.cleanup_user_session(&session.user_id, session_id).await;
+                self.cleanup_user_session(&session.user_id, session_id)
+                    .await;
                 return Err(SessionError::SessionHijackingDetected);
             }
         }
@@ -311,7 +315,7 @@ impl SecureSessionManager {
     /// Complete MFA for session
     pub async fn complete_mfa(&self, session_id: &str) -> Result<(), SessionError> {
         let mut sessions = self.sessions.write().await;
-        
+
         let session = sessions
             .get_mut(session_id)
             .ok_or(SessionError::SessionNotFound)?;
@@ -336,10 +340,11 @@ impl SecureSessionManager {
     /// Invalidate session
     pub async fn invalidate_session(&self, session_id: &str) -> Result<(), SessionError> {
         let mut sessions = self.sessions.write().await;
-        
+
         if let Some(session) = sessions.remove(session_id) {
-            self.cleanup_user_session(&session.user_id, session_id).await;
-            
+            self.cleanup_user_session(&session.user_id, session_id)
+                .await;
+
             tracing::info!(
                 session_id = %session_id,
                 user_id = %session.user_id,
@@ -354,9 +359,9 @@ impl SecureSessionManager {
     pub async fn invalidate_user_sessions(&self, user_id: &str) -> Result<u32, SessionError> {
         let mut sessions = self.sessions.write().await;
         let mut user_sessions = self.user_sessions.write().await;
-        
+
         let mut invalidated_count = 0;
-        
+
         if let Some(session_ids) = user_sessions.remove(user_id) {
             for session_id in session_ids {
                 if sessions.remove(&session_id).is_some() {
@@ -416,12 +421,15 @@ impl SecureSessionManager {
     pub async fn get_session_stats(&self) -> SessionStats {
         let sessions = self.sessions.read().await;
         let user_sessions = self.user_sessions.read().await;
-        
+
         SessionStats {
             total_sessions: sessions.len(),
             active_users: user_sessions.len(),
             authenticated_sessions: sessions.values().filter(|s| s.is_authenticated).count(),
-            mfa_pending_sessions: sessions.values().filter(|s| s.requires_mfa && !s.mfa_completed).count(),
+            mfa_pending_sessions: sessions
+                .values()
+                .filter(|s| s.requires_mfa && !s.mfa_completed)
+                .count(),
         }
     }
 }
@@ -484,7 +492,10 @@ mod tests {
             .validate_session(&session_id, "192.168.1.2", "Mozilla/5.0")
             .await;
 
-        assert!(matches!(result, Err(SessionError::SessionHijackingDetected)));
+        assert!(matches!(
+            result,
+            Err(SessionError::SessionHijackingDetected)
+        ));
     }
 
     #[tokio::test]
@@ -518,6 +529,9 @@ mod tests {
             )
             .await;
 
-        assert!(matches!(result, Err(SessionError::TooManyConcurrentSessions)));
+        assert!(matches!(
+            result,
+            Err(SessionError::TooManyConcurrentSessions)
+        ));
     }
 }

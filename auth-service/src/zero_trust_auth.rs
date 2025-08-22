@@ -90,7 +90,7 @@ pub enum DeviceType {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ComplianceStatus {
     Compliant,
     NonCompliant,
@@ -208,7 +208,7 @@ impl ZeroTrustEngine {
             config,
         }
     }
-    
+
     /// Evaluate access request using zero-trust principles
     pub async fn evaluate_access(&self, request: &AccessRequest) -> Result<AccessDecision> {
         // Multi-dimensional trust evaluation
@@ -217,7 +217,7 @@ impl ZeroTrustEngine {
         let network_score = self.evaluate_network(&request.network).await?;
         let behavioral_score = self.evaluate_behavior(&request.user_id, request).await?;
         let contextual_score = self.evaluate_context(request).await?;
-        
+
         // Calculate composite trust score
         let trust_score = self.calculate_trust_score(
             identity_score,
@@ -226,60 +226,66 @@ impl ZeroTrustEngine {
             behavioral_score,
             contextual_score,
         );
-        
+
         // Calculate risk score
         let risk_score = self.risk_assessor.calculate_risk(request).await?;
-        
+
         // Make access decision
-        let decision = self.make_access_decision(trust_score, risk_score, request).await?;
-        
+        let decision = self
+            .make_access_decision(trust_score, risk_score, request)
+            .await?;
+
         // Log decision for audit
         self.log_access_decision(request, &decision).await?;
-        
+
         Ok(decision)
     }
-    
+
     /// Evaluate user identity trust
     async fn evaluate_identity(&self, user_id: &str) -> Result<f64> {
         // Check user reputation and history
         let user_profile = self.get_user_profile(user_id).await?;
-        
-        let mut score = 0.5; // Base score
-        
+
+        let mut score: f64 = 0.5; // Base score
+
         // Account age factor
         let account_age_days = (Utc::now() - user_profile.created_at).num_days();
         score += (account_age_days as f64 / 365.0).min(0.2); // Max 0.2 for account age
-        
+
         // Authentication history
         if user_profile.successful_auths > user_profile.failed_auths * 10 {
             score += 0.1;
         }
-        
+
         // MFA enrollment
         if user_profile.mfa_enabled {
             score += 0.15;
         }
-        
+
         // Security incidents
         score -= user_profile.security_incidents as f64 * 0.1;
-        
+
         Ok(score.max(0.0).min(1.0))
     }
-    
+
     /// Evaluate device trust
     async fn evaluate_device(&self, device: &DeviceContext) -> Result<f64> {
-        let mut score = 0.3; // Base score for unknown devices
-        
+        let mut score: f64 = 0.3; // Base score for unknown devices
+
         // Device registration status
-        if self.device_registry.is_registered(&device.device_id).await? {
+        if self
+            .device_registry
+            .is_registered(&device.device_id)
+            .await?
+        {
             score += 0.3;
         }
-        
+
         // Device management status
         if device.is_managed {
             score += 0.2;
         }
-        
+
         // Compliance status
         match device.compliance_status {
             ComplianceStatus::Compliant => score += 0.2,
@@ -287,20 +293,20 @@ impl ZeroTrustEngine {
             ComplianceStatus::Quarantined => score = 0.0,
             ComplianceStatus::Unknown => {} // No change
         }
-        
+
         // Device age and familiarity
         let days_since_first_seen = (Utc::now() - device.last_seen).num_days();
         if days_since_first_seen > 30 {
             score += 0.1; // Familiar device
         }
-        
+
         Ok(score.max(0.0).min(1.0))
     }
-    
+
     /// Evaluate network trust
     async fn evaluate_network(&self, network: &NetworkContext) -> Result<f64> {
         let mut score = 0.5; // Base score
-        
+
         // Network type
         match network.network_type {
             NetworkType::Corporate => score += 0.3,
@@ -309,89 +315,99 @@ impl ZeroTrustEngine {
             NetworkType::Mobile => score -= 0.1,
             NetworkType::Unknown => score -= 0.3,
         }
-        
+
         // VPN usage
         if network.is_vpn {
             score -= 0.1; // Slightly suspicious
         }
-        
+
         // Tor usage
         if network.is_tor {
             score -= 0.4; // Highly suspicious
         }
-        
+
         // IP reputation
         score += (network.reputation_score - 0.5) * 0.4;
-        
+
         // Geographic anomaly
         if let Some(location) = &network.location {
-            let is_anomalous = self.is_location_anomalous(&network.source_ip, location).await?;
+            let is_anomalous = self
+                .is_location_anomalous(&network.source_ip, location)
+                .await?;
             if is_anomalous {
                 score -= 0.2;
             }
         }
-        
+
         Ok(score.max(0.0).min(1.0))
     }
-    
+
     /// Evaluate behavioral patterns
     async fn evaluate_behavior(&self, user_id: &str, request: &AccessRequest) -> Result<f64> {
         let behavior_profile = self.behavior_analyzer.get_profile(user_id).await?;
-        
+
         let mut score = 0.5; // Base score
-        
+
         // Time-based patterns
-        if self.is_typical_access_time(&behavior_profile, &request.temporal).await? {
+        if self
+            .is_typical_access_time(&behavior_profile, &request.temporal)
+            .await?
+        {
             score += 0.2;
         } else {
             score -= 0.1;
         }
-        
+
         // Access patterns
-        if self.is_typical_resource(&behavior_profile, &request.request.resource).await? {
+        if self
+            .is_typical_resource(&behavior_profile, &request.request.resource)
+            .await?
+        {
             score += 0.1;
         } else {
             score -= 0.05;
         }
-        
+
         // Velocity checks
-        let recent_requests = self.get_recent_requests(user_id, Duration::minutes(5)).await?;
+        let recent_requests = self
+            .get_recent_requests(user_id, Duration::minutes(5))
+            .await?;
         if recent_requests > 100 {
             score -= 0.3; // Potential bot behavior
         }
-        
+
         Ok(score.max(0.0).min(1.0))
     }
-    
+
     /// Evaluate contextual factors
     async fn evaluate_context(&self, request: &AccessRequest) -> Result<f64> {
         let mut score = 0.5; // Base score
-        
+
         // Resource sensitivity
         match request.request.sensitivity_level {
             SensitivityLevel::Public => score += 0.1,
-            SensitivityLevel::Internal => {}, // No change
+            SensitivityLevel::Internal => {} // No change
             SensitivityLevel::Confidential => score -= 0.1,
             SensitivityLevel::Restricted => score -= 0.2,
         }
-        
+
         // Business hours
         if request.temporal.is_business_hours {
             score += 0.1;
         } else {
             score -= 0.05;
         }
-        
+
         // Time since last access
         if request.temporal.time_since_last_access < Duration::hours(1) {
             score += 0.1; // Recent activity is normal
         } else if request.temporal.time_since_last_access > Duration::days(30) {
             score -= 0.1; // Long absence is suspicious
         }
-        
+
         Ok(score.max(0.0).min(1.0))
     }
-    
+
     /// Calculate composite trust score
     fn calculate_trust_score(
         &self,
@@ -404,29 +420,43 @@ impl ZeroTrustEngine {
         // Weighted average with emphasis on identity and device
         let weights = [0.3, 0.25, 0.2, 0.15, 0.1]; // identity, device, network, behavior, context
         let scores = [identity, device, network, behavior, context];
-        
-        weights.iter()
-            .zip(scores.iter())
-            .map(|(w, s)| w * s)
-            .sum()
+
+        weights.iter().zip(scores.iter()).map(|(w, s)| w * s).sum()
     }
-    
+
     /// Make final access decision
-    async fn make_access_decision(&self, trust_score: f64, risk_score: f64, request: &AccessRequest) -> Result<AccessDecision> {
+    async fn make_access_decision(
+        &self,
+        trust_score: f64,
+        risk_score: f64,
+        request: &AccessRequest,
+    ) -> Result<AccessDecision> {
         let adjusted_score = trust_score * (1.0 - risk_score);
-        
-        let (decision, required_actions, monitoring_level) = if adjusted_score >= self.config.min_trust_score {
-            if adjusted_score >= self.config.mfa_threshold {
-                (Decision::Allow, vec![], MonitoringLevel::Standard)
-            } else if adjusted_score >= self.config.step_up_threshold {
-                (Decision::AllowWithMfa, vec![RequiredAction::MfaChallenge], MonitoringLevel::Enhanced)
+
+        let (decision, required_actions, monitoring_level) =
+            if adjusted_score >= self.config.min_trust_score {
+                if adjusted_score >= self.config.mfa_threshold {
+                    (Decision::Allow, vec![], MonitoringLevel::Standard)
+                } else if adjusted_score >= self.config.step_up_threshold {
+                    (
+                        Decision::AllowWithMfa,
+                        vec![RequiredAction::MfaChallenge],
+                        MonitoringLevel::Enhanced,
+                    )
+                } else {
+                    (
+                        Decision::AllowWithStepUp,
+                        vec![
+                            RequiredAction::MfaChallenge,
+                            RequiredAction::DeviceRegistration,
+                        ],
+                        MonitoringLevel::Intensive,
+                    )
+                }
             } else {
-                (Decision::AllowWithStepUp, vec![RequiredAction::MfaChallenge, RequiredAction::DeviceRegistration], MonitoringLevel::Intensive)
-            }
-        } else {
-            (Decision::Deny, vec![], MonitoringLevel::Intensive)
-        };
-        
+                (Decision::Deny, vec![], MonitoringLevel::Intensive)
+            };
+
         let session_duration = if adjusted_score >= 0.9 {
             self.config.max_session_duration
         } else if adjusted_score >= 0.7 {
@@ -434,19 +464,21 @@ impl ZeroTrustEngine {
         } else {
             self.config.max_session_duration / 4
         };
-        
+
         Ok(AccessDecision {
             decision,
             trust_score,
             risk_score,
             confidence: self.calculate_confidence(trust_score, risk_score),
-            reasons: self.generate_decision_reasons(trust_score, risk_score, request).await?,
+            reasons: self
+                .generate_decision_reasons(trust_score, risk_score, request)
+                .await?,
             required_actions,
             session_duration,
             monitoring_level,
         })
     }
-    
+
     /// Calculate confidence in the decision
     fn calculate_confidence(&self, trust_score: f64, risk_score: f64) -> f64 {
         // Higher confidence when trust and risk scores are more extreme
@@ -454,32 +486,41 @@ impl ZeroTrustEngine {
         let risk_confidence = (risk_score - 0.5).abs() * 2.0;
         ((trust_confidence + risk_confidence) / 2.0).min(1.0)
     }
-    
+
     /// Generate human-readable reasons for the decision
-    async fn generate_decision_reasons(&self, trust_score: f64, risk_score: f64, request: &AccessRequest) -> Result<Vec<String>> {
+    async fn generate_decision_reasons(
+        &self,
+        trust_score: f64,
+        risk_score: f64,
+        request: &AccessRequest,
+    ) -> Result<Vec<String>> {
         let mut reasons = Vec::new();
-        
+
         if trust_score < 0.5 {
             reasons.push("Low trust score due to unfamiliar access pattern".to_string());
         }
-        
+
         if risk_score > 0.7 {
             reasons.push("High risk score due to suspicious network activity".to_string());
         }
-        
+
         if !request.temporal.is_business_hours {
             reasons.push("Access outside business hours".to_string());
         }
-        
+
         if request.device.compliance_status == ComplianceStatus::NonCompliant {
             reasons.push("Device not compliant with security policies".to_string());
         }
-        
+
         Ok(reasons)
     }
-    
+
     /// Log access decision for audit
-    async fn log_access_decision(&self, request: &AccessRequest, decision: &AccessDecision) -> Result<()> {
+    async fn log_access_decision(
+        &self,
+        request: &AccessRequest,
+        decision: &AccessDecision,
+    ) -> Result<()> {
         info!(
             user_id = %request.user_id,
             device_id = %request.device.device_id,
@@ -489,13 +530,13 @@ impl ZeroTrustEngine {
             risk_score = decision.risk_score,
             "Zero-trust access decision made"
         );
-        
+
         // Store in audit log
         // Implementation would store in persistent audit store
-        
+
         Ok(())
     }
-    
+
     // Helper methods (simplified implementations)
     async fn get_user_profile(&self, user_id: &str) -> Result<UserProfile> {
         // Implementation would fetch from user store
@@ -508,22 +549,26 @@ impl ZeroTrustEngine {
             security_incidents: 0,
         })
     }
-    
+
     async fn is_location_anomalous(&self, ip: &IpAddr, location: &GeoLocation) -> Result<bool> {
         // Implementation would check against user's typical locations
         Ok(false)
     }
-    
-    async fn is_typical_access_time(&self, profile: &BehaviorProfile, temporal: &TemporalContext) -> Result<bool> {
+
+    async fn is_typical_access_time(
+        &self,
+        profile: &BehaviorProfile,
+        temporal: &TemporalContext,
+    ) -> Result<bool> {
         // Implementation would analyze typical access patterns
         Ok(temporal.is_business_hours)
     }
-    
+
     async fn is_typical_resource(&self, profile: &BehaviorProfile, resource: &str) -> Result<bool> {
         // Implementation would check against typical resources
         Ok(true)
     }
-    
+
     async fn get_recent_requests(&self, user_id: &str, duration: Duration) -> Result<u32> {
         // Implementation would count recent requests
         Ok(10)
@@ -552,7 +597,9 @@ struct BehaviorProfile {
 // Component implementations (simplified)
 struct RiskAssessor;
 impl RiskAssessor {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     async fn calculate_risk(&self, request: &AccessRequest) -> Result<f64> {
         Ok(0.2) // Simplified implementation
     }
@@ -560,7 +607,9 @@ impl RiskAssessor {
 
 struct DeviceRegistry;
 impl DeviceRegistry {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     async fn is_registered(&self, device_id: &str) -> Result<bool> {
         Ok(true) // Simplified implementation
     }
@@ -568,7 +617,9 @@ impl DeviceRegistry {
 
 struct BehaviorAnalyzer;
 impl BehaviorAnalyzer {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
     async fn get_profile(&self, user_id: &str) -> Result<BehaviorProfile> {
         Ok(BehaviorProfile {
             user_id: user_id.to_string(),
@@ -581,10 +632,14 @@ impl BehaviorAnalyzer {
 
 struct PolicyEngine;
 impl PolicyEngine {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
 }
 
 struct ContinuousMonitor;
 impl ContinuousMonitor {
-    fn new() -> Self { Self }
+    fn new() -> Self {
+        Self
+    }
 }

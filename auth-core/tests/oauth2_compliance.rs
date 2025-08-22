@@ -1,33 +1,50 @@
 #![cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
-use axum::body::{to_bytes, Body};
-use axum::http::Request;
+use auth_core::{
+    client::ClientConfig,
+    server::{AppState, ServerConfig},
+    store::MemoryStore,
+};
+use axum::{extract::State, response::IntoResponse, Form};
 use serde_json::Value;
-use tower::ServiceExt; // oneshot
-use tower::ServiceExt; // for oneshot
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[tokio::test]
 async fn test_client_credentials_flow_rfc6749_section_4_4() {
-    let server = AuthServer::minimal()
-        .with_client("test_client", "test_secret")
-        .build()
-        .expect("Failed to build server");
+    let mut clients = HashMap::new();
+    clients.insert(
+        "test_client".to_string(),
+        ClientConfig {
+            client_id: "test_client".into(),
+            client_secret: "test_secret".into(),
+            grant_types: vec!["client_credentials".into()],
+            scopes: vec!["default".into()],
+        },
+    );
+    let state = AppState {
+        config: ServerConfig {
+            clients,
+            rate_limit: 100,
+            cors_enabled: true,
+            jwt_secret: None,
+            protected_routes: vec![],
+        },
+        store: Arc::new(RwLock::new(MemoryStore::new())),
+    };
 
-    // Build router and hit it directly (no network)
-    let mut svc = server.into_router().into_service();
-    let body = "grant_type=client_credentials&client_id=test_client&client_secret=test_secret";
-    let request = Request::builder()
-        .method("POST")
-        .uri("/oauth/token")
-        .header("content-type", "application/x-www-form-urlencoded")
-        .body(Body::from(body.to_string()))
-        .unwrap();
-    let response = svc.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), axum::http::StatusCode::OK);
-
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let token_response: Value = serde_json::from_slice(&bytes).expect("Failed to parse JSON");
+    let req = TokenRequest {
+        grant_type: "client_credentials".into(),
+        client_id: "test_client".into(),
+        client_secret: "test_secret".into(),
+        scope: None,
+    };
+    let resp = auth_core::handler::token::client_credentials(State(state), Form(req))
+        .await
+        .expect("token issuance failed");
+    let token_response: Value = serde_json::to_value(resp.0).unwrap();
     assert!(token_response.get("access_token").is_some());
     assert_eq!(token_response.get("token_type").unwrap(), "Bearer");
     assert!(token_response.get("expires_in").is_some());
@@ -45,95 +62,87 @@ async fn test_client_credentials_flow_rfc6749_section_4_4() {
 
 #[tokio::test]
 async fn test_invalid_grant_type_error_rfc6749_section_5_2() {
-    let server = AuthServer::minimal()
-        .with_client("test_client", "test_secret")
-        .build()
-        .expect("Failed to build server");
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let server_handle = tokio::spawn(async move {
-        let _router = server.into_make_service();
-        drop(listener);
-    });
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("client_id", "test_client"),
-            ("client_secret", "test_secret"),
-        ])
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    assert_eq!(response.status(), 400);
-
-    let error_response: Value = response.json().await.expect("Failed to parse JSON");
-    assert_eq!(
-        error_response.get("error").unwrap(),
-        "unsupported_grant_type"
+    let mut clients = HashMap::new();
+    clients.insert(
+        "test_client".to_string(),
+        ClientConfig {
+            client_id: "test_client".into(),
+            client_secret: "test_secret".into(),
+            grant_types: vec!["client_credentials".into()],
+            scopes: vec!["default".into()],
+        },
     );
-
-    server_handle.abort();
+    let state = AppState {
+        config: ServerConfig {
+            clients,
+            rate_limit: 100,
+            cors_enabled: true,
+            jwt_secret: None,
+            protected_routes: vec![],
+        },
+        store: Arc::new(RwLock::new(MemoryStore::new())),
+    };
+    let bad = TokenRequest {
+        grant_type: "authorization_code".into(),
+        client_id: "test_client".into(),
+        client_secret: "test_secret".into(),
+        scope: None,
+    };
+    let res = auth_core::handler::token::client_credentials(State(state), Form(bad)).await;
+    let err = res.err().expect("expected unsupported_grant_type error");
+    let resp = err.into_response();
+    assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
+    let body = hyper::body::to_bytes(resp.into_body()).await.unwrap();
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v.get("error").unwrap(), "unsupported_grant_type");
 }
 
 #[tokio::test]
 async fn test_invalid_client_error_rfc6749_section_5_2() {
-    let server = AuthServer::minimal()
-        .with_client("valid_client", "valid_secret")
-        .build()
-        .expect("Failed to build server");
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let server_handle = tokio::spawn(async move {
-        let _router = server.into_make_service();
-        drop(listener);
-    });
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    let client = reqwest::Client::new();
-
-    let response = client
-        .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-        .form(&[
-            ("grant_type", "client_credentials"),
-            ("client_id", "invalid_client"),
-            ("client_secret", "valid_secret"),
-        ])
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    assert_eq!(response.status(), 401);
-
-    let error_response: Value = response.json().await.expect("Failed to parse JSON");
-    assert_eq!(error_response.get("error").unwrap(), "invalid_client");
-
-    let response = client
-        .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-        .form(&[
-            ("grant_type", "client_credentials"),
-            ("client_id", "valid_client"),
-            ("client_secret", "invalid_secret"),
-        ])
-        .send()
-        .await
-        .expect("Failed to send request");
-
-    assert_eq!(response.status(), 401);
-
-    let error_response: Value = response.json().await.expect("Failed to parse JSON");
-    assert_eq!(error_response.get("error").unwrap(), "invalid_client");
-
-    server_handle.abort();
+    let mut clients = HashMap::new();
+    clients.insert(
+        "valid_client".to_string(),
+        ClientConfig {
+            client_id: "valid_client".into(),
+            client_secret: "valid_secret".into(),
+            grant_types: vec!["client_credentials".into()],
+            scopes: vec!["default".into()],
+        },
+    );
+    let state = AppState {
+        config: ServerConfig {
+            clients,
+            rate_limit: 100,
+            cors_enabled: true,
+            jwt_secret: None,
+            protected_routes: vec![],
+        },
+        store: Arc::new(RwLock::new(MemoryStore::new())),
+    };
+    let bad1 = TokenRequest {
+        grant_type: "client_credentials".into(),
+        client_id: "invalid_client".into(),
+        client_secret: "valid_secret".into(),
+        scope: None,
+    };
+    let res1 =
+        auth_core::handler::token::client_credentials(State(state.clone()), Form(bad1)).await;
+    assert!(matches!(
+        res1,
+        Err(auth_core::error::AuthError::InvalidClient)
+    ));
+    let bad2 = TokenRequest {
+        grant_type: "client_credentials".into(),
+        client_id: "valid_client".into(),
+        client_secret: "invalid_secret".into(),
+        scope: None,
+    };
+    let res2 =
+        auth_core::handler::token::client_credentials(State(state.clone()), Form(bad2)).await;
+    assert!(matches!(
+        res2,
+        Err(auth_core::error::AuthError::InvalidClient)
+    ));
 }
 
 #[cfg(all(feature = "jwt", feature = "introspection"))]

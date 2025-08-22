@@ -227,3 +227,15 @@ logs-auth:
 # View logs from policy service
 logs-policy:
     kubectl logs -f deployment/policy-service
+
+
+# Consolidated improvement sweep (local)
+improve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔧 Running consolidated improvement sweep..."
+    just ci
+    just coverage-check || echo "⚠️ Coverage below baseline; consider adding tests"
+    just sbom || echo "⚠️ SBOM generation skipped/failed"
+    just validate-security || echo "⚠️ Security validation reported issues"
+    echo "✅ Improvement sweep complete"

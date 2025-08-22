@@ -1,9 +1,9 @@
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
-use chrono::{DateTime, Utc, Duration};
-use serde::{Deserialize, Serialize};
 
 /// Enhanced rate limiter with adaptive security controls
 pub struct SecureRateLimiter {
@@ -40,7 +40,7 @@ impl Default for RateLimitConfig {
         endpoint_limits.insert("/oauth/authorize".to_string(), 20);
         endpoint_limits.insert("/oauth/introspect".to_string(), 100);
         endpoint_limits.insert("/admin/".to_string(), 5); // Strict admin limits
-        
+
         Self {
             global_requests_per_minute: 1000,
             ip_requests_per_minute: 60,
@@ -86,7 +86,7 @@ impl TokenBucket {
     fn refill(&mut self) {
         let now = Utc::now();
         let elapsed = (now - self.last_refill).num_milliseconds() as f64 / 1000.0;
-        
+
         if elapsed > 0.0 {
             let tokens_to_add = elapsed * self.refill_rate;
             self.tokens = (self.tokens + tokens_to_add).min(self.capacity);
@@ -96,7 +96,7 @@ impl TokenBucket {
 
     fn try_consume(&mut self, tokens: f64) -> bool {
         self.refill();
-        
+
         if self.tokens >= tokens {
             self.tokens -= tokens;
             true
@@ -183,14 +183,12 @@ impl SecureRateLimiter {
         {
             let mut ip_buckets = self.ip_buckets.write().await;
             let ip_bucket = ip_buckets.entry(ip).or_insert_with(|| {
-                IpTokenBucket::new(
-                    self.config.ip_requests_per_minute,
-                    self.config.burst_size,
-                )
+                IpTokenBucket::new(self.config.ip_requests_per_minute, self.config.burst_size)
             });
 
             // Detect suspicious patterns
-            self.detect_suspicious_activity(ip_bucket, user_agent, ip).await?;
+            self.detect_suspicious_activity(ip_bucket, user_agent, ip)
+                .await?;
 
             if !ip_bucket.bucket.try_consume(1.0) {
                 // Track violation
@@ -206,8 +204,9 @@ impl SecureRateLimiter {
 
                 // Check if IP should be banned
                 if ip_bucket.violation_count >= self.config.ban_threshold {
-                    let ban_expiry = Utc::now() + Duration::minutes(self.config.ban_duration_minutes as i64);
-                    
+                    let ban_expiry =
+                        Utc::now() + Duration::minutes(self.config.ban_duration_minutes as i64);
+
                     let mut banned_ips = self.banned_ips.write().await;
                     banned_ips.insert(ip, ban_expiry);
 
@@ -233,12 +232,14 @@ impl SecureRateLimiter {
         // Check client-based rate limit
         if let Some(client_id) = client_id {
             let mut client_buckets = self.client_buckets.write().await;
-            let bucket = client_buckets.entry(client_id.to_string()).or_insert_with(|| {
-                TokenBucket::new(
-                    self.config.client_requests_per_minute,
-                    self.config.burst_size,
-                )
-            });
+            let bucket = client_buckets
+                .entry(client_id.to_string())
+                .or_insert_with(|| {
+                    TokenBucket::new(
+                        self.config.client_requests_per_minute,
+                        self.config.burst_size,
+                    )
+                });
 
             if !bucket.try_consume(1.0) {
                 tracing::warn!(
@@ -255,10 +256,12 @@ impl SecureRateLimiter {
         // Check endpoint-specific limits
         if let Some(&limit) = self.config.endpoint_limits.get(endpoint) {
             let mut endpoint_buckets = self.endpoint_buckets.write().await;
-            let endpoint_map = endpoint_buckets.entry(endpoint.to_string()).or_insert_with(HashMap::new);
-            let bucket = endpoint_map.entry(ip).or_insert_with(|| {
-                TokenBucket::new(limit, self.config.burst_size)
-            });
+            let endpoint_map = endpoint_buckets
+                .entry(endpoint.to_string())
+                .or_insert_with(HashMap::new);
+            let bucket = endpoint_map
+                .entry(ip)
+                .or_insert_with(|| TokenBucket::new(limit, self.config.burst_size));
 
             if !bucket.try_consume(1.0) {
                 tracing::warn!(
@@ -284,7 +287,7 @@ impl SecureRateLimiter {
         ip: IpAddr,
     ) -> Result<(), RateLimitError> {
         let now = Utc::now();
-        
+
         // Check for rapid requests (potential bot behavior)
         if let Some(last_violation) = ip_bucket.last_violation {
             let time_since_violation = now - last_violation;
@@ -315,10 +318,10 @@ impl SecureRateLimiter {
                 suspicious_score = ip_bucket.suspicious_activity,
                 "Suspicious activity detected"
             );
-            
+
             // Apply stricter rate limiting for suspicious IPs
             ip_bucket.bucket.refill_rate *= 0.5; // Reduce refill rate
-            
+
             return Err(RateLimitError::SuspiciousActivity { ip });
         }
 
@@ -328,18 +331,20 @@ impl SecureRateLimiter {
     /// Check if user agent appears suspicious
     fn is_suspicious_user_agent(&self, user_agent: &str) -> bool {
         let suspicious_patterns = [
-            "bot", "crawler", "spider", "scraper", "curl", "wget",
-            "python", "java", "go-http", "okhttp", "axios",
+            "bot", "crawler", "spider", "scraper", "curl", "wget", "python", "java", "go-http",
+            "okhttp", "axios",
         ];
 
         let ua_lower = user_agent.to_lowercase();
-        suspicious_patterns.iter().any(|pattern| ua_lower.contains(pattern))
+        suspicious_patterns
+            .iter()
+            .any(|pattern| ua_lower.contains(pattern))
     }
 
     /// Clean up expired entries
     pub async fn cleanup_expired(&self) {
         let now = Utc::now();
-        
+
         // Clean up banned IPs
         {
             let mut banned_ips = self.banned_ips.write().await;
@@ -349,26 +354,20 @@ impl SecureRateLimiter {
         // Clean up old IP buckets (older than 1 hour)
         {
             let mut ip_buckets = self.ip_buckets.write().await;
-            ip_buckets.retain(|_, bucket| {
-                (now - bucket.first_seen).num_hours() < 1
-            });
+            ip_buckets.retain(|_, bucket| (now - bucket.first_seen).num_hours() < 1);
         }
 
         // Clean up old client buckets
         {
             let mut client_buckets = self.client_buckets.write().await;
-            client_buckets.retain(|_, bucket| {
-                (now - bucket.last_refill).num_minutes() < 30
-            });
+            client_buckets.retain(|_, bucket| (now - bucket.last_refill).num_minutes() < 30);
         }
 
         // Clean up endpoint buckets
         {
             let mut endpoint_buckets = self.endpoint_buckets.write().await;
             for (_, ip_map) in endpoint_buckets.iter_mut() {
-                ip_map.retain(|_, bucket| {
-                    (now - bucket.last_refill).num_minutes() < 30
-                });
+                ip_map.retain(|_, bucket| (now - bucket.last_refill).num_minutes() < 30);
             }
             endpoint_buckets.retain(|_, ip_map| !ip_map.is_empty());
         }
@@ -384,7 +383,8 @@ impl SecureRateLimiter {
             tracked_ips: ip_buckets.len(),
             tracked_clients: client_buckets.len(),
             banned_ips: banned_ips.len(),
-            suspicious_ips: ip_buckets.values()
+            suspicious_ips: ip_buckets
+                .values()
                 .filter(|bucket| bucket.suspicious_activity >= self.config.suspicious_threshold)
                 .count(),
         }
@@ -411,7 +411,10 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
         // Should allow initial requests
-        assert!(limiter.check_rate_limit(ip, None, "/test", Some("Mozilla/5.0")).await.is_ok());
+        assert!(limiter
+            .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
+            .await
+            .is_ok());
     }
 
     #[tokio::test]
@@ -419,17 +422,21 @@ mod tests {
         let mut config = RateLimitConfig::default();
         config.ip_requests_per_minute = 1;
         config.ban_threshold = 2;
-        
+
         let limiter = SecureRateLimiter::new(config);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));
 
         // Exhaust rate limit multiple times to trigger ban
         for _ in 0..3 {
-            let _ = limiter.check_rate_limit(ip, None, "/test", Some("Mozilla/5.0")).await;
+            let _ = limiter
+                .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
+                .await;
         }
 
         // Should be banned now
-        let result = limiter.check_rate_limit(ip, None, "/test", Some("Mozilla/5.0")).await;
+        let result = limiter
+            .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
+            .await;
         assert!(matches!(result, Err(RateLimitError::IpBanned { .. })));
     }
 
@@ -440,7 +447,9 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 3));
 
         // Request with suspicious user agent
-        let result = limiter.check_rate_limit(ip, None, "/test", Some("curl/7.68.0")).await;
+        let result = limiter
+            .check_rate_limit(ip, None, "/test", Some("curl/7.68.0"))
+            .await;
         // May trigger suspicious activity detection
     }
 }
