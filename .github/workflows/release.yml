@@ -28,12 +28,13 @@ jobs:
   validate-release:
     name: Validate Release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.version }}
       is-prerelease: ${{ steps.version.outputs.is-prerelease }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           fetch-depth: 0
 
@@ -71,6 +72,7 @@ jobs:
   build-artifacts:
     name: Build Release Artifacts
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     needs: [validate-release]
     strategy:
       matrix:
@@ -89,10 +91,10 @@ jobs:
             archive-name: rust-security-macos-aarch64
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
         with:
           targets: ${{ matrix.target }}
 
@@ -134,9 +136,9 @@ jobs:
           fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
-          name: release-artifacts
+          name: release-artifacts-${{ matrix.target }}
           path: |
             ${{ matrix.archive-name }}.*
 
@@ -147,19 +149,20 @@ jobs:
   build-containers:
     name: Build Container Images
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [validate-release]
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -167,7 +170,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -182,7 +185,7 @@ jobs:
 
       - name: Build and push container image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
         with:
           context: .
           file: ./security/configs/Dockerfile.security
@@ -198,7 +201,7 @@ jobs:
             VCS_REF=${{ github.sha }}
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
 
       - name: Sign container image
         env:
@@ -217,13 +220,14 @@ jobs:
   package-helm:
     name: Package Helm Charts
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [validate-release]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Set up Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v3.5
         with:
           version: v3.13.0
 
@@ -232,33 +236,46 @@ jobs:
           VERSION="${{ needs.validate-release.outputs.version }}"
           VERSION_NO_V="${VERSION#v}"
           
-          # Update auth-service chart
-          yq eval ".version = \"$VERSION_NO_V\"" -i helm/auth-service/Chart.yaml
-          yq eval ".appVersion = \"$VERSION_NO_V\"" -i helm/auth-service/Chart.yaml
+          # Only update charts if they exist
+          if [ -d "helm/auth-service" ]; then
+            yq eval ".version = \"$VERSION_NO_V\"" -i helm/auth-service/Chart.yaml
+            yq eval ".appVersion = \"$VERSION_NO_V\"" -i helm/auth-service/Chart.yaml
+          fi
           
-          # Update policy-service chart
-          yq eval ".version = \"$VERSION_NO_V\"" -i helm/policy-service/Chart.yaml
-          yq eval ".appVersion = \"$VERSION_NO_V\"" -i helm/policy-service/Chart.yaml
+          if [ -d "helm/policy-service" ]; then
+            yq eval ".version = \"$VERSION_NO_V\"" -i helm/policy-service/Chart.yaml
+            yq eval ".appVersion = \"$VERSION_NO_V\"" -i helm/policy-service/Chart.yaml
+          fi
 
       - name: Package charts
         run: |
-          helm package helm/auth-service
-          helm package helm/policy-service
+          if [ -d "helm/auth-service" ]; then
+            helm package helm/auth-service
+          fi
+          if [ -d "helm/policy-service" ]; then
+            helm package helm/policy-service
+          fi
 
       - name: Sign charts
         run: |
-          helm plugin install https://github.com/sigstore/helm-sigstore
-          for chart in *.tgz; do
-            helm sigstore sign "$chart"
-          done
+          if ls *.tgz 1> /dev/null 2>&1; then
+            helm plugin install https://github.com/sigstore/helm-sigstore
+            for chart in *.tgz; do
+              helm sigstore sign "$chart"
+            done
+          else
+            echo "No Helm charts found to sign"
+          fi
 
       - name: Upload chart packages
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        if: success()
         with:
           name: helm-charts
           path: |
             *.tgz
             *.tgz.prov
+          if-no-files-found: ignore
 
   # ============================================================================
   # GENERATE RELEASE NOTES
@@ -267,12 +284,13 @@ jobs:
   generate-release-notes:
     name: Generate Release Notes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [validate-release]
     outputs:
       release-notes: ${{ steps.notes.outputs.notes }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           fetch-depth: 0
 
@@ -325,12 +343,15 @@ jobs:
           **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_VERSION}...${VERSION}
           EOF
           
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          cat release-notes.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Use proper output format for multiline strings
+          {
+            echo 'notes<<EOF'
+            cat release-notes.md
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       - name: Upload release notes
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: release-notes
           path: release-notes.md
@@ -342,52 +363,22 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [validate-release, build-artifacts, build-containers, package-helm, generate-release-notes]
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        id: create_release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ncipollo/release-action@2c591bcc8ecdcd2db72b97d6147f871fcd833ba5 # v1.14.0
         with:
-          tag_name: ${{ needs.validate-release.outputs.version }}
-          release_name: Release ${{ needs.validate-release.outputs.version }}
+          tag: ${{ needs.validate-release.outputs.version }}
+          name: Release ${{ needs.validate-release.outputs.version }}
           body: ${{ needs.generate-release-notes.outputs.release-notes }}
           draft: false
           prerelease: ${{ needs.validate-release.outputs.is-prerelease }}
-
-      - name: Upload release assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
-          
-          # Upload binary archives
-          for file in release-artifacts/*; do
-            if [[ -f "$file" ]]; then
-              filename=$(basename "$file")
-              curl -X POST \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Content-Type: application/octet-stream" \
-                --data-binary @"$file" \
-                "${UPLOAD_URL%\{*}?name=$filename"
-            fi
-          done
-          
-          # Upload Helm charts
-          for file in helm-charts/*; do
-            if [[ -f "$file" ]]; then
-              filename=$(basename "$file")
-              curl -X POST \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Content-Type: application/octet-stream" \
-                --data-binary @"$file" \
-                "${UPLOAD_URL%\{*}?name=$filename"
-            fi
-          done
+          artifacts: "release-artifacts-*/*,helm-charts/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   # ============================================================================
   # NOTIFY RELEASE
@@ -396,11 +387,12 @@ jobs:
   notify-release:
     name: Notify Release
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [validate-release, create-release]
     if: always()
     steps:
       - name: Send Slack notification
-        uses: 8398a7/action-slack@v3
+        uses: 8398a7/action-slack@28ba43ae48961b90635b50953d216767a6bea486 # v3.16.2
         with:
           status: ${{ job.status }}
           text: |
@@ -418,6 +410,7 @@ jobs:
             • [Documentation](https://github.com/${{ github.repository }}/tree/${{ needs.validate-release.outputs.version }}/docs)
           webhook_url: ${{ secrets.SLACK_WEBHOOK }}
           fields: repo,message,commit,author,action,eventName,ref,workflow
+        continue-on-error: true
 
       - name: Update documentation
         run: |
@@ -427,3 +420,4 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/${{ github.repository }}/dispatches \
             -d '{"event_type":"release","client_payload":{"version":"${{ needs.validate-release.outputs.version }}"}}'
+        continue-on-error: true

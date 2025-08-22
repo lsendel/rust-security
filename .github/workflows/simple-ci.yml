@@ -1,4 +1,6 @@
-name: Simple CI Pipeline
+name: Basic CI Pipeline (Fallback)
+# This workflow serves as a lightweight alternative to the main CI pipeline
+# Use when: compilation issues exist, quick feedback needed, or resource constraints
 
 on:
   push:
@@ -14,9 +16,10 @@ jobs:
   duplicate-code-analysis:
     name: Duplicate Code Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Install jscpd
         run: npm install -g jscpd
@@ -36,26 +39,30 @@ jobs:
   build-and-test:
     name: Build & Test (${{ matrix.rust }} on ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
+      fail-fast: false
       matrix:
-        rust: [stable, nightly] 
+        rust: [stable] 
         os: [ubuntu-latest, macos-latest]
         include:
-          - rust: stable
+          - rust: nightly
             os: ubuntu-latest
+            experimental: true
+      continue-on-error: ${{ matrix.experimental || false }}
             
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # master
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: |
             ~/.cargo/registry
@@ -97,12 +104,13 @@ jobs:
   security-checks:
     name: Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
 
       - name: Install cargo-audit
         run: cargo install cargo-audit
@@ -114,16 +122,17 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: build-and-test
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: |
             ~/.cargo/registry
@@ -145,16 +154,17 @@ jobs:
   performance-tests:
     name: Performance Tests  
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build-and-test
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: |
             ~/.cargo/registry
@@ -171,14 +181,15 @@ jobs:
   docker-build-and-scan:
     name: Docker Build & Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [build-and-test, security-checks]
     if: github.event_name == 'push'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
 
       - name: Build Docker image (if Dockerfile exists)
         run: |

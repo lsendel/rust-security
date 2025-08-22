@@ -6,9 +6,15 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_VERSION: stable
+  RUSTFLAGS: -D warnings
 
 jobs:
   build_and_test:
@@ -24,16 +30,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
         with:
           key: ${{ matrix.os }}-${{ matrix.rust }}
 
@@ -44,16 +50,16 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings -D clippy::all -D clippy::pedantic
 
       - name: Build (Debug)
-        run: cargo build --workspace --verbose
+        run: cargo build --workspace --all-features --locked --verbose
 
       - name: Run unit tests
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --all-features --verbose -- --nocapture
 
       - name: Build (Release)
-        run: cargo build --workspace --release --verbose
+        run: cargo build --workspace --all-features --locked --release --verbose
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: release-binaries-${{ matrix.os }}-${{ matrix.rust }}
           path: |
@@ -61,23 +67,23 @@ jobs:
             target/release/policy-service
         if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
 
-      - name: Generate coverage report
+      - name: Generate coverage report (fail under 80%)
         if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
         run: |
           cargo install cargo-llvm-cov --locked
-          cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+          cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info --fail-under-lines 80
 
       - name: Upload coverage to Codecov
         if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673 # v4.5.0
         with:
           file: lcov.info
           fail_ci_if_error: false
 
-      - name: Check coverage baseline
+      - name: Check coverage baseline (>= 80%)
         if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
         run: |
-          BASELINE_COVERAGE=70
+          BASELINE_COVERAGE=80
           COVERAGE=$(cargo llvm-cov --workspace --all-features --summary-only | grep -E "^TOTAL" | awk '{print $10}' | sed 's/%//')
           echo "Current coverage: ${COVERAGE}%"
           echo "Baseline: ${BASELINE_COVERAGE}%"
@@ -91,23 +97,24 @@ jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build_and_test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84 # v2.7.3
 
       - name: Install security tools
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@331a600f1b10a3fed8dc56f925012bede91ae51f # v2.41.7
         with:
-          tool: cargo-audit,cargo-deny,cargo-outdated
+          tool: cargo-audit,cargo-deny,cargo-outdated,cargo-geiger
 
       - name: Audit dependencies
         run: cargo audit --deny warnings
@@ -120,8 +127,11 @@ jobs:
         # To fix, run 'cargo update' locally and commit the changes.
         run: cargo outdated --workspace --exit-code 1
 
+      - name: Scan for unsafe code (deny any unsafe)
+        run: cargo geiger --all-features --all-targets --output-format GitHub --fail-threshold 0
+
       - name: Filesystem vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@7c2007bcb556501da015201bcba5aa14069b74e2 # 0.23.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -129,7 +139,7 @@ jobs:
           output: 'trivy-fs-results.sarif'
 
       - name: Upload Trivy FS scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@e675ced7a7522a761fc9c8eb26682c8b27c42b2b # v3.25.1
         if: always()
         with:
           sarif_file: 'trivy-fs-results.sarif'
@@ -137,13 +147,14 @@ jobs:
   integration_test:
     name: Integration Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build_and_test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: release-binaries-ubuntu-latest-stable
           path: target/release
@@ -162,7 +173,7 @@ jobs:
           ./scripts/validation/wait-for-service.sh http://localhost:8081/health
 
       - name: Run integration tests
-        run: cargo test --test '*integration*' --all-features --verbose
+        run: cargo test --test '*integration*' --all-features --verbose -- --nocapture
 
       - name: Cleanup services
         if: always()
@@ -171,19 +182,20 @@ jobs:
   docker:
     name: Docker Build & Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: build_and_test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
 
       - name: Cache Docker layers
-        uses: actions/cache@v4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
@@ -209,13 +221,14 @@ jobs:
   performance_test:
     name: Performance Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build_and_test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: release-binaries-ubuntu-latest-stable
           path: target/release
@@ -248,15 +261,58 @@ jobs:
   duplicate_code_analysis:
     name: Duplicate Code Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
         with:
           node-version: '20'
 
       - name: Run jscpd
         run: |
           npx jscpd@3.5.10 --config .jscpd.json
+
+  db_migrations:
+    name: DB Migration Verification (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build_and_test
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: auth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=10s --health-timeout=5s --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17
+        with:
+          toolchain: stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+      - name: Run migrations up and down
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/auth
+        run: |
+          cd auth-service
+          sqlx database create
+          sqlx migrate run
+          sqlx migrate revert -y || true
+          sqlx migrate run
+      - name: Run auth-service integration tests (DB)
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/auth
+        run: |
+          cargo test -p auth-service --features api-keys -- --nocapture --test-threads=1

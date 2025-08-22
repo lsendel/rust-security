@@ -1,5 +1,11 @@
 name: Auth-Core Test Suite
 
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+  pull-requests: read
+
 on:
   push:
     branches: [ main, develop ]
@@ -96,7 +102,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Setup Rust toolchain
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@e645b0cf01249a964ec099494d38d2da0f0b349f
       with:
         toolchain: ${{ matrix.rust }}
         
@@ -266,7 +272,7 @@ jobs:
       working-directory: auth-core
       
     - name: Upload fuzz artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
       if: always()
       with:
         name: fuzz-artifacts
@@ -302,7 +308,7 @@ jobs:
       working-directory: auth-core
       
     - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
       with:
         name: auth-core-benchmarks
         path: auth-core/benchmark-results.json
@@ -379,7 +385,7 @@ jobs:
         RUST_LOG: debug
         
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
       with:
         file: auth-core/lcov.info
         directory: auth-core
@@ -396,7 +402,7 @@ jobs:
       working-directory: auth-core
       
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
       with:
         name: auth-core-coverage-html
         path: auth-core/coverage-html

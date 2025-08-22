@@ -24,6 +24,7 @@ jobs:
   detect-changes:
     name: Detect Dependency Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       rust-changed: ${{ steps.changes.outputs.rust }}
       javascript-changed: ${{ steps.changes.outputs.javascript }}
@@ -131,6 +132,7 @@ jobs:
   build-and-test:
     name: Build and Test (${{ matrix.rust-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: detect-changes
     if: needs.detect-changes.outputs.rust-changed == 'true'
     strategy:
@@ -170,6 +172,7 @@ jobs:
   performance-regression:
     name: Performance Regression Check
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     needs: [detect-changes, build-and-test]
     if: needs.detect-changes.outputs.is-dependency-update == 'true'
     steps:
@@ -208,6 +211,7 @@ jobs:
   container-security:
     name: Container Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: detect-changes
     if: needs.detect-changes.outputs.docker-changed == 'true'
     steps:
@@ -238,6 +242,7 @@ jobs:
   javascript-security:
     name: JavaScript Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: detect-changes
     if: needs.detect-changes.outputs.javascript-changed == 'true'
     steps:
@@ -273,6 +278,7 @@ jobs:
   dependency-license-check:
     name: License Compliance Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: detect-changes
     if: needs.detect-changes.outputs.rust-changed == 'true'
     steps:
@@ -318,6 +324,7 @@ jobs:
   auto-merge-check:
     name: Auto-merge Eligibility
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [security-audit, build-and-test, performance-regression, dependency-license-check]
     if: |
       always() &&
@@ -375,6 +382,7 @@ jobs:
   notification:
     name: Send Notifications
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [security-audit, build-and-test]
     if: always() && (failure() || cancelled())
     steps:

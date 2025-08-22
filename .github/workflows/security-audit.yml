@@ -10,6 +10,11 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -17,15 +22,16 @@ jobs:
   rust-security-audit:
     name: Rust Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
         
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: |
             ~/.cargo/registry
@@ -40,19 +46,20 @@ jobs:
         
       - name: Run security audit
         run: |
-          cargo audit || echo "✅ Rust dependency audit completed with known acceptable risks"
-          echo "✅ Rust dependency audit completed"
+          cargo audit || echo "Rust dependency audit completed with known acceptable risks"
+          echo "Rust dependency audit completed"
         continue-on-error: false
 
   cargo-deny-check:
     name: Cargo Deny Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         
       - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@8371184bd11e21dcf8ac82ebf8c9c9f74ebf7268 # v1.6.3
         with:
           log-level: warn
           command: check
@@ -61,13 +68,14 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@72eb03d02c7872a771aacd928f3123ac62ad6d3a # v4.3.3
         with:
           fail-on-severity: moderate
           deny-licenses: GPL-3.0, LGPL-2.1, AGPL-3.0
@@ -75,12 +83,13 @@ jobs:
   python-security-check:
     name: Python Security Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
         with:
           python-version: '3.11'
           
@@ -105,12 +114,13 @@ jobs:
   container-scan:
     name: Container Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@7c2007bcb556501da015201bcba5aa14069b74e2 # 0.23.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -119,7 +129,7 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
           
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@e675ced7a7522a761fc9c8eb26682c8b27c42b2b # v3.25.1
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -127,9 +137,10 @@ jobs:
   kubernetes-security:
     name: Kubernetes Security Policy Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         
       - name: Install kubesec
         run: |
@@ -156,12 +167,13 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [rust-security-audit, cargo-deny-check, python-security-check, container-scan, kubernetes-security]
     if: always()
     steps:
       - name: Summary Report
         run: |
-          echo "## 🔒 Security Audit Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Security Audit Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.rust-security-audit.result }}" == "success" ]; then
