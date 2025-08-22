@@ -515,7 +515,7 @@ impl FuzzTestSuite {
                             input: self.sanitize_input_for_display(&input),
                             error_type,
                             error_message: self.sanitize_error_message(&error_message),
-                            strategy: "random".to_string(), // TODO: Track actual strategy
+                            strategy: format!("random_iteration_{}", i),
                             input_size: input.len(),
                         });
                     }

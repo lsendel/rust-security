@@ -32,10 +32,12 @@ confidence-threshold = 0.8
 # Banned packages with security issues
 deny = [
     { name = "time", version = "=0.1.0" }, # Unsound API
-    { name = "rsa", version = "*" },       # Marvin attack vulnerability
+    { name = "rsa", version = "*" },       # RUSTSEC-2023-0071 Marvin attack vulnerability
     { name = "openssl", version = "*" },   # Prefer ring/rustls for better security
     { name = "native-tls", version = "*" }, # Prefer rustls
     { name = "chrono", version = "<0.4.20" }, # Old versions have vulnerabilities
+    { name = "pprof2", version = "*" },    # RUSTSEC-2024-0408 memory safety issue
+    { name = "trust-dns-resolver", version = "*" }, # Deprecated, use hickory-dns
 ]
 
 # Allow multiple versions for compatibility during migration
@@ -56,8 +58,7 @@ yanked = "deny"
 # All security vulnerabilities must be addressed, not ignored
 ignore = []
 
-# Severity threshold - deny all vulnerabilities
-severity-threshold = "low"
+# Note: severity-threshold has been deprecated, use individual advisory settings instead
 
 [sources]
 unknown-registry = "deny"

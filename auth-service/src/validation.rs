@@ -50,7 +50,7 @@ pub struct TokenRequest {
     #[validate(length(max = 255))]
     pub username: Option<String>,
 
-    #[validate(length(min = 1, max = 255))]
+    #[validate(length(min = 12, max = 255), custom(function = "validate_password_strength"))]
     pub password: Option<String>,
 }
 
@@ -598,6 +598,90 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     }
 
     Ok(())
+}
+
+/// Validate password strength
+fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
+    let mut score = 0;
+    let mut errors = Vec::new();
+    
+    // Check minimum length
+    if password.len() < 12 {
+        errors.push("Password must be at least 12 characters long");
+    } else {
+        score += 1;
+    }
+    
+    // Check for uppercase letters
+    if password.chars().any(|c| c.is_uppercase()) {
+        score += 1;
+    } else {
+        errors.push("Password must contain at least one uppercase letter");
+    }
+    
+    // Check for lowercase letters
+    if password.chars().any(|c| c.is_lowercase()) {
+        score += 1;
+    } else {
+        errors.push("Password must contain at least one lowercase letter");
+    }
+    
+    // Check for digits
+    if password.chars().any(|c| c.is_numeric()) {
+        score += 1;
+    } else {
+        errors.push("Password must contain at least one digit");
+    }
+    
+    // Check for special characters
+    if password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c)) {
+        score += 1;
+    } else {
+        errors.push("Password must contain at least one special character");
+    }
+    
+    // Check for common patterns
+    let common_patterns = [
+        "password", "123456", "qwerty", "admin", "root", "user",
+        "letmein", "welcome", "monkey", "dragon"
+    ];
+    
+    for pattern in &common_patterns {
+        if password.to_lowercase().contains(pattern) {
+            errors.push("Password contains common patterns and is not secure");
+            break;
+        }
+    }
+    
+    // Check for sequential characters
+    if has_sequential_chars(password) {
+        errors.push("Password contains sequential characters");
+    }
+    
+    // Require at least 4 out of 5 criteria for a strong password
+    if score < 4 || !errors.is_empty() {
+        return Err(ValidationError::new("password_too_weak"));
+    }
+    
+    Ok(())
+}
+
+/// Check for sequential characters (3 or more in a row)
+fn has_sequential_chars(password: &str) -> bool {
+    let chars: Vec<char> = password.chars().collect();
+    
+    for window in chars.windows(3) {
+        // Check for ascending sequence
+        if window[0] as u8 + 1 == window[1] as u8 && window[1] as u8 + 1 == window[2] as u8 {
+            return true;
+        }
+        // Check for descending sequence
+        if window[0] as u8 == window[1] as u8 + 1 && window[1] as u8 == window[2] as u8 + 1 {
+            return true;
+        }
+    }
+    
+    false
 }
 
 /// Validation result wrapper

@@ -525,12 +525,33 @@ impl SafeParser<ScimFilter> for ScimParser {
             input_size: input.len(),
             parse_duration: start_time.elapsed(),
             tokens_processed: parse_input.split_whitespace().count(),
-            max_depth_reached: 0, // TODO: Track actual depth
+            max_depth_reached: Self::calculate_parse_depth(&parse_input),
             was_sanitized,
             parse_method: "recursive_descent".to_string(),
         };
 
         Ok(ParsedResult::new(filter, metadata))
+    }
+
+    /// Calculate the parsing depth of a SCIM filter expression
+    fn calculate_parse_depth(input: &str) -> usize {
+        let mut depth = 0;
+        let mut max_depth = 0;
+        
+        for char in input.chars() {
+            match char {
+                '(' => {
+                    depth += 1;
+                    max_depth = max_depth.max(depth);
+                }
+                ')' => {
+                    depth = depth.saturating_sub(1);
+                }
+                _ => {}
+            }
+        }
+        
+        max_depth
     }
 
     fn validate_input(&self, input: &str) -> Result<(), ParserError> {

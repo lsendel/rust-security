@@ -92,8 +92,8 @@ pub fn validate_token_binding(
 pub fn generate_code_verifier() -> Result<String, &'static str> {
     use ring::rand::{SecureRandom, SystemRandom};
 
-    // Use cryptographically secure random generator
-    let mut bytes = [0u8; 32]; // 256 bits of entropy
+    // Use cryptographically secure random generator with enhanced entropy
+    let mut bytes = [0u8; 64]; // 512 bits of entropy for enhanced security per RFC 7636
     SystemRandom::new()
         .fill(&mut bytes)
         .map_err(|_| "Random generation failed")?;
@@ -436,6 +436,28 @@ static RATE_LIMIT_PER_MIN: Lazy<u32> = Lazy::new(|| {
         .filter(|v| *v > 0)
         .unwrap_or(60)
 });
+
+/// Cleanup expired entries from the rate limiter to prevent memory leaks
+async fn cleanup_rate_limiter() {
+    let mut limiter = RATE_LIMITER.lock().await;
+    let now = Instant::now();
+    let cleanup_threshold = Duration::from_secs(3600); // 1 hour
+    
+    limiter.retain(|_, (_, last_access)| {
+        now.duration_since(*last_access) < cleanup_threshold
+    });
+}
+
+/// Start periodic cleanup task for rate limiter
+pub fn start_rate_limiter_cleanup() {
+    tokio::spawn(async {
+        let mut interval = tokio::time::interval(Duration::from_secs(300)); // Clean every 5 minutes
+        loop {
+            interval.tick().await;
+            cleanup_rate_limiter().await;
+        }
+    });
+}
 
 /// Simple global rate limiter: configurable requests/min per client IP (via X-Forwarded-For)
 pub async fn rate_limit(request: Request, next: Next) -> Response {

@@ -220,30 +220,30 @@ pub struct AppState {
 
 impl AppState {
     /// Create a new AppState with in-memory storage
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, AppError> {
         let jwt_secret =
-            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
-        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key-for-development-only-replace-in-production".to_string());
+        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24))?);
 
-        Self { user_repository: Arc::new(InMemoryUserRepository::new()), jwt_service }
+        Ok(Self { user_repository: Arc::new(InMemoryUserRepository::new()), jwt_service })
     }
 
     /// Create AppState with a specific repository
-    pub fn with_repository(repository: Arc<dyn UserRepository>) -> Self {
+    pub fn with_repository(repository: Arc<dyn UserRepository>) -> Result<Self, AppError> {
         let jwt_secret =
-            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
-        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key-for-development-only-replace-in-production".to_string());
+        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24))?);
 
-        Self { user_repository: repository, jwt_service }
+        Ok(Self { user_repository: repository, jwt_service })
     }
 
     /// Create AppState from database
-    pub fn from_database(database: Database) -> Self {
+    pub fn from_database(database: Database) -> Result<Self, AppError> {
         let jwt_secret =
-            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
-        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24)));
+            std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key-for-development-only-replace-in-production".to_string());
+        let jwt_service = Arc::new(JwtService::new(jwt_secret, Some(24))?);
 
-        Self { user_repository: database.user_repository(), jwt_service }
+        Ok(Self { user_repository: database.user_repository(), jwt_service })
     }
 
     /// Create AppState with custom JWT service
@@ -361,9 +361,9 @@ impl RegisterRequest {
 }
 
 /// Build application router with in-memory storage
-pub fn create_app() -> Router {
-    let state = AppState::new();
-    create_router_with_state(state)
+pub fn create_app() -> Result<Router, AppError> {
+    let state = AppState::new()?;
+    Ok(create_router_with_state(state))
 }
 
 /// Create router with given state
@@ -384,7 +384,7 @@ fn create_router_with_state(state: AppState) -> Router {
 /// Build application router with database
 pub async fn create_app_with_database() -> Result<Router, DbError> {
     let database = init_database().await?;
-    let state = AppState::from_database(database);
+    let state = AppState::from_database(database).map_err(|e| DbError::Internal)?;
     Ok(create_router_with_state(state))
 }
 
@@ -634,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_app_state_new() {
-        let state = AppState::new();
+        let state = AppState::new().unwrap();
         // Verify the state holds valid Arc references
         assert!(std::sync::Arc::strong_count(&state.user_repository) >= 1);
         assert!(std::sync::Arc::strong_count(&state.jwt_service) >= 1);
@@ -667,7 +667,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_users_empty() {
-        let state = AppState::new();
+        let state = AppState::new().unwrap();
         let result = list_users(State(state)).await;
 
         assert!(result.is_ok());

@@ -5,6 +5,9 @@
 use std::sync::Arc;
 use crate::store::HybridStore;
 
+/// Maximum request body size (1MB)
+pub const MAX_REQUEST_BODY_SIZE: usize = 1_048_576;
+
 /// Application state shared across handlers
 #[derive(Clone)]
 pub struct AppState {

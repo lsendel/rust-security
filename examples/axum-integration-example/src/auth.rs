@@ -7,7 +7,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{hash, verify};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -19,9 +19,29 @@ pub struct JwtService {
 }
 
 impl JwtService {
-    /// Create a new JWT service
-    pub fn new(secret: String, expiration_hours: Option<u64>) -> Self {
-        Self { secret, expiration_hours: expiration_hours.unwrap_or(24) }
+    /// Create a new JWT service with secure configuration
+    pub fn new(secret: String, expiration_hours: Option<u64>) -> Result<Self, AppError> {
+        if secret.len() < 32 {
+            return Err(AppError::Auth("JWT secret must be at least 32 characters long for security".to_string()));
+        }
+        
+        Ok(Self { 
+            secret, 
+            expiration_hours: expiration_hours.unwrap_or(24).min(168) // Cap at 7 days max
+        })
+    }
+    
+    /// Create JWT service from environment variables (recommended)
+    pub fn from_env() -> Result<Self, AppError> {
+        let secret = std::env::var("JWT_SECRET_KEY")
+            .map_err(|_| AppError::Auth("JWT_SECRET_KEY environment variable required".to_string()))?;
+            
+        let expiration_hours = std::env::var("JWT_EXPIRATION_HOURS")
+            .ok()
+            .and_then(|h| h.parse().ok())
+            .unwrap_or(24);
+            
+        Self::new(secret, Some(expiration_hours))
     }
 
     /// Generate a JWT token for a user
@@ -42,14 +62,22 @@ impl JwtService {
             .map_err(|_| AppError::Auth("Failed to generate token".to_string()))
     }
 
-    /// Validate a JWT token and return claims
+    /// Validate a JWT token and return claims with enhanced security
     pub fn validate_token(&self, token: &str) -> Result<Claims, AppError> {
+        let mut validation = Validation::default();
+        validation.validate_exp = true;
+        validation.validate_nbf = true;
+        validation.leeway = 30; // 30 seconds clock skew tolerance
+        
         let token_data = decode::<Claims>(
             token,
             &DecodingKey::from_secret(self.secret.as_ref()),
-            &Validation::default(),
+            &validation,
         )
-        .map_err(|_| AppError::Auth("Invalid token".to_string()))?;
+        .map_err(|e| {
+            tracing::warn!("JWT validation failed: {}", e);
+            AppError::Auth("Invalid or expired token".to_string())
+        })?;
 
         Ok(token_data.claims)
     }
@@ -57,19 +85,64 @@ impl JwtService {
     // No stub implementations when auth is not enabled because `auth` is now default
 }
 
-/// Password service for hashing and verification
+/// Password service for hashing and verification with enhanced security
 pub struct PasswordService;
 
 impl PasswordService {
-    /// Hash a password using bcrypt
+    /// Validate password strength before hashing
+    pub fn validate_password_strength(password: &str) -> Result<(), AppError> {
+        if password.len() < 12 {
+            return Err(AppError::Auth("Password must be at least 12 characters long".to_string()));
+        }
+        
+        let mut score = 0;
+        if password.chars().any(|c| c.is_uppercase()) { score += 1; }
+        if password.chars().any(|c| c.is_lowercase()) { score += 1; }
+        if password.chars().any(|c| c.is_numeric()) { score += 1; }
+        if password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c)) { score += 1; }
+        
+        if score < 3 {
+            return Err(AppError::Auth("Password must contain at least 3 of: uppercase, lowercase, numbers, special characters".to_string()));
+        }
+        
+        // Check for common patterns
+        let common_patterns = ["password", "123456", "qwerty", "admin"];
+        for pattern in &common_patterns {
+            if password.to_lowercase().contains(pattern) {
+                return Err(AppError::Auth("Password contains common patterns and is not secure".to_string()));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Hash a password using bcrypt with enhanced cost
     pub fn hash_password(password: &str) -> Result<String, AppError> {
-        hash(password, DEFAULT_COST)
-            .map_err(|_| AppError::Auth("Failed to hash password".to_string()))
+        Self::validate_password_strength(password)?;
+        
+        // Use higher cost for better security (12 instead of default 4)
+        let cost = std::env::var("BCRYPT_COST")
+            .ok()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(12)
+            .max(10)  // Minimum cost 10
+            .min(15); // Maximum cost 15 (avoid DoS)
+            
+        hash(password, cost)
+            .map_err(|e| {
+                tracing::error!("Password hashing failed: {}", e);
+                AppError::Auth("Failed to hash password".to_string())
+            })
     }
 
-    /// Verify a password against a hash
+    /// Verify a password against a hash with timing attack protection
     pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
-        verify(password, hash).map_err(|_| AppError::Auth("Failed to verify password".to_string()))
+        // Use constant-time verification to prevent timing attacks
+        verify(password, hash)
+            .map_err(|e| {
+                tracing::warn!("Password verification failed: {}", e);
+                AppError::Auth("Authentication failed".to_string())
+            })
     }
 
     // No stub implementations when auth is not enabled because `auth` is now default

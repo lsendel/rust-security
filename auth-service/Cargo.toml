@@ -3,6 +3,10 @@ name = "auth-service"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Enterprise-grade authentication service with zero-trust architecture"
+authors = ["Security Team"]
+keywords = ["authentication", "oauth2", "security", "zero-trust"]
+categories = ["web-programming::http-server", "authentication"]
 
 [lints]
 workspace = true
@@ -62,13 +66,13 @@ tera = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 walkdir = { workspace = true, optional = true }
 # Updated to fix protobuf vulnerability RUSTSEC-2024-0437
-prometheus = { workspace = true }
+prometheus = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 url = { workspace = true }
 reqwest = { workspace = true }
 regex = { workspace = true }
 # High-performance rate limiting
-dashmap = { workspace = true }
+dashmap = { workspace = true, optional = true }
 num_cpus = { workspace = true }
 # OpenTelemetry for distributed tracing
 opentelemetry = { workspace = true, optional = true }
@@ -93,7 +97,7 @@ rayon = { workspace = true }
 deadpool-redis = { workspace = true, optional = true }
 # Optimized serialization
 # Metrics and profiling
-pprof = { workspace = true, optional = true }
+# pprof2 = { workspace = true, optional = true }  # Removed due to RUSTSEC-2024-0408 memory safety vulnerability
 
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
@@ -177,17 +181,26 @@ wiremock = { workspace = true }
 [features]
 ml-basic = ["threat-hunting", "smartcore", "ndarray"]
 ml-enhanced = ["ml-basic", "advanced-analytics", "nalgebra", "petgraph"]  # Added missing feature
-default = ["fast-build", "api-keys", "enhanced-session-store", "crypto", "tracing", "threat-hunting"]  # Development-optimized defaults, ML features disabled for security
+default = ["security-essential", "api-keys", "enhanced-session-store", "crypto"]  # Production-optimized security defaults
+# Core security features
+security-essential = ["crypto", "rate-limiting", "audit-logging"]
+security-enhanced = ["security-essential", "post-quantum", "zero-trust"]
+rate-limiting = ["dep:dashmap"]
+audit-logging = ["tracing"]
+zero-trust = ["enhanced-session-store", "threat-hunting"]
+
+# Development features
 fast-build = []  # Minimal feature set for fast development builds
+development = ["docs", "fast-build"]
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
 tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
-benchmarks = ["pprof"]
+# benchmarks = ["criterion"]  # pprof2 removed due to security vulnerability
 simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]
 crypto = ["ed25519-dalek"]
-profiling = ["pprof"]
+# profiling = []  # pprof2 removed due to security vulnerability
 # Secrets management feature flags
 secrets-vault-aws = ["aws", "vault"]
 # Post-quantum cryptography feature flags
@@ -197,14 +210,33 @@ hybrid-crypto = ["post-quantum", "p256", "p384", "ed25519-dalek", "x25519-dalek"
 threat-hunting = ["smartcore", "petgraph", "ndarray", "nalgebra", "geo", "statrs", "indexmap", "flume", "crossbeam"]
 advanced-analytics = ["threat-hunting", "dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]
 optimizations = []
+# Production feature sets
+production = ["security-enhanced", "monitoring", "secrets-vault-aws"]
+monitoring = ["tracing", "dep:prometheus"]
+
+# Service features
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]
 api-keys = ["dep:sqlx"]
 enhanced-session-store = ["dep:redis", "dep:deadpool-redis"]
 
-[[bench]]
-name = "performance_suite"
-harness = false
-required-features = ["benchmarks"]
+# Complete feature sets
+enterprise = ["production", "threat-hunting", "soar", "hybrid-crypto"]
+all-features = ["enterprise", "development", "advanced-analytics"]
+
+# Build profiles for security optimization
+[profile.security]
+inherits = "release"
+debug = false
+strip = true
+panic = "abort"
+overflow-checks = true
+lto = true
+codegen-units = 1
+
+# [[bench]]
+# name = "performance_suite"
+# harness = false
+# required-features = ["benchmarks"]  # Disabled due to pprof2 removal
 
 [lib]
 name = "auth_service"

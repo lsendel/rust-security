@@ -58,9 +58,20 @@ async fn main() -> Result<()> {
     let token_url = format!("{}/token", auth_service_url);
     println!("\\n🎫 Requesting access token...");
 
+    // Get credentials from environment for security (never hardcode in production)
+    let client_id = std::env::var("CLIENT_ID").unwrap_or_else(|_| {
+        println!("⚠️  Using demo credentials - set CLIENT_ID environment variable for production");
+        "demo-client".to_string()
+    });
+    
+    let client_secret = std::env::var("CLIENT_SECRET").unwrap_or_else(|_| {
+        println!("⚠️  Using demo credentials - set CLIENT_SECRET environment variable for production");
+        "demo-secret".to_string()
+    });
+
     let auth_request = AuthRequest {
-        client_id: "demo-client".to_string(),
-        client_secret: "demo-secret".to_string(),
+        client_id,
+        client_secret,
         grant_type: "client_credentials".to_string(),
     };
 

@@ -2,17 +2,22 @@
 name = "axum-integration-example"
 version = "0.1.0"
 edition = "2021"
-description = "Example integration with Axum web framework"
+description = "Production-ready Axum web framework integration example with comprehensive security features"
+authors = ["Security Team"]
+license = "MIT OR Apache-2.0"
+keywords = ["axum", "web", "security", "rest-api"]
+categories = ["web-programming::http-server", "development-tools::testing"]
 
 [lints]
 workspace = true
 
 [dependencies]
-# Web framework
+# Web framework with security features
 axum = { workspace = true }
+axum-server = { workspace = true, optional = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-http = { workspace = true }
+tower-http = { workspace = true, features = ["cors", "trace", "limit", "timeout"], optional = true }
 
 # Serialization
 serde = { workspace = true }
@@ -23,20 +28,31 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 # Database dependencies
-sqlx = { workspace = true, optional = true, default-features = false }
+sqlx = { workspace = true, optional = true }
 
-# Authentication dependencies
+# Authentication and security dependencies
 jsonwebtoken = { workspace = true, optional = true }
 bcrypt = { workspace = true, optional = true }
+argon2 = { workspace = true, optional = true }
+validator = { workspace = true, optional = true }
+governor = { version = "0.6", optional = true }
+tower_governor = { version = "0.3", optional = true }
+headers = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 
 # Documentation dependencies
 utoipa = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 
-# Monitoring dependencies
+# Monitoring and observability dependencies
 prometheus = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }
 metrics-prometheus = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+# Database connection pooling
+deadpool = { version = "0.10", optional = true }
+redis = { workspace = true, optional = true }
 
 # Additional dependencies for enhanced features
 chrono = { workspace = true }
@@ -49,16 +65,74 @@ anyhow = { workspace = true }
 common = { path = "../../common" }
 
 [features]
-default = ["auth"]
-postgres = ["dep:sqlx", "sqlx/postgres"]
-sqlite = ["dep:sqlx", "sqlx/sqlite"]
-auth = ["dep:jsonwebtoken", "dep:bcrypt"]
+# Production-ready defaults with security
+default = ["auth", "security", "validation"]
+
+# Core security features
+security = ["dep:tower-http", "rate-limiting", "dep:headers", "security-headers"]
+validation = ["dep:validator"]
+rate-limiting = ["dep:governor", "dep:tower_governor"]
+security-headers = ["dep:headers"]
+
+# Authentication features
+auth = ["auth-basic", "auth-advanced"]
+auth-basic = ["dep:jsonwebtoken", "dep:bcrypt"]
+auth-advanced = ["auth-basic", "dep:argon2"]
+
+# Database features with security
+database = ["postgres"]
+postgres = ["dep:sqlx"]
+sqlite = ["dep:sqlx"]
+
+# Production features
+production = ["tls", "monitoring", "compression", "connection-pooling", "health"]
+tls = ["dep:rustls", "dep:axum-server"]
+compression = ["tower-http/compression-gzip", "tower-http/compression-deflate"]
+connection-pooling = ["dep:deadpool"]
+health = []
+
+# Monitoring and observability
+monitoring = ["metrics", "telemetry"]
+metrics = ["dep:prometheus", "dep:metrics", "dep:metrics-prometheus"]
+telemetry = ["dep:opentelemetry", "dep:tracing-opentelemetry"]
+
+# Documentation features
 docs = ["dep:utoipa", "dep:utoipa-swagger-ui"]
-monitoring = ["dep:prometheus", "dep:metrics", "dep:metrics-prometheus"]
-full = ["postgres", "sqlite", "auth", "docs", "monitoring"]
+
+# Integration features
+integrations = ["redis-cache"]
+redis-cache = ["dep:redis"]
+
+# Development features
+development = ["docs", "dev-tools"]
+dev-tools = []
+
+# Complete feature sets
+web-security = ["security", "auth-advanced", "rate-limiting", "validation"]
+full = ["production", "database", "integrations", "docs", "web-security"]
+
+# Security-focused build profiles
+[profile.security]
+inherits = "release"
+debug = false
+strip = true
+panic = "abort"
+overflow-checks = true
+lto = true
+codegen-units = 1
+
+# Performance profile for benchmarking
+[profile.bench]
+inherits = "release"
+debug = true
+lto = false
 
 [dev-dependencies]
 http-body-util = { workspace = true }
 http = { workspace = true }
 tokio-test = { workspace = true }
 reqwest = { workspace = true }
+wiremock = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true }
+pretty_assertions = { workspace = true }

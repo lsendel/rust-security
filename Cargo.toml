@@ -9,7 +9,8 @@ members = [
     "policy-service",
     "common",
     "api-contracts",
-    "compliance-tools"
+    "compliance-tools",
+    "examples/axum-integration-example"
 ]
 
 exclude = [
@@ -82,15 +83,16 @@ reqwest = { version = "0.12", features = ["json"] }
 # Configuration
 config = "0.14"
 
-# Validation
-validator = { version = "0.19", features = ["derive"] }
+# Validation - Updated to fix idna vulnerability
+validator = { version = "0.20", features = ["derive"] }
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
 
 # Additional common dependencies
 async-trait = "0.1"
-base64 = "0.22"
+headers = "0.4"
+base64 = "0.21"
 bytes = "1.8"
 constant_time_eq = "0.3"
 dashmap = "6.1"
@@ -107,6 +109,7 @@ zeroize = "1.8"
 
 # Web/HTTP additional
 http = "1.1"
+http-body-util = "0.1"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 urlencoding = "2.1"
 url = "2.5"
@@ -128,12 +131,13 @@ x25519-dalek = "2.0"
 p256 = "0.13"
 p384 = "0.13"
 
-# Development/Testing
+# Development/Testing - Keep wiremock at 0.6 for now
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.5"
 quickcheck = "1.0"
 quickcheck_macros = "1.0"
 tempfile = "3.13"
+pretty_assertions = "1.4"
 tokio-test = "0.4"
 wiremock = "0.6"
 arbitrary = "1.4"
@@ -242,8 +246,8 @@ num_cpus = "1.16"
 # Probabilistic data structures
 probabilistic-collections = "0.7"
 
-# Profiling
-pprof = "0.13"
+# Profiling - Removed due to RUSTSEC-2024-0408 memory safety vulnerability
+# pprof2 = "0.14.0"  # Use alternative profiling tools like flamegraph or perf
 
 # TypeScript (placeholder, not a real crate - commenting out)
 # tsc = "0.1"
@@ -251,9 +255,12 @@ pprof = "0.13"
 # Additional network/TLS dependencies
 ipnetwork = "0.20"
 opentelemetry-otlp = "0.15"
-x509-parser = "0.16"
+x509-parser = "0.17"
 rustls = "0.23"
 webpki-roots = "0.26"
+
+# DNS resolution - security-focused replacement for trust-dns
+hickory-resolver = "0.24"
 
 [profile.dev]
 opt-level = 1
@@ -311,3 +318,11 @@ experimental = [
     "chaos-engineering",
     "zero-trust-networking"
 ]
+
+
+# Security metadata for supply chain verification
+[workspace.metadata.security]
+audit_policy = "strict"
+vulnerability_tolerance = "none"
+dependency_review_required = true
+security_contact = "security@company.com"
