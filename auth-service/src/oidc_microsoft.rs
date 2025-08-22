@@ -1,4 +1,4 @@
-use crate::{mint_local_tokens_for_subject, AppState};
+use crate::AppState;
 use axum::extract::State;
 use axum::{extract::Query, response::IntoResponse, Json};
 use once_cell::sync::Lazy;

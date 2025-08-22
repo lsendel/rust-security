@@ -7,8 +7,7 @@ use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, 
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use async_trait::async_trait;
 use lettre::{
-    transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message,
-    Tokio1Executor,
+    transport::smtp::authentication::Credentials, SmtpTransport, Transport, Message,
 };
 use reqwest::Client;
 use serde_json::Value;

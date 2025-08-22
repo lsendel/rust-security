@@ -10,7 +10,7 @@ use smartcore::ensemble::random_forest_classifier::RandomForestClassifier;
 use smartcore::linalg::basic::matrix::DenseMatrix;
 use smartcore::linalg::basic::arrays::Array2;
 use smartcore::model_selection::train_test_split;
-use smartcore::preprocessing::StandardScaler;
+use smartcore::preprocessing::numerical::StandardScaler;
 use smartcore::tree::decision_tree_classifier::SplitCriterion;
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet, VecDeque};

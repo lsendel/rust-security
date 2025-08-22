@@ -1,10 +1,7 @@
-use opentelemetry::{
-    global,
-    sdk::{
-        trace::{self, RandomIdGenerator, Sampler},
-        Resource,
-    },
-    KeyValue,
+use opentelemetry::{global, KeyValue};
+use opentelemetry_sdk::{
+    trace::{self, RandomIdGenerator, Sampler},
+    Resource,
 };
 use opentelemetry_jaeger::new_agent_pipeline;
 use rand::RngCore;

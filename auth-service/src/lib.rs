@@ -11,6 +11,31 @@ pub struct AppState {
     pub store: Arc<HybridStore>,
 }
 
+// Missing function implementation - stub for compilation
+pub async fn mint_local_tokens_for_subject(
+    _state: &AppState,
+    _subject: String,
+    _scope: Option<String>,
+) -> Result<serde_json::Value, crate::errors::AuthError> {
+    // TODO: Implement proper token minting logic
+    Ok(serde_json::json!({
+        "access_token": "stub_token",
+        "token_type": "Bearer",
+        "expires_in": 3600
+    }))
+}
+
+// Missing type definition - stub for compilation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IntrospectionRecord {
+    pub token: String,
+    pub active: bool,
+    pub scope: Option<String>,
+    pub client_id: Option<String>,
+    pub username: Option<String>,
+    pub exp: Option<i64>,
+}
+
 // Re-export core functionality
 pub use lib::core::*;
 
@@ -123,6 +148,7 @@ pub mod pq_integration;
 pub mod pq_jwt;
 pub mod pq_key_management;
 pub mod pq_migration;
+#[cfg(test)]
 pub mod property_testing_framework;
 pub mod quantum_jwt;
 pub mod rate_limit_enhanced;

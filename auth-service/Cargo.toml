@@ -85,6 +85,7 @@ fastrand = { workspace = true }
 opentelemetry-otlp = "0.16"
 x509-parser = "0.16"
 rustls = "0.23"
+rustls-pemfile = { workspace = true }
 webpki-roots = "0.26"
 rayon = { workspace = true }
 # High-performance async runtime

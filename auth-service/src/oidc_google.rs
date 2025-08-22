@@ -1,7 +1,7 @@
 use crate::pii_protection::redact_log;
 use crate::resilient_http::OidcHttpClient;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
-use crate::{mint_local_tokens_for_subject, AppState};
+use crate::AppState;
 use axum::extract::State;
 use axum::{extract::Query, response::IntoResponse, Json};
 use once_cell::sync::Lazy;

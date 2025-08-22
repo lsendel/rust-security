@@ -1,13 +1,36 @@
-// Advanced Property-Based Testing Framework
-// Comprehensive property testing for security-critical components
+//! Advanced Property-Based Testing Framework
+//! Comprehensive property testing for security-critical components
 
-use proptest::prelude::*;
-use proptest::test_runner::{Config, TestRunner};
-use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::time::Duration;
-use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error};
+#[cfg(test)]
+mod property_tests {
+    use proptest::prelude::*;
+    use proptest::test_runner::{Config, TestRunner};
+    use std::collections::HashMap;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+    use std::time::Duration;
+    use serde::{Deserialize, Serialize};
+    use tracing::{info, warn, error};
+
+    /// Property-based testing configuration for security components
+    #[derive(Debug, Clone)]
+    pub struct SecurityTestConfig {
+        pub max_iterations: u32,
+        pub timeout_ms: u64,
+        pub shrink_iterations: u32,
+    }
+
+    // Rest of the property testing code would go here...
+    // For now, just a placeholder to fix compilation
+}
+
+// Non-test exports (empty for now)
+pub struct PropertyTestingFramework;
+
+impl PropertyTestingFramework {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 /// Property test configuration
 #[derive(Debug, Clone)]

@@ -8,7 +8,7 @@ use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use smartcore::metrics::distance::Distance;
 use smartcore::neighbors::knn_classifier::KNNClassifier;
-use smartcore::preprocessing::StandardScaler;
+use smartcore::preprocessing::numerical::StandardScaler;
 use statrs::distribution::{ChiSquared, ContinuousCDF, Normal};
 use statrs::statistics::{OrderStatistics, Statistics};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
