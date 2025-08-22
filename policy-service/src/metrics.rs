@@ -3,21 +3,20 @@
 //! This module provides metrics collection for Cedar policy evaluation,
 //! authorization decisions, cache operations, and service health.
 
-use std::sync::Arc as _;
 use std::time::{Duration, Instant};
 
 use axum::{
     extract::{MatchedPath, Request},
-    http::{Method as _, StatusCode},
+    http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use once_cell::sync::Lazy;
 use prometheus::{
-    Encoder, Histogram as _, HistogramOpts, HistogramVec, IntCounter as _, IntCounterVec, IntGauge, Opts,
+    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts,
     Registry, TextEncoder,
 };
-use tracing::{debug, error, info as _, warn as _};
+use tracing::{debug, error};
 
 /// Core metrics registry for policy service observability
 #[allow(dead_code)]
@@ -568,6 +567,7 @@ impl PolicyMetricsHelper {
     }
 
     /// Record a policy evaluation error
+    #[allow(dead_code)]
     pub fn record_policy_evaluation_error(error_type: &str, error_cause: &str, policy_id: &str) {
         POLICY_METRICS
             .policy_evaluation_errors_total
@@ -584,6 +584,7 @@ impl PolicyMetricsHelper {
     }
 
     /// Record an authorization anomaly
+    #[allow(dead_code)]
     pub fn record_authorization_anomaly(
         anomaly_type: &str,
         confidence: &str,
@@ -597,6 +598,7 @@ impl PolicyMetricsHelper {
     }
 
     /// Record SLO violation
+    #[allow(dead_code)]
     pub fn record_slo_violation(slo_type: &str, severity: &str, component: &str) {
         POLICY_METRICS
             .slo_violations_total
@@ -605,6 +607,7 @@ impl PolicyMetricsHelper {
     }
 
     /// Update error budget consumption
+    #[allow(dead_code)]
     pub fn update_error_budget_consumption(
         slo_type: &str,
         time_window: &str,

@@ -4,7 +4,6 @@ use std::time::Instant;
 // Explicitly acknowledge unused dependencies that are part of future functionality
 use cedar_policy_core as _;
 use dotenvy as _;
-use reqwest as _;
 use tokio as _;
 use tracing_subscriber as _;
 
@@ -216,8 +215,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         }
         _ => {
             // Default to no origins unless explicitly configured
-            let layer = CorsLayer::new();
-            layer
+            CorsLayer::new()
         }
     };
 
