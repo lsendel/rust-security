@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+#![deny(rust_2018_idioms, future_incompatible)]
 //! Common types and utilities for the rust-security workspace
 //!
 //! This crate provides shared types, error handling, and utility functions

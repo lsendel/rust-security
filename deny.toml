@@ -1,5 +1,5 @@
-# Modern cargo-deny configuration
-# Updated to latest format for dependency security
+# Modern cargo-deny configuration with strict security policies
+# Updated to remove all ignored vulnerabilities and enforce security
 
 [graph]
 targets = [
@@ -32,25 +32,32 @@ confidence-threshold = 0.8
 # Banned packages with security issues
 deny = [
     { name = "time", version = "=0.1.0" }, # Unsound API
+    { name = "rsa", version = "*" },       # Marvin attack vulnerability
+    { name = "openssl", version = "*" },   # Prefer ring/rustls for better security
+    { name = "native-tls", version = "*" }, # Prefer rustls
+    { name = "chrono", version = "<0.4.20" }, # Old versions have vulnerabilities
 ]
 
-# Allow multiple versions for compatibility
+# Allow multiple versions for compatibility during migration
 skip = [
     { name = "thiserror", version = "*" },
     { name = "thiserror-impl", version = "*" },
     { name = "tower", version = "*" },
+    { name = "syn", version = "*" }, # Common in proc macros
+    { name = "quote", version = "*" }, # Common in proc macros
 ]
 
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 yanked = "deny"
-# Ignore RSA vulnerability - comes from sqlx-mysql which we don't use in production
-# Only postgres and sqlite are used
-ignore = [
-    "RUSTSEC-2024-0436",   # paste unmaintained - used only in optional ML features
-    "RUSTSEC-2023-0071"    # RSA Marvin attack - comes from sqlx-mysql which we don't use (only postgres/sqlite)
-]
+
+# REMOVED ALL IGNORED VULNERABILITIES - FIX THEM INSTEAD
+# All security vulnerabilities must be addressed, not ignored
+ignore = []
+
+# Severity threshold - deny all vulnerabilities
+severity-threshold = "low"
 
 [sources]
 unknown-registry = "deny"
@@ -67,4 +74,5 @@ github = [
     "serde-rs",
     "hyperium",
     "RustCrypto",
+    "rustls",
 ]

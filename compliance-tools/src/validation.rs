@@ -25,7 +25,10 @@ impl Validator {
         if std::path::Path::new(path).exists() {
             Ok(())
         } else {
-            Err(ComplianceError::Validation(format!("File path does not exist: {}", path)))
+            Err(ComplianceError::Validation(format!(
+                "File path does not exist: {}",
+                path
+            )))
         }
     }
 
@@ -47,7 +50,10 @@ impl Validator {
         if value > 0 {
             Ok(())
         } else {
-            Err(ComplianceError::Validation(format!("Value must be positive: {}", value)))
+            Err(ComplianceError::Validation(format!(
+                "Value must be positive: {}",
+                value
+            )))
         }
     }
 

@@ -43,7 +43,10 @@ async fn test_compliance_control_creation() {
 
     assert_eq!(control.control_id, "CC-001");
     assert_eq!(control.framework, ComplianceFramework::Soc2);
-    assert_eq!(control.implementation_status, ImplementationStatus::Implemented);
+    assert_eq!(
+        control.implementation_status,
+        ImplementationStatus::Implemented
+    );
     assert_eq!(control.effectiveness, EffectivenessLevel::Effective);
     assert_eq!(control.risk_level, RiskLevel::Low);
 }
@@ -136,8 +139,12 @@ async fn test_compliance_config_creation() {
 #[tokio::test]
 async fn test_metric_status_hierarchy() {
     // Test that metric statuses can be properly ordered
-    let statuses =
-        vec![MetricStatus::Pass, MetricStatus::Warning, MetricStatus::Fail, MetricStatus::Unknown];
+    let statuses = vec![
+        MetricStatus::Pass,
+        MetricStatus::Warning,
+        MetricStatus::Fail,
+        MetricStatus::Unknown,
+    ];
 
     for status in statuses {
         // Test serialization

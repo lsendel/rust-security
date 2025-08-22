@@ -75,8 +75,8 @@ opentelemetry = { workspace = true, optional = true }
 opentelemetry-jaeger = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
-# SIMD and hardware acceleration
-packed_simd_2 = { workspace = true, optional = true }
+# SIMD and hardware acceleration (removed due to compatibility issues)
+# packed_simd_2 = { workspace = true, optional = true }
 ring = { workspace = true }
 # High-performance async runtime
 # Connection pooling optimization
@@ -88,9 +88,6 @@ pprof = { workspace = true, optional = true }
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
 smartcore = { workspace = true, optional = true }
-candle-core = { workspace = true, optional = true }
-candle-nn = { workspace = true, optional = true }
-candle-transformers = { workspace = true, optional = true }
 ndarray = { workspace = true, optional = true }
 nalgebra = { workspace = true, optional = true }
 # Graph analysis for attack pattern detection
@@ -168,6 +165,7 @@ wiremock = { workspace = true }
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
+ml-basic = ["threat-hunting", "smartcore", "ndarray"]
 default = ["fast-build", "api-keys", "enhanced-session-store", "crypto"]  # Development-optimized defaults, ML features disabled for security
 fast-build = []  # Minimal feature set for fast development builds
 docs = ["utoipa-swagger-ui"]
@@ -175,7 +173,7 @@ vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
 tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
 benchmarks = ["pprof"]
-simd = ["dep:packed_simd_2"]
+simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]
 crypto = ["ed25519-dalek"]
 profiling = ["pprof"]
@@ -186,8 +184,7 @@ post-quantum = ["pqcrypto-mlkem", "pqcrypto-mldsa", "x509-cert", "pkcs8", "der"]
 hybrid-crypto = ["post-quantum", "p256", "p384", "ed25519-dalek", "x25519-dalek"]
 # Threat hunting feature flags
 threat-hunting = ["smartcore", "petgraph", "ndarray", "nalgebra", "geo", "statrs", "indexmap", "flume", "crossbeam"]
-ml-enhanced = ["threat-hunting", "candle-core", "candle-nn", "candle-transformers"]
-advanced-analytics = ["threat-hunting", "ml-enhanced", "dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]
+advanced-analytics = ["threat-hunting", "dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]
 optimizations = []
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]
 api-keys = ["dep:sqlx"]

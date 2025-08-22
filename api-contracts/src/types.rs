@@ -1,11 +1,11 @@
 //! Common types and data structures for API contracts
 
+use chrono::{DateTime, Utc};
+use regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use validator::{Validate, ValidationError};
-use regex;
 
 /// Standard API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,7 +27,7 @@ impl<T> ApiResponse<T> {
             error: None,
         }
     }
-    
+
     /// Create success response with metadata
     pub fn success_with_meta(data: T, meta: ResponseMetadata) -> Self {
         Self {
@@ -36,7 +36,7 @@ impl<T> ApiResponse<T> {
             error: None,
         }
     }
-    
+
     /// Create error response
     pub fn error(error: ApiErrorDetail) -> Self {
         Self {
@@ -75,17 +75,17 @@ impl ResponseMetadata {
             rate_limit: None,
         }
     }
-    
+
     pub fn with_request_id(mut self, request_id: Uuid) -> Self {
         self.request_id = request_id;
         self
     }
-    
+
     pub fn with_processing_time(mut self, duration_ms: u64) -> Self {
         self.processing_time_ms = Some(duration_ms);
         self
     }
-    
+
     pub fn with_api_version(mut self, version: String) -> Self {
         self.api_version = Some(version);
         self
@@ -112,7 +112,7 @@ pub struct PaginationMetadata {
 impl PaginationMetadata {
     pub fn new(page: u32, per_page: u32, total_items: u64) -> Self {
         let total_pages = ((total_items as f64) / (per_page as f64)).ceil() as u32;
-        
+
         Self {
             page,
             per_page,
@@ -162,17 +162,17 @@ impl ApiErrorDetail {
             help_url: None,
         }
     }
-    
+
     pub fn with_details(mut self, details: serde_json::Value) -> Self {
         self.details = Some(details);
         self
     }
-    
+
     pub fn with_field_errors(mut self, field_errors: HashMap<String, Vec<String>>) -> Self {
         self.field_errors = Some(field_errors);
         self
     }
-    
+
     pub fn with_help_url(mut self, help_url: String) -> Self {
         self.help_url = Some(help_url);
         self
@@ -185,15 +185,15 @@ pub struct PaginationRequest {
     /// Page number (1-based)
     #[validate(range(min = 1, max = 10000))]
     pub page: Option<u32>,
-    
+
     /// Items per page
     #[validate(range(min = 1, max = 1000))]
     pub per_page: Option<u32>,
-    
+
     /// Sort field
     #[validate(length(min = 1, max = 100))]
     pub sort_by: Option<String>,
-    
+
     /// Sort direction
     pub sort_order: Option<SortOrder>,
 }
@@ -213,11 +213,11 @@ impl PaginationRequest {
     pub fn page(&self) -> u32 {
         self.page.unwrap_or(1)
     }
-    
+
     pub fn per_page(&self) -> u32 {
         self.per_page.unwrap_or(20)
     }
-    
+
     pub fn offset(&self) -> u32 {
         (self.page() - 1) * self.per_page()
     }
@@ -271,7 +271,7 @@ pub struct ApiFilter {
     /// Field to filter on
     #[validate(length(min = 1, max = 100))]
     pub field: String,
-    
+
     /// Filter operation
     pub operation: FilterOperation,
 }
@@ -282,11 +282,11 @@ pub struct SearchRequest {
     /// Search query
     #[validate(length(max = 1000))]
     pub query: Option<String>,
-    
+
     /// Filters to apply
     #[validate(length(max = 10))]
     pub filters: Vec<ApiFilter>,
-    
+
     /// Pagination parameters
     #[validate(nested)]
     pub pagination: PaginationRequest,
@@ -297,7 +297,7 @@ pub struct SearchRequest {
 pub struct HealthCheckRequest {
     /// Include dependency checks
     pub include_dependencies: Option<bool>,
-    
+
     /// Include detailed metrics
     pub include_metrics: Option<bool>,
 }
@@ -308,10 +308,10 @@ pub struct BatchRequest<T: Serialize> {
     /// Items to process
     #[validate(length(min = 1, max = 100))]
     pub items: Vec<T>,
-    
+
     /// Whether to fail entire batch on first error
     pub fail_fast: Option<bool>,
-    
+
     /// Batch operation timeout in seconds
     #[validate(range(min = 1, max = 300))]
     pub timeout_seconds: Option<u32>,
@@ -322,10 +322,10 @@ pub struct BatchRequest<T: Serialize> {
 pub struct BatchResponse<T, E> {
     /// Successful results
     pub success: Vec<BatchResult<T>>,
-    
+
     /// Failed results
     pub errors: Vec<BatchError<E>>,
-    
+
     /// Summary statistics
     pub summary: BatchSummary,
 }
@@ -335,7 +335,7 @@ pub struct BatchResponse<T, E> {
 pub struct BatchResult<T> {
     /// Index in original batch
     pub index: usize,
-    
+
     /// Result data
     pub data: T,
 }
@@ -345,7 +345,7 @@ pub struct BatchResult<T> {
 pub struct BatchError<E> {
     /// Index in original batch
     pub index: usize,
-    
+
     /// Error information
     pub error: E,
 }
@@ -355,13 +355,13 @@ pub struct BatchError<E> {
 pub struct BatchSummary {
     /// Total items processed
     pub total: usize,
-    
+
     /// Number of successful operations
     pub success_count: usize,
-    
+
     /// Number of failed operations
     pub error_count: usize,
-    
+
     /// Processing time in milliseconds
     pub processing_time_ms: u64,
 }
@@ -371,37 +371,37 @@ pub struct BatchSummary {
 pub struct AuditLogEntry {
     /// Unique entry ID
     pub id: Uuid,
-    
+
     /// Timestamp of the event
     pub timestamp: DateTime<Utc>,
-    
+
     /// User who performed the action
     pub user_id: Option<Uuid>,
-    
+
     /// Service that logged the event
     pub service: String,
-    
+
     /// Action performed
     pub action: String,
-    
+
     /// Resource affected
     pub resource: Option<String>,
-    
+
     /// Resource ID
     pub resource_id: Option<String>,
-    
+
     /// Event outcome
     pub outcome: AuditOutcome,
-    
+
     /// Additional event data
     pub metadata: HashMap<String, serde_json::Value>,
-    
+
     /// Client IP address
     pub client_ip: Option<String>,
-    
+
     /// User agent
     pub user_agent: Option<String>,
-    
+
     /// Request ID for correlation
     pub request_id: Uuid,
 }
@@ -419,7 +419,7 @@ pub enum AuditOutcome {
 pub fn validate_email(email: &str) -> Result<(), ValidationError> {
     let email_regex = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
         .map_err(|_| ValidationError::new("invalid_regex"))?;
-    
+
     if email_regex.is_match(email) {
         Ok(())
     } else {
@@ -430,7 +430,7 @@ pub fn validate_email(email: &str) -> Result<(), ValidationError> {
 pub fn validate_username(username: &str) -> Result<(), ValidationError> {
     let username_regex = regex::Regex::new(r"^[a-zA-Z0-9_-]{3,50}$")
         .map_err(|_| ValidationError::new("invalid_regex"))?;
-    
+
     if username_regex.is_match(username) {
         Ok(())
     } else {
@@ -471,10 +471,11 @@ mod tests {
         let response = ApiResponse::success("test data");
         assert!(response.data.is_some());
         assert!(response.error.is_none());
-        
-        let error_response = ApiResponse::<String>::error(
-            ApiErrorDetail::new("TEST_ERROR".to_string(), "Test error message".to_string())
-        );
+
+        let error_response = ApiResponse::<String>::error(ApiErrorDetail::new(
+            "TEST_ERROR".to_string(),
+            "Test error message".to_string(),
+        ));
         assert!(error_response.data.is_none());
         assert!(error_response.error.is_some());
     }
@@ -486,7 +487,7 @@ mod tests {
         assert_eq!(pagination.total_pages, 3);
         assert!(pagination.has_previous);
         assert!(pagination.has_next);
-        
+
         let last_page = PaginationMetadata::new(3, 10, 25);
         assert!(!last_page.has_next);
         assert!(last_page.has_previous);
@@ -498,7 +499,7 @@ mod tests {
         assert_eq!(request.page(), 1);
         assert_eq!(request.per_page(), 20);
         assert_eq!(request.offset(), 0);
-        
+
         let request2 = PaginationRequest {
             page: Some(3),
             per_page: Some(15),
@@ -528,7 +529,7 @@ mod tests {
             fail_fast: Some(true),
             timeout_seconds: Some(60),
         };
-        
+
         assert_eq!(batch.items.len(), 2);
         assert_eq!(batch.fail_fast, Some(true));
     }

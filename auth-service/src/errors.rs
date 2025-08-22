@@ -146,8 +146,167 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
     }
 }
 
-/// Structured error response for API clients
-#[derive(Debug, Serialize, Deserialize)]
+impl IntoResponse for AuthError {
+    fn into_response(self) -> Response {
+        let (status, error_code, user_message, log_details) = match &self {
+            AuthError::InvalidClientCredentials => (
+                StatusCode::UNAUTHORIZED,
+                "invalid_client",
+                "Authentication failed",
+                false,
+            ),
+            AuthError::InvalidToken { .. } => (
+                StatusCode::UNAUTHORIZED,
+                "invalid_token",
+                "Token validation failed",
+                false,
+            ),
+            AuthError::RateLimitExceeded => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limit_exceeded",
+                "Too many requests",
+                false,
+            ),
+            AuthError::IpRateLimitExceeded { ip } => {
+                // Log security event but don't expose IP to client
+                tracing::warn!(
+                    ip = %ip,
+                    "Rate limit exceeded for IP"
+                );
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "rate_limit_exceeded",
+                    "Too many requests",
+                    false,
+                )
+            },
+            AuthError::ValidationError { field, .. } => (
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "Request validation failed",
+                false,
+            ),
+            AuthError::SessionExpired => (
+                StatusCode::UNAUTHORIZED,
+                "session_expired",
+                "Session has expired",
+                false,
+            ),
+            AuthError::MfaChallengeRequired { .. } => (
+                StatusCode::UNAUTHORIZED,
+                "mfa_required",
+                "Multi-factor authentication required",
+                false,
+            ),
+            // Internal errors - don't leak details to client
+            AuthError::InternalError { error_id, context } => {
+                // Log full details internally with error ID for tracking
+                tracing::error!(
+                    error_id = %error_id,
+                    context = %context,
+                    error = %self,
+                    "Internal server error occurred"
+                );
+                
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    "An internal error occurred",
+                    true,
+                )
+            },
+            AuthError::TokenStoreError { operation, .. } => {
+                let error_id = uuid::Uuid::new_v4();
+                tracing::error!(
+                    error_id = %error_id,
+                    operation = %operation,
+                    error = %self,
+                    "Token store operation failed"
+                );
+                
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    "An internal error occurred",
+                    true,
+                )
+            },
+            AuthError::RedisConnectionError { .. } => {
+                let error_id = uuid::Uuid::new_v4();
+                tracing::error!(
+                    error_id = %error_id,
+                    error = %self,
+                    "Redis connection failed"
+                );
+                
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "service_unavailable",
+                    "Service temporarily unavailable",
+                    true,
+                )
+            },
+            AuthError::ConfigurationError { field, .. } => {
+                let error_id = uuid::Uuid::new_v4();
+                tracing::error!(
+                    error_id = %error_id,
+                    field = %field,
+                    error = %self,
+                    "Configuration error"
+                );
+                
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    "An internal error occurred",
+                    true,
+                )
+            },
+            // Default case for any other errors
+            _ => {
+                let error_id = uuid::Uuid::new_v4();
+                tracing::error!(
+                    error_id = %error_id,
+                    error = %self,
+                    "Unhandled error occurred"
+                );
+                
+                (
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    "Request could not be processed",
+                    true,
+                )
+            },
+        };
+
+        // Create sanitized error response
+        let mut error_response = ErrorResponse {
+            error: error_code.to_string(),
+            error_description: user_message.to_string(),
+            error_id: None,
+        };
+
+        // Only include error_id for internal errors to help with debugging
+        if log_details {
+            if let AuthError::InternalError { error_id, .. } = &self {
+                error_response.error_id = Some(*error_id);
+            }
+        }
+
+        // Add security headers
+        let mut response = (status, Json(error_response)).into_response();
+        
+        // Add security headers to error responses
+        let headers = response.headers_mut();
+        headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+        headers.insert("X-Frame-Options", "DENY".parse().unwrap());
+        headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
+        headers.insert("Referrer-Policy", "strict-origin-when-cross-origin".parse().unwrap());
+        
+        response
+    }
+}
 pub struct ErrorResponse {
     pub error: String,
     pub error_description: String,

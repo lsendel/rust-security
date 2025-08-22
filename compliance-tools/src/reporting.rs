@@ -2,11 +2,10 @@
 
 use crate::{
     ClassificationLevel, ComplianceControl, ComplianceError, ComplianceFramework, ComplianceResult,
-    OrganizationInfo, ReportFormat, SecurityIncident, SecurityMetric,
+    OrganizationInfo, SecurityIncident, SecurityMetric,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use std::collections::HashMap;
 use std::path::Path;
 use tera::{Context, Tera};
 use tokio::fs;
@@ -34,7 +33,9 @@ impl ReportRenderer {
         )
         .expect("Failed to add Markdown template");
 
-        Self { template_engine: tera }
+        Self {
+            template_engine: tera,
+        }
     }
 
     /// Render HTML report
@@ -45,7 +46,10 @@ impl ReportRenderer {
     ) -> ComplianceResult<()> {
         let mut context = Context::new();
         context.insert("report", data);
-        context.insert("generated_at", &Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string());
+        context.insert(
+            "generated_at",
+            &Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+        );
 
         let html = self
             .template_engine
@@ -115,7 +119,10 @@ impl ReportRenderer {
     ) -> ComplianceResult<()> {
         let mut context = Context::new();
         context.insert("report", data);
-        context.insert("generated_at", &Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string());
+        context.insert(
+            "generated_at",
+            &Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+        );
 
         let markdown = self
             .template_engine

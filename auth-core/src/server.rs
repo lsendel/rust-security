@@ -1,6 +1,7 @@
 //! Minimal OAuth 2.0 server implementation
 
 use axum::{
+    http::{HeaderMap, StatusCode},
     routing::{get, post},
     Router,
 };
@@ -14,6 +15,8 @@ use crate::{
     handler::{health, token},
     store::MemoryStore,
 };
+#[cfg(feature = "introspection")]
+use crate::handler::introspect;
 
 /// Main OAuth 2.0 server configuration
 #[derive(Debug, Clone)]
@@ -26,6 +29,8 @@ pub struct ServerConfig {
     pub cors_enabled: bool,
     /// Custom JWT signing key (optional, generates random if None)
     pub jwt_secret: Option<String>,
+    /// Simple list of protected GET routes to expose for tests
+    pub protected_routes: Vec<String>,
 }
 
 impl Default for ServerConfig {
@@ -35,6 +40,7 @@ impl Default for ServerConfig {
             rate_limit: 100,
             cors_enabled: true,
             jwt_secret: None,
+            protected_routes: Vec::new(),
         }
     }
 }
@@ -65,14 +71,19 @@ impl AuthServer {
         Ok(self)
     }
 
-    /// Expect method for compatibility with tests  
+    /// Expect method for compatibility with tests
     pub fn expect(self, _msg: &str) -> Self {
         self
     }
 
-    /// Convert to make service for compatibility with tests
-    pub fn into_make_service(self) -> Self {
-        self
+    /// Return the Router to be used with axum::serve in tests
+    pub fn into_make_service(self) -> Router<AppState> {
+        self.create_router()
+    }
+
+    /// Return a Router directly (ergonomic name for tests and axum::serve)
+    pub fn into_router(self) -> Router<AppState> {
+        self.create_router()
     }
 
     /// Start the server on the specified address
@@ -111,7 +122,20 @@ impl AuthServer {
 
         #[cfg(feature = "client-credentials")]
         {
-            router = router.route("/oauth/token", post(token::client_credentials));
+            router = router
+                .route("/oauth/token", post(token::client_credentials))
+                .route("/oauth/token", get(method_not_allowed));
+        }
+
+        // Token introspection endpoint
+        #[cfg(feature = "introspection")]
+        {
+            router = router.route("/oauth/introspect", post(introspect::token_introspect));
+        }
+
+        // Add simple protected GET routes for tests
+        for path in &state.config.protected_routes {
+            router = router.route(path.as_str(), get(protected_resource));
         }
 
         router = router.with_state(state);
@@ -182,6 +206,12 @@ impl AuthServerBuilder {
         self
     }
 
+    /// Add a protected GET route for tests
+    pub fn add_protected_route(mut self, path: &str) -> Self {
+        self.config.protected_routes.push(path.to_string());
+        self
+    }
+
     /// Build the server
     pub fn build(self) -> AuthServer {
         AuthServer::with_config(self.config)
@@ -191,6 +221,25 @@ impl AuthServerBuilder {
     pub async fn serve(self, addr: &str) -> Result<()> {
         self.build().serve(addr).await
     }
+}
+
+/// Very simple protected resource handler used in tests
+async fn protected_resource(headers: HeaderMap) -> StatusCode {
+    match headers.get("Authorization") {
+        Some(value) => {
+            let v = value.to_str().unwrap_or("");
+            if v.starts_with("Bearer ") {
+                StatusCode::OK
+            } else {
+                StatusCode::UNAUTHORIZED
+            }
+        }
+        None => StatusCode::UNAUTHORIZED,
+    }
+}
+
+async fn method_not_allowed() -> StatusCode {
+    StatusCode::METHOD_NOT_ALLOWED
 }
 
 /// Application state passed to handlers

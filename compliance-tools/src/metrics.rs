@@ -42,7 +42,10 @@ impl MetricsCollector {
             None
         };
 
-        Ok(Self { config: config.clone(), prometheus_client })
+        Ok(Self {
+            config: config.clone(),
+            prometheus_client,
+        })
     }
 
     /// Collect all available security metrics
@@ -92,7 +95,7 @@ impl MetricsCollector {
     async fn collect_audit_metrics(&self) -> ComplianceResult<Vec<SecurityMetric>> {
         let mut metrics = Vec::new();
         let now = Utc::now();
-        let one_hour_ago = now - Duration::hours(1);
+        let _one_hour_ago = now - Duration::hours(1);
         let one_day_ago = now - Duration::days(1);
 
         for log_path in &self.config.data_sources.audit_log_paths {
@@ -131,7 +134,11 @@ impl MetricsCollector {
                 name: "audit_success_rate".to_string(),
                 value: success_rate,
                 threshold: 95.0,
-                status: if success_rate >= 95.0 { MetricStatus::Pass } else { MetricStatus::Fail },
+                status: if success_rate >= 95.0 {
+                    MetricStatus::Pass
+                } else {
+                    MetricStatus::Fail
+                },
                 description: "Audit event success rate percentage".to_string(),
                 timestamp: now,
                 tags: HashMap::new(),
@@ -191,7 +198,7 @@ impl MetricsCollector {
         }
 
         let now = Utc::now();
-        let mut metrics = vec![
+        let metrics = vec![
             SecurityMetric {
                 name: "audit_total_events".to_string(),
                 value: total_events as f64,
@@ -214,7 +221,11 @@ impl MetricsCollector {
                 name: "audit_failed_events".to_string(),
                 value: failed_events as f64,
                 threshold: 100.0, // Fail if more than 100 failures
-                status: if failed_events <= 100 { MetricStatus::Pass } else { MetricStatus::Fail },
+                status: if failed_events <= 100 {
+                    MetricStatus::Pass
+                } else {
+                    MetricStatus::Fail
+                },
                 description: format!("Failed audit events in {}", log_path),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
@@ -262,7 +273,7 @@ impl MetricsCollector {
     /// Collect system-level security metrics
     async fn collect_system_metrics(&self) -> ComplianceResult<Vec<SecurityMetric>> {
         let mut metrics = Vec::new();
-        let now = Utc::now();
+        let _now = Utc::now();
 
         // Certificate expiration check
         if let Ok(cert_metrics) = self.check_certificate_expiration().await {
@@ -289,7 +300,10 @@ impl MetricsCollector {
 
         // This is a simplified implementation
         // In practice, you would check actual certificates
-        let cert_paths = vec!["/etc/ssl/certs/auth-service.crt", "/etc/ssl/certs/api-gateway.crt"];
+        let cert_paths = vec![
+            "/etc/ssl/certs/auth-service.crt",
+            "/etc/ssl/certs/api-gateway.crt",
+        ];
 
         for cert_path in cert_paths {
             let days_until_expiry = if Path::new(cert_path).exists() {
@@ -336,7 +350,11 @@ impl MetricsCollector {
             ("session_timeout", "Session timeout configured", true),
             ("audit_logging", "Audit logging enabled", true),
             ("encryption_at_rest", "Encryption at rest enabled", true),
-            ("encryption_in_transit", "Encryption in transit enabled", true),
+            (
+                "encryption_in_transit",
+                "Encryption in transit enabled",
+                true,
+            ),
         ];
 
         for (policy_name, description, enabled) in policies {
@@ -344,7 +362,11 @@ impl MetricsCollector {
                 name: format!("security_policy_{}", policy_name),
                 value: if enabled { 1.0 } else { 0.0 },
                 threshold: 1.0,
-                status: if enabled { MetricStatus::Pass } else { MetricStatus::Fail },
+                status: if enabled {
+                    MetricStatus::Pass
+                } else {
+                    MetricStatus::Fail
+                },
                 description: description.to_string(),
                 timestamp: now,
                 tags: HashMap::from([("policy_type".to_string(), "security".to_string())]),
@@ -366,8 +388,9 @@ impl MetricsCollector {
             ("threat-hunting", "http://localhost:8082/health"),
         ];
 
-        let client =
-            reqwest::Client::builder().timeout(std::time::Duration::from_secs(5)).build()?;
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()?;
 
         for (service_name, health_url) in services {
             let is_healthy = match client.get(health_url).send().await {
@@ -379,7 +402,11 @@ impl MetricsCollector {
                 name: format!("service_health_{}", service_name),
                 value: if is_healthy { 1.0 } else { 0.0 },
                 threshold: 1.0,
-                status: if is_healthy { MetricStatus::Pass } else { MetricStatus::Fail },
+                status: if is_healthy {
+                    MetricStatus::Pass
+                } else {
+                    MetricStatus::Fail
+                },
                 description: format!("Health status of {}", service_name),
                 timestamp: now,
                 tags: HashMap::from([
@@ -470,10 +497,16 @@ mod tests {
         assert!(!metrics.is_empty());
 
         // Check that we have the expected metrics
-        let total_events = metrics.iter().find(|m| m.name == "audit_total_events").unwrap();
+        let total_events = metrics
+            .iter()
+            .find(|m| m.name == "audit_total_events")
+            .unwrap();
         assert_eq!(total_events.value, 2.0);
 
-        let failed_events = metrics.iter().find(|m| m.name == "audit_failed_events").unwrap();
+        let failed_events = metrics
+            .iter()
+            .find(|m| m.name == "audit_failed_events")
+            .unwrap();
         assert_eq!(failed_events.value, 1.0);
     }
 }

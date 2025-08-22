@@ -3,7 +3,7 @@
 use crate::{ComplianceError, ComplianceResult, MetricStatus, SecurityMetric};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, error, info};
@@ -21,7 +21,10 @@ impl PrometheusClient {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { base_url: base_url.trim_end_matches('/').to_string(), client }
+        Self {
+            base_url: base_url.trim_end_matches('/').to_string(),
+            client,
+        }
     }
 
     /// Execute a Prometheus query
@@ -30,7 +33,7 @@ impl PrometheusClient {
         query: &str,
         time: Option<DateTime<Utc>>,
     ) -> ComplianceResult<PrometheusResponse> {
-        let mut url = format!("{}/api/v1/query", self.base_url);
+        let url = format!("{}/api/v1/query", self.base_url);
         let mut params = vec![("query", query.to_string())];
 
         if let Some(time) = time {
@@ -212,7 +215,10 @@ impl PrometheusClient {
             }
         }
 
-        info!("Collected {} security metrics from Prometheus", metrics.len());
+        info!(
+            "Collected {} security metrics from Prometheus",
+            metrics.len()
+        );
         Ok(metrics)
     }
 

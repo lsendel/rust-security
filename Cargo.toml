@@ -42,7 +42,7 @@ thiserror = "1.0"
 
 # Cryptography
 jsonwebtoken = "9.0"
-rand = "0.8"
+rand = "0.8.5"
 sha2 = "0.10"
 sha1 = "0.10"
 aes = "0.8"
@@ -173,7 +173,7 @@ mimalloc = "0.1"
 tikv-jemalloc-ctl = "0.5"
 jemalloc-sys = "0.5"
 rayon = "1.0"
-packed_simd_2 = "0.3"
+# packed_simd_2 = "0.3"  # Removed due to Rust compatibility issues
 
 # Compression
 lz4_flex = "0.11"
@@ -239,9 +239,6 @@ fastrand = "2.0"
 getrandom = { version = "0.3", features = ["std"] }
 
 # WebAssembly/ML
-candle-core = "0.7"
-candle-nn = "0.7"
-candle-transformers = "0.7"
 
 [profile.dev]
 # Faster builds for development

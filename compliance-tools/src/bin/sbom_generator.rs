@@ -9,6 +9,30 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use uuid::Uuid;
 
+// Unused dependencies (required by workspace but not used in this binary)
+use calamine as _;
+use common as _;
+use compliance_tools as _;
+use config as _;
+use csv as _;
+use dotenvy as _;
+use fastrand as _;
+use handlebars as _;
+use moka as _;
+use prometheus as _;
+use pulldown_cmark as _;
+use regex as _;
+use reqwest as _;
+use serde_yaml as _;
+use tempfile as _;
+use tera as _;
+use thiserror as _;
+use tokio as _;
+use tracing as _;
+use tracing_subscriber as _;
+use url as _;
+use walkdir as _;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct CargoMetadata {
     packages: Vec<CargoPackage>,
@@ -29,7 +53,7 @@ struct CargoPackage {
 }
 
 #[derive(Debug, Serialize)]
-struct SpdxDocument {
+pub struct SpdxDocument {
     #[serde(rename = "spdxVersion")]
     spdx_version: String,
     #[serde(rename = "dataLicense")]
@@ -97,7 +121,7 @@ struct Relationship {
 }
 
 #[derive(Debug, Serialize)]
-struct CycloneDxDocument {
+pub struct CycloneDxDocument {
     #[serde(rename = "bomFormat")]
     bom_format: String,
     #[serde(rename = "specVersion")]
@@ -159,7 +183,9 @@ pub struct SbomGenerator {
 
 impl SbomGenerator {
     pub fn new(project_root: impl AsRef<Path>) -> Self {
-        Self { project_root: project_root.as_ref().to_path_buf() }
+        Self {
+            project_root: project_root.as_ref().to_path_buf(),
+        }
     }
 
     pub fn generate_spdx_sbom(&self) -> Result<SpdxDocument> {
@@ -225,7 +251,10 @@ impl SbomGenerator {
                 let mut component = CycloneDxComponent {
                     component_type: "library".to_string(),
                     name: package.name.clone(),
-                    version: package.version_info.clone().unwrap_or_else(|| "unknown".to_string()),
+                    version: package
+                        .version_info
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string()),
                     purl: Some(self.generate_purl(&package.name, &package.version_info)),
                     licenses: None,
                     hashes: None,
@@ -233,7 +262,9 @@ impl SbomGenerator {
 
                 if package.license_concluded != "NOASSERTION" {
                     component.licenses = Some(vec![CycloneDxLicense {
-                        license: CycloneDxLicenseInfo { id: package.license_concluded.clone() },
+                        license: CycloneDxLicenseInfo {
+                            id: package.license_concluded.clone(),
+                        },
                     }]);
                 }
 
@@ -333,15 +364,25 @@ impl SbomGenerator {
         let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)
             .map_err(|e| anyhow!("Failed to parse cargo metadata: {}", e))?;
 
-        Ok(metadata.packages.into_iter().filter(|pkg| pkg.source.is_some()).collect())
+        Ok(metadata
+            .packages
+            .into_iter()
+            .filter(|pkg| pkg.source.is_some())
+            .collect())
     }
 
     fn create_dependency_package(&self, dep: &CargoPackage) -> SpdxPackage {
-        let license_concluded = dep.license.clone().unwrap_or_else(|| "NOASSERTION".to_string());
+        let license_concluded = dep
+            .license
+            .clone()
+            .unwrap_or_else(|| "NOASSERTION".to_string());
         let license_declared = license_concluded.clone();
 
         let checksums = dep.checksum.as_ref().map(|checksum| {
-            vec![Checksum { algorithm: "SHA256".to_string(), checksum_value: checksum.clone() }]
+            vec![Checksum {
+                algorithm: "SHA256".to_string(),
+                checksum_value: checksum.clone(),
+            }]
         });
 
         SpdxPackage {
@@ -381,7 +422,10 @@ impl SbomGenerator {
         let mut hasher = Sha256::new();
 
         // Hash Rust source files
-        for entry in walkdir::WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
+        for entry in walkdir::WalkDir::new(&self.project_root)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs")
                 && !path.components().any(|c| {
@@ -535,7 +579,10 @@ fn main() -> Result<()> {
     let package_count = spdx_sbom
         .packages
         .iter()
-        .filter(|p| !p.spdx_id.ends_with(&generator.get_project_name().unwrap_or_default()))
+        .filter(|p| {
+            !p.spdx_id
+                .ends_with(&generator.get_project_name().unwrap_or_default())
+        })
         .count();
     println!("📊 Generated SBOM with {} dependencies", package_count);
 

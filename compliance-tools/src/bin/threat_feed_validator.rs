@@ -12,8 +12,28 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use url::Url;
+
+// Unused dependencies (required by workspace but not used in this binary)
+use calamine as _;
+use common as _;
+use compliance_tools as _;
+use config as _;
+use csv as _;
+use dotenvy as _;
+use fastrand as _;
+use handlebars as _;
+use moka as _;
+use prometheus as _;
+use pulldown_cmark as _;
+use regex as _;
+use sha2 as _;
+use tempfile as _;
+use tera as _;
+use thiserror as _;
+use uuid as _;
+use walkdir as _;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -75,11 +95,17 @@ async fn main() -> Result<()> {
     let verbose = matches.get_flag("verbose");
 
     info!("Starting threat feed validation");
-    info!("Config: {}, Output: {}, Timeout: {}s", config_path, output_path, timeout_secs);
+    info!(
+        "Config: {}, Output: {}, Timeout: {}s",
+        config_path, output_path, timeout_secs
+    );
 
     // Load feeds configuration
     let feeds_config = load_feeds_config(config_path).await?;
-    info!("Loaded {} threat feeds from configuration", feeds_config.feeds.len());
+    info!(
+        "Loaded {} threat feeds from configuration",
+        feeds_config.feeds.len()
+    );
 
     // Create validator
     let validator = ThreatFeedValidator::new(*timeout_secs);
@@ -196,7 +222,10 @@ fn output_table_report(report: &ValidationReport, verbose: bool) {
     println!("📊 Total Feeds: {}", report.total_feeds);
     println!("✅ Successful: {}", report.successful_feeds);
     println!("❌ Failed: {}", report.failed_feeds);
-    println!("📅 Generated: {}", report.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!(
+        "📅 Generated: {}",
+        report.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
+    );
 
     println!("\n📋 Feed Details:");
     println!(
@@ -223,8 +252,11 @@ fn output_table_report(report: &ValidationReport, verbose: bool) {
             "N/A".to_string()
         };
 
-        let content_size =
-            if feed.content_size > 0 { format_bytes(feed.content_size) } else { "N/A".to_string() };
+        let content_size = if feed.content_size > 0 {
+            format_bytes(feed.content_size)
+        } else {
+            "N/A".to_string()
+        };
 
         println!(
             "│ {:<35} │ {} {:<6} │ {:<12} │ {:<19} │",
@@ -287,10 +319,10 @@ struct ThreatFeedConfig {
     url: Option<String>,
     api_key: Option<String>,
     headers: Option<HashMap<String, String>>,
-    feed_type: Option<String>,
-    description: Option<String>,
-    confidence_threshold: Option<f64>,
-    update_interval: Option<String>,
+    _feed_type: Option<String>,
+    _description: Option<String>,
+    _confidence_threshold: Option<f64>,
+    _update_interval: Option<String>,
 }
 
 /// Threat feed validator
@@ -307,7 +339,10 @@ impl ThreatFeedValidator {
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { client, timeout_duration: Duration::from_secs(timeout_secs) }
+        Self {
+            client,
+            timeout_duration: Duration::from_secs(timeout_secs),
+        }
     }
 
     async fn validate_all_feeds(
@@ -368,7 +403,9 @@ impl ThreatFeedValidator {
         // Validate URL scheme
         if !matches!(url.scheme(), "http" | "https") {
             result.status = ValidationStatus::Failed;
-            result.errors.push(format!("Unsupported URL scheme: {}", url.scheme()));
+            result
+                .errors
+                .push(format!("Unsupported URL scheme: {}", url.scheme()));
             return result;
         }
 
@@ -393,13 +430,17 @@ impl ThreatFeedValidator {
                     if result.status == ValidationStatus::Success {
                         result.status = ValidationStatus::Warning;
                     }
-                    result.errors.push("Small content size (<100 bytes)".to_string());
+                    result
+                        .errors
+                        .push("Small content size (<100 bytes)".to_string());
                 }
             }
             Err(e) => {
                 result.response_time_ms = start_time.elapsed().as_millis() as u64;
                 result.status = ValidationStatus::Failed;
-                result.errors.push(format!("Connectivity test failed: {}", e));
+                result
+                    .errors
+                    .push(format!("Connectivity test failed: {}", e));
             }
         }
 
@@ -434,7 +475,7 @@ impl ThreatFeedValidator {
         }
 
         // Get content length
-        let content_size = response.content_length().unwrap_or(0);
+        let _content_size = response.content_length().unwrap_or(0);
 
         // Read a preview of the content
         let content_bytes = response.bytes().await?;
@@ -446,7 +487,10 @@ impl ThreatFeedValidator {
             String::from_utf8_lossy(&content_bytes).to_string()
         };
 
-        Ok(ResponseInfo { content_size: actual_size, content_preview })
+        Ok(ResponseInfo {
+            content_size: actual_size,
+            content_preview,
+        })
     }
 }
 

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+#![deny(rust_2018_idioms, future_incompatible)]
 use std::sync::Arc;
 use std::time::Instant;
 

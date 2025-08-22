@@ -1,7 +1,5 @@
 //! Compliance framework implementations
 
-use crate::*;
-
 // Re-export common types
 pub use crate::{
     ComplianceControl, ComplianceFramework, EffectivenessLevel, ImplementationStatus, MetricStatus,
@@ -303,7 +301,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get custom framework controls
-    pub fn get_custom_controls(framework_name: &str) -> Vec<ComplianceControl> {
+    pub fn get_custom_controls(_framework_name: &str) -> Vec<ComplianceControl> {
         // Return empty vec for now - in practice, this would load from configuration
         Vec::new()
     }

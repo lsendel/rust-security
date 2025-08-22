@@ -30,6 +30,9 @@
 //! Start with `auth-core` and upgrade to `auth-standard` or `auth-enterprise`
 //! as your needs grow, without changing your API.
 
+#![forbid(unsafe_code)]
+#![deny(rust_2018_idioms, future_incompatible)]
+
 pub mod client;
 pub mod error;
 pub mod handler;

@@ -4,6 +4,32 @@ use compliance_tools::{ComplianceError, MetricStatus, Result, SecurityMetric};
 use std::collections::HashMap;
 use tokio;
 
+// Unused dependencies (required by workspace but not used in this binary)
+use anyhow as _;
+use calamine as _;
+use common as _;
+use config as _;
+use csv as _;
+use dotenvy as _;
+use fastrand as _;
+use handlebars as _;
+use moka as _;
+use prometheus as _;
+use pulldown_cmark as _;
+use regex as _;
+use reqwest as _;
+use serde as _;
+use serde_yaml as _;
+use sha2 as _;
+use tempfile as _;
+use tera as _;
+use thiserror as _;
+use tracing as _;
+use tracing_subscriber as _;
+use url as _;
+use uuid as _;
+use walkdir as _;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let matches = Command::new("security-metrics-collector")
@@ -45,7 +71,7 @@ async fn main() -> Result<()> {
     println!("📊 Output format: {}", output_format);
     println!("⏱️  Collection interval: {}s", interval);
 
-    let mut collector = MetricsCollector::new();
+    let collector = MetricsCollector::new();
 
     // Main collection loop
     loop {
@@ -57,7 +83,11 @@ async fn main() -> Result<()> {
             "json" => output_json(&metrics)?,
             "prometheus" => output_prometheus(&metrics)?,
             "csv" => output_csv(&metrics)?,
-            _ => return Err(ComplianceError::Configuration("Invalid output format".to_string())),
+            _ => {
+                return Err(ComplianceError::Configuration(
+                    "Invalid output format".to_string(),
+                ))
+            }
         }
 
         println!("✅ Collected {} metrics", metrics.len());
@@ -73,7 +103,10 @@ struct MetricsCollector {
 impl MetricsCollector {
     fn new() -> Self {
         let mut tags = HashMap::new();
-        tags.insert("collector".to_string(), "security-metrics-collector".to_string());
+        tags.insert(
+            "collector".to_string(),
+            "security-metrics-collector".to_string(),
+        );
         tags.insert("version".to_string(), "1.0.0".to_string());
 
         Self { tags }

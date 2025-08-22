@@ -1,3 +1,32 @@
+set shell := ["/bin/bash", "-cu"]
+
+fmt:
+    cargo fmt --all
+
+lint:
+    cargo clippy --workspace --all-targets -- -D warnings
+
+build:
+    cargo build --workspace --locked
+
+test:
+    cargo test --workspace -- --nocapture
+
+cov:
+    cargo llvm-cov --workspace --fail-under-lines 80
+
+audit:
+    cargo audit --deny warnings
+
+deny:
+    cargo deny check
+
+geiger:
+    cargo geiger --all-features --all-targets --output-format GitHub --fail-threshold 0
+
+auth-core-compile-gated:
+    cargo test -p auth-core --features compliance-tests,introspection --no-run
+
 # Rust Security Project Justfile
 # Common development tasks
 

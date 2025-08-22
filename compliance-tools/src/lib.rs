@@ -20,7 +20,31 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
-use uuid::Uuid;
+
+// Dependencies used by binaries but not directly by lib
+use anyhow as _;
+use clap as _;
+use sha2 as _;
+use uuid as _;
+
+// Dependencies that might be used conditionally or in features
+use calamine as _;
+use config as _;
+use csv as _;
+use dotenvy as _;
+use fastrand as _;
+use handlebars as _;
+use moka as _;
+use pulldown_cmark as _;
+use regex as _;
+use serde_yaml as _;
+use tempfile as _;
+use tracing_subscriber as _;
+use walkdir as _;
+
+// Dependencies used in lib modules
+use common as _;
+use prometheus as _;
 
 /// Common error types for compliance tools
 #[derive(Error, Debug)]

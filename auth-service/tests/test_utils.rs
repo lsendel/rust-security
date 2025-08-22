@@ -1,13 +1,13 @@
 // Test utilities and helpers for comprehensive testing
 
-use auth_service::jwks_rotation::{JwksManager, InMemoryKeyStorage};
+use ::common::Store;
+use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
-use auth_service::{app, api_key_store::ApiKeyStore, store::TokenStore, AppState};
+use auth_service::{api_key_store::ApiKeyStore, app, store::TokenStore, AppState};
 use axum::extract::Request;
 use axum::response::Response;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use ::common::Store;
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -50,10 +50,11 @@ impl TestFixture {
         let store = Arc::new(HybridStore::new().await) as Arc<dyn Store>;
         let session_store = Arc::new(RedisSessionStore::new(None).await)
             as Arc<dyn auth_service::session_store::SessionStore>;
-        let jwks_manager = Arc::new(JwksManager::new(
-            Default::default(),
-            Arc::new(InMemoryKeyStorage::new())
-        ).await.unwrap());
+        let jwks_manager = Arc::new(
+            JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+                .await
+                .unwrap(),
+        );
 
         let app_state = AppState {
             store,

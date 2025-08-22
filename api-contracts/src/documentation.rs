@@ -1,10 +1,8 @@
 //! OpenAPI documentation generation and management
 
-#[cfg(feature = "openapi")]
-use utoipa::{OpenApi, ToSchema};
+use crate::ApiVersion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::{ApiVersion, types::*};
 
 /// OpenAPI documentation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,53 +107,50 @@ impl DocumentationManager {
             default_config,
         }
     }
-    
+
     /// Add version-specific configuration
     pub fn add_version_config(&mut self, version: ApiVersion, config: OpenApiConfig) {
         self.configs.insert(version, config);
     }
-    
+
     /// Get configuration for version
     pub fn get_config(&self, version: &ApiVersion) -> &OpenApiConfig {
         self.configs.get(version).unwrap_or(&self.default_config)
     }
-    
+
     /// Generate OpenAPI specification for version
     #[cfg(feature = "openapi")]
     pub fn generate_openapi_spec(&self, version: &ApiVersion) -> utoipa::openapi::OpenApi {
         let config = self.get_config(version);
-        
-        let mut openapi = utoipa::openapi::OpenApiBuilder::new()
-            .info(
-                utoipa::openapi::InfoBuilder::new()
-                    .title(&config.title)
-                    .description(Some(&config.description))
-                    .version(version.to_string())
-                    .build()
-            );
-        
+
+        let mut openapi = utoipa::openapi::OpenApiBuilder::new().info(
+            utoipa::openapi::InfoBuilder::new()
+                .title(&config.title)
+                .description(Some(&config.description))
+                .version(version.to_string())
+                .build(),
+        );
+
         // Add servers
         for server in &config.servers {
-            openapi = openapi.servers(Some(vec![
-                utoipa::openapi::ServerBuilder::new()
-                    .url(&server.url)
-                    .description(Some(&server.description))
-                    .build()
-            ]));
+            openapi = openapi.servers(Some(vec![utoipa::openapi::ServerBuilder::new()
+                .url(&server.url)
+                .description(Some(&server.description))
+                .build()]));
         }
-        
+
         openapi.build()
     }
-    
+
     /// Generate API documentation in markdown format
     pub fn generate_markdown_docs(&self, version: &ApiVersion) -> String {
         let config = self.get_config(version);
-        
+
         let mut docs = String::new();
         docs.push_str(&format!("# {} API Documentation\n\n", config.title));
         docs.push_str(&format!("**Version:** {}\n\n", version));
         docs.push_str(&format!("{}\n\n", config.description));
-        
+
         // Add servers section
         if !config.servers.is_empty() {
             docs.push_str("## Servers\n\n");
@@ -164,37 +159,42 @@ impl DocumentationManager {
             }
             docs.push_str("\n");
         }
-        
+
         // Add authentication section
         if !config.security_schemes.is_empty() {
             docs.push_str("## Authentication\n\n");
             for (name, scheme) in &config.security_schemes {
                 docs.push_str(&format!("### {}\n\n", name));
                 match scheme {
-                    SecurityScheme::Http { scheme, bearer_format } => {
+                    SecurityScheme::Http {
+                        scheme,
+                        bearer_format,
+                    } => {
                         docs.push_str(&format!("- **Type**: HTTP\n"));
                         docs.push_str(&format!("- **Scheme**: {}\n", scheme));
                         if let Some(format) = bearer_format {
                             docs.push_str(&format!("- **Bearer Format**: {}\n", format));
                         }
-                    },
+                    }
                     SecurityScheme::ApiKey { name, location } => {
                         docs.push_str(&format!("- **Type**: API Key\n"));
                         docs.push_str(&format!("- **Name**: {}\n", name));
                         docs.push_str(&format!("- **Location**: {:?}\n", location));
-                    },
+                    }
                     SecurityScheme::OAuth2 { flows: _ } => {
                         docs.push_str(&format!("- **Type**: OAuth2\n"));
-                    },
-                    SecurityScheme::OpenIdConnect { open_id_connect_url } => {
+                    }
+                    SecurityScheme::OpenIdConnect {
+                        open_id_connect_url,
+                    } => {
                         docs.push_str(&format!("- **Type**: OpenID Connect\n"));
                         docs.push_str(&format!("- **URL**: {}\n", open_id_connect_url));
-                    },
+                    }
                 }
                 docs.push_str("\n");
             }
         }
-        
+
         docs
     }
 }
@@ -204,7 +204,9 @@ impl Default for OpenApiConfig {
     fn default() -> Self {
         Self {
             title: "Rust Security Platform API".to_string(),
-            description: "Production-ready authentication and authorization platform built with Rust".to_string(),
+            description:
+                "Production-ready authentication and authorization platform built with Rust"
+                    .to_string(),
             terms_of_service: Some("https://rust-security.example.com/terms".to_string()),
             contact: Some(ContactInfo {
                 name: "Rust Security Team".to_string(),
@@ -228,38 +230,60 @@ impl Default for OpenApiConfig {
                 },
             ],
             security_schemes: HashMap::from([
-                ("bearerAuth".to_string(), SecurityScheme::Http {
-                    scheme: "bearer".to_string(),
-                    bearer_format: Some("JWT".to_string()),
-                }),
-                ("apiKey".to_string(), SecurityScheme::ApiKey {
-                    name: "X-API-Key".to_string(),
-                    location: ApiKeyLocation::Header,
-                }),
-                ("oauth2".to_string(), SecurityScheme::OAuth2 {
-                    flows: OAuth2Flows {
-                        authorization_code: Some(OAuth2Flow {
-                            authorization_url: Some("https://auth.rust-security.example.com/oauth2/authorize".to_string()),
-                            token_url: Some("https://auth.rust-security.example.com/oauth2/token".to_string()),
-                            refresh_url: Some("https://auth.rust-security.example.com/oauth2/refresh".to_string()),
-                            scopes: HashMap::from([
-                                ("read".to_string(), "Read access".to_string()),
-                                ("write".to_string(), "Write access".to_string()),
-                                ("admin".to_string(), "Administrative access".to_string()),
-                            ]),
-                        }),
-                        client_credentials: Some(OAuth2Flow {
-                            authorization_url: None,
-                            token_url: Some("https://auth.rust-security.example.com/oauth2/token".to_string()),
-                            refresh_url: None,
-                            scopes: HashMap::from([
-                                ("service".to_string(), "Service-to-service access".to_string()),
-                            ]),
-                        }),
-                        implicit: None,
-                        password: None,
+                (
+                    "bearerAuth".to_string(),
+                    SecurityScheme::Http {
+                        scheme: "bearer".to_string(),
+                        bearer_format: Some("JWT".to_string()),
                     },
-                }),
+                ),
+                (
+                    "apiKey".to_string(),
+                    SecurityScheme::ApiKey {
+                        name: "X-API-Key".to_string(),
+                        location: ApiKeyLocation::Header,
+                    },
+                ),
+                (
+                    "oauth2".to_string(),
+                    SecurityScheme::OAuth2 {
+                        flows: OAuth2Flows {
+                            authorization_code: Some(OAuth2Flow {
+                                authorization_url: Some(
+                                    "https://auth.rust-security.example.com/oauth2/authorize"
+                                        .to_string(),
+                                ),
+                                token_url: Some(
+                                    "https://auth.rust-security.example.com/oauth2/token"
+                                        .to_string(),
+                                ),
+                                refresh_url: Some(
+                                    "https://auth.rust-security.example.com/oauth2/refresh"
+                                        .to_string(),
+                                ),
+                                scopes: HashMap::from([
+                                    ("read".to_string(), "Read access".to_string()),
+                                    ("write".to_string(), "Write access".to_string()),
+                                    ("admin".to_string(), "Administrative access".to_string()),
+                                ]),
+                            }),
+                            client_credentials: Some(OAuth2Flow {
+                                authorization_url: None,
+                                token_url: Some(
+                                    "https://auth.rust-security.example.com/oauth2/token"
+                                        .to_string(),
+                                ),
+                                refresh_url: None,
+                                scopes: HashMap::from([(
+                                    "service".to_string(),
+                                    "Service-to-service access".to_string(),
+                                )]),
+                            }),
+                            implicit: None,
+                            password: None,
+                        },
+                    },
+                ),
             ]),
         }
     }
@@ -268,10 +292,12 @@ impl Default for OpenApiConfig {
 /// Generate API schema documentation
 pub fn generate_schema_docs() -> String {
     let mut docs = String::new();
-    
+
     docs.push_str("# API Schema Documentation\n\n");
-    docs.push_str("This document describes the data schemas used by the Rust Security Platform API.\n\n");
-    
+    docs.push_str(
+        "This document describes the data schemas used by the Rust Security Platform API.\n\n",
+    );
+
     // Common types
     docs.push_str("## Common Types\n\n");
     docs.push_str("### ApiResponse<T>\n\n");
@@ -290,7 +316,7 @@ pub fn generate_schema_docs() -> String {
     docs.push_str("  \"error\": ApiErrorDetail | null\n");
     docs.push_str("}\n");
     docs.push_str("```\n\n");
-    
+
     // Error types
     docs.push_str("### ApiErrorDetail\n\n");
     docs.push_str("Error information for failed requests.\n\n");
@@ -305,7 +331,7 @@ pub fn generate_schema_docs() -> String {
     docs.push_str("  \"help_url\": \"string\" | null\n");
     docs.push_str("}\n");
     docs.push_str("```\n\n");
-    
+
     // Pagination
     docs.push_str("### PaginationMetadata\n\n");
     docs.push_str("Pagination information for list responses.\n\n");
@@ -319,14 +345,14 @@ pub fn generate_schema_docs() -> String {
     docs.push_str("  \"has_previous\": boolean\n");
     docs.push_str("}\n");
     docs.push_str("```\n\n");
-    
+
     docs
 }
 
 /// Documentation utilities
 pub mod utils {
     use super::*;
-    
+
     /// Generate endpoint documentation
     pub fn document_endpoint(
         method: &str,
@@ -336,40 +362,47 @@ pub mod utils {
         response_schema: Option<&str>,
     ) -> String {
         let mut docs = String::new();
-        
+
         docs.push_str(&format!("### {} {}\n\n", method.to_uppercase(), path));
         docs.push_str(&format!("{}\n\n", description));
-        
+
         if let Some(request) = request_schema {
             docs.push_str("**Request Schema:**\n\n");
             docs.push_str("```json\n");
             docs.push_str(request);
             docs.push_str("\n```\n\n");
         }
-        
+
         if let Some(response) = response_schema {
             docs.push_str("**Response Schema:**\n\n");
             docs.push_str("```json\n");
             docs.push_str(response);
             docs.push_str("\n```\n\n");
         }
-        
+
         docs
     }
-    
+
     /// Generate deprecation notice
-    pub fn generate_deprecation_notice(version: &ApiVersion, sunset_date: &str, migration_guide: Option<&str>) -> String {
+    pub fn generate_deprecation_notice(
+        version: &ApiVersion,
+        sunset_date: &str,
+        migration_guide: Option<&str>,
+    ) -> String {
         let mut notice = String::new();
-        
-        notice.push_str(&format!("**⚠️ DEPRECATED**: API version {} is deprecated.\n\n", version));
+
+        notice.push_str(&format!(
+            "**⚠️ DEPRECATED**: API version {} is deprecated.\n\n",
+            version
+        ));
         notice.push_str(&format!("**Sunset Date**: {}\n\n", sunset_date));
-        
+
         if let Some(guide) = migration_guide {
             notice.push_str(&format!("**Migration Guide**: {}\n\n", guide));
         }
-        
+
         notice.push_str("Please migrate to the latest API version before the sunset date.\n\n");
-        
+
         notice
     }
 }
@@ -390,17 +423,17 @@ mod tests {
     fn test_documentation_manager() {
         let config = OpenApiConfig::default();
         let mut manager = DocumentationManager::new(config.clone());
-        
+
         let v2_config = OpenApiConfig {
             title: "Rust Security Platform API v2".to_string(),
             ..config
         };
-        
+
         manager.add_version_config(ApiVersion::new(2, 0, 0), v2_config);
-        
+
         let v1_config = manager.get_config(&ApiVersion::new(1, 0, 0));
         let v2_config = manager.get_config(&ApiVersion::new(2, 0, 0));
-        
+
         assert_eq!(v1_config.title, "Rust Security Platform API");
         assert_eq!(v2_config.title, "Rust Security Platform API v2");
     }
@@ -409,7 +442,7 @@ mod tests {
     fn test_markdown_generation() {
         let config = OpenApiConfig::default();
         let manager = DocumentationManager::new(config);
-        
+
         let docs = manager.generate_markdown_docs(&ApiVersion::new(1, 0, 0));
         assert!(docs.contains("# Rust Security Platform API Documentation"));
         assert!(docs.contains("**Version:** 1.0.0"));

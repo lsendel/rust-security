@@ -15,6 +15,28 @@ use serde_json;
 use std::path::PathBuf;
 use tracing::{error, info, warn};
 
+// Unused dependencies (required by workspace but not used in this binary)
+use calamine as _;
+use common as _;
+use config as _;
+use csv as _;
+use dotenvy as _;
+use fastrand as _;
+use handlebars as _;
+use moka as _;
+use prometheus as _;
+use pulldown_cmark as _;
+use regex as _;
+use reqwest as _;
+use serde as _;
+use sha2 as _;
+use tempfile as _;
+use tera as _;
+use thiserror as _;
+use url as _;
+use uuid as _;
+use walkdir as _;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
@@ -82,7 +104,10 @@ async fn main() -> Result<()> {
     let include_recommendations = matches.get_flag("include-recommendations");
 
     info!("Starting compliance report generation");
-    info!("Framework: {}, Output: {}, Format: {}", framework, output_path, format);
+    info!(
+        "Framework: {}, Output: {}, Format: {}",
+        framework, output_path, format
+    );
 
     // Load configuration
     let config = load_compliance_config(config_path).await?;
@@ -100,7 +125,7 @@ async fn main() -> Result<()> {
     let report_config = ReportGenerationConfig {
         framework: compliance_framework,
         assessment_period_days: *period_days,
-        include_recommendations,
+        _include_recommendations: include_recommendations,
         output_format: report_format,
         output_path: PathBuf::from(output_path),
         classification: ClassificationLevel::Internal,
@@ -109,13 +134,22 @@ async fn main() -> Result<()> {
     match reporter.generate_report(report_config).await {
         Ok(report_metadata) => {
             info!("✅ Compliance report generated successfully");
-            info!("📊 Controls assessed: {}", report_metadata.controls_assessed);
+            info!(
+                "📊 Controls assessed: {}",
+                report_metadata.controls_assessed
+            );
             info!("⚠️  Issues found: {}", report_metadata.issues_found);
-            info!("📈 Compliance score: {:.1}%", report_metadata.compliance_score);
+            info!(
+                "📈 Compliance score: {:.1}%",
+                report_metadata.compliance_score
+            );
             info!("📄 Report saved to: {}", output_path);
 
             if report_metadata.issues_found > 0 {
-                warn!("⚠️  {} compliance issues require attention", report_metadata.issues_found);
+                warn!(
+                    "⚠️  {} compliance issues require attention",
+                    report_metadata.issues_found
+                );
             }
         }
         Err(e) => {
@@ -171,7 +205,7 @@ fn parse_format(format: &str) -> Result<ReportFormat> {
 struct ReportGenerationConfig {
     framework: ComplianceFramework,
     assessment_period_days: u32,
-    include_recommendations: bool,
+    _include_recommendations: bool,
     output_format: ReportFormat,
     output_path: PathBuf,
     classification: ClassificationLevel,
@@ -183,14 +217,14 @@ struct ReportMetadata {
     controls_assessed: u32,
     issues_found: u32,
     compliance_score: f64,
-    generation_time: DateTime<Utc>,
+    _generation_time: DateTime<Utc>,
 }
 
 /// Main compliance reporter
 struct ComplianceReporter {
     config: ComplianceConfig,
     metrics_collector: MetricsCollector,
-    prometheus_client: Option<PrometheusClient>,
+    _prometheus_client: Option<PrometheusClient>,
 }
 
 impl ComplianceReporter {
@@ -203,18 +237,28 @@ impl ComplianceReporter {
 
         let metrics_collector = MetricsCollector::new(&config).await?;
 
-        Ok(Self { config, metrics_collector, prometheus_client })
+        Ok(Self {
+            config,
+            metrics_collector,
+            _prometheus_client: prometheus_client,
+        })
     }
 
     async fn generate_report(&mut self, config: ReportGenerationConfig) -> Result<ReportMetadata> {
-        info!("Generating compliance report for framework: {:?}", config.framework);
+        info!(
+            "Generating compliance report for framework: {:?}",
+            config.framework
+        );
 
         // Collect metrics and data
         let security_metrics = self.collect_security_metrics().await?;
         let compliance_controls = self.assess_compliance_controls(&config.framework).await?;
-        let security_incidents =
-            self.collect_security_incidents(config.assessment_period_days).await?;
-        let audit_logs = self.analyze_audit_logs(config.assessment_period_days).await?;
+        let security_incidents = self
+            .collect_security_incidents(config.assessment_period_days)
+            .await?;
+        let audit_logs = self
+            .analyze_audit_logs(config.assessment_period_days)
+            .await?;
 
         // Generate report
         let report_data = ComplianceReportData {
@@ -252,7 +296,7 @@ impl ComplianceReporter {
             controls_assessed,
             issues_found,
             compliance_score,
-            generation_time: Utc::now(),
+            _generation_time: Utc::now(),
         })
     }
 
@@ -268,7 +312,10 @@ impl ComplianceReporter {
         &self,
         framework: &ComplianceFramework,
     ) -> Result<Vec<ComplianceControl>> {
-        info!("Assessing compliance controls for framework: {:?}", framework);
+        info!(
+            "Assessing compliance controls for framework: {:?}",
+            framework
+        );
 
         // This would typically load control definitions and assess them
         // For now, return example controls
@@ -283,7 +330,10 @@ impl ComplianceReporter {
     }
 
     async fn collect_security_incidents(&self, period_days: u32) -> Result<Vec<SecurityIncident>> {
-        info!("Collecting security incidents for the last {} days", period_days);
+        info!(
+            "Collecting security incidents for the last {} days",
+            period_days
+        );
         // Implementation would collect from incident management system
         Ok(Vec::new())
     }
@@ -322,7 +372,10 @@ impl ComplianceReporter {
                     .to_string(),
                 implementation_status: ImplementationStatus::Implemented,
                 effectiveness: EffectivenessLevel::Effective,
-                evidence: vec!["MFA policies".to_string(), "Authentication logs".to_string()],
+                evidence: vec![
+                    "MFA policies".to_string(),
+                    "Authentication logs".to_string(),
+                ],
                 last_tested: Utc::now(),
                 next_review: Utc::now() + chrono::Duration::days(90),
                 risk_level: RiskLevel::Low,
@@ -359,7 +412,10 @@ impl ComplianceReporter {
             description: "Implement appropriate technical and organizational measures".to_string(),
             implementation_status: ImplementationStatus::Implemented,
             effectiveness: EffectivenessLevel::Effective,
-            evidence: vec!["Encryption policies".to_string(), "Access controls".to_string()],
+            evidence: vec![
+                "Encryption policies".to_string(),
+                "Access controls".to_string(),
+            ],
             last_tested: Utc::now(),
             next_review: Utc::now() + chrono::Duration::days(180),
             risk_level: RiskLevel::High,
@@ -391,7 +447,10 @@ impl ComplianceReporter {
                 reporter.render_markdown(data, &config.output_path).await?;
             }
             _ => {
-                return Err(anyhow::anyhow!("Unsupported format: {:?}", config.output_format));
+                return Err(anyhow::anyhow!(
+                    "Unsupported format: {:?}",
+                    config.output_format
+                ));
             }
         }
 

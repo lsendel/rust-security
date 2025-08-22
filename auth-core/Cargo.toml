@@ -21,6 +21,9 @@ device-flow = []
 jwt = ["dep:jsonwebtoken"]
 opaque-tokens = []
 
+# Optional endpoints
+introspection = []
+
 # Storage backends
 memory-store = []
 file-store = []

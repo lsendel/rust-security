@@ -1,9 +1,13 @@
-use auth_service::jwks_rotation::{JwksManager, InMemoryKeyStorage};
+use ::common::Store;
+use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::{
-    app, api_key_store::ApiKeyStore, sql_store::SqlStore, store::{HybridStore, TokenStore}, AppState, IntrospectRequest, IntrospectResponse,
+    api_key_store::ApiKeyStore,
+    app,
+    sql_store::SqlStore,
+    store::{HybridStore, TokenStore},
+    AppState, IntrospectRequest, IntrospectResponse,
 };
-use ::common::Store;
 use reqwest::header::CONTENT_TYPE;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,10 +24,11 @@ async fn spawn_app(store: Arc<dyn Store>) -> String {
     let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
     let session_store = Arc::new(RedisSessionStore::new(None).await)
         as Arc<dyn auth_service::session_store::SessionStore>;
-    let jwks_manager = Arc::new(JwksManager::new(
-        Default::default(),
-        Arc::new(InMemoryKeyStorage::new())
-    ).await.unwrap());
+    let jwks_manager = Arc::new(
+        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+            .await
+            .unwrap(),
+    );
 
     let app_state = AppState {
         store,

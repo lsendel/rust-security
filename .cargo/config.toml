@@ -1,114 +1,20 @@
-# Cargo configuration for rust-security workspace
-# Optimizes build performance and development experience
-
 [build]
-# Use all available CPU cores for parallel compilation
-# jobs = 0  # 0 = number of logical CPUs (auto-detect) - commented out due to cargo limitation
+rustflags = [
+    "-C", "target-cpu=native",
+]
 
-# Optimize for development speed
-incremental = true
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+]
 
-# Use faster linker globally
-target-dir = "target"
-
-# Reduce crate metadata overhead
-pipelining = true
-
-# Use faster linker on supported platforms
-# [target.x86_64-unknown-linux-gnu]
-# linker = "clang"
-# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+# macOS uses the system linker by default
+[target.aarch64-apple-darwin]
+rustflags = [
+    "-C", "target-cpu=native",
+]
 
 [target.x86_64-apple-darwin]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
-
-# Moved to workspace Cargo.toml for better organization
-# These settings are now in the root Cargo.toml file
-
-# Environment variables for faster builds
-[env]
-# Use system allocator instead of jemalloc for faster debug builds
-CARGO_PROFILE_DEV_DEBUG = "1"
-# Enable parallel frontend
-CARGO_PROFILE_DEV_CODEGEN_UNITS = "512"
-# Faster incremental compilation
-CARGO_INCREMENTAL = "1"
-
-# Security-focused release builds
-[profile.release]
-panic = "abort"
-lto = "thin"
-codegen-units = 1
-strip = "symbols"
-
-# Development convenience
-[alias]
-# Quick commands
-b = "build"
-c = "check"
-t = "test"
-r = "run"
-f = "fmt"
-
-# Workspace commands
-wall = "build --workspace"
-tall = "test --workspace"
-call = "check --workspace"
-fall = "fmt --all"
-
-# Security commands (using external tools directly)
-sec = ["clippy", "--workspace", "--all-targets", "--", "-D", "clippy::unwrap_used"]
-
-# Development shortcuts
-dev = "watch -x check -x test"
-quick = "check --workspace"
-fast = "build --features fast-build"
-core = ["build", "--package", "auth-service", "--package", "policy-service", "--package", "common"]
-
-# Feature builds optimized for performance
-opt = "build --features optimizations"
-threat = "build --features threat-hunting --package auth-service"
-pq = "build --features post-quantum --package auth-service"
-minimal = "build --no-default-features"
-
-# Performance analysis
-timing = "build --timings --workspace"
-profile = "build --features fast-build --timings"
-
-# Testing shortcuts
-unit = "test --lib"
-integration = "test --test"
-ignored = "test -- --ignored"
-
-# Clean commands
-sweep = "sweep --time 7"
-fresh = "clean --release"
-
-[cargo-new]
-# Default settings for new crates
-edition = "2021"
-vcs = "git"
-
-[term]
-# Better terminal output
-verbose = false
-color = "auto"
-progress.when = "auto"
-progress.width = 80
-
-[net]
-# Network optimizations
-retry = 2
-git-fetch-with-cli = true
-
-[http]
-# Faster downloads
-multiplexing = true
-user-agent = "rust-security-workspace"
-
-# [registry]
-# Registry optimizations would go here if needed
-
-# Git dependencies optimization is handled in [net] section
-
-# Compilation output moved to [term] section above
+rustflags = [
+    "-C", "target-cpu=native",
+]

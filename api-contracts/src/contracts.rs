@@ -1,24 +1,24 @@
 //! Service contracts and interface definitions
 
+use crate::{errors::ContractError, ApiVersion, RequestContext};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use crate::{ApiVersion, RequestContext, errors::ContractError};
 
 /// Base trait for all service contracts
 #[async_trait]
 pub trait ServiceContract {
     /// Service name
     fn service_name(&self) -> &str;
-    
+
     /// Supported API versions
     fn supported_versions(&self) -> Vec<ApiVersion>;
-    
+
     /// Health check endpoint
     async fn health_check(&self, ctx: &RequestContext) -> Result<HealthStatus, ContractError>;
-    
+
     /// Service information
     fn service_info(&self) -> ServiceInfo;
 }
@@ -92,42 +92,38 @@ pub trait AuthServiceContract: ServiceContract {
         ctx: &RequestContext,
         request: AuthenticationRequest,
     ) -> Result<AuthenticationResponse, ContractError>;
-    
+
     /// Issue access token
     async fn issue_token(
         &self,
         ctx: &RequestContext,
         request: TokenRequest,
     ) -> Result<TokenResponse, ContractError>;
-    
+
     /// Validate token
     async fn validate_token(
         &self,
         ctx: &RequestContext,
         token: String,
     ) -> Result<TokenValidationResponse, ContractError>;
-    
+
     /// Refresh token
     async fn refresh_token(
         &self,
         ctx: &RequestContext,
         refresh_token: String,
     ) -> Result<TokenResponse, ContractError>;
-    
+
     /// Revoke token
-    async fn revoke_token(
-        &self,
-        ctx: &RequestContext,
-        token: String,
-    ) -> Result<(), ContractError>;
-    
+    async fn revoke_token(&self, ctx: &RequestContext, token: String) -> Result<(), ContractError>;
+
     /// Get user profile
     async fn get_user_profile(
         &self,
         ctx: &RequestContext,
         user_id: Uuid,
     ) -> Result<UserProfile, ContractError>;
-    
+
     /// Update user profile
     async fn update_user_profile(
         &self,
@@ -146,21 +142,21 @@ pub trait PolicyServiceContract: ServiceContract {
         ctx: &RequestContext,
         request: PolicyEvaluationRequest,
     ) -> Result<PolicyEvaluationResponse, ContractError>;
-    
+
     /// Create policy
     async fn create_policy(
         &self,
         ctx: &RequestContext,
         policy: PolicyDefinition,
     ) -> Result<Policy, ContractError>;
-    
+
     /// Get policy
     async fn get_policy(
         &self,
         ctx: &RequestContext,
         policy_id: Uuid,
     ) -> Result<Policy, ContractError>;
-    
+
     /// Update policy
     async fn update_policy(
         &self,
@@ -168,14 +164,14 @@ pub trait PolicyServiceContract: ServiceContract {
         policy_id: Uuid,
         policy: PolicyDefinition,
     ) -> Result<Policy, ContractError>;
-    
+
     /// Delete policy
     async fn delete_policy(
         &self,
         ctx: &RequestContext,
         policy_id: Uuid,
     ) -> Result<(), ContractError>;
-    
+
     /// List policies
     async fn list_policies(
         &self,
@@ -512,10 +508,10 @@ mod tests {
             dependencies: HashMap::new(),
             metrics: None,
         };
-        
+
         let json = serde_json::to_string(&health).unwrap();
         let parsed: HealthStatus = serde_json::from_str(&json).unwrap();
-        
+
         assert!(matches!(parsed.status, HealthState::Healthy));
     }
 
@@ -534,10 +530,10 @@ mod tests {
                 device_fingerprint: None,
             },
         };
-        
+
         let json = serde_json::to_string(&request).unwrap();
         let parsed: AuthenticationRequest = serde_json::from_str(&json).unwrap();
-        
+
         assert!(matches!(parsed.method, AuthenticationMethod::Password));
     }
 
@@ -566,10 +562,10 @@ mod tests {
                 client_info: None,
             },
         };
-        
+
         let json = serde_json::to_string(&request).unwrap();
         let parsed: PolicyEvaluationRequest = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(parsed.action.name, "read");
         assert_eq!(parsed.resource.type_, "document");
     }
