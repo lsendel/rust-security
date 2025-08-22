@@ -1,0 +1,431 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rust-security-production
+  labels:
+    environment: production
+    app.kubernetes.io/name: rust-security
+    app.kubernetes.io/version: "1.0.0"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+    component: authentication
+    environment: production
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+        component: authentication
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: auth-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: auth-service
+        image: ghcr.io/lsendel/rust-security/auth-service:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9090
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: RUST_LOG
+          value: "auth_service=info,tower_http=info"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: redis-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: jwt-secret
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: encryption-key
+        - name: TOKEN_BINDING_SALT
+          valueFrom:
+            secretKeyRef:
+              name: auth-service-secrets
+              key: token-binding-salt
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 1Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - auth-service
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+    component: authentication
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: auth-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service-metrics
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+    component: metrics
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    app: auth-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: auth-service
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: auth-service
+  namespace: rust-security-production
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: auth-service
+  namespace: rust-security-production
+subjects:
+- kind: ServiceAccount
+  name: auth-service
+  namespace: rust-security-production
+roleRef:
+  kind: Role
+  name: auth-service
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-service-secrets
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+type: Opaque
+stringData:
+  database-url: "postgresql://auth_user:CHANGE_ME@postgres:5432/auth_db"
+  redis-url: "redis://redis:6379"
+  jwt-secret: "CHANGE_ME_TO_SECURE_RANDOM_STRING_AT_LEAST_32_CHARS"
+  encryption-key: "CHANGE_ME_TO_SECURE_RANDOM_KEY_32_BYTES"
+  token-binding-salt: "CHANGE_ME_TO_SECURE_RANDOM_SALT_32_BYTES"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service-hpa
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  minReplicas: 5
+  maxReplicas: 50
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      selectPolicy: Min
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: auth-service
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-network-policy
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: database
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 443
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: auth-service
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+      component: metrics
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    honorLabels: true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: auth-service-alerts
+  namespace: rust-security-production
+  labels:
+    app: auth-service
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: auth-service.rules
+    rules:
+    - alert: AuthServiceHighErrorRate
+      expr: rate(http_requests_total{job="auth-service",status=~"5.."}[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: critical
+        service: auth-service
+      annotations:
+        summary: "Auth Service has high error rate"
+        description: "Auth Service error rate is {{ $value }} errors per second"
+    
+    - alert: AuthServiceHighLatency
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="auth-service"}[5m])) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+      annotations:
+        summary: "Auth Service has high latency"
+        description: "Auth Service 95th percentile latency is {{ $value }}s"
+    
+    - alert: AuthServiceDown
+      expr: up{job="auth-service"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        service: auth-service
+      annotations:
+        summary: "Auth Service is down"
+        description: "Auth Service has been down for more than 1 minute"
+    
+    - alert: AuthServiceHighMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"auth-service-.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        service: auth-service
+      annotations:
+        summary: "Auth Service high memory usage"
+        description: "Auth Service memory usage is {{ $value | humanizePercentage }}"

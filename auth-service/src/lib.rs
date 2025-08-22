@@ -104,6 +104,11 @@ pub mod sql_store;
 pub mod store;
 pub mod validation;
 
+// Advanced optimization and monitoring
+pub mod performance_optimizer;
+pub mod security_analyzer;
+pub mod intelligent_cache;
+
 // Authentication and authorization
 pub mod api_key_endpoints;
 pub mod api_key_store;

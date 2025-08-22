@@ -1,0 +1,392 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Rust Security Platform - Production Dashboard",
+    "tags": ["rust", "security", "authentication", "production"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job=\"auth-service\"}",
+            "legendFormat": "Service Status",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Requests/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+            "legendFormat": "P95 Latency",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"auth-service\",status=~\"5..\"}[5m]) / rate(http_requests_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Error Rate",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "displayMode": "list",
+              "orientation": "horizontal"
+            },
+            "mappings": [],
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Total Requests/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"auth-service\",status=~\"2..\"}[5m])",
+            "legendFormat": "Success Requests/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"auth-service\",status=~\"4..\"}[5m])",
+            "legendFormat": "Client Error Requests/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"auth-service\",status=~\"5..\"}[5m])",
+            "legendFormat": "Server Error Requests/sec",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Requests per second",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Response Time",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+            "legendFormat": "P50 Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+            "legendFormat": "P95 Latency",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+            "legendFormat": "P99 Latency",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Authentication Metrics",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 17},
+        "targets": [
+          {
+            "expr": "rate(auth_attempts_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Authentication Attempts/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(auth_success_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Successful Authentications/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(auth_failures_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Failed Authentications/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(brute_force_attempts_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Brute Force Attempts/sec",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Events per second",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Security Events",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 17},
+        "targets": [
+          {
+            "expr": "rate(security_threats_detected_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Threats Detected/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(security_threats_blocked_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Threats Blocked/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(rate_limit_exceeded_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Rate Limits Exceeded/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(suspicious_activity_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Suspicious Activity/sec",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Events per second",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Resource Usage",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 26},
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{pod=~\"auth-service-.*\"}[5m])",
+            "legendFormat": "CPU Usage",
+            "refId": "A"
+          },
+          {
+            "expr": "container_memory_usage_bytes{pod=~\"auth-service-.*\"} / 1024 / 1024",
+            "legendFormat": "Memory Usage (MB)",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Usage",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Cache Performance",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 26},
+        "targets": [
+          {
+            "expr": "cache_hit_rate{job=\"auth-service\"}",
+            "legendFormat": "Cache Hit Rate",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(cache_hits_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Cache Hits/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(cache_misses_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Cache Misses/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "cache_size_bytes{job=\"auth-service\"} / 1024 / 1024",
+            "legendFormat": "Cache Size (MB)",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Rate / Size",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Database Performance",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 35},
+        "targets": [
+          {
+            "expr": "rate(database_queries_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Database Queries/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(database_query_duration_seconds_bucket{job=\"auth-service\"}[5m]))",
+            "legendFormat": "P95 Query Duration",
+            "refId": "B"
+          },
+          {
+            "expr": "database_connections_active{job=\"auth-service\"}",
+            "legendFormat": "Active Connections",
+            "refId": "C"
+          },
+          {
+            "expr": "database_connections_idle{job=\"auth-service\"}",
+            "legendFormat": "Idle Connections",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Queries/sec / Connections",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "JWT Token Metrics",
+        "type": "graph",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 35},
+        "targets": [
+          {
+            "expr": "rate(jwt_tokens_issued_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "JWT Tokens Issued/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(jwt_tokens_validated_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "JWT Tokens Validated/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(jwt_tokens_expired_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "JWT Tokens Expired/sec",
+            "refId": "C"
+          },
+          {
+            "expr": "rate(jwt_tokens_invalid_total{job=\"auth-service\"}[5m])",
+            "legendFormat": "Invalid JWT Tokens/sec",
+            "refId": "D"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Tokens per second",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Top Endpoints by Request Volume",
+        "type": "table",
+        "gridPos": {"h": 9, "w": 12, "x": 0, "y": 44},
+        "targets": [
+          {
+            "expr": "topk(10, rate(http_requests_total{job=\"auth-service\"}[5m]))",
+            "legendFormat": "{{method}} {{path}}",
+            "refId": "A",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Error Rate by Endpoint",
+        "type": "table",
+        "gridPos": {"h": 9, "w": 12, "x": 12, "y": 44},
+        "targets": [
+          {
+            "expr": "topk(10, rate(http_requests_total{job=\"auth-service\",status=~\"[45]..\"}[5m]) / rate(http_requests_total{job=\"auth-service\"}[5m]))",
+            "legendFormat": "{{method}} {{path}}",
+            "refId": "A",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Geographic Distribution of Requests",
+        "type": "worldmap",
+        "gridPos": {"h": 9, "w": 24, "x": 0, "y": 53},
+        "targets": [
+          {
+            "expr": "sum by (country) (rate(http_requests_total{job=\"auth-service\"}[5m]))",
+            "legendFormat": "{{country}}",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "namespace",
+          "type": "query",
+          "query": "label_values(up{job=\"auth-service\"}, namespace)",
+          "current": {
+            "value": "rust-security-production",
+            "text": "rust-security-production"
+          }
+        },
+        {
+          "name": "pod",
+          "type": "query",
+          "query": "label_values(up{job=\"auth-service\", namespace=\"$namespace\"}, pod)",
+          "current": {
+            "value": "All",
+            "text": "All"
+          },
+          "includeAll": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "changes(up{job=\"auth-service\"}[1m]) > 0",
+          "titleFormat": "Deployment",
+          "textFormat": "Service restarted"
+        }
+      ]
+    }
+  }
+}

@@ -214,7 +214,7 @@ impl PerformanceMonitor {
     pub async fn get_metrics(&self) -> Result<PerformanceMetrics> {
         let latency_samples = self.request_latency.get_sample_count();
         let latency_sum = self.request_latency.get_sample_sum();
-        
+
         let avg_latency_ms = if latency_samples > 0 {
             (latency_sum / latency_samples as f64) * 1000.0
         } else {
