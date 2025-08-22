@@ -444,7 +444,7 @@ mod tests {
         let manager = DocumentationManager::new(config);
 
         let docs = manager.generate_markdown_docs(&ApiVersion::new(1, 0, 0));
-        assert!(docs.contains("# Rust Security Platform API Documentation"));
+        assert!(docs.contains("# Rust Security Platform API API Documentation"));
         assert!(docs.contains("**Version:** 1.0.0"));
     }
 

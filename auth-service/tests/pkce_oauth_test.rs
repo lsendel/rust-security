@@ -76,7 +76,8 @@ async fn test_pkce_authorization_code_flow() {
 
     // Step 1: Generate PKCE parameters (normally done by client)
     let code_verifier = auth_service::security::generate_code_verifier();
-    let code_challenge = auth_service::security::generate_code_challenge(&code_verifier);
+    let code_challenge = auth_service::security::generate_code_challenge(&code_verifier)
+        .expect("Failed to generate code challenge");
 
     // Step 2: Authorization request with PKCE
     let auth_url = format!(

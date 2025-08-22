@@ -389,7 +389,7 @@ mod tests {
             VersionManager::new(ApiVersion::new(1, 0, 0), DeprecationPolicy::default());
         version_manager.add_version(ApiVersion::new(1, 1, 0));
 
-        let middleware = ApiVersioningMiddleware::new(version_manager);
+        let _middleware = ApiVersioningMiddleware::new(version_manager);
 
         let mut headers = HeaderMap::new();
         headers.insert("api-version", HeaderValue::from_static("1.1.0"));

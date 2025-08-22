@@ -1,0 +1,24 @@
+auth_service:
+  bind_address: "0.0.0.0:8080"
+  log_level: "debug"
+  enable_cors: true
+  cors_origins: ["http://localhost:3000", "http://localhost:8080"]
+  
+policy_service:
+  bind_address: "0.0.0.0:8081"
+  log_level: "debug"
+  cedar_policies_path: "./policies/development"
+  
+observability:
+  tracing:
+    enabled: true
+    endpoint: "http://localhost:4317"
+    sampling_rate: 1.0
+  metrics:
+    enabled: true
+    endpoint: "http://localhost:9090"
+    
+development:
+  hot_reload: true
+  debug_endpoints: true
+  sample_data: true
