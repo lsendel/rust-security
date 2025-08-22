@@ -180,7 +180,7 @@ impl IntoResponse for AuthError {
                     false,
                 )
             }
-            AuthError::ValidationError { field, .. } => (
+            AuthError::ValidationError { .. } => (
                 StatusCode::BAD_REQUEST,
                 "invalid_request",
                 "Request validation failed",
@@ -416,6 +416,7 @@ impl From<anyhow::Error> for AuthError {
 // Utility functions for PII/SPI protection
 
 /// Redact client ID to prevent information leakage while preserving some utility
+#[allow(dead_code)]
 fn redact_client_id(client_id: &str) -> String {
     let _redactor = PiiSpiRedactor::new();
     // Use partial redaction for client IDs to maintain some utility for debugging

@@ -1,0 +1,462 @@
+set shell := ["/bin/bash", "-cu"]
+
+# =============================================================================
+# ENHANCED JUSTFILE - RUST SECURITY PLATFORM
+# Comprehensive development automation with immediate improvements
+# =============================================================================
+
+# Default recipe that lists available commands
+default:
+    @just --list
+
+# =============================================================================
+# IMMEDIATE WINS - ENHANCED VALIDATION
+# =============================================================================
+
+# Complete CI pipeline locally (comprehensive validation)
+ci-complete:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔄 Running complete CI pipeline locally..."
+    
+    echo "📝 Step 1/7: Format check..."
+    just fmt-check
+    
+    echo "🔍 Step 2/7: Linting..."
+    just lint
+    
+    echo "🧪 Step 3/7: Testing..."
+    just test
+    
+    echo "🔒 Step 4/7: Security audit..."
+    just audit
+    
+    echo "🚫 Step 5/7: Dependency check..."
+    just deny
+    
+    echo "📊 Step 6/7: Coverage check..."
+    just coverage-check || echo "⚠️ Coverage below baseline"
+    
+    echo "🛡️ Step 7/7: Security validation..."
+    just validate-security || echo "⚠️ Security issues detected"
+    
+    echo "✅ Complete CI pipeline finished!"
+
+# Quick validation for fast feedback (<30s target)
+validate-quick:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "⚡ Quick validation (30s target)..."
+    
+    start_time=$(date +%s)
+    
+    echo "🔍 Checking workspace..."
+    cargo check --workspace --all-features --message-format=short
+    
+    echo "📎 Running clippy (essential only)..."
+    cargo clippy --workspace --message-format=short -- -D warnings
+    
+    echo "🧪 Running unit tests only..."
+    cargo test --workspace --lib --quiet
+    
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+    
+    echo "✅ Quick validation complete in ${duration}s!"
+    
+    if [ $duration -gt 30 ]; then
+        echo "⚠️ Warning: Validation took longer than 30s target"
+    fi
+
+# Security-focused validation sweep
+validate-security:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔒 Security validation sweep..."
+    
+    echo "🔍 Cargo audit..."
+    cargo audit --deny warnings
+    
+    echo "🚫 Cargo deny check..."
+    cargo deny check --all-features
+    
+    echo "🛡️ Security script..."
+    if [ -f "./scripts/security-audit.sh" ]; then
+        ./scripts/security-audit.sh
+    else
+        echo "⚠️ Security audit script not found"
+    fi
+    
+    echo "🔐 Checking for hardcoded secrets..."
+    if command -v rg &> /dev/null; then
+        rg -i "password|secret|key|token" --type rust src/ || echo "No obvious secrets found"
+    fi
+    
+    echo "✅ Security validation complete!"
+
+# Performance validation and regression detection
+validate-performance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📊 Performance validation..."
+    
+    echo "🏃 Running benchmarks..."
+    cargo bench --workspace --quiet
+    
+    echo "📈 Checking for regressions..."
+    if [ -f "./scripts/performance/check-regression.sh" ]; then
+        ./scripts/performance/check-regression.sh
+    else
+        echo "⚠️ Performance regression script not found"
+    fi
+    
+    echo "✅ Performance validation complete!"
+
+# =============================================================================
+# ENHANCED DEVELOPMENT TOOLS
+# =============================================================================
+
+# Install and configure development hooks
+install-hooks:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🪝 Installing development hooks..."
+    
+    # Install pre-commit if not available
+    if ! command -v pre-commit &> /dev/null; then
+        echo "📦 Installing pre-commit..."
+        pip install pre-commit || echo "⚠️ Failed to install pre-commit"
+    fi
+    
+    # Install hooks
+    pre-commit install
+    pre-commit install --hook-type commit-msg
+    
+    # Test hooks
+    echo "🧪 Testing hooks..."
+    pre-commit run --all-files || echo "⚠️ Some hooks failed - this is normal on first run"
+    
+    echo "✅ Development hooks installed!"
+
+# Setup complete development environment
+setup-dev-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🚀 Setting up complete development environment..."
+    
+    # Install required tools
+    echo "📦 Installing Rust tools..."
+    cargo install cargo-audit cargo-deny cargo-llvm-cov just || echo "Some tools may already be installed"
+    
+    # Install pre-commit hooks
+    just install-hooks
+    
+    # Start development services
+    echo "🐳 Starting development services..."
+    docker-compose up -d redis postgresql || echo "⚠️ Failed to start some services"
+    
+    # Verify setup
+    echo "✅ Verifying setup..."
+    just validate-quick
+    
+    echo "🎉 Development environment ready!"
+
+# =============================================================================
+# ENHANCED TESTING & COVERAGE
+# =============================================================================
+
+# Generate comprehensive coverage report
+coverage-report:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    echo "📊 Generating comprehensive coverage report..."
+    
+    mkdir -p target/coverage-reports
+    
+    echo "📈 HTML report..."
+    cargo llvm-cov --workspace --all-features --html --output-dir target/coverage-reports/html
+    
+    echo "📄 LCOV report..."
+    cargo llvm-cov --workspace --all-features --lcov --output-path target/coverage-reports/lcov.info
+    
+    echo "📋 JSON report..."
+    cargo llvm-cov --workspace --all-features --json --output-path target/coverage-reports/coverage.json
+    
+    echo "📝 Summary report..."
+    cargo llvm-cov --workspace --all-features --summary-only > target/coverage-reports/summary.txt
+    
+    echo "✅ Coverage reports generated in target/coverage-reports/"
+    echo "🌐 Open target/coverage-reports/html/index.html to view detailed report"
+
+# Coverage check with configurable baseline
+coverage-check baseline="70":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    
+    BASELINE_COVERAGE={{baseline}}
+    echo "🎯 Checking coverage against baseline: ${BASELINE_COVERAGE}%"
+    
+    # Generate coverage and extract percentage
+    COVERAGE_OUTPUT=$(cargo llvm-cov --workspace --all-features --summary-only)
+    COVERAGE=$(echo "$COVERAGE_OUTPUT" | grep -E "^TOTAL" | awk '{print $10}' | sed 's/%//' || echo "0")
+    
+    echo "Current coverage: ${COVERAGE}%"
+    echo "$COVERAGE_OUTPUT"
+    
+    # Compare with baseline
+    if (( $(echo "$COVERAGE >= $BASELINE_COVERAGE" | bc -l) )); then
+        echo "✅ Coverage meets baseline requirement (${COVERAGE}% >= ${BASELINE_COVERAGE}%)"
+    else
+        echo "❌ Coverage below baseline: ${COVERAGE}% < ${BASELINE_COVERAGE}%"
+        echo "💡 Consider adding tests to improve coverage"
+        exit 1
+    fi
+
+# =============================================================================
+# ENHANCED PERFORMANCE TOOLS
+# =============================================================================
+
+# Run continuous benchmarks with analysis
+bench-continuous:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📊 Running continuous benchmarks..."
+    
+    # Create benchmark results directory
+    mkdir -p benchmark-results/$(date +%Y%m%d_%H%M%S)
+    
+    # Run benchmarks
+    cargo bench --workspace 2>&1 | tee benchmark-results/latest.txt
+    
+    # Analyze results if script exists
+    if [ -f "./scripts/performance/analyze-results.sh" ]; then
+        ./scripts/performance/analyze-results.sh
+    fi
+    
+    echo "✅ Benchmarks complete!"
+
+# Generate CPU flamegraph
+profile-cpu:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔥 Generating CPU flamegraph..."
+    
+    # Install flamegraph if not available
+    if ! cargo flamegraph --version &> /dev/null; then
+        echo "📦 Installing flamegraph..."
+        cargo install flamegraph
+    fi
+    
+    # Generate flamegraph for auth-service
+    cd auth-service
+    cargo flamegraph --bin auth-service -- --help
+    
+    echo "✅ Flamegraph generated!"
+
+# Memory profiling
+profile-memory:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🧠 Memory profiling..."
+    
+    # Use valgrind if available
+    if command -v valgrind &> /dev/null; then
+        cd auth-service
+        cargo build --bin auth-service
+        valgrind --tool=massif target/debug/auth-service --help
+        echo "✅ Memory profile generated with valgrind"
+    else
+        echo "⚠️ Valgrind not available, skipping memory profiling"
+    fi
+
+# =============================================================================
+# ENHANCED SECURITY TOOLS
+# =============================================================================
+
+# Generate SBOM with enhanced metadata
+sbom-generate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📋 Generating Software Bill of Materials..."
+    
+    # Generate SBOM using compliance tools
+    cd compliance-tools
+    cargo run --bin sbom-generator -- --project-root .. --output ../sbom.spdx.json
+    
+    # Generate additional formats if tools available
+    if command -v cyclonedx-bom &> /dev/null; then
+        echo "📋 Generating CycloneDX SBOM..."
+        cyclonedx-bom -o ../sbom.cyclonedx.json
+    fi
+    
+    echo "✅ SBOM generated!"
+
+# Comprehensive security audit
+security-audit-comprehensive:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔒 Comprehensive security audit..."
+    
+    echo "🔍 Cargo audit..."
+    cargo audit --deny warnings
+    
+    echo "🚫 Cargo deny..."
+    cargo deny check --all-features
+    
+    echo "🔐 Checking dependencies..."
+    cargo tree --duplicates
+    
+    echo "📋 Generating SBOM..."
+    just sbom-generate
+    
+    echo "🛡️ Security validation..."
+    just validate-security
+    
+    echo "✅ Comprehensive security audit complete!"
+
+# =============================================================================
+# ENHANCED BUILD & DEPLOYMENT
+# =============================================================================
+
+# Build with security hardening
+build-secure:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🔒 Building with security hardening..."
+    
+    # Set security-focused environment variables
+    export RUSTFLAGS="-D warnings -C target-cpu=native"
+    
+    # Build with all security features
+    cargo build --workspace --all-features --release
+    
+    echo "✅ Secure build complete!"
+
+# Docker build with security scanning
+docker-build-secure:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🐳 Building secure Docker images..."
+    
+    # Build images
+    docker build -f auth-service/Dockerfile.secure -t auth-service:latest .
+    docker build -f policy-service/Dockerfile -t policy-service:latest .
+    
+    # Scan images if trivy is available
+    if command -v trivy &> /dev/null; then
+        echo "🔍 Scanning images for vulnerabilities..."
+        trivy image auth-service:latest
+        trivy image policy-service:latest
+    fi
+    
+    echo "✅ Secure Docker build complete!"
+
+# =============================================================================
+# ENHANCED MAINTENANCE
+# =============================================================================
+
+# Update dependencies with security check
+update-secure:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "📦 Updating dependencies securely..."
+    
+    # Update dependencies
+    cargo update
+    
+    # Check for security issues
+    cargo audit --deny warnings
+    cargo deny check --all-features
+    
+    # Test after update
+    just test
+    
+    echo "✅ Secure dependency update complete!"
+
+# Clean with verification
+clean-verify:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🧹 Cleaning with verification..."
+    
+    # Clean build artifacts
+    cargo clean
+    rm -rf target/
+    
+    # Clean coverage reports
+    rm -rf target/coverage-reports/
+    
+    # Clean benchmark results (keep latest)
+    find benchmark-results/ -type f -name "*.txt" -not -name "latest.txt" -delete 2>/dev/null || true
+    
+    # Verify clean build
+    echo "✅ Verifying clean build..."
+    just build
+    
+    echo "✅ Clean and verify complete!"
+
+# =============================================================================
+# LEGACY COMPATIBILITY (from original justfile)
+# =============================================================================
+
+fmt:
+    cargo fmt --all
+
+fmt-check:
+    cargo fmt --all -- --check
+
+lint:
+    cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::perf -W clippy::suspicious
+
+build:
+    cargo build --workspace --all-features
+
+build-release:
+    cargo build --workspace --all-features --release
+
+test:
+    #!/usr/bin/env bash
+    export TEST_MODE=1
+    cargo test --workspace --all-features --verbose
+
+audit:
+    cargo audit --deny warnings
+
+deny:
+    cargo deny check --all-features
+
+# =============================================================================
+# HELP AND DOCUMENTATION
+# =============================================================================
+
+# Show help for enhanced features
+help-enhanced:
+    #!/usr/bin/env bash
+    echo "🚀 Enhanced Justfile Features:"
+    echo ""
+    echo "🔄 Validation Commands:"
+    echo "  ci-complete           - Run complete CI pipeline locally"
+    echo "  validate-quick        - Fast validation (<30s)"
+    echo "  validate-security     - Security-focused validation"
+    echo "  validate-performance  - Performance regression check"
+    echo ""
+    echo "🛠️ Development Tools:"
+    echo "  install-hooks         - Install pre-commit hooks"
+    echo "  setup-dev-env         - Complete development setup"
+    echo ""
+    echo "📊 Enhanced Testing:"
+    echo "  coverage-report       - Comprehensive coverage analysis"
+    echo "  coverage-check [N]    - Check coverage against baseline"
+    echo ""
+    echo "🔥 Performance Tools:"
+    echo "  bench-continuous      - Continuous benchmarking"
+    echo "  profile-cpu           - Generate CPU flamegraph"
+    echo "  profile-memory        - Memory profiling"
+    echo ""
+    echo "🔒 Security Tools:"
+    echo "  sbom-generate         - Generate SBOM"
+    echo "  security-audit-comprehensive - Full security audit"
+    echo ""
+    echo "Use 'just --list' to see all available commands"

@@ -156,6 +156,8 @@ pub mod ai_threat_detection;
 pub mod config_secure;
 pub mod quantum_jwt;
 pub mod rate_limit_secure;
+pub mod performance_monitor;
+pub mod monitoring_dashboard;
 pub mod security_tests;
 pub mod session_secure;
 pub mod validation_secure;

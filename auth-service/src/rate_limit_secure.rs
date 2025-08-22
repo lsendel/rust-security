@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;

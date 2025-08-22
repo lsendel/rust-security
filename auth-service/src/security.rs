@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
+use ring::rand::SecureRandom;
 
 /// Request timestamp validation window in seconds
 const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
@@ -16,7 +17,7 @@ static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
     std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
         // Generate a cryptographically secure salt
         let mut salt = [0u8; 32];
-        use ring::rand::{SecureRandom, SystemRandom};
+        use ring::rand::SystemRandom;
         SystemRandom::new()
             .fill(&mut salt)
             .expect("Failed to generate salt");
@@ -26,10 +27,7 @@ static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
 
 /// Generate a token binding value from client information using secure practices
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<String, &'static str> {
-    use ring::{
-        hmac,
-        rand::{SecureRandom, SystemRandom},
-    };
+    use ring::hmac;
 
     let salt = TOKEN_BINDING_SALT.as_bytes();
 

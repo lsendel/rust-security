@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
+use tracing::info;
 
 /// Quantum-safe JWT implementation with hybrid cryptography
 /// Combines classical RSA/ECDSA with post-quantum ML-DSA signatures

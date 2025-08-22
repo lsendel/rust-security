@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
-use validator::{ValidationError, ValidationErrors};
+use validator::ValidationError;
 
 // Import constants from the main validation module
 use crate::validation::{
@@ -411,7 +411,7 @@ pub fn sanitize_string(input: &str) -> String {
 pub fn validate_text_input(
     input: &str,
     max_length: usize,
-    field_name: &str,
+    _field_name: &str,
 ) -> Result<String, ValidationError> {
     if input.is_empty() {
         return Err(ValidationError::new("Field cannot be empty"));

@@ -3,7 +3,7 @@ use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::warn;
 
 /// AI-powered advanced threat detection system
 /// Uses machine learning models for real-time threat analysis
