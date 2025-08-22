@@ -15,7 +15,7 @@ use opentelemetry_sdk::{
     trace::{self, RandomIdGenerator, Sampler},
     Resource,
 };
-use opentelemetry_jaeger::JaegerTraceExporter;
+use opentelemetry_jaeger::new_agent_pipeline;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use sha2::{Sha256, Digest};

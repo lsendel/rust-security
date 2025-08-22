@@ -10,7 +10,6 @@ use tokio::sync::RwLock;
 /// Optimized database operations with security constraints
 pub struct DatabaseOptimized {
     redis_pool: RedisPool,
-    connection_pool: Arc<bb8::Pool<RedisConnectionManager>>,
     query_cache: Arc<DashMap<String, CachedQuery>>,
     prepared_statements: Arc<RwLock<DashMap<String, String>>>,
     security_constraints: SecurityConstraints,

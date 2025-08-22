@@ -9,7 +9,7 @@ use opentelemetry::{
     trace::{SpanKind, TraceContextExt, Tracer},
     Context, KeyValue,
 };
-use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
+use opentelemetry_otlp::{WithExportConfig, TonicConfig};
 use opentelemetry_sdk::{
     metrics::{MeterProviderBuilder, PeriodicReader, SdkMeterProvider},
     resource::{EnvResourceDetector, TelemetryResourceDetector},

@@ -481,8 +481,7 @@ impl Clone for OptimizedConnectionPool {
 
 /// Wrapper for different types of Redis connections
 pub enum PooledConnection {
-    Bb8(bb8::PooledConnection<'static, RedisConnectionManager>),
-    Multiplexed(RedisMultiplexedConnection),
+    Multiplexed(RedisConnection),
     Direct(RedisConnection),
 }
 

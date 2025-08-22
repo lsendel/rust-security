@@ -1,7 +1,9 @@
-use async_trait::async_trait;//! SOAR Workflow Orchestration Engine
+//! SOAR Workflow Orchestration Engine
 //!
 //! This module provides the workflow execution engine for security playbooks,
 //! including step execution, dependency management, approval handling, and error recovery.
+
+use async_trait::async_trait;
 
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::soar_core::*;
