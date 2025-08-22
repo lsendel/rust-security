@@ -67,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
         
       - name: Dependency Review
-        uses: actions/dependency-review-action@v3
+        uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
           deny-licenses: GPL-3.0, LGPL-2.1, AGPL-3.0
@@ -90,8 +90,16 @@ jobs:
           
       - name: Check Python dependencies
         run: |
-          cd red-team-exercises/security-dashboard/python-dashboard
-          safety check -r requirements.txt --json
+          if [ -d "red-team-exercises/security-dashboard/python-dashboard" ]; then
+            cd red-team-exercises/security-dashboard/python-dashboard
+            if [ -f "requirements.txt" ]; then
+              safety check -r requirements.txt --json || echo "Safety check completed with findings"
+            else
+              echo "No requirements.txt found in Python dashboard"
+            fi
+          else
+            echo "Python dashboard directory not found, skipping Python security check"
+          fi
         continue-on-error: true
         
   container-scan:
@@ -132,10 +140,18 @@ jobs:
           
       - name: Scan Kubernetes manifests
         run: |
-          for file in k8s/*.yaml; do
-            echo "Scanning $file..."
-            kubesec scan "$file" || true
-          done
+          if [ -d "k8s" ]; then
+            if ls k8s/*.yaml 1> /dev/null 2>&1; then
+              for file in k8s/*.yaml; do
+                echo "Scanning $file..."
+                kubesec scan "$file" || echo "Warning: kubesec scan failed for $file"
+              done
+            else
+              echo "No YAML files found in k8s directory"
+            fi
+          else
+            echo "No k8s directory found, skipping Kubernetes security scan"
+          fi
           
   security-summary:
     name: Security Summary

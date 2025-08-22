@@ -136,6 +136,13 @@ pub mod security_logging;
 pub mod security_metrics;
 pub mod security_monitoring;
 
+// Enhanced JWT validation with comprehensive security constraints
+pub mod enhanced_jwt_validation;
+
+// Enhanced comprehensive observability system
+pub mod enhanced_observability;
+pub mod observability_init;
+
 // Key management
 pub mod jwks_handler;
 pub mod jwks_rate_limiter;
@@ -251,12 +258,12 @@ pub async fn jwks(State(state): State<AppState>) -> Json<serde_json::Value> {
     }))
 }
 
-/// Validate JWT using JWKS rotation manager
-/// This function can be used throughout the application to validate JWTs issued by this service
+/// Enhanced JWT validation using JWKS rotation manager with comprehensive security constraints
+/// This function performs thorough validation including audience, issuer, algorithm constraints
 pub async fn validate_jwt_with_jwks(
     state: &AppState,
     token: &str,
-) -> Result<serde_json::Value, AuthError> {
+) -> Result<enhanced_jwt_validation::JwtValidationResult, AuthError> {
     // Decode the JWT header to get the kid
     let header = jsonwebtoken::decode_header(token)
         .map_err(|e| AuthError::InvalidToken {
@@ -273,20 +280,76 @@ pub async fn validate_jwt_with_jwks(
             reason: format!("Failed to get decoding key: {}", e),
         })?;
 
-    // Set up validation - in production you'd want to customize these
-    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
-    // Disable default validations for now - enhance as needed
-    validation.validate_exp = true;
-    validation.validate_nbf = true;
-    validation.leeway = 60; // 60 seconds leeway for clock skew
-
-    // Decode and validate the token
-    let token_data = jsonwebtoken::decode::<serde_json::Value>(token, &decoding_key, &validation)
+    // Create enhanced validator with environment-based configuration
+    let validator = enhanced_jwt_validation::EnhancedJwtValidator::from_env()
         .map_err(|e| AuthError::InvalidToken {
-            reason: format!("JWT validation failed: {}", e),
+            reason: format!("Failed to create JWT validator: {}", e),
         })?;
 
-    Ok(token_data.claims)
+    // Perform comprehensive validation
+    validator.validate_token(token, &decoding_key).await
+}
+
+/// Validate JWT for OAuth access tokens with specific constraints
+pub async fn validate_oauth_access_token(
+    state: &AppState,
+    token: &str,
+) -> Result<enhanced_jwt_validation::JwtValidationResult, AuthError> {
+    // Decode the JWT header to get the kid
+    let header = jsonwebtoken::decode_header(token)
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Invalid JWT header: {}", e),
+        })?;
+
+    let kid = header.kid.ok_or_else(|| AuthError::InvalidToken {
+        reason: "Missing kid in JWT header".to_string(),
+    })?;
+
+    // Get the decoding key from JWKS manager
+    let decoding_key = state.jwks_manager.get_decoding_key(&kid).await
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Failed to get decoding key: {}", e),
+        })?;
+
+    // Create OAuth-specific validator
+    let validator = enhanced_jwt_validation::create_oauth_access_token_validator()
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Failed to create OAuth validator: {}", e),
+        })?;
+
+    // Perform OAuth-specific validation
+    validator.validate_token(token, &decoding_key).await
+}
+
+/// Validate JWT for ID tokens with specific constraints
+pub async fn validate_id_token(
+    state: &AppState,
+    token: &str,
+) -> Result<enhanced_jwt_validation::JwtValidationResult, AuthError> {
+    // Decode the JWT header to get the kid
+    let header = jsonwebtoken::decode_header(token)
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Invalid JWT header: {}", e),
+        })?;
+
+    let kid = header.kid.ok_or_else(|| AuthError::InvalidToken {
+        reason: "Missing kid in JWT header".to_string(),
+    })?;
+
+    // Get the decoding key from JWKS manager
+    let decoding_key = state.jwks_manager.get_decoding_key(&kid).await
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Failed to get decoding key: {}", e),
+        })?;
+
+    // Create ID token validator
+    let validator = enhanced_jwt_validation::create_id_token_validator()
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Failed to create ID token validator: {}", e),
+        })?;
+
+    // Perform ID token validation
+    validator.validate_token(token, &decoding_key).await
 }
 
 /// Create a JWKS manager with the appropriate storage backend
