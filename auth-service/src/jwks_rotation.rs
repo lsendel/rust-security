@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
+use redis::AsyncCommands;
 
 /// Key rotation configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +63,7 @@ pub struct CryptoKey {
     pub status: KeyStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum KeyStatus {
     Active,    // Current signing key
     Valid,     // Can be used for validation
@@ -498,5 +499,163 @@ mod tests {
         let jwks = manager.get_jwks().await;
         assert!(!jwks.keys.is_empty());
         assert!(jwks.keys[0].kid.starts_with("key_"));
+    }
+}
+
+/// Redis-backed key storage for distributed environments
+pub struct RedisKeyStorage {
+    client: redis::Client,
+    key_prefix: String,
+}
+
+impl RedisKeyStorage {
+    pub fn new(redis_url: &str) -> Result<Self, AuthError> {
+        let client = redis::Client::open(redis_url)
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to create Redis client: {}", e)
+            })?;
+        
+        Ok(Self {
+            client,
+            key_prefix: "jwks:keys:".to_string(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl KeyStorage for RedisKeyStorage {
+    async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError> {
+        let mut conn = self.client.get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e)
+            })?;
+
+        let redis_key = format!("{}{}", self.key_prefix, key.kid);
+        let key_json = serde_json::to_string(key)
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to serialize key: {}", e)
+            })?;
+
+        // Store with expiration based on key expiry
+        let ttl = (key.expires_at.timestamp() - chrono::Utc::now().timestamp()).max(60);
+        
+        redis::pipe()
+            .set(&redis_key, key_json)
+            .expire(&redis_key, ttl)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to store key in Redis: {}", e)
+            })?;
+
+        Ok(())
+    }
+
+    async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError> {
+        let mut conn = self.client.get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e)
+            })?;
+
+        let pattern = format!("{}*", self.key_prefix);
+        let key_names: Vec<String> = conn.keys(&pattern)
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to scan keys: {}", e)
+            })?;
+
+        let mut keys = Vec::new();
+        for key_name in key_names {
+            let key_json: Option<String> = conn.get(&key_name)
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to get key {}: {}", key_name, e)
+                })?;
+
+            if let Some(json) = key_json {
+                match serde_json::from_str::<CryptoKey>(&json) {
+                    Ok(key) => keys.push(key),
+                    Err(e) => {
+                        warn!("Failed to deserialize key {}: {}", key_name, e);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        Ok(keys)
+    }
+
+    async fn delete_key(&self, kid: &str) -> Result<(), AuthError> {
+        let mut conn = self.client.get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e)
+            })?;
+
+        let redis_key = format!("{}{}", self.key_prefix, kid);
+        conn.del(&redis_key)
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to delete key: {}", e)
+            })?;
+
+        Ok(())
+    }
+
+    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError> {
+        let mut conn = self.client.get_multiplexed_async_connection()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Redis connection failed: {}", e)
+            })?;
+
+        let redis_key = format!("{}{}", self.key_prefix, kid);
+        let key_json: Option<String> = conn.get(&redis_key)
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to get key for status update: {}", e)
+            })?;
+
+        if let Some(json) = key_json {
+            let mut key: CryptoKey = serde_json::from_str(&json)
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to deserialize key: {}", e)
+                })?;
+
+            key.status = status;
+            if status != KeyStatus::Active {
+                key.is_active = false;
+            }
+
+            let updated_json = serde_json::to_string(&key)
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to serialize updated key: {}", e)
+                })?;
+
+            conn.set(&redis_key, updated_json)
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to update key status: {}", e)
+                })?;
+        }
+
+        Ok(())
     }
 }

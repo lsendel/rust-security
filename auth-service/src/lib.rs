@@ -240,8 +240,83 @@ pub async fn oidc_metadata() -> Json<serde_json::Value> {
 }
 
 #[utoipa::path(get, path = "/jwks.json", responses((status = 200, body = serde_json::Value)))]
-pub async fn jwks() -> Json<serde_json::Value> {
-    Json(keys::jwks_document().await)
+pub async fn jwks(State(state): State<AppState>) -> Json<serde_json::Value> {
+    // Use the new JWKS rotation manager for public key distribution
+    let jwks_response = state.jwks_manager.get_jwks().await;
+    Json(serde_json::to_value(jwks_response).unwrap_or_else(|e| {
+        tracing::error!("Failed to serialize JWKS response: {}", e);
+        serde_json::json!({"keys": []})
+    }))
+}
+
+/// Validate JWT using JWKS rotation manager
+/// This function can be used throughout the application to validate JWTs issued by this service
+pub async fn validate_jwt_with_jwks(
+    state: &AppState,
+    token: &str,
+) -> Result<serde_json::Value, AuthError> {
+    // Decode the JWT header to get the kid
+    let header = jsonwebtoken::decode_header(token)
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Invalid JWT header: {}", e),
+        })?;
+
+    let kid = header.kid.ok_or_else(|| AuthError::InvalidToken {
+        reason: "Missing kid in JWT header".to_string(),
+    })?;
+
+    // Get the decoding key from JWKS manager
+    let decoding_key = state.jwks_manager.get_decoding_key(&kid).await
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("Failed to get decoding key: {}", e),
+        })?;
+
+    // Set up validation - in production you'd want to customize these
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
+    // Disable default validations for now - enhance as needed
+    validation.validate_exp = true;
+    validation.validate_nbf = true;
+    validation.leeway = 60; // 60 seconds leeway for clock skew
+
+    // Decode and validate the token
+    let token_data = jsonwebtoken::decode::<serde_json::Value>(token, &decoding_key, &validation)
+        .map_err(|e| AuthError::InvalidToken {
+            reason: format!("JWT validation failed: {}", e),
+        })?;
+
+    Ok(token_data.claims)
+}
+
+/// Create a JWKS manager with the appropriate storage backend
+pub async fn create_jwks_manager() -> Result<Arc<crate::jwks_rotation::JwksManager>, AuthError> {
+    let config = crate::jwks_rotation::KeyRotationConfig::default();
+    
+    // Try to use Redis if available, fallback to in-memory
+    let storage: Arc<dyn crate::jwks_rotation::KeyStorage> = 
+        if let Ok(redis_url) = std::env::var("REDIS_URL") {
+            match crate::jwks_rotation::RedisKeyStorage::new(&redis_url) {
+                Ok(redis_storage) => {
+                    tracing::info!("Using Redis-backed JWKS key storage");
+                    Arc::new(redis_storage)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize Redis storage, falling back to in-memory: {:?}", e);
+                    Arc::new(crate::jwks_rotation::InMemoryKeyStorage::new())
+                }
+            }
+        } else {
+            tracing::info!("Using in-memory JWKS key storage");
+            Arc::new(crate::jwks_rotation::InMemoryKeyStorage::new())
+        };
+
+    let manager = crate::jwks_rotation::JwksManager::new(config, storage)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to initialize JWKS manager: {:?}", e);
+            e
+        })?;
+
+    Ok(Arc::new(manager))
 }
 
 // Enhanced MFA v2 endpoints using the comprehensive system
@@ -782,6 +857,7 @@ pub struct AppState {
     pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<crate::backpressure::BackpressureState>,
     pub api_key_store: ApiKeyStore,
+    pub jwks_manager: Arc<crate::jwks_rotation::JwksManager>,
 }
 
 // IntrospectionRecord is now common::TokenRecord, used by the Store trait.
@@ -2419,21 +2495,25 @@ async fn store_access_token_metadata(
 }
 
 /// Helper function to create ID token if requested
-async fn create_id_token(subject: Option<String>, now: i64, exp: i64) -> Option<String> {
+async fn create_id_token(state: &AppState, subject: Option<String>, now: i64, exp: i64) -> Option<String> {
     subject.as_ref()?;
 
-    let (kid, encoding_key) = keys::current_signing_key()
+    // Use the new JWKS rotation manager for token signing
+    let header = state.jwks_manager.create_jwt_header()
         .await
         .map_err(|e| {
-            tracing::error!(error = %redact_log(&e.to_string()), "Failed to get signing key");
+            tracing::error!(error = %redact_log(&e.to_string()), "Failed to get JWT header with kid");
             e
         })
         .ok()?;
-    let header = jsonwebtoken::Header {
-        alg: jsonwebtoken::Algorithm::RS256,
-        kid: Some(kid),
-        ..Default::default()
-    };
+
+    let encoding_key = state.jwks_manager.get_encoding_key()
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %redact_log(&e.to_string()), "Failed to get encoding key");
+            e
+        })
+        .ok()?;
 
     #[derive(Serialize)]
     struct IdClaims<'a> {
@@ -2492,7 +2572,7 @@ async fn issue_new_token(
         .await?;
 
     let id_token = if make_id_token {
-        create_id_token(subject.clone(), now, exp).await
+        create_id_token(state, subject.clone(), now, exp).await
     } else {
         None
     };
