@@ -1,6 +1,7 @@
 #![cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
+use axum::body::to_bytes;
 use auth_core::{
     client::ClientConfig,
     server::{AppState, ServerConfig},
@@ -92,7 +93,7 @@ async fn test_invalid_grant_type_error_rfc6749_section_5_2() {
     let err = res.err().expect("expected unsupported_grant_type error");
     let resp = err.into_response();
     assert_eq!(resp.status(), axum::http::StatusCode::BAD_REQUEST);
-    let body = hyper::body::to_bytes(resp.into_body()).await.unwrap();
+    let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
     let v: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(v.get("error").unwrap(), "unsupported_grant_type");
 }

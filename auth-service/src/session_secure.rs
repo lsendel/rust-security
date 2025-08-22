@@ -201,8 +201,9 @@ impl SecureSessionManager {
 
         // Check expiration
         if now > session.expires_at {
+            let user_id = session.user_id.clone();
             sessions.remove(session_id);
-            self.cleanup_user_session(&session.user_id, session_id)
+            self.cleanup_user_session(&user_id, session_id)
                 .await;
             return Err(SessionError::SessionExpired);
         }
@@ -210,8 +211,9 @@ impl SecureSessionManager {
         // Check idle timeout
         let idle_duration = now - session.last_accessed;
         if idle_duration.num_seconds() > self.config.max_idle_time_seconds as i64 {
+            let user_id = session.user_id.clone();
             sessions.remove(session_id);
-            self.cleanup_user_session(&session.user_id, session_id)
+            self.cleanup_user_session(&user_id, session_id)
                 .await;
             return Err(SessionError::SessionIdleTimeout);
         }
@@ -226,8 +228,9 @@ impl SecureSessionManager {
                 "Session IP mismatch detected - possible hijacking attempt"
             );
 
+            let user_id = session.user_id.clone();
             sessions.remove(session_id);
-            self.cleanup_user_session(&session.user_id, session_id)
+            self.cleanup_user_session(&user_id, session_id)
                 .await;
             return Err(SessionError::SessionHijackingDetected);
         }
@@ -242,8 +245,9 @@ impl SecureSessionManager {
                     "Session user agent mismatch detected"
                 );
 
+                let user_id = session.user_id.clone();
                 sessions.remove(session_id);
-                self.cleanup_user_session(&session.user_id, session_id)
+                self.cleanup_user_session(&user_id, session_id)
                     .await;
                 return Err(SessionError::SessionHijackingDetected);
             }

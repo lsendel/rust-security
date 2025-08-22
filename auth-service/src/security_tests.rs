@@ -6,6 +6,8 @@ mod security_tests {
     use crate::security::*;
     use crate::session_secure::*;
     use crate::validation_secure::*;
+    use base64::Engine;
+    use ring::rand::SecureRandom;
     use std::net::{IpAddr, Ipv4Addr};
 
     /// Test hardcoded salt vulnerability fix

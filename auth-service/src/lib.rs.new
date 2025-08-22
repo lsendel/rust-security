@@ -1,0 +1,32 @@
+//! Auth Service Core Library
+//!
+//! Provides authentication and authorization services with enterprise-grade
+//! security features including rate limiting, audit logging, and threat detection.
+
+// Core modules
+pub mod auth;
+pub mod config;
+pub mod errors;
+pub mod handlers;
+pub mod middleware;
+pub mod metrics;
+pub mod security;
+pub mod storage;
+pub mod types;
+
+// SOAR modules
+pub mod soar;
+
+// Re-export main types for convenience
+pub use auth::{AuthService, AuthResult};
+pub use config::AuthConfig;
+pub use errors::AuthError;
+pub use types::{AuthRequest, AuthResponse, Token};
+
+// Service metadata
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const SERVICE_NAME: &str = "rust-security-auth-service";
+
+// Import dependencies for compatibility
+use futures as _;
+use tracing_subscriber as _;

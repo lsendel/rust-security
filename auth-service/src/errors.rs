@@ -298,7 +298,8 @@ impl IntoResponse for AuthError {
         }
 
         // Add security headers
-        let mut response = (status, Json(error_response)).into_response();
+        let response_tuple = (status, Json(error_response));
+        let mut response = response_tuple.into_response();
 
         // Add security headers to error responses
         let headers = response.headers_mut();

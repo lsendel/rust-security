@@ -3,6 +3,10 @@
 use auth_core::prelude::*;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use auth_core::{client::ClientConfig, server::{AppState, ServerConfig}, store::MemoryStore};
 use serde_json::Value;
 use tower::ServiceExt; // oneshot
 
@@ -57,12 +61,9 @@ async fn test_owasp_a1_injection_attacks() {
 
 #[tokio::test]
 async fn test_owasp_a2_broken_authentication() {
-    let server = AuthServer::minimal()
-        .with_client("valid_client", "secure_secret")
-        .build()
-        .expect("Failed to build server");
-
-    let mut router = server.into_router().into_service();
+    let mut clients = HashMap::new();
+    clients.insert("valid_client".to_string(), ClientConfig { client_id: "valid_client".into(), client_secret: "secure_secret".into(), grant_types: vec!["client_credentials".into()], scopes: vec!["default".into()] });
+    let state = AppState { config: ServerConfig { clients, rate_limit: 100, cors_enabled: true, jwt_secret: None, protected_routes: vec![] }, store: Arc::new(RwLock::new(MemoryStore::new())) };
 
     let bypass_attempts = vec![
         ("", ""),
@@ -76,27 +77,12 @@ async fn test_owasp_a2_broken_authentication() {
     ];
 
     for (client_id, client_secret) in bypass_attempts {
-        let response = client
-            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
-            .form(&[
-                ("grant_type", "client_credentials"),
-                ("client_id", client_id),
-                ("client_secret", client_secret),
-            ])
-            .send()
-            .await
-            .expect("Failed to send authentication bypass test");
-
-        assert_eq!(
-            response.status(),
-            401,
-            "Authentication bypass with: '{}'/'{}'",
-            client_id,
-            client_secret
-        );
+        let res = auth_core::handler::token::client_credentials(
+            axum::extract::State(state.clone()),
+            axum::Form(TokenRequest { grant_type: "client_credentials".into(), client_id: client_id.into(), client_secret: client_secret.into(), scope: None })
+        ).await;
+        assert!(res.is_err(), "Authentication bypass with: '{}'/'{}'", client_id, client_secret);
     }
-
-    server_handle.abort();
 }
 
 #[tokio::test]
@@ -238,16 +224,7 @@ async fn test_owasp_a6_security_misconfiguration() {
         .with_client("test_client", "test_secret")
         .build()
         .expect("Failed to build server");
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let server_handle = tokio::spawn(async move {
-        let _router = server.into_make_service();
-        drop(listener);
-    });
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let client = reqwest::Client::new();
+    let mut router = server.into_router().into_service();
 
     let body = "grant_type=client_credentials&client_id=test_client&client_secret=test_secret";
     let request = Request::builder()

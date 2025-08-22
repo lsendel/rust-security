@@ -90,7 +90,7 @@ pub struct SecurityHeaders {
     pub csp: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum FrameOptions {
     Deny,
     SameOrigin,

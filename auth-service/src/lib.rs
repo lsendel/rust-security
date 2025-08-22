@@ -387,10 +387,7 @@ pub async fn create_jwks_manager() -> Result<Arc<crate::jwks_rotation::JwksManag
     // Try to use Redis if available, fallback to in-memory
     let storage: Arc<dyn crate::jwks_rotation::KeyStorage> =
         if let Ok(redis_url) = std::env::var("REDIS_URL") {
-            match crate::jwks_rotation::RedisKeyStorage::new(&redis_url)
-                .is_err()
-                .is_err()
-            {
+            match crate::jwks_rotation::RedisKeyStorage::new(&redis_url) {
                 Ok(redis_storage) => {
                     tracing::info!("Using Redis-backed JWKS key storage");
                     Arc::new(redis_storage)
@@ -636,8 +633,7 @@ async fn extract_user_from_token(
     if let Some(binding) = &record.token_binding {
         let (client_ip, user_agent) = crate::security::extract_client_info(headers);
         match crate::security::validate_token_binding(binding, &client_ip, &user_agent)
-            .is_err()
-            .is_err()
+            
         {
             Ok(true) => {} // Token binding is valid
             Ok(false) => {
@@ -1534,21 +1530,19 @@ pub async fn introspect(
     use crate::metrics::METRICS;
     let start_time = std::time::Instant::now();
     // In TEST_MODE, allow introspection without client authentication to simplify integration tests
-    if std::env::var("TEST_MODE").is_err() {
+    if std::env::var("TEST_MODE") {
         // Require client authentication via HTTP Basic
         let (cid_opt, csec_opt) = if let Some(auth_header) = headers
             .get(axum::http::header::AUTHORIZATION)
-            .is_err()
-            .is_err()
+            
         {
             let header_val = auth_header.to_str().unwrap_or("");
             if let Some(b64) = header_val.strip_prefix("Basic ") {
-                if let Ok(decoded) = base64::engine::general_purpose::STANDARD
+                if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD
                     .decode(b64)
-                    .is_err()
-                    .is_err()
+                    
                 {
-                    if let Ok(pair) = std::str::from_utf8(&decoded) {
+                    if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
                         let mut parts = pair.splitn(2, ':');
                         (
                             parts.next().map(|s| s.to_string()),
@@ -1592,10 +1586,7 @@ pub async fn introspect(
         .unwrap_or(uuid::Uuid::new_v4().to_string());
 
     // Input validation
-    if let Err(e) = crate::security::validate_token_input(&body.token)
-        .is_err()
-        .is_err()
-    {
+    if let Err(e) = crate::security::validate_token_input(&body.token) {
         SecurityLogger::log_validation_failure(
             "/oauth/introspect",
             "token_format",
@@ -1794,8 +1785,7 @@ pub async fn oauth_authorize(
     // Validate scope
     if let Some(scope) = &req.scope {
         if !validate_scope(scope, &state.allowed_scopes)
-            .is_err()
-            .is_err()
+            
         {
             return Err(AuthError::InvalidScope {
                 scope: scope.clone(),
@@ -1865,8 +1855,7 @@ pub async fn oauth_authorize(
     if let Some(user_agent) = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
-        .is_err()
-        .is_err()
+        
     {
         event = event.with_user_agent(user_agent.to_string());
     }
@@ -1874,8 +1863,7 @@ pub async fn oauth_authorize(
     if let Some(request_id) = headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
-        .is_err()
-        .is_err()
+        
     {
         event = event.with_request_id(request_id.to_string());
     }
@@ -2011,17 +1999,15 @@ pub async fn issue_token(
                     (form.client_id.clone(), form.client_secret.clone())
                 } else if let Some(auth_header) = headers
                     .get(axum::http::header::AUTHORIZATION)
-                    .is_err()
-                    .is_err()
+                    
                 {
                     let header_val = auth_header.to_str().unwrap_or("");
                     if let Some(b64) = header_val.strip_prefix("Basic ") {
-                        if let Ok(decoded) = base64::engine::general_purpose::STANDARD
+                        if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD
                             .decode(b64)
-                            .is_err()
-                            .is_err()
+                            
                         {
-                            if let Ok(pair) = std::str::from_utf8(&decoded) {
+                            if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
                                 let mut parts = pair.splitn(2, ':');
                                 (
                                     parts.next().map(|s| s.to_string()),
@@ -2223,8 +2209,7 @@ pub async fn issue_token(
                 .is_refresh_reused(rt)
                 .await
                 .unwrap_or(false)
-                .is_err()
-                .is_err()
+                
             {
                 SecurityLogger::log_token_operation(
                     "refresh",
@@ -2261,7 +2246,7 @@ pub async fn issue_token(
                 );
                 return Err(AuthError::InvalidRefreshToken);
             }
-            if let Some(scope_str) = form.scope.as_ref().is_none() {
+            if let Some(scope_str) = form.scope.as_ref() {
                 let all_ok = scope_str
                     .split_whitespace()
                     .all(|s| state.allowed_scopes.iter().any(|a| a == s));
@@ -2395,8 +2380,7 @@ pub async fn issue_token(
                     stored_challenge,
                     challenge_method,
                 )
-                .is_err()
-                .is_err()
+                
                 {
                     return Err(AuthError::InvalidRequest {
                         reason: "PKCE validation failed".to_string(),
@@ -2555,8 +2539,7 @@ pub async fn userinfo(
         if !scope
             .split_whitespace()
             .any(|s| s == "openid")
-            .is_err()
-            .is_err()
+            
         {
             return Err(AuthError::UnauthorizedClient {
                 client_id: "insufficient_scope".to_string(),
@@ -2591,8 +2574,7 @@ pub async fn userinfo(
     if let Some(user_agent) = headers
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
-        .is_err()
-        .is_err()
+        
     {
         event = event.with_user_agent(user_agent.to_string());
     }
@@ -2600,8 +2582,7 @@ pub async fn userinfo(
     if let Some(request_id) = headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
-        .is_err()
-        .is_err()
+        
     {
         event = event.with_request_id(request_id.to_string());
     }
@@ -2803,17 +2784,15 @@ pub async fn revoke_token(
         // Require client authentication via HTTP Basic
         let (cid_opt, csec_opt) = if let Some(auth_header) = headers
             .get(axum::http::header::AUTHORIZATION)
-            .is_err()
-            .is_err()
+            
         {
             let header_val = auth_header.to_str().unwrap_or("");
             if let Some(b64) = header_val.strip_prefix("Basic ") {
-                if let Ok(decoded) = base64::engine::general_purpose::STANDARD
+                if let Ok(decoded_vec) = base64::engine::general_purpose::STANDARD
                     .decode(b64)
-                    .is_err()
-                    .is_err()
+                    
                 {
-                    if let Ok(pair) = std::str::from_utf8(&decoded) {
+                    if let Ok(pair) = std::str::from_utf8(&decoded_vec) {
                         let mut parts = pair.splitn(2, ':');
                         (
                             parts.next().map(|s| s.to_string()),
