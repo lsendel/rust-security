@@ -390,6 +390,7 @@ impl FraudDetectionEngine {
         let mut monitor = self.monitor.write().await;
         
         if let Some(session) = monitor.active_sessions.remove(session_id) {
+            let user_id_clone = session.user_id.clone();
             Some(SessionReport {
                 session_id: session.session_id,
                 user_id: session.user_id,
@@ -397,7 +398,7 @@ impl FraudDetectionEngine {
                 total_events: session.events.len(),
                 final_risk_score: session.current_risk_score,
                 alerts_generated: monitor.alerts.iter()
-                    .filter(|alert| alert.user_id == session.user_id)
+                    .filter(|alert| alert.user_id == user_id_clone)
                     .count(),
             })
         } else {

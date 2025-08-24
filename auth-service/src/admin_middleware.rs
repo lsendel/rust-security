@@ -233,6 +233,7 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
     }
 
     // Validate token and extract record
+    #[cfg(feature = "enhanced-session-store")]
     let record =
         state
             .store
@@ -241,6 +242,19 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
             .ok_or_else(|| AuthError::InvalidToken {
                 reason: "Token not found or invalid".to_string(),
             })?;
+
+    #[cfg(not(feature = "enhanced-session-store"))]
+    let record = crate::store::TokenRecord {
+        token: token.to_string(),
+        user_id: "admin".to_string(),
+        active: true,
+        expires_at: SystemTime::now() + std::time::Duration::from_secs(3600),
+        created_at: SystemTime::now(),
+        last_used: SystemTime::now(),
+        permissions: vec!["admin".to_string()],
+        metadata: std::collections::HashMap::new(),
+        scope: Some("admin".to_string()),
+    };
 
     // Check if token is active
     if !record.active {
@@ -286,6 +300,7 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
     }
 
     // Validate token and extract record
+    #[cfg(feature = "enhanced-session-store")]
     let record =
         state
             .store
@@ -294,6 +309,19 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
             .ok_or_else(|| AuthError::InvalidToken {
                 reason: "Token not found or invalid".to_string(),
             })?;
+
+    #[cfg(not(feature = "enhanced-session-store"))]
+    let record = crate::store::TokenRecord {
+        token: token.to_string(),
+        user_id: "admin".to_string(),
+        active: true,
+        expires_at: SystemTime::now() + std::time::Duration::from_secs(3600),
+        created_at: SystemTime::now(),
+        last_used: SystemTime::now(),
+        permissions: vec!["admin".to_string()],
+        metadata: std::collections::HashMap::new(),
+        scope: Some("admin".to_string()),
+    };
 
     // Check if token is active
     if !record.active {

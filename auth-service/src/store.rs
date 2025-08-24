@@ -73,7 +73,36 @@ impl HybridStore {
         }
     }
 
-    // Removed stub method - using trait implementation instead
+    /// Get token record - inherent method for direct access
+    pub async fn get_token_record(&self, token: &str) -> Result<Option<crate::IntrospectionRecord>, crate::errors::AuthError> {
+        // Try to get from the Store trait implementation and convert
+        match Store::get_token_record(self, token).await {
+            Ok(Some(token_record)) => {
+                // Convert TokenRecord to IntrospectionRecord
+                Ok(Some(crate::IntrospectionRecord {
+                    token: token.to_string(),
+                    active: true,
+                    scope: token_record.scope,
+                    client_id: Some(token_record.client_id),
+                    username: token_record.subject,
+                    exp: token_record.exp,
+                    iat: token_record.iat,
+                    nbf: None,
+                    sub: token_record.subject.clone(),
+                    aud: None,
+                    iss: None,
+                    jti: None,
+                    token_type: Some("Bearer".to_string()),
+                    token_binding: None,
+                }))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(crate::errors::AuthError::TokenStoreError {
+                operation: "get_token_record".to_string(),
+                source: e,
+            }),
+        }
+    }
 }
 
 #[async_trait]

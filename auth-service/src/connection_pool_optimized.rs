@@ -486,6 +486,7 @@ impl Clone for OptimizedConnectionPool {
 pub enum PooledConnection {
     Multiplexed(RedisConnection),
     Direct(RedisConnection),
+    Bb8(bb8_redis::bb8::PooledConnection<'static, bb8_redis::RedisConnectionManager>),
 }
 
 impl PooledConnection {

@@ -263,13 +263,15 @@ impl EnhancedObservability {
             latency_p95_ms: 0.0,
             error_rate_percentage: 0.0,
             last_updated: SystemTime::now(),
+            is_meeting_targets: true,
+            violations_count: 0,
         }));
 
         let health_status = Arc::new(RwLock::new(HealthStatus {
+            service: "auth-service".to_string(),
+            status: HealthCheckStatus::Healthy,
+            checks: HashMap::new(),
             overall_health: HealthCheckStatus::Healthy,
-            service_health: HashMap::new(),
-            resource_health: HashMap::new(),
-            last_check: SystemTime::now(),
             timestamp: SystemTime::now(),
         }));
 

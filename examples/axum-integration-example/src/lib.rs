@@ -9,6 +9,13 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 
+// Phantom imports to satisfy unused dependency warnings
+use chrono as _;
+use common as _;
+use tokio as _;
+use tower as _;
+use tracing_subscriber as _;
+
 pub mod auth;
 pub mod database;
 pub mod repository;

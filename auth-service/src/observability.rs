@@ -234,11 +234,12 @@ impl ObservabilityProvider {
         let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| "info,auth_service=debug".into());
 
-        tracing_subscriber::registry()
+        let subscriber = tracing_subscriber::registry()
             .with(env_filter)
             .with(tracing_subscriber::fmt::layer())
-            .with(telemetry_layer)
-            .try_init()
+            .with(telemetry_layer);
+
+        tracing::subscriber::set_global_default(subscriber)
             .map_err(|_| SecurityError::Configuration)?;
 
         Ok(())

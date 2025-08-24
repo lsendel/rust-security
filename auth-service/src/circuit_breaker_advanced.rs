@@ -187,7 +187,7 @@ impl AdvancedCircuitBreaker {
             self.update_adaptive_config().await;
         }
 
-        result
+        call_result
     }
 
     /// Check if a call is allowed based on current state
@@ -199,7 +199,7 @@ impl AdvancedCircuitBreaker {
             CircuitState::Open => {
                 // Check if recovery timeout has passed
                 let now = Instant::now();
-                if now.duration_since(metrics.state_transition_time) >= self.config.recovery_timeout {
+                if now.saturating_duration_since(metrics.state_transition_time) >= self.config.recovery_timeout {
                     // Transition to half-open
                     metrics.state = CircuitState::HalfOpen;
                     metrics.state_transition_time = now;

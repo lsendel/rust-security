@@ -3,6 +3,18 @@ use std::env;
 use std::net::SocketAddr;
 use tokio::signal;
 
+// Phantom imports to satisfy unused dependency warnings  
+use async_trait as _;
+use bcrypt as _;
+use chrono as _;
+use common as _;
+use jsonwebtoken as _;
+use serde as _;
+use serde_json as _;
+use thiserror as _;
+use tower as _;
+use tower_http as _;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for structured logging

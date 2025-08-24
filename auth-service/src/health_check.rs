@@ -80,26 +80,26 @@ impl HealthChecker {
         let start = Instant::now();
         
         // Check all components
-        let mut component_checks = Vec::new();
+        let mut component_checks: Vec<ComponentHealthCheck> = Vec::new();
         
-        // Database health check
-        component_checks.push(self.check_database());
-        
-        // Redis health check
-        component_checks.push(self.check_redis());
-        
-        // External services health check
-        component_checks.push(self.check_external_services());
-        
-        // Memory and system health
-        component_checks.push(self.check_system_resources());
+        // Execute all health checks concurrently
+        let (db_result, redis_result, external_result, system_result) = tokio::join!(
+            self.check_database(),
+            self.check_redis(),
+            self.check_external_services(),
+            self.check_system_resources()
+        );
 
-        // Wait for all checks to complete
-        let results = futures::future::join_all(component_checks).await;
-        
+        // Collect results
+        let mut component_results = Vec::new();
+        component_results.push(db_result);
+        component_results.push(redis_result);
+        component_results.push(external_result);
+        component_results.push(system_result);
+
         // Update component statuses
         let mut components = self.components.write().await;
-        for result in results {
+        for result in component_results {
             if let Ok((name, health)) = result {
                 components.insert(name, health);
             }

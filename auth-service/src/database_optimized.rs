@@ -116,7 +116,7 @@ impl DatabaseOptimized {
         }
 
         let start = Instant::now();
-        let mut conn = self.connection_pool.get().await?;
+        let mut conn = self.redis_pool.get().await?;
 
         // Use Redis pipeline for batch operations
         let mut pipeline = redis::pipe();
@@ -159,7 +159,7 @@ impl DatabaseOptimized {
         ttl: Option<u64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let key = self.secure_key_name("token", token)?;
-        let mut conn = self.connection_pool.get().await?;
+        let mut conn = self.redis_pool.get().await?;
 
         let mut pipeline = redis::pipe();
 
@@ -222,7 +222,7 @@ impl DatabaseOptimized {
         }
 
         let start = Instant::now();
-        let mut conn = self.connection_pool.get().await?;
+        let mut conn = self.redis_pool.get().await?;
 
         // Use EXISTS command for fast validation
         let mut pipeline = redis::pipe();
@@ -303,7 +303,7 @@ impl DatabaseOptimized {
         &self,
     ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
         let start = Instant::now();
-        let mut conn = self.connection_pool.get().await?;
+        let mut conn = self.redis_pool.get().await?;
 
         // Get all token keys
         let pattern = self.secure_key_pattern("token", "*")?;
@@ -359,12 +359,13 @@ impl DatabaseOptimized {
     pub async fn get_pool_stats(
         &self,
     ) -> Result<PoolStats, Box<dyn std::error::Error + Send + Sync>> {
-        let state = self.connection_pool.state().await;
+        let state = self.redis_pool.state().await;
 
         Ok(PoolStats {
+            total_connections: state.connections,
             active_connections: state.connections,
             idle_connections: state.idle_connections,
-            max_connections: self.connection_pool.max_size(),
+            max_connections: self.redis_pool.max_size(),
             pending_requests: 0, // bb8 doesn't expose this directly
         })
     }
@@ -384,7 +385,7 @@ impl DatabaseOptimized {
         R: Send,
     {
         let start = Instant::now();
-        let mut conn = self.connection_pool.get().await?;
+        let mut conn = self.redis_pool.get().await?;
 
         // Start transaction
         redis::cmd("MULTI").query_async(&mut *conn).await?;
@@ -428,7 +429,7 @@ impl DatabaseOptimized {
         Ok(format!("auth:{}:{}", prefix, pattern))
     }
 
-    async fn encrypt_if_required(
+    fn encrypt_if_required(
         &self,
         data: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -444,7 +445,7 @@ impl DatabaseOptimized {
         }
     }
 
-    async fn decrypt_if_required(
+    fn decrypt_if_required(
         &self,
         data: &str,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -540,6 +541,7 @@ impl DatabaseOptimized {
 
 #[derive(Debug, Clone)]
 pub struct PoolStats {
+    pub total_connections: u32,
     pub active_connections: u32,
     pub idle_connections: u32,
     pub max_connections: u32,
