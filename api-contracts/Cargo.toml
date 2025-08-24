@@ -4,6 +4,9 @@ version = "1.0.0"
 edition = "2021"
 description = "API contracts and versioning framework for Rust Security Platform"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/lsendel/rust-security"
+keywords = ["api", "contracts", "versioning", "openapi", "security"]
+categories = ["web-programming", "api-bindings", "development-tools"]
 
 [features]
 default = ["openapi", "tracing"]

@@ -372,7 +372,7 @@ impl ThreatDetectionEngine {
             threat_score: threat_score.score,
             confidence: threat_score.confidence,
             anomalies,
-            risk_factors: threat_score.factors,
+            risk_factors: threat_score.factors.clone(),
             recommended_actions: self.recommend_actions(&threat_score).await,
             timestamp,
         }
