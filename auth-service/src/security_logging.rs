@@ -6,22 +6,10 @@ use std::collections::HashMap;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-/// Security event severity levels
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum SecuritySeverity {
-    Info,
-    Low,
-    Medium,
-    High,
-    Critical,
-    Warning,
-}
-
 /// Security event types for categorization
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum SecurityEventType {
+pub enum LegacySecurityEventType {
     AuthenticationAttempt,
     AuthenticationFailure,
     AuthenticationSuccess,
@@ -51,9 +39,10 @@ pub enum SecurityEventType {
     KeyManagement,
 }
 
-/// Structured security event for audit logging with comprehensive fields
+
+/// Legacy structured security event for audit logging with comprehensive fields
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecurityEvent {
+pub struct LegacyLegacySecurityEvent {
     /// Unique event identifier
     pub event_id: String,
 
@@ -61,7 +50,7 @@ pub struct SecurityEvent {
     pub timestamp: DateTime<Utc>,
 
     /// Event type for categorization
-    pub event_type: SecurityEventType,
+    pub event_type: LegacySecurityEventType,
 
     /// Severity level
     pub severity: SecuritySeverity,
@@ -137,10 +126,10 @@ pub struct SecurityEvent {
     pub response_time_ms: Option<u64>,
 }
 
-impl SecurityEvent {
+impl LegacyLegacySecurityEvent {
     /// Create a new security event
     pub fn new(
-        event_type: SecurityEventType,
+        event_type: LegacySecurityEventType,
         severity: SecuritySeverity,
         source: String,
         description: String,
@@ -560,8 +549,8 @@ mod tests {
 
     #[test]
     fn test_security_event_builder() {
-        let event = SecurityEvent::new(
-            SecurityEventType::AuthenticationAttempt,
+        let event = LegacySecurityEvent::new(
+            LegacySecurityEventType::AuthenticationAttempt,
             SecuritySeverity::Medium,
             "auth-service".to_string(),
             "User login attempt".to_string(),
@@ -578,7 +567,7 @@ mod tests {
         .with_http_status(200)
         .with_response_time_ms(150);
 
-        assert_eq!(event.event_type, SecurityEventType::AuthenticationAttempt);
+        assert_eq!(event.event_type, LegacySecurityEventType::AuthenticationAttempt);
         assert_eq!(event.severity, SecuritySeverity::Medium);
         assert_eq!(event.source, "auth-service");
         assert!(event.actor.is_some());
@@ -594,16 +583,90 @@ mod tests {
     }
 }
 
-/// Security logger for structured audit logging
+// Main re-exports - using enhanced security logging for some types
+pub use crate::security_logging_enhanced::SecuritySeverity;
+
+// Legacy types as primary API for backward compatibility
+pub type SecurityEvent = LegacyLegacySecurityEvent;
+pub type SecurityEventType = LegacySecurityEventType;
+
+/// Main SecurityLogger struct for API compatibility
 pub struct SecurityLogger;
 
-impl Default for SecurityLogger {
+impl SecurityLogger {
+    /// Log a security event (static method for backward compatibility)
+    pub fn log_event(event: &SecurityEvent) {
+        LegacySecurityLogger::log_event(event);
+    }
+    
+    /// Log authentication attempt
+    pub fn log_auth_attempt(
+        client_id: &str,
+        ip_address: &str,
+        user_agent: Option<&str>,
+        outcome: &str,
+        details: Option<HashMap<String, Value>>,
+    ) {
+        LegacySecurityLogger::log_auth_attempt(client_id, ip_address, user_agent, outcome, details);
+    }
+    
+    /// Log token operation
+    pub fn log_token_operation(
+        operation: &str,
+        token_type: &str,
+        client_id: &str,
+        ip_address: &str,
+        outcome: &str,
+        details: Option<HashMap<String, Value>>,
+    ) {
+        LegacySecurityLogger::log_token_operation(operation, token_type, client_id, ip_address, outcome, details);
+    }
+    
+    /// Log security violation
+    pub fn log_security_violation(
+        violation_type: &str,
+        client_id: Option<&str>,
+        ip_address: &str,
+        description: &str,
+        risk_score: u8,
+        details: Option<HashMap<String, Value>>,
+    ) {
+        LegacySecurityLogger::log_security_violation(violation_type, client_id, ip_address, description, risk_score, details);
+    }
+    
+    /// Log input validation failure
+    pub fn log_validation_failure(
+        endpoint: &str,
+        validation_type: &str,
+        client_id: Option<&str>,
+        ip_address: &str,
+        details: Option<HashMap<String, Value>>,
+    ) {
+        LegacySecurityLogger::log_validation_failure(endpoint, validation_type, client_id, ip_address, details);
+    }
+    
+    /// Log rate limit exceeded
+    pub fn log_rate_limit_exceeded(
+        client_id: &str,
+        ip_address: &str,
+        endpoint: &str,
+        current_rate: u32,
+        limit: u32,
+    ) {
+        LegacySecurityLogger::log_rate_limit_exceeded(client_id, ip_address, endpoint, current_rate, limit);
+    }
+}
+
+/// Legacy security logger for structured audit logging  
+pub struct LegacySecurityLogger;
+
+impl Default for LegacySecurityLogger {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SecurityLogger {
+impl LegacySecurityLogger {
     /// Create a new security logger instance
     pub fn new() -> Self {
         Self
@@ -711,7 +774,7 @@ impl SecurityLogger {
         details: Option<HashMap<String, Value>>,
     ) {
         let mut event = SecurityEvent::new(
-            SecurityEventType::AuthenticationAttempt,
+            LegacySecurityEventType::AuthenticationAttempt,
             if outcome == "success" {
                 SecuritySeverity::Low
             } else {
@@ -734,7 +797,7 @@ impl SecurityLogger {
             }
         }
 
-        SecurityLogger::log_event(&event);
+        LegacySecurityLogger::log_event(&event);
     }
 
     /// Log token operation
@@ -747,9 +810,9 @@ impl SecurityLogger {
         details: Option<HashMap<String, Value>>,
     ) {
         let event_type = match operation {
-            "issue" => SecurityEventType::TokenIssued,
-            "revoke" => SecurityEventType::TokenRevoked,
-            _ => SecurityEventType::SystemError,
+            "issue" => LegacySecurityEventType::TokenIssued,
+            "revoke" => LegacySecurityEventType::TokenRevoked,
+            _ => LegacySecurityEventType::SystemError,
         };
 
         let mut event = SecurityEvent::new(
@@ -770,7 +833,7 @@ impl SecurityLogger {
             }
         }
 
-        SecurityLogger::log_event(&event);
+        LegacySecurityLogger::log_event(&event);
     }
 
     /// Log security violation
@@ -783,7 +846,7 @@ impl SecurityLogger {
         details: Option<HashMap<String, Value>>,
     ) {
         let mut event = SecurityEvent::new(
-            SecurityEventType::SuspiciousActivity,
+            LegacySecurityEventType::SuspiciousActivity,
             match risk_score {
                 0..=25 => SecuritySeverity::Low,
                 26..=50 => SecuritySeverity::Medium,
@@ -808,7 +871,7 @@ impl SecurityLogger {
             }
         }
 
-        SecurityLogger::log_event(&event);
+        LegacySecurityLogger::log_event(&event);
     }
 
     /// Log input validation failure
@@ -820,7 +883,7 @@ impl SecurityLogger {
         details: Option<HashMap<String, Value>>,
     ) {
         let mut event = SecurityEvent::new(
-            SecurityEventType::InputValidationFailure,
+            LegacySecurityEventType::InputValidationFailure,
             SecuritySeverity::Medium,
             "auth-service".to_string(),
             format!("Input validation failure at {}", endpoint),
@@ -840,7 +903,7 @@ impl SecurityLogger {
             }
         }
 
-        SecurityLogger::log_event(&event);
+        LegacySecurityLogger::log_event(&event);
     }
 
     /// Log rate limit exceeded
@@ -852,7 +915,7 @@ impl SecurityLogger {
         limit: u32,
     ) {
         let event = SecurityEvent::new(
-            SecurityEventType::RateLimitExceeded,
+            LegacySecurityEventType::RateLimitExceeded,
             SecuritySeverity::Medium,
             "auth-service".to_string(),
             format!(
@@ -867,7 +930,7 @@ impl SecurityLogger {
         .with_detail("current_rate".to_string(), current_rate)
         .with_detail("rate_limit".to_string(), limit);
 
-        SecurityLogger::log_event(&event);
+        LegacySecurityLogger::log_event(&event);
     }
 }
 

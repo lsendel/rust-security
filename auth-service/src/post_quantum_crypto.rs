@@ -47,7 +47,7 @@ use p256::ecdsa::{SigningKey as P256SigningKey, VerifyingKey as P256VerifyingKey
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 
 /// Security levels for post-quantum cryptography
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum SecurityLevel {
     /// 128-bit security equivalent
     Level1,

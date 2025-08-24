@@ -1,6 +1,14 @@
 //! Advanced Property-Based Testing Framework
 //! Comprehensive property testing for security-critical components
 
+use proptest::prelude::*;
+use proptest::test_runner::TestRunner;
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::time::Duration;
+use serde::{Deserialize, Serialize};
+use tracing::{info, warn, error};
+
 #[cfg(test)]
 mod property_tests {
     use proptest::prelude::*;
@@ -66,6 +74,7 @@ pub struct PropertyTestResult {
     pub passed: bool,
     pub cases_tested: u32,
     pub failures: Vec<PropertyTestFailure>,
+    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub duration: Duration,
     pub coverage_info: Option<CoverageInfo>,
 }
@@ -651,6 +660,7 @@ pub struct PropertyTestSummary {
     pub failed_tests: usize,
     pub total_cases: u32,
     pub total_failures: usize,
+    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
     pub total_duration: Duration,
     pub success_rate: f64,
     pub results: Vec<PropertyTestResult>,
@@ -689,6 +699,23 @@ fn create_session(session_id: &str, ttl: Duration) -> String {
 fn is_session_expired(session: &str, elapsed: Duration) -> bool {
     // Mock implementation
     elapsed.as_secs() > 3600
+}
+
+/// Serialize Duration as seconds
+fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_f64(duration.as_secs_f64())
+}
+
+/// Deserialize Duration from seconds
+fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let secs = f64::deserialize(deserializer)?;
+    Ok(Duration::from_secs_f64(secs))
 }
 
 #[cfg(test)]

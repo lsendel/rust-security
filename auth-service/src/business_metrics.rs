@@ -770,6 +770,7 @@ impl UserBehaviorAnalytics {
                 .duration_since(session.session_start)
                 .unwrap_or_default();
 
+            #[cfg(feature = "monitoring")]
             BusinessMetricsHelper::record_user_session(
                 &session.user_type,
                 "interactive",
@@ -802,6 +803,7 @@ impl UserBehaviorAnalytics {
                     .duration_since(session.session_start)
                     .unwrap_or_default();
 
+                #[cfg(feature = "monitoring")]
                 BusinessMetricsHelper::record_user_session(
                     &session.user_type,
                     "timeout",
