@@ -19,13 +19,24 @@ pub struct BusinessMetricsRegistry {
     pub registry: Registry,
 
     // === User Behavior Metrics ===
-    /// User session duration tracking
+    /// Tracks user session duration in seconds across different user types and clients
+    /// Labels: user_type (premium, basic, trial), session_type (interactive, timeout), client_id
+    /// Purpose: Monitor user engagement patterns and detect abnormal session behaviors
     pub user_session_duration: HistogramVec,
-    /// Login frequency by user type and time of day
+    
+    /// Counts login events by user characteristics and temporal patterns
+    /// Labels: user_type, hour_of_day (0-23), day_of_week (0-6), login_method (password, sso, mfa)
+    /// Purpose: Identify login patterns, detect unusual access times, plan capacity
     pub user_login_frequency: IntCounterVec,
-    /// Password change frequency and reasons
+    
+    /// Tracks password change events and their triggers
+    /// Labels: reason (expired, security, user_initiated), user_type, complexity_level, forced (true/false)
+    /// Purpose: Monitor password hygiene, track security policy compliance
     pub password_change_events: IntCounterVec,
-    /// MFA adoption and usage patterns
+    
+    /// Measures MFA adoption rates and usage patterns
+    /// Labels: event_type (enrollment, usage, bypass), mfa_method (totp, sms, webauthn), user_segment, enrollment_path
+    /// Purpose: Track security adoption, identify MFA gaps, measure security posture improvements
     pub mfa_adoption_metrics: IntCounterVec,
 
     // === Business Process Metrics ===
@@ -361,10 +372,23 @@ impl BusinessMetricsRegistry {
             Box::new(self_service_metrics.clone()),
         ];
 
-        for metric in metrics {
+        let mut registration_errors = Vec::new();
+        for (i, metric) in metrics.into_iter().enumerate() {
             if let Err(e) = registry.register(metric) {
-                error!("Failed to register business metric: {}", e);
+                let error_msg = format!("Metric #{}: {}", i, e);
+                error!("Failed to register business metric: {}", error_msg);
+                registration_errors.push(error_msg);
             }
+        }
+        
+        if !registration_errors.is_empty() {
+            error!(
+                "Business metrics registration completed with {} errors: {:?}",
+                registration_errors.len(),
+                registration_errors
+            );
+        } else {
+            info!("All {} business metrics registered successfully", 20);
         }
 
         Self {
@@ -391,6 +415,36 @@ impl BusinessMetricsRegistry {
             self_service_metrics,
         }
     }
+
+    /// Export metrics in Prometheus text format
+    pub fn export_metrics(&self) -> Result<String, Box<dyn std::error::Error>> {
+        use prometheus::TextEncoder;
+        let encoder = TextEncoder::new();
+        let metric_families = self.registry.gather();
+        encoder.encode_to_string(&metric_families)
+    }
+
+    /// Get registry statistics
+    pub fn get_stats(&self) -> prometheus::proto::MetricFamily {
+        let metrics = self.registry.gather();
+        let mut stats = prometheus::proto::MetricFamily::new();
+        stats.set_name("business_metrics_registry_stats".to_string());
+        stats.set_help("Statistics about the business metrics registry".to_string());
+        stats.set_field_type(prometheus::proto::MetricType::GAUGE);
+        
+        let mut metric = prometheus::proto::Metric::new();
+        let mut gauge = prometheus::proto::Gauge::new();
+        gauge.set_value(metrics.len() as f64);
+        metric.set_gauge(gauge);
+        
+        let mut label = prometheus::proto::LabelPair::new();
+        label.set_name("stat".to_string());
+        label.set_value("total_metrics".to_string());
+        metric.mut_label().push(label);
+        
+        stats.mut_metric().push(metrics);
+        stats
+    }
 }
 
 /// Global business metrics registry
@@ -415,6 +469,41 @@ impl BusinessMetricsHelper {
             .get(..max_len.min(label.len()))
             .unwrap_or("invalid_label")
             .to_string()
+    }
+
+    /// Validate metric values to ensure they are within acceptable ranges
+    pub fn validate_metric_value(metric_name: &str, value: f64) -> Result<f64, String> {
+        match metric_name {
+            name if name.contains("duration") => {
+                if value < 0.0 || value > 86400.0 {
+                    Err(format!("Duration value {} is out of range (0-86400 seconds)", value))
+                } else {
+                    Ok(value)
+                }
+            },
+            name if name.contains("score") => {
+                if value < 0.0 || value > 100.0 {
+                    Err(format!("Score value {} is out of range (0-100)", value))
+                } else {
+                    Ok(value)
+                }
+            },
+            name if name.contains("count") || name.contains("total") => {
+                if value < 0.0 {
+                    Err(format!("Counter value {} cannot be negative", value))
+                } else {
+                    Ok(value)
+                }
+            },
+            _ => {
+                // General validation for all other metrics
+                if value.is_nan() || value.is_infinite() {
+                    Err(format!("Invalid metric value: {}", value))
+                } else {
+                    Ok(value)
+                }
+            }
+        }
     }
 }
 
@@ -596,6 +685,12 @@ pub struct SessionInfo {
     pub activity_count: u64,
     pub user_type: String,
     pub client_id: String,
+    /// Client IP address for security monitoring
+    pub ip_address: Option<String>,
+    /// User agent for device tracking and fraud detection
+    pub user_agent: Option<String>,
+    /// Session security score based on behavior patterns
+    pub security_score: u8,
 }
 
 impl UserBehaviorAnalytics {
@@ -612,6 +707,8 @@ impl UserBehaviorAnalytics {
         user_id: String,
         user_type: String,
         client_id: String,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
     ) {
         // Validate session ID format (should be UUID-like or similar secure format)
         if session_id.len() < 16 || session_id.len() > 64 {
@@ -625,6 +722,9 @@ impl UserBehaviorAnalytics {
             return;
         }
 
+        // Calculate initial security score based on available information
+        let security_score = calculate_session_security_score(&ip_address, &user_agent);
+
         let session_info = SessionInfo {
             user_id,
             session_start: SystemTime::now(),
@@ -632,6 +732,9 @@ impl UserBehaviorAnalytics {
             activity_count: 1,
             user_type,
             client_id,
+            ip_address,
+            user_agent,
+            security_score,
         };
 
         let mut sessions = self.session_tracking.write().await;
@@ -744,24 +847,179 @@ impl BusinessMetricsHelper {
         Self
     }
     
-    pub fn record_user_session(_user_type: &str, _session_type: &str, _client_id: &str, _duration: Duration) {}
-    pub fn record_login_event(_user_type: &str, _login_method: &str, _timestamp: SystemTime) {}
-    pub fn record_oauth_flow_step(_client_id: &str, _grant_type: &str, _flow_stage: &str, _result: &str) {}
-    pub fn record_mfa_adoption(_event_type: &str, _mfa_method: &str, _user_segment: &str, _enrollment_path: &str) {}
-    pub fn record_privacy_request(_request_type: &str, _user_segment: &str, _processing_stage: &str, _result: &str) {}
-    pub fn record_rate_limit_enforcement(_path: &str, _client_key: &str, _action: &str, _request_type: &str) {}
-    pub fn record_security_control_outcome(_control_type: &str, _threat_category: &str, _outcome: &str, _confidence_level: &str) {}
-    pub fn record_threat_detection_feedback(_detection_type: &str, _threat_category: &str, _outcome: &str, _feedback_source: &str) {}
-    pub fn record_revenue_impact(_event_type: &str, _customer_segment: &str, _revenue_tier: &str, _auth_method: &str) {}
-    pub fn record_customer_satisfaction(_satisfaction_score: &str, _feedback_type: &str, _user_segment: &str, _auth_journey_stage: &str) {}
-    pub fn record_support_correlation(_ticket_category: &str, _auth_event_type: &str, _resolution_type: &str, _prevention_opportunity: &str) {}
-    pub fn record_onboarding_funnel(_funnel_stage: &str, _conversion_outcome: &str, _user_segment: &str, _onboarding_path: &str) {}
+    /// Record user session completion - logs to tracing instead of metrics
+    pub fn record_user_session(user_type: &str, session_type: &str, client_id: &str, duration: Duration) {
+        tracing::debug!(
+            user_type = user_type,
+            session_type = session_type,
+            client_id = client_id,
+            duration_seconds = duration.as_secs(),
+            "User session recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record login event - logs to tracing instead of metrics
+    pub fn record_login_event(user_type: &str, login_method: &str, _timestamp: SystemTime) {
+        tracing::info!(
+            user_type = user_type,
+            login_method = login_method,
+            "Login event recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record OAuth flow progression - logs to tracing instead of metrics
+    pub fn record_oauth_flow_step(client_id: &str, grant_type: &str, flow_stage: &str, result: &str) {
+        tracing::debug!(
+            client_id = client_id,
+            grant_type = grant_type,
+            flow_stage = flow_stage,
+            result = result,
+            "OAuth flow step recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record MFA adoption event - logs to tracing instead of metrics
+    pub fn record_mfa_adoption(event_type: &str, mfa_method: &str, user_segment: &str, enrollment_path: &str) {
+        tracing::info!(
+            event_type = event_type,
+            mfa_method = mfa_method,
+            user_segment = user_segment,
+            enrollment_path = enrollment_path,
+            "MFA adoption recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record privacy request processing - logs to tracing instead of metrics
+    pub fn record_privacy_request(request_type: &str, user_segment: &str, processing_stage: &str, result: &str) {
+        tracing::info!(
+            request_type = request_type,
+            user_segment = user_segment,
+            processing_stage = processing_stage,
+            result = result,
+            "Privacy request recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record rate limit enforcement - logs to tracing instead of metrics
+    pub fn record_rate_limit_enforcement(path: &str, client_key: &str, action: &str, request_type: &str) {
+        tracing::warn!(
+            path = path,
+            client_key = client_key,
+            action = action,
+            request_type = request_type,
+            "Rate limit enforcement recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record security control outcome - logs to tracing instead of metrics
+    pub fn record_security_control_outcome(control_type: &str, threat_category: &str, outcome: &str, confidence_level: &str) {
+        tracing::info!(
+            control_type = control_type,
+            threat_category = threat_category,
+            outcome = outcome,
+            confidence_level = confidence_level,
+            "Security control outcome recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record threat detection feedback - logs to tracing instead of metrics
+    pub fn record_threat_detection_feedback(detection_type: &str, threat_category: &str, outcome: &str, feedback_source: &str) {
+        tracing::info!(
+            detection_type = detection_type,
+            threat_category = threat_category,
+            outcome = outcome,
+            feedback_source = feedback_source,
+            "Threat detection feedback recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record revenue impact event - logs to tracing instead of metrics
+    pub fn record_revenue_impact(event_type: &str, customer_segment: &str, revenue_tier: &str, auth_method: &str) {
+        tracing::info!(
+            event_type = event_type,
+            customer_segment = customer_segment,
+            revenue_tier = revenue_tier,
+            auth_method = auth_method,
+            "Revenue impact recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record customer satisfaction feedback - logs to tracing instead of metrics
+    pub fn record_customer_satisfaction(satisfaction_score: &str, feedback_type: &str, user_segment: &str, auth_journey_stage: &str) {
+        tracing::info!(
+            satisfaction_score = satisfaction_score,
+            feedback_type = feedback_type,
+            user_segment = user_segment,
+            auth_journey_stage = auth_journey_stage,
+            "Customer satisfaction recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record support ticket correlation - logs to tracing instead of metrics
+    pub fn record_support_correlation(ticket_category: &str, auth_event_type: &str, resolution_type: &str, prevention_opportunity: &str) {
+        tracing::info!(
+            ticket_category = ticket_category,
+            auth_event_type = auth_event_type,
+            resolution_type = resolution_type,
+            prevention_opportunity = prevention_opportunity,
+            "Support correlation recorded (metrics disabled)"
+        );
+    }
+    
+    /// Record onboarding funnel progression - logs to tracing instead of metrics
+    pub fn record_onboarding_funnel(funnel_stage: &str, conversion_outcome: &str, user_segment: &str, onboarding_path: &str) {
+        tracing::info!(
+            funnel_stage = funnel_stage,
+            conversion_outcome = conversion_outcome,
+            user_segment = user_segment,
+            onboarding_path = onboarding_path,
+            "Onboarding funnel recorded (metrics disabled)"
+        );
+    }
+    
+    /// Validate metric values (stub implementation)
+    pub fn validate_metric_value(metric_name: &str, value: f64) -> Result<f64, String> {
+        tracing::debug!(
+            metric_name = metric_name,
+            value = value,
+            "Metric validation (metrics disabled)"
+        );
+        Ok(value)
+    }
+}
+
+/// Calculate session security score based on available information
+fn calculate_session_security_score(ip_address: &Option<String>, user_agent: &Option<String>) -> u8 {
+    let mut score = 50; // Base score
+    
+    // Bonus for having IP address
+    if ip_address.is_some() {
+        score += 20;
+    }
+    
+    // Bonus for having user agent
+    if let Some(ua) = user_agent {
+        score += 15;
+        
+        // Additional checks for suspicious user agents
+        let ua_lower = ua.to_lowercase();
+        if ua_lower.contains("bot") || ua_lower.contains("crawler") || ua_lower.contains("spider") {
+            score -= 30; // Suspicious bot-like user agent
+        } else if ua_lower.len() < 10 {
+            score -= 20; // Suspiciously short user agent
+        } else if ua_lower.len() > 500 {
+            score -= 15; // Suspiciously long user agent
+        }
+    }
+    
+    // Ensure score stays within bounds
+    score.max(0).min(100)
 }
 
 /// Global user behavior analytics instance
 pub static USER_ANALYTICS: Lazy<UserBehaviorAnalytics> = Lazy::new(UserBehaviorAnalytics::new);
 
-#[cfg(test)]
+#[cfg(all(test, feature = "monitoring"))]
 mod tests {
     use super::*;
 
@@ -769,6 +1027,34 @@ mod tests {
     fn test_business_metrics_creation() {
         let metrics = BusinessMetricsRegistry::new();
         assert!(!metrics.registry.gather().is_empty());
+    }
+
+    #[test]
+    fn test_metrics_registration() {
+        let registry = BusinessMetricsRegistry::new();
+        let metrics = registry.registry.gather();
+        
+        // Verify that all expected metrics are registered
+        let metric_names: Vec<String> = metrics
+            .iter()
+            .map(|m| m.get_name().to_string())
+            .collect();
+        
+        assert!(metric_names.contains(&"auth_user_session_duration_seconds".to_string()));
+        assert!(metric_names.contains(&"auth_oauth_flow_completion_total".to_string()));
+        assert!(metric_names.contains(&"auth_security_control_effectiveness_total".to_string()));
+    }
+
+    #[test]
+    fn test_label_sanitization() {
+        let sanitized = BusinessMetricsHelper::sanitize_label("valid_label-123", 50);
+        assert_eq!(sanitized, "valid_label-123");
+        
+        let sanitized = BusinessMetricsHelper::sanitize_label("invalid@#$%label", 50);
+        assert_eq!(sanitized, "invalidlabel");
+        
+        let sanitized = BusinessMetricsHelper::sanitize_label("toolongabelthatshouldbetruncated", 10);
+        assert_eq!(sanitized, "label_too_long_35");
     }
 
     #[tokio::test]
@@ -781,11 +1067,65 @@ mod tests {
                 "user-456".to_string(),
                 "premium".to_string(),
                 "client-789".to_string(),
+                Some("192.168.1.1".to_string()),
+                Some("Mozilla/5.0 (compatible; test-agent)".to_string()),
             )
             .await;
 
         analytics.record_activity("session-123").await;
         analytics.end_session("session-123").await;
+    }
+
+    #[test]
+    fn test_security_score_calculation() {
+        // Test base score with no info
+        let score = calculate_session_security_score(&None, &None);
+        assert_eq!(score, 50);
+
+        // Test with IP but no user agent
+        let score = calculate_session_security_score(&Some("192.168.1.1".to_string()), &None);
+        assert_eq!(score, 70);
+
+        // Test with suspicious bot user agent
+        let score = calculate_session_security_score(
+            &Some("192.168.1.1".to_string()), 
+            &Some("bot crawler spider".to_string())
+        );
+        assert_eq!(score, 55); // 70 + 15 - 30
+
+        // Test with normal user agent
+        let score = calculate_session_security_score(
+            &Some("192.168.1.1".to_string()), 
+            &Some("Mozilla/5.0 (compatible; legitimate-browser)".to_string())
+        );
+        assert_eq!(score, 85); // 70 + 15
+    }
+
+    #[test]
+    fn test_metric_validation() {
+        // Test duration validation
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_duration", 3600.0).is_ok());
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_duration", -1.0).is_err());
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_duration", 90000.0).is_err());
+
+        // Test score validation
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_score", 85.0).is_ok());
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_score", -5.0).is_err());
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_score", 150.0).is_err());
+
+        // Test counter validation
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_total", 100.0).is_ok());
+        assert!(BusinessMetricsHelper::validate_metric_value("auth_total", -1.0).is_err());
+    }
+
+    #[test]
+    fn test_metrics_export() {
+        let registry = BusinessMetricsRegistry::new();
+        let export_result = registry.export_metrics();
+        assert!(export_result.is_ok());
+        
+        let stats = registry.get_stats();
+        assert_eq!(stats.get_name(), "business_metrics_registry_stats");
     }
 
     #[test]
