@@ -70,7 +70,7 @@ use tower::ServiceExt;
 /// // App is ready for testing with clean state
 /// ```
 fn create_test_app() -> Router {
-    create_app()
+    create_app().unwrap()
 }
 
 /// Builds HTTP requests with proper headers for API testing.

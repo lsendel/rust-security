@@ -10,6 +10,7 @@ use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingCon
 use chrono::{DateTime, Duration, Utc};
 use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
+#[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};

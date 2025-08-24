@@ -72,7 +72,7 @@ impl Default for ObservabilityConfig {
 /// Comprehensive observability provider
 pub struct ObservabilityProvider {
     config: ObservabilityConfig,
-    tracer: Option<Tracer>,
+    tracer: Option<Box<dyn opentelemetry::trace::Tracer + Send + Sync>>,
     meter: Option<Meter>,
     metrics: Arc<RwLock<ServiceMetrics>>,
 }
@@ -145,7 +145,7 @@ impl ObservabilityProvider {
     async fn init_tracing(
         config: &ObservabilityConfig,
         resource: Resource,
-    ) -> SecurityResult<Tracer> {
+    ) -> SecurityResult<opentelemetry::global::BoxedTracer> {
         info!("Initializing OpenTelemetry tracing");
 
         let tracer_provider = opentelemetry_otlp::new_pipeline()
@@ -197,27 +197,11 @@ impl ObservabilityProvider {
 
         let exporter = opentelemetry_otlp::new_exporter()
             .tonic()
-            .with_export_config(export_config)
-            .build_metrics_exporter(
-                Box::new(opentelemetry_sdk::metrics::selectors::simple::inexpensive()),
-                Box::new(opentelemetry_sdk::metrics::processors::basic::new(
-                    opentelemetry_sdk::metrics::selectors::simple::inexpensive(),
-                    opentelemetry_sdk::export::metrics::aggregation::cumulative_temporality_selector(),
-                    opentelemetry_sdk::metrics::processors::basic::simple_processor(),
-                )),
-            )
-            .map_err(|e| {
-                error!("Failed to create metrics exporter: {}", e);
-                SecurityError::Configuration
-            })?;
-
-        let reader = PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio)
-            .with_interval(Duration::from_secs(30))
             .build();
-
-        let meter_provider = MeterProviderBuilder::default()
+        
+        // Use a simple noop meter provider for now - can be configured for production
+        let meter_provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
             .with_resource(resource)
-            .with_reader(reader)
             .build();
 
         // Set as global meter provider
@@ -261,7 +245,7 @@ impl ObservabilityProvider {
     }
 
     /// Get the tracer instance
-    pub fn tracer(&self) -> Option<&Tracer> {
+    pub fn tracer(&self) -> Option<&(dyn opentelemetry::trace::Tracer + Send + Sync)> {
         self.tracer.as_ref()
     }
 
@@ -284,7 +268,9 @@ impl ObservabilityProvider {
         }
 
         if self.meter.is_some() {
-            global::shutdown_meter_provider();
+            // Note: shutdown_meter_provider is not available in this version
+            // global::shutdown_meter_provider();
+            global::shutdown_tracer_provider();
         }
 
         info!("Observability shutdown completed");
@@ -483,11 +469,11 @@ pub struct TracingUtils;
 impl TracingUtils {
     /// Create a new span with common attributes
     pub fn create_span(
-        tracer: &Tracer,
+        tracer: &(dyn opentelemetry::trace::Tracer + Send + Sync),
         name: &str,
         kind: SpanKind,
         attributes: Vec<KeyValue>,
-    ) -> opentelemetry::trace::Span {
+    ) -> opentelemetry::global::BoxedSpan {
         tracer
             .span_builder(name)
             .with_kind(kind)
@@ -497,7 +483,7 @@ impl TracingUtils {
 
     /// Add security context to span
     pub fn add_security_context(
-        span: &mut opentelemetry::trace::Span,
+        span: &mut opentelemetry::global::BoxedSpan,
         user_id: Option<&str>,
         session_id: Option<&str>,
         client_ip: Option<&str>,
@@ -518,7 +504,7 @@ impl TracingUtils {
     }
 
     /// Add error information to span
-    pub fn add_error_to_span(span: &mut opentelemetry::trace::Span, error: &SecurityError) {
+    pub fn add_error_to_span(span: &mut opentelemetry::global::BoxedSpan, error: &SecurityError) {
         span.set_status(opentelemetry::trace::Status::Error {
             description: error.public_message().into(),
         });

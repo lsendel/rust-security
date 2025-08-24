@@ -11,7 +11,7 @@ async fn spawn_app() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    let app = create_app();
+    let app = create_app().unwrap();
     tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
@@ -230,7 +230,7 @@ async fn test_password_service() {
 async fn test_jwt_service() {
     use axum_integration_example::{JwtService, UserRole};
 
-    let jwt_service = JwtService::new("test_secret_key".to_string(), Some(1));
+    let jwt_service = JwtService::new("this-is-a-test-secret-with-enough-length".to_string(), Some(1)).unwrap();
 
     // Test token generation
     let token = jwt_service.generate_token(1, "test@example.com", UserRole::User).unwrap();

@@ -393,11 +393,11 @@ pub fn security_headers() -> Vec<(&'static str, &'static str)> {
 
 fn convert_cipher_suites(suites: &[TlsCipherSuite]) -> Vec<SupportedCipherSuite> {
     suites.iter().map(|suite| match suite {
-        TlsCipherSuite::Tls13Aes256GcmSha384 => rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
-        TlsCipherSuite::Tls13Chacha20Poly1305Sha256 => rustls::cipher_suite::TLS13_CHACHA20_POLY1305_SHA256,
-        TlsCipherSuite::Tls13Aes128GcmSha256 => rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
-        TlsCipherSuite::Tls12EcdheEcdsaWithAes256GcmSha384 => rustls::cipher_suite::TLS12_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-        TlsCipherSuite::Tls12EcdheRsaWithAes256GcmSha384 => rustls::cipher_suite::TLS12_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+        TlsCipherSuite::Tls13Aes256GcmSha384 => rustls::TLS13_AES_256_GCM_SHA384,
+        TlsCipherSuite::Tls13Chacha20Poly1305Sha256 => rustls::TLS13_CHACHA20_POLY1305_SHA256,
+        TlsCipherSuite::Tls13Aes128GcmSha256 => rustls::TLS13_AES_128_GCM_SHA256,
+        TlsCipherSuite::Tls12EcdheEcdsaWithAes256GcmSha384 => rustls::TLS12_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+        TlsCipherSuite::Tls12EcdheRsaWithAes256GcmSha384 => rustls::TLS12_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
     }).collect()
 }
 

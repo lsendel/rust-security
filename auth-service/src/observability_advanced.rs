@@ -463,7 +463,7 @@ impl Clone for ObservabilityManager {
 pub struct SpanHandle {
     span_id: String,
     trace_id: String,
-    otel_span: Option<opentelemetry::trace::Span>,
+    otel_span: Option<opentelemetry::global::BoxedSpan>,
     manager: Arc<ObservabilityManager>,
 }
 

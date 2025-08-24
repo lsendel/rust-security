@@ -13,9 +13,13 @@ use crate::{
     enhanced_observability::{
         observability_middleware, EnhancedObservability, ObservabilityConfig, SliConfig,
     },
+    AuthError,
+};
+
+#[cfg(feature = "monitoring")]
+use crate::{
     metrics::MetricsRegistry,
     security_metrics::SecurityMetrics,
-    AuthError,
 };
 
 /// Observability system coordinator
@@ -23,8 +27,10 @@ pub struct ObservabilitySystem {
     /// Enhanced observability core
     pub enhanced_observability: Arc<EnhancedObservability>,
     /// Metrics registry
+    #[cfg(feature = "monitoring")]
     pub metrics_registry: Arc<MetricsRegistry>,
     /// Security metrics collector
+    #[cfg(feature = "monitoring")]
     pub security_metrics: Arc<SecurityMetrics>,
     /// Business metrics
     pub business_metrics: Arc<BusinessMetricsRegistry>,
@@ -35,18 +41,6 @@ impl ObservabilitySystem {
     pub async fn initialize() -> Result<Self, AuthError> {
         info!("Initializing comprehensive observability system");
 
-        // Initialize metrics registry
-        let metrics_registry = Arc::new(MetricsRegistry::new());
-
-        // Initialize security metrics
-        let security_metrics =
-            Arc::new(
-                SecurityMetrics::new().map_err(|_| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: "Failed to initialize security metrics".to_string(),
-                })?,
-            );
-
         // Initialize business metrics
         let business_metrics = Arc::new(BusinessMetricsRegistry::new());
 
@@ -54,27 +48,55 @@ impl ObservabilitySystem {
         let observability_config = Self::load_observability_config();
         let sli_config = Self::load_sli_config();
 
-        // Initialize enhanced observability
+        #[cfg(feature = "monitoring")]
+        let (metrics_registry, security_metrics, enhanced_observability) = {
+            // Initialize metrics registry
+            let metrics_registry = Arc::new(MetricsRegistry::new());
+
+            // Initialize security metrics
+            let security_metrics = Arc::new(
+                SecurityMetrics::new().map_err(|_| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: "Failed to initialize security metrics".to_string(),
+                })?,
+            );
+
+            // Initialize enhanced observability
+            let enhanced_observability = Arc::new(
+                EnhancedObservability::new(
+                    observability_config,
+                    sli_config,
+                    Arc::clone(&metrics_registry),
+                    Arc::clone(&security_metrics),
+                    Arc::clone(&business_metrics),
+                )
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to initialize enhanced observability: {}", e),
+                })?,
+            );
+
+            (metrics_registry, security_metrics, enhanced_observability)
+        };
+
+        #[cfg(not(feature = "monitoring"))]
         let enhanced_observability = Arc::new(
-            EnhancedObservability::new(
-                observability_config,
-                sli_config,
-                Arc::clone(&metrics_registry),
-                Arc::clone(&security_metrics),
-                Arc::clone(&business_metrics),
-            )
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to initialize enhanced observability: {}", e),
-            })?,
+            EnhancedObservability::new_minimal(observability_config, sli_config, Arc::clone(&business_metrics))
+                .await
+                .map_err(|e| AuthError::InternalError {
+                    error_id: uuid::Uuid::new_v4(),
+                    context: format!("Failed to initialize enhanced observability: {}", e),
+                })?,
         );
 
         info!("Observability system initialized successfully");
 
         Ok(Self {
             enhanced_observability,
+            #[cfg(feature = "monitoring")]
             metrics_registry,
+            #[cfg(feature = "monitoring")]
             security_metrics,
             business_metrics,
         })

@@ -8,11 +8,13 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use once_cell::sync::Lazy;
+#[cfg(feature = "monitoring")]
 use prometheus::{HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
 /// Business metrics registry for auth service
+#[cfg(feature = "monitoring")]
 pub struct BusinessMetricsRegistry {
     pub registry: Registry,
 
@@ -69,6 +71,7 @@ pub struct BusinessMetricsRegistry {
     pub self_service_metrics: IntCounterVec,
 }
 
+#[cfg(feature = "monitoring")]
 impl BusinessMetricsRegistry {
     pub fn new() -> Self {
         let registry = Registry::new();
@@ -391,12 +394,14 @@ impl BusinessMetricsRegistry {
 }
 
 /// Global business metrics registry
+#[cfg(feature = "monitoring")]
 pub static BUSINESS_METRICS: Lazy<BusinessMetricsRegistry> =
     Lazy::new(BusinessMetricsRegistry::new);
 
 /// Business metrics helper functions
 pub struct BusinessMetricsHelper;
 
+#[cfg(feature = "monitoring")]
 impl BusinessMetricsHelper {
     /// Record user session completion
     pub fn record_user_session(
@@ -673,6 +678,22 @@ impl UserBehaviorAnalytics {
             }
         });
     }
+}
+
+// Stub implementations when monitoring is not enabled
+#[cfg(not(feature = "monitoring"))]
+impl BusinessMetricsHelper {
+    pub fn record_user_session(_user_type: &str, _session_type: &str, _client_id: &str, _duration: Duration) {}
+    pub fn record_login_event(_user_type: &str, _login_method: &str, _timestamp: SystemTime) {}
+    pub fn record_oauth_flow_step(_client_id: &str, _grant_type: &str, _flow_stage: &str, _result: &str) {}
+    pub fn record_mfa_adoption(_event_type: &str, _mfa_method: &str, _user_segment: &str, _enrollment_path: &str) {}
+    pub fn record_privacy_request(_request_type: &str, _user_segment: &str, _processing_stage: &str, _result: &str) {}
+    pub fn record_security_control_outcome(_control_type: &str, _threat_category: &str, _outcome: &str, _confidence_level: &str) {}
+    pub fn record_threat_detection_feedback(_detection_type: &str, _threat_category: &str, _outcome: &str, _feedback_source: &str) {}
+    pub fn record_revenue_impact(_event_type: &str, _customer_segment: &str, _revenue_tier: &str, _auth_method: &str) {}
+    pub fn record_customer_satisfaction(_satisfaction_score: &str, _feedback_type: &str, _user_segment: &str, _auth_journey_stage: &str) {}
+    pub fn record_support_correlation(_ticket_category: &str, _auth_event_type: &str, _resolution_type: &str, _prevention_opportunity: &str) {}
+    pub fn record_onboarding_funnel(_funnel_stage: &str, _conversion_outcome: &str, _user_segment: &str, _onboarding_path: &str) {}
 }
 
 /// Global user behavior analytics instance

@@ -1,6 +1,7 @@
 use crate::errors::AuthError;
 use axum::{extract::Request, middleware::Next, response::Response};
 use once_cell::sync::Lazy;
+#[cfg(feature = "monitoring")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
 };
@@ -115,10 +116,12 @@ impl BackpressureConfig {
     }
 }
 
-// Metrics
+// Metrics (feature-gated)
+#[cfg(feature = "monitoring")]
 static REQUESTS_TOTAL: Lazy<IntCounter> =
     Lazy::new(|| register_int_counter!("auth_requests_total", "Total number of requests").unwrap());
 
+#[cfg(feature = "monitoring")]
 static REQUESTS_REJECTED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!(
         "auth_requests_rejected_total",
@@ -127,6 +130,7 @@ static REQUESTS_REJECTED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     .unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static CONCURRENT_REQUESTS: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "auth_concurrent_requests",
@@ -135,10 +139,12 @@ static CONCURRENT_REQUESTS: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static REQUEST_BODY_SIZE: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!("auth_request_body_size_bytes", "Request body size in bytes").unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static REQUEST_DURATION: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!(
         "auth_request_duration_seconds",
@@ -147,10 +153,54 @@ static REQUEST_DURATION: Lazy<Histogram> = Lazy::new(|| {
     .unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 #[allow(dead_code)]
 static QUEUE_DEPTH: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!("auth_request_queue_depth", "Current request queue depth").unwrap()
 });
+
+// Metrics helper functions
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_requests_total() { inc_requests_total(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_requests_total() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_requests_rejected_total() { inc_requests_rejected_total(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_requests_rejected_total() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_concurrent_requests() { inc_concurrent_requests(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_concurrent_requests() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn dec_concurrent_requests() { dec_concurrent_requests(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn dec_concurrent_requests() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn observe_request_body_size(size: f64) { observe_request_body_size(size); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn observe_request_body_size(_size: f64) {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn observe_request_duration(duration: f64) { REQUEST_DURATION.observe(duration); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn observe_request_duration(_duration: f64) {}
 
 // Backpressure state tracking
 #[derive(Debug)]
@@ -179,7 +229,7 @@ impl BackpressureState {
         // Check global concurrent request limit
         let current_concurrent = self.concurrent_requests.load(Ordering::Relaxed);
         if current_concurrent >= self.config.max_concurrent_requests {
-            REQUESTS_REJECTED_TOTAL.inc();
+            inc_requests_rejected_total();
             return Err(AuthError::ServiceUnavailable {
                 reason: "Server is at capacity".to_string(),
             });
@@ -194,7 +244,7 @@ impl BackpressureState {
 
             let ip_concurrent = ip_counter.load(Ordering::Relaxed);
             if ip_concurrent >= self.config.max_concurrent_per_ip {
-                REQUESTS_REJECTED_TOTAL.inc();
+                inc_requests_rejected_total();
                 return Err(AuthError::ServiceUnavailable {
                     reason: "Too many concurrent requests from this IP".to_string(),
                 });
@@ -204,7 +254,7 @@ impl BackpressureState {
         // Check queue depth
         let queue_depth = self.queue_depth.load(Ordering::Relaxed);
         if queue_depth >= self.config.queue_depth_threshold {
-            REQUESTS_REJECTED_TOTAL.inc();
+            inc_requests_rejected_total();
             return Err(AuthError::ServiceUnavailable {
                 reason: "Request queue is full".to_string(),
             });
@@ -213,7 +263,7 @@ impl BackpressureState {
         // Check memory pressure
         let memory_usage = self.memory_usage.load(Ordering::Relaxed);
         if memory_usage >= self.config.memory_pressure_threshold {
-            REQUESTS_REJECTED_TOTAL.inc();
+            inc_requests_rejected_total();
             return Err(AuthError::ServiceUnavailable {
                 reason: "Server memory pressure".to_string(),
             });
@@ -228,7 +278,7 @@ impl BackpressureState {
                     / (1.0 - self.config.load_shed_threshold));
 
             if rand::random::<f64>() > admit_probability {
-                REQUESTS_REJECTED_TOTAL.inc();
+                inc_requests_rejected_total();
                 return Err(AuthError::ServiceUnavailable {
                     reason: "Load shedding active".to_string(),
                 });
@@ -240,8 +290,8 @@ impl BackpressureState {
 
     pub fn on_request_start(&self, client_ip: &str) {
         self.concurrent_requests.fetch_add(1, Ordering::Relaxed);
-        CONCURRENT_REQUESTS.inc();
-        REQUESTS_TOTAL.inc();
+        inc_concurrent_requests();
+        inc_requests_total();
 
         // Increment per-IP counter
         let mut counters = self.per_ip_counters.lock().unwrap();
@@ -253,7 +303,7 @@ impl BackpressureState {
 
     pub fn on_request_end(&self, client_ip: &str) {
         self.concurrent_requests.fetch_sub(1, Ordering::Relaxed);
-        CONCURRENT_REQUESTS.dec();
+        dec_concurrent_requests();
 
         // Decrement per-IP counter
         let mut counters = self.per_ip_counters.lock().unwrap();
@@ -325,7 +375,7 @@ pub async fn backpressure_middleware(
     if let Some(content_length) = request.headers().get("content-length") {
         if let Ok(size_str) = content_length.to_str() {
             if let Ok(size) = size_str.parse::<f64>() {
-                REQUEST_BODY_SIZE.observe(size);
+                observe_request_body_size(size);
             }
         }
     }
@@ -338,7 +388,7 @@ pub async fn backpressure_middleware(
 
     // Record metrics
     let duration = start_time.elapsed();
-    REQUEST_DURATION.observe(duration.as_secs_f64());
+    observe_request_duration(duration.as_secs_f64());
 
     // Log slow requests
     if duration >= state.config.slow_request_threshold {

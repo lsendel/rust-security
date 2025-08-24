@@ -6,6 +6,7 @@ use petgraph::{
     graph::NodeIndex,
     Directed, Graph,
 };
+#[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};

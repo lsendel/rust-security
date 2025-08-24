@@ -9,6 +9,8 @@
 //! - Operational dashboards and alerting
 
 use anyhow::Result;
+#[cfg(feature = "monitoring")]
+use crate::security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -20,12 +22,14 @@ use tracing::Instrument;
 use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
+#[cfg(feature = "monitoring")]
 use crate::{
     business_metrics::BusinessMetricsRegistry,
     metrics::MetricsRegistry,
-    security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity},
     security_metrics::SecurityMetrics,
 };
+
+use crate::security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity};
 
 /// Service Level Indicators (SLIs) configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

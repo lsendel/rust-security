@@ -12,6 +12,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::time::sleep;
+#[cfg(feature = "monitoring")]
 use prometheus::{IntCounter, IntGauge, Histogram, register_int_counter, register_int_gauge, register_histogram};
 use once_cell::sync::Lazy;
 
@@ -308,7 +309,7 @@ impl AdvancedRateLimiter {
         if let Some(ban_time) = self.banned_ips.get(&ip) {
             let ban_expires = *ban_time + Duration::from_secs(self.config.ban_duration_minutes as u64 * 60);
             if SystemTime::now() < ban_expires {
-                RATE_LIMIT_BLOCKED_TOTAL.inc();
+                inc_blocked_total();
                 return RateLimitResult::Banned {
                     expires_at: ban_expires,
                 };
@@ -320,13 +321,13 @@ impl AdvancedRateLimiter {
 
         // Check allowlist (bypass all limits if on allowlist)
         if self.config.enable_allowlist && self.is_ip_allowed(&ip) {
-            RATE_LIMIT_ALLOWED_TOTAL.inc();
+            inc_allowed_total();
             return RateLimitResult::Allowed;
         }
 
         // Check banlist
         if self.config.enable_banlist && self.is_ip_banned(&ip) {
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return RateLimitResult::Blocked {
                 reason: "IP is on banlist".to_string(),
                 retry_after: Duration::from_secs(3600), // 1 hour
@@ -358,7 +359,7 @@ impl AdvancedRateLimiter {
         // All checks passed, record the request
         self.record_request(ip, client_id, endpoint).await;
 
-        RATE_LIMIT_ALLOWED_TOTAL.inc();
+        inc_allowed_total();
         RateLimitResult::Allowed
     }
 
@@ -376,7 +377,7 @@ impl AdvancedRateLimiter {
 
         let minute_count = self.global_minute_counter.load(Ordering::Relaxed);
         if minute_count >= self.config.global_requests_per_minute as u64 {
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return Some(RateLimitResult::Blocked {
                 reason: "Global minute limit exceeded".to_string(),
                 retry_after: Duration::from_secs(60),
@@ -394,7 +395,7 @@ impl AdvancedRateLimiter {
 
         let hour_count = self.global_hour_counter.load(Ordering::Relaxed);
         if hour_count >= self.config.global_requests_per_hour as u64 {
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return Some(RateLimitResult::Blocked {
                 reason: "Global hour limit exceeded".to_string(),
                 retry_after: Duration::from_secs(3600),
@@ -415,7 +416,7 @@ impl AdvancedRateLimiter {
         if window.requests >= self.config.per_ip_requests_per_minute {
             // Try to use burst tokens
             if !window.can_consume_burst_token() {
-                RATE_LIMIT_BLOCKED_TOTAL.inc();
+                inc_blocked_total();
                 return Some(RateLimitResult::Blocked {
                     reason: "Per-IP minute limit exceeded".to_string(),
                     retry_after: Duration::from_secs(60),
@@ -425,7 +426,7 @@ impl AdvancedRateLimiter {
 
         // Check daily limit
         if window.daily_requests >= self.config.per_ip_requests_per_day {
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return Some(RateLimitResult::Blocked {
                 reason: "Per-IP daily limit exceeded".to_string(),
                 retry_after: Duration::from_secs(86400),
@@ -435,7 +436,7 @@ impl AdvancedRateLimiter {
         // Check for suspicious activity
         if self.config.enable_adaptive_limits && window.requests > self.config.suspicious_threshold {
             self.ban_ip(ip);
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return Some(RateLimitResult::Banned {
                 expires_at: SystemTime::now() + Duration::from_secs(self.config.ban_duration_minutes as u64 * 60),
             });
@@ -451,7 +452,7 @@ impl AdvancedRateLimiter {
         window.reset_if_needed(Duration::from_secs(60));
 
         if window.requests >= self.config.per_client_requests_per_minute {
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return Some(RateLimitResult::Blocked {
                 reason: format!("Per-client limit exceeded for client: {}", client_id),
                 retry_after: Duration::from_secs(60),
@@ -476,7 +477,7 @@ impl AdvancedRateLimiter {
         window.reset_if_needed(Duration::from_secs(60));
 
         if window.requests >= limit {
-            RATE_LIMIT_BLOCKED_TOTAL.inc();
+            inc_blocked_total();
             return Some(RateLimitResult::Blocked {
                 reason: format!("Endpoint-specific limit exceeded for: {}", endpoint),
                 retry_after: Duration::from_secs(60),
@@ -510,7 +511,7 @@ impl AdvancedRateLimiter {
         }
 
         // Update metrics
-        RATE_LIMIT_REQUESTS_TOTAL.inc();
+        inc_requests_total();
 
         // Periodic cleanup
         self.cleanup_if_needed().await;
@@ -526,7 +527,7 @@ impl AdvancedRateLimiter {
             "IP address banned due to suspicious activity"
         );
 
-        RATE_LIMIT_BANS_TOTAL.inc();
+        inc_bans_total();
     }
 
     fn is_ip_allowed(&self, ip: &IpAddr) -> bool {
@@ -649,26 +650,67 @@ struct RateLimitErrorResponse {
     retry_after_seconds: u64,
 }
 
-// Metrics
+// Metrics (feature-gated)
+#[cfg(feature = "monitoring")]
 static RATE_LIMIT_REQUESTS_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!("rate_limit_requests_total", "Total requests processed by rate limiter").unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static RATE_LIMIT_ALLOWED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!("rate_limit_allowed_total", "Total requests allowed by rate limiter").unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static RATE_LIMIT_BLOCKED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!("rate_limit_blocked_total", "Total requests blocked by rate limiter").unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static RATE_LIMIT_BANS_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     register_int_counter!("rate_limit_bans_total", "Total IP bans issued").unwrap()
 });
 
+#[cfg(feature = "monitoring")]
 static RATE_LIMIT_CHECK_DURATION: Lazy<Histogram> = Lazy::new(|| {
     register_histogram!("rate_limit_check_duration_seconds", "Time spent checking rate limits").unwrap()
 });
+
+// Metrics helper functions to handle feature gates
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_requests_total() { inc_requests_total(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_requests_total() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_allowed_total() { inc_allowed_total(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_allowed_total() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_blocked_total() { inc_blocked_total(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_blocked_total() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn inc_bans_total() { inc_bans_total(); }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn inc_bans_total() {}
+
+#[cfg(feature = "monitoring")]
+#[inline]
+fn start_check_timer() -> prometheus::HistogramTimer { RATE_LIMIT_CHECK_DURATION.start_timer() }
+#[cfg(not(feature = "monitoring"))]
+#[inline]
+fn start_check_timer() -> () { () }
 
 /// Advanced rate limiting middleware
 pub async fn advanced_rate_limit_middleware(
@@ -677,7 +719,7 @@ pub async fn advanced_rate_limit_middleware(
     request: Request,
     next: Next,
 ) -> Result<Response, impl IntoResponse> {
-    let _timer = RATE_LIMIT_CHECK_DURATION.start_timer();
+    let _timer = start_check_timer();
 
     // Skip rate limiting in test mode
     if std::env::var("TEST_MODE").ok().as_deref() == Some("1") ||

@@ -2,6 +2,8 @@ use dashmap::DashMap;
 use deadpool_redis::{
     Config as RedisConfig, Connection as RedisConnection, Pool as RedisPool, Runtime,
 };
+#[cfg(feature = "enhanced-session-store")]
+use bb8_redis::RedisConnectionManager;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

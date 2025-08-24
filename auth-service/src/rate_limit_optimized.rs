@@ -11,6 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+#[cfg(feature = "monitoring")]
 use crate::metrics::MetricsHelper;
 
 /// Configuration for rate limiting

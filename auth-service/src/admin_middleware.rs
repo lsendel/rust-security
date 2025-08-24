@@ -1,3 +1,4 @@
+#[cfg(feature = "rate-limiting")]
 use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
 use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};

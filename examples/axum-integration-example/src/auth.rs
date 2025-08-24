@@ -207,24 +207,24 @@ mod tests {
 
     #[test]
     fn test_jwt_service_creation() {
-        let service = JwtService::new("test_secret".to_string(), Some(24));
+        let service = JwtService::new("this-is-a-test-secret-with-enough-length".to_string(), Some(24)).unwrap();
         assert_eq!(service.expiration_hours, 24);
     }
 
     #[cfg(feature = "auth")]
     #[test]
     fn test_password_hashing() {
-        let password = "test_password";
+        let password = "SecureTest987#"; // Strong password meeting validation criteria
         let hash = PasswordService::hash_password(password).unwrap();
 
         assert!(PasswordService::verify_password(password, &hash).unwrap());
-        assert!(!PasswordService::verify_password("wrong_password", &hash).unwrap());
+        assert!(!PasswordService::verify_password("WrongPassword123!", &hash).unwrap());
     }
 
     #[cfg(feature = "auth")]
     #[test]
     fn test_jwt_token_generation_and_validation() {
-        let service = JwtService::new("test_secret".to_string(), Some(1));
+        let service = JwtService::new("this-is-a-test-secret-with-enough-length".to_string(), Some(1)).unwrap();
 
         let token = service.generate_token(1, "test@example.com", UserRole::User).unwrap();
         let claims = service.validate_token(&token).unwrap();
@@ -237,8 +237,8 @@ mod tests {
     #[test]
     fn test_password_service_without_auth_feature() {
         // This should work even without auth feature
-        let hash = PasswordService::hash_password("test").unwrap();
-        let verified = PasswordService::verify_password("test", &hash).unwrap();
+        let hash = PasswordService::hash_password("SecureTest987#").unwrap();
+        let _verified = PasswordService::verify_password("SecureTest987#", &hash).unwrap();
 
         #[cfg(not(feature = "auth"))]
         {

@@ -5,7 +5,28 @@ use std::sync::Arc;
 use crate::repository::{PostgresUserRepository, SqliteUserRepository};
 
 #[cfg(any(feature = "sqlite", feature = "postgres"))]
-use sqlx::{migrate::MigrateDatabase, AnyPool, Postgres, Sqlite};
+use sqlx::{migrate::MigrateDatabase, Postgres, Sqlite};
+
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
+#[derive(Debug, Clone)]
+pub enum DatabasePool {
+    #[cfg(feature = "postgres")]
+    Postgres(sqlx::PgPool),
+    #[cfg(feature = "sqlite")]
+    Sqlite(sqlx::SqlitePool),
+}
+
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
+impl DatabasePool {
+    pub async fn close(&self) {
+        match self {
+            #[cfg(feature = "postgres")]
+            DatabasePool::Postgres(pool) => pool.close().await,
+            #[cfg(feature = "sqlite")]
+            DatabasePool::Sqlite(pool) => pool.close().await,
+        }
+    }
+}
 
 /// Database configuration
 #[derive(Debug, Clone)]
@@ -23,7 +44,7 @@ impl Default for DatabaseConfig {
 /// Database connection manager
 pub struct Database {
     #[cfg(any(feature = "sqlite", feature = "postgres"))]
-    pool: Option<AnyPool>,
+    pool: Option<DatabasePool>,
     repository: Arc<dyn UserRepository>,
 }
 
@@ -70,7 +91,10 @@ impl Database {
             .await
             .map_err(|e| DbError::Connection(format!("Migration failed: {}", e)))?;
 
-        Ok(Self { pool: None, repository: Arc::new(SqliteUserRepository::new(sqlite_pool)) })
+        Ok(Self { 
+            pool: Some(DatabasePool::Sqlite(sqlite_pool.clone())), 
+            repository: Arc::new(SqliteUserRepository::new(sqlite_pool)) 
+        })
     }
 
     #[cfg(feature = "postgres")]
@@ -95,7 +119,10 @@ impl Database {
             .await
             .map_err(|e| DbError::Connection(format!("Migration failed: {}", e)))?;
 
-        Ok(Self { pool: None, repository: Arc::new(PostgresUserRepository::new(pg_pool)) })
+        Ok(Self { 
+            pool: Some(DatabasePool::Postgres(pg_pool.clone())), 
+            repository: Arc::new(PostgresUserRepository::new(pg_pool)) 
+        })
     }
 
     #[cfg(any(feature = "sqlite", feature = "postgres"))]
@@ -125,7 +152,7 @@ impl Database {
 
     #[cfg(any(feature = "sqlite", feature = "postgres"))]
     /// Get the database pool (if available)
-    pub fn pool(&self) -> Option<&AnyPool> {
+    pub fn pool(&self) -> Option<&DatabasePool> {
         self.pool.as_ref()
     }
 
@@ -147,6 +174,7 @@ pub async fn init_database() -> Result<Database, DbError> {
         }
         #[cfg(not(any(feature = "sqlite", feature = "postgres")))]
         {
+            let _ = database_url; // Acknowledge the variable is used conditionally
             tracing::warn!(
                 "DATABASE_URL provided but no database features enabled, using in-memory storage"
             );

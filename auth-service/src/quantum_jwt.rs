@@ -60,17 +60,17 @@ pub struct QuantumJwtPayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HybridAlgorithm {
     /// RSA-2048 + ML-DSA-44 (Security Level 1)
-    RS256_MLDSA44,
+    Rs256MlDsa44,
     /// RSA-3072 + ML-DSA-65 (Security Level 3)
-    RS384_MLDSA65,
+    Rs384MlDsa65,
     /// RSA-4096 + ML-DSA-87 (Security Level 5)
-    RS512_MLDSA87,
+    Rs512MlDsa87,
     /// ECDSA P-256 + ML-DSA-44 (Security Level 1)
-    ES256_MLDSA44,
+    Es256MlDsa44,
     /// ECDSA P-384 + ML-DSA-65 (Security Level 3)
-    ES384_MLDSA65,
+    Es384MlDsa65,
     /// ECDSA P-521 + ML-DSA-87 (Security Level 5)
-    ES512_MLDSA87,
+    Es512MlDsa87,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -552,9 +552,9 @@ impl QuantumJwtManager {
     /// Get hybrid algorithm for security level
     fn get_hybrid_algorithm(&self, security_level: u8) -> Result<HybridAlgorithm> {
         match security_level {
-            1 => Ok(HybridAlgorithm::ES256_MLDSA44),
-            3 => Ok(HybridAlgorithm::ES384_MLDSA65),
-            5 => Ok(HybridAlgorithm::ES512_MLDSA87),
+            1 => Ok(HybridAlgorithm::Es256MlDsa44),
+            3 => Ok(HybridAlgorithm::Es384MlDsa65),
+            5 => Ok(HybridAlgorithm::Es512MlDsa87),
             _ => Err(anyhow!("Invalid security level: {}", security_level)),
         }
     }

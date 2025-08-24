@@ -112,13 +112,13 @@ http = "1.1"
 http-body-util = "0.1"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 urlencoding = "2.1"
-url = "2.5"
+url = "2.5.4"
 
 # Policy engine
 cedar-policy = "4.2"
 
 # API documentation
-utoipa = { version = "5.1", features = ["axum_extras"] }
+utoipa = { version = "5.1", features = ["axum_extras", "chrono"] }
 
 # Crypto additional
 argon2 = "0.5"
@@ -157,15 +157,15 @@ nalgebra = "0.33"
 pqcrypto-mlkem = "0.1"
 pqcrypto-mldsa = "0.1"
 
-# Cloud integrations
-aws-config = "1.5"
-aws-sdk-secretsmanager = "1.48"
+# Cloud integrations - compatible with Rust 1.82.0
+aws-config = "1.1"
+aws-sdk-secretsmanager = "1.10"
 vaultrs = "0.7"
 
 # Monitoring/telemetry
-opentelemetry = "0.22"
+opentelemetry = { version = "0.22", features = ["metrics"] }
 opentelemetry-jaeger = "0.22"
-opentelemetry_sdk = "0.22"
+opentelemetry_sdk = { version = "0.22", features = ["metrics", "rt-tokio"] }
 tracing-opentelemetry = "0.22"
 tokio-metrics = "0.3"
 metrics = "0.24"

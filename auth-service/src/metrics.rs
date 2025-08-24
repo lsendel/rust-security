@@ -21,6 +21,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use once_cell::sync::Lazy;
+#[cfg(feature = "monitoring")]
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };

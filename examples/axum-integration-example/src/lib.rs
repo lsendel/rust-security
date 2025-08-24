@@ -255,7 +255,7 @@ impl AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        Self::new()
+        Self::new().expect("Failed to create default AppState - JWT secret must be at least 32 characters")
     }
 }
 
@@ -384,7 +384,7 @@ fn create_router_with_state(state: AppState) -> Router {
 /// Build application router with database
 pub async fn create_app_with_database() -> Result<Router, DbError> {
     let database = init_database().await?;
-    let state = AppState::from_database(database).map_err(|e| DbError::Internal)?;
+    let state = AppState::from_database(database).map_err(|_e| DbError::Internal)?;
     Ok(create_router_with_state(state))
 }
 

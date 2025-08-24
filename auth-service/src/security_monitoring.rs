@@ -1,5 +1,7 @@
+#[cfg(feature = "monitoring")]
 use crate::security_metrics::SECURITY_METRICS;
 use once_cell::sync::Lazy;
+#[cfg(feature = "monitoring")]
 use prometheus::{Encoder, TextEncoder};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

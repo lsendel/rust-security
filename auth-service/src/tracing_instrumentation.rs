@@ -424,7 +424,7 @@ impl AuthFlowTracer {
 
 /// Authentication flow span wrapper
 pub struct AuthFlowSpan {
-    span: opentelemetry::trace::Span,
+    span: opentelemetry::global::BoxedSpan,
     flow_id: String,
     observability: Arc<ObservabilityProvider>,
 }
@@ -469,7 +469,7 @@ impl Drop for AuthFlowSpan {
 
 /// Token validation span wrapper
 pub struct TokenValidationSpan {
-    span: opentelemetry::trace::Span,
+    span: opentelemetry::global::BoxedSpan,
     start_time: Instant,
     observability: Arc<ObservabilityProvider>,
     token_type: String,
@@ -531,7 +531,7 @@ impl Drop for TokenValidationSpan {
 
 /// Policy evaluation span wrapper
 pub struct PolicyEvaluationSpan {
-    span: opentelemetry::trace::Span,
+    span: opentelemetry::global::BoxedSpan,
     start_time: Instant,
     observability: Arc<ObservabilityProvider>,
     policy_id: String,
@@ -566,7 +566,7 @@ impl Drop for PolicyEvaluationSpan {
 
 /// Database operation span wrapper
 pub struct DatabaseOperationSpan {
-    span: opentelemetry::trace::Span,
+    span: opentelemetry::global::BoxedSpan,
     start_time: Instant,
     observability: Arc<ObservabilityProvider>,
     operation: String,

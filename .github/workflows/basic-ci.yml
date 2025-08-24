@@ -19,15 +19,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.package }}
-      
+
       - name: Check ${{ matrix.package }}
         run: cargo check -p ${{ matrix.package }}
 
@@ -41,15 +41,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.package }}
-      
+
       - name: Test ${{ matrix.package }}
         run: |
           if [ "${{ matrix.package }}" = "api-contracts" ] || [ "${{ matrix.package }}" = "auth-service" ]; then
@@ -65,13 +65,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
-      
+
       - name: Check entire workspace
         run: cargo check --workspace
 
@@ -81,12 +81,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -100,17 +100,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.package }}
-      
+
       - name: Run clippy on ${{ matrix.package }}
         run: cargo clippy -p ${{ matrix.package }} --all-targets -- -D warnings
 
@@ -120,18 +120,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
-      
+
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
-      
+
       - name: Run security audit
         run: cargo audit --deny warnings
 
@@ -141,18 +141,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
-      
+
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny
-      
+
       - name: Run dependency check
         run: cargo deny check
 
@@ -164,37 +164,24 @@ jobs:
     steps:
       - name: Summary
         run: |
-          echo "## 🎉 COMPLETE SUCCESS - ENTIRE PLATFORM COMPILES!" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ ALL PACKAGES WORKING (6/6 - 100% SUCCESS!):" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔐 **auth-core** - Core authentication functionality" >> $GITHUB_STEP_SUMMARY
-          echo "- 🛠️ **common** - Shared utilities and types" >> $GITHUB_STEP_SUMMARY
-          echo "- 📋 **api-contracts** - API definitions and contracts" >> $GITHUB_STEP_SUMMARY
-          echo "- 🚀 **auth-service** - Main authentication service" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔒 **policy-service** - Authorization and policy engine" >> $GITHUB_STEP_SUMMARY
-          echo "- 📊 **compliance-tools** - Compliance and audit utilities" >> $GITHUB_STEP_SUMMARY
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🏆 INCREDIBLE ACHIEVEMENTS:" >> $GITHUB_STEP_SUMMARY
-          echo "- **100% compilation success** across entire platform" >> $GITHUB_STEP_SUMMARY
-          echo "- **Enterprise-grade security platform** ready for production" >> $GITHUB_STEP_SUMMARY
-          echo "- **Memory-safe Rust** foundation preventing vulnerabilities" >> $GITHUB_STEP_SUMMARY
-          echo "- **Comprehensive CI/CD pipeline** with security scanning" >> $GITHUB_STEP_SUMMARY
+          echo "- Check: ${{ needs.check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Test: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Workspace Check: ${{ needs.workspace-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Format: ${{ needs.format.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Clippy: ${{ needs.clippy.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security Audit: ${{ needs.security-audit.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dependency Check: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔒 Security & Quality Checks:" >> $GITHUB_STEP_SUMMARY
-          echo "- 🔍 **Security audit** (cargo-audit)" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 **Dependency check** (cargo-deny)" >> $GITHUB_STEP_SUMMARY
-          echo "- 🎨 **Code formatting** validation" >> $GITHUB_STEP_SUMMARY
-          echo "- 📎 **Clippy linting** for all packages" >> $GITHUB_STEP_SUMMARY
-          echo "- 🏗️ **Full workspace** compilation check" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🚀 Ready for Advanced Features:" >> $GITHUB_STEP_SUMMARY
-          echo "1. 📊 **Code coverage reporting** (cargo-llvm-cov)" >> $GITHUB_STEP_SUMMARY
-          echo "2. ⚡ **Performance benchmarks** and regression testing" >> $GITHUB_STEP_SUMMARY
-          echo "3. 🐳 **Docker containerization** and deployment" >> $GITHUB_STEP_SUMMARY
-          echo "4. 🔐 **Advanced security scanning** (SAST, dependency scanning)" >> $GITHUB_STEP_SUMMARY
-          echo "5. 📈 **Monitoring and observability** integration" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🎯 Platform Ready For:" >> $GITHUB_STEP_SUMMARY
-          echo "- **Production deployment** with enterprise-grade authentication" >> $GITHUB_STEP_SUMMARY
-          echo "- **Multi-tenant SaaS** applications" >> $GITHUB_STEP_SUMMARY
-          echo "- **High-security environments** (financial, healthcare, government)" >> $GITHUB_STEP_SUMMARY
-          echo "- **API security** with OAuth 2.0, SAML, OIDC support" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.check.result }}" = "success" ] && \
+             [ "${{ needs.test.result }}" = "success" ] && \
+             [ "${{ needs.workspace-check.result }}" = "success" ] && \
+             [ "${{ needs.format.result }}" = "success" ] && \
+             [ "${{ needs.clippy.result }}" = "success" ] && \
+             [ "${{ needs.security-audit.result }}" = "success" ] && \
+             [ "${{ needs.dependency-check.result }}" = "success" ]; then
+            echo "✅ All checks passed successfully." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ One or more checks failed. See jobs above for details." >> $GITHUB_STEP_SUMMARY
+          fi

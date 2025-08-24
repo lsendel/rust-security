@@ -3,6 +3,7 @@ use chrono::{DateTime, Duration, Utc};
 use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
 use nalgebra::{DMatrix, DVector};
+#[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde_json;

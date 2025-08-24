@@ -14,9 +14,7 @@ workspace = true
 [dependencies]
 # Web framework with security features
 axum = { workspace = true }
-axum-server = { workspace = true, optional = true }
 tokio = { workspace = true }
-tower = { workspace = true }
 tower-http = { workspace = true, features = ["cors", "trace", "limit", "timeout"], optional = true }
 
 # Serialization
@@ -25,7 +23,6 @@ serde_json = { workspace = true }
 
 # Logging and tracing
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 # Database dependencies
 sqlx = { workspace = true, optional = true }
@@ -33,33 +30,30 @@ sqlx = { workspace = true, optional = true }
 # Authentication and security dependencies
 jsonwebtoken = { workspace = true, optional = true }
 bcrypt = { workspace = true, optional = true }
-argon2 = { workspace = true, optional = true }
-validator = { workspace = true, optional = true }
-governor = { version = "0.6", optional = true }
-tower_governor = { version = "0.3", optional = true }
-headers = { workspace = true, optional = true }
-rustls = { workspace = true, optional = true }
 
 # Documentation dependencies
 utoipa = { workspace = true, optional = true }
 utoipa-swagger-ui = { workspace = true, optional = true }
 
-# Monitoring and observability dependencies
+# TLS and server dependencies
+rustls = { workspace = true, optional = true }
+axum-server = { workspace = true, optional = true }
+
+# Connection pooling and monitoring
+deadpool = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 metrics = { workspace = true, optional = true }
 metrics-prometheus = { workspace = true, optional = true }
 opentelemetry = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
-# Database connection pooling
-deadpool = { version = "0.10", optional = true }
 redis = { workspace = true, optional = true }
 
+
+
 # Additional dependencies for enhanced features
-chrono = { workspace = true }
-uuid = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
-anyhow = { workspace = true }
+chrono = { workspace = true }
 
 # Common utilities
 common = { path = "../../common" }
@@ -68,16 +62,14 @@ common = { path = "../../common" }
 # Production-ready defaults with security
 default = ["auth", "security", "validation"]
 
-# Core security features
-security = ["dep:tower-http", "rate-limiting", "dep:headers", "security-headers"]
-validation = ["dep:validator"]
-rate-limiting = ["dep:governor", "dep:tower_governor"]
-security-headers = ["dep:headers"]
+# Core security features (simplified to remove unused dependencies)
+security = ["dep:tower-http"]
+validation = []
 
 # Authentication features
 auth = ["auth-basic", "auth-advanced"]
 auth-basic = ["dep:jsonwebtoken", "dep:bcrypt"]
-auth-advanced = ["auth-basic", "dep:argon2"]
+auth-advanced = ["auth-basic"]
 
 # Database features with security
 database = ["postgres"]
@@ -108,24 +100,10 @@ development = ["docs", "dev-tools"]
 dev-tools = []
 
 # Complete feature sets
-web-security = ["security", "auth-advanced", "rate-limiting", "validation"]
+web-security = ["security", "auth-advanced", "validation"]
 full = ["production", "database", "integrations", "docs", "web-security"]
 
-# Security-focused build profiles
-[profile.security]
-inherits = "release"
-debug = false
-strip = true
-panic = "abort"
-overflow-checks = true
-lto = true
-codegen-units = 1
-
-# Performance profile for benchmarking
-[profile.bench]
-inherits = "release"
-debug = true
-lto = false
+# Build profiles are defined at workspace root
 
 [dev-dependencies]
 http-body-util = { workspace = true }

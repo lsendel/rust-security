@@ -32,7 +32,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize};
 
 #[cfg(feature = "post-quantum")]
 use pqcrypto_dilithium::{dilithium2, dilithium3, dilithium5};
@@ -99,7 +99,7 @@ pub enum ClassicalAlgorithm {
 }
 
 /// Post-quantum key material with metadata
-#[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PQKeyMaterial {
     pub kid: String,
     pub algorithm: PQAlgorithm,
@@ -110,7 +110,7 @@ pub struct PQKeyMaterial {
     pub jwk: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PQKeyData {
     #[cfg(feature = "post-quantum")]
     Dilithium {
@@ -134,7 +134,7 @@ pub enum PQKeyData {
     Placeholder,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClassicalKeyData {
     #[cfg(feature = "hybrid-crypto")]
     EcdsaP256 {

@@ -6,6 +6,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
+#[cfg(feature = "monitoring")]
+#[cfg(feature = "monitoring")]
 use crate::metrics::{MetricsHelper, METRICS};
 
 /// Cache configuration

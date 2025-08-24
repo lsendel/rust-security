@@ -1,4 +1,5 @@
 use once_cell::sync::Lazy;
+#[cfg(feature = "monitoring")]
 use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, Opts, Registry};
 use std::time::Instant;
 

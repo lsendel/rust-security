@@ -75,13 +75,14 @@ regex = { workspace = true }
 dashmap = { workspace = true, optional = true }
 num_cpus = { workspace = true }
 # OpenTelemetry for distributed tracing
-opentelemetry = { workspace = true, optional = true }
+opentelemetry = { workspace = true, features = ["metrics"], optional = true }
 opentelemetry-jaeger = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
-opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, features = ["metrics"], optional = true }
 # SIMD and hardware acceleration (removed due to compatibility issues)
 # packed_simd_2 = { workspace = true, optional = true }
 ring = { workspace = true }
+zeroize = { workspace = true }
 
 # Additional missing dependencies identified during compilation
 ipnetwork = { workspace = true }
@@ -95,9 +96,11 @@ rayon = { workspace = true }
 # High-performance async runtime
 # Connection pooling optimization
 deadpool-redis = { workspace = true, optional = true }
+bb8 = { workspace = true, optional = true }
+bb8-redis = { workspace = true, optional = true }
 # Optimized serialization
 # Metrics and profiling
-# pprof2 = { workspace = true, optional = true }  # Removed due to RUSTSEC-2024-0408 memory safety vulnerability
+# pprof2 = { workspace = true, optional = true }  # Removed due to RUSTSEC-2024-0408
 
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
@@ -196,11 +199,11 @@ docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
 tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
-# benchmarks = ["criterion"]  # pprof2 removed due to security vulnerability
+# benchmarks = []  # Removed pprof2 due to security vulnerability
 simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]
 crypto = ["ed25519-dalek"]
-# profiling = []  # pprof2 removed due to security vulnerability
+# profiling = []  # Removed pprof2 due to security vulnerability
 # Secrets management feature flags
 secrets-vault-aws = ["aws", "vault"]
 # Post-quantum cryptography feature flags
@@ -217,21 +220,13 @@ monitoring = ["tracing", "dep:prometheus"]
 # Service features
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]
 api-keys = ["dep:sqlx"]
-enhanced-session-store = ["dep:redis", "dep:deadpool-redis"]
+enhanced-session-store = ["dep:redis", "dep:deadpool-redis", "dep:bb8", "dep:bb8-redis"]
 
 # Complete feature sets
 enterprise = ["production", "threat-hunting", "soar", "hybrid-crypto"]
 all-features = ["enterprise", "development", "advanced-analytics"]
 
-# Build profiles for security optimization
-[profile.security]
-inherits = "release"
-debug = false
-strip = true
-panic = "abort"
-overflow-checks = true
-lto = true
-codegen-units = 1
+# Build profiles are defined at workspace root
 
 # [[bench]]
 # name = "performance_suite"

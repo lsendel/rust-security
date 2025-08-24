@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Instant};
 use tracing::{debug, error, info, warn};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::{Zeroize};
 
 use crate::post_quantum_crypto::{
     get_pq_manager, ClassicalKeyData, PQAlgorithm, PQConfig, PQKeyData, PQKeyMaterial,
@@ -77,7 +77,7 @@ impl Default for KeyRotationPolicy {
 }
 
 /// Key usage statistics and metadata
-#[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyMetadata {
     pub kid: String,
     pub created_at: u64,
@@ -146,7 +146,7 @@ impl Default for KeyPerformanceMetrics {
 }
 
 /// Key storage with secure handling
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct SecureKeyStorage {
     keys: Arc<RwLock<HashMap<String, PQKeyMaterial>>>,
     metadata: Arc<RwLock<HashMap<String, KeyMetadata>>>,

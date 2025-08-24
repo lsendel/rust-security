@@ -10,12 +10,12 @@ use tracing::{info, error};
 /// Main application structure
 pub struct App {
     pub router: Router,
-    pub config: Arc<crate::config::AuthServiceConfig>,
+    pub config: Arc<crate::config::AppConfig>,
 }
 
 impl App {
     /// Create a new application instance
-    pub fn new(config: Arc<crate::config::AuthServiceConfig>) -> Self {
+    pub fn new(config: Arc<crate::config::AppConfig>) -> Self {
         let router = crate::lib::api::create_router();
         
         Self {

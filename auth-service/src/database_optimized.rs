@@ -1,5 +1,7 @@
 use dashmap::DashMap;
 use deadpool_redis::{Config as RedisConfig, Pool as RedisPool, Runtime};
+#[cfg(feature = "enhanced-session-store")]
+use bb8_redis::RedisConnectionManager;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};

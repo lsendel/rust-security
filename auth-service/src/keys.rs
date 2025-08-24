@@ -237,9 +237,16 @@ impl KeyManager {
 
     /// Generate secure key material with proper error handling
     async fn generate_secure_key_material() -> Result<SecureKeyMaterial, AuthError> {
-        // Use a pre-generated secure RSA key to avoid the vulnerable rsa crate
-        // In production, these keys should be generated externally and loaded securely
-        let private_key_pem = include_str!("../keys/rsa_private_key.pem");
+        // SECURITY: Load RSA key from secure environment variable or external key management
+        // This prevents hardcoded keys and supports key rotation
+        let private_key_pem = std::env::var("JWT_RSA_PRIVATE_KEY")
+            .or_else(|_| std::env::var("RSA_PRIVATE_KEY"))
+            .map_err(|_| {
+                internal_error(
+                    "JWT_RSA_PRIVATE_KEY or RSA_PRIVATE_KEY environment variable must be set. \
+                     Generate with: openssl genpkey -algorithm RSA -pkcs8 -out private_key.pem -pkcs8"
+                )
+            })?;
 
         let kid = format!("key-{}", Self::current_timestamp());
 

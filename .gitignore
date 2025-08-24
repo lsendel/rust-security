@@ -18,6 +18,15 @@ benchmarks/
 profiling/
 metrics/
 traces/
+
+# Security: Never commit private keys or certificates
+*.pem
+*.key
+*.p12
+*.pfx
+auth-service/keys/
+**/keys/private*
+**/certs/private*
 dumps/
 tmp/
 temp/

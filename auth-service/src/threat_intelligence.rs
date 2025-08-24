@@ -2,6 +2,7 @@ use crate::threat_types::*;
 use chrono::{DateTime, Duration, Utc};
 use flume::{unbounded, Receiver, Sender};
 use indexmap::IndexMap;
+#[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
