@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Common types and utilities for the rust-security workspace"
+repository = "https://github.com/lsendel/rust-security"
+readme = "../README.md"
+keywords = ["security", "auth", "crypto"]
+categories = ["authentication", "cryptography", "network-programming"]
 
 [lints]
 workspace = true

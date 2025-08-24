@@ -479,6 +479,8 @@ impl DatabaseOptimized {
             aud: hash_map.get("aud").cloned(),
             iss: hash_map.get("iss").cloned(),
             jti: hash_map.get("jti").cloned(),
+            token_type: hash_map.get("token_type").cloned(),
+            token_binding: hash_map.get("token_binding").cloned(),
         }
     }
 
