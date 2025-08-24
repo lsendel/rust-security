@@ -495,7 +495,7 @@ pub enum WorkflowStatus {
 }
 
 /// Workflow execution request
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WorkflowExecutionRequest {
     /// Workflow instance ID
     pub instance_id: String,
@@ -582,6 +582,17 @@ pub struct StepError {
 
     /// Whether the error is retryable
     pub retryable: bool,
+}
+
+impl From<serde_json::Error> for StepError {
+    fn from(err: serde_json::Error) -> Self {
+        Self {
+            code: "SERIALIZATION_ERROR".to_string(),
+            message: format!("JSON serialization error: {}", err),
+            details: None,
+            retryable: false,
+        }
+    }
 }
 
 /// Workflow error

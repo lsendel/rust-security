@@ -28,7 +28,8 @@ use aws_sdk_secretsmanager::{Client as SecretsManagerClient, Error as AwsError};
 #[cfg(feature = "vault")]
 use vaultrs::{
     client::{VaultClient, VaultClientSettingsBuilder},
-    kv2, Error as VaultError,
+    kv2,
+    error::ClientError as VaultError,
 };
 
 use crate::crypto_unified::{EncryptedData, UnifiedCryptoError, UnifiedCryptoManager};

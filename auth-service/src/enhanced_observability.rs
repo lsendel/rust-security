@@ -9,8 +9,6 @@
 //! - Operational dashboards and alerting
 
 use anyhow::Result;
-#[cfg(feature = "monitoring")]
-use crate::security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,

@@ -494,7 +494,7 @@ pub async fn emergency_rollback(
             "Emergency rollback triggered: {} - {}",
             request.trigger, request.reason
         ))
-        .with_detail("trigger".to_string(), request.trigger)
+        .with_detail("trigger".to_string(), request.trigger.clone())
         .with_detail("rotated_keys".to_string(), rotated_keys.len()),
     );
 

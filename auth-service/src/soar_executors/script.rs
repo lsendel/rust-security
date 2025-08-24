@@ -74,7 +74,7 @@ impl StepExecutor for ScriptExecutor {
                         .with_actor("soar_system".to_string())
                         .with_action("soar_execute".to_string())
                         .with_target("soar_playbook".to_string())
-                        .with_outcome(if exit_code == 0 { "success" } else { "failure" })
+                        .with_outcome(if exit_code == 0 { "success".to_string() } else { "failure".to_string() })
                         .with_reason("Script execution step completed".to_string())
                         .with_detail("script_type".to_string(), script_type.clone())
                         .with_detail("exit_code".to_string(), exit_code),
@@ -268,9 +268,9 @@ impl StepExecutor for HttpRequestExecutor {
                         .with_action("soar_execute".to_string())
                         .with_target("soar_playbook".to_string())
                         .with_outcome(if status_code < 400 {
-                            "success"
+                            "success".to_string()
                         } else {
-                            "failure"
+                            "failure".to_string()
                         })
                         .with_reason("HTTP request step completed".to_string())
                         .with_detail("method".to_string(), method.clone())

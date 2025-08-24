@@ -87,6 +87,102 @@ pub struct CorrelationConfig {
     pub correlation_rules: Vec<CorrelationRule>,
 }
 
+/// Correlation rule for alert pattern matching
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationRule {
+    /// Rule ID
+    pub id: String,
+    /// Rule name
+    pub name: String,
+    /// Rule description
+    pub description: String,
+    /// Alert types to correlate
+    pub alert_types: Vec<SecurityAlertType>,
+    /// Time window for correlation
+    pub time_window_minutes: u32,
+    /// Minimum events required
+    pub min_events: u32,
+    /// Rule severity
+    pub severity: AlertSeverity,
+    /// Whether the rule is enabled
+    pub enabled: bool,
+}
+
+/// Result of alert correlation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationResult {
+    /// Correlation ID
+    pub id: String,
+    /// Rule that triggered the correlation
+    pub rule_id: String,
+    /// Correlated alerts
+    pub alerts: Vec<SecurityAlert>,
+    /// Correlation timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Correlation confidence score (0-100)
+    pub confidence_score: u8,
+    /// Correlation status
+    pub status: CorrelationStatus,
+    /// Additional metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// Correlation processing status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CorrelationStatus {
+    /// Correlation is active and being processed
+    Active,
+    /// Correlation has been resolved
+    Resolved,
+    /// Correlation has been dismissed as false positive
+    Dismissed,
+    /// Correlation requires manual review
+    PendingReview,
+}
+
+/// Correlation metrics
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CorrelationMetrics {
+    /// Total correlations processed
+    pub total_correlations: u64,
+    /// Active correlations count
+    pub active_correlations: u64,
+    /// False positive correlations
+    pub false_positives: u64,
+    /// Processing time statistics
+    pub avg_processing_time_ms: f64,
+    /// Rule effectiveness metrics
+    pub rule_metrics: HashMap<String, RuleMetrics>,
+}
+
+/// Metrics for individual correlation rules
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct RuleMetrics {
+    /// Times the rule was triggered
+    pub trigger_count: u64,
+    /// Times the rule resulted in valid correlation
+    pub success_count: u64,
+    /// False positive rate
+    pub false_positive_rate: f64,
+    /// Average confidence score
+    pub avg_confidence: f64,
+}
+
+/// Correlation error types
+#[derive(Debug, thiserror::Error)]
+pub enum CorrelationError {
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+    #[error("Processing error: {0}")]
+    Processing(String),
+    #[error("Rule error: {0}")]
+    Rule(String),
+    #[error("Storage error: {0}")]
+    Storage(String),
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
 /// Notification configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationConfig {
@@ -155,6 +251,9 @@ pub struct SmsConfig {
 /// Integration configuration for external tools
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntegrationConfig {
+    /// Unique identifier for the integration
+    pub id: String,
+
     /// Integration type (SIEM, EDR, Firewall, etc.)
     pub integration_type: IntegrationType,
 

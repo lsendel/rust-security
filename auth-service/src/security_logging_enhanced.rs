@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use sha2::{Sha256, Digest};
 use regex::Regex;
 
 /// Security event types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SecurityEventType {
     // Authentication events
@@ -55,8 +55,40 @@ pub enum SecurityEventType {
     PrivilegeEscalation,
 }
 
+impl std::fmt::Display for SecurityEventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            SecurityEventType::AuthenticationSuccess => "authentication_success",
+            SecurityEventType::AuthenticationFailure => "authentication_failure", 
+            SecurityEventType::AuthenticationAttempt => "authentication_attempt",
+            SecurityEventType::AuthorizationSuccess => "authorization_success",
+            SecurityEventType::AuthorizationFailure => "authorization_failure",
+            SecurityEventType::PermissionDenied => "permission_denied",
+            SecurityEventType::SessionCreated => "session_created",
+            SecurityEventType::SessionDestroyed => "session_destroyed",
+            SecurityEventType::SessionExpired => "session_expired",
+            SecurityEventType::SessionHijackAttempt => "session_hijack_attempt",
+            SecurityEventType::RateLimitExceeded => "rate_limit_exceeded",
+            SecurityEventType::RateLimitWarning => "rate_limit_warning",
+            SecurityEventType::CsrfTokenMissing => "csrf_token_missing",
+            SecurityEventType::CsrfTokenInvalid => "csrf_token_invalid",
+            SecurityEventType::SqlInjectionAttempt => "sql_injection_attempt",
+            SecurityEventType::XssAttempt => "xss_attempt",
+            SecurityEventType::SuspiciousActivity => "suspicious_activity",
+            SecurityEventType::ConfigurationChange => "configuration_change",
+            SecurityEventType::SecurityPolicyViolation => "security_policy_violation",
+            SecurityEventType::ThreatDetected => "threat_detected",
+            SecurityEventType::BruteForceAttempt => "brute_force_attempt",
+            SecurityEventType::CredentialStuffing => "credential_stuffing",
+            SecurityEventType::AccountEnumeration => "account_enumeration",
+            SecurityEventType::PrivilegeEscalation => "privilege_escalation",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 /// Security event severity levels
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SecuritySeverity {
     Info,
@@ -64,6 +96,21 @@ pub enum SecuritySeverity {
     Medium,
     High,
     Critical,
+    Warning,
+}
+
+impl std::fmt::Display for SecuritySeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            SecuritySeverity::Info => "info",
+            SecuritySeverity::Low => "low", 
+            SecuritySeverity::Medium => "medium",
+            SecuritySeverity::High => "high",
+            SecuritySeverity::Critical => "critical",
+            SecuritySeverity::Warning => "warning",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 /// Security event metadata
@@ -146,7 +193,7 @@ pub struct IpReputation {
 }
 
 /// PII detection patterns
-struct PiiDetector {
+pub struct PiiDetector {
     email_regex: Regex,
     phone_regex: Regex,
     ssn_regex: Regex,
@@ -154,7 +201,7 @@ struct PiiDetector {
 }
 
 impl PiiDetector {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             email_regex: Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
             phone_regex: Regex::new(r"\b\d{3}-\d{3}-\d{4}\b|\b\(\d{3}\)\s*\d{3}-\d{4}\b").unwrap(),
@@ -163,7 +210,7 @@ impl PiiDetector {
         }
     }
 
-    fn sanitize_text(&self, text: &str) -> String {
+    pub fn sanitize_text(&self, text: &str) -> String {
         let mut sanitized = text.to_string();
         
         // Replace email addresses
@@ -179,6 +226,21 @@ impl PiiDetector {
         sanitized = self.credit_card_regex.replace_all(&sanitized, "[CC_REDACTED]").to_string();
         
         sanitized
+    }
+
+    /// Convenience method for PII redaction (alias for sanitize_text)
+    pub fn redact_pii(&self, text: &str) -> String {
+        self.sanitize_text(text)
+    }
+
+    /// Hash an identifier for privacy-safe logging
+    pub fn hash_identifier(&self, identifier: &str) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        identifier.hash(&mut hasher);
+        format!("hash:{:x}", hasher.finish())
     }
 }
 
@@ -280,7 +342,7 @@ impl SecurityLogger {
             .source_ip(ip)
             .user_id(user_id)
             .correlation_id(correlation_id)
-            .description("User authentication successful")
+            .description("User authentication successful".to_string())
             .build();
         
         self.log_event(event).await;
@@ -393,6 +455,7 @@ impl SecurityLogger {
             SecuritySeverity::Medium => warn!(target: "security", "{}", json),
             SecuritySeverity::Low => info!(target: "security", "{}", json),
             SecuritySeverity::Info => debug!(target: "security", "{}", json),
+            SecuritySeverity::Warning => warn!(target: "security", "{}", json),
         }
     }
 
@@ -414,6 +477,7 @@ impl SecurityLogger {
             SecuritySeverity::Medium => warn!(target: "security", "{}", message),
             SecuritySeverity::Low => info!(target: "security", "{}", message),
             SecuritySeverity::Info => debug!(target: "security", "{}", message),
+            SecuritySeverity::Warning => warn!(target: "security", "{}", message),
         }
     }
 

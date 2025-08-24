@@ -5,12 +5,12 @@ use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use uuid::Uuid;
 
-/// Core security event structure representing all authentication and security-related events
+/// Core threat security event structure representing all authentication and security-related events
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SecurityEvent {
+pub struct ThreatThreatSecurityEvent {
     pub event_id: String,
     pub timestamp: DateTime<Utc>,
-    pub event_type: SecurityEventType,
+    pub event_type: ThreatSecurityEventType,
     pub severity: ThreatSeverity,
     pub source: String,
     pub client_id: Option<String>,
@@ -53,7 +53,7 @@ pub struct TokenBindingInfo {
 
 /// Types of security events that can occur
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum SecurityEventType {
+pub enum ThreatSecurityEventType {
     AuthenticationAttempt,
     AuthenticationSuccess,
     AuthenticationFailure,
@@ -339,7 +339,7 @@ pub struct AttackPattern {
     pub last_observed: DateTime<Utc>,
 
     // Pattern characteristics
-    pub event_sequence: Vec<SecurityEventType>,
+    pub event_sequence: Vec<ThreatSecurityEventType>,
     pub timing_constraints: Vec<TimingConstraint>,
     pub entity_relationships: Vec<EntityRelationship>,
     pub statistical_signatures: Vec<StatisticalSignature>,
@@ -587,10 +587,10 @@ pub struct RollbackPlan {
     pub emergency_contacts: Vec<String>,
 }
 
-impl SecurityEvent {
+impl ThreatSecurityEvent {
     /// Create a new security event with minimal required fields
     pub fn new(
-        event_type: SecurityEventType,
+        event_type: ThreatSecurityEventType,
         severity: ThreatSeverity,
         source: String,
         description: String,
@@ -627,12 +627,12 @@ impl SecurityEvent {
 
         // Base score by event type
         score += match self.event_type {
-            SecurityEventType::AuthenticationFailure => 20,
-            SecurityEventType::MfaFailure => 30,
-            SecurityEventType::SuspiciousActivity => 40,
-            SecurityEventType::UnauthorizedAccess => 60,
-            SecurityEventType::SecurityPolicyViolation => 50,
-            SecurityEventType::AuthenticationSuccess => 5,
+            ThreatSecurityEventType::AuthenticationFailure => 20,
+            ThreatSecurityEventType::MfaFailure => 30,
+            ThreatSecurityEventType::SuspiciousActivity => 40,
+            ThreatSecurityEventType::UnauthorizedAccess => 60,
+            ThreatSecurityEventType::SecurityPolicyViolation => 50,
+            ThreatSecurityEventType::AuthenticationSuccess => 5,
             _ => 10,
         };
 
@@ -648,7 +648,7 @@ impl SecurityEvent {
         // Outcome impact
         let outcome_modifier = match self.outcome {
             EventOutcome::Success => {
-                if matches!(self.event_type, SecurityEventType::AuthenticationSuccess) {
+                if matches!(self.event_type, ThreatSecurityEventType::AuthenticationSuccess) {
                     -10
                 } else {
                     0
@@ -675,11 +675,11 @@ impl SecurityEvent {
     pub fn is_security_failure(&self) -> bool {
         matches!(
             self.event_type,
-            SecurityEventType::AuthenticationFailure
-                | SecurityEventType::MfaFailure
-                | SecurityEventType::UnauthorizedAccess
-                | SecurityEventType::SecurityPolicyViolation
-                | SecurityEventType::SuspiciousActivity
+            ThreatSecurityEventType::AuthenticationFailure
+                | ThreatSecurityEventType::MfaFailure
+                | ThreatSecurityEventType::UnauthorizedAccess
+                | ThreatSecurityEventType::SecurityPolicyViolation
+                | ThreatSecurityEventType::SuspiciousActivity
         ) || matches!(
             self.outcome,
             EventOutcome::Failure | EventOutcome::Blocked | EventOutcome::Suspicious
@@ -689,10 +689,10 @@ impl SecurityEvent {
     /// Get time window for threat correlation (in minutes)
     pub fn get_correlation_window(&self) -> u64 {
         match self.event_type {
-            SecurityEventType::AuthenticationFailure => 15,
-            SecurityEventType::MfaFailure => 10,
-            SecurityEventType::SuspiciousActivity => 60,
-            SecurityEventType::UnauthorizedAccess => 30,
+            ThreatSecurityEventType::AuthenticationFailure => 15,
+            ThreatSecurityEventType::MfaFailure => 10,
+            ThreatSecurityEventType::SuspiciousActivity => 60,
+            ThreatSecurityEventType::UnauthorizedAccess => 30,
             _ => 5,
         }
     }
@@ -800,7 +800,7 @@ impl UserBehaviorProfile {
     }
 
     /// Update profile with new security event
-    pub fn update_with_event(&mut self, event: &SecurityEvent) {
+    pub fn update_with_event(&mut self, event: &ThreatSecurityEvent) {
         self.last_updated = Utc::now();
         self.security_events_count += 1;
 

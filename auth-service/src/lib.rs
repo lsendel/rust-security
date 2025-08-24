@@ -3,6 +3,16 @@
 //! Enterprise-grade authentication service with comprehensive security features.
 
 use std::sync::Arc;
+
+// Suppress warnings for unused extern crate dependencies
+#[allow(unused_extern_crates)]
+extern crate http;
+#[allow(unused_extern_crates)]
+extern crate opentelemetry_otlp;
+#[allow(unused_extern_crates)]
+extern crate rayon;
+#[allow(unused_extern_crates)]
+extern crate zeroize;
 #[cfg(feature = "enhanced-session-store")]
 use crate::store::HybridStore;
 
@@ -48,6 +58,7 @@ pub struct IntrospectionRecord {
     pub aud: Option<String>,
     pub iss: Option<String>,
     pub jti: Option<String>,
+    pub mfa_verified: bool,
     pub token_type: Option<String>,
     pub token_binding: Option<String>,
 }
@@ -203,8 +214,9 @@ pub mod oauth_client_registration_policies;
 pub mod oauth_client_secret_rotation;
 #[cfg(feature = "tracing")]
 pub mod observability;
-#[cfg(feature = "tracing")]
-pub mod observability_advanced;
+// Disabled due to OpenTelemetry version compatibility issues
+// #[cfg(feature = "tracing")]
+// pub mod observability_advanced;
 #[cfg(feature = "tracing")]
 pub mod observability_init;
 #[cfg(feature = "enhanced-session-store")]
@@ -225,13 +237,19 @@ pub mod pii_audit_tests;
 pub mod pii_protection;
 #[cfg(feature = "rate-limiting")]
 pub mod policy_cache;
+#[cfg(feature = "post-quantum")]
 pub mod post_quantum_crypto;
+#[cfg(feature = "post-quantum")]
 pub mod pq_integration;
+#[cfg(feature = "post-quantum")]
 pub mod pq_jwt;
+#[cfg(feature = "post-quantum")]
 pub mod pq_key_management;
+#[cfg(feature = "post-quantum")]
 pub mod pq_migration;
 #[cfg(test)]
 pub mod property_testing_framework;
+#[cfg(feature = "post-quantum")]
 pub mod quantum_jwt;
 pub mod rate_limit_enhanced;
 #[cfg(feature = "rate-limiting")]
@@ -253,6 +271,7 @@ pub mod security_analyzer;
 pub mod security_fixed;
 pub mod security_headers;
 pub mod security_logging;
+pub mod security_logging_enhanced;
 #[cfg(feature = "monitoring")]
 pub mod security_metrics;
 #[cfg(feature = "threat-hunting")]
@@ -297,8 +316,9 @@ pub mod threat_user_profiler;
 pub mod tls_security;
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
-#[cfg(feature = "tracing")]
-pub mod tracing_instrumentation;
+// Disabled due to OpenTelemetry compatibility issues
+// #[cfg(feature = "tracing")]  
+// pub mod tracing_instrumentation;
 pub mod validation;
 pub mod validation_secure;
 pub mod webauthn;

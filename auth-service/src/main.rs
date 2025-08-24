@@ -61,13 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let config = Arc::new(AuthServiceConfig::default());
     
     // Start rate limiter cleanup task
-    crate::security::start_rate_limiter_cleanup();
+    auth_service::security::start_rate_limiter_cleanup();
     
     // Create simple HTTP server using axum with security middleware
     let app = axum::Router::new()
         .route("/health", axum::routing::get(health_check))
         .route("/api/v1/status", axum::routing::get(status))
-        .layer(axum::middleware::from_fn(crate::security::rate_limit))
+        .layer(axum::middleware::from_fn(auth_service::security::rate_limit))
         .layer(axum::middleware::from_fn(security_headers));
     
     let addr = format!("{}:{}", config.server.bind_address, config.server.port);

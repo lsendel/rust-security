@@ -1,0 +1,247 @@
+# 🦀 Rust Clean Code Configuration
+# This file defines the clean code standards for the Rust Security Platform
+
+[general]
+# Project-wide settings
+project_name = "Rust Security Platform"
+version = "1.0.0"
+rust_edition = "2021"
+minimum_rust_version = "1.80"
+
+[metrics]
+# Code quality metrics and thresholds
+max_function_lines = 100
+max_file_lines = 500
+max_cyclomatic_complexity = 10
+max_function_parameters = 7
+max_struct_fields = 15
+min_test_coverage = 90
+min_documentation_coverage = 95
+
+[naming_conventions]
+# Naming patterns (regex)
+function_pattern = "^[a-z][a-z0-9_]*$"
+struct_pattern = "^[A-Z][A-Za-z0-9]*$"
+enum_pattern = "^[A-Z][A-Za-z0-9]*$"
+constant_pattern = "^[A-Z][A-Z0-9_]*$"
+module_pattern = "^[a-z][a-z0-9_]*$"
+
+[error_handling]
+# Error handling standards
+require_error_context = true
+prefer_thiserror = true
+use_anyhow_for_applications = true
+use_result_type_aliases = true
+
+[documentation]
+# Documentation requirements
+require_module_docs = true
+require_public_function_docs = true
+require_public_struct_docs = true
+require_examples_in_docs = true
+require_error_documentation = true
+
+[testing]
+# Testing standards
+require_unit_tests = true
+require_integration_tests = true
+require_property_tests_for_core = true
+test_file_suffix = "_test.rs"
+benchmark_file_suffix = "_bench.rs"
+
+[performance]
+# Performance guidelines
+prefer_zero_copy = true
+avoid_unnecessary_allocations = true
+use_cow_for_conditional_ownership = true
+prefer_iterators_over_loops = true
+use_const_generics_when_appropriate = true
+
+[security]
+# Security-specific requirements
+forbid_unsafe_code = true
+require_input_validation = true
+require_output_sanitization = true
+use_secure_random = true
+require_constant_time_comparison = true
+
+[dependencies]
+# Dependency management
+allow_dev_dependencies_in_tests_only = true
+prefer_workspace_dependencies = true
+require_security_audit = true
+max_dependency_age_days = 365
+
+[formatting]
+# Code formatting (rustfmt configuration)
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+use_small_heuristics = "Default"
+fn_args_layout = "Tall"
+brace_style = "SameLineWhere"
+control_brace_style = "AlwaysSameLine"
+trailing_semicolon = true
+trailing_comma = "Vertical"
+match_block_trailing_comma = false
+blank_lines_upper_bound = 1
+blank_lines_lower_bound = 0
+edition = "2021"
+version = "Two"
+inline_attribute_width = 0
+format_strings = false
+format_macro_matchers = false
+format_macro_bodies = true
+hex_literal_case = "Preserve"
+empty_item_single_line = true
+struct_lit_single_line = true
+fn_single_line = false
+where_single_line = false
+imports_indent = "Block"
+imports_layout = "Mixed"
+merge_imports = false
+reorder_imports = true
+reorder_modules = true
+reorder_impl_items = false
+type_punctuation_density = "Wide"
+space_before_colon = false
+space_after_colon = true
+spaces_around_ranges = false
+binop_separator = "Front"
+remove_nested_parens = true
+combine_control_expr = true
+overflow_delimited_expr = false
+struct_field_align_threshold = 0
+enum_discrim_align_threshold = 0
+match_arm_blocks = true
+force_multiline_blocks = false
+fn_args_density = "Tall"
+wrap_comments = false
+format_code_in_doc_comments = false
+comment_width = 80
+normalize_comments = false
+normalize_doc_attributes = false
+license_template_path = ""
+format_generated_files = true
+
+[clippy]
+# Clippy configuration
+warn_level = "all"
+pedantic = true
+nursery = true
+cargo = true
+
+# Allowed lints (use sparingly)
+allowed_lints = [
+    "clippy::module_name_repetitions",  # Sometimes necessary for clarity
+    "clippy::similar_names",            # Common in crypto/security code
+]
+
+# Denied lints (enforce strictly)
+denied_lints = [
+    "clippy::unwrap_used",
+    "clippy::expect_used",
+    "clippy::panic",
+    "clippy::unimplemented",
+    "clippy::todo",
+    "clippy::unreachable",
+    "clippy::indexing_slicing",
+    "clippy::integer_arithmetic",
+    "clippy::float_arithmetic",
+]
+
+[modules]
+# Module organization standards
+max_modules_per_file = 10
+prefer_flat_module_structure = false
+require_mod_rs_for_directories = true
+
+# Standard module names
+common_modules = [
+    "config",
+    "errors",
+    "handlers",
+    "middleware",
+    "types",
+    "utils",
+    "tests",
+]
+
+[patterns]
+# Preferred patterns and anti-patterns
+
+# Builder pattern for complex types
+use_builder_pattern_threshold = 5  # fields
+
+# Newtype pattern for domain types
+prefer_newtype_for_primitives = true
+
+# Error handling patterns
+prefer_early_returns = true
+avoid_deep_nesting = true
+max_nesting_depth = 4
+
+# Async patterns
+prefer_structured_concurrency = true
+use_timeout_for_external_calls = true
+prefer_channels_over_shared_state = true
+
+[files]
+# File organization
+source_directories = ["src", "tests", "benches", "examples"]
+exclude_patterns = [
+    "target/**",
+    ".git/**",
+    "node_modules/**",
+    "*.tmp",
+    "*.bak",
+]
+
+# File naming conventions
+test_file_pattern = "test_*.rs"
+integration_test_pattern = "*_integration_test.rs"
+benchmark_file_pattern = "*_bench.rs"
+
+[git_hooks]
+# Git hooks configuration
+enable_pre_commit = true
+enable_pre_push = true
+run_tests_on_commit = true
+run_clippy_on_commit = true
+run_fmt_check_on_commit = true
+
+[ci_cd]
+# Continuous integration requirements
+require_all_tests_pass = true
+require_zero_warnings = true
+require_security_audit = true
+require_coverage_threshold = true
+generate_documentation = true
+
+[reporting]
+# Code quality reporting
+generate_metrics_report = true
+report_format = "markdown"
+include_trends = true
+export_to_json = true
+
+[tools]
+# Required development tools
+required_tools = [
+    "cargo-clippy",
+    "cargo-fmt", 
+    "cargo-audit",
+    "cargo-tarpaulin",
+    "cargo-deny",
+    "tokei",
+]
+
+# Optional but recommended tools
+recommended_tools = [
+    "cargo-watch",
+    "cargo-expand",
+    "cargo-tree",
+    "cargo-outdated",
+    "cargo-udeps",
+]

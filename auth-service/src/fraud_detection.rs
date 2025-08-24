@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 use serde::{Deserialize, Serialize};
 
 /// Real-time fraud detection engine with ML-based risk scoring
@@ -445,7 +445,7 @@ impl FraudDetectionEngine {
         0.0
     }
 
-    async fn analyze_device(&self, user_id: &str, device_fingerprint: &str, user_agent: &str) -> f64 {
+    async fn analyze_device(&self, _user_id: &str, device_fingerprint: &str, user_agent: &str) -> f64 {
         let models = self.models.read().await;
         
         // Check if device is known for this user
@@ -465,7 +465,7 @@ impl FraudDetectionEngine {
         let models = self.models.read().await;
         
         if let Some(baseline) = models.behavioral_model.user_baselines.get(user_id) {
-            let mut risk_score = 0.0;
+            let mut risk_score: f64 = 0.0;
             
             // Check if transaction type is typical
             if let Some(typical_frequency) = baseline.activity_patterns.get(transaction_type) {
@@ -494,7 +494,7 @@ impl FraudDetectionEngine {
         0.2
     }
 
-    async fn analyze_geography(&self, user_id: &str, location: &str, ip_address: IpAddr) -> f64 {
+    async fn analyze_geography(&self, _user_id: &str, location: &str, _ip_address: IpAddr) -> f64 {
         let models = self.models.read().await;
         
         // Check location risk

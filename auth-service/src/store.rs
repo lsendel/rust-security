@@ -84,21 +84,46 @@ impl HybridStore {
                     active: true,
                     scope: token_record.scope,
                     client_id: token_record.client_id,
-                    username: token_record.username,
+                    username: token_record.sub.clone(), // Map sub to username
                     exp: token_record.exp,
                     iat: token_record.iat,
                     nbf: None,
-                    sub: token_record.sub.clone(),
+                    sub: token_record.sub,
                     aud: None,
                     iss: None,
                     jti: None,
+                    mfa_verified: token_record.mfa_verified,
                     token_type: Some("Bearer".to_string()),
-                    token_binding: None,
+                    token_binding: token_record.token_binding,
                 }))
             }
             Ok(None) => Ok(None),
             Err(e) => Err(crate::errors::AuthError::TokenStoreError {
                 operation: "get_token_record".to_string(),
+                source: e,
+            }),
+        }
+    }
+
+    /// Set token record - inherent method for direct access with IntrospectionRecord
+    pub async fn set_token_record(&self, token: &str, record: &crate::IntrospectionRecord, ttl_secs: Option<u64>) -> Result<(), crate::errors::AuthError> {
+        // Convert IntrospectionRecord to TokenRecord for storage
+        let token_record = TokenRecord {
+            active: record.active,
+            scope: record.scope.clone(),
+            client_id: record.client_id.clone(),
+            sub: record.sub.clone(),
+            exp: record.exp,
+            iat: record.iat,
+            token_binding: record.token_binding.clone(),
+            mfa_verified: record.mfa_verified,
+        };
+        
+        // Use the trait method to store
+        match Store::set_token_record(self, token, &token_record, ttl_secs).await {
+            Ok(()) => Ok(()),
+            Err(e) => Err(crate::errors::AuthError::TokenStoreError {
+                operation: "set_token_record".to_string(),
                 source: e,
             }),
         }

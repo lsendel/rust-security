@@ -1,13 +1,6 @@
-use axum::response::IntoResponse;
-use axum::{extract::Request, middleware::Next, response::Response};
 use base64::Engine as _;
 use once_cell::sync::Lazy;
 use ring::{digest, hmac, rand::{SecureRandom as RingSecureRandom, SystemRandom}};
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
-use tower::ServiceBuilder;
-use tower_http::limit::RequestBodyLimitLayer;
 
 /// Secure token binding salt - loaded from environment or generated
 static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
@@ -118,7 +111,8 @@ pub fn verify_code_challenge(code_verifier: &str, code_challenge: &str) -> Resul
     let computed_challenge = generate_code_challenge(code_verifier)?;
     
     // Use constant-time comparison to prevent timing attacks
-    Ok(ring::constant_time::verify_slices_are_equal(
+    use ring::constant_time;
+    Ok(constant_time::verify_slices_are_equal(
         computed_challenge.as_bytes(),
         code_challenge.as_bytes(),
     ).is_ok())
@@ -207,7 +201,8 @@ pub fn verify_request_signature(
     let expected_signature = generate_request_signature(method, path, body, timestamp, secret)?;
     
     // Use constant-time comparison
-    Ok(ring::constant_time::verify_slices_are_equal(
+    use ring::constant_time;
+    Ok(constant_time::verify_slices_are_equal(
         expected_signature.as_bytes(),
         signature.as_bytes(),
     ).is_ok())
@@ -287,7 +282,7 @@ mod tests {
         assert!(verifier.len() <= 128);
         
         // Should only contain URL-safe characters
-        assert!(verifier.chars().all(|c| c.is_ascii_alphanumum() || c == '-' || c == '_'));
+        assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
     }
 
     #[test]

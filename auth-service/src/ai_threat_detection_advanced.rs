@@ -5,7 +5,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error, debug};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
@@ -485,7 +484,7 @@ impl ThreatDetectionEngine {
         features: &HashMap<String, f64>,
     ) -> Vec<AnomalyDetection> {
         let mut anomalies = Vec::new();
-        let models = self.anomaly_models.read().await;
+        let _models = self.anomaly_models.read().await;
 
         // Temporal anomaly detection
         if let Some(hour_deviation) = features.get("hour_deviation") {

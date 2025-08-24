@@ -9,6 +9,9 @@ use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
 
+/// Result type alias for authentication operations
+pub type AuthResult<T> = Result<T, AuthError>;
+
 /// Comprehensive error type for the auth service
 #[derive(Debug, Error)]
 pub enum AuthError {
@@ -132,6 +135,10 @@ pub enum AuthError {
     OAuthStateMismatch,
     #[error("Authorization code expired")]
     AuthorizationCodeExpired,
+
+    // Database errors
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] sqlx::Error),
 
     // Generic errors (use sparingly)
     #[error("Internal server error")]

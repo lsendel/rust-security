@@ -11,7 +11,7 @@ pub struct MonitoringDashboard {
     /// System health metrics
     health_metrics: Arc<RwLock<HealthMetrics>>,
     /// Security event tracker
-    security_events: Arc<RwLock<SecurityEventTracker>>,
+    security_events: Arc<RwLock<DashboardSecurityEventTracker>>,
     /// Performance analytics
     performance_analytics: Arc<RwLock<PerformanceAnalytics>>,
     /// Alert manager
@@ -48,7 +48,7 @@ pub struct ServiceHealth {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecurityEventTracker {
+pub struct DashboardSecurityEventTracker {
     /// Failed authentication attempts in last hour
     pub failed_auth_attempts: u32,
     /// Blocked IPs in last hour
@@ -60,14 +60,14 @@ pub struct SecurityEventTracker {
     /// JWT validation failures
     pub jwt_failures: u32,
     /// Recent security events
-    pub recent_events: Vec<SecurityEvent>,
+    pub recent_events: Vec<DashboardSecurityEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SecurityEvent {
+pub struct DashboardDashboardSecurityEvent {
     pub timestamp: u64,
-    pub event_type: SecurityEventType,
-    pub severity: SecuritySeverity,
+    pub event_type: DashboardDashboardDashboardSecurityEventType,
+    pub severity: DashboardDashboardSecuritySeverity,
     pub source_ip: String,
     pub user_id: Option<String>,
     pub description: String,
@@ -75,7 +75,7 @@ pub struct SecurityEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SecurityEventType {
+pub enum DashboardDashboardDashboardSecurityEventType {
     FailedAuthentication,
     SuspiciousActivity,
     RateLimitViolation,
@@ -86,7 +86,7 @@ pub enum SecurityEventType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SecuritySeverity {
+pub enum DashboardDashboardSecuritySeverity {
     Low,
     Medium,
     High,
@@ -124,7 +124,7 @@ pub struct TimeSeriesPoint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardData {
     pub health: HealthMetrics,
-    pub security: SecurityEventTracker,
+    pub security: DashboardSecurityEventTracker,
     pub performance: PerformanceAnalytics,
     pub alerts: Vec<Alert>,
     pub system_info: SystemInfo,
@@ -198,7 +198,7 @@ impl Default for HealthMetrics {
     }
 }
 
-impl Default for SecurityEventTracker {
+impl Default for DashboardSecurityEventTracker {
     fn default() -> Self {
         Self {
             failed_auth_attempts: 0,
@@ -237,7 +237,7 @@ impl MonitoringDashboard {
 
         Self {
             health_metrics: Arc::new(RwLock::new(HealthMetrics::default())),
-            security_events: Arc::new(RwLock::new(SecurityEventTracker::default())),
+            security_events: Arc::new(RwLock::new(DashboardSecurityEventTracker::default())),
             performance_analytics: Arc::new(RwLock::new(PerformanceAnalytics::default())),
             alert_manager: Arc::new(alert_manager),
         }
@@ -253,15 +253,15 @@ impl MonitoringDashboard {
     }
 
     /// Record a security event
-    pub async fn record_security_event(&self, event: SecurityEvent) {
+    pub async fn record_security_event(&self, event: DashboardSecurityEvent) {
         let mut tracker = self.security_events.write().await;
 
         // Update counters based on event type
         match event.event_type {
-            SecurityEventType::FailedAuthentication => tracker.failed_auth_attempts += 1,
-            SecurityEventType::RateLimitViolation => tracker.rate_limit_violations += 1,
-            SecurityEventType::JwtValidationFailure => tracker.jwt_failures += 1,
-            SecurityEventType::SuspiciousActivity => tracker.suspicious_activities += 1,
+            DashboardDashboardSecurityEventType::FailedAuthentication => tracker.failed_auth_attempts += 1,
+            DashboardDashboardSecurityEventType::RateLimitViolation => tracker.rate_limit_violations += 1,
+            DashboardDashboardSecurityEventType::JwtValidationFailure => tracker.jwt_failures += 1,
+            DashboardDashboardSecurityEventType::SuspiciousActivity => tracker.suspicious_activities += 1,
             _ => {}
         }
 
@@ -593,7 +593,7 @@ impl AlertManager {
         }
     }
 
-    pub async fn check_security_alerts(&self, _event: &SecurityEvent) {
+    pub async fn check_security_alerts(&self, _event: &DashboardSecurityEvent) {
         // Implementation for security-based alerts
         info!("Security event processed for alerting");
     }
@@ -660,10 +660,10 @@ mod tests {
     async fn test_security_event_recording() {
         let dashboard = MonitoringDashboard::new();
 
-        let event = SecurityEvent {
+        let event = DashboardSecurityEvent {
             timestamp: current_timestamp(),
-            event_type: SecurityEventType::FailedAuthentication,
-            severity: SecuritySeverity::Medium,
+            event_type: DashboardDashboardSecurityEventType::FailedAuthentication,
+            severity: DashboardSecuritySeverity::Medium,
             source_ip: "192.168.1.1".to_string(),
             user_id: Some("user123".to_string()),
             description: "Invalid password".to_string(),

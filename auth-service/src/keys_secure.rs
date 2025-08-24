@@ -3,7 +3,6 @@ use base64::Engine as _;
 use tokio::sync::RwLock;
 use serde_json::Value;
 use jsonwebtoken::{EncodingKey, DecodingKey};
-use std::sync::Arc;
 use thiserror::Error;
 
 #[cfg(feature = "vault")]

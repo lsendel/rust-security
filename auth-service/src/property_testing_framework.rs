@@ -2,6 +2,7 @@
 //! Comprehensive property testing for security-critical components
 
 use proptest::prelude::*;
+use proptest::strategy::{Strategy, Just};
 use proptest::test_runner::TestRunner;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};

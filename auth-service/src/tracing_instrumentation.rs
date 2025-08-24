@@ -153,16 +153,16 @@ impl AuthFlowTracer {
         let tracer = self.observability.tracer()
             .ok_or(SecurityError::Configuration)?;
 
-        let mut span = TracingUtils::create_span(
+        let mut span = TracingUtils::create_span_with_tracer(
             tracer,
             &span_name,
-            SpanKind::Server,
+            crate::observability::SpanKind::Server,
             vec![
-                KeyValue::new("auth.flow_type", flow_type.to_string()),
-                KeyValue::new("auth.flow_id", self.flow_id.clone()),
-                KeyValue::new("request.id", self.security_context.request_id.clone()),
-                KeyValue::new("correlation.id", self.security_context.correlation_id.clone()),
-                KeyValue::new("security.threat_level", self.security_context.threat_level.to_string()),
+                crate::observability::KeyValue::new("auth.flow_type", flow_type.to_string()),
+                crate::observability::KeyValue::new("auth.flow_id", self.flow_id.clone()),
+                crate::observability::KeyValue::new("request.id", self.security_context.request_id.clone()),
+                crate::observability::KeyValue::new("correlation.id", self.security_context.correlation_id.clone()),
+                crate::observability::KeyValue::new("security.threat_level", self.security_context.threat_level.to_string()),
             ],
         );
 
@@ -176,15 +176,15 @@ impl AuthFlowTracer {
 
         // Add additional context attributes
         if let Some(user_agent) = &self.security_context.user_agent {
-            span.set_attribute(KeyValue::new("http.user_agent", user_agent.clone()));
+            span.set_attribute(crate::observability::KeyValue::new("http.user_agent", user_agent.clone()));
         }
 
         if let Some(user_ctx) = &self.user_context {
             if let Some(client_id) = &user_ctx.client_id {
-                span.set_attribute(KeyValue::new("oauth.client_id", client_id.clone()));
+                span.set_attribute(crate::observability::KeyValue::new("oauth.client_id", client_id.clone()));
             }
             if !user_ctx.scopes.is_empty() {
-                span.set_attribute(KeyValue::new("oauth.scopes", user_ctx.scopes.join(",")));
+                span.set_attribute(crate::observability::KeyValue::new("oauth.scopes", user_ctx.scopes.join(",")));
             }
         }
 
@@ -192,9 +192,10 @@ impl AuthFlowTracer {
         {
             let metrics = self.observability.metrics().read().await;
             metrics.record_auth_attempt(
+                true, // Starting attempt  
                 flow_type,
-                true, // Starting attempt
-                self.user_context.as_ref().and_then(|ctx| ctx.user_id.as_deref()),
+                std::time::Duration::from_millis(0), // Starting, no duration yet
+                None, // No error yet
             );
         }
 

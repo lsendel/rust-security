@@ -325,6 +325,12 @@ impl From<u8> for CircuitState {
     }
 }
 
+impl From<rustls::Error> for SecurityError {
+    fn from(_error: rustls::Error) -> Self {
+        SecurityError::CryptographicFailure
+    }
+}
+
 impl CircuitBreaker {
     pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
         Self {
@@ -486,7 +492,7 @@ where
 /// Validation helpers that return SecurityError
 pub mod validation {
     use super::*;
-    use validator::{Validate, ValidationErrors};
+    use validator::Validate;
     
     pub fn validate_input<T: Validate>(input: &T) -> SecurityResult<()> {
         input.validate()

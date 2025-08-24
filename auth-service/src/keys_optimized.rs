@@ -4,14 +4,13 @@
 use once_cell::sync::Lazy;
 use ring::{
     rand::SystemRandom,
-    signature::{Ed25519KeyPair, ED25519, KeyPair},
+    signature::{Ed25519KeyPair, KeyPair},
     error::Unspecified,
 };
 use base64::Engine as _;
 use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
 use serde_json::Value;
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct OptimizedSecureKeyMaterial {

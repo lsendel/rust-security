@@ -100,6 +100,7 @@ pub struct CircuitMetrics {
     pub failure_rate: f64,
     pub slow_call_rate: f64,
     pub last_failure_time: Option<SystemTime>,
+    #[serde(skip, default = "std::time::Instant::now")]
     pub state_transition_time: Instant,
     pub half_open_calls: u32,
     pub consecutive_failures: u32,

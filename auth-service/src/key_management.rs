@@ -570,9 +570,8 @@ impl KeyManagementService {
     async fn generate_rsa_key_pem(&self) -> Result<String, AuthError> {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing
-        Err(AuthError::NotImplemented {
-            feature: "RSA key generation".to_string(),
-            reason: "Use HMAC keys for development - RSA keys require additional dependencies".to_string(),
+        Err(AuthError::KeyGenerationError {
+            source: "RSA key generation not implemented - use HMAC keys for development".into(),
         })
     }
 

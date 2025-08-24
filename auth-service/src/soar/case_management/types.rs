@@ -142,6 +142,23 @@ pub enum CaseCategory {
     General,
 }
 
+impl std::fmt::Display for CaseCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CaseCategory::Malware => write!(f, "Malware"),
+            CaseCategory::Phishing => write!(f, "Phishing"),
+            CaseCategory::DataBreach => write!(f, "DataBreach"),
+            CaseCategory::UnauthorizedAccess => write!(f, "UnauthorizedAccess"),
+            CaseCategory::DenialOfService => write!(f, "DenialOfService"),
+            CaseCategory::InsiderThreat => write!(f, "InsiderThreat"),
+            CaseCategory::Compliance => write!(f, "Compliance"),
+            CaseCategory::Vulnerability => write!(f, "Vulnerability"),
+            CaseCategory::Fraud => write!(f, "Fraud"),
+            CaseCategory::General => write!(f, "General"),
+        }
+    }
+}
+
 /// Evidence item in a case
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceItem {

@@ -1,7 +1,9 @@
+#[cfg(test)]
 use crate::errors::AuthError;
 /// Automated tests to ensure no secrets or tokens are logged at any level
 /// This module provides comprehensive testing for PII/SPI redaction compliance
 use crate::pii_protection::{DataClassification, PiiSpiRedactor, SensitiveDataType};
+#[cfg(test)]
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Test data samples that should be redacted

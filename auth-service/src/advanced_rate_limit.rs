@@ -6,15 +6,14 @@ use axum::{
     Json,
 };
 use dashmap::DashMap;
+use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::time::sleep;
+use std::time::{Duration, Instant, SystemTime};
 #[cfg(feature = "monitoring")]
 use prometheus::{IntCounter, IntGauge, Histogram, register_int_counter, register_int_gauge, register_histogram};
-use once_cell::sync::Lazy;
 
 /// Advanced rate limiting configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -679,28 +678,40 @@ static RATE_LIMIT_CHECK_DURATION: Lazy<Histogram> = Lazy::new(|| {
 // Metrics helper functions to handle feature gates
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_requests_total() { inc_requests_total(); }
+fn inc_requests_total() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.requests_total.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_requests_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_allowed_total() { inc_allowed_total(); }
+fn inc_allowed_total() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.allowed_total.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_allowed_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_blocked_total() { inc_blocked_total(); }
+fn inc_blocked_total() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.blocked_total.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_blocked_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_bans_total() { inc_bans_total(); }
+fn inc_bans_total() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.bans_total.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_bans_total() {}
@@ -828,7 +839,7 @@ fn extract_client_id(headers: &HeaderMap) -> Option<String> {
     if let Some(auth) = headers.get("authorization") {
         if let Ok(auth_str) = auth.to_str() {
             if let Some(basic) = auth_str.strip_prefix("Basic ") {
-                if let Ok(decoded) = base64::decode(basic) {
+                if let Ok(decoded) = general_purpose::STANDARD.decode(basic) {
                     if let Ok(credentials) = String::from_utf8(decoded) {
                         if let Some((client_id, _)) = credentials.split_once(':') {
                             return Some(client_id.to_string());

@@ -122,6 +122,7 @@ impl OptimizedTokenStore {
                     aud: None,
                     iss: None,
                     jti: None,
+                    mfa_verified: false,
                     token_type: None,
                     token_binding: None,
                 })
@@ -150,6 +151,7 @@ impl OptimizedTokenStore {
                         aud: None,
                         iss: None,
                         jti: None,
+                        mfa_verified: false,
                         token_type: None,
                         token_binding: None,
                     });
@@ -168,6 +170,7 @@ impl OptimizedTokenStore {
                     aud: fields.get("aud").cloned(),
                     iss: fields.get("iss").cloned(),
                     jti: fields.get("jti").cloned(),
+                    mfa_verified: fields.get("mfa_verified").map(|v| v == "1").unwrap_or(false),
                     token_type: fields.get("token_type").cloned(),
                     token_binding: fields.get("token_binding").cloned(),
                 })
@@ -219,7 +222,7 @@ impl OptimizedTokenStore {
                     pipe.expire(&key, ttl as i64);
                 }
 
-                pipe.query_async(&mut conn).await?;
+                pipe.query_async::<()>(&mut conn).await?;
                 Ok(())
             }
         }
@@ -271,7 +274,7 @@ impl OptimizedTokenStore {
                     }
                 }
 
-                pipe.query_async(&mut conn).await?;
+                pipe.query_async::<()>(&mut conn).await?;
                 Ok(())
             }
         }
@@ -295,7 +298,7 @@ impl OptimizedTokenStore {
                     .arg(&key)
                     .arg("active")
                     .arg("0")
-                    .query_async(&mut conn)
+                    .query_async::<()>(&mut conn)
                     .await?;
 
                 Ok(())
@@ -323,7 +326,7 @@ impl OptimizedTokenStore {
                     pipe.hset(&key, "active", "0");
                 }
 
-                pipe.query_async(&mut conn).await?;
+                pipe.query_async::<()>(&mut conn).await?;
                 Ok(())
             }
         }
@@ -450,12 +453,20 @@ mod tests {
         let store = OptimizedTokenStore::new_in_memory();
 
         let record = IntrospectionRecord {
+            token: "test_token".to_string(),
             active: true,
             scope: Some("read write".to_string()),
             client_id: Some("test-client".to_string()),
+            username: Some("test-user".to_string()),
             exp: Some(1234567890),
             iat: Some(1234567890),
+            nbf: None,
             sub: Some("test-user".to_string()),
+            aud: None,
+            iss: None,
+            jti: None,
+            mfa_verified: false,
+            token_type: Some("Bearer".to_string()),
             token_binding: None,
         };
 
@@ -487,12 +498,20 @@ mod tests {
     #[tokio::test]
     async fn test_cached_token_record_expiration() {
         let record = IntrospectionRecord {
+            token: "test_token".to_string(),
             active: true,
             scope: None,
             client_id: None,
+            username: None,
             exp: None,
             iat: None,
+            nbf: None,
             sub: None,
+            aud: None,
+            iss: None,
+            jti: None,
+            mfa_verified: false,
+            token_type: None,
             token_binding: None,
         };
 

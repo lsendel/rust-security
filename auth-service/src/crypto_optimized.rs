@@ -4,7 +4,7 @@ use base64::Engine as _;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use ring::rand::SecureRandom;
-use ring::{aead, digest, hmac, pbkdf2, rand, signature};
+use ring::{aead, digest, hmac, rand, signature};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -37,7 +37,7 @@ pub struct CryptoOptimized {
 pub struct HardwareAccelerated;
 
 impl aead::BoundKey<HardwareAccelerated> for HardwareAccelerated {
-    fn new(unbound_key: aead::UnboundKey, nonce_sequence: HardwareAccelerated) -> Self {
+    fn new(_unbound_key: aead::UnboundKey, nonce_sequence: HardwareAccelerated) -> Self {
         nonce_sequence
     }
 
@@ -155,7 +155,7 @@ impl CryptoOptimized {
             .map_err(|_| ring::error::Unspecified)?;
 
         // Prepend nonce to ciphertext
-        let mut result = nonce.as_ref().to_vec();
+        let mut result = nonce_bytes.to_vec();
         result.extend_from_slice(&in_out);
 
         self.update_metrics(start.elapsed(), cache_hit).await;
@@ -188,7 +188,7 @@ impl CryptoOptimized {
             .map_err(|_| ring::error::Unspecified)?;
 
         self.update_metrics(start.elapsed(), cache_hit).await;
-        Ok(plaintext)
+        Ok(plaintext.to_vec())
     }
 
     /// Optimized password hashing with Argon2id and timing attack protection
@@ -424,7 +424,8 @@ pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
 
 #[cfg(not(feature = "simd"))]
 pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
-    ring::constant_time::verify_slices_are_equal(a, b).is_ok()
+    use ring::constant_time;
+    constant_time::verify_slices_are_equal(a, b).is_ok()
 }
 
 #[cfg(test)]

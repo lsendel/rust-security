@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-scaling-config
+  namespace: rust-security
+data:
+  scaling-rules.yaml: |
+    # Auto-scaling Security Controls Configuration
+    scaling:
+      # Rate limiting scales with user load
+      rate_limiting:
+        base_limit: 1000  # requests per minute per user
+        scale_factor: 1.2  # multiply by this when scaling up
+        max_limit: 10000   # absolute maximum
+        
+      # Session management scaling
+      session_management:
+        base_max_sessions: 10000
+        scale_factor: 1.5
+        cleanup_interval_seconds: 300
+        
+      # Security monitoring thresholds
+      security_monitoring:
+        failed_login_threshold: 5    # base threshold
+        scale_multiplier: 2          # multiply when scaling up
+        
+      # Resource allocation per replica
+      resources:
+        memory_per_1k_users: "50Mi"
+        cpu_per_1k_users: "100m"
+        
+    # Security policies that scale with load
+    security_policies:
+      # Adaptive rate limiting based on current load
+      adaptive_rate_limiting:
+        enabled: true
+        normal_load_multiplier: 1.0
+        high_load_multiplier: 0.8    # tighter limits under high load
+        critical_load_multiplier: 0.5
+        
+      # Enhanced monitoring during scale events
+      enhanced_monitoring:
+        enabled: true
+        scale_event_window: "5m"     # monitor closely during scale events
+        threat_detection_sensitivity: "high"
+        
+      # Auto-adjust security controls
+      adaptive_security:
+        enabled: true
+        threat_level_scaling:
+          low: 1.0
+          medium: 1.2
+          high: 1.5
+          critical: 2.0
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-controller
+  namespace: rust-security
+  labels:
+    app: security-controller
+    component: security-scaling
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: security-controller
+  template:
+    metadata:
+      labels:
+        app: security-controller
+    spec:
+      serviceAccountName: security-controller
+      containers:
+      - name: security-controller
+        image: rust-security/security-controller:latest
+        env:
+        - name: KUBERNETES_NAMESPACE
+          value: "rust-security"
+        - name: SCALING_CONFIG_PATH
+          value: "/etc/config/scaling-rules.yaml"
+        - name: METRICS_ENDPOINT
+          value: "http://prometheus:9090"
+        - name: AUTH_SERVICE_ENDPOINT
+          value: "http://auth-service:8080"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: security-scaling-config
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: security-controller
+  namespace: rust-security
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: rust-security
+  name: security-controller
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "services", "pods"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "update", "patch", "create"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: security-controller
+  namespace: rust-security
+subjects:
+- kind: ServiceAccount
+  name: security-controller
+  namespace: rust-security
+roleRef:
+  kind: Role
+  name: security-controller
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: auth-service-circuit-breaker
+  namespace: rust-security
+spec:
+  host: auth-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 10
+        maxRequestsPerConnection: 2
+    circuitBreaker:
+      consecutiveGatewayErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 30
+    outlierDetection:
+      consecutiveGatewayErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50

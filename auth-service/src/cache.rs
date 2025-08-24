@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 #[cfg(feature = "monitoring")]
 use crate::metrics::{MetricsHelper, METRICS};
@@ -77,7 +77,7 @@ impl Cache {
             match Client::open(config.redis_url.as_ref().unwrap().as_str()) {
                 Ok(client) => {
                     // Test the connection
-                    match client.get_async_connection().await {
+                    match client.get_multiplexed_async_connection().await {
                         Ok(_conn) => {
                             // Connection successful - no need to ping
                             info!("Redis cache connection established");
@@ -114,11 +114,14 @@ impl Cache {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
         // Try Redis first if available
-        if let Some(ref client) = self.redis_client {
+        if let Some(ref _client) = self.redis_client {
             match self.get_from_redis(&full_key).await {
                 Ok(Some(data)) => {
                     debug!(key = %key, "Cache hit (Redis)");
-                    let duration = start_time.elapsed();
+                    #[cfg(feature = "monitoring")]
+                    #[cfg(feature = "monitoring")]
+                #[cfg(feature = "monitoring")]
+        let duration = start_time.elapsed();
                     #[cfg(feature = "monitoring")]
                     MetricsHelper::record_cache_operation("redis", "get", "hit", duration);
                     return Some(data);
@@ -128,7 +131,10 @@ impl Cache {
                 }
                 Err(e) => {
                     warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
-                    let duration = start_time.elapsed();
+                    #[cfg(feature = "monitoring")]
+                    #[cfg(feature = "monitoring")]
+                #[cfg(feature = "monitoring")]
+        let duration = start_time.elapsed();
                     #[cfg(feature = "monitoring")]
                     MetricsHelper::record_cache_operation("redis", "get", "error", duration);
                 }
@@ -139,14 +145,18 @@ impl Cache {
         match self.get_from_memory(&full_key).await {
             Some(data) => {
                 debug!(key = %key, "Cache hit (Memory)");
-                let duration = start_time.elapsed();
+                #[cfg(feature = "monitoring")]
+                #[cfg(feature = "monitoring")]
+        let duration = start_time.elapsed();
                 #[cfg(feature = "monitoring")]
                 MetricsHelper::record_cache_operation("memory", "get", "hit", duration);
                 Some(data)
             }
             None => {
                 debug!(key = %key, "Cache miss (Memory)");
-                let duration = start_time.elapsed();
+                #[cfg(feature = "monitoring")]
+                #[cfg(feature = "monitoring")]
+        let duration = start_time.elapsed();
                 #[cfg(feature = "monitoring")]
                 MetricsHelper::record_cache_operation("memory", "get", "miss", duration);
                 None
@@ -166,7 +176,7 @@ impl Cache {
         let serialized = serde_json::to_vec(value)?;
 
         // Set in Redis if available
-        if let Some(ref client) = self.redis_client {
+        if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.set_in_redis(&full_key, &serialized, ttl_seconds).await {
                 warn!(key = %key, error = %e, "Failed to set in Redis cache");
             } else {
@@ -179,6 +189,7 @@ impl Cache {
         debug!(key = %key, ttl = ttl_seconds, "Set in memory cache");
         
         // Record cache set operation
+        #[cfg(feature = "monitoring")]
         let duration = start_time.elapsed();
         #[cfg(feature = "monitoring")]
         MetricsHelper::record_cache_operation("memory", "set", "success", duration);
@@ -191,7 +202,7 @@ impl Cache {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
         // Delete from Redis if available
-        if let Some(ref client) = self.redis_client {
+        if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.delete_from_redis(&full_key).await {
                 warn!(key = %key, error = %e, "Failed to delete from Redis cache");
             }
@@ -207,7 +218,7 @@ impl Cache {
     /// Clear all cached items
     pub async fn clear(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Clear Redis if available
-        if let Some(ref client) = self.redis_client {
+        if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.clear_redis().await {
                 warn!(error = %e, "Failed to clear Redis cache");
             }
@@ -237,7 +248,7 @@ impl Cache {
         T: for<'de> Deserialize<'de>,
     {
         if let Some(ref client) = self.redis_client {
-            let mut conn = client.get_async_connection().await?;
+            let mut conn = client.get_multiplexed_async_connection().await?;
             let data: Option<Vec<u8>> = conn.get(key).await?;
 
             if let Some(bytes) = data {
@@ -250,15 +261,15 @@ impl Cache {
 
     async fn set_in_redis(&self, key: &str, data: &[u8], ttl_seconds: u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(ref client) = self.redis_client {
-            let mut conn = client.get_async_connection().await?;
-            conn.set_ex(key, data, ttl_seconds).await?;
+            let mut conn = client.get_multiplexed_async_connection().await?;
+            conn.set_ex::<_, _, ()>(key, data, ttl_seconds).await?;
         }
         Ok(())
     }
 
     async fn delete_from_redis(&self, key: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(ref client) = self.redis_client {
-            let mut conn = client.get_async_connection().await?;
+            let mut conn = client.get_multiplexed_async_connection().await?;
             let _: i32 = conn.del(key).await?;
         }
         Ok(())
@@ -266,7 +277,7 @@ impl Cache {
 
     async fn clear_redis(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(ref client) = self.redis_client {
-            let mut conn = client.get_async_connection().await?;
+            let mut conn = client.get_multiplexed_async_connection().await?;
             let pattern = format!("{}*", self.config.key_prefix);
             let keys: Vec<String> = conn.keys(pattern).await?;
 

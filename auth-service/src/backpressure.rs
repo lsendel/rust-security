@@ -1,6 +1,5 @@
 use crate::errors::AuthError;
 use axum::{extract::Request, middleware::Next, response::Response};
-use once_cell::sync::Lazy;
 #[cfg(feature = "monitoring")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
@@ -162,35 +161,50 @@ static QUEUE_DEPTH: Lazy<IntGauge> = Lazy::new(|| {
 // Metrics helper functions
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_requests_total() { inc_requests_total(); }
+fn inc_requests_total() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.requests_total.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_requests_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_requests_rejected_total() { inc_requests_rejected_total(); }
+fn inc_requests_rejected_total() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.requests_rejected_total.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_requests_rejected_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn inc_concurrent_requests() { inc_concurrent_requests(); }
+fn inc_concurrent_requests() { 
+    // TODO: Implement actual metrics increment
+    // METRICS.concurrent_requests.inc();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn inc_concurrent_requests() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn dec_concurrent_requests() { dec_concurrent_requests(); }
+fn dec_concurrent_requests() { 
+    // TODO: Implement actual metrics decrement
+    // METRICS.concurrent_requests.dec();
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn dec_concurrent_requests() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
-fn observe_request_body_size(size: f64) { observe_request_body_size(size); }
+fn observe_request_body_size(size: f64) { 
+    // TODO: Implement actual metrics observation
+    // METRICS.request_body_size.observe(size);
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 fn observe_request_body_size(_size: f64) {}

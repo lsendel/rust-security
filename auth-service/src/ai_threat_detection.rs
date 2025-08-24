@@ -568,7 +568,7 @@ impl AiThreatDetector {
         assessment: &ThreatAssessment,
     ) -> Result<()> {
         // Update anomaly detection models
-        for (model_name, model) in &self.anomaly_models {
+        for (_model_name, model) in &self.anomaly_models {
             model
                 .update_online(features, assessment.anomaly_score)
                 .await?;
@@ -727,35 +727,35 @@ impl AiThreatDetector {
     }
 
     // Placeholder implementations for external dependencies
-    async fn get_recent_request_count(&self, user_id: &str, duration: Duration) -> Result<u32> {
+    async fn get_recent_request_count(&self, _user_id: &str, _duration: Duration) -> Result<u32> {
         Ok(10)
     }
-    async fn get_session_age(&self, session_id: &str) -> Result<Duration> {
+    async fn get_session_age(&self, _session_id: &str) -> Result<Duration> {
         Ok(Duration::minutes(30))
     }
-    async fn get_session_request_count(&self, session_id: &str) -> Result<u32> {
+    async fn get_session_request_count(&self, _session_id: &str) -> Result<u32> {
         Ok(5)
     }
-    async fn get_ip_request_count(&self, ip: &str, duration: Duration) -> Result<u32> {
+    async fn get_ip_request_count(&self, _ip: &str, _duration: Duration) -> Result<u32> {
         Ok(20)
     }
-    async fn get_path_request_count(&self, path: &str, duration: Duration) -> Result<u32> {
+    async fn get_path_request_count(&self, _path: &str, _duration: Duration) -> Result<u32> {
         Ok(15)
     }
-    async fn get_user_agent_request_count(&self, ua: &str, duration: Duration) -> Result<u32> {
+    async fn get_user_agent_request_count(&self, _ua: &str, _duration: Duration) -> Result<u32> {
         Ok(25)
     }
-    async fn add_to_block_list(&self, ip: &str) -> Result<()> {
+    async fn add_to_block_list(&self, _ip: &str) -> Result<()> {
         Ok(())
     }
     async fn send_security_alert(
         &self,
-        assessment: &ThreatAssessment,
-        request: &HttpRequest,
+        _assessment: &ThreatAssessment,
+        _request: &HttpRequest,
     ) -> Result<()> {
         Ok(())
     }
-    async fn quarantine_user(&self, user_id: &str) -> Result<()> {
+    async fn quarantine_user(&self, _user_id: &str) -> Result<()> {
         Ok(())
     }
 }
@@ -768,7 +768,9 @@ pub struct ThreatClassification {
     pub individual_scores: HashMap<ThreatType, f64>,
 }
 
+#[allow(dead_code)]
 struct AnomalyModel {
+    #[allow(dead_code)]
     name: String,
     // Model parameters would be stored here
 }
@@ -786,7 +788,7 @@ impl AnomalyModel {
         Ok(score.min(1.0))
     }
 
-    async fn update_online(&self, features: &FeatureVector, score: f64) -> Result<()> {
+    async fn update_online(&self, _features: &FeatureVector, _score: f64) -> Result<()> {
         // Online learning update - would update actual model parameters
         Ok(())
     }
@@ -824,8 +826,8 @@ impl ThreatClassifier {
 
     async fn update_online(
         &self,
-        features: &FeatureVector,
-        threat_types: &[ThreatType],
+        _features: &FeatureVector,
+        _threat_types: &[ThreatType],
     ) -> Result<()> {
         // Online learning update for classifier
         Ok(())
@@ -847,24 +849,26 @@ impl BehavioralAnalyzer {
         })
     }
 
-    async fn analyze_user_behavior(&self, user_id: &str, features: &FeatureVector) -> Result<f64> {
+    async fn analyze_user_behavior(&self, _user_id: &str, _features: &FeatureVector) -> Result<f64> {
         // Simplified behavioral analysis
         Ok(0.8)
     }
 
-    async fn analyze_anonymous_behavior(&self, features: &FeatureVector) -> Result<f64> {
+    async fn analyze_anonymous_behavior(&self, _features: &FeatureVector) -> Result<f64> {
         // Simplified anonymous behavioral analysis
         Ok(0.6)
     }
 
-    async fn update_user_profile(&self, user_id: &str, features: &FeatureVector) -> Result<()> {
+    async fn update_user_profile(&self, _user_id: &str, _features: &FeatureVector) -> Result<()> {
         // Update user behavioral profile
         Ok(())
     }
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct UserBehaviorProfile {
+    #[allow(dead_code)]
     user_id: String,
     average_request_rate: f64,
     typical_access_hours: Vec<u32>,

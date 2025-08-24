@@ -19,6 +19,8 @@ pub struct SecurityAlert {
     pub description: String,
     pub timestamp: u64,
     pub source_ip: Option<String>,
+    pub destination_ip: Option<String>,
+    pub source: String,
     pub user_id: Option<String>,
     pub client_id: Option<String>,
     pub metadata: HashMap<String, serde_json::Value>,
@@ -41,7 +43,7 @@ pub enum SecurityAlertType {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, utoipa::ToSchema,
+    Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, utoipa::ToSchema,
 )]
 pub enum AlertSeverity {
     Low,

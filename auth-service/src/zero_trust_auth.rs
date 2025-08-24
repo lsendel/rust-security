@@ -1,11 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tracing::{error, info, warn};
+use tracing::info;
 
 /// Zero-Trust continuous authentication engine
 /// Implements "never trust, always verify" principle
@@ -569,7 +567,7 @@ impl ZeroTrustEngine {
         Ok(true)
     }
 
-    async fn get_recent_requests(&self, user_id: &str, duration: Duration) -> Result<u32> {
+    async fn get_recent_requests(&self, _user_id: &str, _duration: Duration) -> Result<u32> {
         // Implementation would count recent requests
         Ok(10)
     }
@@ -577,7 +575,9 @@ impl ZeroTrustEngine {
 
 // Supporting structures
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct UserProfile {
+    #[allow(dead_code)]
     user_id: String,
     created_at: DateTime<Utc>,
     successful_auths: u32,
@@ -600,7 +600,7 @@ impl RiskAssessor {
     fn new() -> Self {
         Self
     }
-    async fn calculate_risk(&self, request: &AccessRequest) -> Result<f64> {
+    async fn calculate_risk(&self, _request: &AccessRequest) -> Result<f64> {
         Ok(0.2) // Simplified implementation
     }
 }
@@ -610,7 +610,7 @@ impl DeviceRegistry {
     fn new() -> Self {
         Self
     }
-    async fn is_registered(&self, device_id: &str) -> Result<bool> {
+    async fn is_registered(&self, _device_id: &str) -> Result<bool> {
         Ok(true) // Simplified implementation
     }
 }

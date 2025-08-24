@@ -1,0 +1,280 @@
+#!/bin/bash
+
+# 🦀 Pre-commit Hook for Rust Clean Code Standards
+# This hook enforces clean code standards before allowing commits
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🦀 Running Rust Clean Code Checks...${NC}"
+
+# Function to print status
+print_status() {
+    local status=$1
+    local message=$2
+    if [ "$status" = "OK" ]; then
+        echo -e "${GREEN}✅ $message${NC}"
+    elif [ "$status" = "WARN" ]; then
+        echo -e "${YELLOW}⚠️  $message${NC}"
+    else
+        echo -e "${RED}❌ $message${NC}"
+    fi
+}
+
+# Get list of staged Rust files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
+
+if [ -z "$STAGED_FILES" ]; then
+    print_status "OK" "No Rust files to check"
+    exit 0
+fi
+
+echo "Checking staged files:"
+echo "$STAGED_FILES" | sed 's/^/  - /'
+
+# Check 1: Code formatting
+echo -e "\n${BLUE}🎨 Checking code formatting...${NC}"
+if ! cargo fmt --all -- --check >/dev/null 2>&1; then
+    print_status "FAIL" "Code formatting issues found"
+    echo -e "${YELLOW}💡 Run 'cargo fmt --all' to fix formatting${NC}"
+    exit 1
+else
+    print_status "OK" "Code formatting is consistent"
+fi
+
+# Check 2: Clippy lints
+echo -e "\n${BLUE}📎 Running clippy analysis...${NC}"
+CLIPPY_OUTPUT=$(cargo clippy --workspace --all-features --message-format=short 2>&1 || true)
+CLIPPY_WARNINGS=$(echo "$CLIPPY_OUTPUT" | grep -c "warning:" || true)
+CLIPPY_ERRORS=$(echo "$CLIPPY_OUTPUT" | grep -c "error:" || true)
+
+if [ "$CLIPPY_ERRORS" -gt 0 ]; then
+    print_status "FAIL" "$CLIPPY_ERRORS clippy errors found"
+    echo "$CLIPPY_OUTPUT" | grep "error:"
+    exit 1
+elif [ "$CLIPPY_WARNINGS" -gt 0 ]; then
+    print_status "WARN" "$CLIPPY_WARNINGS clippy warnings found"
+    echo "$CLIPPY_OUTPUT" | grep "warning:" | head -5
+    echo -e "${YELLOW}💡 Consider fixing these warnings before committing${NC}"
+else
+    print_status "OK" "No clippy issues found"
+fi
+
+# Check 3: Function length (simplified check)
+echo -e "\n${BLUE}📏 Checking function lengths...${NC}"
+LONG_FUNCTIONS=0
+
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        # Simple heuristic: count lines between 'fn ' and matching '}'
+        awk '
+        /^[[:space:]]*pub[[:space:]]+fn[[:space:]]+/ || /^[[:space:]]*fn[[:space:]]+/ {
+            if (in_function && function_lines > 100) {
+                print FILENAME ":" function_start_line ": Function " function_name " is " function_lines " lines (>100)"
+                long_functions++
+            }
+            in_function = 1
+            function_name = $0
+            gsub(/.*fn[[:space:]]+/, "", function_name)
+            gsub(/[[:space:]]*\(.*/, "", function_name)
+            function_lines = 0
+            function_start_line = NR
+        }
+        
+        in_function {
+            function_lines++
+            # Simple brace counting (not perfect but good enough)
+            open_braces = gsub(/{/, "{")
+            close_braces = gsub(/}/, "}")
+            brace_count += open_braces - close_braces
+            
+            if (brace_count < 0) {
+                if (function_lines > 100) {
+                    print FILENAME ":" function_start_line ": Function " function_name " is " function_lines " lines (>100)"
+                    long_functions++
+                }
+                in_function = 0
+                brace_count = 0
+            }
+        }
+        
+        END {
+            if (long_functions > 0) {
+                exit 1
+            }
+        }
+        ' "$file" && continue
+        
+        ((LONG_FUNCTIONS++))
+    fi
+done
+
+if [ "$LONG_FUNCTIONS" -gt 0 ]; then
+    print_status "WARN" "$LONG_FUNCTIONS functions exceed 100 lines"
+    echo -e "${YELLOW}💡 Consider breaking down large functions${NC}"
+else
+    print_status "OK" "All functions are within size limits"
+fi
+
+# Check 4: TODO/FIXME comments in staged files
+echo -e "\n${BLUE}📝 Checking for TODO/FIXME comments...${NC}"
+TODO_COUNT=0
+
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        TODOS=$(grep -n -i "todo\|fixme\|hack\|xxx" "$file" || true)
+        if [ -n "$TODOS" ]; then
+            echo -e "${YELLOW}$file:${NC}"
+            echo "$TODOS" | sed 's/^/  /'
+            TODO_COUNT=$((TODO_COUNT + $(echo "$TODOS" | wc -l)))
+        fi
+    fi
+done
+
+if [ "$TODO_COUNT" -gt 0 ]; then
+    print_status "WARN" "$TODO_COUNT TODO/FIXME comments found"
+    echo -e "${YELLOW}💡 Consider addressing these before committing${NC}"
+else
+    print_status "OK" "No TODO/FIXME comments in staged files"
+fi
+
+# Check 5: Unsafe code blocks
+echo -e "\n${BLUE}🔒 Checking for unsafe code...${NC}"
+UNSAFE_COUNT=0
+
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        UNSAFE_BLOCKS=$(grep -n "unsafe" "$file" || true)
+        if [ -n "$UNSAFE_BLOCKS" ]; then
+            echo -e "${RED}$file:${NC}"
+            echo "$UNSAFE_BLOCKS" | sed 's/^/  /'
+            UNSAFE_COUNT=$((UNSAFE_COUNT + $(echo "$UNSAFE_BLOCKS" | wc -l)))
+        fi
+    fi
+done
+
+if [ "$UNSAFE_COUNT" -gt 0 ]; then
+    print_status "FAIL" "$UNSAFE_COUNT unsafe blocks found"
+    echo -e "${RED}🚫 Unsafe code is not allowed in this project${NC}"
+    exit 1
+else
+    print_status "OK" "No unsafe code found"
+fi
+
+# Check 6: Panic-inducing code
+echo -e "\n${BLUE}🚨 Checking for panic-inducing code...${NC}"
+PANIC_COUNT=0
+
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        PANICS=$(grep -n -E "\.unwrap\(\)|\.expect\(|panic!|unimplemented!|unreachable!" "$file" || true)
+        if [ -n "$PANICS" ]; then
+            echo -e "${YELLOW}$file:${NC}"
+            echo "$PANICS" | sed 's/^/  /'
+            PANIC_COUNT=$((PANIC_COUNT + $(echo "$PANICS" | wc -l)))
+        fi
+    fi
+done
+
+if [ "$PANIC_COUNT" -gt 0 ]; then
+    print_status "WARN" "$PANIC_COUNT potential panic sites found"
+    echo -e "${YELLOW}💡 Consider using proper error handling instead${NC}"
+else
+    print_status "OK" "No panic-inducing code found"
+fi
+
+# Check 7: Large file sizes
+echo -e "\n${BLUE}📊 Checking file sizes...${NC}"
+LARGE_FILES=0
+
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        LINES=$(wc -l < "$file")
+        if [ "$LINES" -gt 500 ]; then
+            print_status "WARN" "$file has $LINES lines (>500)"
+            ((LARGE_FILES++))
+        fi
+    fi
+done
+
+if [ "$LARGE_FILES" -eq 0 ]; then
+    print_status "OK" "All files are within size limits"
+fi
+
+# Check 8: Test files for new code
+echo -e "\n${BLUE}🧪 Checking for corresponding tests...${NC}"
+MISSING_TESTS=0
+
+for file in $STAGED_FILES; do
+    # Skip if it's already a test file
+    if [[ "$file" == *"test"* ]] || [[ "$file" == *"tests/"* ]]; then
+        continue
+    fi
+    
+    # Check if there's a corresponding test file
+    BASE_NAME=$(basename "$file" .rs)
+    DIR_NAME=$(dirname "$file")
+    
+    # Look for test files in common locations
+    TEST_PATTERNS=(
+        "${DIR_NAME}/tests/${BASE_NAME}_test.rs"
+        "${DIR_NAME}/${BASE_NAME}_test.rs"
+        "tests/${BASE_NAME}_test.rs"
+        "${DIR_NAME}/tests/test_${BASE_NAME}.rs"
+    )
+    
+    FOUND_TEST=false
+    for pattern in "${TEST_PATTERNS[@]}"; do
+        if [ -f "$pattern" ]; then
+            FOUND_TEST=true
+            break
+        fi
+    done
+    
+    if [ "$FOUND_TEST" = false ]; then
+        print_status "WARN" "No test file found for $file"
+        ((MISSING_TESTS++))
+    fi
+done
+
+if [ "$MISSING_TESTS" -eq 0 ]; then
+    print_status "OK" "Test coverage appears adequate"
+else
+    echo -e "${YELLOW}💡 Consider adding tests for new functionality${NC}"
+fi
+
+# Summary
+echo -e "\n${BLUE}📋 Pre-commit Summary${NC}"
+echo "======================"
+
+TOTAL_ISSUES=$((CLIPPY_WARNINGS + LONG_FUNCTIONS + TODO_COUNT + PANIC_COUNT + LARGE_FILES + MISSING_TESTS))
+
+if [ "$TOTAL_ISSUES" -eq 0 ]; then
+    print_status "OK" "All clean code checks passed!"
+    echo -e "\n${GREEN}🎉 Ready to commit!${NC}"
+    exit 0
+else
+    print_status "WARN" "$TOTAL_ISSUES potential issues found"
+    echo -e "\n${YELLOW}⚠️  Consider addressing the issues above${NC}"
+    echo -e "${BLUE}💡 You can still commit, but fixing these issues will improve code quality${NC}"
+    
+    # Ask user if they want to proceed
+    echo -e "\n${YELLOW}Do you want to proceed with the commit? (y/N)${NC}"
+    read -r response
+    case "$response" in
+        [yY][eE][sS]|[yY]) 
+            echo -e "${GREEN}Proceeding with commit...${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Commit aborted. Please address the issues and try again.${NC}"
+            exit 1
+            ;;
+    esac
+fi

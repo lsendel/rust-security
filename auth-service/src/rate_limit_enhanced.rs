@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{info, warn, error};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 /// Configuration for rate limiting
 #[derive(Debug, Clone, Deserialize)]
