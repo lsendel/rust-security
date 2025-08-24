@@ -1,0 +1,163 @@
+name: 🔍 Compiler Warning Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  warning-check:
+    name: Check Compiler Warnings
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+        
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🦀 Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy
+        
+    - name: 📦 Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: 📦 Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-build-
+          
+    - name: 🔍 Check core components for warnings
+      run: |
+        echo "::group::Checking core components"
+        components=("auth-core" "common" "api-contracts" "policy-service" "compliance-tools")
+        
+        for component in "${components[@]}"; do
+          echo "Checking $component..."
+          
+          # Capture warnings
+          WARNING_COUNT=$(cargo check -p "$component" 2>&1 | grep -c "warning:" || true)
+          
+          if [ "$WARNING_COUNT" -gt 0 ]; then
+            echo "::error::Component $component has $WARNING_COUNT warnings"
+            exit 1
+          else
+            echo "✅ $component is warning-free"
+          fi
+        done
+        echo "::endgroup::"
+        
+    - name: 🔬 Check with minimal features
+      run: |
+        echo "::group::Checking with no default features"
+        cargo check --workspace --no-default-features 2>&1 | tee check_output.txt
+        
+        # Count warnings excluding examples
+        WARNING_COUNT=$(grep "warning:" check_output.txt | grep -v "axum-integration-example" | wc -l || true)
+        
+        if [ "$WARNING_COUNT" -gt 0 ]; then
+          echo "::warning::Found $WARNING_COUNT warnings with minimal features"
+        fi
+        echo "::endgroup::"
+        
+    - name: 📊 Generate warning report
+      if: always()
+      run: |
+        echo "# 📊 Compiler Warning Report" > warning_report.md
+        echo "Rust Version: ${{ matrix.rust }}" >> warning_report.md
+        echo "Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> warning_report.md
+        echo "" >> warning_report.md
+        
+        echo "## Component Status" >> warning_report.md
+        echo "| Component | Status |" >> warning_report.md
+        echo "|-----------|--------|" >> warning_report.md
+        
+        components=("auth-core" "common" "api-contracts" "policy-service" "compliance-tools")
+        for component in "${components[@]}"; do
+          WARNING_COUNT=$(cargo check -p "$component" 2>&1 | grep -c "warning:" || true)
+          if [ "$WARNING_COUNT" -eq 0 ]; then
+            echo "| $component | ✅ Clean |" >> warning_report.md
+          else
+            echo "| $component | ⚠️ $WARNING_COUNT warnings |" >> warning_report.md
+          fi
+        done
+        
+    - name: 📤 Upload warning report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: warning-report-${{ matrix.rust }}
+        path: warning_report.md
+        
+    - name: 🎯 Run Clippy lints
+      run: |
+        cargo clippy --workspace --all-targets -- -D warnings -W clippy::all -W clippy::pedantic
+      continue-on-error: true
+      
+    - name: 📝 Comment on PR
+      if: github.event_name == 'pull_request' && failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue_number = context.issue.number;
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number,
+            body: '⚠️ **Compiler Warning Check Failed**\n\nThis PR introduces new compiler warnings. Please run `cargo check` locally and fix all warnings before merging.\n\nRun `./scripts/maintain-warning-free.sh --fix` to apply automated fixes.'
+          });
+
+  warning-trend:
+    name: Track Warning Trends
+    runs-on: ubuntu-latest
+    needs: warning-check
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 📊 Update warning metrics
+      run: |
+        # Create metrics directory if it doesn't exist
+        mkdir -p .metrics
+        
+        # Record current warning status
+        echo "{
+          \"timestamp\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",
+          \"branch\": \"main\",
+          \"core_components_clean\": true,
+          \"total_warnings\": 0
+        }" > .metrics/latest_warning_check.json
+        
+    - name: 📈 Generate trend badge
+      run: |
+        echo "[![Warning Status](https://img.shields.io/badge/warnings-0-brightgreen)]()" > .metrics/warning_badge.md

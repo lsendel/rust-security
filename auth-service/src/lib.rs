@@ -60,6 +60,9 @@ pub struct TokenResponse {
     pub expires_in: u64,
     pub refresh_token: Option<String>,
     pub scope: Option<String>,
+    pub exp: Option<i64>,
+    pub iat: Option<i64>,
+    pub id_token: Option<String>,
 }
 
 // Missing constants - stubs for compilation

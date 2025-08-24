@@ -473,7 +473,10 @@ pub async fn emergency_rollback(
     let rotated_keys = key_manager
         .emergency_rotation(trigger)
         .await
-        .map_err(|e| AuthError::InternalError(e))?;
+        .map_err(|e| AuthError::InternalError { 
+            error_id: uuid::Uuid::new_v4(), 
+            context: e.to_string() 
+        })?;
 
     // Log emergency rollback
     SecurityLogger::log_event(
@@ -653,7 +656,9 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
                 .with_detail("error".to_string(), e.to_string()),
             );
 
-            Err(AuthError::InvalidToken(e.to_string()))
+            Err(AuthError::InvalidToken { 
+                reason: e.to_string() 
+            })
         }
     }
 }
@@ -680,7 +685,10 @@ pub async fn migrate_token_issuance(
     {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| AuthError::InternalError(anyhow::anyhow!("System time error")))?
+            .map_err(|_| AuthError::InternalError { 
+                error_id: uuid::Uuid::new_v4(), 
+                context: "System time error".to_string() 
+            })?
             .as_secs() as i64;
 
         let refresh_token = format!("rt_{}", uuid::Uuid::new_v4());
@@ -704,12 +712,12 @@ pub async fn migrate_token_issuance(
 
         return Ok(crate::TokenResponse {
             access_token: token,
-            token_type: "Bearer",
+            token_type: "Bearer".to_string(),
             expires_in,
             refresh_token: Some(refresh_token),
             scope,
-            exp: now + expires_in as i64,
-            iat: now,
+            exp: Some(now + expires_in as i64),
+            iat: Some(now),
             id_token,
         });
     }
@@ -717,12 +725,12 @@ pub async fn migrate_token_issuance(
     // TODO: Fix issue_new_token reference - placeholder implementation
     Ok(crate::TokenResponse {
         access_token: "placeholder_access_token".to_string(),
-        token_type: "Bearer",
+        token_type: "Bearer".to_string(),
         expires_in: 3600,
         refresh_token: Some("placeholder_refresh_token".to_string()),
-        scope: scope.unwrap_or_default(),
-        exp: chrono::Utc::now().timestamp() + 3600,
-        iat: chrono::Utc::now().timestamp(),
+        scope: Some(scope.unwrap_or_default()),
+        exp: Some(chrono::Utc::now().timestamp() + 3600),
+        iat: Some(chrono::Utc::now().timestamp()),
         id_token: if make_id_token { Some("placeholder_id_token".to_string()) } else { None },
     })
 }

@@ -271,18 +271,18 @@ impl RegressionTestSuite {
                 .await;
 
             match auth_response {
-                Ok(resp) => {
+                Ok(_resp) => {
                     resilience_results.push(json!({
                         "service": "auth",
-                        "status": resp.status().as_u16(),
+                        "status": _resp.status().as_u16(),
                         "response_time_ms": auth_start.elapsed().as_millis(),
-                        "available": resp.status() == 200
+                        "available": _resp.status() == 200
                     }));
                 }
-                Err(e) => {
+                Err(_e) => {
                     resilience_results.push(json!({
                         "service": "auth",
-                        "error": e.to_string(),
+                        "error": _e.to_string(),
                         "available": false
                     }));
                 }
@@ -297,18 +297,18 @@ impl RegressionTestSuite {
                 .await;
 
             match policy_response {
-                Ok(resp) => {
+                Ok(_resp) => {
                     resilience_results.push(json!({
                         "service": "policy",
-                        "status": resp.status().as_u16(),
+                        "status": _resp.status().as_u16(),
                         "response_time_ms": policy_start.elapsed().as_millis(),
-                        "available": resp.status() == 200
+                        "available": _resp.status() == 200
                     }));
                 }
-                Err(e) => {
+                Err(_e) => {
                     resilience_results.push(json!({
                         "service": "policy",
-                        "error": e.to_string(),
+                        "error": _e.to_string(),
                         "available": false
                     }));
                 }
