@@ -79,9 +79,6 @@ impl HealthChecker {
     pub async fn check_health(&self) -> Result<HealthResponse> {
         let start = Instant::now();
         
-        // Check all components
-        let mut component_checks: Vec<ComponentHealthCheck> = Vec::new();
-        
         // Execute all health checks concurrently
         let (db_result, redis_result, external_result, system_result) = tokio::join!(
             self.check_database(),
