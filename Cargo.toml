@@ -58,7 +58,7 @@ sha1 = "0.10"
 aes = "0.8"
 aes-gcm = "0.10"
 
-# Database
+# Database - MySQL excluded to avoid RSA vulnerability (RUSTSEC-2023-0071)
 sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros", "runtime-tokio-rustls"], default-features = false }
 deadpool = "0.12"
 
@@ -328,3 +328,5 @@ audit_policy = "strict"
 vulnerability_tolerance = "none"
 dependency_review_required = true
 security_contact = "security@company.com"
+
+

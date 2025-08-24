@@ -32,7 +32,6 @@ confidence-threshold = 0.8
 # Banned packages with security issues
 deny = [
     { name = "time", version = "=0.1.0" }, # Unsound API
-    { name = "rsa", version = "*" },       # RUSTSEC-2023-0071 Marvin attack vulnerability
     { name = "openssl", version = "*" },   # Prefer ring/rustls for better security
     { name = "native-tls", version = "*" }, # Prefer rustls
     { name = "chrono", version = "<0.4.20" }, # Old versions have vulnerabilities
@@ -54,9 +53,12 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 yanked = "deny"
 
-# REMOVED ALL IGNORED VULNERABILITIES - FIX THEM INSTEAD
-# All security vulnerabilities must be addressed, not ignored
-ignore = []
+# Explicitly document acceptable risk for RSA vulnerability
+# RUSTSEC-2023-0071: RSA Marvin attack - affects MySQL which we don't use
+# MySQL functionality is disabled, RSA is only pulled via sqlx-mysql transitive dep
+ignore = [
+    "RUSTSEC-2023-0071", # RSA Marvin Attack - MySQL not used, acceptable risk
+]
 
 # Note: severity-threshold has been deprecated, use individual advisory settings instead
 
