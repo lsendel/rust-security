@@ -100,7 +100,7 @@ pub struct CircuitMetrics {
     pub failure_rate: f64,
     pub slow_call_rate: f64,
     pub last_failure_time: Option<SystemTime>,
-    pub state_transition_time: SystemTime,
+    pub state_transition_time: Instant,
     pub half_open_calls: u32,
     pub consecutive_failures: u32,
     pub consecutive_successes: u32,
@@ -117,7 +117,7 @@ impl Default for CircuitMetrics {
             failure_rate: 0.0,
             slow_call_rate: 0.0,
             last_failure_time: None,
-            state_transition_time: SystemTime::now(),
+            state_transition_time: Instant::now(),
             half_open_calls: 0,
             consecutive_failures: 0,
             consecutive_successes: 0,
@@ -262,7 +262,7 @@ impl AdvancedCircuitBreaker {
         metrics.failed_calls += 1;
         metrics.consecutive_failures += 1;
         metrics.consecutive_successes = 0;
-        metrics.last_failure_time = Some(Instant::now());
+        metrics.last_failure_time = Some(SystemTime::now());
 
         if duration > self.config.slow_call_threshold {
             metrics.slow_calls += 1;

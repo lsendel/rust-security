@@ -276,6 +276,7 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = true
+overflow-checks = true
 
 [profile.test]
 opt-level = 1

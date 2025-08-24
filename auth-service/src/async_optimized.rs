@@ -158,7 +158,36 @@ impl AsyncSecurityExecutor {
         self.active_operations
             .insert(operation_id.clone(), start_time);
 
-        let result = self.execute_with_retry(operation, &operation_id).await;
+        // For single execution, we don't need retry logic with moved values
+        // Execute directly with timeout and concurrency control
+        let _permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| AsyncError::SemaphoreError);
+
+        let result = match _permit {
+            Ok(_permit) => {
+                let timeout_result = timeout(
+                    self.config.default_timeout,
+                    operation.instrument(tracing::span!(
+                        tracing::Level::DEBUG,
+                        "security_operation",
+                        operation_id
+                    )),
+                )
+                .await;
+
+                match timeout_result {
+                    Ok(operation_result) => operation_result,
+                    Err(_) => Err(AsyncError::Timeout { 
+                        duration: self.config.default_timeout 
+                    }),
+                }
+            }
+            Err(e) => Err(e),
+        };
+
         let duration = start_time.elapsed();
 
         self.active_operations.remove(&operation_id);
@@ -167,7 +196,7 @@ impl AsyncSecurityExecutor {
         AsyncOperationResult {
             result,
             duration,
-            retry_count: 0, // This would be tracked in execute_with_retry
+            retry_count: 0,
             operation_id,
         }
     }
@@ -175,11 +204,11 @@ impl AsyncSecurityExecutor {
     /// Execute operation with automatic retry and exponential backoff
     async fn execute_with_retry<F, T>(
         &self,
-        operation: F,
+        mut operation: F,
         operation_id: &str,
     ) -> Result<T, AsyncError>
     where
-        F: Future<Output = Result<T, AsyncError>> + Send + 'static,
+        F: FnMut() -> Pin<Box<dyn Future<Output = Result<T, AsyncError>> + Send>> + Send + 'static,
         T: Send + 'static,
     {
         let mut retry_count = 0;
@@ -205,7 +234,7 @@ impl AsyncSecurityExecutor {
             }
 
             // Execute operation with timeout
-            let operation_future = operation;
+            let operation_future = operation();
             let timeout_result = timeout(
                 self.config.default_timeout,
                 operation_future.instrument(tracing::span!(
