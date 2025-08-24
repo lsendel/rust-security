@@ -401,6 +401,23 @@ pub static BUSINESS_METRICS: Lazy<BusinessMetricsRegistry> =
 /// Business metrics helper functions
 pub struct BusinessMetricsHelper;
 
+impl BusinessMetricsHelper {
+    /// Validate and sanitize metric labels to prevent injection attacks
+    fn sanitize_label(label: &str, max_len: usize) -> String {
+        if label.len() > max_len {
+            return format!("label_too_long_{}", label.len());
+        }
+        
+        // Remove potential problematic characters
+        label.chars()
+            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.')
+            .collect::<String>()
+            .get(..max_len.min(label.len()))
+            .unwrap_or("invalid_label")
+            .to_string()
+    }
+}
+
 #[cfg(feature = "monitoring")]
 impl BusinessMetricsHelper {
     /// Record user session completion
@@ -588,7 +605,7 @@ impl UserBehaviorAnalytics {
         }
     }
 
-    /// Start tracking a new session
+    /// Start tracking a new session with security validation
     pub async fn start_session(
         &self,
         session_id: String,
@@ -596,6 +613,18 @@ impl UserBehaviorAnalytics {
         user_type: String,
         client_id: String,
     ) {
+        // Validate session ID format (should be UUID-like or similar secure format)
+        if session_id.len() < 16 || session_id.len() > 64 {
+            debug!("Invalid session ID length: {}", session_id.len());
+            return;
+        }
+        
+        // Validate input lengths for security
+        if user_id.len() > 128 || user_type.len() > 32 || client_id.len() > 64 {
+            debug!("Invalid input lengths for session tracking");
+            return;
+        }
+
         let session_info = SessionInfo {
             user_id,
             session_start: SystemTime::now(),
@@ -606,6 +635,17 @@ impl UserBehaviorAnalytics {
         };
 
         let mut sessions = self.session_tracking.write().await;
+        
+        // Prevent session table from growing unbounded (potential DoS protection)
+        if sessions.len() > 10000 {
+            debug!("Session table at capacity, cleaning up oldest sessions");
+            // Keep only the 8000 most recent sessions
+            let mut session_pairs: Vec<_> = sessions.drain().collect();
+            session_pairs.sort_by(|a, b| b.1.last_activity.cmp(&a.1.last_activity));
+            session_pairs.truncate(8000);
+            sessions.extend(session_pairs);
+        }
+        
         sessions.insert(session_id, session_info);
     }
 
@@ -679,14 +719,19 @@ impl UserBehaviorAnalytics {
         });
     }
 
-    /// Record rate limit enforcement
+    /// Record rate limit enforcement with security-safe logging
     pub fn record_rate_limit_enforcement(path: &str, client_key: &str, action: &str, request_type: &str) {
-        // For now, just log the rate limit event
+        // Validate input lengths to prevent log injection
+        let safe_path = if path.len() > 100 { &path[..100] } else { path };
+        let safe_client_key = if client_key.len() > 32 { "key_too_long" } else { client_key };
+        let safe_action = if action.len() > 20 { "action_truncated" } else { action };
+        let safe_request_type = if request_type.len() > 20 { "type_truncated" } else { request_type };
+        
         tracing::info!(
-            path = path,
-            client_key = client_key,
-            action = action,
-            request_type = request_type,
+            path = %safe_path,
+            client_key = %safe_client_key,
+            action = %safe_action,
+            request_type = %safe_request_type,
             "Rate limit enforcement"
         );
     }
