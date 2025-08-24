@@ -78,8 +78,8 @@ impl Cache {
                 Ok(client) => {
                     // Test the connection
                     match client.get_async_connection().await {
-                        Ok(mut conn) => {
-                            let _: String = conn.ping().await?;
+                        Ok(_conn) => {
+                            // Connection successful - no need to ping
                             info!("Redis cache connection established");
                             Some(client)
                         }
@@ -119,6 +119,7 @@ impl Cache {
                 Ok(Some(data)) => {
                     debug!(key = %key, "Cache hit (Redis)");
                     let duration = start_time.elapsed();
+                    #[cfg(feature = "monitoring")]
                     MetricsHelper::record_cache_operation("redis", "get", "hit", duration);
                     return Some(data);
                 }
@@ -128,6 +129,7 @@ impl Cache {
                 Err(e) => {
                     warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
                     let duration = start_time.elapsed();
+                    #[cfg(feature = "monitoring")]
                     MetricsHelper::record_cache_operation("redis", "get", "error", duration);
                 }
             }
@@ -138,12 +140,14 @@ impl Cache {
             Some(data) => {
                 debug!(key = %key, "Cache hit (Memory)");
                 let duration = start_time.elapsed();
+                #[cfg(feature = "monitoring")]
                 MetricsHelper::record_cache_operation("memory", "get", "hit", duration);
                 Some(data)
             }
             None => {
                 debug!(key = %key, "Cache miss (Memory)");
                 let duration = start_time.elapsed();
+                #[cfg(feature = "monitoring")]
                 MetricsHelper::record_cache_operation("memory", "get", "miss", duration);
                 None
             }
@@ -176,6 +180,7 @@ impl Cache {
         
         // Record cache set operation
         let duration = start_time.elapsed();
+        #[cfg(feature = "monitoring")]
         MetricsHelper::record_cache_operation("memory", "set", "success", duration);
 
         Ok(())

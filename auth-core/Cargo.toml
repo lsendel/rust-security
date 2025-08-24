@@ -4,7 +4,8 @@ version = "1.0.0"
 edition = "2021"
 description = "Minimal OAuth 2.0 server implementation in Rust"
 license = "Apache-2.0"
-repository = "https://github.com/rust-security/auth-service"
+repository = "https://github.com/lsendel/rust-security"
+readme = "README.md"
 keywords = ["oauth2", "authentication", "jwt", "security"]
 categories = ["authentication", "web-programming::http-server"]
 

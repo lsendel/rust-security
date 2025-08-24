@@ -87,11 +87,19 @@ pub struct AsyncMetrics {
 }
 
 /// Batch operation for grouping related async calls
-#[derive(Debug)]
 pub struct BatchOperation<T> {
     pub operation_id: String,
     pub future: BoxFuture<'static, Result<T, AsyncError>>,
     pub created_at: Instant,
+}
+
+impl<T> std::fmt::Debug for BatchOperation<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BatchOperation")
+            .field("operation_id", &self.operation_id)
+            .field("created_at", &self.created_at)
+            .finish()
+    }
 }
 
 /// High-performance async executor optimized for security operations

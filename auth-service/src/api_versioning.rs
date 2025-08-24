@@ -84,7 +84,7 @@ pub struct DeprecationInfo {
     pub migration_guide_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeprecatedVersion {
     pub version: String,
     pub deprecation_date: String,

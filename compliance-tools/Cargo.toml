@@ -5,6 +5,10 @@ edition = "2021"
 description = "Rust-based compliance reporting and validation tools"
 authors = ["Rust Security Team"]
 license = "MIT"
+repository = "https://github.com/lsendel/rust-security"
+readme = "README.md"
+keywords = ["compliance", "reporting", "validation", "security", "threat-feed", "sbom"]
+categories = ["development-tools", "development-tools::build-utils", "security"]
 
 [lints]
 workspace = true
