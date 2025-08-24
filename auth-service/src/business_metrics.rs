@@ -678,16 +678,33 @@ impl UserBehaviorAnalytics {
             }
         });
     }
+
+    /// Record rate limit enforcement
+    pub fn record_rate_limit_enforcement(path: &str, client_key: &str, action: &str, request_type: &str) {
+        // For now, just log the rate limit event
+        tracing::info!(
+            path = path,
+            client_key = client_key,
+            action = action,
+            request_type = request_type,
+            "Rate limit enforcement"
+        );
+    }
 }
 
 // Stub implementations when monitoring is not enabled
 #[cfg(not(feature = "monitoring"))]
 impl BusinessMetricsHelper {
+    pub fn new() -> Self {
+        Self
+    }
+    
     pub fn record_user_session(_user_type: &str, _session_type: &str, _client_id: &str, _duration: Duration) {}
     pub fn record_login_event(_user_type: &str, _login_method: &str, _timestamp: SystemTime) {}
     pub fn record_oauth_flow_step(_client_id: &str, _grant_type: &str, _flow_stage: &str, _result: &str) {}
     pub fn record_mfa_adoption(_event_type: &str, _mfa_method: &str, _user_segment: &str, _enrollment_path: &str) {}
     pub fn record_privacy_request(_request_type: &str, _user_segment: &str, _processing_stage: &str, _result: &str) {}
+    pub fn record_rate_limit_enforcement(_path: &str, _client_key: &str, _action: &str, _request_type: &str) {}
     pub fn record_security_control_outcome(_control_type: &str, _threat_category: &str, _outcome: &str, _confidence_level: &str) {}
     pub fn record_threat_detection_feedback(_detection_type: &str, _threat_category: &str, _outcome: &str, _feedback_source: &str) {}
     pub fn record_revenue_impact(_event_type: &str, _customer_segment: &str, _revenue_tier: &str, _auth_method: &str) {}

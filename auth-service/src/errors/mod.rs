@@ -47,6 +47,7 @@ pub enum AuthError {
     ClientRateLimitExceeded { client_id: String },
 
     // Storage/persistence errors
+    #[cfg(feature = "enhanced-session-store")]
     #[error("Redis connection error")]
     RedisConnectionError { source: redis::RedisError },
     #[error("Token store error: {operation}")]
@@ -231,6 +232,7 @@ impl IntoResponse for AuthError {
                     true,
                 )
             }
+            #[cfg(feature = "enhanced-session-store")]
             AuthError::RedisConnectionError { .. } => {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
@@ -365,6 +367,7 @@ impl ErrorResponse {
 
 // Error conversion implementations
 
+#[cfg(feature = "enhanced-session-store")]
 impl From<redis::RedisError> for AuthError {
     fn from(err: redis::RedisError) -> Self {
         AuthError::RedisConnectionError { source: err }

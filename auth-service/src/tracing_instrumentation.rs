@@ -4,7 +4,7 @@
 //! security events, and performance monitoring with OpenTelemetry integration.
 
 use opentelemetry::{
-    trace::{SpanKind, TraceContextExt, Tracer},
+    trace::{SpanKind, TraceContextExt, Tracer, Span as OtelSpan},
     Context, KeyValue,
 };
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tracing::{error, info, instrument, warn, Span};
+use tracing::{error, info, instrument, warn, Span as TracingSpan};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 

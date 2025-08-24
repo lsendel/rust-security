@@ -134,6 +134,7 @@ pub mod admin_replay_protection;
 pub mod advanced_rate_limit;
 pub mod ai_threat_detection;
 pub mod ai_threat_detection_advanced;
+#[cfg(feature = "api-keys")]
 pub mod api_key_endpoints;
 #[cfg(feature = "api-keys")]
 pub mod api_key_store;
@@ -157,6 +158,7 @@ pub mod csrf_protection;
 #[cfg(feature = "rate-limiting")]
 pub mod crypto_optimized;
 #[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "enhanced-session-store")]
 pub mod database_optimized;
 pub mod enhanced_jwt_validation;
 #[cfg(feature = "tracing")]
@@ -169,6 +171,7 @@ pub mod intelligent_cache;
 pub mod jwks_handler;
 #[cfg(feature = "enhanced-session-store")]
 pub mod jwks_rate_limiter;
+#[cfg(feature = "enhanced-session-store")]
 #[cfg(feature = "enhanced-session-store")]
 pub mod jwks_rotation;
 pub mod jwt_secure;
@@ -233,6 +236,7 @@ pub mod redirect_validation;
 pub mod resilience_config;
 pub mod resilient_http;
 #[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "enhanced-session-store")]
 pub mod resilient_store;
 pub mod scim;
 pub mod scim_filter;
@@ -260,7 +264,9 @@ pub mod soar_case_management;
 #[cfg(feature = "soar")]
 pub mod soar_config_loader;
 #[cfg(feature = "soar")]
+#[cfg(feature = "soar")]
 pub mod soar_correlation;
+#[cfg(feature = "soar")]
 #[cfg(feature = "soar")]
 pub mod soar_workflow;
 #[cfg(feature = "enhanced-session-store")]
@@ -273,11 +279,13 @@ pub mod threat_behavioral_analyzer;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_hunting_orchestrator;
 #[cfg(feature = "threat-hunting")]
+#[cfg(feature = "threat-hunting")]
 pub mod threat_intelligence;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_response_orchestrator;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_types;
+#[cfg(feature = "threat-hunting")]
 #[cfg(feature = "threat-hunting")]
 pub mod threat_user_profiler;
 pub mod tls_security;

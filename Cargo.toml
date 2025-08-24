@@ -1,6 +1,6 @@
 [workspace.package]
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.82"
 
 [workspace]
 members = [
@@ -113,6 +113,7 @@ http-body-util = "0.1"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 urlencoding = "2.1"
 url = "2.5.4"
+idna = "1.0.3"  # Force newer version to fix RUSTSEC-2024-0421
 
 # Policy engine
 cedar-policy = "4.2"
@@ -157,7 +158,7 @@ nalgebra = "0.33"
 pqcrypto-mlkem = "0.1"
 pqcrypto-mldsa = "0.1"
 
-# Cloud integrations - compatible with Rust 1.82.0
+# Cloud integrations - compatible with Rust 1.89.0
 aws-config = "1.1"
 aws-sdk-secretsmanager = "1.10"
 vaultrs = "0.7"

@@ -33,9 +33,14 @@ pub struct CryptoOptimized {
 }
 
 /// Hardware-accelerated AEAD implementation
+#[derive(Debug)]
 pub struct HardwareAccelerated;
 
 impl aead::BoundKey<HardwareAccelerated> for HardwareAccelerated {
+    fn new(unbound_key: aead::UnboundKey, nonce_sequence: HardwareAccelerated) -> Self {
+        nonce_sequence
+    }
+
     fn algorithm(&self) -> &'static aead::Algorithm {
         &aead::AES_256_GCM
     }

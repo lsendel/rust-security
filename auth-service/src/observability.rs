@@ -72,7 +72,7 @@ impl Default for ObservabilityConfig {
 /// Comprehensive observability provider
 pub struct ObservabilityProvider {
     config: ObservabilityConfig,
-    tracer: Option<Box<dyn opentelemetry::trace::Tracer + Send + Sync>>,
+    tracer: Option<opentelemetry::global::BoxedTracer>,
     meter: Option<Meter>,
     metrics: Arc<RwLock<ServiceMetrics>>,
 }
@@ -245,7 +245,7 @@ impl ObservabilityProvider {
     }
 
     /// Get the tracer instance
-    pub fn tracer(&self) -> Option<&(dyn opentelemetry::trace::Tracer + Send + Sync)> {
+    pub fn tracer(&self) -> Option<&opentelemetry::global::BoxedTracer> {
         self.tracer.as_ref()
     }
 
@@ -469,7 +469,7 @@ pub struct TracingUtils;
 impl TracingUtils {
     /// Create a new span with common attributes
     pub fn create_span(
-        tracer: &(dyn opentelemetry::trace::Tracer + Send + Sync),
+        tracer: &opentelemetry::global::BoxedTracer,
         name: &str,
         kind: SpanKind,
         attributes: Vec<KeyValue>,

@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "monitoring")]
-use crate::metrics::MetricsHelper;
+use crate::business_metrics::BusinessMetricsHelper;
 
 /// Configuration for rate limiting
 #[derive(Debug, Clone)]
@@ -375,13 +375,15 @@ pub async fn optimized_rate_limit(request: Request, next: Next) -> Response {
         RateLimitResult::Allowed => {
             // Record allowed request
             let path = request.uri().path();
-            MetricsHelper::record_rate_limit_enforcement(path, &client_key, "allowed", "request");
+            #[cfg(not(feature = "monitoring"))]
+            crate::business_metrics::BusinessMetricsHelper::record_rate_limit_enforcement(path, &client_key, "allowed", "request");
             next.run(request).await
         }
         RateLimitResult::RateLimited { retry_after } => {
             // Record rate limit hit
             let path = request.uri().path();
-            MetricsHelper::record_rate_limit_enforcement(path, &client_key, "blocked", "request");
+            #[cfg(not(feature = "monitoring"))]
+            crate::business_metrics::BusinessMetricsHelper::record_rate_limit_enforcement(path, &client_key, "blocked", "request");
             let mut response =
                 (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded").into_response();
 

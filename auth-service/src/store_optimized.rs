@@ -110,12 +110,19 @@ impl OptimizedTokenStore {
 
                 // Return default inactive record
                 Ok(IntrospectionRecord {
+                    token: token.to_string(),
                     active: false,
                     scope: None,
                     client_id: None,
+                    username: None,
                     exp: None,
                     iat: None,
+                    nbf: None,
                     sub: None,
+                    aud: None,
+                    iss: None,
+                    jti: None,
+                    token_type: None,
                     token_binding: None,
                 })
             }
@@ -131,23 +138,37 @@ impl OptimizedTokenStore {
 
                 if fields.is_empty() {
                     return Ok(IntrospectionRecord {
+                        token: token.to_string(),
                         active: false,
                         scope: None,
                         client_id: None,
+                        username: None,
                         exp: None,
                         iat: None,
+                        nbf: None,
                         sub: None,
+                        aud: None,
+                        iss: None,
+                        jti: None,
+                        token_type: None,
                         token_binding: None,
                     });
                 }
 
                 Ok(IntrospectionRecord {
+                    token: token.to_string(),
                     active: fields.get("active").map(|v| v == "1").unwrap_or(false),
                     scope: fields.get("scope").cloned(),
                     client_id: fields.get("client_id").cloned(),
+                    username: fields.get("username").cloned(),
                     exp: fields.get("exp").and_then(|v| v.parse().ok()),
                     iat: fields.get("iat").and_then(|v| v.parse().ok()),
+                    nbf: fields.get("nbf").and_then(|v| v.parse().ok()),
                     sub: fields.get("sub").cloned(),
+                    aud: fields.get("aud").cloned(),
+                    iss: fields.get("iss").cloned(),
+                    jti: fields.get("jti").cloned(),
+                    token_type: fields.get("token_type").cloned(),
                     token_binding: fields.get("token_binding").cloned(),
                 })
             }

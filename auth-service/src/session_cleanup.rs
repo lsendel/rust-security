@@ -323,7 +323,9 @@ impl SessionCleanupScheduler {
             }
 
             // Update metrics if enabled
+            #[cfg(feature = "monitoring")]
             if self.config.enable_metrics {
+                use crate::security_metrics::SECURITY_METRICS;
                 SECURITY_METRICS.security_events_total
                     .with_label_values(&["session_cleanup", "info", "auth-service"])
                     .inc();

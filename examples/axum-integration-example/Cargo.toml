@@ -15,6 +15,7 @@ workspace = true
 # Web framework with security features
 axum = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true }
 tower-http = { workspace = true, features = ["cors", "trace", "limit", "timeout"], optional = true }
 
 # Serialization
@@ -23,6 +24,7 @@ serde_json = { workspace = true }
 
 # Logging and tracing
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # Database dependencies
 sqlx = { workspace = true, optional = true }

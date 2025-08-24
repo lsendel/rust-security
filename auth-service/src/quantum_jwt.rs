@@ -401,7 +401,7 @@ impl QuantumJwtManager {
     }
 
     /// Sign data with classical algorithm
-    async fn sign_classical(&self, data: &[u8], key_pair: &ClassicalKeyPair) -> Result<String> {
+    async fn sign_classical(&self, data: &[u8], _key_pair: &ClassicalKeyPair) -> Result<String> {
         // Simulate ECDSA signing (would use actual crypto library)
         let signature_data = format!("classical_sig_{}", hex::encode(data));
         let signature_hash = digest::digest(&digest::SHA256, signature_data.as_bytes());
@@ -412,7 +412,7 @@ impl QuantumJwtManager {
     async fn sign_post_quantum(
         &self,
         data: &[u8],
-        key_pair: &PostQuantumKeyPair,
+        _key_pair: &PostQuantumKeyPair,
     ) -> Result<String> {
         // Simulate ML-DSA signing (would use actual PQ crypto library)
         let signature_data = format!("pq_sig_{}", hex::encode(data));

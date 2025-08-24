@@ -8,6 +8,7 @@ use tracing::{error, info, instrument, warn};
 
 use crate::errors::AuthError;
 #[cfg(feature = "monitoring")]
+#[cfg(feature = "monitoring")]
 use crate::metrics::METRICS;
 
 /// Configuration for policy caching
@@ -141,10 +142,12 @@ impl PolicyCache {
 
                 // Record cache hit metrics
                 let duration = start_time.elapsed();
+                #[cfg(feature = "monitoring")]
                 METRICS
                     .policy_cache_operations
                     .with_label_values(&["get", "hit", policy_type])
                     .inc();
+                #[cfg(feature = "monitoring")]
                 METRICS
                     .cache_operation_duration
                     .with_label_values(&["policy", "get"])
@@ -172,10 +175,12 @@ impl PolicyCache {
 
         // Record cache miss metrics
         let duration = start_time.elapsed();
+        #[cfg(feature = "monitoring")]
         METRICS
             .policy_cache_operations
             .with_label_values(&["get", "miss", policy_type])
             .inc();
+        #[cfg(feature = "monitoring")]
         METRICS
             .cache_operation_duration
             .with_label_values(&["policy", "get"])

@@ -29,7 +29,9 @@ use crate::{
     security_metrics::SecurityMetrics,
 };
 
-use crate::security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity};
+use crate::{
+    security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity},
+};
 
 /// Service Level Indicators (SLIs) configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,11 +143,16 @@ pub struct EnhancedObservability {
     /// Active alerts
     alerts: Arc<RwLock<HashMap<String, Alert>>>,
     /// Metrics registry
+    #[cfg(feature = "monitoring")]
     metrics_registry: Arc<MetricsRegistry>,
     /// Security metrics
+    #[cfg(feature = "monitoring")]
     security_metrics: Arc<SecurityMetrics>,
     /// Business metrics
+    #[cfg(feature = "monitoring")]
     business_metrics: Arc<BusinessMetricsRegistry>,
+    #[cfg(not(feature = "monitoring"))]
+    business_metrics: Arc<crate::business_metrics::BusinessMetricsHelper>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,12 +197,14 @@ impl Default for ObservabilityConfig {
 
 impl EnhancedObservability {
     /// Initialize enhanced observability system
+    #[cfg(feature = "monitoring")]
     #[instrument(skip_all)]
     pub async fn new(
         config: ObservabilityConfig,
         sli_config: SliConfig,
         metrics_registry: Arc<MetricsRegistry>,
         security_metrics: Arc<SecurityMetrics>,
+        #[cfg(feature = "monitoring")]
         business_metrics: Arc<BusinessMetricsRegistry>,
     ) -> Result<Self> {
         info!("Initializing enhanced observability system");
@@ -224,8 +233,11 @@ impl EnhancedObservability {
             performance_profiles: Arc::new(RwLock::new(HashMap::new())),
             health_status,
             alerts: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "monitoring")]
             metrics_registry,
+            #[cfg(feature = "monitoring")]
             security_metrics,
+            #[cfg(feature = "monitoring")]
             business_metrics,
         };
 
@@ -233,6 +245,48 @@ impl EnhancedObservability {
         observability.start_monitoring_tasks().await?;
 
         info!("Enhanced observability system initialized successfully");
+        Ok(observability)
+    }
+
+    /// Initialize minimal observability system without monitoring features
+    #[cfg(not(feature = "monitoring"))]
+    #[instrument(skip_all)]
+    pub async fn new_minimal(
+        config: ObservabilityConfig,
+        sli_config: SliConfig,
+        business_metrics: Arc<crate::business_metrics::BusinessMetricsHelper>,
+    ) -> Result<Self> {
+        info!("Initializing minimal observability system");
+
+        let slo_status = Arc::new(RwLock::new(SloStatus {
+            availability_percentage: 100.0,
+            latency_p95_ms: 0.0,
+            error_rate_percentage: 0.0,
+            last_updated: SystemTime::now(),
+        }));
+
+        let health_status = Arc::new(RwLock::new(HealthStatus {
+            overall_health: HealthCheckStatus::Healthy,
+            service_health: HashMap::new(),
+            resource_health: HashMap::new(),
+            last_check: SystemTime::now(),
+            timestamp: SystemTime::now(),
+        }));
+
+        let observability = Self {
+            config,
+            sli_config,
+            slo_status,
+            performance_profiles: Arc::new(RwLock::new(HashMap::new())),
+            health_status,
+            alerts: Arc::new(RwLock::new(HashMap::new())),
+            business_metrics,
+        };
+
+        // Start background monitoring tasks
+        observability.start_monitoring_tasks().await?;
+
+        info!("Minimal observability system initialized successfully");
         Ok(observability)
     }
 

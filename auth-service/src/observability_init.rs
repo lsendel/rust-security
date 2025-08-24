@@ -8,8 +8,13 @@ use axum::response::IntoResponse;
 use std::sync::Arc;
 use tracing::info;
 
+#[cfg(feature = "monitoring")]
+use crate::business_metrics::BusinessMetricsRegistry;
+
+#[cfg(not(feature = "monitoring"))]
+use crate::business_metrics::BusinessMetricsHelper as BusinessMetricsRegistry;
+
 use crate::{
-    business_metrics::BusinessMetricsRegistry,
     enhanced_observability::{
         observability_middleware, EnhancedObservability, ObservabilityConfig, SliConfig,
     },

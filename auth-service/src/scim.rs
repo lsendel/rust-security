@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use common::{ScimGroup, ScimUser};
+use common::{ScimGroup, ScimUser, Store};
 use serde::{Deserialize, Serialize};
 
 // Note: ScimUser and ScimGroup are now in the `common` crate.

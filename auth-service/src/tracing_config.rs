@@ -9,7 +9,7 @@ use std::env;
 use std::collections::HashMap;
 use std::str::FromStr;
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
-use tracing::{info, warn, Span};
+use tracing::{info, warn, Span, Instrument};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use uuid::Uuid;
@@ -466,8 +466,8 @@ impl TracingHttpClient {
 
         // Add tracing headers
         for (name, value) in context.to_headers() {
-            if let (Ok(name_str), Ok(value_str)) = (name.as_str(), value.to_str()) {
-                request = request.header(name_str, value_str);
+            if let (Some(name), Ok(value_str)) = (name, value.to_str()) {
+                request = request.header(name.as_str(), value_str);
             }
         }
 
@@ -499,8 +499,8 @@ impl TracingHttpClient {
 
         // Add tracing headers
         for (name, value) in context.to_headers() {
-            if let (Ok(name_str), Ok(value_str)) = (name.as_str(), value.to_str()) {
-                request = request.header(name_str, value_str);
+            if let (Some(name), Ok(value_str)) = (name, value.to_str()) {
+                request = request.header(name.as_str(), value_str);
             }
         }
 

@@ -243,6 +243,7 @@ impl SessionManager {
         SecurityLogger::log_event(&event);
 
         // Update metrics
+        #[cfg(feature = "monitoring")]
         SECURITY_METRICS.active_sessions.inc();
 
         Ok(session)
@@ -275,6 +276,7 @@ impl SessionManager {
         if let Some(client) = &self.redis_client {
             match self.delete_session_from_redis(client, session_id).await {
                 Ok(_) => {
+                    #[cfg(feature = "monitoring")]
                     SECURITY_METRICS.active_sessions.dec();
                     return Ok(());
                 }
@@ -287,6 +289,7 @@ impl SessionManager {
         // Fallback to memory store
         let mut store = self.memory_store.write().await;
         if store.remove(session_id).is_some() {
+            #[cfg(feature = "monitoring")]
             SECURITY_METRICS.active_sessions.dec();
         }
         Ok(())
@@ -382,6 +385,7 @@ impl SessionManager {
         // For now, we rely on Redis TTL for cleanup
 
         if cleaned_count > 0 {
+            #[cfg(feature = "monitoring")]
             SECURITY_METRICS.active_sessions.sub(cleaned_count as i64);
             info!(
                 cleaned_sessions = cleaned_count,

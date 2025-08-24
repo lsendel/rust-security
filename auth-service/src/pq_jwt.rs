@@ -264,7 +264,7 @@ impl PQJwtManager {
     /// Create a classical JWT for backward compatibility
     async fn create_classical_jwt(&self, payload: &Value) -> Result<String> {
         // Get current classical signing key from the existing keys module
-        let (kid, encoding_key) = crate::keys::current_signing_key().await;
+        let (kid, encoding_key) = crate::keys::current_signing_key().await?;
 
         let header = jsonwebtoken::Header {
             alg: Algorithm::RS256,
@@ -409,7 +409,7 @@ impl PQJwtManager {
         let header = jsonwebtoken::decode_header(token)?;
 
         // For now, just verify structure - in production, implement full verification
-        let validation = jsonwebtoken::Validation::new(Algorithm::RS256);
+        let _validation = jsonwebtoken::Validation::new(Algorithm::RS256);
 
         // This is a simplified version - in production, you'd need proper key retrieval
         let parts: Vec<&str> = token.split('.').collect();
