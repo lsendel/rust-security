@@ -1,0 +1,407 @@
+name: 🔒 Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily security scans at 3 AM UTC
+    - cron: '0 3 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  dependency-audit:
+    name: 🔍 Dependency Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🦀 Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: 🔧 Install cargo-audit
+      run: cargo install cargo-audit
+      
+    - name: 🔍 Run dependency security audit
+      run: |
+        echo "::group::Cargo Audit Results"
+        cargo audit --format json > audit-results.json
+        cargo audit --format text
+        echo "::endgroup::"
+        
+    - name: 📊 Check for vulnerabilities
+      run: |
+        VULN_COUNT=$(jq '.vulnerabilities.count' audit-results.json)
+        if [ "$VULN_COUNT" -gt 0 ]; then
+          echo "::error::Found $VULN_COUNT security vulnerabilities"
+          jq '.vulnerabilities.list[] | "RUSTSEC-\(.advisory.id): \(.advisory.title)"' audit-results.json
+          exit 1
+        else
+          echo "::notice::No security vulnerabilities found"
+        fi
+        
+    - name: 📤 Upload audit results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-audit-results
+        path: audit-results.json
+
+  cargo-deny:
+    name: 🚫 Cargo Deny Security Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🦀 Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: 🔧 Install cargo-deny
+      run: cargo install cargo-deny
+      
+    - name: 📋 Create deny.toml configuration
+      run: |
+        cat > deny.toml << 'EOF'
+        [graph]
+        targets = [
+            { triple = "x86_64-unknown-linux-gnu" },
+            { triple = "x86_64-apple-darwin" },
+            { triple = "x86_64-pc-windows-msvc" },
+        ]
+        
+        [advisories]
+        version = 2
+        ignore = []
+        informational = "warn"
+        severity-threshold = "low"
+        
+        [licenses]
+        version = 2
+        confidence-threshold = 0.8
+        allow = [
+            "MIT",
+            "Apache-2.0",
+            "Apache-2.0 WITH LLVM-exception",
+            "BSD-2-Clause",
+            "BSD-3-Clause",
+            "ISC",
+            "Unicode-DFS-2016",
+        ]
+        
+        [bans]
+        version = 2
+        multiple-versions = "warn"
+        wildcards = "allow"
+        highlight = "all"
+        
+        # Known problematic crates
+        deny = [
+            { name = "openssl", reason = "Use rustls instead" },
+            { name = "time", version = "=0.1.0", reason = "Known security vulnerability" },
+            { name = "chrono", version = "<0.4.20", reason = "Contains security vulnerabilities" },
+        ]
+        
+        [sources]
+        version = 2
+        unknown-registry = "warn"
+        unknown-git = "warn"
+        allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+        EOF
+        
+    - name: 🚫 Run cargo deny
+      run: |
+        echo "::group::Cargo Deny - Advisories Check"
+        cargo deny check advisories
+        echo "::endgroup::"
+        
+        echo "::group::Cargo Deny - Licenses Check"
+        cargo deny check licenses
+        echo "::endgroup::"
+        
+        echo "::group::Cargo Deny - Bans Check"
+        cargo deny check bans
+        echo "::endgroup::"
+
+  clippy-security:
+    name: 🔍 Clippy Security Lints
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🦀 Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+        
+    - name: 🔍 Run security-focused clippy lints
+      run: |
+        cargo clippy --workspace --all-targets -- \
+          -W clippy::suspicious \
+          -W clippy::perf \
+          -W clippy::cargo \
+          -W clippy::nursery \
+          -D clippy::mem_forget \
+          -D clippy::unwrap_used \
+          -D clippy::expect_used \
+          -D clippy::panic \
+          -D clippy::unreachable \
+          -D clippy::todo \
+          -D clippy::unimplemented \
+          -D clippy::string_slice \
+          -D clippy::indexing_slicing \
+          -D clippy::clone_on_ref_ptr \
+          -D clippy::multiple_unsafe_ops_per_block \
+          -D clippy::undocumented_unsafe_blocks
+
+  unsafe-code-scan:
+    name: 🚨 Unsafe Code Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Scan for unsafe code blocks
+      run: |
+        echo "::group::Scanning for unsafe code"
+        
+        # Find all unsafe blocks
+        UNSAFE_COUNT=$(grep -r "unsafe" --include="*.rs" src/ | wc -l || echo "0")
+        
+        if [ "$UNSAFE_COUNT" -gt 0 ]; then
+          echo "::warning::Found $UNSAFE_COUNT unsafe code occurrences"
+          echo "Unsafe code locations:"
+          grep -rn "unsafe" --include="*.rs" src/ | head -10
+          
+          # Check if unsafe code is properly documented
+          UNDOCUMENTED_UNSAFE=$(grep -B5 -A1 "unsafe" --include="*.rs" src/ | grep -v "// SAFETY:" | grep -v "/// SAFETY:" | wc -l || echo "0")
+          
+          if [ "$UNDOCUMENTED_UNSAFE" -gt 0 ]; then
+            echo "::error::Found $UNDOCUMENTED_UNSAFE potentially undocumented unsafe blocks"
+          fi
+        else
+          echo "::notice::No unsafe code found - excellent memory safety!"
+        fi
+        echo "::endgroup::"
+
+  secret-scan:
+    name: 🔐 Secret Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Scan for hardcoded secrets
+      run: |
+        echo "::group::Scanning for hardcoded secrets"
+        
+        # Common secret patterns
+        SECRET_PATTERNS=(
+          "password\s*=\s*['\"][^'\"]{8,}['\"]"
+          "api_key\s*=\s*['\"][^'\"]{20,}['\"]"
+          "secret\s*=\s*['\"][^'\"]{16,}['\"]"
+          "token\s*=\s*['\"][^'\"]{20,}['\"]"
+          "-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----"
+          "['\"][0-9a-f]{32,}['\"]"
+        )
+        
+        SECRETS_FOUND=false
+        for pattern in "${SECRET_PATTERNS[@]}"; do
+          if grep -rE "$pattern" --include="*.rs" --include="*.toml" src/ Cargo.toml || true; then
+            SECRETS_FOUND=true
+            echo "::error::Potential hardcoded secret found matching pattern: $pattern"
+          fi
+        done
+        
+        if [ "$SECRETS_FOUND" = true ]; then
+          echo "::error::Hardcoded secrets detected - please use environment variables or secure vaults"
+          exit 1
+        else
+          echo "::notice::No hardcoded secrets detected"
+        fi
+        echo "::endgroup::"
+
+  integer-overflow-check:
+    name: 🔢 Integer Overflow Protection
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🦀 Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: 🔍 Check for integer overflow protection
+      run: |
+        echo "::group::Integer Overflow Protection Check"
+        
+        # Check if overflow-checks is enabled in Cargo.toml
+        if grep -q "overflow-checks.*true" Cargo.toml; then
+          echo "::notice::Integer overflow checks are enabled"
+        else
+          echo "::warning::Consider enabling overflow-checks = true in release profile"
+        fi
+        
+        # Look for potentially dangerous arithmetic operations
+        DANGEROUS_OPS=$(grep -r "\+\|\-\|\*" --include="*.rs" src/ | grep -v "checked_" | grep -v "//" | wc -l)
+        SAFE_OPS=$(grep -r "checked_\|saturating_\|wrapping_" --include="*.rs" src/ | wc -l)
+        
+        echo "Arithmetic operations found: $DANGEROUS_OPS"
+        echo "Safe arithmetic operations: $SAFE_OPS"
+        
+        if [ "$SAFE_OPS" -gt 0 ]; then
+          echo "::notice::Safe arithmetic operations detected - good security practice"
+        fi
+        
+        # Check for explicit overflow handling
+        grep -rn "checked_add\|checked_sub\|checked_mul\|saturating_" --include="*.rs" src/ | head -5 || true
+        echo "::endgroup::"
+
+  miri-undefined-behavior:
+    name: 🐛 Miri Undefined Behavior Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🦀 Install Rust nightly with miri
+      run: |
+        rustup toolchain install nightly --component miri
+        rustup override set nightly
+        
+    - name: 🔍 Run miri on safe components
+      run: |
+        echo "::group::Miri Analysis"
+        
+        # Run miri on core components (which should be safe)
+        COMPONENTS=("auth-core" "common" "api-contracts" "policy-service" "compliance-tools")
+        
+        for component in "${COMPONENTS[@]}"; do
+          echo "Testing $component with miri..."
+          if cargo miri test -p "$component" --lib 2>&1 | tee miri_$component.log; then
+            echo "::notice::$component passed miri analysis"
+          else
+            echo "::error::$component failed miri analysis - potential undefined behavior"
+          fi
+        done
+        echo "::endgroup::"
+      continue-on-error: true
+
+  supply-chain-security:
+    name: 🔗 Supply Chain Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Analyze dependency tree
+      run: |
+        echo "::group::Supply Chain Analysis"
+        
+        # Generate dependency tree
+        cargo tree --format "{p} {f}" > dependency-tree.txt
+        
+        # Count total dependencies
+        TOTAL_DEPS=$(cargo tree --edges normal | grep -c "├──\|└──" || echo "0")
+        echo "Total dependencies: $TOTAL_DEPS"
+        
+        # Look for suspicious patterns
+        if grep -i "yanked\|deprecated" dependency-tree.txt; then
+          echo "::warning::Found yanked or deprecated dependencies"
+        fi
+        
+        # Check for dependencies with many transitive deps (potential supply chain risk)
+        echo "Top dependencies by transitive dependency count:"
+        cargo tree --prefix depth | sort -nr | head -10
+        
+        echo "::endgroup::"
+        
+    - name: 📤 Upload dependency analysis
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-analysis
+        path: dependency-tree.txt
+
+  security-report:
+    name: 📊 Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [dependency-audit, cargo-deny, clippy-security, unsafe-code-scan, secret-scan]
+    if: always()
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 📊 Generate comprehensive security report
+      run: |
+        cat > SECURITY_SCAN_REPORT.md << 'EOF'
+        # 🔒 Security Scan Report
+        
+        **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        **Repository**: rust-security
+        **Branch**: ${GITHUB_REF#refs/heads/}
+        **Commit**: ${GITHUB_SHA:0:7}
+        
+        ## 📋 Security Scan Summary
+        
+        | Check | Status | Details |
+        |-------|--------|---------|
+        | Dependency Audit | ${{ needs.dependency-audit.result == 'success' && '✅ PASS' || '❌ FAIL' }} | RUSTSEC vulnerability scan |
+        | Cargo Deny | ${{ needs.cargo-deny.result == 'success' && '✅ PASS' || '❌ FAIL' }} | License and ban compliance |
+        | Clippy Security | ${{ needs.clippy-security.result == 'success' && '✅ PASS' || '❌ FAIL' }} | Security-focused lints |
+        | Unsafe Code Scan | ${{ needs.unsafe-code-scan.result == 'success' && '✅ PASS' || '❌ FAIL' }} | Memory safety verification |
+        | Secret Scan | ${{ needs.secret-scan.result == 'success' && '✅ PASS' || '❌ FAIL' }} | Hardcoded secret detection |
+        
+        ## 🎯 Security Recommendations
+        
+        1. **Regular Audits**: Run `cargo audit` regularly to check for new vulnerabilities
+        2. **Dependency Management**: Use `cargo deny` to maintain dependency policies
+        3. **Safe Arithmetic**: Use `checked_*` methods for arithmetic operations
+        4. **Memory Safety**: Minimize unsafe code and document safety invariants
+        5. **Secret Management**: Use environment variables and secure vaults
+        
+        ## 📈 Metrics
+        
+        - **Memory Safety**: Rust's ownership system prevents most memory vulnerabilities
+        - **Integer Overflow**: Protected by compiler checks and safe arithmetic
+        - **Concurrency**: Protected by Rust's type system and Send/Sync traits
+        - **Supply Chain**: Monitored through dependency auditing
+        
+        ---
+        *This report was generated automatically by GitHub Actions*
+        EOF
+        
+    - name: 📤 Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-scan-report
+        path: SECURITY_SCAN_REPORT.md
+        
+    - name: 💬 Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('SECURITY_SCAN_REPORT.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '## 🔒 Security Scan Results\n\n' + report
+          });

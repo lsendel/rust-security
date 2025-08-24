@@ -277,7 +277,23 @@ impl AsyncSecurityExecutor {
         let mut results = Vec::with_capacity(operations.len());
         let chunk_size = self.config.batch_size.min(operations.len());
 
-        for chunk in operations.chunks(chunk_size) {
+        // Convert Vec<F> to Vec<Vec<F>> for chunking
+        let mut operations_iter = operations.into_iter();
+        let mut chunks = Vec::new();
+        
+        while let Some(operation) = operations_iter.next() {
+            let mut chunk = vec![operation];
+            for _ in 1..chunk_size {
+                if let Some(op) = operations_iter.next() {
+                    chunk.push(op);
+                } else {
+                    break;
+                }
+            }
+            chunks.push(chunk);
+        }
+
+        for chunk in chunks {
             let mut batch_futures = Vec::new();
 
             for operation in chunk {
