@@ -45,7 +45,7 @@ impl Default for CsrfConfig {
         
         Self {
             secret_key,
-            token_lifetime: Duration::from_hours(24),
+            token_lifetime: Duration::from_secs(24 * 60 * 60), // 24 hours
             cookie_name: "csrf_token".to_string(),
             header_name: "X-CSRF-Token".to_string(),
             form_field_name: "csrf_token".to_string(),

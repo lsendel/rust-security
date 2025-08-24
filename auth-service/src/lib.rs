@@ -12,7 +12,10 @@ pub const MAX_REQUEST_BODY_SIZE: usize = 1_048_576;
 /// Application state shared across handlers
 #[derive(Clone)]
 pub struct AppState {
+    #[cfg(feature = "enhanced-session-store")]
     pub store: Arc<HybridStore>,
+    #[cfg(feature = "api-keys")]
+    pub api_key_store: Arc<crate::api_key_store::ApiKeyStore>,
 }
 
 // Missing function implementation - stub for compilation
@@ -75,7 +78,7 @@ pub struct JwtClaims {
     pub exp: Option<i64>,
     pub nbf: Option<i64>,
     pub iat: Option<i64>,
-    pub sub: Option<String>,
+    pub jti: Option<String>,
     pub token_binding: Option<String>,
 }
 
@@ -179,7 +182,7 @@ pub mod key_management;
 pub mod key_rotation;
 pub mod keys;
 pub mod keys_optimized;
-pub mod keys_ring;
+// pub mod keys_ring; // Temporarily disabled - uses removed RSA dependency
 pub mod keys_secure;
 // pub mod main; // Removed - main.rs should not be a module in lib.rs
 #[cfg(feature = "monitoring")]

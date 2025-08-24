@@ -322,7 +322,7 @@ impl RegressionTestSuite {
 
             let mut results = Vec::new();
 
-            for (request, scenario) in test_scenarios {
+            for (request, _scenario) in test_scenarios {
                 let response = client
                     .post(&format!("{}/v1/authorize", policy_base_url))
                     .header("Content-Type", "application/json")

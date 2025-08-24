@@ -4,7 +4,7 @@
 use once_cell::sync::Lazy;
 use ring::{
     rand::SystemRandom,
-    signature::{RsaKeyPair, RSA_PKCS1_SHA256, KeyPair},
+    signature::{Ed25519KeyPair, ED25519, KeyPair},
     error::Unspecified,
 };
 use base64::Engine as _;
@@ -16,7 +16,7 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct OptimizedSecureKeyMaterial {
     pub kid: String,
-    pub keypair: Arc<RsaKeyPair>,
+    pub keypair: Arc<Ed25519KeyPair>,
     pub public_jwk: Value,
     pub created_at: u64,
     pub usage_count: Arc<std::sync::atomic::AtomicU64>,
@@ -48,26 +48,25 @@ impl OptimizedSecureKeyManager {
         }
     }
 
-    /// Generate a new secure key using ring
+    /// Generate a new secure key using Ed25519 (more secure and performant than RSA)
     async fn generate_key(&self) -> Result<OptimizedSecureKeyMaterial, Unspecified> {
-        let keypair = RsaKeyPair::generate_pkcs1(&self.rng, 2048)?;
+        // Generate Ed25519 key pair using Ring
+        let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&self.rng)?;
+        let keypair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
+        
         let kid = format!("opt-key-{}", self.now_unix());
 
-        // Extract public key components for JWK
-        let public_key = keypair.public_key();
-        let public_key_der = public_key.as_ref();
-
-        // Parse DER to extract modulus and exponent
-        let (n, e) = self.extract_rsa_components(public_key_der)?;
+        // Create JWK for Ed25519
+        let public_key_bytes = keypair.public_key().as_ref();
+        let public_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public_key_bytes);
 
         let public_jwk = serde_json::json!({
-            "kty": "RSA",
+            "kty": "OKP",
+            "crv": "Ed25519", 
             "use": "sig",
-            "key_ops": ["verify"],
-            "alg": "RS256",
             "kid": kid,
-            "n": self.base64url(&n),
-            "e": self.base64url(&e)
+            "x": public_key_b64,
+            "alg": "EdDSA"
         });
 
         Ok(OptimizedSecureKeyMaterial {
@@ -145,8 +144,8 @@ impl OptimizedSecureKeyManager {
             // Increment usage counter
             key_material.usage_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            let signature = key_material.keypair.sign(&RSA_PKCS1_SHA256, payload)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+            // Ed25519 signing is simpler and more secure
+            let signature = key_material.keypair.sign(payload);
             Ok(signature.as_ref().to_vec())
         } else {
             Err("No signing key available".into())
@@ -183,20 +182,6 @@ impl OptimizedSecureKeyManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs()
-    }
-
-    fn extract_rsa_components(&self, der: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Unspecified> {
-        // Standard RSA exponent (65537)
-        let e = vec![0x01, 0x00, 0x01];
-
-        if der.len() < 256 {
-            return Err(Unspecified);
-        }
-
-        // Extract the last 256 bytes as the modulus (simplified)
-        let n = der[der.len() - 256..].to_vec();
-
-        Ok((n, e))
     }
 }
 

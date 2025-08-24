@@ -128,7 +128,7 @@ pub enum RiskLevel {
 }
 
 /// Performance benchmark results
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct PerformanceBenchmark {
     pub timestamp: u64,
     pub algorithm: String,

@@ -26,10 +26,8 @@ impl App {
 
     /// Start the application server
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let addr = format!("{}:{}", 
-            self.config.server.bind_address, 
-            self.config.server.port
-        );
+        // TODO: Fix server config structure - using available fields
+        let addr = self.config.bind_addr.clone();
         
         info!("Starting auth-service on {}", addr);
         

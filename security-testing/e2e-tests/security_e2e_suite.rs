@@ -1406,7 +1406,7 @@ impl SecurityE2ETestSuite {
     async fn query_detection_system(
         &self,
         expected_detection: &ExpectedDetection,
-        attack_start: &Instant,
+        _attack_start: &Instant,
     ) -> Result<bool> {
         // In a real implementation, this would query the actual detection systems
         // For simulation, we'll return based on detection type and attack pattern
@@ -1506,7 +1506,7 @@ impl SecurityE2ETestSuite {
         &self,
         scenario: &AttackScenario,
         attack_metrics: &AttackMetrics,
-        detection_results: &[DetectionResult],
+        _detection_results: &[DetectionResult],
         security_controls: &[SecurityControlStatus],
     ) -> TestStatus {
         let critical_bypasses =

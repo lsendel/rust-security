@@ -6,7 +6,7 @@ use deadpool_redis::{
 use bb8_redis::RedisConnectionManager;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
@@ -129,12 +129,13 @@ pub struct PoolStatistics {
     pub avg_response_time: Duration,
     pub circuit_breaker_state: String,
     pub connection_errors: u64,
-    pub last_health_check: Option<Instant>,
+    pub last_health_check: Option<SystemTime>,
 }
 
 /// Optimized connection pool manager with security-focused features
 pub struct OptimizedConnectionPool {
     redis_pool: RedisPool,
+    bb8_pool: Arc<bb8::Pool<RedisConnectionManager>>,
     multiplexed_pool: Option<Arc<RwLock<Vec<RedisConnection>>>>,
     config: ConnectionPoolConfig,
     circuit_breaker: Arc<RwLock<CircuitBreaker>>,
@@ -144,8 +145,8 @@ pub struct OptimizedConnectionPool {
 
 #[derive(Debug, Clone)]
 struct ConnectionMetrics {
-    created_at: Instant,
-    last_used: Instant,
+    created_at: SystemTime,
+    last_used: SystemTime,
     total_operations: u64,
     total_duration: Duration,
 }

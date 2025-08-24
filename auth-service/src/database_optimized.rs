@@ -3,10 +3,10 @@ use deadpool_redis::{Config as RedisConfig, Pool as RedisPool, Runtime};
 #[cfg(feature = "enhanced-session-store")]
 use bb8_redis::RedisConnectionManager;
 use once_cell::sync::Lazy;
-use rayon::prelude::*;
+use sha2::Digest;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime, Instant};
 use tokio::sync::RwLock;
 
 /// Optimized database operations with security constraints
@@ -29,7 +29,7 @@ pub struct SecurityConstraints {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedQuery {
     pub result: String,
-    pub created_at: Instant,
+    pub created_at: SystemTime,
     pub ttl: Duration,
     pub is_encrypted: bool,
 }
@@ -467,13 +467,18 @@ impl DatabaseOptimized {
         hash_map: std::collections::HashMap<String, String>,
     ) -> crate::IntrospectionRecord {
         crate::IntrospectionRecord {
+            token: hash_map.get("token").cloned().unwrap_or_default(),
             active: hash_map.get("active").map(|v| v == "1").unwrap_or(false),
             scope: hash_map.get("scope").cloned(),
             client_id: hash_map.get("client_id").cloned(),
+            username: hash_map.get("username").cloned(),
             exp: hash_map.get("exp").and_then(|v| v.parse().ok()),
             iat: hash_map.get("iat").and_then(|v| v.parse().ok()),
+            nbf: hash_map.get("nbf").and_then(|v| v.parse().ok()),
             sub: hash_map.get("sub").cloned(),
-            token_binding: hash_map.get("token_binding").cloned(),
+            aud: hash_map.get("aud").cloned(),
+            iss: hash_map.get("iss").cloned(),
+            jti: hash_map.get("jti").cloned(),
         }
     }
 

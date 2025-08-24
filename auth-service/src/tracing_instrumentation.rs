@@ -189,7 +189,8 @@ impl AuthFlowTracer {
         }
 
         // Record metrics
-        if let Ok(metrics) = self.observability.metrics().read().await {
+        {
+            let metrics = self.observability.metrics().read().await;
             metrics.record_auth_attempt(
                 flow_type,
                 true, // Starting attempt
@@ -293,7 +294,8 @@ impl AuthFlowTracer {
         self.performance_tracker.checkpoint("policy_evaluation_start");
 
         // Record policy evaluation metric
-        if let Ok(metrics) = self.observability.metrics().read().await {
+        {
+            let metrics = self.observability.metrics().read().await;
             metrics.policy_evaluations_total.add(1, &[
                 KeyValue::new("policy_id", policy_id.to_string()),
                 KeyValue::new("resource", resource.to_string()),
@@ -340,7 +342,8 @@ impl AuthFlowTracer {
         self.performance_tracker.checkpoint("db_operation_start");
 
         // Record database operation metric
-        if let Ok(metrics) = self.observability.metrics().read().await {
+        {
+            let metrics = self.observability.metrics().read().await;
             metrics.database_operations_total.add(1, &[
                 KeyValue::new("operation", operation.to_string()),
                 KeyValue::new("table", table.to_string()),
@@ -381,7 +384,8 @@ impl AuthFlowTracer {
         );
 
         // Record security event metric
-        if let Ok(metrics) = self.observability.metrics().read().await {
+        {
+            let metrics = self.observability.metrics().read().await;
             metrics.record_security_event(
                 event_type,
                 severity,
@@ -484,7 +488,8 @@ impl TokenValidationSpan {
         self.span.set_attribute(KeyValue::new("token.validation_duration_ms", duration.as_millis() as i64));
 
         // Record metrics
-        if let Ok(metrics) = self.observability.metrics().read().await {
+        {
+            let metrics = self.observability.metrics().read().await;
             metrics.token_validation_duration.record(duration.as_secs_f64(), &[
                 KeyValue::new("token_type", self.token_type.clone()),
                 KeyValue::new("result", "success".to_string()),
@@ -507,7 +512,8 @@ impl TokenValidationSpan {
         self.span.set_attribute(KeyValue::new("token.validation_duration_ms", duration.as_millis() as i64));
 
         // Record metrics
-        if let Ok(metrics) = self.observability.metrics().read().await {
+        {
+            let metrics = self.observability.metrics().read().await;
             metrics.token_validation_duration.record(duration.as_secs_f64(), &[
                 KeyValue::new("token_type", self.token_type.clone()),
                 KeyValue::new("result", "failure".to_string()),

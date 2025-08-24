@@ -42,7 +42,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
                     KeyValue::new("service.namespace", "rust-security"),
                 ])),
         )
-        .install_batch(opentelemetry::runtime::Tokio)?;
+        .install_simple()?;
 
     // Configure tracing subscriber with multiple layers
     let telemetry_layer = OpenTelemetryLayer::new(tracer);
@@ -64,7 +64,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
                 .with_thread_ids(true)
                 .with_file(true)
                 .with_line_number(true)
-                .json() // Use JSON format for structured logging
+                .with_writer(std::io::stdout) // Use structured logging
         )
         .with(telemetry_layer)
         .init();

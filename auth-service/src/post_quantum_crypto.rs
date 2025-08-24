@@ -927,7 +927,7 @@ pub struct MigrationStatus {
     pub features_available: PQFeatures,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PQFeatures {
     pub dilithium: bool,
     pub kyber: bool,

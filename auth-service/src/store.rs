@@ -72,6 +72,12 @@ impl HybridStore {
             None => None,
         }
     }
+
+    /// Get token record - stub implementation for compilation
+    pub async fn get_token_record(&self, _token: &str) -> Result<Option<crate::IntrospectionRecord>, crate::errors::AuthError> {
+        // TODO: Implement proper token record retrieval
+        Ok(None)
+    }
 }
 
 #[async_trait]

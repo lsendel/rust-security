@@ -41,7 +41,7 @@ opentelemetry = { version = "0.21", optional = true }
 tracing-opentelemetry = { version = "0.22", optional = true }
 
 # Validation
-validator = { version = "0.18", features = ["derive"] }
+validator = { version = "0.19", features = ["derive"] }
 regex = "1.10"
 rand = "0.8"
 url = "2.4"

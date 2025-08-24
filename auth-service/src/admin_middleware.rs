@@ -14,9 +14,11 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::OnceCell;
 
+#[cfg(feature = "rate-limiting")]
 /// Global replay protection instance
 static REPLAY_PROTECTION: OnceCell<Arc<ReplayProtection>> = OnceCell::const_new();
 
+#[cfg(feature = "rate-limiting")]
 /// Global rate limiter instance
 static RATE_LIMITER: OnceCell<Arc<AdminRateLimiter>> = OnceCell::const_new();
 
@@ -54,6 +56,7 @@ impl Default for AdminAuthConfig {
 }
 
 /// Initialize replay protection and rate limiter
+#[cfg(feature = "rate-limiting")]
 async fn init_security_components(config: &AdminAuthConfig) {
     // Initialize replay protection
     let replay_protection = Arc::new(ReplayProtection::new(
@@ -69,6 +72,11 @@ async fn init_security_components(config: &AdminAuthConfig) {
         60, // 1 minute window
     ));
     let _ = RATE_LIMITER.set(rate_limiter);
+}
+
+#[cfg(not(feature = "rate-limiting"))]
+async fn init_security_components(_config: &AdminAuthConfig) {
+    // No-op when rate limiting is disabled
 }
 
 /// Admin authentication middleware for protecting admin endpoints
@@ -97,6 +105,7 @@ pub async fn admin_auth_middleware(
     };
 
     // Apply rate limiting per admin key
+    #[cfg(feature = "rate-limiting")]
     if let Some(rate_limiter) = RATE_LIMITER.get() {
         if let Err(_) = rate_limiter.check_rate_limit(&admin_key) {
             tracing::warn!(

@@ -537,7 +537,7 @@ impl RegressionTestSuite {
 
             let mut validation_results = Vec::new();
 
-            for (body, expected_status) in invalid_requests {
+            for (body, _expected_status) in invalid_requests {
                 let response = client
                     .post(&format!("{}/oauth/token", auth_base_url))
                     .header("Content-Type", "application/x-www-form-urlencoded")

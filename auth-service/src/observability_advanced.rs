@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn, error, debug, Span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use opentelemetry::{
-    trace::{TraceContextExt, Tracer, TracerProvider, SpanKind, Status},
+    trace::{TraceContextExt, Tracer, TracerProvider, SpanKind, Status, Span as OtelSpan},
     Context, KeyValue,
 };
 use opentelemetry_sdk::{
@@ -210,7 +210,7 @@ impl TracingContext {
 /// Advanced observability manager
 pub struct ObservabilityManager {
     config: ObservabilityConfig,
-    tracer: Option<Box<dyn Tracer + Send + Sync>>,
+    tracer: Option<opentelemetry::global::BoxedTracer>,
     active_spans: Arc<RwLock<HashMap<String, StandardSpan>>>,
     metrics_collector: Arc<RwLock<MetricsCollector>>,
     business_metrics: Arc<RwLock<BusinessMetricsCollector>>,
@@ -235,7 +235,7 @@ impl ObservabilityManager {
     }
 
     /// Setup distributed tracing
-    async fn setup_tracing(config: &ObservabilityConfig) -> Result<Box<dyn Tracer + Send + Sync>, ObservabilityError> {
+    async fn setup_tracing(config: &ObservabilityConfig) -> Result<opentelemetry::global::BoxedTracer, ObservabilityError> {
         #[cfg(feature = "opentelemetry")]
         {
             let tracer = opentelemetry_jaeger::new_agent_pipeline()

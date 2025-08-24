@@ -91,7 +91,7 @@ pub struct VelocityModel {
     recent_transactions: HashMap<String, Vec<TransactionEvent>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VelocityThreshold {
     pub max_per_minute: u32,
     pub max_per_hour: u32,

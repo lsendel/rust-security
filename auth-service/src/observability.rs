@@ -6,7 +6,7 @@
 use opentelemetry::{
     global,
     metrics::{Counter, Histogram, Meter, MeterProvider, Unit},
-    trace::{SpanKind, TraceContextExt, Tracer},
+    trace::{SpanKind, TraceContextExt, Tracer, Span, Status},
     Context, KeyValue,
 };
 use opentelemetry_otlp::{WithExportConfig, TonicConfig};

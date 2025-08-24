@@ -449,7 +449,7 @@ fn load_private_key(key_path: &str) -> SecurityResult<PrivateKeyDer> {
         .ok_or(SecurityError::CryptographicFailure)
 }
 
-fn load_client_cert_verifier(ca_cert_path: Option<&str>) -> SecurityResult<Arc<dyn rustls::server::ClientCertVerifier>> {
+fn load_client_cert_verifier(ca_cert_path: Option<&str>) -> SecurityResult<Arc<dyn rustls::server::danger::ClientCertVerifier>> {
     let root_store = load_ca_certificates(ca_cert_path)?;
     Ok(rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store)).build().map_err(|_| SecurityError::CryptographicFailure)?)
 }

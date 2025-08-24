@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime, Instant};
 use tokio::sync::RwLock;
 use tracing::{info, warn, error, debug};
 use serde::{Deserialize, Serialize};
@@ -100,7 +100,7 @@ pub struct CircuitMetrics {
     pub failure_rate: f64,
     pub slow_call_rate: f64,
     pub last_failure_time: Option<Instant>,
-    pub state_transition_time: Instant,
+    pub state_transition_time: SystemTime,
     pub half_open_calls: u32,
     pub consecutive_failures: u32,
     pub consecutive_successes: u32,
@@ -432,7 +432,7 @@ pub struct CircuitHealthStatus {
     pub recent_failures: usize,
     pub recent_slow_calls: usize,
     pub uptime_percentage: f64,
-    pub last_failure: Option<Instant>,
+    pub last_failure: Option<SystemTime>,
 }
 
 /// Circuit breaker registry for managing multiple circuit breakers

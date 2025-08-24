@@ -255,7 +255,10 @@ pub async fn create_pq_jwt(
         force_pq,
     )
     .await
-    .map_err(|e| AuthError::InternalError(e))?;
+    .map_err(|e| AuthError::InternalError { 
+        error_id: uuid::Uuid::new_v4(), 
+        context: e.to_string() 
+    })?;
 
     // Log token creation
     SecurityLogger::log_event(
@@ -297,23 +300,26 @@ pub async fn run_pq_benchmark(
         "DILITHIUM3" => PQAlgorithm::Dilithium(SecurityLevel::Level3),
         "DILITHIUM5" => PQAlgorithm::Dilithium(SecurityLevel::Level5),
         _ => {
-            return Err(AuthError::InvalidRequest(
-                "Unsupported algorithm".to_string(),
-            ))
+            return Err(AuthError::InvalidRequest { 
+                reason: "Unsupported algorithm".to_string() 
+            })
         }
     };
 
     let iterations = request.iterations.unwrap_or(100);
 
     if iterations > 10000 {
-        return Err(AuthError::InvalidRequest(
-            "Too many iterations (max 10000)".to_string(),
-        ));
+        return Err(AuthError::InvalidRequest { 
+            reason: "Too many iterations (max 10000)".to_string() 
+        });
     }
 
     let benchmark = run_benchmark(algorithm, iterations)
         .await
-        .map_err(|e| AuthError::InternalError(e))?;
+        .map_err(|e| AuthError::InternalError { 
+            error_id: uuid::Uuid::new_v4(), 
+            context: e.to_string() 
+        })?;
 
     Ok(Json(benchmark))
 }
@@ -352,7 +358,10 @@ pub async fn force_key_rotation(
     let rotated_keys = key_manager
         .rotate_keys(reason)
         .await
-        .map_err(|e| AuthError::InternalError(e))?;
+        .map_err(|e| AuthError::InternalError { 
+            error_id: uuid::Uuid::new_v4(), 
+            context: e.to_string() 
+        })?;
 
     // Log key rotation
     SecurityLogger::log_event(
@@ -395,7 +404,10 @@ pub async fn start_migration_phase(
     migration_manager
         .start_phase(&request.phase_id)
         .await
-        .map_err(|e| AuthError::InternalError(e))?;
+        .map_err(|e| AuthError::InternalError { 
+            error_id: uuid::Uuid::new_v4(), 
+            context: e.to_string() 
+        })?;
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -440,9 +452,9 @@ pub async fn emergency_rollback(
     Json(request): Json<EmergencyRollbackRequest>,
 ) -> Result<Json<serde_json::Value>, AuthError> {
     if !request.confirm {
-        return Err(AuthError::InvalidRequest(
-            "Emergency rollback requires confirmation".to_string(),
-        ));
+        return Err(AuthError::InvalidRequest { 
+            reason: "Emergency rollback requires confirmation".to_string() 
+        });
     }
 
     let trigger = match request.trigger.as_str() {
@@ -451,9 +463,9 @@ pub async fn emergency_rollback(
         "quantum_threat" => EmergencyTrigger::QuantumThreatEscalation,
         "manual" => EmergencyTrigger::Manual,
         _ => {
-            return Err(AuthError::InvalidRequest(
-                "Invalid trigger type".to_string(),
-            ))
+            return Err(AuthError::InvalidRequest { 
+                reason: "Invalid trigger type".to_string() 
+            })
         }
     };
 
