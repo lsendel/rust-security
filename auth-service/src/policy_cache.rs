@@ -122,7 +122,7 @@ impl PolicyCache {
         }
 
         let key = self.generate_cache_key(request);
-        let policy_type = &request.action;
+        let _policy_type = &request.action;
 
         if let Some(mut entry) = self.cache.get_mut(&key) {
             // Check if entry is still valid
@@ -141,17 +141,17 @@ impl PolicyCache {
                 );
 
                 // Record cache hit metrics
-                let duration = start_time.elapsed();
+                let _duration = start_time.elapsed();
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .policy_cache_operations
-                    .with_label_values(&["get", "hit", policy_type])
+                    .with_label_values(&["get", "hit", _policy_type])
                     .inc();
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .cache_operation_duration
                     .with_label_values(&["policy", "get"])
-                    .observe(duration.as_secs_f64());
+                    .observe(_duration.as_secs_f64());
 
                 return Some(entry.response.clone());
             } else {
@@ -174,17 +174,17 @@ impl PolicyCache {
         stats.misses += 1;
 
         // Record cache miss metrics
-        let duration = start_time.elapsed();
+        let _duration = start_time.elapsed();
         #[cfg(feature = "monitoring")]
         METRICS
             .policy_cache_operations
-            .with_label_values(&["get", "miss", policy_type])
+            .with_label_values(&["get", "miss", _policy_type])
             .inc();
         #[cfg(feature = "monitoring")]
         METRICS
             .cache_operation_duration
             .with_label_values(&["policy", "get"])
-            .observe(duration.as_secs_f64());
+            .observe(_duration.as_secs_f64());
 
         None
     }

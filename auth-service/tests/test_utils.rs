@@ -417,7 +417,7 @@ impl TestAssertions for Response {
         // This would need to be implemented based on the actual response body
         // For now, we'll just check headers don't contain sensitive info
         let headers = self.headers();
-        for (name, value) in headers.iter() {
+        for (_name, value) in headers.iter() {
             let value_str = value.to_str().unwrap_or("");
             assert!(!value_str.contains("password"));
             assert!(!value_str.contains("secret"));

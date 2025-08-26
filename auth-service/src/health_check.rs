@@ -312,13 +312,13 @@ impl HealthChecker {
 
     /// Determine overall health status
     async fn determine_overall_status(&self, components: &HashMap<String, ComponentHealth>) -> HealthStatus {
-        let mut healthy_count = 0;
+        let mut _healthy_count = 0;
         let mut degraded_count = 0;
         let mut unhealthy_count = 0;
 
         for health in components.values() {
             match health.status {
-                HealthStatus::Healthy => healthy_count += 1,
+                HealthStatus::Healthy => _healthy_count += 1,
                 HealthStatus::Degraded => degraded_count += 1,
                 HealthStatus::Unhealthy => unhealthy_count += 1,
             }

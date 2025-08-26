@@ -28,7 +28,7 @@ use crate::{
 };
 
 use crate::{
-    security_logging::{SecurityEvent, SecurityLogger, SecuritySeverity},
+    security_logging::{SecurityEvent, SecuritySeverity},
 };
 
 /// Service Level Indicators (SLIs) configuration

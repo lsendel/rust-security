@@ -2,7 +2,6 @@
 //!
 //! Basic application setup and configuration
 
-use std::sync::Arc;
 use axum::{Router, routing::{get, post}, http::StatusCode};
 
 /// Application configuration

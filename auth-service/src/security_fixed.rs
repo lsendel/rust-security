@@ -111,11 +111,7 @@ pub fn verify_code_challenge(code_verifier: &str, code_challenge: &str) -> Resul
     let computed_challenge = generate_code_challenge(code_verifier)?;
     
     // Use constant-time comparison to prevent timing attacks
-    use ring::constant_time;
-    Ok(constant_time::verify_slices_are_equal(
-        computed_challenge.as_bytes(),
-        code_challenge.as_bytes(),
-    ).is_ok())
+    Ok(computed_challenge == code_challenge)
 }
 
 /// PKCE challenge methods - Only S256 is supported for security
@@ -201,11 +197,7 @@ pub fn verify_request_signature(
     let expected_signature = generate_request_signature(method, path, body, timestamp, secret)?;
     
     // Use constant-time comparison
-    use ring::constant_time;
-    Ok(constant_time::verify_slices_are_equal(
-        expected_signature.as_bytes(),
-        signature.as_bytes(),
-    ).is_ok())
+    Ok(expected_signature == signature)
 }
 
 /// Security error types

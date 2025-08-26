@@ -10,19 +10,19 @@
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response, Redirect},
+    response::Redirect,
     Json,
 };
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
+use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::info;
 use uuid::Uuid;
-use validator::{Validate, ValidationError};
+use validator::Validate;
 
 /// Application state for authentication
 #[derive(Clone)]

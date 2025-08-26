@@ -39,6 +39,7 @@ pub struct TokenClaims {
 }
 
 /// Authentication service trait
+#[allow(async_fn_in_trait)]
 pub trait AuthService: Send + Sync {
     /// Authenticate a user
     async fn authenticate(&self, request: AuthRequest) -> Result<AuthResult, AuthError>;
@@ -68,12 +69,12 @@ pub enum AuthError {
 
 /// Default authentication service implementation
 pub struct DefaultAuthService {
-    config: std::sync::Arc<crate::config::AppConfig>,
+    _config: std::sync::Arc<crate::config::AppConfig>,
 }
 
 impl DefaultAuthService {
     pub fn new(config: std::sync::Arc<crate::config::AppConfig>) -> Self {
-        Self { config }
+        Self { _config: config }
     }
 }
 

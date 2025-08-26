@@ -10,8 +10,17 @@ categories = ["web-programming::http-server", "authentication"]
 repository = "https://github.com/lsendel/rust-security"
 readme = "README.md"
 
-[lints]
-workspace = true
+[lints.rust]
+unused_crate_dependencies = "allow"
+unused_imports = "warn"
+dead_code = "warn"
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+cargo = "warn"
+nursery = "warn"
 
 [dependencies]
 axum = { workspace = true }

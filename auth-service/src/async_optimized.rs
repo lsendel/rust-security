@@ -1,5 +1,5 @@
 use redis::{Client, RedisError};
-use redis::aio::Connection;
+use redis::aio::MultiplexedConnection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -46,7 +46,7 @@ impl AsyncTokenStorage {
             .arg(&json_data)
             .arg("EX")
             .arg(3600) // 1 hour expiration
-            .query_async(&mut conn)
+            .query_async::<()>(&mut conn)
             .await?;
         
         Ok(())
@@ -84,9 +84,9 @@ impl AsyncTokenStorage {
     }
 
     /// Get an async Redis connection
-    async fn get_connection(&self) -> Result<Connection, TokenError> {
+    async fn get_connection(&self) -> Result<MultiplexedConnection, TokenError> {
         self.client
-            .get_async_connection()
+            .get_multiplexed_async_connection()
             .await
             .map_err(TokenError::Connection)
     }

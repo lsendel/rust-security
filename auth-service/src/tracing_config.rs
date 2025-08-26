@@ -3,6 +3,7 @@ use opentelemetry_sdk::{
     trace::{self, RandomIdGenerator, Sampler},
     Resource,
 };
+#[allow(deprecated)]
 use opentelemetry_jaeger::new_agent_pipeline;
 use rand::RngCore;
 use std::env;
@@ -23,6 +24,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
     let service_version = env::var("SERVICE_VERSION").unwrap_or_else(|_| "0.1.0".to_string());
 
     // Configure OpenTelemetry tracer
+    #[allow(deprecated)]
     let tracer = new_agent_pipeline()
         .with_service_name(service_name)
         .with_endpoint(&jaeger_endpoint)
