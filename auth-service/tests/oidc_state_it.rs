@@ -4,7 +4,7 @@ use reqwest::Client;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::RwLock;
+// Removed unused import: use tokio::sync::RwLock;
 
 async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();

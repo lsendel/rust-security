@@ -255,11 +255,9 @@ pub mod observability_init;
 #[cfg(feature = "rate-limiting")]
 pub mod per_ip_rate_limit;
 // Removed performance monitoring for MVP
-// #[cfg(feature = "monitoring")]
-// pub mod performance_monitor;
-// #[cfg(feature = "monitoring")]
-// pub mod performance_monitoring;
-// pub mod performance_optimizer;
+// pub mod performance_monitor;  // Temporarily disabled - requires prometheus feature
+// pub mod performance_monitoring; // Temporarily disabled - requires prometheus feature
+pub mod performance_optimizer;
 // Removed PII protection and policy cache for MVP
 // pub mod pii_audit_tests;
 pub mod pii_protection;

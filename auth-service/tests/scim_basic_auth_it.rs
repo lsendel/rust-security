@@ -8,7 +8,7 @@ use reqwest::Client;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::RwLock;
+// Removed unused import: use tokio::sync::RwLock;
 
 async fn spawn_app() -> String {
     std::env::set_var("SCIM_BASIC_CREDENTIALS", "scimuser:scimpass");

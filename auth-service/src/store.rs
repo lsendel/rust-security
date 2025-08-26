@@ -47,14 +47,21 @@ impl HybridStore {
         let config = Config::from_url(&redis_url);
         let pool = config.create_pool(Some(Runtime::Tokio1)).ok()?;
 
-        // Test the connection
-        match pool.get().await {
-            Ok(_conn) => {
+        // Test the connection with timeout for tests
+        let connection_test = pool.get();
+        let timeout_duration = std::time::Duration::from_secs(2); // 2 second timeout
+        
+        match tokio::time::timeout(timeout_duration, connection_test).await {
+            Ok(Ok(_conn)) => {
                 info!("Redis connection pool initialized successfully");
                 Some(pool)
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to get Redis connection from pool: {}", e);
+                None
+            }
+            Err(_) => {
+                warn!("Redis connection test timed out - using memory-only mode");
                 None
             }
         }

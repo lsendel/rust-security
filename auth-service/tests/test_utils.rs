@@ -4,7 +4,7 @@ use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
 use auth_service::{api_key_store::ApiKeyStore, app, AppState};
-use axum::extract::Request;
+// Removed unused import: use axum::extract::Request;
 use axum::response::Response;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use common::TokenRecord;

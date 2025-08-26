@@ -449,7 +449,7 @@ mod tests {
         let tracker = AuthFailureTracker::new(config);
 
         // Simulate failures from same IP
-        for i in 0..5 {
+        for _i in 0..5 {
             tracker.log_auth_failure(
                 AuthFailureType::InvalidCredentials,
                 Some("test_client"),

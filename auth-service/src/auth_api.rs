@@ -29,7 +29,7 @@ use validator::Validate;
 pub struct AuthState {
     pub jwt_secret: String,
     pub users: Arc<tokio::sync::RwLock<HashMap<String, User>>>,
-    pub sessions: Arc<tokio::sync::RwLock<HashMap<String, Session>>>,
+    pub _sessions: Arc<tokio::sync::RwLock<HashMap<String, Session>>>,
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
 }
@@ -123,7 +123,7 @@ pub struct LoginRequest {
 /// OAuth authorization request
 #[derive(Debug, Deserialize, Validate)]
 pub struct AuthorizeRequest {
-    pub response_type: String,
+    pub _response_type: String,
     pub client_id: String,
     pub redirect_uri: String,
     pub scope: Option<String>,
@@ -135,7 +135,7 @@ pub struct AuthorizeRequest {
 pub struct TokenRequest {
     pub grant_type: String,
     pub code: Option<String>,
-    pub redirect_uri: Option<String>,
+    pub _redirect_uri: Option<String>,
     pub client_id: String,
     pub client_secret: String,
 }
@@ -211,7 +211,7 @@ impl AuthState {
         Self {
             jwt_secret,
             users: Arc::new(tokio::sync::RwLock::new(users)),
-            sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            _sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             oauth_clients: Arc::new(tokio::sync::RwLock::new(oauth_clients)),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }

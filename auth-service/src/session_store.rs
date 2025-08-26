@@ -137,14 +137,21 @@ impl RedisSessionStore {
         let config = Config::from_url(redis_url);
         let pool = config.create_pool(Some(Runtime::Tokio1)).ok()?;
 
-        // Test the connection
-        match pool.get().await {
-            Ok(_conn) => {
+        // Test the connection with timeout
+        let connection_test = pool.get();
+        let timeout_duration = std::time::Duration::from_secs(2);
+        
+        match tokio::time::timeout(timeout_duration, connection_test).await {
+            Ok(Ok(_conn)) => {
                 info!("Redis session store initialized successfully");
                 Some(pool)
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!("Failed to get Redis connection for session store: {}", e);
+                None
+            }
+            Err(_) => {
+                warn!("Redis session store connection test timed out - using memory fallback");
                 None
             }
         }
@@ -820,56 +827,8 @@ impl SessionStore for EnhancedRedisSessionStore {
 #[cfg(test)]
 mod chaos_tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
     use tokio::time::{sleep, Duration};
 
-    /// Simulated Redis connection that can be made to fail
-    pub struct ChaosRedisConnection {
-        fail_next: Arc<AtomicBool>,
-        failure_count: Arc<AtomicU32>,
-        permanent_failure: Arc<AtomicBool>,
-    }
-
-    impl ChaosRedisConnection {
-        pub fn new() -> Self {
-            Self {
-                fail_next: Arc::new(AtomicBool::new(false)),
-                failure_count: Arc::new(AtomicU32::new(0)),
-                permanent_failure: Arc::new(AtomicBool::new(false)),
-            }
-        }
-
-        pub fn trigger_failure(&self) {
-            self.fail_next.store(true, Ordering::SeqCst);
-        }
-
-        pub fn trigger_permanent_failure(&self) {
-            self.permanent_failure.store(true, Ordering::SeqCst);
-        }
-
-        pub fn restore(&self) {
-            self.fail_next.store(false, Ordering::SeqCst);
-            self.permanent_failure.store(false, Ordering::SeqCst);
-        }
-
-        pub fn get_failure_count(&self) -> u32 {
-            self.failure_count.load(Ordering::SeqCst)
-        }
-
-        fn should_fail(&self) -> bool {
-            if self.permanent_failure.load(Ordering::SeqCst) {
-                self.failure_count.fetch_add(1, Ordering::SeqCst);
-                return true;
-            }
-
-            if self.fail_next.swap(false, Ordering::SeqCst) {
-                self.failure_count.fetch_add(1, Ordering::SeqCst);
-                return true;
-            }
-
-            false
-        }
-    }
 
     /// Test Redis outage scenarios
     #[tokio::test]
@@ -1003,7 +962,7 @@ mod chaos_tests {
         let user_id = "test_user_resilience";
 
         // Create multiple sessions for the same user
-        let session_ids = (0..5)
+        let _session_ids = (0..5)
             .map(|i| {
                 let session = SessionData::new(
                     user_id.to_string(),

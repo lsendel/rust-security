@@ -457,8 +457,6 @@ pub fn unblacklist_ip(ip: &IpAddr) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread;
-    use std::time::Duration;
 
     #[test]
     fn test_per_ip_rate_limiting() {

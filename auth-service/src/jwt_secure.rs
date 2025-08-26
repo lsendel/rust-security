@@ -253,8 +253,6 @@ pub fn create_id_token_validator() -> Result<Validation, AuthError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use jsonwebtoken::{EncodingKey, Header};
 
     #[test]
     fn test_secure_jwt_validation_rejects_weak_algorithms() {

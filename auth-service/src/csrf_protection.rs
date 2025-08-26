@@ -378,7 +378,7 @@ mod tests {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
         
-        let (token, signed_token) = csrf.generate_token(Some("session123".to_string())).await.unwrap();
+        let (_token, signed_token) = csrf.generate_token(Some("session123".to_string())).await.unwrap();
         let (token_part, signature_part) = signed_token.split_once(':').unwrap();
         
         // Valid token should pass
@@ -434,7 +434,7 @@ mod tests {
         let csrf = CsrfProtection::new(config);
         
         // Generate token
-        let (token, _) = csrf.generate_token(None).await.unwrap();
+        let (_token, _) = csrf.generate_token(None).await.unwrap();
         
         // Wait for expiration
         tokio::time::sleep(Duration::from_millis(10)).await;

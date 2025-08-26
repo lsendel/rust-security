@@ -9,7 +9,6 @@ mod security_tests {
     use crate::session_secure::*;
     use crate::validation_secure::*;
     use base64::Engine;
-    use ring::rand::SecureRandom;
     use std::net::{IpAddr, Ipv4Addr};
 
     /// Test hardcoded salt vulnerability fix
@@ -258,13 +257,13 @@ mod security_tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));
 
         // Request with suspicious user agent should trigger detection
-        let result = limiter
+        let _result = limiter
             .check_rate_limit(ip, None, "/test", Some("curl/7.68.0"))
             .await;
         // May trigger suspicious activity (depends on implementation)
 
         // Request without user agent should be suspicious
-        let result = limiter.check_rate_limit(ip, None, "/test", None).await;
+        let _result = limiter.check_rate_limit(ip, None, "/test", None).await;
         // Should be handled appropriately
     }
 
@@ -436,7 +435,7 @@ mod security_tests {
 
         // Generate some secure random data
         let rng = TestSecureRandom::new();
-        let data = rng.generate_bytes(1024).unwrap();
+        let _data = rng.generate_bytes(1024).unwrap();
 
         // Process it through our security functions
         let verifier = generate_code_verifier().unwrap();

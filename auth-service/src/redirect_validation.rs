@@ -663,7 +663,6 @@ impl RedirectUriValidator {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    use std::collections::HashSet;
 
     #[test]
     fn test_production_configuration() {

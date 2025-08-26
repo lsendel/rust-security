@@ -191,7 +191,8 @@ mod tests {
     #[test]
     fn test_app_context() {
         let context = AppContext::with_default_config();
-        assert!(context.get_uptime().as_millis() >= 0);
+        // Just verify uptime is accessible (comparison with 0 is always true for u128)
+        let _ = context.get_uptime().as_millis();
     }
 
     #[test]

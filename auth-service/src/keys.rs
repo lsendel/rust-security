@@ -339,7 +339,7 @@ pub async fn initialize_keys() -> Result<(), AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_key_generation() {
