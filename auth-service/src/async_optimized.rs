@@ -1,6 +1,6 @@
-use redis::{Client, Connection, RedisError};
+use redis::{Client, RedisError};
+use redis::aio::Connection;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use thiserror::Error;
 
 /// Simple error type for token operations
@@ -41,7 +41,7 @@ impl AsyncTokenStorage {
         let json_data = serde_json::to_string(data)
             .map_err(|e| TokenError::Serialization(e.to_string()))?;
         
-        let _: () = redis::cmd("SET")
+        redis::cmd("SET")
             .arg(format!("token:{}", token))
             .arg(&json_data)
             .arg("EX")
@@ -83,15 +83,12 @@ impl AsyncTokenStorage {
         Ok(deleted > 0)
     }
 
-    /// Get a simple Redis connection
+    /// Get an async Redis connection
     async fn get_connection(&self) -> Result<Connection, TokenError> {
-        tokio::task::spawn_blocking({
-            let client = self.client.clone();
-            move || client.get_connection()
-        })
-        .await
-        .map_err(|e| TokenError::Connection(RedisError::from((redis::ErrorKind::IoError, "Connection failed", e.to_string())))?)?
-        .map_err(TokenError::Connection)
+        self.client
+            .get_async_connection()
+            .await
+            .map_err(TokenError::Connection)
     }
 }
 

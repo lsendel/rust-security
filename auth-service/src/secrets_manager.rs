@@ -293,7 +293,7 @@ impl SecretsManager {
     async fn init_aws_backend(&mut self) -> Result<(), SecretsError> {
         let region_provider = RegionProviderChain::default_provider();
         let region_provider = if let Some(region) = &self.config.aws_region {
-            region_provider.or_else(region.clone())
+            region_provider.or_else(region.as_str())
         } else {
             region_provider.or_else("us-east-1")
         };

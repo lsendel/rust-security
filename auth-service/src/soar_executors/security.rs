@@ -3,7 +3,7 @@
 //! This module provides executors for security-related actions such as
 //! IP blocking, account locking, and token revocation.
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use crate::store::HybridStore;
 use async_trait::async_trait;

@@ -1,9 +1,9 @@
-use ::common::Store;
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
-use auth_service::{api_key_store::ApiKeyStore, app, store::TokenStore, AppState};
-use std::collections::HashMap;
+use auth_service::{api_key_store::ApiKeyStore, app, AppState};
+use common::TokenRecord;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -17,9 +17,8 @@ async fn spawn_app() -> String {
 
     let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
 
-    let store = Arc::new(HybridStore::new().await) as Arc<dyn Store>;
-    let session_store = Arc::new(RedisSessionStore::new(None).await)
-        as Arc<dyn auth_service::session_store::SessionStore>;
+    let store = Arc::new(HybridStore::new().await);
+    let session_store = Arc::new(RedisSessionStore::new(None).await);
     let jwks_manager = Arc::new(
         JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
             .await
@@ -29,17 +28,15 @@ async fn spawn_app() -> String {
     let app_state = AppState {
         store,
         session_store,
-        token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
-        client_credentials: HashMap::new(),
-        allowed_scopes: vec!["admin".to_string()],
-        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
+        token_store: Arc::new(std::sync::RwLock::new(HashMap::<String, TokenRecord>::new())),
+        client_credentials: Arc::new(std::sync::RwLock::new(HashMap::new())),
+        allowed_scopes: Arc::new(std::sync::RwLock::new(HashSet::from(["admin".to_string()]))),
+        authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: Arc::new(auth_service::policy_cache::PolicyCache::new(
             Default::default(),
         )),
-        backpressure_state: Arc::new(auth_service::backpressure::BackpressureState::new(
-            Default::default(),
-        )),
-        api_key_store,
+        backpressure_state: Arc::new(std::sync::RwLock::new(false)),
+        api_key_store: Arc::new(api_key_store),
         jwks_manager,
     };
 

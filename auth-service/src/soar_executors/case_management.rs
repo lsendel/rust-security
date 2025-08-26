@@ -3,7 +3,7 @@
 //! This module provides executors for case management operations including
 //! ticket creation and case updates.
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use async_trait::async_trait;
 use serde_json::Value;

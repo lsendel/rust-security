@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 /// Simple auth metrics using HashMap counters
 pub struct AuthMetrics {
@@ -117,7 +117,15 @@ pub fn get_metrics() -> &'static AuthMetrics {
 /// Business metrics helper for compatibility with other modules
 pub struct BusinessMetricsHelper;
 
+/// Type alias for compatibility with other modules
+pub type BusinessMetricsRegistry = BusinessMetricsHelper;
+
 impl BusinessMetricsHelper {
+    /// Create a new BusinessMetricsHelper instance
+    pub fn new() -> Self {
+        Self
+    }
+
     /// Record rate limit enforcement
     pub fn record_rate_limit_enforcement(_path: &str, _client_key: &str, _action: &str, _request_type: &str) {
         let metrics = get_metrics();
@@ -155,6 +163,12 @@ impl BusinessMetricsHelper {
     pub fn record_api_access(_endpoint: &str, _method: &str, _status_code: u16, _duration: Duration) {
         let _metrics = get_metrics();
         // Could extend to track API-specific metrics
+    }
+}
+
+impl Default for BusinessMetricsHelper {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

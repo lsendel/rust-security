@@ -1,0 +1,381 @@
+# Optimized Policy Service Deployment for Maximum Performance
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-service-optimized
+  namespace: rust-security
+  labels:
+    app: policy-service
+    version: optimized
+    performance.tier: high
+spec:
+  replicas: 3  # Optimized for policy evaluation workload
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero downtime deployments
+  selector:
+    matchLabels:
+      app: policy-service
+      version: optimized
+  template:
+    metadata:
+      labels:
+        app: policy-service
+        version: optimized
+        performance.tier: high
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyCPU: "50m"
+        sidecar.istio.io/proxyMemory: "64Mi"
+        sidecar.istio.io/proxyConcurrency: "1"  # Lower for policy service
+    spec:
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Node affinity for CPU-intensive policy evaluation
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["compute-optimized"]
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["policy-service"]
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+      - name: policy-service
+        image: policy-service:optimized-1.0.0
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - containerPort: 8081
+          name: http
+          protocol: TCP
+        - containerPort: 9091
+          name: metrics
+          protocol: TCP
+
+        # Optimized environment variables for policy evaluation
+        env:
+        - name: RUST_LOG
+          value: "info,policy_service=debug"
+        - name: TOKIO_WORKER_THREADS
+          value: "2"  # Optimized for policy evaluation
+        - name: CEDAR_CACHE_SIZE
+          value: "10000"
+        - name: CEDAR_CACHE_TTL_SECONDS
+          value: "600"
+        - name: POLICY_BATCH_SIZE
+          value: "50"
+        - name: POLICY_EVALUATION_TIMEOUT_MS
+          value: "100"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PERFORMANCE_MODE
+          value: "high"
+        - name: CIRCUIT_BREAKER_THRESHOLD
+          value: "3"
+        - name: CIRCUIT_BREAKER_TIMEOUT_MS
+          value: "500"
+
+        # Resource allocation optimized for policy evaluation
+        resources:
+          requests:
+            memory: "128Mi"  # Lower memory for policy service
+            cpu: "100m"      # CPU-optimized for Cedar evaluation
+            ephemeral-storage: "500Mi"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"      # Higher CPU limit for complex policies
+            ephemeral-storage: "1Gi"
+
+        # Optimized health checks for policy service
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 2
+
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 3
+          periodSeconds: 2
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 10
+
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+
+        # Volume mounts
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: policy-cache
+          mountPath: /app/cache
+        - name: cedar-policies
+          mountPath: /app/policies
+          readOnly: true
+
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 50Mi
+      - name: policy-cache
+        emptyDir:
+          sizeLimit: 200Mi
+      - name: cedar-policies
+        configMap:
+          name: cedar-policies
+
+---
+---
+# Optimized Service Configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-service-optimized
+  namespace: rust-security
+  labels:
+    app: policy-service
+    version: optimized
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8081
+    targetPort: 8081
+    protocol: TCP
+    name: http
+  - port: 9091
+    targetPort: 9091
+    protocol: TCP
+    name: metrics
+  selector:
+    app: policy-service
+    version: optimized
+
+---
+---
+# Horizontal Pod Autoscaler for Policy Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: policy-service-hpa
+  namespace: rust-security
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: policy-service-optimized
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60  # Lower threshold for policy evaluation
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Pods
+    pods:
+      metric:
+        name: policy_evaluations_per_second
+      target:
+        type: AverageValue
+        averageValue: "50"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30  # Faster scaling for policy service
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 180
+      policies:
+      - type: Percent
+        value: 20
+        periodSeconds: 60
+
+---
+---
+# Cedar Policies ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cedar-policies
+  namespace: rust-security
+data:
+  auth-policies.cedar: |
+    // High-performance authentication policies
+    permit(
+      principal in User::"authenticated",
+      action == Action::"read",
+      resource in Resource::"user-profile"
+    ) when {
+      principal.verified == true
+    };
+
+    permit(
+      principal in User::"admin",
+      action,
+      resource
+    );
+
+    permit(
+      principal in User::"authenticated",
+      action == Action::"update",
+      resource in Resource::"user-profile"
+    ) when {
+      principal == resource.owner
+    };
+
+    // Rate limiting policy
+    forbid(
+      principal,
+      action,
+      resource
+    ) when {
+      principal.rate_limit_exceeded == true
+    };
+
+  performance-policies.cedar: |
+    // Performance-optimized policies for high-throughput scenarios
+    permit(
+      principal in Role::"service",
+      action == Action::"authenticate",
+      resource in Service::"auth-service"
+    ) when {
+      principal.service_account == true &&
+      principal.namespace == "rust-security"
+    };
+
+    permit(
+      principal in Role::"service",
+      action == Action::"evaluate",
+      resource in Service::"policy-service"
+    ) when {
+      principal.service_account == true &&
+      principal.circuit_breaker_open == false
+    };
+
+---
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: policy-service-pdb
+  namespace: rust-security
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: policy-service
+      version: optimized
+
+---
+---
+# Network Policy for Policy Service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: policy-service-optimized-netpol
+  namespace: rust-security
+spec:
+  podSelector:
+    matchLabels:
+      app: policy-service
+      version: optimized
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    - namespaceSelector:
+        matchLabels:
+          name: rust-security
+    - podSelector:
+        matchLabels:
+          app: auth-service
+    ports:
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 9091
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

@@ -1,7 +1,7 @@
 #[cfg(feature = "rate-limiting")]
 use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::{errors::AuthError, AppState};
 use axum::{
     body::Body,
@@ -136,6 +136,7 @@ pub async fn admin_auth_middleware(
                 request_id: extract_correlation_id(&headers),
                 session_id: None,
                 details: std::collections::HashMap::new(),
+                metadata: std::collections::HashMap::new(),
                 resource: None,
                 risk_score: Some(90),
                 location: None,
@@ -145,7 +146,7 @@ pub async fn admin_auth_middleware(
                 request_path: Some(path.to_string()),
                 response_time_ms: None,
             };
-            SecurityLogger::log_event(&event);
+            crate::security_logging::log_event(&event);
 
             let rate_limit_error = AuthError::RateLimitExceeded;
             return handle_auth_failure(rate_limit_error, method, path, &client_ip, &headers);
@@ -183,6 +184,7 @@ pub async fn admin_auth_middleware(
                 session_id: None,
                 request_id: extract_correlation_id(&headers),
                 details: std::collections::HashMap::new(),
+                metadata: std::collections::HashMap::new(),
                 resource: None,
                 risk_score: Some(1), // Low risk for successful admin access
                 location: None,
@@ -192,7 +194,7 @@ pub async fn admin_auth_middleware(
                 request_path: Some(path.to_string()),
                 response_time_ms: None,
             };
-            SecurityLogger::log_event(&event);
+            crate::security_logging::log_event(&event);
 
             // If request signing is required, validate the signature with replay protection
             if config.require_request_signing {
@@ -518,6 +520,7 @@ fn handle_auth_failure(
         request_id: extract_correlation_id(headers),
         session_id: None,
         details,
+        metadata: std::collections::HashMap::new(),
         resource: None,
         risk_score: Some(75),
         location: None,
@@ -527,7 +530,7 @@ fn handle_auth_failure(
         request_path: Some(path.to_string()),
         response_time_ms: None,
     };
-    SecurityLogger::log_event(&event);
+    crate::security_logging::log_event(&event);
 
     Err(auth_error.into_response())
 }
@@ -579,6 +582,7 @@ fn handle_signature_failure(
         request_id: extract_correlation_id(headers),
         session_id: None,
         details: std::collections::HashMap::new(),
+        metadata: std::collections::HashMap::new(),
         resource: None,
         risk_score: Some(85),
         location: None,
@@ -588,7 +592,7 @@ fn handle_signature_failure(
         request_path: Some(path.to_string()),
         response_time_ms: None,
     };
-    SecurityLogger::log_event(&event);
+    crate::security_logging::log_event(&event);
 
     Err((status_code, format!("Request validation failed: {}", error)).into_response())
 }

@@ -1,18 +1,18 @@
-use ::common::Store;
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
-use auth_service::{api_key_store::ApiKeyStore, app, store::TokenStore, AppState};
+use auth_service::{api_key_store::ApiKeyStore, app, AppState};
+use common::TokenRecord;
 use data_encoding::BASE32;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
-use sha1::Sha1;
-use std::collections::HashMap;
+use sha2::Sha256; // Use sha2::Sha256 instead of sha1::Sha1
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
-type HmacSha1 = Hmac<Sha1>;
+type HmacSha256 = Hmac<Sha256>; // Change to Sha256
 
 async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -20,9 +20,8 @@ async fn spawn_app() -> String {
 
     let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
 
-    let store = Arc::new(HybridStore::new().await) as Arc<dyn Store>;
-    let session_store = Arc::new(RedisSessionStore::new(None).await)
-        as Arc<dyn auth_service::session_store::SessionStore>;
+    let store = Arc::new(HybridStore::new().await);
+    let session_store = Arc::new(RedisSessionStore::new(None).await);
     let jwks_manager = Arc::new(
         JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
             .await
@@ -32,19 +31,15 @@ async fn spawn_app() -> String {
     let app = app(AppState {
         store,
         session_store,
-        token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
-        client_credentials: HashMap::new(),
-        allowed_scopes: vec![],
-        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
+        token_store: Arc::new(std::sync::RwLock::new(HashMap::<String, TokenRecord>::new())),
+        client_credentials: Arc::new(std::sync::RwLock::new(HashMap::new())),
+        allowed_scopes: Arc::new(std::sync::RwLock::new(std::collections::HashSet::new())),
+        authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),
         )),
-        backpressure_state: std::sync::Arc::new(
-            auth_service::backpressure::BackpressureState::new(
-                auth_service::backpressure::BackpressureConfig::default(),
-            ),
-        ),
-        api_key_store,
+        backpressure_state: Arc::new(std::sync::RwLock::new(false)),
+        api_key_store: Arc::new(api_key_store),
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -84,7 +79,7 @@ fn now_unix() -> u64 {
 fn hotp(secret: &[u8], counter: u64) -> u32 {
     let mut msg = [0u8; 8];
     msg.copy_from_slice(&counter.to_be_bytes());
-    let mut mac = HmacSha1::new_from_slice(secret).unwrap();
+    let mut mac = HmacSha256::new_from_slice(secret).unwrap();
     mac.update(&msg);
     let hash = mac.finalize().into_bytes();
     let offset = (hash[19] & 0x0f) as usize;

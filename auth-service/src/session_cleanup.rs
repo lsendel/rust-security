@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 #[cfg(feature = "monitoring")]
 use crate::security_metrics::SECURITY_METRICS;
 use crate::session_manager::{SessionError, SessionManager};

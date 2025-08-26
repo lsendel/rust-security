@@ -38,7 +38,7 @@ use crate::pq_migration::{
     generate_compliance_report, get_migration_manager, initialize_migration_management,
     run_benchmark, PerformanceBenchmark,
 };
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::{AppState, AuthError};
 
 /// Post-quantum configuration endpoint response

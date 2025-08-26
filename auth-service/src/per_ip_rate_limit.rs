@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use axum::http::StatusCode;
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;
@@ -343,14 +343,14 @@ impl PerIpRateLimiter {
         .with_target(target)
         .with_outcome(outcome)
         .with_reason(format!("Per-IP rate limiting: {}", reason))
-        .with_detail("ip_address".to_string(), ip.to_string())
-        .with_detail("reason".to_string(), reason.to_string());
+        .with_detail_string("ip_address".to_string(), ip.to_string())
+        .with_detail_string("reason".to_string(), reason.to_string());
 
         if let Some(ua) = user_agent {
-            event = event.with_detail("user_agent".to_string(), ua.to_string());
+            event = event.with_detail_string("user_agent".to_string(), ua.to_string());
         }
 
-        SecurityLogger::log_event(&event);
+        crate::security_logging::log_event(&event);
     }
 }
 

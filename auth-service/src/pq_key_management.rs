@@ -26,7 +26,7 @@ use crate::post_quantum_crypto::{
     get_pq_manager, ClassicalKeyData, PQAlgorithm, PQConfig, PQKeyData, PQKeyMaterial,
     SecurityLevel,
 };
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Key rotation policy configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

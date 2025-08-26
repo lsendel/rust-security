@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use dashmap::DashMap;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -211,27 +211,27 @@ impl AuthFailureTracker {
             format!("Authentication failure: {}", failure_reason),
         )
         .with_action("authentication".to_string())
-        .with_detail("failure_type".to_string(), format!("{:?}", failure_type))
-        .with_detail("failure_reason".to_string(), failure_reason.to_string())
+        .with_detail_string("failure_type".to_string(), format!("{:?}", failure_type))
+        .with_detail_string("failure_reason".to_string(), failure_reason.to_string())
         .with_outcome("failure".to_string());
 
         // Add context information
         if let Some(client) = client_id {
-            event = event.with_detail("client_id".to_string(), client.to_string());
+            event = event.with_detail_string("client_id".to_string(), client.to_string());
         }
 
         if let Some(ip) = ip_address {
-            event = event.with_detail("ip_address".to_string(), ip.to_string());
+            event = event.with_detail_string("ip_address".to_string(), ip.to_string());
         }
 
         if let Some(ua) = user_agent {
-            event = event.with_detail("user_agent".to_string(), ua.to_string());
+            event = event.with_detail_string("user_agent".to_string(), ua.to_string());
         }
 
         // Add suspicious activity indicators
         if is_suspicious {
-            event = event.with_detail("is_suspicious".to_string(), "true".to_string());
-            event = event.with_detail(
+            event = event.with_detail_string("is_suspicious".to_string(), "true".to_string());
+            event = event.with_detail_string(
                 "suspicious_reasons".to_string(),
                 suspicious_reasons.join(", "),
             );
@@ -249,10 +249,10 @@ impl AuthFailureTracker {
             if let Some(ip) = ip_address {
                 if let Some(ip_stats) = self.ip_failures.get(ip) {
                     let (count, first, _last, suspicious) = ip_stats.get_stats();
-                    event = event.with_detail("ip_failure_count".to_string(), count.to_string());
-                    event = event.with_detail("ip_first_failure".to_string(), first.to_string());
+                    event = event.with_detail_string("ip_failure_count".to_string(), count.to_string());
+                    event = event.with_detail_string("ip_first_failure".to_string(), first.to_string());
                     event =
-                        event.with_detail("ip_is_suspicious".to_string(), suspicious.to_string());
+                        event.with_detail_string("ip_is_suspicious".to_string(), suspicious.to_string());
                 }
             }
         }
@@ -265,7 +265,7 @@ impl AuthFailureTracker {
             .with_outcome("failure".to_string())
             .with_reason(failure_reason.to_string());
 
-        SecurityLogger::log_event(&mut event);
+        crate::security_logging::log_event(&mut event);
 
         // Log additional alert for suspicious activity
         if is_suspicious {
@@ -308,19 +308,19 @@ impl AuthFailureTracker {
             "Suspicious authentication activity detected".to_string(),
         )
         .with_action("suspicious_activity_detection".to_string())
-        .with_detail("reasons".to_string(), reasons.join("; "))
+        .with_detail_string("reasons".to_string(), reasons.join("; "))
         .with_outcome("alert_generated".to_string());
 
         if let Some(client) = client_id {
-            event = event.with_detail("client_id".to_string(), client.to_string());
+            event = event.with_detail_string("client_id".to_string(), client.to_string());
         }
 
         if let Some(ip) = ip_address {
-            event = event.with_detail("ip_address".to_string(), ip.to_string());
+            event = event.with_detail_string("ip_address".to_string(), ip.to_string());
         }
 
         if let Some(ua) = user_agent {
-            event = event.with_detail("user_agent".to_string(), ua.to_string());
+            event = event.with_detail_string("user_agent".to_string(), ua.to_string());
         }
 
         let mut event = event
@@ -330,7 +330,7 @@ impl AuthFailureTracker {
             .with_outcome("detected".to_string())
             .with_reason("Suspicious authentication patterns detected".to_string());
 
-        SecurityLogger::log_event(&mut event);
+        crate::security_logging::log_event(&mut event);
     }
 
     /// Get failure statistics

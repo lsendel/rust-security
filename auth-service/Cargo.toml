@@ -25,7 +25,7 @@ thiserror = { workspace = true }
 http = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
-bytes = { workspace = true }
+# bytes = { workspace = true }  # Unused - removed
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
 redis = { workspace = true, optional = true }
@@ -43,7 +43,7 @@ ed25519-dalek = { workspace = true, optional = true }
 chrono = { workspace = true }
 envy = { workspace = true }
 hmac = { workspace = true }
-sha1 = { workspace = true }
+# sha1 = { workspace = true }  # Unused - removed
 data-encoding = { workspace = true }
 sha2 = { workspace = true }
 # TLS/HTTPS support
@@ -75,7 +75,7 @@ reqwest = { workspace = true }
 regex = { workspace = true }
 # High-performance rate limiting
 dashmap = { workspace = true, optional = true }
-num_cpus = { workspace = true }
+# num_cpus = { workspace = true }  # Unused - removed
 # OpenTelemetry for distributed tracing
 opentelemetry = { workspace = true, features = ["metrics"], optional = true }
 opentelemetry-jaeger = { workspace = true, optional = true }
@@ -87,19 +87,19 @@ ring = { workspace = true }
 zeroize = { workspace = true }
 
 # Additional missing dependencies identified during compilation
-ipnetwork = { workspace = true }
+# ipnetwork = { workspace = true }  # Unused - removed
 fastrand = { workspace = true }
 opentelemetry-otlp = { workspace = true }
-x509-parser = { workspace = true }
+# x509-parser = { workspace = true }  # Unused - removed
 rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
+# rustls-pemfile = { workspace = true }  # Unused - removed
 webpki-roots = { workspace = true }
 rayon = { workspace = true }
 # High-performance async runtime
 # Connection pooling optimization
 deadpool-redis = { workspace = true, optional = true }
-bb8 = { workspace = true, optional = true }
-bb8-redis = { workspace = true, optional = true }
+# bb8 = { workspace = true, optional = true }  # Unused - removed
+# bb8-redis = { workspace = true, optional = true }  # Unused - removed
 # Optimized serialization
 # Metrics and profiling
 # pprof2 = { workspace = true, optional = true }  # Removed due to RUSTSEC-2024-0408
@@ -222,7 +222,7 @@ monitoring = ["tracing", "dep:prometheus"]
 # Service features
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]
 api-keys = ["dep:sqlx"]
-enhanced-session-store = ["dep:redis", "dep:deadpool-redis", "dep:bb8", "dep:bb8-redis"]
+enhanced-session-store = ["dep:redis", "dep:deadpool-redis"]
 
 # Complete feature sets
 enterprise = ["production", "threat-hunting", "soar", "hybrid-crypto"]

@@ -4,7 +4,7 @@
 //! security operations, automation, and response activities.
 
 use super::types::*;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;

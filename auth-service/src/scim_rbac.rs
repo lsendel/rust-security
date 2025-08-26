@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::AuthError;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};

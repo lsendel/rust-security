@@ -1,0 +1,355 @@
+# Optimized Auth Service Deployment for Maximum Performance
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service-optimized
+  namespace: rust-security
+  labels:
+    app: auth-service
+    version: optimized
+    performance.tier: high
+spec:
+  replicas: 5  # Increased from 3 for better load distribution
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: auth-service
+      version: optimized
+  template:
+    metadata:
+      labels:
+        app: auth-service
+        version: optimized
+        performance.tier: high
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyCPU: "100m"
+        sidecar.istio.io/proxyMemory: "128Mi"
+        sidecar.istio.io/proxyConcurrency: "2"
+    spec:
+      # Performance optimizations
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Node affinity for performance
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["performance"]
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["auth-service"]
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+      - name: auth-service
+        image: auth-service:optimized-1.0.0
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+
+        # Optimized environment variables
+        env:
+        - name: RUST_LOG
+          value: "info,auth_service=debug"
+        - name: TOKIO_WORKER_THREADS
+          value: "4"
+        - name: REDIS_URL
+          value: "redis://redis:6379"
+        - name: REDIS_POOL_SIZE
+          value: "20"
+        - name: REDIS_TIMEOUT_MS
+          value: "100"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: jwt-secret
+        - name: CLIENT_CREDENTIALS
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: client-credentials
+        - name: REQUEST_SIGNING_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: auth-secrets
+              key: request-signing-secret
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PERFORMANCE_MODE
+          value: "high"
+        - name: CONNECTION_POOL_SIZE
+          value: "50"
+        - name: CACHE_TTL_SECONDS
+          value: "300"
+        - name: BATCH_SIZE
+          value: "100"
+        - name: CIRCUIT_BREAKER_THRESHOLD
+          value: "5"
+        - name: CIRCUIT_BREAKER_TIMEOUT_MS
+          value: "1000"
+
+        # Performance-optimized resource allocation
+        resources:
+          requests:
+            memory: "256Mi"  # Reduced from 512Mi with optimizations
+            cpu: "200m"      # Increased for better performance
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"     # Increased CPU limit for burst capacity
+            ephemeral-storage: "2Gi"
+
+        # Optimized health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 15  # Reduced from 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 2
+
+        # Startup probe for faster deployment
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 2
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 10
+
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+
+        # Volume mounts for temporary files
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: cache
+        emptyDir:
+          sizeLimit: 500Mi
+
+---
+---
+# Optimized Service Configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service-optimized
+  namespace: rust-security
+  labels:
+    app: auth-service
+    version: optimized
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+spec:
+  type: ClusterIP
+  sessionAffinity: ClientIP  # Enable session affinity
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 300
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    app: auth-service
+    version: optimized
+
+---
+---
+# Horizontal Pod Autoscaler for Dynamic Scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service-hpa
+  namespace: rust-security
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service-optimized
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+---
+# Pod Disruption Budget for High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: rust-security
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: auth-service
+      version: optimized
+
+---
+---
+# Network Policy for Optimized Traffic Flow
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-optimized-netpol
+  namespace: rust-security
+spec:
+  podSelector:
+    matchLabels:
+      app: auth-service
+      version: optimized
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: istio-system
+    - namespaceSelector:
+        matchLabels:
+          name: rust-security
+    - podSelector:
+        matchLabels:
+          app: policy-service
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9090
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - to:
+    - podSelector:
+        matchLabels:
+          app: policy-service
+    ports:
+    - protocol: TCP
+      port: 8081
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

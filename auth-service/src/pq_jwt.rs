@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use tracing::{error, info, warn};
 
 use crate::post_quantum_crypto::{get_pq_manager, MigrationMode, PQAlgorithm, SecurityLevel};
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Post-quantum JWT header with additional metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]

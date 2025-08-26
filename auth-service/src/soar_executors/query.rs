@@ -3,7 +3,7 @@
 //! This module provides executors for various query operations including
 //! SIEM queries and database queries.
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use async_trait::async_trait;
 use serde_json::Value;

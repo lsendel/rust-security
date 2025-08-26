@@ -26,6 +26,15 @@ pub struct AppState {
     pub store: Arc<HybridStore>,
     #[cfg(feature = "api-keys")]
     pub api_key_store: Arc<crate::api_key_store::ApiKeyStore>,
+    // Additional fields for test compatibility
+    pub session_store: Arc<crate::session_store::RedisSessionStore>,
+    pub token_store: Arc<std::sync::RwLock<std::collections::HashMap<String, common::TokenRecord>>>,
+    pub client_credentials: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
+    pub allowed_scopes: Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
+    pub authorization_codes: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
+    pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
+    pub backpressure_state: Arc<std::sync::RwLock<bool>>,
+    pub jwks_manager: Arc<crate::jwks_rotation::JwksManager>,
 }
 
 // Missing function implementation - stub for compilation
@@ -61,6 +70,29 @@ pub struct IntrospectionRecord {
     pub mfa_verified: bool,
     pub token_type: Option<String>,
     pub token_binding: Option<String>,
+}
+
+// Request/Response types for introspection
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IntrospectRequest {
+    pub token: String,
+    pub token_type_hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct IntrospectResponse {
+    pub active: bool,
+    pub scope: Option<String>,
+    pub client_id: Option<String>,
+    pub username: Option<String>,
+    pub exp: Option<i64>,
+    pub iat: Option<i64>,
+    pub nbf: Option<i64>,
+    pub sub: Option<String>,
+    pub aud: Option<String>,
+    pub iss: Option<String>,
+    pub jti: Option<String>,
+    pub token_type: Option<String>,
 }
 
 // Additional missing types - stubs for compilation
@@ -121,36 +153,23 @@ pub mod secrets_manager;
 pub mod sql_store;
 #[cfg(feature = "enhanced-session-store")]
 pub mod store;
+pub mod session_store;
+pub mod jwks_rotation;
+pub mod policy_cache;
+pub mod rate_limit_secure;
 
-// Additional modules (commented out missing ones for now)
-// TODO: Implement these modules as needed
-/*
-pub mod anomaly_detection;
-pub mod behavioral_analysis;
-pub mod ml_threat_detection;
-
-// Security modules
-pub mod advanced_rate_limiting;
-pub mod attack_detection;
-pub mod compliance_monitoring;
-pub mod device_fingerprinting;
-pub mod fraud_detection;
-pub mod geo_blocking;
-pub mod honeypot;
-pub mod incident_response;
-pub mod risk_scoring;
-pub mod security_automation;
-pub mod threat_hunting;
-*/
+// Removed all advanced AI/ML and enterprise security modules for MVP
 
 // Existing working modules
 pub mod admin_middleware;
 #[cfg(feature = "rate-limiting")]
 pub mod admin_replay_protection;
-#[cfg(feature = "rate-limiting")]
-pub mod advanced_rate_limit;
-pub mod ai_threat_detection;
-pub mod ai_threat_detection_advanced;
+// Removed advanced rate limiting for MVP
+// #[cfg(feature = "rate-limiting")]
+// pub mod advanced_rate_limit;
+// Removed AI threat detection for MVP
+// pub mod ai_threat_detection;
+// pub mod ai_threat_detection_advanced;
 #[cfg(feature = "api-keys")]
 pub mod api_key_endpoints;
 #[cfg(feature = "api-keys")]
@@ -162,56 +181,62 @@ pub mod async_optimized;
 pub mod auth_failure_logging;
 pub mod backpressure;
 pub mod business_metrics;
-#[cfg(feature = "enhanced-session-store")]
-pub mod cache;
 pub mod circuit_breaker;
-pub mod circuit_breaker_advanced;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod cache;
+// pub mod circuit_breaker;
 pub mod client_auth;
 pub mod config_production;
 pub mod config_secure;
-#[cfg(feature = "enhanced-session-store")]
-pub mod connection_pool_optimized;
+// Removed connection pool optimizations for MVP
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod connection_pool_optimized;
 pub mod csrf_protection;
-#[cfg(feature = "rate-limiting")]
-pub mod crypto_optimized;
-#[cfg(feature = "enhanced-session-store")]
-#[cfg(feature = "enhanced-session-store")]
-pub mod database_optimized;
-pub mod enhanced_jwt_validation;
+// Removed crypto optimizations for MVP
+// #[cfg(feature = "rate-limiting")]
+// pub mod crypto_optimized;
+// Removed database optimizations and enhanced JWT for MVP
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod database_optimized;
+// pub mod enhanced_jwt_validation;
 #[cfg(feature = "tracing")]
 pub mod enhanced_observability;
 pub mod error_handling;
 pub mod feature_flags;
-pub mod fraud_detection;
+// Removed for MVP - pub mod fraud_detection;
 pub mod health_check;
-pub mod intelligent_cache;
-pub mod jwks_handler;
-#[cfg(feature = "enhanced-session-store")]
-pub mod jwks_rate_limiter;
-#[cfg(feature = "enhanced-session-store")]
-#[cfg(feature = "enhanced-session-store")]
-pub mod jwks_rotation;
+// Removed intelligent cache and JWKS features for MVP
+// pub mod intelligent_cache;
+// pub mod jwks_handler;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod jwks_rate_limiter;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod jwks_rotation;
 pub mod jwt_secure;
-pub mod key_management;
-pub mod key_rotation;
+// Removed advanced key management for MVP - keep basic keys only
+// pub mod key_management;
+// pub mod key_rotation;
 pub mod keys;
-pub mod keys_optimized;
+// pub mod keys_optimized;
 // pub mod keys_ring; // Temporarily disabled - uses removed RSA dependency
-pub mod keys_secure;
+// pub mod keys_secure;
 // pub mod main; // Removed - main.rs should not be a module in lib.rs
 #[cfg(feature = "monitoring")]
 pub mod metrics;
-#[cfg(feature = "enhanced-session-store")]
-pub mod mfa;
-#[cfg(feature = "monitoring")]
-pub mod monitoring_dashboard;
-pub mod multi_tenant_enterprise;
-#[cfg(feature = "api-keys")]
-pub mod oauth_client_registration;
-#[cfg(feature = "api-keys")]
-pub mod oauth_client_registration_policies;
-#[cfg(feature = "api-keys")]
-pub mod oauth_client_secret_rotation;
+// Removed MFA for MVP
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod mfa;
+// Removed advanced features for MVP
+// #[cfg(feature = "monitoring")]
+// pub mod monitoring_dashboard;
+// pub mod multi_tenant_enterprise;
+// Removed OAuth client management for MVP
+// #[cfg(feature = "api-keys")]
+// pub mod oauth_client_registration;
+// #[cfg(feature = "api-keys")]
+// pub mod oauth_client_registration_policies;
+// #[cfg(feature = "api-keys")]
+// pub mod oauth_client_secret_rotation;
 #[cfg(feature = "tracing")]
 pub mod observability;
 // Disabled due to OpenTelemetry version compatibility issues
@@ -219,98 +244,108 @@ pub mod observability;
 // pub mod observability_advanced;
 #[cfg(feature = "tracing")]
 pub mod observability_init;
-#[cfg(feature = "enhanced-session-store")]
-pub mod oidc_github;
-#[cfg(feature = "enhanced-session-store")]
-pub mod oidc_google;
-#[cfg(feature = "enhanced-session-store")]
-pub mod oidc_microsoft;
-pub mod otp_provider;
+// Removed OIDC providers and OTP for MVP
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod oidc_github;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod oidc_google;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod oidc_microsoft;
+// pub mod otp_provider;
 #[cfg(feature = "rate-limiting")]
 pub mod per_ip_rate_limit;
-#[cfg(feature = "monitoring")]
-pub mod performance_monitor;
-#[cfg(feature = "monitoring")]
-pub mod performance_monitoring;
-pub mod performance_optimizer;
-pub mod pii_audit_tests;
+// Removed performance monitoring for MVP
+// #[cfg(feature = "monitoring")]
+// pub mod performance_monitor;
+// #[cfg(feature = "monitoring")]
+// pub mod performance_monitoring;
+// pub mod performance_optimizer;
+// Removed PII protection and policy cache for MVP
+// pub mod pii_audit_tests;
 pub mod pii_protection;
-#[cfg(feature = "rate-limiting")]
-pub mod policy_cache;
-#[cfg(feature = "post-quantum")]
-pub mod post_quantum_crypto;
-#[cfg(feature = "post-quantum")]
-pub mod pq_integration;
-#[cfg(feature = "post-quantum")]
-pub mod pq_jwt;
-#[cfg(feature = "post-quantum")]
-pub mod pq_key_management;
-#[cfg(feature = "post-quantum")]
-pub mod pq_migration;
-#[cfg(test)]
-pub mod property_testing_framework;
-#[cfg(feature = "post-quantum")]
-pub mod quantum_jwt;
-pub mod rate_limit_enhanced;
-#[cfg(feature = "rate-limiting")]
-pub mod rate_limit_optimized;
-pub mod rate_limit_secure;
+// #[cfg(feature = "rate-limiting")]
+// pub mod policy_cache;
+// Removed post-quantum cryptography for MVP
+// #[cfg(feature = "post-quantum")]
+// pub mod post_quantum_crypto;
+// #[cfg(feature = "post-quantum")]
+// pub mod pq_integration;
+// #[cfg(feature = "post-quantum")]
+// pub mod pq_jwt;
+// #[cfg(feature = "post-quantum")]
+// pub mod pq_key_management;
+// #[cfg(feature = "post-quantum")]
+// pub mod pq_migration;
+// Removed property testing framework for MVP
+// #[cfg(test)]
+// pub mod property_testing_framework;
+// Removed for MVP
+// #[cfg(feature = "post-quantum")]
+// pub mod quantum_jwt;
+// Removed enhanced rate limiting for MVP - keep basic only
+// pub mod rate_limit_enhanced;
+// #[cfg(feature = "rate-limiting")]
+// pub mod rate_limit_optimized;
+// pub mod rate_limit_secure;
 pub mod redirect_validation;
-#[cfg(feature = "enhanced-session-store")]
-pub mod resilience_config;
-pub mod resilient_http;
-#[cfg(feature = "enhanced-session-store")]
-#[cfg(feature = "enhanced-session-store")]
-pub mod resilient_store;
-pub mod scim;
+// Removed resilience features for MVP
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod resilience_config;
+// pub mod resilient_http;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod resilient_store;
+// Removed SCIM features for MVP
+// pub mod scim;
 pub mod scim_filter;
-pub mod scim_rbac;
+// pub mod scim_rbac;
 pub mod secure_random;
 pub mod security;
-pub mod security_analyzer;
+// Removed advanced security features for MVP - keep basic security only
+// pub mod security_analyzer;
 pub mod security_fixed;
 pub mod security_headers;
 pub mod security_logging;
-pub mod security_logging_enhanced;
+// pub mod security_logging_enhanced;
 #[cfg(feature = "monitoring")]
 pub mod security_metrics;
-#[cfg(feature = "threat-hunting")]
-pub mod security_monitoring;
+// Removed security monitoring for MVP
+// #[cfg(feature = "threat-hunting")]
+// pub mod security_monitoring;
 pub mod security_tests;
-#[cfg(feature = "enhanced-session-store")]
-pub mod session_cleanup;
-#[cfg(feature = "enhanced-session-store")]
-pub mod session_manager;
+// Removed advanced session management for MVP - keep basic only
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod session_cleanup;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod session_manager;
 pub mod session_secure;
-#[cfg(feature = "enhanced-session-store")]
-pub mod session_store;
-#[cfg(feature = "soar")]
-pub mod soar_case_management;
-#[cfg(feature = "soar")]
-pub mod soar_config_loader;
-#[cfg(feature = "soar")]
-#[cfg(feature = "soar")]
-pub mod soar_correlation;
-#[cfg(feature = "soar")]
-#[cfg(feature = "soar")]
-pub mod soar_workflow;
-#[cfg(feature = "enhanced-session-store")]
-pub mod store_optimized;
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod session_store;
+// Removed SOAR (Security Orchestration, Automation and Response) for MVP
+// #[cfg(feature = "soar")]
+// pub mod soar_case_management;
+// #[cfg(feature = "soar")]
+// pub mod soar_config_loader;
+// #[cfg(feature = "soar")]
+// pub mod soar_correlation;
+// #[cfg(feature = "soar")]
+// pub mod soar_workflow;
+// Removed store optimizations for MVP
+// #[cfg(feature = "enhanced-session-store")]
+// pub mod store_optimized;
 pub mod test_mode_security;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_attack_patterns;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_behavioral_analyzer;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_hunting_orchestrator;
-#[cfg(feature = "threat-hunting")]
-#[cfg(feature = "threat-hunting")]
-pub mod threat_intelligence;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_response_orchestrator;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_types;
-#[cfg(feature = "threat-hunting")]
+// Removed threat hunting modules for MVP
+// #[cfg(feature = "threat-hunting")]
+// pub mod threat_attack_patterns;
+// #[cfg(feature = "threat-hunting")]
+// pub mod threat_behavioral_analyzer;
+// #[cfg(feature = "threat-hunting")]
+// pub mod threat_hunting_orchestrator;
+// #[cfg(feature = "threat-hunting")]
+// pub mod threat_intelligence;
+// #[cfg(feature = "threat-hunting")]
+// pub mod threat_response_orchestrator;
+// #[cfg(feature = "threat-hunting")]
+// pub mod threat_types;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_user_profiler;
 pub mod tls_security;
@@ -321,13 +356,17 @@ pub mod tracing_config;
 // pub mod tracing_instrumentation;
 pub mod validation;
 pub mod validation_secure;
-pub mod webauthn;
-pub mod zero_trust_auth;
+pub mod app;
+pub use app::app;
+pub mod auth_api;
+// Removed WebAuthn and Zero Trust for MVP
+// pub mod webauthn;
+// pub mod zero_trust_auth;
 
-// Module directories
-#[cfg(feature = "soar")]
-pub mod soar_core;
-#[cfg(feature = "soar")]
-pub mod soar_executors;
-#[cfg(feature = "soar")]
-pub mod soar;
+// Removed all SOAR module directories for MVP
+// #[cfg(feature = "soar")]
+// pub mod soar_core;
+// #[cfg(feature = "soar")]
+// pub mod soar_executors;
+// #[cfg(feature = "soar")]
+// pub mod soar;

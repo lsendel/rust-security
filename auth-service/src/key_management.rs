@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::errors::{internal_error, AuthError};
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Key lifecycle states
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

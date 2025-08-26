@@ -4,7 +4,7 @@
 //! executing security playbooks and managing workflow instances.
 
 use super::types::*;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use handlebars::Handlebars;

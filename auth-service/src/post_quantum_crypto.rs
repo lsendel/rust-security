@@ -44,7 +44,7 @@ use ed25519_dalek::{SigningKey as Ed25519SigningKey, VerifyingKey as Ed25519Veri
 #[cfg(feature = "hybrid-crypto")]
 use p256::ecdsa::{SigningKey as P256SigningKey, VerifyingKey as P256VerifyingKey};
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Security levels for post-quantum cryptography
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]

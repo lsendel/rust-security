@@ -14,7 +14,7 @@ use tokio::sync::RwLock;
 
 use crate::otp_provider::{MockSender, OtpSender, TwilioSender};
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::AppState;
 
 // Declare the crypto module

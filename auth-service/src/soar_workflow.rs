@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::*;
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;

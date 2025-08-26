@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::{internal_error, AuthError};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
@@ -239,14 +239,14 @@ impl ClientAuthenticator {
             "unknown_client" => "Client ID not found in system".to_string(),
             _ => format!("Authentication failed: {}", reason),
         })
-        .with_detail("client_id".to_string(), client_id.to_string())
-        .with_detail("reason".to_string(), reason.to_string());
+        .with_detail_string("client_id".to_string(), client_id.to_string())
+        .with_detail_string("reason".to_string(), reason.to_string());
 
         if let Some(ip) = ip_address {
-            event = event.with_detail("ip_address".to_string(), ip.to_string());
+            event = event.with_detail_string("ip_address".to_string(), ip.to_string());
         }
 
-        SecurityLogger::log_event(&event);
+        crate::security_logging::log_event(&event);
     }
 
     /// Load clients from environment variables (for backward compatibility)

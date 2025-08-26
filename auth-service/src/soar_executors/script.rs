@@ -2,7 +2,7 @@
 //!
 //! This module provides executors for script execution and HTTP requests.
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use async_trait::async_trait;
 use reqwest::{header::HeaderMap, Client};

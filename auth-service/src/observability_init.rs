@@ -47,7 +47,7 @@ impl ObservabilitySystem {
         info!("Initializing comprehensive observability system");
 
         // Initialize business metrics
-        let business_metrics = Arc::new(BusinessMetricsRegistry::new());
+        let business_metrics = Arc::new(BusinessMetricsRegistry::default());
 
         // Load configuration from environment
         let observability_config = Self::load_observability_config();
@@ -290,8 +290,8 @@ impl ObservabilitySystem {
                 "authentication".to_string(),
                 "Authentication attempt failed".to_string(),
             )
-            .with_detail("method".to_string(), method.to_string())
-            .with_detail(
+            .with_detail_string("method".to_string(), method.to_string())
+            .with_detail_string(
                 "client_ip".to_string(),
                 client_ip.unwrap_or("unknown").to_string(),
             );

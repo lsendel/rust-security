@@ -23,7 +23,7 @@ use crate::post_quantum_crypto::{
     get_pq_manager, MigrationMode, MigrationStatus, PQAlgorithm, PQFeatures, SecurityLevel,
 };
 use crate::pq_key_management::{get_pq_key_manager, KeyOperation};
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
 /// Migration phase configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

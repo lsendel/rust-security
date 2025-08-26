@@ -488,7 +488,7 @@ impl EnhancedObservability {
     #[instrument(skip(self, event))]
     pub async fn record_security_event(&self, event: &SecurityEvent) {
         // Log to security logger
-        SecurityLogger::log_event(event);
+        crate::security_logging::log_event(event);
 
         // Check for security alert conditions
         if event.severity == SecuritySeverity::Critical || event.severity == SecuritySeverity::High

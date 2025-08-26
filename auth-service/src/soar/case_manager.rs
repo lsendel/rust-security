@@ -15,7 +15,7 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::security_monitoring::{AlertSeverity, SecurityAlert};
 use crate::soar_core::*;
 

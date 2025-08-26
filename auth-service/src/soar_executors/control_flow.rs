@@ -3,7 +3,7 @@
 //! This module provides executors for workflow control flow operations
 //! including decision making and wait operations.
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use async_trait::async_trait;
 use serde_json::Value;

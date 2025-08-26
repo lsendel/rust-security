@@ -1,6 +1,7 @@
-use auth_service::{app, store::TokenStore, AppState};
+use auth_service::{app, AppState};
+use common::TokenRecord;
 use reqwest::Client;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -22,28 +23,31 @@ async fn spawn_app() -> String {
         .await
         .expect("Failed to create test API key store");
 
-    let jwks_manager = auth_service::create_jwks_manager()
+    let jwks_manager = Arc::new(
+        auth_service::jwks_rotation::JwksManager::new(
+            Default::default(),
+            Arc::new(auth_service::jwks_rotation::InMemoryKeyStorage::new()),
+        )
         .await
-        .expect("Failed to create JWKS manager");
+        .expect("Failed to create JWKS manager")
+    );
 
     let app_state = AppState {
         store,
         session_store,
-        token_store: TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new()))),
-        client_credentials: HashMap::new(),
-        allowed_scopes: vec![
+        token_store: Arc::new(std::sync::RwLock::new(HashMap::<String, TokenRecord>::new())),
+        client_credentials: Arc::new(std::sync::RwLock::new(HashMap::new())),
+        allowed_scopes: Arc::new(std::sync::RwLock::new(HashSet::from([
             "openid".to_string(),
             "profile".to_string(),
             "email".to_string(),
-        ],
-        authorization_codes: Arc::new(RwLock::new(HashMap::new())),
+        ]))),
+        authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),
         )),
-        backpressure_state: Arc::new(auth_service::backpressure::BackpressureState::new(
-            auth_service::backpressure::BackpressureConfig::default(),
-        )),
-        api_key_store,
+        backpressure_state: Arc::new(std::sync::RwLock::new(false)),
+        api_key_store: Arc::new(api_key_store),
         jwks_manager,
     };
 

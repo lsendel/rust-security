@@ -1,86 +1,72 @@
-//! Security Logging Module
+//! Security Logging Module - MVP Version
 //!
-//! Re-exports from the enhanced security logging implementation.
-//! This module provides a clean API for security event logging with:
-//! - PII protection and redaction
-//! - Threat intelligence integration
-//! - Structured JSON logging
-//! - SIEM forwarding capabilities
-//! - Privacy-safe user identification using hashes
-//! - Comprehensive security event types and severity levels
-
-// Enhanced features from enhanced security logging
-pub use crate::security_logging_enhanced::{
-    SecuritySeverity,
-    SecurityLoggerConfig,
-    SecurityEventBuilder,
-    SecurityEventStats,
-    SecurityMetadata,
-    ThreatIntelligence,
-    IpReputation,
-};
+//! Simple security event logging for basic authentication monitoring.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use uuid;
 
-/// Legacy Security event types for categorization
+/// Basic security event severity levels
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SecuritySeverity {
+    Low,
+    Medium,
+    High,
+    Critical,
+    Info,
+    Warning,
+}
+
+/// Basic security event types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum LegacySecurityEventType {
+pub enum SecurityEventType {
     AuthenticationAttempt,
     AuthenticationFailure, 
     AuthenticationSuccess,
     TokenIssued,
     TokenRevoked,
-    TokenBindingViolation,
-    InputValidationFailure,
+    TokenOperation,
     RateLimitExceeded,
-    RequestSignatureFailure,
+    AccessDenied,
+    SystemEvent,
+    SecurityViolation,
     Authentication,
     Authorization,
     RateLimitViolation,
     SuspiciousActivity,
-    MfaAttempt,
-    MfaFailure,
-    SystemEvent,
-    ConfigurationChange,
-    SystemError,
-    AccessDenied,
-    PrivilegeEscalation,
-    DataAccess,
+    UnauthorizedAccess,
     AdminAction,
     AdminAccess,
-    UnauthorizedAccess,
-    SessionEvent,
-    SecurityViolation,
-    KeyManagement,
+    InputValidationFailure,
+    ValidationFailure,
+    RequestSignatureFailure,
 }
 
-/// Legacy structured security event for audit logging
+/// Simple security event structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LegacyLegacySecurityEvent {
+pub struct SecurityEvent {
     pub event_id: String,
     pub timestamp: DateTime<Utc>,
-    pub event_type: LegacySecurityEventType,
+    pub event_type: SecurityEventType,
     pub severity: SecuritySeverity,
     pub source: String,
+    pub description: String,
+    pub ip_address: Option<String>,
+    pub user_id: Option<String>,
+    pub details: HashMap<String, Value>,
+    pub metadata: HashMap<String, Value>,
     pub actor: Option<String>,
     pub action: Option<String>,
     pub target: Option<String>,
     pub outcome: String,
     pub reason: Option<String>,
     pub correlation_id: Option<String>,
-    pub ip_address: Option<String>,
     pub user_agent: Option<String>,
     pub client_id: Option<String>,
-    pub user_id: Option<String>,
     pub request_id: Option<String>,
     pub session_id: Option<String>,
-    pub description: String,
-    pub details: HashMap<String, Value>,
     pub resource: Option<String>,
     pub risk_score: Option<u8>,
     pub location: Option<String>,
@@ -91,33 +77,34 @@ pub struct LegacyLegacySecurityEvent {
     pub response_time_ms: Option<u64>,
 }
 
-impl LegacyLegacySecurityEvent {
+impl SecurityEvent {
     pub fn new(
-        event_type: LegacySecurityEventType,
+        event_type: SecurityEventType,
         severity: SecuritySeverity,
         source: String,
         description: String,
     ) -> Self {
         Self {
             event_id: uuid::Uuid::new_v4().to_string(),
-            timestamp: chrono::Utc::now(),
+            timestamp: Utc::now(),
             event_type,
             severity,
             source,
+            description,
+            ip_address: None,
+            user_id: None,
+            details: HashMap::new(),
+            metadata: HashMap::new(),
             actor: None,
             action: None,
             target: None,
-            outcome: "unknown".to_string(),
+            outcome: "pending".to_string(),
             reason: None,
             correlation_id: None,
-            ip_address: None,
             user_agent: None,
             client_id: None,
-            user_id: None,
             request_id: None,
             session_id: None,
-            description,
-            details: HashMap::new(),
             resource: None,
             risk_score: None,
             location: None,
@@ -129,7 +116,31 @@ impl LegacyLegacySecurityEvent {
         }
     }
 
-    // Builder pattern methods
+    pub fn with_ip(mut self, ip: String) -> Self {
+        self.ip_address = Some(ip);
+        self
+    }
+    
+    pub fn with_ip_address(mut self, ip: String) -> Self {
+        self.ip_address = Some(ip);
+        self
+    }
+
+    pub fn with_user_id(mut self, user_id: String) -> Self {
+        self.user_id = Some(user_id);
+        self
+    }
+
+    pub fn with_detail(mut self, key: String, value: Value) -> Self {
+        self.details.insert(key, value);
+        self
+    }
+
+    pub fn with_detail_string(mut self, key: String, value: String) -> Self {
+        self.details.insert(key, Value::String(value));
+        self
+    }
+
     pub fn with_actor(mut self, actor: String) -> Self {
         self.actor = Some(actor);
         self
@@ -160,11 +171,6 @@ impl LegacyLegacySecurityEvent {
         self
     }
 
-    pub fn with_ip_address(mut self, ip_address: String) -> Self {
-        self.ip_address = Some(ip_address);
-        self
-    }
-
     pub fn with_user_agent(mut self, user_agent: String) -> Self {
         self.user_agent = Some(user_agent);
         self
@@ -172,11 +178,6 @@ impl LegacyLegacySecurityEvent {
 
     pub fn with_client_id(mut self, client_id: String) -> Self {
         self.client_id = Some(client_id);
-        self
-    }
-
-    pub fn with_user_id(mut self, user_id: String) -> Self {
-        self.user_id = Some(user_id);
         self
     }
 
@@ -196,14 +197,7 @@ impl LegacyLegacySecurityEvent {
     }
 
     pub fn with_risk_score(mut self, risk_score: u8) -> Self {
-        self.risk_score = Some(risk_score.min(100));
-        self
-    }
-
-    pub fn with_detail<T: Serialize>(mut self, key: String, value: T) -> Self {
-        if let Ok(json_value) = serde_json::to_value(value) {
-            self.details.insert(key, json_value);
-        }
+        self.risk_score = Some(risk_score);
         self
     }
 
@@ -212,159 +206,104 @@ impl LegacyLegacySecurityEvent {
         self
     }
 
-    pub fn with_device_fingerprint(mut self, fingerprint: String) -> Self {
-        self.device_fingerprint = Some(fingerprint);
+    pub fn with_device_fingerprint(mut self, device_fingerprint: String) -> Self {
+        self.device_fingerprint = Some(device_fingerprint);
         self
     }
 
-    pub fn with_http_method(mut self, method: String) -> Self {
-        self.http_method = Some(method);
+    pub fn with_http_method(mut self, http_method: String) -> Self {
+        self.http_method = Some(http_method);
         self
     }
 
-    pub fn with_http_status(mut self, status: u16) -> Self {
-        self.http_status = Some(status);
+    pub fn with_http_status(mut self, http_status: u16) -> Self {
+        self.http_status = Some(http_status);
         self
     }
 
-    pub fn with_request_path(mut self, path: String) -> Self {
-        self.request_path = Some(path);
+    pub fn with_request_path(mut self, request_path: String) -> Self {
+        self.request_path = Some(request_path);
         self
     }
 
-    pub fn with_response_time_ms(mut self, time_ms: u64) -> Self {
-        self.response_time_ms = Some(time_ms);
+    pub fn with_response_time_ms(mut self, response_time_ms: u64) -> Self {
+        self.response_time_ms = Some(response_time_ms);
         self
     }
 
-    /// Apply PII protection to sensitive fields
+    /// Basic PII redaction for MVP
+    fn redact_basic_pii(&self, text: &str) -> String {
+        // Simple email redaction
+        let email_regex = regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
+        let text = email_regex.replace_all(text, "[EMAIL_REDACTED]");
+        
+        // Simple phone number redaction
+        let phone_regex = regex::Regex::new(r"\b\d{3}-\d{3}-\d{4}\b|\b\(\d{3}\)\s?\d{3}-\d{4}\b").unwrap();
+        let text = phone_regex.replace_all(&text, "[PHONE_REDACTED]");
+        
+        text.to_string()
+    }
+
+    /// Apply basic PII protection
     pub fn apply_pii_protection(&mut self) {
-        // Use the enhanced PII detector for protection
-        use crate::security_logging_enhanced::PiiDetector;
-        let detector = PiiDetector::new();
-        
-        // Redact PII in description
-        self.description = detector.redact_pii(&self.description);
-        
-        // Redact PII in optional string fields
-        if let Some(ref mut actor) = self.actor {
-            *actor = detector.redact_pii(actor);
-        }
-        if let Some(ref mut reason) = self.reason {
-            *reason = detector.redact_pii(reason);
-        }
-        
-        // Hash user_id instead of storing it directly
-        if let Some(ref user_id) = self.user_id {
-            self.user_id = Some(detector.hash_identifier(user_id));
-        }
+        self.description = self.redact_basic_pii(&self.description);
     }
 }
 
-// Main types from legacy API for backward compatibility
-pub type SecurityEvent = LegacyLegacySecurityEvent;
-pub type SecurityEventType = LegacySecurityEventType;
+/// Simple security logger
+#[derive(Debug, Clone)]
+pub struct SecurityLogger {
+    pub config: SecurityLoggerConfig,
+}
 
-// Main SecurityLogger for static method compatibility
-pub struct SecurityLogger;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityLoggerConfig {
+    pub enabled: bool,
+    pub max_events: usize,
+}
+
+impl Default for SecurityLoggerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_events: 10000,
+        }
+    }
+}
 
 impl SecurityLogger {
-    pub fn log_event(event: &SecurityEvent) {
-        // Implementation using tracing directly for simplicity
-        match event.severity {
-            SecuritySeverity::Critical | SecuritySeverity::High => {
-                tracing::error!(target: "security_audit", event = ?event, "Security event");
-            }
-            SecuritySeverity::Medium | SecuritySeverity::Warning => {
-                tracing::warn!(target: "security_audit", event = ?event, "Security event");
-            }
-            SecuritySeverity::Low | SecuritySeverity::Info => {
-                tracing::info!(target: "security_audit", event = ?event, "Security event");
-            }
+    pub fn new(config: SecurityLoggerConfig) -> Self {
+        Self { config }
+    }
+
+    pub fn log_event(&self, event: SecurityEvent) {
+        if self.config.enabled {
+            tracing::info!(
+                event_type = ?event.event_type,
+                severity = ?event.severity,
+                source = event.source,
+                description = event.description,
+                ip_address = event.ip_address,
+                user_id = event.user_id,
+                "Security event logged"
+            );
         }
     }
-}
 
-// Convenience macro for quick security event logging
-#[macro_export]
-macro_rules! log_security_event {
-    ($logger:expr, $event_type:expr, $severity:expr, $ip:expr, $description:expr) => {
-        {
-            let event = $logger.event_builder()
-                .event_type($event_type)
-                .severity($severity)
-                .source_ip($ip)
-                .description($description.to_string())
-                .build();
-            $logger.log_event(event).await;
-        }
-    };
-}
-
-// Convenience macro for authentication events
-#[macro_export]
-macro_rules! log_auth_event {
-    (success, $logger:expr, $user_id:expr, $ip:expr, $correlation_id:expr) => {
-        $logger.log_auth_success($user_id, $ip, $correlation_id).await;
-    };
-    (failure, $logger:expr, $user_id:expr, $ip:expr, $correlation_id:expr, $reason:expr) => {
-        $logger.log_auth_failure($user_id, $ip, $correlation_id, $reason).await;
-    };
-}
-
-// Convenience macro for rate limiting events
-#[macro_export]
-macro_rules! log_rate_limit {
-    ($logger:expr, $ip:expr, $endpoint:expr, $correlation_id:expr) => {
-        $logger.log_rate_limit_exceeded($ip, $endpoint, $correlation_id).await;
-    };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::net::{IpAddr, Ipv4Addr};
-    
-    #[tokio::test]
-    async fn test_security_logging_api() {
-        let config = crate::security_logging_enhanced::SecurityLoggerConfig::default();
-        let logger = crate::security_logging_enhanced::SecurityLogger::new(config);
-        let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        
-        // Test authentication success
-        logger.log_auth_success("test_user", ip, "corr-123").await;
-        
-        // Test authentication failure  
-        logger.log_auth_failure("test_user", ip, "corr-124", "invalid_password").await;
-        
-        // Test rate limiting
-        logger.log_rate_limit_exceeded(ip, "/api/login", "corr-125").await;
-        
-        // Test CSRF violation
-        logger.log_csrf_violation(ip, "/api/transfer", "corr-126").await;
-        
-        // Test suspicious activity
-        logger.log_suspicious_activity(ip, "Multiple failed login attempts", "corr-127").await;
-        
-        // Verify events were logged
-        let stats = logger.get_event_stats().await;
-        assert!(stats.total_events > 0);
+    /// Static method for backwards compatibility
+    pub fn log_event_static(event: &SecurityEvent) {
+        let logger = SecurityLogger::default();
+        logger.log_event(event.clone());
     }
-    
-    #[test] 
-    fn test_event_builder() {
-        use crate::security_logging_enhanced::{SecurityEventType, SecurityEvent};
-        
-        let event = SecurityEventBuilder::new()
-            .event_type(SecurityEventType::AuthenticationSuccess)
-            .severity(SecuritySeverity::Info)
-            .user_id("test_user")
-            .description("Test authentication success".to_string())
-            .build();
-            
-        assert_eq!(event.event_type, SecurityEventType::AuthenticationSuccess);
-        assert_eq!(event.severity, SecuritySeverity::Info);
-        assert!(event.user_id_hash.is_some());
-        assert!(!event.description.is_empty());
+}
+
+impl Default for SecurityLogger {
+    fn default() -> Self {
+        Self::new(SecurityLoggerConfig::default())
     }
+}
+
+/// Global function for logging security events (backwards compatibility)  
+pub fn log_event(event: &SecurityEvent) {
+    SecurityLogger::log_event_static(event);
 }
