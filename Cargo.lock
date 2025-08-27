@@ -351,6 +351,7 @@ dependencies = [
  "bloomfilter",
  "chrono",
  "common",
+ "config",
  "criterion",
  "crossbeam",
  "dashmap",
@@ -4895,6 +4896,7 @@ dependencies = [
  "axum 0.7.9",
  "cedar-policy",
  "cedar-policy-core",
+ "chrono",
  "dotenvy",
  "futures",
  "once_cell",
@@ -4909,6 +4911,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utoipa 5.4.0",
+ "utoipa-swagger-ui 8.1.0",
 ]
 
 [[package]]
@@ -6165,6 +6168,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "security-features"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "async-trait",
+ "axum 0.7.9",
+ "base64 0.21.7",
+ "bcrypt",
+ "chrono",
+ "common",
+ "dashmap",
+ "hmac",
+ "jsonwebtoken",
+ "rand 0.8.5",
+ "regex",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-test",
+ "tower 0.5.2",
+ "tower-http 0.6.6",
+ "tracing",
+ "uuid",
+ "validator 0.20.0",
+ "zeroize",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6500,6 +6535,31 @@ checksum = "9676b89cd56310a87b93dec47b11af744f34d5fc9f367b829474eec0a891350d"
 dependencies = [
  "borsh",
  "serde",
+]
+
+[[package]]
+name = "soar-integration"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "common",
+ "config",
+ "handlebars",
+ "lettre",
+ "reqwest 0.12.23",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tera",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "uuid",
+ "walkdir",
 ]
 
 [[package]]
@@ -7807,6 +7867,7 @@ version = "8.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db4b5ac679cc6dfc5ea3f2823b0291c777750ffd5e13b21137e0f7ac0e8f9617"
 dependencies = [
+ "axum 0.7.9",
  "base64 0.22.1",
  "mime_guess",
  "regex",

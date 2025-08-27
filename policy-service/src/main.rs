@@ -1,5 +1,6 @@
 // Explicitly acknowledge unused dependencies for future functionality
 use cedar_policy as _;
+use chrono as _;
 use cedar_policy_core as _;
 use once_cell as _;
 use prometheus as _;
@@ -16,9 +17,11 @@ use reqwest as _;
 #[cfg(test)]
 use tempfile as _;
 
+use anyhow::Context;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use policy_service::{app, load_policies_and_entities, ApiDoc};
 
@@ -31,13 +34,17 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let state = load_policies_and_entities()?;
+    let state = load_policies_and_entities()
+        .map_err(|e| anyhow::anyhow!(e))
+        .context("Failed to load policies and entities")?;
     let openapi = ApiDoc::openapi();
 
-    let app = app(state).route(
-        "/openapi.json",
-        axum::routing::get(move || async { axum::Json(openapi) }),
-    );
+    let app = app(state)
+        .merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", openapi.clone()))
+        .route(
+            "/openapi.json",
+            axum::routing::get(move || async { axum::Json(openapi) }),
+        );
 
     let cfg = config::AppConfig::from_env()?;
     let listener = TcpListener::bind(cfg.bind_addr).await?;

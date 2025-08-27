@@ -11,7 +11,7 @@ members = [
     "api-contracts",
     "compliance-tools",
     "examples/axum-integration-example"
-]
+, "soar-integration", "security-features"]
 
 exclude = [
     "red-team-exercises",
@@ -226,7 +226,7 @@ toml = "0.8"
 serde_yaml = "0.9"
 
 # Documentation
-utoipa-swagger-ui = "8.1"
+utoipa-swagger-ui = { version = "8.1", features = ["axum"] }
 
 # Web server
 axum-server = "0.7"

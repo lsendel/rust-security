@@ -5,47 +5,13 @@
 use std::sync::Arc;
 use tracing::{info, error};
 use axum::{extract::Request, middleware::Next, response::Response};
+use anyhow::Context;
 
 mod auth_api;
+mod config;
+
 use auth_api::AuthState;
-
-// Local configuration
-#[derive(Debug, Clone)]
-pub struct AuthServiceConfig {
-    pub server: ServerConfig,
-    pub auth: AuthConfig,
-}
-
-#[derive(Debug, Clone)]
-pub struct ServerConfig {
-    pub bind_address: String,
-    pub port: u16,
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthConfig {
-    pub jwt_secret: String,
-    pub token_expiry: u64,
-}
-
-impl Default for AuthServiceConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig {
-                bind_address: std::env::var("BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string()),
-                port: std::env::var("PORT")
-                    .unwrap_or_else(|_| "8080".to_string())
-                    .parse()
-                    .unwrap_or(8080),
-            },
-            auth: AuthConfig {
-                jwt_secret: std::env::var("JWT_SECRET_KEY")
-                    .expect("JWT_SECRET_KEY environment variable must be set for security"),
-                token_expiry: 86400, // 24 hours
-            },
-        }
-    }
-}
+use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -55,11 +21,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("🚀 Starting Rust Security Platform - Auth Service v2.0");
     info!("🔐 Enhanced with OAuth 2.0, User Registration, and JWT Authentication");
     
-    // Load configuration
-    let config = Arc::new(AuthServiceConfig::default());
+    // Load unified configuration
+    let config = Config::load()
+        .context("Failed to load configuration")?;
+    
+    // Validate configuration
+    config.validate()
+        .context("Invalid configuration")?;
+    
+    let config = Arc::new(config);
     
     // Initialize authentication state
-    let auth_state = AuthState::new(config.auth.jwt_secret.clone());
+    let auth_state = AuthState::new(config.jwt.secret.clone());
     
     // Start rate limiter cleanup task
     auth_service::security::start_rate_limiter_cleanup();
@@ -86,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .layer(axum::middleware::from_fn(auth_service::security::rate_limit))
         .layer(axum::middleware::from_fn(security_headers));
     
-    let addr = format!("{}:{}", config.server.bind_address, config.server.port);
+    let addr = config.server.bind_addr;
     info!("🌐 Auth service listening on {}", addr);
     info!("📋 Available endpoints:");
     info!("   • Health: GET /health");
