@@ -17,7 +17,7 @@ pub struct PolicyCacheConfig {
     /// Default TTL for cache entries
     pub default_ttl: Duration,
     /// Maximum number of entries in cache
-    pub max_entries: ucache_size,
+    pub max_entries: usize,
     /// Enable/disable caching
     pub enabled: bool,
     /// TTL for deny decisions (usually shorter than allow)
@@ -72,7 +72,7 @@ struct CacheEntry {
 pub struct PolicyCacheStats {
     pub hits: u64,
     pub misses: u64,
-    pub entries: ucache_size,
+    pub entries: usize,
     pub evictions: u64,
     pub errors: u64,
     pub avg_response_time_ms: f64,
@@ -239,7 +239,7 @@ impl PolicyCache {
 
     /// Invalidate cache entries by pattern
     #[instrument(skip(self))]
-    pub async fn invalidate(&self, pattern: &str) -> ucache_size {
+    pub async fn invalidate(&self, pattern: &str) -> usize {
         let mut removed = 0;
 
         // For now, implement simple prefix matching

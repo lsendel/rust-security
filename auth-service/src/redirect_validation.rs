@@ -393,7 +393,7 @@ mod tests {
         );
 
         // Should allow registration but fail validation
-        if operation_result.is_ok() {
+        if result.is_ok() {
             assert!(validator
                 .validate_redirect_uri("test_client", "http://example.com/callback")
                 .is_err());
@@ -423,7 +423,7 @@ mod tests {
             vec!["https://example.com/../callback".to_string()],
         );
 
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -434,7 +434,7 @@ mod tests {
             vec!["https://192.168.1.1/callback".to_string()],
         );
 
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -454,7 +454,7 @@ mod tests {
 
         let result = validator
             .register_client_uris("test_client", vec!["https://evil.com/callback".to_string()]);
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -464,7 +464,7 @@ mod tests {
             "test_client",
             vec!["https://example.badtld/callback".to_string()],
         );
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -472,7 +472,7 @@ mod tests {
         let mut validator = RedirectUriValidator::new(false);
         let result = validator
             .register_client_uris("test_client", vec!["javascript:alert('xss')".to_string()]);
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -482,7 +482,7 @@ mod tests {
             "test_client",
             vec!["data:text/html,<script>alert('xss')</script>".to_string()],
         );
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -497,14 +497,14 @@ mod tests {
                     .to_string(),
             ],
         );
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
 
         // Test double encoding
         let result = validator.register_client_uris(
             "test_client2",
             vec!["https://example.com/callback?param=%25%33%43script%25%33%45".to_string()],
         );
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -514,7 +514,7 @@ mod tests {
             "test_client",
             vec!["https://example.com/callback\\x3cscript\\x3e".to_string()],
         );
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -531,7 +531,7 @@ mod tests {
         for attack_path in attack_paths {
             let result =
                 validator.register_client_uris("test_client", vec![attack_path.to_string()]);
-            assert!(operation_result.is_err(), "Should reject path: {}", attack_path);
+            assert!(result.is_err(), "Should reject path: {}", attack_path);
         }
     }
 
@@ -558,7 +558,7 @@ mod tests {
         for attempt in redirect_attempts {
             let result = validator.validate_redirect_uri("test_client", attempt);
             assert!(
-                operation_result.is_err(),
+                result.is_err(),
                 "Should reject redirect attempt: {}",
                 attempt
             );
@@ -615,9 +615,9 @@ mod tests {
             let result = validator.register_client_uris("test_client", vec![uri.to_string()]);
 
             if should_pass {
-                assert!(operation_result.is_ok(), "Should allow URI: {}", uri);
+                assert!(result.is_ok(), "Should allow URI: {}", uri);
             } else {
-                assert!(operation_result.is_err(), "Should reject URI: {}", uri);
+                assert!(result.is_err(), "Should reject URI: {}", uri);
             }
         }
     }
@@ -634,7 +634,7 @@ mod tests {
 
         for domain in shortener_domains {
             let result = validator.register_client_uris("test_client", vec![domain.to_string()]);
-            assert!(operation_result.is_err(), "Should block URL shortener: {}", domain);
+            assert!(result.is_err(), "Should block URL shortener: {}", domain);
         }
     }
 }
@@ -678,7 +678,7 @@ mod integration_tests {
             "prod_client",
             vec!["http://example.com/callback".to_string()],
         );
-        assert!(operation_result.is_err());
+        assert!(result.is_err());
 
         // Clean up
         std::env::remove_var("OAUTH_ENFORCE_HTTPS");
@@ -716,7 +716,7 @@ mod integration_tests {
 
         for attack in attack_vectors {
             let result = validator.register_client_uris("attack_client", vec![attack.to_string()]);
-            assert!(operation_result.is_err(), "Should block attack vector: {}", attack);
+            assert!(result.is_err(), "Should block attack vector: {}", attack);
         }
     }
 
@@ -735,7 +735,7 @@ mod integration_tests {
 
         for uri in legitimate_uris {
             let result = validator.register_client_uris("legit_client", vec![uri.to_string()]);
-            assert!(operation_result.is_ok(), "Should allow legitimate URI: {}", uri);
+            assert!(result.is_ok(), "Should allow legitimate URI: {}", uri);
         }
     }
 }

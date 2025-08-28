@@ -935,9 +935,9 @@ mod chaos_tests {
                 let update_result = store_clone.update_session(&session).await;
 
                 (
-                    create_session_result.is_ok(),
-                    get_session_result.is_ok(),
-                    update_session_result.is_ok(),
+                    create_result.is_ok(),
+                    get_result.is_ok(),
+                    update_result.is_ok(),
                 )
             });
             handles.push(handle);
@@ -948,7 +948,7 @@ mod chaos_tests {
 
         // All operations should succeed
         for result in results {
-            let (create_ok, get_ok, update_ok) = session_result.unwrap();
+            let (create_ok, get_ok, update_ok) = result.unwrap();
             assert!(create_ok, "Session creation should succeed");
             assert!(get_ok, "Session retrieval should succeed");
             assert!(update_ok, "Session update should succeed");

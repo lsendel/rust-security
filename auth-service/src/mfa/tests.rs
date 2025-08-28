@@ -126,7 +126,7 @@ mod property_tests {
                 let mut denied_count = 0;
 
                 for _ in 0..attempt_count {
-                    let _result = limiter.check_verification_attempts(user_id).await.unwrap();
+                    let result = limiter.check_verification_attempts(user_id).await.unwrap();
                     if operation_result.allowed {
                         allowed_count += 1;
                     } else {

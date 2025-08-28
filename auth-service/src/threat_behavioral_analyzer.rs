@@ -338,7 +338,7 @@ impl AdvancedBehavioralThreatDetector {
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let client = redis::Client::open(config.redis_config.url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
 
@@ -353,7 +353,7 @@ impl AdvancedBehavioralThreatDetector {
     async fn load_user_profiles(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let redis_client = self.redis_client.lock().await;
         if let Some(ref client) = *redis_client {
-            let _config = self.config.read().await;
+            let config = self.config.read().await;
             let pattern = format!("{}user_profile:*", config.redis_config.key_prefix);
 
             let keys: Vec<String> = redis::cmd("KEYS")
@@ -469,7 +469,7 @@ impl AdvancedBehavioralThreatDetector {
             return Ok(threats);
         };
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let thresholds = &config.thresholds.credential_stuffing;
 
         // Analyze recent events from this IP
@@ -559,7 +559,7 @@ impl AdvancedBehavioralThreatDetector {
             return Ok(threats);
         };
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let thresholds = &config.thresholds.account_takeover;
 
         let mut anomaly_indicators = Vec::new();
@@ -695,7 +695,7 @@ impl AdvancedBehavioralThreatDetector {
             return Ok(threats);
         };
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let thresholds = &config.thresholds.brute_force;
 
         // Count recent failures for this user
@@ -773,7 +773,7 @@ impl AdvancedBehavioralThreatDetector {
             let current_session = sessions.iter().find(|s| s.session_id == *session_id);
 
             if let Some(session) = current_session {
-                let _config = self.config.read().await;
+                let config = self.config.read().await;
                 let thresholds = &config.thresholds.session_hijacking;
 
                 let mut anomaly_indicators = Vec::new();
@@ -910,7 +910,7 @@ impl AdvancedBehavioralThreatDetector {
             .calculate_statistical_anomaly_score(event, &features)
             .await;
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let thresholds = &config.thresholds.behavioral_anomaly;
 
         if anomaly_score < thresholds.anomaly_score_threshold {
@@ -1226,7 +1226,7 @@ impl AdvancedBehavioralThreatDetector {
         // Store in Redis if available
         let redis_client = self.redis_client.lock().await;
         if let Some(ref client) = *redis_client {
-            let _config = self.config.read().await;
+            let config = self.config.read().await;
             let key = format!(
                 "{}threat:{}",
                 config.redis_config.key_prefix, threat.threat_id

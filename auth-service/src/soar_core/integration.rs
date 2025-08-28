@@ -111,7 +111,7 @@ impl IntegrationFramework {
             })?;
 
         // Execute action
-        let _result = integration.execute_action(action, context).await;
+        let result = integration.execute_action(action, context).await;
 
         // Update metrics
         let duration = start_time.elapsed();

@@ -253,7 +253,7 @@ impl WorkflowEngine {
         workflow_definition: &WorkflowDefinition,
         instance: &mut WorkflowInstance,
     ) -> Result<(), WorkflowError> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let max_execution_time = config.max_execution_time;
         drop(config);
         
@@ -288,7 +288,7 @@ impl WorkflowEngine {
                 self.execute_single_step(step, instance).await?;
             } else {
                 // Parallel execution
-                let _config = self.config.read().await;
+                let config = self.config.read().await;
                 if config.parallel_execution_enabled {
                     self.execute_parallel_steps(&step_batch, instance).await?;
                 } else {

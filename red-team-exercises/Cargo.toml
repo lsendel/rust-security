@@ -12,23 +12,23 @@ readme = "README.md"
 
 [dependencies]
 # Core async runtime with signal handling for graceful shutdown
-tokio = { workspace = true, features = ["signal"] }
+tokio = { version = "1.37", features = ["full", "signal"] }
 # HTTP client with rustls for better security
-reqwest = { workspace = true, features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.11", features = ["rustls-tls"], default-features = false }
 # Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 # Utilities
-uuid = { workspace = true }
-chrono = { workspace = true }
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8.5"  # Keep local for specific version
-anyhow = { workspace = true }
+anyhow = { version = "1.0" }
 # Logging
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
 # Security-focused dependencies with workspace versions
-base64 = { workspace = true }
+base64 = { version = "1.0" }
 jsonwebtoken = { version = "9.3", optional = true }  # Keep local - uses newer ring for security
 sha2 = "0.10"  # Keep local for crypto consistency
 hmac = "0.12"  # Keep local for crypto consistency
@@ -37,24 +37,24 @@ redis = "0.27"  # Updated to match workspace security improvements
 prometheus = "0.14"  # Keep local version
 hyper = { version = "1.5", features = ["server", "http1", "http2"] }  # Specific features instead of "full"
 urlencoding = "2.1"  # Keep local version
-async-trait = { workspace = true }
+async-trait = { version = "1.0" }
 
 # Optional dependencies with security fixes
 # pprof2 = { workspace = true, optional = true }  # Removed due to RUSTSEC-2024-0408 memory safety issue
 criterion = { version = "0.5.1", optional = true }
 
 # Command line and utilities
-clap = { workspace = true }
-futures = { workspace = true }
+clap = "4.0"
+futures = { version = "1.0" }
 pem = "3.0"  # Keep local version
 x509-parser = "0.17.0"  # Keep updated security version
 colored = "2.1.0"  # Keep compatible version
 indicatif = "0.17.8"  # Keep compatible version  
 tabular = "0.2"  # Keep local version
-hex = { workspace = true }
+hex = { version = "1.0" }
 
 # Integration dependencies with security focus
-config = { workspace = true }
+config = { version = "1.0" }
 toml = "0.8.19"  # Keep for compatibility
 xml-rs = "0.8"  # Keep local version
 # elasticsearch = "8.5"  # Commented out alpha version - use stable if needed
@@ -70,7 +70,7 @@ slack-morphism = { version = "2.14.0", optional = true }
 webhook = { version = "2.1", optional = true }
 
 # Cryptography - security-focused selection
-ring = { workspace = true, optional = true }  # Use workspace version for consistency
+ring = { version = "0.17", optional = true }  # Use stable version for consistency
 # rsa = "0.9.8"  # Removed due to RUSTSEC-2023-0071 - use ring or other alternatives
 
 # DNS resolution - security-focused DNS resolution
@@ -114,8 +114,8 @@ codegen-units = 1
 
 # Development dependencies
 [dev-dependencies]
-criterion = { workspace = true }
+criterion = { version = "1.0" }
 pretty_assertions = "1.4"
-tokio-test = { workspace = true }
-tempfile = { workspace = true }
-wiremock = { workspace = true }
+tokio-test = { version = "1.0" }
+tempfile = { version = "1.0" }
+wiremock = { version = "1.0" }

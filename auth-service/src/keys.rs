@@ -425,7 +425,7 @@ mod tests {
         // but we can test the error path through other means
 
         let key_result = current_signing_key().await;
-        assert!(key_operation_result.is_ok()); // Due to lazy initialization
+        assert!(key_result.is_ok()); // Due to lazy initialization
     }
 
     #[tokio::test]

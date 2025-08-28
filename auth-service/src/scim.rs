@@ -241,7 +241,7 @@ async fn bulk_operations(
     let mut error_count = 0;
 
     for operation in &request.operations {
-        let _result = process_single_operation(&state, operation).await;
+        let result = process_single_operation(&state, operation).await;
 
         match result {
             Ok(response_op) => {

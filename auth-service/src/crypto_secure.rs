@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use zeroize::ZeroizeOnDrop;
 use base64::Engine;
 
 #[derive(Error, Debug)]
@@ -37,11 +36,8 @@ pub enum CryptoError {
 /// Secure key material that zeroizes on drop
 #[derive(Clone)]
 pub struct SecureKey {
-    #[zeroize(skip)]
     key: LessSafeKey,
-    #[zeroize(skip)]
     id: String,
-    #[zeroize(skip)]
     created_at: chrono::DateTime<chrono::Utc>,
 }
 

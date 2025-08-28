@@ -6,7 +6,7 @@ pub mod risk_assessment;
 pub mod time_series;
 pub mod types;
 
-pub use crate::config::*;
+pub use config::*;
 pub use profiler::AdvancedUserBehaviorProfiler;
 pub use types::*;
 

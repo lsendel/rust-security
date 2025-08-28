@@ -131,7 +131,7 @@ pub async fn validate_config(
     info!("Configuration validation requested via HTTP endpoint");
 
     // Parse the configuration
-    let parsed_config: crate::config::Config = match serde_json::from_value(config) {
+    let parsed_config = match serde_json::from_value::<crate::config::Config>(config) {
         Ok(config) => config,
         Err(e) => {
             return Ok(Json(ConfigValidationResponse {
@@ -224,13 +224,12 @@ pub fn config_router(reload_manager: Arc<ConfigReloadManager>) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
     use axum::body::Body;
     use axum::http::{Method, Request};
     use tower::util::ServiceExt;
 
-    fn create_test_config() -> Config {
-        Config::default()
+    fn create_test_config() -> crate::config::Config {
+        crate::config::Config::default()
     }
 
     #[tokio::test]

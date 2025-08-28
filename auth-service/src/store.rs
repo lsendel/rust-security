@@ -253,7 +253,7 @@ impl Store for HybridStore {
             // Use the simpler Redis interface
             let result: Result<(), _> = {
                 let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
-                if set_operation_result.is_ok() {
+                if set_result.is_ok() {
                     conn.expire(&key, ttl_secs as i64).await
                 } else {
                     set_result
@@ -354,7 +354,7 @@ impl Store for HybridStore {
             let redis_result = if let Some(ttl) = ttl_secs {
                 {
                     let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
-                    if set_operation_result.is_ok() {
+                    if set_result.is_ok() {
                         let _: Result<(), _> = conn.expire(&key, ttl as i64).await;
                     }
                     set_result
@@ -410,7 +410,7 @@ impl Store for HybridStore {
             let key = format!("refresh_token:{}", refresh_token);
             match {
                 let set_result = conn.set::<_, _, ()>(&key, access_token).await;
-                if set_operation_result.is_ok() {
+                if set_result.is_ok() {
                     let _: Result<(), _> = conn.expire(&key, ttl_secs as i64).await;
                 }
                 set_result
@@ -479,7 +479,7 @@ impl Store for HybridStore {
                 // Reuse detection window 10 minutes
                 let _: Result<(), _> = {
                     let set_result = conn.set::<_, _, ()>(&key, 1).await;
-                    if set_operation_result.is_ok() {
+                    if set_result.is_ok() {
                         let _: Result<(), _> = conn.expire(&key, 600i64).await;
                     }
                     set_result

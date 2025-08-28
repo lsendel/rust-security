@@ -697,7 +697,7 @@ impl AlertCorrelationEngine {
         &self,
         alert: &SecurityAlert,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let window_duration = Duration::minutes(config.correlation_window_minutes as i64);
 
         // Calculate window boundaries

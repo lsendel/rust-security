@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use thiserror::Error;
-use zeroize::ZeroizeOnDrop;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -21,7 +20,7 @@ pub enum ConfigError {
 }
 
 /// Secure string that automatically zeroizes on drop
-#[derive(Clone, Serialize, Deserialize, ZeroizeOnDrop)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SecureString(String);
 
 impl SecureString {

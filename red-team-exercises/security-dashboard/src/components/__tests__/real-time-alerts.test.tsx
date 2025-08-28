@@ -7,7 +7,7 @@ import type { SecurityAlert } from '../../types/security'
 
 // Mock the AuthContext
 const mockAuthContext = {
-  currentUser: { id: 'test-user', email: 'test@example.com' },
+  currentUser: { id: 'test-user', email: 'test@example.com', role: 'user', permissions: ['read'] },
   isAuthenticated: true,
   login: vi.fn(),
   logout: vi.fn(),
@@ -18,25 +18,21 @@ const mockAuthContext = {
 const mockAlerts: SecurityAlert[] = [
   {
     id: 'alert-1',
-    type: 'security_breach',
     severity: 'high',
     title: 'Suspicious Login Detected',
     description: 'Multiple failed login attempts from unknown IP',
-    timestamp: '2024-01-01T12:00:00Z',
+    timestamp: new Date('2024-01-01T12:00:00Z').getTime(),
     source: 'auth-service',
-    metadata: {},
     correlatedEvents: [],
     acknowledged: false
   },
   {
     id: 'alert-2',
-    type: 'rate_limit_exceeded',
     severity: 'medium',
     title: 'Rate Limit Exceeded',
     description: 'API rate limit exceeded for client',
-    timestamp: '2024-01-01T11:30:00Z',
+    timestamp: new Date('2024-01-01T11:30:00Z').getTime(),
     source: 'api-gateway',
-    metadata: {},
     correlatedEvents: [],
     acknowledged: false
   }
@@ -74,15 +70,13 @@ describe('RealTimeAlerts', () => {
   it('limits alerts to maximum of 5', () => {
     const manyAlerts = Array.from({ length: 10 }, (_, i) => ({
       id: `alert-${i}`,
-      type: 'security_breach',
-      severity: 'low',
+      severity: 'low' as const,
       title: `Alert ${i}`,
       description: `Description ${i}`,
-      timestamp: '2024-01-01T12:00:00Z',
+      timestamp: new Date('2024-01-01T12:00:00Z').getTime(),
       source: 'test',
-      metadata: {},
-    correlatedEvents: [],
-    acknowledged: false
+      correlatedEvents: [],
+      acknowledged: false
     }))
 
     renderWithAuth(<RealTimeAlerts alerts={manyAlerts} />)

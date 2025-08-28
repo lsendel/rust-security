@@ -2,24 +2,29 @@
 edition = "2021"
 rust-version = "1.80"
 
+# PRODUCTION: Simplified workspace - only essential services
 [workspace]
 members = [
-    "auth-core",
-    "auth-service",
+    "auth-service", 
     "policy-service",
-    "common",
-    "api-contracts",
-    "compliance-tools",
-    "examples/axum-integration-example"
-, "soar-integration", "security-features"]
+    "common"
+]
 
+# PRODUCTION: Moved non-essential components to exclude for stability  
 exclude = [
     "red-team-exercises",
-    "user-portal",
+    "user-portal", 
     "security-platform",
     "input-validation",
-    "chaos-engineering",
-    "security-testing"
+    "chaos-engineering", 
+    "security-testing",
+    # Moved to exclude - can be re-enabled in development
+    "auth-core",           # Functionality merged into auth-service
+    "api-contracts",       # OpenAPI specs - not needed for runtime
+    "compliance-tools",    # Advanced compliance - not core functionality
+    "examples",            # Development examples
+    "soar-integration",    # Advanced SOAR - experimental
+    "security-features"    # Experimental security features
 ]
 
 resolver = "2"
@@ -313,12 +318,13 @@ enterprise = [
     "audit-compliance"
 ]
 
-experimental = [
-    "post-quantum-crypto",
-    "ml-threat-detection",
-    "chaos-engineering",
-    "zero-trust-networking"
-]
+# PRODUCTION: Experimental features disabled for stability
+# experimental = [
+#     "post-quantum-crypto",
+#     "ml-threat-detection", 
+#     "chaos-engineering",
+#     "zero-trust-networking"
+# ]
 
 
 # Security metadata for supply chain verification

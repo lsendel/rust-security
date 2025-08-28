@@ -7,6 +7,8 @@ use std::sync::Arc;
 
 // Core modules providing fundamental functionality
 pub mod core;
+pub mod graceful_shutdown;
+pub mod production_logging;
 
 // Suppress warnings for unused extern crate dependencies
 #[allow(unused_extern_crates)]

@@ -261,7 +261,7 @@ impl NonHumanIdentityMonitor {
                 / identity_metrics.total_requests as usize;
 
             // Calculate request rate
-            let _config = self.config.read().await;
+            let config = self.config.read().await;
             let rate = self
                 .calculate_request_rate(&identity_logs, config.rate_window_minutes)
                 .await;
@@ -273,7 +273,7 @@ impl NonHumanIdentityMonitor {
 
     /// Check for anomalies in token usage
     pub async fn check_token_anomalies(&self, usage: &TokenUsage) -> bool {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let mut anomaly_detected = false;
 
         // Check usage rate anomaly
@@ -323,7 +323,7 @@ impl NonHumanIdentityMonitor {
             .get(&identity_id)
             .ok_or(AuthError::InsufficientDataForBaseline)?;
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         if identity_logs.len() < config.min_requests_for_baseline {
             return Err(AuthError::InsufficientDataForBaseline);
@@ -447,7 +447,7 @@ impl NonHumanIdentityMonitor {
         anomaly_type: RiskFactorType,
         severity: AlertSeverity,
     ) -> Result<(), AuthError> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         match severity {
             AlertSeverity::Critical => {

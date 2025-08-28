@@ -11,7 +11,7 @@ mod auth_api;
 mod config;
 
 use auth_api::AuthState;
-use crate::config::Config;
+use config::Config;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

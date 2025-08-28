@@ -353,7 +353,7 @@ pub fn record_jit_token_issued(identity_type: &str, scopes_count: usize, lifetim
 /// Record JIT token validation
 #[cfg(feature = "monitoring")]
 pub fn record_jit_token_validation(identity_type: &str, success: bool) {
-    let _result = if success { "success" } else { "failure" };
+    let result = if success { "success" } else { "failure" };
     JIT_TOKEN_METRICS.tokens_validated
         .with_label_values(&[identity_type, result])
         .inc();
@@ -460,7 +460,7 @@ impl TokenRequestTimer {
     
     pub fn finish(self, success: bool) {
         let duration = self.timer.elapsed().as_secs_f64();
-        let _result = if success { "success" } else { "failure" };
+        let result = if success { "success" } else { "failure" };
         
         SERVICE_IDENTITY_METRICS.token_request_duration
             .with_label_values(&[&self.identity_type, result])

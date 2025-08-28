@@ -381,7 +381,7 @@ impl ThreatIntelligenceCorrelator {
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let client = redis::Client::open(config.redis_config.url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
 
@@ -396,7 +396,7 @@ impl ThreatIntelligenceCorrelator {
     async fn load_cached_indicators(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let redis_client = self.redis_client.lock().await;
         if let Some(ref client) = *redis_client {
-            let _config = self.config.read().await;
+            let config = self.config.read().await;
             let pattern = format!("{}indicator:*", config.redis_config.key_prefix);
 
             let keys: Vec<String> = redis::cmd("KEYS")
@@ -430,7 +430,7 @@ impl ThreatIntelligenceCorrelator {
 
     /// Initialize rate limiters for feeds
     async fn initialize_rate_limiters(&self) {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let mut rate_limiters = self.rate_limiters.write().await;
 
         for feed in &config.feeds {
@@ -642,7 +642,7 @@ impl ThreatIntelligenceCorrelator {
     ) {
         let mut cache = self.indicator_cache.write().await;
         let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         let cached_result = CachedResult {
             result,
@@ -680,7 +680,7 @@ impl ThreatIntelligenceCorrelator {
                 let start_time = SystemTime::now();
 
                 // Process the query
-                let _result = Self::process_intelligence_query(
+                let result = Self::process_intelligence_query(
                     &query,
                     &http_client,
                     &config,
@@ -829,7 +829,7 @@ impl ThreatIntelligenceCorrelator {
     ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
         let timer = THREAT_INTEL_RESPONSE_TIME.start_timer();
 
-        let _result = match feed.feed_type {
+        let result = match feed.feed_type {
             ThreatFeedType::AbuseIpdb => {
                 Self::query_abuse_ipdb(feed, indicator, indicator_type, http_client).await
             }

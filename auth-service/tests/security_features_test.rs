@@ -179,7 +179,7 @@ async fn test_circuit_breaker_basic() {
     assert_eq!(cb.state(), CircuitState::Closed);
 
     // First failure should open circuit
-    let _result = cb
+    let result = cb
         .call(async { Err::<(), TestError>(TestError("failure")) })
         .await;
     assert!(result.is_err());
@@ -191,7 +191,7 @@ async fn test_circuit_breaker_basic() {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // After timeout, a success should recover the circuit
-    let _result = cb.call(async { Ok::<(), TestError>(()) }).await;
+    let result = cb.call(async { Ok::<(), TestError>(()) }).await;
     assert!(result.is_ok());
 
     // After a success, circuit should be closed (since success_threshold is 1)

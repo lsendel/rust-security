@@ -213,7 +213,7 @@ impl EnhancedJwtValidator {
         let validation_metadata =
             self.create_validation_metadata(&header, &token_data.claims, validation_start)?;
 
-        let _result = JwtValidationResult {
+        let result = JwtValidationResult {
             claims: token_data.claims,
             header,
             validation_metadata,

@@ -407,7 +407,7 @@ mod tests {
             "very_strong_secret_with_mixed_chars_123!@#".to_string(),
             metadata,
         );
-        assert!(operation_result.is_ok());
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -192,7 +192,7 @@ impl AdvancedUserBehaviorProfiler {
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         let client = redis::Client::open(config.redis_config.connection_url.as_str())?;
         let connection_manager = ConnectionManager::new(client).await?;

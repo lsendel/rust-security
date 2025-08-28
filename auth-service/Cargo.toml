@@ -28,7 +28,9 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+# lazy_static = "1.4"  # Using workspace version instead
 uuid = { workspace = true }
 thiserror = { workspace = true }
 http = { workspace = true }
@@ -227,7 +229,7 @@ secrets-vault-aws = ["aws", "vault"]
 # post-quantum = ["x509-cert", "pkcs8", "der"]  # Removed pqcrypto dependencies
 # hybrid-crypto = ["p256", "p384", "ed25519-dalek", "x25519-dalek"]  # Removed post-quantum
 # Threat hunting feature flags
-# threat-hunting = ["petgraph", "geo", "indexmap", "flume", "crossbeam"]  # Removed smartcore, statrs
+threat-hunting = ["petgraph", "geo", "indexmap", "flume", "crossbeam"]
 # advanced-analytics = ["dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]  # Removed threat-hunting
 optimizations = []
 # Production feature sets

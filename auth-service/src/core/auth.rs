@@ -160,19 +160,19 @@ impl AuthResult {
 /// Authentication provider trait for implementing different auth mechanisms
 pub trait AuthProvider {
     /// Authenticate a user with credentials
-    async fn authenticate(
+    fn authenticate(
         &self,
         credentials: &AuthCredentials,
-    ) -> Result<AuthResult, CoreError>;
+    ) -> impl std::future::Future<Output = Result<AuthResult, CoreError>> + Send;
 
     /// Validate an existing token
-    async fn validate_token(&self, token: &str) -> Result<AuthResult, CoreError>;
+    fn validate_token(&self, token: &str) -> impl std::future::Future<Output = Result<AuthResult, CoreError>> + Send;
 
     /// Refresh an authentication token
-    async fn refresh_token(&self, refresh_token: &str) -> Result<AuthResult, CoreError>;
+    fn refresh_token(&self, refresh_token: &str) -> impl std::future::Future<Output = Result<AuthResult, CoreError>> + Send;
 
     /// Revoke a token
-    async fn revoke_token(&self, token: &str) -> Result<(), CoreError>;
+    fn revoke_token(&self, token: &str) -> impl std::future::Future<Output = Result<(), CoreError>> + Send;
 }
 
 /// Authentication credentials for different authentication methods

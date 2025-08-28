@@ -5,7 +5,8 @@
       "WebFetch(domain:kenhuangus.substack.com)",
       "Bash(python:*)",
       "Bash(cargo check:*)",
-      "Bash(cargo run:*)"
+      "Bash(cargo run:*)",
+      "Bash(git remote set-url:*)"
     ],
     "deny": [],
     "ask": []

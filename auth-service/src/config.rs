@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use common::{constants, UnifiedRedisConfig};
-use crate::config::{Config as ConfigBuilder, Environment, File};
+use config::{Environment, File};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::net::SocketAddr;
@@ -199,7 +199,7 @@ impl Config {
         let environment = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
         let config_dir = env::var("CONFIG_DIR").unwrap_or_else(|_| "config".to_string());
 
-        let mut builder = ConfigBuilder::builder();
+        let mut builder = config::Config::builder();
 
         // Load base configuration
         let base_config = Path::new(&config_dir).join("base.toml");

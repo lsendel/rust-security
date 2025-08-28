@@ -445,7 +445,7 @@ impl ThreatHuntingOrchestrator {
 
     /// Initialize Redis connection with cluster support
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // For now, use the first URL (in production, implement cluster support)
         let redis_url = config.redis_config.cluster_urls.first().ok_or_else(|| {

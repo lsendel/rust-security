@@ -704,7 +704,7 @@ impl Store for SqlStore {
         .fetch_optional(&mut *tx)
         .await?;
 
-        if operation_result.is_some() {
+        if result.is_some() {
             // Mark as reused
             let reuse_exp = chrono::Utc::now().timestamp() + 600; // 10 minute reuse detection window
             sqlx::query(
@@ -718,7 +718,7 @@ impl Store for SqlStore {
 
         tx.commit().await?;
 
-        Ok(operation_result.map(|(access_token_hash,)| access_token_hash))
+        Ok(result.map(|(access_token_hash,)| access_token_hash))
     }
     async fn is_refresh_reused(
         &self,

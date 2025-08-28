@@ -646,7 +646,7 @@ impl MetricsHelper {
         F: FnOnce() -> R,
     {
         let start = Instant::now();
-        let _result = operation();
+        let result = operation();
         let duration = start.elapsed();
 
         METRICS
@@ -666,7 +666,7 @@ impl MetricsHelper {
         F: FnOnce() -> Result<R, E>,
     {
         let start = Instant::now();
-        let _result = operation();
+        let result = operation();
         let duration = start.elapsed();
 
         let result_label = if operation_result.is_ok() { "success" } else { "error" };

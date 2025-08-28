@@ -43,7 +43,7 @@ impl BehavioralFeatureExtractor {
     ) -> Result<BehavioralFeatureVector, Box<dyn std::error::Error + Send + Sync>> {
         info!("Extracting behavioral features for user {}", user_id);
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // Extract features from different dimensions
         let temporal_features = self
@@ -198,7 +198,7 @@ impl BehavioralFeatureExtractor {
         &self,
         features: &BehavioralFeatureVector,
     ) -> Result<HashMap<String, f64>, Box<dyn std::error::Error + Send + Sync>> {
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let mut importance_scores = HashMap::new();
 
         // Calculate importance based on variance and configured weights

@@ -573,7 +573,7 @@ mod tests {
             let result = circuit_breaker
                 .call(async { Err::<(), SecurityError>(SecurityError::Internal) })
                 .await;
-            assert!(operation_result.is_err());
+            assert!(result.is_err());
         }
 
         // Circuit should be open now
@@ -583,7 +583,7 @@ mod tests {
         let result = circuit_breaker
             .call(async { Ok::<(), SecurityError>(()) })
             .await;
-        assert_eq!(operation_result.unwrap_err().error_code(), "SERVICE_UNAVAILABLE");
+        assert_eq!(result.unwrap_err().error_code(), "SERVICE_UNAVAILABLE");
     }
 
     #[tokio::test]
@@ -604,7 +604,7 @@ mod tests {
             })
             .await;
 
-        assert_eq!(operation_result.unwrap(), "success");
+        assert_eq!(result.unwrap(), "success");
         assert_eq!(call_count, 3);
     }
 
@@ -615,7 +615,7 @@ mod tests {
             Ok::<_, SecurityError>("success")
         })
         .await;
-        assert_eq!(operation_result.unwrap(), "success");
+        assert_eq!(result.unwrap(), "success");
 
         // Test operation that times out
         let result = with_timeout(Duration::from_millis(10), async {
@@ -623,7 +623,7 @@ mod tests {
             Ok::<_, SecurityError>("success")
         })
         .await;
-        assert_eq!(operation_result.unwrap_err().error_code(), "TIMEOUT");
+        assert_eq!(result.unwrap_err().error_code(), "TIMEOUT");
     }
 
     #[test]

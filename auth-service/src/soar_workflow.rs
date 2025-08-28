@@ -932,7 +932,7 @@ impl WorkflowOrchestrator {
                     tokio::spawn(async move {
                         let _permit = permit; // Keep permit until workflow completes
 
-                        let _result = Self::execute_workflow_internal(
+                        let result = Self::execute_workflow_internal(
                             request,
                             active_workflows,
                             step_executors,
@@ -1175,7 +1175,7 @@ impl WorkflowOrchestrator {
         }
 
         // Send response if channel is still open
-        let _result = if let Some(error) = workflow_error {
+        let result = if let Some(error) = workflow_error {
             Err(error)
         } else {
             Ok(WorkflowResult {

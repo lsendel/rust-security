@@ -95,7 +95,7 @@ impl OptimizedSecureKeyManager {
             *self.status.write().await = KeyGenerationStatus::Generating;
 
             // Generate key in background
-            let _result = self.generate_key().await;
+            let result = self.generate_key().await;
 
             match result {
                 Ok(new_key) => {

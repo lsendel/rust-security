@@ -230,8 +230,8 @@ pub async fn request_jit_token(
 
 /// GET /api/v1/identities/:id - Get identity details
 pub async fn get_identity(
-    State(state): State<Arc<ServiceIdentityApiState>>,
-    Path(id): Path<Uuid>,
+    State(_state): State<Arc<ServiceIdentityApiState>>,
+    Path(_id): Path<Uuid>,
 ) -> Result<Json<IdentityDetailsResponse>, ApiError> {
     // In production, would fetch from identity manager
     Err(ApiError::NotImplemented)
@@ -239,7 +239,7 @@ pub async fn get_identity(
 
 /// GET /api/v1/identities - List identities
 pub async fn list_identities(
-    State(state): State<Arc<ServiceIdentityApiState>>,
+    State(_state): State<Arc<ServiceIdentityApiState>>,
     Query(_query): Query<ListIdentitiesQuery>,
 ) -> Result<Json<Vec<ServiceIdentity>>, ApiError> {
     // In production, would query from identity manager with filters
@@ -305,8 +305,8 @@ pub struct RevokeTokensResponse {
 
 /// GET /api/v1/identities/:id/metrics - Get identity metrics
 pub async fn get_identity_metrics(
-    State(state): State<Arc<ServiceIdentityApiState>>,
-    Path(id): Path<Uuid>,
+    State(_state): State<Arc<ServiceIdentityApiState>>,
+    Path(_id): Path<Uuid>,
 ) -> Result<Json<IdentityMetricsResponse>, ApiError> {
     // In production, would fetch from monitoring system
     Err(ApiError::NotImplemented)
@@ -446,7 +446,7 @@ mod tests {
         };
 
         let result = convert_identity_type(dto);
-        assert!(operation_result.is_ok());
+        assert!(result.is_ok());
     }
 
     #[test]

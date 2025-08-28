@@ -168,7 +168,7 @@ impl AdvancedCircuitBreaker {
         self.check_call_allowed().await?;
 
         let start_time = Instant::now();
-        let _result = operation().await;
+        let result = operation().await;
         let duration = start_time.elapsed();
 
         // Record the call result

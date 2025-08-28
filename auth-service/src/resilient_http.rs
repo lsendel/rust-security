@@ -171,7 +171,7 @@ impl ResilientRequestBuilder {
                         reason: "Cannot retry request with streaming body".to_string(),
                     })?;
 
-            let _result = self
+            let result = self
                 .circuit_breaker
                 .call(async move { request.send().await })
                 .await;

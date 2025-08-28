@@ -161,7 +161,7 @@ impl CaseManagementSystem {
         };
 
         // Calculate SLA deadlines based on severity
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
         let response_deadline = now + Duration::hours(
             config.default_sla.response_time_hours
                 .get(&format!("{:?}", severity))

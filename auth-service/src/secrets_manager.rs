@@ -403,7 +403,7 @@ impl SecretsManager {
             .as_ref()
             .ok_or_else(|| SecretsError::AwsError("AWS client not initialized".to_string()))?;
 
-        let _result = client
+        let result = client
             .get_secret_value()
             .secret_id(name)
             .send()
@@ -678,8 +678,8 @@ mod tests {
         let manager = SecretsManager::new_with_config(config).await.unwrap();
         let result = manager.get_secret("NONEXISTENT_SECRET").await;
 
-        assert!(operation_result.is_err());
-        match operation_result.unwrap_err() {
+        assert!(result.is_err());
+        match result.unwrap_err() {
             SecretsError::EnvError { name } => assert_eq!(name, "NONEXISTENT_SECRET"),
             _ => panic!("Expected EnvError"),
         }

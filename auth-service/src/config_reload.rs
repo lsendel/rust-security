@@ -151,7 +151,7 @@ impl ConfigReloadManager {
         let new_config = if let Some(config_path) = &self.config_path {
             self.load_config_from_file(config_path).await?
         } else {
-            Config::load()?
+            crate::config::Config::load()?
         };
 
         // Validate the new configuration
@@ -238,7 +238,7 @@ impl ConfigReloadManager {
     }
 
     /// Validate configuration
-    pub async fn validate_config(&self, config: &Config) -> Result<(), Vec<String>> {
+    pub async fn validate_config(&self, config: &crate::config::Config) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
         // Validate using validator crate
@@ -264,7 +264,7 @@ impl ConfigReloadManager {
     }
 
     /// Detect changes between configurations
-    async fn detect_changes(&self, old_config: &Config, new_config: &Config) -> Vec<ConfigChange> {
+    async fn detect_changes(&self, old_config: &crate::config::Config, new_config: &crate::config::Config) -> Vec<ConfigChange> {
         let mut changes = Vec::new();
 
         // Compare bind address
@@ -382,10 +382,8 @@ pub struct ConfigReloadMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
-
-    fn create_test_config() -> Config {
-        Config::default()
+    fn create_test_config() -> crate::config::Config {
+        crate::config::Config::default()
     }
 
     #[tokio::test]
@@ -424,8 +422,8 @@ mod tests {
         let (manager, _receiver) = ConfigReloadManager::new(create_test_config(), None);
         let result = manager.validate_config(&config).await;
 
-        assert!(operation_result.is_err());
-        let errors = operation_result.unwrap_err();
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
         assert!(errors.iter().any(|e| e.contains("bind_addr")));
     }
 }

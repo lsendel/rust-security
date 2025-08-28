@@ -38,7 +38,7 @@ impl RiskAssessmentEngine {
     ) -> Result<RiskAssessment, Box<dyn std::error::Error + Send + Sync>> {
         info!("Performing risk assessment for user {}", user_id);
 
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // Calculate individual risk factors
         let mut risk_factors = Vec::new();
@@ -121,7 +121,7 @@ impl RiskAssessmentEngine {
         temporal_features: &TemporalFeatures,
     ) -> Result<Vec<RiskFactor>, Box<dyn std::error::Error + Send + Sync>> {
         let mut risk_factors = Vec::new();
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // Login frequency anomalies
         if temporal_features.login_frequency > 50.0 {
@@ -217,7 +217,7 @@ impl RiskAssessmentEngine {
         location_features: &LocationFeatures,
     ) -> Result<Vec<RiskFactor>, Box<dyn std::error::Error + Send + Sync>> {
         let mut risk_factors = Vec::new();
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // High location entropy (too many different locations)
         if location_features.location_entropy > 3.0 {
@@ -304,7 +304,7 @@ impl RiskAssessmentEngine {
         device_features: &DeviceFeatures,
     ) -> Result<Vec<RiskFactor>, Box<dyn std::error::Error + Send + Sync>> {
         let mut risk_factors = Vec::new();
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // Too many unique devices
         if device_features.unique_devices > 10 {
@@ -369,7 +369,7 @@ impl RiskAssessmentEngine {
         network_features: &NetworkFeatures,
     ) -> Result<Vec<RiskFactor>, Box<dyn std::error::Error + Send + Sync>> {
         let mut risk_factors = Vec::new();
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // Suspicious IP interactions
         if network_features.suspicious_ip_interactions > 0 {
@@ -434,7 +434,7 @@ impl RiskAssessmentEngine {
         activity_features: &ActivityFeatures,
     ) -> Result<Vec<RiskFactor>, Box<dyn std::error::Error + Send + Sync>> {
         let mut risk_factors = Vec::new();
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         // High failed action rate
         if activity_features.failed_action_rate > 0.1 {
@@ -481,7 +481,7 @@ impl RiskAssessmentEngine {
         anomaly_scores: &HashMap<String, f64>,
     ) -> Result<Vec<RiskFactor>, Box<dyn std::error::Error + Send + Sync>> {
         let mut risk_factors = Vec::new();
-        let _config = self.config.read().await;
+        let config = self.config.read().await;
 
         for (anomaly_type, &score) in anomaly_scores {
             if score > 0.8 {

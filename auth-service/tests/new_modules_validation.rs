@@ -88,7 +88,7 @@ mod service_identity_tests {
             allowed_hours: None,
         };
 
-        let _result = manager.register_identity(identity_type, config).await;
+        let result = manager.register_identity(identity_type, config).await;
         assert!(
             result.is_ok(),
             "Should successfully register service identity"
@@ -114,7 +114,7 @@ mod service_identity_tests {
             allowed_hours: None,
         };
 
-        let _result = manager.register_identity(identity_type, config).await;
+        let result = manager.register_identity(identity_type, config).await;
         assert!(result.is_ok(), "Should create API key identity");
 
         let api_key_identity = result.unwrap();
@@ -148,7 +148,7 @@ mod service_identity_tests {
             allowed_hours: Some((8, 18)), // Business hours
         };
 
-        let _result = manager.register_identity(identity_type, config).await;
+        let result = manager.register_identity(identity_type, config).await;
         assert!(result.is_ok(), "Should create AI agent identity");
 
         let ai_agent = result.unwrap();
