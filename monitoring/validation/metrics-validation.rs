@@ -359,7 +359,7 @@ impl MetricsValidator {
             iteration += 1;
             
             if iteration % 100 == 0 {
-                let result = self.validate_registry(registry).await;
+                let _result = self.validate_registry(registry).await;
                 if !result.is_valid {
                     println!("Validation failed at iteration {}: {:?}", iteration, result.errors);
                     return result;
@@ -478,7 +478,7 @@ mod tests {
         let counter = IntCounter::new("auth_test_total", "Test counter").unwrap();
         registry.register(Box::new(counter)).unwrap();
         
-        let result = validator.validate_registry(&registry).await;
+        let _result = validator.validate_registry(&registry).await;
         assert!(!result.errors.is_empty()); // Should have errors due to missing required metrics
     }
 
@@ -503,7 +503,7 @@ test_bucket{le="+Inf"} 15
         let validator = MetricsValidator::new(config);
         let registry = Registry::new();
         
-        let result = validator
+        let _result = validator
             .load_test_cardinality(&registry, Duration::from_millis(100))
             .await;
         

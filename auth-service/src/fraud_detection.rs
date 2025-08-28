@@ -287,7 +287,7 @@ impl FraudDetectionEngine {
     ) -> FraudAssessment {
         let mut risk_factors = Vec::new();
         let mut total_risk_score = 0.0;
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         // Velocity analysis
         let velocity_risk = self.analyze_velocity(user_id, transaction_type).await;

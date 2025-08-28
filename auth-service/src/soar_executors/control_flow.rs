@@ -78,7 +78,7 @@ impl StepExecutor for DecisionExecutor {
                 retryable: false,
             })?;
 
-        let result = self.evaluate_condition(condition, context)?;
+        let _result = self.evaluate_condition(condition, context)?;
 
         SecurityLogger::log_event(
             &SecurityEvent::new(

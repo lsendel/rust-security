@@ -198,7 +198,7 @@ impl ShardedRateLimiter {
         let mut shard_sizes = Vec::new();
 
         for shard in &self.shards {
-            let size = shard.len();
+            let _size = shard.len();
             total_entries += size;
             shard_sizes.push(size);
         }

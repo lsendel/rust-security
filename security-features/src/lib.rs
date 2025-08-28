@@ -21,22 +21,22 @@ use thiserror::Error;
 pub enum SecurityError {
     #[error("Authentication failed: {reason}")]
     AuthenticationFailed { reason: String },
-    
+
     #[error("Authorization denied: {reason}")]
     AuthorizationDenied { reason: String },
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Validation failed: {field}")]
     ValidationFailed { field: String },
-    
+
     #[error("Encryption error: {reason}")]
     EncryptionError { reason: String },
-    
+
     #[error("Token invalid or expired")]
     TokenInvalid,
-    
+
     #[error("Security policy violation: {policy}")]
     PolicyViolation { policy: String },
 }
@@ -83,13 +83,13 @@ pub struct UserInfo {
 pub trait AuthenticationProvider: Send + Sync {
     /// Authenticate a user
     async fn authenticate(&self, request: AuthenticationRequest) -> Result<AuthenticationResponse>;
-    
+
     /// Verify a token
     async fn verify_token(&self, token: &str) -> Result<SecurityContext>;
-    
+
     /// Refresh an authentication token
     async fn refresh_token(&self, refresh_token: &str) -> Result<AuthenticationResponse>;
-    
+
     /// Revoke a token
     async fn revoke_token(&self, token: &str) -> Result<()>;
 }
@@ -99,10 +99,10 @@ pub trait AuthenticationProvider: Send + Sync {
 pub trait RateLimiter: Send + Sync {
     /// Check if request is allowed
     async fn check_rate_limit(&self, key: &str, limit: u32, window: Duration) -> Result<bool>;
-    
+
     /// Record a request
     async fn record_request(&self, key: &str) -> Result<()>;
-    
+
     /// Get remaining requests
     async fn get_remaining(&self, key: &str, limit: u32, window: Duration) -> Result<u32>;
 }
@@ -112,10 +112,10 @@ pub trait RateLimiter: Send + Sync {
 pub trait ThreatDetector: Send + Sync {
     /// Analyze request for threats
     async fn analyze_request(&self, context: &SecurityContext) -> Result<ThreatAssessment>;
-    
+
     /// Report suspicious activity
     async fn report_suspicious_activity(&self, activity: SuspiciousActivity) -> Result<()>;
-    
+
     /// Get threat intelligence
     async fn get_threat_intel(&self, indicator: &str) -> Result<ThreatIntel>;
 }
@@ -188,7 +188,7 @@ mod tests {
             permissions: vec!["read".to_string(), "write".to_string()],
             metadata: HashMap::new(),
         };
-        
+
         assert!(context.authenticated);
         assert_eq!(context.permissions.len(), 2);
     }

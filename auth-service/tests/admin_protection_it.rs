@@ -1,8 +1,8 @@
+use ::common::TokenRecord;
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
 use auth_service::{api_key_store::ApiKeyStore, app, AppState};
-use ::common::TokenRecord;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;

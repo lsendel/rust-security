@@ -1,5 +1,5 @@
-use redis::{Client, RedisError};
 use redis::aio::MultiplexedConnection;
+use redis::{Client, RedisError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -37,10 +37,10 @@ impl AsyncTokenStorage {
     /// Store a token with associated data
     pub async fn store_token(&self, token: &str, data: &TokenData) -> Result<(), TokenError> {
         let mut conn = self.get_connection().await?;
-        
-        let json_data = serde_json::to_string(data)
-            .map_err(|e| TokenError::Serialization(e.to_string()))?;
-        
+
+        let json_data =
+            serde_json::to_string(data).map_err(|e| TokenError::Serialization(e.to_string()))?;
+
         redis::cmd("SET")
             .arg(format!("token:{}", token))
             .arg(&json_data)
@@ -48,19 +48,19 @@ impl AsyncTokenStorage {
             .arg(3600) // 1 hour expiration
             .query_async::<()>(&mut conn)
             .await?;
-        
+
         Ok(())
     }
 
     /// Get token data
     pub async fn get_token(&self, token: &str) -> Result<Option<TokenData>, TokenError> {
         let mut conn = self.get_connection().await?;
-        
+
         let result: Option<String> = redis::cmd("GET")
             .arg(format!("token:{}", token))
             .query_async(&mut conn)
             .await?;
-        
+
         match result {
             Some(json_data) => {
                 let data: TokenData = serde_json::from_str(&json_data)
@@ -74,12 +74,12 @@ impl AsyncTokenStorage {
     /// Delete a token
     pub async fn delete_token(&self, token: &str) -> Result<bool, TokenError> {
         let mut conn = self.get_connection().await?;
-        
+
         let deleted: i32 = redis::cmd("DEL")
             .arg(format!("token:{}", token))
             .query_async(&mut conn)
             .await?;
-        
+
         Ok(deleted > 0)
     }
 
@@ -107,7 +107,7 @@ pub fn is_token_expired(data: &TokenData) -> bool {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    
+
     data.expires_at < now
 }
 
@@ -119,22 +119,22 @@ mod tests {
     async fn test_token_storage_basic_operations() {
         // This test would need a running Redis instance
         // For now, we'll just test token data creation and expiration
-        
+
         let token_data = create_token_data(
             "user123".to_string(),
             9999999999, // Far future
             vec!["read".to_string(), "write".to_string()],
         );
-        
+
         assert_eq!(token_data.user_id, "user123");
         assert!(!is_token_expired(&token_data));
-        
+
         let expired_data = create_token_data(
             "user123".to_string(),
             1, // Far past
             vec!["read".to_string()],
         );
-        
+
         assert!(is_token_expired(&expired_data));
     }
 
@@ -144,19 +144,19 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         let valid_data = create_token_data(
             "user1".to_string(),
             current_time + 3600, // 1 hour from now
             vec!["read".to_string()],
         );
-        
+
         let expired_data = create_token_data(
             "user2".to_string(),
             current_time - 3600, // 1 hour ago
             vec!["read".to_string()],
         );
-        
+
         assert!(!is_token_expired(&valid_data));
         assert!(is_token_expired(&expired_data));
     }

@@ -700,7 +700,7 @@ impl AttackVector for EmailAttack {
     async fn execute(&self, target: &Target) -> Result<AttackResult> {
         info!("Executing email attack against target: {}", target.name);
         
-        let result = self.send_email(target).await?;
+        let _result = self.send_email(target).await?;
         Ok(result.base_result)
     }
     

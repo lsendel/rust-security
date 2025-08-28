@@ -44,7 +44,7 @@ notifications:
         write!(config_file, "{}", config_content).unwrap();
 
         // Test JSON output format
-        let result = collect_metrics_json(config_file.path().to_str().unwrap()).await;
+        let _result = collect_metrics_json(config_file.path().to_str().unwrap()).await;
         assert!(result.is_ok());
         
         let json_str = result.unwrap();
@@ -81,7 +81,7 @@ notifications:
 "#;
         write!(config_file, "{}", config_content).unwrap();
 
-        let result = collect_metrics_prometheus(config_file.path().to_str().unwrap()).await;
+        let _result = collect_metrics_prometheus(config_file.path().to_str().unwrap()).await;
         assert!(result.is_ok());
         
         let prometheus_output = result.unwrap();
@@ -116,7 +116,7 @@ notifications:
 "#;
         write!(config_file, "{}", config_content).unwrap();
 
-        let result = collect_metrics_csv(config_file.path().to_str().unwrap()).await;
+        let _result = collect_metrics_csv(config_file.path().to_str().unwrap()).await;
         assert!(result.is_ok());
         
         let csv_output = result.unwrap();

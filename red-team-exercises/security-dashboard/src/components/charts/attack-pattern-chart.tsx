@@ -21,46 +21,98 @@ interface AttackPatternChartProps {
 
 export function AttackPatternChart({ threats }: AttackPatternChartProps) {
   const attackTypeData = useMemo(() => {
-    const typeCounts = threats.reduce((acc, threat) => {
-      acc[threat.type] = (acc[threat.type] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+    if (!threats || !Array.isArray(threats) || threats.length === 0) {
+      return []
+    }
 
-    return Object.entries(typeCounts)
-      .map(([type, count]) => ({ type, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10) // Top 10 attack types
+    try {
+      const typeCounts = threats.reduce((acc, threat) => {
+        if (threat && threat.type && typeof threat.type === 'string') {
+          acc[threat.type] = (acc[threat.type] || 0) + 1
+        }
+        return acc
+      }, {} as Record<string, number>)
+
+      return Object.entries(typeCounts)
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10) // Top 10 attack types
+    } catch (error) {
+      console.error('Error processing attack type data:', error)
+      return []
+    }
   }, [threats])
 
   const severityData = useMemo(() => {
-    const severityCounts = threats.reduce((acc, threat) => {
-      acc[threat.severity] = (acc[threat.severity] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+    if (!threats || !Array.isArray(threats) || threats.length === 0) {
+      return []
+    }
 
-    return Object.entries(severityCounts).map(([severity, count]) => ({
-      severity,
-      count,
-      color: getSeverityColor(severity)
-    }))
+    try {
+      const severityCounts = threats.reduce((acc, threat) => {
+        if (threat && threat.severity && typeof threat.severity === 'string') {
+          acc[threat.severity] = (acc[threat.severity] || 0) + 1
+        }
+        return acc
+      }, {} as Record<string, number>)
+
+      return Object.entries(severityCounts).map(([severity, count]) => ({
+        severity,
+        count,
+        color: getSeverityColor(severity)
+      }))
+    } catch (error) {
+      console.error('Error processing severity data:', error)
+      return []
+    }
   }, [threats])
 
   const timePatternData = useMemo(() => {
-    const hourCounts = new Array(24).fill(0)
-    
-    threats.forEach(threat => {
-      const hour = new Date(threat.timestamp).getHours()
-      hourCounts[hour]++
-    })
+    if (!threats || !Array.isArray(threats) || threats.length === 0) {
+      return Array.from({ length: 24 }, (_, hour) => ({
+        hour: `${hour}:00`,
+        count: 0
+      }))
+    }
 
-    return hourCounts.map((count, hour) => ({
-      hour: `${hour}:00`,
-      count
-    }))
+    try {
+      const hourCounts = new Array(24).fill(0)
+      
+      threats.forEach(threat => {
+        if (threat && threat.timestamp) {
+          try {
+            const date = new Date(threat.timestamp)
+            if (!isNaN(date.getTime())) {
+              const hour = date.getHours()
+              if (hour >= 0 && hour < 24) {
+                hourCounts[hour]++
+              }
+            }
+          } catch (dateError) {
+            console.warn('Invalid timestamp:', threat.timestamp, dateError)
+          }
+        }
+      })
+
+      return hourCounts.map((count, hour) => ({
+        hour: `${hour}:00`,
+        count
+      }))
+    } catch (error) {
+      console.error('Error processing time pattern data:', error)
+      return Array.from({ length: 24 }, (_, hour) => ({
+        hour: `${hour}:00`,
+        count: 0
+      }))
+    }
   }, [threats])
 
-  function getSeverityColor(severity: string) {
-    switch (severity) {
+  function getSeverityColor(severity: string): string {
+    if (!severity || typeof severity !== 'string') {
+      return '#6b7280'
+    }
+    
+    switch (severity.toLowerCase()) {
       case 'critical': return '#ef4444'
       case 'high': return '#f97316'
       case 'medium': return '#eab308'
@@ -69,20 +121,53 @@ export function AttackPatternChart({ threats }: AttackPatternChartProps) {
     }
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
+  const CustomTooltip = useMemo(() => ({ active, payload, label }: any) => {
+    if (!active || !payload || !Array.isArray(payload) || payload.length === 0) {
+      return null
+    }
+
+    try {
       return (
         <div className="bg-background border rounded-lg shadow-lg p-3">
-          <p className="text-sm font-medium mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {`${entry.name || entry.dataKey}: ${entry.value}`}
-            </p>
-          ))}
+          <p className="text-sm font-medium mb-2">{label || 'Unknown'}</p>
+          {payload.map((entry: any, index: number) => {
+            const name = entry.name || entry.dataKey || 'Value'
+            const value = typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value || 'N/A'
+            const color = entry.color || '#6b7280'
+            
+            return (
+              <p key={index} className="text-sm" style={{ color }}>
+                {`${name}: ${value}`}
+              </p>
+            )
+          })}
         </div>
       )
+    } catch (error) {
+      console.error('Error rendering tooltip:', error)
+      return null
     }
-    return null
+  }, [])
+
+  // Early return for invalid data
+  if (!threats || !Array.isArray(threats)) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No threat data available</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (threats.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No threats detected</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -56,7 +56,7 @@ impl CoverageAnalyzer {
         ];
 
         for endpoint in standard_endpoints {
-            let result = self.client.get(&format!("{}{}", target, endpoint)).send().await;
+            let _result = self.client.get(&format!("{}{}", target, endpoint)).send().await;
 
             if let Ok(response) = result {
                 // Consider endpoint discovered if it doesn't return 404
@@ -82,7 +82,7 @@ impl CoverageAnalyzer {
         ];
 
         for pattern in endpoint_patterns {
-            let result = self.client.get(&format!("{}{}", target, pattern)).send().await;
+            let _result = self.client.get(&format!("{}{}", target, pattern)).send().await;
 
             if let Ok(response) = result {
                 if response.status().as_u16() != 404 {
@@ -164,7 +164,7 @@ impl CoverageAnalyzer {
         // Test 4: Check HTTP methods allowed
         let methods = vec!["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"];
         for method in methods {
-            let result = match method {
+            let _result = match method {
                 "GET" => self.client.get(&format!("{}{}", target, endpoint)).send().await,
                 "POST" => self.client.post(&format!("{}{}", target, endpoint)).send().await,
                 "PUT" => self.client.put(&format!("{}{}", target, endpoint)).send().await,

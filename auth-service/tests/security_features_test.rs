@@ -40,9 +40,11 @@ async fn spawn_app() -> String {
             auth_service::policy_cache::PolicyCacheConfig::default(),
         )),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
-        api_key_store: Arc::new(auth_service::api_key_store::ApiKeyStore::new(":memory:")
-            .await
-            .unwrap()),
+        api_key_store: Arc::new(
+            auth_service::api_key_store::ApiKeyStore::new(":memory:")
+                .await
+                .unwrap(),
+        ),
         jwks_manager: Arc::new(
             auth_service::jwks_rotation::JwksManager::new(
                 auth_service::jwks_rotation::KeyRotationConfig::default(),
@@ -177,7 +179,7 @@ async fn test_circuit_breaker_basic() {
     assert_eq!(cb.state(), CircuitState::Closed);
 
     // First failure should open circuit
-    let result = cb
+    let _result = cb
         .call(async { Err::<(), TestError>(TestError("failure")) })
         .await;
     assert!(result.is_err());
@@ -189,7 +191,7 @@ async fn test_circuit_breaker_basic() {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // After timeout, a success should recover the circuit
-    let result = cb.call(async { Ok::<(), TestError>(()) }).await;
+    let _result = cb.call(async { Ok::<(), TestError>(()) }).await;
     assert!(result.is_ok());
 
     // After a success, circuit should be closed (since success_threshold is 1)

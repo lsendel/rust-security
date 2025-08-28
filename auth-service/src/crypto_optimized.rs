@@ -425,7 +425,7 @@ pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
 #[cfg(not(feature = "simd"))]
 pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
     use ring::constant_time;
-    constant_time::verify_slices_are_equal(a, b).is_ok()
+    constant_time::constant_time_eq::constant_time_eq(a, b)
 }
 
 #[cfg(test)]

@@ -1,13 +1,18 @@
 use base64::Engine as _;
 use once_cell::sync::Lazy;
-use ring::{digest, hmac, rand::{SecureRandom as RingSecureRandom, SystemRandom}};
+use ring::{
+    digest, hmac,
+    rand::{SecureRandom as RingSecureRandom, SystemRandom},
+};
 
 /// Secure token binding salt - loaded from environment or generated
 static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
     std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
         // Generate a cryptographically secure salt
         let mut salt = [0u8; 32];
-        SystemRandom::new().fill(&mut salt).expect("Failed to generate salt");
+        SystemRandom::new()
+            .fill(&mut salt)
+            .expect("Failed to generate salt");
         hex::encode(salt)
     })
 });
@@ -15,25 +20,25 @@ static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
 /// Generate a token binding value from client information using secure practices
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<String, SecurityError> {
     let salt = TOKEN_BINDING_SALT.as_bytes();
-    
+
     // Use HMAC-SHA256 for secure binding
     let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
     let mut ctx = hmac::Context::with_key(&key);
-    
+
     ctx.update(client_ip.as_bytes());
     ctx.update(b"|"); // Separator to prevent collision attacks
     ctx.update(user_agent.as_bytes());
     ctx.update(b"|");
     ctx.update(&chrono::Utc::now().timestamp().to_be_bytes()); // Add timestamp
-    
+
     let tag = ctx.sign();
     Ok(base64::engine::general_purpose::STANDARD.encode(tag.as_ref()))
 }
 
 /// Validate token binding to ensure token is used from the same client
 pub fn validate_token_binding(
-    stored_binding: &str, 
-    client_ip: &str, 
+    stored_binding: &str,
+    client_ip: &str,
     user_agent: &str,
     max_age_seconds: i64,
 ) -> Result<bool, SecurityError> {
@@ -41,32 +46,32 @@ pub fn validate_token_binding(
     let stored_bytes = base64::engine::general_purpose::STANDARD
         .decode(stored_binding)
         .map_err(|_| SecurityError::InvalidTokenBinding)?;
-    
+
     // For validation, we need to check against recent timestamps
     let now = chrono::Utc::now().timestamp();
-    
+
     // Check multiple recent timestamps to account for clock skew
     for offset in 0..=max_age_seconds {
         let test_timestamp = now - offset;
-        
+
         let salt = TOKEN_BINDING_SALT.as_bytes();
         let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
         let mut ctx = hmac::Context::with_key(&key);
-        
+
         ctx.update(client_ip.as_bytes());
         ctx.update(b"|");
         ctx.update(user_agent.as_bytes());
         ctx.update(b"|");
         ctx.update(&test_timestamp.to_be_bytes());
-        
+
         let expected_tag = ctx.sign();
-        
+
         // Use constant-time comparison to prevent timing attacks
         if hmac::verify(&key, &stored_bytes, expected_tag.as_ref()).is_ok() {
             return Ok(true);
         }
     }
-    
+
     Ok(false)
 }
 
@@ -78,10 +83,10 @@ pub fn generate_code_verifier() -> Result<String, SecurityError> {
     SystemRandom::new()
         .fill(&mut bytes)
         .map_err(|_| SecurityError::RandomGenerationFailed)?;
-    
+
     // Encode using URL-safe base64 without padding
     let mut verifier = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-    
+
     // Ensure minimum length requirement (43-128 characters per RFC 7636)
     while verifier.len() < 43 {
         let mut additional = [0u8; 8];
@@ -90,7 +95,7 @@ pub fn generate_code_verifier() -> Result<String, SecurityError> {
             .map_err(|_| SecurityError::RandomGenerationFailed)?;
         verifier.push_str(&base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(additional));
     }
-    
+
     // Truncate to maximum length
     verifier.truncate(128);
     Ok(verifier)
@@ -101,17 +106,22 @@ pub fn generate_code_challenge(code_verifier: &str) -> Result<String, SecurityEr
     if code_verifier.len() < 43 || code_verifier.len() > 128 {
         return Err(SecurityError::InvalidCodeVerifier);
     }
-    
+
     let digest = digest::digest(&digest::SHA256, code_verifier.as_bytes());
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest.as_ref()))
 }
 
 /// Verify a code verifier against a code challenge with timing attack protection
-pub fn verify_code_challenge(code_verifier: &str, code_challenge: &str) -> Result<bool, SecurityError> {
+pub fn verify_code_challenge(
+    code_verifier: &str,
+    code_challenge: &str,
+) -> Result<bool, SecurityError> {
     let computed_challenge = generate_code_challenge(code_verifier)?;
-    
+
     // Use constant-time comparison to prevent timing attacks
-    Ok(computed_challenge == code_challenge)
+    use constant_time_eq::constant_time_eq;
+    let eq = constant_time_eq(computed_challenge.as_bytes(), code_challenge.as_bytes());
+    Ok(eq)
 }
 
 /// PKCE challenge methods - Only S256 is supported for security
@@ -127,10 +137,10 @@ impl std::str::FromStr for CodeChallengeMethod {
         match s {
             "S256" => Ok(CodeChallengeMethod::S256),
             "plain" => Err(SecurityError::UnsupportedChallengeMethod(
-                "Plain PKCE method is not supported for security reasons".to_string()
+                "Plain PKCE method is not supported for security reasons".to_string(),
             )),
             _ => Err(SecurityError::UnsupportedChallengeMethod(
-                "Only S256 challenge method is supported".to_string()
+                "Only S256 challenge method is supported".to_string(),
             )),
         }
     }
@@ -143,15 +153,21 @@ pub fn validate_pkce_params(
     method: CodeChallengeMethod,
 ) -> Result<bool, SecurityError> {
     // Validate code verifier format
-    if !code_verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~') {
+    if !code_verifier
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_' || c == '~')
+    {
         return Err(SecurityError::InvalidCodeVerifier);
     }
-    
+
     // Validate code challenge format
-    if !code_challenge.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if !code_challenge
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(SecurityError::InvalidCodeChallenge);
     }
-    
+
     match method {
         CodeChallengeMethod::S256 => verify_code_challenge(code_verifier, code_challenge),
     }
@@ -168,12 +184,12 @@ pub fn generate_request_signature(
     if secret.len() < 32 {
         return Err(SecurityError::WeakSigningSecret);
     }
-    
+
     let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
-    
+
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let signature = hmac::sign(&key, message.as_bytes());
-    
+
     Ok(base64::engine::general_purpose::STANDARD.encode(signature.as_ref()))
 }
 
@@ -189,15 +205,20 @@ pub fn verify_request_signature(
     // Check timestamp window (prevent replay attacks)
     let now = chrono::Utc::now().timestamp();
     let time_diff = (now - timestamp).abs();
-    
-    if time_diff > 300 { // 5 minutes window
+
+    if time_diff > 300 {
+        // 5 minutes window
         return Err(SecurityError::RequestTooOld);
     }
-    
+
     let expected_signature = generate_request_signature(method, path, body, timestamp, secret)?;
-    
+
     // Use constant-time comparison
-    Ok(expected_signature == signature)
+    use constant_time_eq::constant_time_eq;
+    let expected_bytes = expected_signature.as_bytes();
+    let provided_bytes = signature.as_bytes();
+    let eq = constant_time_eq(expected_bytes, provided_bytes);
+    Ok(eq)
 }
 
 /// Security error types
@@ -230,26 +251,27 @@ impl SecureRandom {
             rng: SystemRandom::new(),
         }
     }
-    
+
     /// Generate secure random bytes
     pub fn generate_bytes(&self, len: usize) -> Result<Vec<u8>, SecurityError> {
         let mut bytes = vec![0u8; len];
-        self.rng.fill(&mut bytes)
+        self.rng
+            .fill(&mut bytes)
             .map_err(|_| SecurityError::RandomGenerationFailed)?;
         Ok(bytes)
     }
-    
+
     /// Generate secure random string (base64url encoded)
     pub fn generate_string(&self, byte_len: usize) -> Result<String, SecurityError> {
         let bytes = self.generate_bytes(byte_len)?;
         Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
     }
-    
+
     /// Generate secure session ID
     pub fn generate_session_id(&self) -> Result<String, SecurityError> {
         self.generate_string(32) // 256 bits of entropy
     }
-    
+
     /// Generate secure API key
     pub fn generate_api_key(&self) -> Result<String, SecurityError> {
         let bytes = self.generate_bytes(32)?;
@@ -272,16 +294,18 @@ mod tests {
         let verifier = generate_code_verifier().unwrap();
         assert!(verifier.len() >= 43);
         assert!(verifier.len() <= 128);
-        
+
         // Should only contain URL-safe characters
-        assert!(verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(verifier
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
     }
 
     #[test]
     fn test_pkce_flow() {
         let verifier = generate_code_verifier().unwrap();
         let challenge = generate_code_challenge(&verifier).unwrap();
-        
+
         assert!(verify_code_challenge(&verifier, &challenge).unwrap());
         assert!(!verify_code_challenge("wrong_verifier", &challenge).unwrap());
     }
@@ -290,15 +314,16 @@ mod tests {
     fn test_request_signing() {
         let secret = "test_secret_that_is_long_enough_for_security";
         let timestamp = chrono::Utc::now().timestamp();
-        
+
         let signature = generate_request_signature(
             "POST",
             "/oauth/token",
             "grant_type=client_credentials",
             timestamp,
             secret,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         assert!(verify_request_signature(
             "POST",
             "/oauth/token",
@@ -306,16 +331,17 @@ mod tests {
             timestamp,
             &signature,
             secret,
-        ).unwrap());
+        )
+        .unwrap());
     }
 
     #[test]
     fn test_token_binding() {
         let binding = generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap();
-        
+
         // Should validate within time window
         assert!(validate_token_binding(&binding, "192.168.1.1", "Mozilla/5.0", 300).unwrap());
-        
+
         // Should not validate with different IP
         assert!(!validate_token_binding(&binding, "192.168.1.2", "Mozilla/5.0", 300).unwrap());
     }

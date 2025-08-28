@@ -185,7 +185,7 @@ impl Default for SecurityConfig {
     fn default() -> Self {
         Self {
             jwt_secret: "change-me-in-production".to_string(),
-            jwt_expiration: 3600, // 1 hour
+            jwt_expiration: 3600,                // 1 hour
             refresh_token_expiration: 86400 * 7, // 7 days
             request_signing_secret: "change-me-in-production".to_string(),
             token_binding_salt: "change-me-in-production".to_string(),
@@ -239,22 +239,22 @@ impl ConfigLoader {
     /// Load configuration from environment variables and files
     pub fn load() -> Result<ProductionConfig> {
         let mut config = ProductionConfig::default();
-        
+
         // Load from environment variables
         Self::load_from_env(&mut config)?;
-        
+
         // Load from configuration file if specified
         if let Ok(config_file) = env::var("CONFIG_FILE") {
             Self::load_from_file(&mut config, &config_file)?;
         }
-        
+
         // Validate configuration
         Self::validate_config(&config)?;
-        
+
         info!("Configuration loaded successfully");
         Ok(config)
     }
-    
+
     /// Load configuration from environment variables
     fn load_from_env(config: &mut ProductionConfig) -> Result<()> {
         // Server configuration
@@ -267,23 +267,26 @@ impl ConfigLoader {
         if let Ok(workers) = env::var("SERVER_WORKERS") {
             config.server.workers = Some(workers.parse().context("Invalid SERVER_WORKERS")?);
         }
-        
+
         // Database configuration
         if let Ok(url) = env::var("DATABASE_URL") {
             config.database.url = url;
         }
         if let Ok(max_conn) = env::var("DATABASE_MAX_CONNECTIONS") {
-            config.database.max_connections = max_conn.parse().context("Invalid DATABASE_MAX_CONNECTIONS")?;
+            config.database.max_connections = max_conn
+                .parse()
+                .context("Invalid DATABASE_MAX_CONNECTIONS")?;
         }
-        
+
         // Redis configuration
         if let Ok(url) = env::var("REDIS_URL") {
             config.redis.url = url;
         }
         if let Ok(max_conn) = env::var("REDIS_MAX_CONNECTIONS") {
-            config.redis.max_connections = max_conn.parse().context("Invalid REDIS_MAX_CONNECTIONS")?;
+            config.redis.max_connections =
+                max_conn.parse().context("Invalid REDIS_MAX_CONNECTIONS")?;
         }
-        
+
         // Security configuration
         if let Ok(secret) = env::var("JWT_SECRET") {
             config.security.jwt_secret = secret;
@@ -297,7 +300,7 @@ impl ConfigLoader {
         if let Ok(key) = env::var("ENCRYPTION_KEY") {
             config.security.encryption_key = key;
         }
-        
+
         // Observability configuration
         if let Ok(level) = env::var("LOG_LEVEL") {
             config.observability.log_level = level;
@@ -305,7 +308,7 @@ impl ConfigLoader {
         if let Ok(endpoint) = env::var("TRACING_ENDPOINT") {
             config.observability.tracing_endpoint = Some(endpoint);
         }
-        
+
         // Feature flags
         if let Ok(enabled) = env::var("MFA_ENABLED") {
             config.features.mfa_enabled = enabled.parse().unwrap_or(false);
@@ -325,67 +328,71 @@ impl ConfigLoader {
         if let Ok(enabled) = env::var("QUANTUM_SAFE") {
             config.features.quantum_safe = enabled.parse().unwrap_or(false);
         }
-        
+
         Ok(())
     }
-    
+
     /// Load configuration from file
     fn load_from_file(config: &mut ProductionConfig, file_path: &str) -> Result<()> {
         if !Path::new(file_path).exists() {
             warn!("Configuration file {} not found, using defaults", file_path);
             return Ok(());
         }
-        
+
         let content = std::fs::read_to_string(file_path)
             .with_context(|| format!("Failed to read config file: {}", file_path))?;
-        
-        let file_config: ProductionConfig = if file_path.ends_with(".yaml") || file_path.ends_with(".yml") {
-            serde_yaml::from_str(&content)
-                .with_context(|| format!("Failed to parse YAML config: {}", file_path))?
-        } else if file_path.ends_with(".json") {
-            serde_json::from_str(&content)
-                .with_context(|| format!("Failed to parse JSON config: {}", file_path))?
-        } else {
-            return Err(anyhow::anyhow!("Unsupported config file format: {}", file_path));
-        };
-        
+
+        let file_config: ProductionConfig =
+            if file_path.ends_with(".yaml") || file_path.ends_with(".yml") {
+                serde_yaml::from_str(&content)
+                    .with_context(|| format!("Failed to parse YAML config: {}", file_path))?
+            } else if file_path.ends_with(".json") {
+                serde_json::from_str(&content)
+                    .with_context(|| format!("Failed to parse JSON config: {}", file_path))?
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Unsupported config file format: {}",
+                    file_path
+                ));
+            };
+
         // Merge file config with current config (environment variables take precedence)
         Self::merge_configs(config, file_config);
-        
+
         info!("Configuration loaded from file: {}", file_path);
         Ok(())
     }
-    
+
     /// Merge two configurations (first takes precedence)
     fn merge_configs(base: &mut ProductionConfig, other: ProductionConfig) {
         // Only update fields that are still at default values
         // This allows environment variables to override file config
-        
+
         if base.server.host == ServerConfig::default().host {
             base.server.host = other.server.host;
         }
         if base.server.port == ServerConfig::default().port {
             base.server.port = other.server.port;
         }
-        
+
         if base.database.url == DatabaseConfig::default().url {
             base.database.url = other.database.url;
         }
-        
+
         if base.redis.url == RedisConfig::default().url {
             base.redis.url = other.redis.url;
         }
-        
+
         // Continue for other fields as needed...
     }
-    
+
     /// Validate configuration
     fn validate_config(config: &ProductionConfig) -> Result<()> {
         // Validate server configuration
         if config.server.port == 0 {
             return Err(anyhow::anyhow!("Server port cannot be 0"));
         }
-        
+
         // Validate database configuration
         if config.database.url.is_empty() {
             return Err(anyhow::anyhow!("Database URL cannot be empty"));
@@ -393,7 +400,7 @@ impl ConfigLoader {
         if config.database.max_connections == 0 {
             return Err(anyhow::anyhow!("Database max connections must be > 0"));
         }
-        
+
         // Validate security configuration
         if config.security.jwt_secret == "change-me-in-production" {
             warn!("JWT secret is using default value - change in production!");
@@ -401,44 +408,82 @@ impl ConfigLoader {
         if config.security.jwt_secret.len() < 32 {
             return Err(anyhow::anyhow!("JWT secret must be at least 32 characters"));
         }
-        
+
         if config.security.request_signing_secret == "change-me-in-production" {
             warn!("Request signing secret is using default value - change in production!");
         }
         if config.security.request_signing_secret.len() < 32 {
-            return Err(anyhow::anyhow!("Request signing secret must be at least 32 characters"));
+            return Err(anyhow::anyhow!(
+                "Request signing secret must be at least 32 characters"
+            ));
         }
-        
+
         // Validate observability configuration
         let valid_log_levels = ["trace", "debug", "info", "warn", "error"];
         if !valid_log_levels.contains(&config.observability.log_level.as_str()) {
-            return Err(anyhow::anyhow!("Invalid log level: {}", config.observability.log_level));
+            return Err(anyhow::anyhow!(
+                "Invalid log level: {}",
+                config.observability.log_level
+            ));
         }
-        
+
         info!("Configuration validation passed");
         Ok(())
     }
-    
+
     /// Get configuration summary for logging (without secrets)
     pub fn get_config_summary(config: &ProductionConfig) -> HashMap<String, String> {
         let mut summary = HashMap::new();
-        
+
         summary.insert("server_host".to_string(), config.server.host.clone());
         summary.insert("server_port".to_string(), config.server.port.to_string());
-        summary.insert("database_max_connections".to_string(), config.database.max_connections.to_string());
-        summary.insert("redis_max_connections".to_string(), config.redis.max_connections.to_string());
-        summary.insert("log_level".to_string(), config.observability.log_level.clone());
-        summary.insert("metrics_enabled".to_string(), config.observability.metrics_enabled.to_string());
-        summary.insert("tracing_enabled".to_string(), config.observability.tracing_enabled.to_string());
-        
+        summary.insert(
+            "database_max_connections".to_string(),
+            config.database.max_connections.to_string(),
+        );
+        summary.insert(
+            "redis_max_connections".to_string(),
+            config.redis.max_connections.to_string(),
+        );
+        summary.insert(
+            "log_level".to_string(),
+            config.observability.log_level.clone(),
+        );
+        summary.insert(
+            "metrics_enabled".to_string(),
+            config.observability.metrics_enabled.to_string(),
+        );
+        summary.insert(
+            "tracing_enabled".to_string(),
+            config.observability.tracing_enabled.to_string(),
+        );
+
         // Feature flags
-        summary.insert("mfa_enabled".to_string(), config.features.mfa_enabled.to_string());
-        summary.insert("saml_enabled".to_string(), config.features.saml_enabled.to_string());
-        summary.insert("oidc_enabled".to_string(), config.features.oidc_enabled.to_string());
-        summary.insert("advanced_security".to_string(), config.features.advanced_security.to_string());
-        summary.insert("ai_threat_detection".to_string(), config.features.ai_threat_detection.to_string());
-        summary.insert("quantum_safe".to_string(), config.features.quantum_safe.to_string());
-        
+        summary.insert(
+            "mfa_enabled".to_string(),
+            config.features.mfa_enabled.to_string(),
+        );
+        summary.insert(
+            "saml_enabled".to_string(),
+            config.features.saml_enabled.to_string(),
+        );
+        summary.insert(
+            "oidc_enabled".to_string(),
+            config.features.oidc_enabled.to_string(),
+        );
+        summary.insert(
+            "advanced_security".to_string(),
+            config.features.advanced_security.to_string(),
+        );
+        summary.insert(
+            "ai_threat_detection".to_string(),
+            config.features.ai_threat_detection.to_string(),
+        );
+        summary.insert(
+            "quantum_safe".to_string(),
+            config.features.quantum_safe.to_string(),
+        );
+
         summary
     }
 }
@@ -460,12 +505,12 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = ProductionConfig::default();
-        
+
         // Valid config should pass
         config.security.jwt_secret = "a".repeat(32);
         config.security.request_signing_secret = "b".repeat(32);
         assert!(ConfigLoader::validate_config(&config).is_ok());
-        
+
         // Invalid JWT secret should fail
         config.security.jwt_secret = "too_short".to_string();
         assert!(ConfigLoader::validate_config(&config).is_err());
@@ -476,14 +521,14 @@ mod tests {
         env::set_var("SERVER_PORT", "9090");
         env::set_var("LOG_LEVEL", "debug");
         env::set_var("MFA_ENABLED", "false");
-        
+
         let mut config = ProductionConfig::default();
         ConfigLoader::load_from_env(&mut config).unwrap();
-        
+
         assert_eq!(config.server.port, 9090);
         assert_eq!(config.observability.log_level, "debug");
         assert!(!config.features.mfa_enabled);
-        
+
         // Clean up
         env::remove_var("SERVER_PORT");
         env::remove_var("LOG_LEVEL");
@@ -494,12 +539,14 @@ mod tests {
     fn test_config_summary() {
         let config = ProductionConfig::default();
         let summary = ConfigLoader::get_config_summary(&config);
-        
+
         assert!(summary.contains_key("server_host"));
         assert!(summary.contains_key("server_port"));
         assert!(summary.contains_key("mfa_enabled"));
-        
+
         // Should not contain secrets
-        assert!(!summary.values().any(|v| v.contains("change-me-in-production")));
+        assert!(!summary
+            .values()
+            .any(|v| v.contains("change-me-in-production")));
     }
 }

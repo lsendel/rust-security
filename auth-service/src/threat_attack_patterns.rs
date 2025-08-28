@@ -556,7 +556,7 @@ impl AttackPatternDetector {
 
     /// Load detection rules into the system
     async fn load_detection_rules(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let mut rules = self.detection_rules.write().await;
 
         for rule in &config.sequence_detection_rules {
@@ -578,7 +578,7 @@ impl AttackPatternDetector {
         // Add event to buffer
         {
             let mut buffer = self.event_buffer.lock().await;
-            let config = self.config.read().await;
+            let _config = self.config.read().await;
 
             buffer.push_back(event.clone());
             if buffer.len() > config.max_graph_nodes {
@@ -799,7 +799,7 @@ impl AttackPatternDetector {
         current_event: &SecurityEvent,
         event_buffer: &VecDeque<SecurityEvent>,
     ) -> Option<DetectedAttackSequence> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let time_window = Duration::minutes(config.correlation_window_minutes as i64);
         let cutoff_time = current_event.timestamp - time_window;
 
@@ -1198,7 +1198,7 @@ impl AttackPatternDetector {
 
     /// Update temporal windows with new event
     async fn update_temporal_windows(&self, event: &SecurityEvent) {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let window_size =
             Duration::minutes(config.temporal_analysis_config.window_size_minutes as i64);
 

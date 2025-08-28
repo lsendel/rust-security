@@ -1,6 +1,6 @@
 //! Common utility functions
 
-use crate::ValidationResult;
+use crate::types::ValidationResult;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::time::{Duration, SystemTime};
@@ -8,16 +8,19 @@ use url::Url;
 use uuid::Uuid;
 
 /// Generate a new correlation ID
+#[must_use]
 pub fn generate_correlation_id() -> Uuid {
     Uuid::new_v4()
 }
 
 /// Get current timestamp as UTC
+#[must_use]
 pub fn current_timestamp() -> DateTime<Utc> {
     Utc::now()
 }
 
 /// Calculate uptime in seconds from a start time
+#[must_use]
 pub fn calculate_uptime(start_time: SystemTime) -> u64 {
     SystemTime::now()
         .duration_since(start_time)
@@ -26,11 +29,16 @@ pub fn calculate_uptime(start_time: SystemTime) -> u64 {
 }
 
 /// Validate URL format
+///
+/// # Errors
+///
+/// Returns an error if the URL is invalid.
 pub fn validate_url(url: &str) -> Result<Url> {
-    Url::parse(url).map_err(|e| anyhow::anyhow!("Invalid URL: {}", e))
+    Url::parse(url).map_err(|e| anyhow::anyhow!("Invalid URL: {e}"))
 }
 
 /// Validate that a URL uses HTTPS
+#[must_use]
 pub fn validate_https_url(url: &str) -> ValidationResult {
     let mut result = ValidationResult {
         valid: true,
@@ -47,7 +55,7 @@ pub fn validate_https_url(url: &str) -> ValidationResult {
         }
         Err(e) => {
             result.valid = false;
-            result.errors.push(format!("Invalid URL format: {}", e));
+            result.errors.push(format!("Invalid URL format: {e}"));
         }
     }
 
@@ -55,6 +63,7 @@ pub fn validate_https_url(url: &str) -> ValidationResult {
 }
 
 /// Sanitize string for logging (remove sensitive information)
+#[must_use]
 pub fn sanitize_for_logging(input: &str) -> String {
     // Remove potential tokens, passwords, keys
     let sensitive_patterns = [
@@ -73,7 +82,10 @@ pub fn sanitize_for_logging(input: &str) -> String {
 }
 
 /// Extract client IP from various header formats
-pub fn extract_client_ip(headers: &std::collections::HashMap<String, String>) -> Option<String> {
+#[must_use]
+pub fn extract_client_ip<S: ::std::hash::BuildHasher>(
+    headers: &std::collections::HashMap<String, String, S>,
+) -> Option<String> {
     // Try various headers in order of preference
     let ip_headers = [
         "x-forwarded-for",
@@ -86,7 +98,7 @@ pub fn extract_client_ip(headers: &std::collections::HashMap<String, String>) ->
     for header in &ip_headers {
         if let Some(value) = headers.get(&header.to_lowercase()) {
             // X-Forwarded-For can contain multiple IPs, take the first one
-            let ip = value.split(',').next()?.trim();
+            let ip = value.split(',').next().unwrap_or("").trim();
             if !ip.is_empty() && ip != "unknown" {
                 return Some(ip.to_string());
             }
@@ -97,30 +109,33 @@ pub fn extract_client_ip(headers: &std::collections::HashMap<String, String>) ->
 }
 
 /// Format duration in human-readable format
+#[must_use]
 pub fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
 
     if total_seconds < 60 {
-        format!("{}s", total_seconds)
+        format!("{total_seconds}s")
     } else if total_seconds < 3600 {
         format!("{}m {}s", total_seconds / 60, total_seconds % 60)
     } else if total_seconds < 86400 {
         let hours = total_seconds / 3600;
         let minutes = (total_seconds % 3600) / 60;
-        format!("{}h {}m", hours, minutes)
+        format!("{hours}h {minutes}m")
     } else {
         let days = total_seconds / 86400;
         let hours = (total_seconds % 86400) / 3600;
-        format!("{}d {}h", days, hours)
+        format!("{days}d {hours}h")
     }
 }
 
 /// Validate email format (basic validation)
+#[must_use]
 pub fn validate_email(email: &str) -> bool {
     email.contains('@') && email.len() > 3 && !email.starts_with('@') && !email.ends_with('@')
 }
 
 /// Generate a secure random string
+#[must_use]
 pub fn generate_secure_random_string(length: usize) -> String {
     use rand::Rng;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\

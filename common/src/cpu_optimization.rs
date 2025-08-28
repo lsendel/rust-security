@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn, instrument};
 use prometheus::{Counter, Histogram, Gauge};
-use rayon::prelude::*;
 
 /// CPU profiler for identifying performance hotspots
 #[derive(Clone)]
@@ -154,7 +153,7 @@ impl CpuProfiler {
         }
 
         let start = Instant::now();
-        let result = f.await;
+        let _result = f.await;
         let duration = start.elapsed();
 
         self.record_execution(function_name, duration).await;
@@ -310,11 +309,11 @@ impl OptimizedThreadPool {
         
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.pool.spawn(move || {
-            let result = task();
+            let _result = task();
             let _ = tx.send(result);
         });
 
-        let result = rx.await.expect("Task execution failed");
+        let _result = rx.await.expect("Task execution failed");
         
         let duration = start.elapsed();
         self.work_queue_depth.fetch_sub(1, Ordering::Relaxed);
@@ -410,7 +409,7 @@ where
         let bucket_index = self.hash_to_bucket(key);
         let bucket = &self.buckets[bucket_index];
 
-        let result = bucket.remove(key).map(|(_, entry)| entry.value);
+        let _result = bucket.remove(key).map(|(_, entry)| entry.value);
         self.update_size_metric();
         result
     }
@@ -714,7 +713,7 @@ impl SimdMetrics {
 
         let processing_throughput = Histogram::with_opts(
             HistogramOpts::new("simd_processing_throughput", "SIMD processing throughput (ops/sec)")
-                .buckets(vec![1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0])
+                .buckets(vec![1000.0, 10000.0, 100_000.0, 1_000_000.0, 1_000_0000.0])
         )?;
 
         registry.register(Box::new(operations_total.clone()))?;
@@ -739,7 +738,7 @@ mod tests {
         let registry = prometheus::Registry::new();
         let profiler = CpuProfiler::new(&registry, 1.0).unwrap();
 
-        let result = profiler.profile_function("test_function", async {
+        let _result = profiler.profile_function("test_function", async {
             tokio::time::sleep(Duration::from_millis(10)).await;
             42
         }).await;
@@ -771,7 +770,7 @@ mod tests {
 
         let a = vec![1.0, 2.0, 3.0, 4.0];
         let b = vec![5.0, 6.0, 7.0, 8.0];
-        let result = processor.simd_vector_add(&a, &b);
+        let _result = processor.simd_vector_add(&a, &b);
 
         assert_eq!(result, vec![6.0, 8.0, 10.0, 12.0]);
     }

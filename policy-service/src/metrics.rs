@@ -400,8 +400,9 @@ pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
     let path = req
         .extensions()
         .get::<MatchedPath>()
-        .map(|p| normalize_path_for_cardinality(p.as_str()))
-        .unwrap_or("unknown".to_string());
+        .map_or("unknown".to_string(), |p| {
+            normalize_path_for_cardinality(p.as_str())
+        });
 
     // Extract client ID with cardinality protection
     let client_id = extract_client_id_with_protection(&req);
@@ -507,12 +508,40 @@ fn is_valid_client_id(id: &str) -> bool {
 
 /// Normalize path for metrics to prevent cardinality explosion
 fn normalize_path_for_cardinality(path: &str) -> String {
-    match path {
+    let mut normalized = match path {
         p if p.starts_with("/v1/authorize") => "/v1/authorize".to_string(),
         p if p.starts_with("/health") => "/health".to_string(),
         p if p.starts_with("/metrics") => "/metrics".to_string(),
+        p if p.starts_with("/v1/policies/") => "/v1/policies/:id".to_string(),
+        p if p.starts_with("/v1/entities/") => "/v1/entities/:id".to_string(),
         p => p.to_string(),
+    };
+    // Coarse normalization: collapse UUID-like and long hex segments to :id tokens to further bound cardinality
+    // This is a conservative best-effort without regex to avoid extra deps.
+    if normalized == path {
+        let parts: Vec<&str> = path.split('/').collect();
+        let mapped: Vec<String> = parts
+            .into_iter()
+            .map(|seg| {
+                if seg.len() >= 16
+                    && seg
+                        .chars()
+                        .all(|c| c.is_ascii_hexdigit() || c == '-' || c == '_')
+                {
+                    ":id".to_string()
+                } else if seg.chars().all(|c| c.is_ascii_digit()) && seg.len() > 6 {
+                    ":id".to_string()
+                } else {
+                    seg.to_string()
+                }
+            })
+            .collect();
+        normalized = mapped.join("/");
+        if !normalized.starts_with('/') {
+            normalized = format!("/{}", normalized);
+        }
     }
+    normalized
 }
 
 /// Prometheus metrics endpoint handler for policy service
@@ -528,7 +557,7 @@ pub async fn policy_metrics_handler() -> impl IntoResponse {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 [("content-type", "text/plain")],
-                format!("Error gathering metrics: {}", e),
+                format!("Error gathering metrics: {e}"),
             )
         }
     }

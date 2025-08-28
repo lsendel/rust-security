@@ -374,7 +374,7 @@ impl FuzzTarget for ValidationFuzzTarget {
 
     fn execute(&self, input: &[u8]) -> FuzzExecutionResult {
         if let Ok(input_str) = std::str::from_utf8(input) {
-            let result = self.validator.validate(input_str, self.input_type);
+            let _result = self.validator.validate(input_str, self.input_type);
 
             if !result.is_valid() {
                 // Check if any errors indicate security violations
@@ -557,7 +557,7 @@ impl FuzzTestSuite {
 
     /// Generate random input for target
     fn generate_random_input(&self, target: &dyn FuzzTarget) -> Vec<u8> {
-        let size = fastrand::usize(1..=self.config.max_input_size);
+        let _size = fastrand::usize(1..=self.config.max_input_size);
         let mut input = vec![0u8; size];
 
         // Apply mutation strategies
@@ -896,11 +896,11 @@ mod tests {
         assert_eq!(target.name(), "scim_filter");
 
         // Test normal input
-        let result = target.execute(b"userName eq \"test\"");
+        let _result = target.execute(b"userName eq \"test\"");
         matches!(result, FuzzExecutionResult::Normal);
 
         // Test malicious input
-        let result = target.execute(b"userName eq \"test\"; DROP TABLE users");
+        let _result = target.execute(b"userName eq \"test\"; DROP TABLE users");
         assert!(matches!(result, FuzzExecutionResult::SecurityViolation { .. }));
     }
 
@@ -909,7 +909,7 @@ mod tests {
         let target = OAuthFuzzTarget::new().unwrap();
         assert_eq!(target.name(), "oauth_params");
 
-        let result = target.execute(b"grant_type=authorization_code&client_id=test");
+        let _result = target.execute(b"grant_type=authorization_code&client_id=test");
         matches!(result, FuzzExecutionResult::Normal);
     }
 
@@ -919,7 +919,7 @@ mod tests {
         assert_eq!(target.name(), "jwt_tokens");
 
         // Test invalid JWT
-        let result = target.execute(b"invalid.jwt.token");
+        let _result = target.execute(b"invalid.jwt.token");
         assert!(matches!(result, FuzzExecutionResult::Crash { .. }));
     }
 

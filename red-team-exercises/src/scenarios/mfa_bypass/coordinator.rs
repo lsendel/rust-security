@@ -135,7 +135,7 @@ impl MfaBypassCoordinator {
         info!("🔑 Starting Backup Code Enumeration Attack");
         
         // Placeholder implementation - would be extracted from original file
-        let result = MfaBypassResult::new(MfaAttackType::BackupCodeEnumeration);
+        let _result = MfaBypassResult::new(MfaAttackType::BackupCodeEnumeration);
         
         reporter.log_attack_result("Backup Code Enumeration", false, "Not implemented yet").await;
         Ok(result)
@@ -150,7 +150,7 @@ impl MfaBypassCoordinator {
         info!("🌐 Starting MFA Header Bypass Attack");
         
         // Placeholder implementation
-        let result = MfaBypassResult::new(MfaAttackType::HeaderManipulation);
+        let _result = MfaBypassResult::new(MfaAttackType::HeaderManipulation);
         
         reporter.log_attack_result("MFA Header Bypass", false, "Not implemented yet").await;
         Ok(result)
@@ -165,7 +165,7 @@ impl MfaBypassCoordinator {
         info!("📞 Starting OTP Interception Simulation");
         
         // Placeholder implementation
-        let result = MfaBypassResult::new(MfaAttackType::OtpInterception);
+        let _result = MfaBypassResult::new(MfaAttackType::OtpInterception);
         
         reporter.log_attack_result("OTP Interception", false, "Not implemented yet").await;
         Ok(result)
@@ -180,7 +180,7 @@ impl MfaBypassCoordinator {
         info!("🔄 Starting MFA State Confusion Attack");
         
         // Placeholder implementation
-        let result = MfaBypassResult::new(MfaAttackType::StateConfusion);
+        let _result = MfaBypassResult::new(MfaAttackType::StateConfusion);
         
         reporter.log_attack_result("MFA State Confusion", false, "Not implemented yet").await;
         Ok(result)
@@ -302,7 +302,7 @@ mod tests {
         let config = MfaBypassConfig::default();
         let mut coordinator = MfaBypassCoordinator::new(config);
         
-        let result = MfaBypassResult::new(MfaAttackType::TotpReplay)
+        let _result = MfaBypassResult::new(MfaAttackType::TotpReplay)
             .with_success(true, Some("Test success".to_string()));
         
         coordinator.update_statistics(&result);

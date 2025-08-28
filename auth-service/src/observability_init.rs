@@ -22,10 +22,7 @@ use crate::{
 };
 
 #[cfg(feature = "monitoring")]
-use crate::{
-    metrics::MetricsRegistry,
-    security_metrics::SecurityMetrics,
-};
+use crate::{metrics::MetricsRegistry, security_metrics::SecurityMetrics};
 
 /// Observability system coordinator
 pub struct ObservabilitySystem {
@@ -59,12 +56,7 @@ impl ObservabilitySystem {
             let metrics_registry = Arc::new(MetricsRegistry::new());
 
             // Initialize security metrics
-            let security_metrics = Arc::new(
-                SecurityMetrics::new().map_err(|_| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: "Failed to initialize security metrics".to_string(),
-                })?,
-            );
+            let security_metrics = Arc::new(SecurityMetrics::new());
 
             // Initialize enhanced observability
             let enhanced_observability = Arc::new(
@@ -87,12 +79,16 @@ impl ObservabilitySystem {
 
         #[cfg(not(feature = "monitoring"))]
         let enhanced_observability = Arc::new(
-            EnhancedObservability::new_minimal(observability_config, sli_config, Arc::clone(&business_metrics))
-                .await
-                .map_err(|e| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to initialize enhanced observability: {}", e),
-                })?,
+            EnhancedObservability::new_minimal(
+                observability_config,
+                sli_config,
+                Arc::clone(&business_metrics),
+            )
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to initialize enhanced observability: {}", e),
+            })?,
         );
 
         info!("Observability system initialized successfully");

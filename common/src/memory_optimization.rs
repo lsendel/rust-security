@@ -72,7 +72,7 @@ pub struct MemoryMappedRegion {
 
 unsafe impl GlobalAlloc for OptimizedAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let size = layout.size();
+        let _size = layout.size();
         
         // Try to get from memory pool first for common sizes
         if let Some(ptr) = self.try_pool_alloc(size).await {
@@ -107,7 +107,7 @@ unsafe impl GlobalAlloc for OptimizedAllocator {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        let size = layout.size();
+        let _size = layout.size();
         
         // Try to return to memory pool
         if self.try_pool_dealloc(ptr, size).await {

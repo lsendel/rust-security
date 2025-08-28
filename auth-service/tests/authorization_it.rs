@@ -1,8 +1,8 @@
 use auth_service::{app, AppState};
-use common::TokenRecord;
 use axum::{routing::post, Json, Router};
+use common::TokenRecord;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 // Removed unused import: use tokio::sync::RwLock;
@@ -37,15 +37,20 @@ async fn spawn_auth_app() -> String {
         session_store: Arc::new(auth_service::session_store::RedisSessionStore::new(None).await),
         token_store: Arc::new(std::sync::RwLock::new(HashMap::<String, TokenRecord>::new())),
         client_credentials: Arc::new(std::sync::RwLock::new(HashMap::new())),
-        allowed_scopes: Arc::new(std::sync::RwLock::new(std::collections::HashSet::from(["read".to_string(), "write".to_string()]))),
+        allowed_scopes: Arc::new(std::sync::RwLock::new(std::collections::HashSet::from([
+            "read".to_string(),
+            "write".to_string(),
+        ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),
         )),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
-        api_key_store: Arc::new(auth_service::api_key_store::ApiKeyStore::new(":memory:")
-            .await
-            .unwrap()),
+        api_key_store: Arc::new(
+            auth_service::api_key_store::ApiKeyStore::new(":memory:")
+                .await
+                .unwrap(),
+        ),
         jwks_manager: Arc::new(
             auth_service::jwks_rotation::JwksManager::new(
                 Default::default(),

@@ -38,16 +38,18 @@ fn test_security_logger_auth_attempt() {
     .with_ip("127.0.0.1".to_string())
     .with_user_agent("test-agent/1.0".to_string())
     .with_outcome("success".to_string());
-    
+
     // Add metadata
     event.details.insert(
         "grant_type".to_string(),
         serde_json::Value::String("client_credentials".to_string()),
     );
-    event.details.insert("has_scope".to_string(), serde_json::Value::Bool(true));
-    
+    event
+        .details
+        .insert("has_scope".to_string(), serde_json::Value::Bool(true));
+
     SecurityLogger::log_event_static(&event);
-    
+
     // Original test code (commented out as method doesn't exist)
     // SecurityLogger::log_auth_attempt(
     //     "test_client",
@@ -81,14 +83,14 @@ fn test_security_logger_token_operation() {
     .with_client_id("test_client".to_string())
     .with_ip("127.0.0.1".to_string())
     .with_outcome("success".to_string());
-    
+
     event.details.insert(
         "grant_type".to_string(),
         serde_json::Value::String("client_credentials".to_string()),
     );
-    
+
     SecurityLogger::log_event_static(&event);
-    
+
     // Original test code (commented out as method doesn't exist)
     // SecurityLogger::log_token_operation(
     //     "issue",
@@ -120,14 +122,14 @@ fn test_security_logger_validation_failure() {
     .with_client_id("test_client".to_string())
     .with_ip("127.0.0.1".to_string())
     .with_outcome("failure".to_string());
-    
+
     event.details.insert(
         "requested_scope".to_string(),
         serde_json::Value::String("invalid_scope".to_string()),
     );
-    
+
     SecurityLogger::log_event_static(&event);
-    
+
     // Original test code (commented out as method doesn't exist)
     // SecurityLogger::log_validation_failure(
     //     "/oauth/token",
@@ -158,13 +160,19 @@ fn test_security_logger_rate_limit() {
     .with_client_id("test_client".to_string())
     .with_ip("127.0.0.1".to_string())
     .with_outcome("blocked".to_string());
-    
-    event.details.insert("endpoint".to_string(), serde_json::json!("/oauth/token"));
-    event.details.insert("limit".to_string(), serde_json::json!(100));
-    event.details.insert("current".to_string(), serde_json::json!(50));
-    
+
+    event
+        .details
+        .insert("endpoint".to_string(), serde_json::json!("/oauth/token"));
+    event
+        .details
+        .insert("limit".to_string(), serde_json::json!(100));
+    event
+        .details
+        .insert("current".to_string(), serde_json::json!(50));
+
     SecurityLogger::log_event_static(&event);
-    
+
     // Original test code (commented out as method doesn't exist)
     // SecurityLogger::log_rate_limit_exceeded("test_client", "127.0.0.1", "/oauth/token", 100, 50);
 
@@ -194,8 +202,14 @@ fn test_security_event_with_details() {
         "Token issued".to_string(),
     );
 
-    event = event.with_detail("token_type".to_string(), serde_json::Value::String("access_token".to_string()));
-    event = event.with_detail("expires_in".to_string(), serde_json::Value::Number(serde_json::Number::from(3600)));
+    event = event.with_detail(
+        "token_type".to_string(),
+        serde_json::Value::String("access_token".to_string()),
+    );
+    event = event.with_detail(
+        "expires_in".to_string(),
+        serde_json::Value::Number(serde_json::Number::from(3600)),
+    );
     event = event.with_detail("has_refresh".to_string(), serde_json::Value::Bool(true));
 
     assert_eq!(event.details.len(), 3);

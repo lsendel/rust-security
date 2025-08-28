@@ -671,7 +671,7 @@ mod tests {
             RequestValidator::new(ValidatorConfig::production(), SanitizationConfig::strict())
                 .unwrap();
 
-        let result = validator.validate_and_sanitize("test@example.com", InputType::Email);
+        let _result = validator.validate_and_sanitize("test@example.com", InputType::Email);
         assert!(result.is_ok());
 
         let result =
@@ -691,14 +691,14 @@ mod tests {
         params.insert("client_id".to_string(), "valid_client_123".to_string());
         params.insert("redirect_uri".to_string(), "https://example.com/callback".to_string());
 
-        let result = validator.validate_oauth_params(&params);
+        let _result = validator.validate_oauth_params(&params);
         assert!(result.is_valid());
 
         // Test invalid params
         let mut invalid_params = HashMap::new();
         invalid_params.insert("client_id".to_string(), "<script>alert('xss')</script>".to_string());
 
-        let result = validator.validate_oauth_params(&invalid_params);
+        let _result = validator.validate_oauth_params(&invalid_params);
         assert!(!result.is_valid());
     }
 }

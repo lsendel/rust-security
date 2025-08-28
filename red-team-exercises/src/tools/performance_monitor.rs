@@ -34,7 +34,7 @@ impl PerformanceMonitor {
         for _ in 0..10 {
             let start = Instant::now();
 
-            let result = self.client.get(&format!("{}/health", target)).send().await;
+            let _result = self.client.get(&format!("{}/health", target)).send().await;
 
             let duration = start.elapsed();
 
@@ -107,7 +107,7 @@ impl PerformanceMonitor {
                     ];
 
                     let endpoint = endpoints[i as usize % endpoints.len()];
-                    let result = client
+                    let _result = client
                         .get(&format!("{}{}", target, endpoint))
                         .header("X-Attack-Thread", i.to_string())
                         .send()
@@ -137,7 +137,7 @@ impl PerformanceMonitor {
             while legit_start.elapsed() < legit_duration {
                 let request_start = Instant::now();
 
-                let result = legit_client
+                let _result = legit_client
                     .get(&format!("{}/health", legit_target))
                     .header("X-Legitimate-Request", "true")
                     .send()

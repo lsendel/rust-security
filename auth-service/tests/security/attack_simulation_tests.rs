@@ -474,8 +474,8 @@ async fn test_buffer_overflow_resistance() {
     // Test with extremely long inputs
     let long_inputs = vec![
         "A".repeat(10000),
-        "B".repeat(100000),
-        "C".repeat(1000000),
+        "B".repeat(100_000),
+        "C".repeat(1_000_000),
         format!("client_{}", "D".repeat(50000)),
     ];
 

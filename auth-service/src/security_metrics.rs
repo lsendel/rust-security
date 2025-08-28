@@ -2,8 +2,12 @@
 //!
 //! Provides security-related metrics collection and reporting functionality.
 
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::RwLock;
+
+/// Global security metrics instance
+pub static SECURITY_METRICS: Lazy<SecurityMetrics> = Lazy::new(|| SecurityMetrics::new());
 
 /// Security metrics collector
 pub struct SecurityMetrics {
@@ -49,7 +53,7 @@ impl SecurityMetrics {
     /// Get all security metrics
     pub fn get_all_metrics(&self) -> HashMap<String, u64> {
         let mut all_metrics = HashMap::new();
-        
+
         let failed_logins = self.failed_logins.read().unwrap();
         for (ip, count) in failed_logins.iter() {
             all_metrics.insert(format!("failed_logins_{}", ip), *count);

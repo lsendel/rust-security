@@ -1,5 +1,5 @@
 //! Core module for auth-service
-//! 
+//!
 //! This module contains the core business logic and types for the authentication service.
 
 use serde::{Deserialize, Serialize};
@@ -43,10 +43,10 @@ pub struct TokenClaims {
 pub trait AuthService: Send + Sync {
     /// Authenticate a user
     async fn authenticate(&self, request: AuthRequest) -> Result<AuthResult, AuthError>;
-    
+
     /// Validate a token
     async fn validate_token(&self, token: &str) -> Result<TokenClaims, AuthError>;
-    
+
     /// Refresh a token
     async fn refresh_token(&self, refresh_token: &str) -> Result<AuthResult, AuthError>;
 }
@@ -56,24 +56,24 @@ pub trait AuthService: Send + Sync {
 pub enum AuthError {
     #[error("Invalid credentials")]
     InvalidCredentials,
-    
+
     #[error("Token expired")]
     TokenExpired,
-    
+
     #[error("Invalid token")]
     InvalidToken,
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
 
 /// Default authentication service implementation
 pub struct DefaultAuthService {
-    _config: std::sync::Arc<crate::config::AppConfig>,
+    _config: std::sync::Arc<crate::config::Config>,
 }
 
 impl DefaultAuthService {
-    pub fn new(config: std::sync::Arc<crate::config::AppConfig>) -> Self {
+    pub fn new(config: std::sync::Arc<crate::config::Config>) -> Self {
         Self { _config: config }
     }
 }
@@ -89,7 +89,7 @@ impl AuthService for DefaultAuthService {
             error: None,
         })
     }
-    
+
     async fn validate_token(&self, _token: &str) -> Result<TokenClaims, AuthError> {
         // TODO: Implement actual token validation
         Ok(TokenClaims {
@@ -103,7 +103,7 @@ impl AuthService for DefaultAuthService {
             custom_claims: HashMap::new(),
         })
     }
-    
+
     async fn refresh_token(&self, _refresh_token: &str) -> Result<AuthResult, AuthError> {
         // TODO: Implement actual token refresh logic
         Ok(AuthResult {

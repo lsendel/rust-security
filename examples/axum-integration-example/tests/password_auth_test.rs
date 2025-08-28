@@ -1,11 +1,8 @@
 use axum_integration_example::{
     create_app, AuthResponse, CreateUserRequest, LoginRequest, RegisterRequest, UserRole,
 };
-use http_body_util::BodyExt;
 use serde_json::Value;
-use std::collections::HashMap;
 use tokio::net::TcpListener;
-use tower::ServiceExt;
 
 async fn spawn_app() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -73,8 +70,12 @@ async fn test_user_login_with_password() {
         password: "mypassword456".to_string(),
     };
 
-    let response =
-        client.post(format!("{}/auth/login", base)).json(&login_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/auth/login", base))
+        .json(&login_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), 200);
 
@@ -109,8 +110,12 @@ async fn test_login_with_wrong_password() {
         password: "wrongpassword".to_string(),
     };
 
-    let response =
-        client.post(format!("{}/auth/login", base)).json(&login_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/auth/login", base))
+        .json(&login_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), 401);
 }
@@ -177,7 +182,12 @@ async fn test_duplicate_email_registration() {
     assert_eq!(response.status(), 400);
 
     let error_response: Value = response.json().await.unwrap();
-    assert!(error_response.get("error").unwrap().as_str().unwrap().contains("already exists"));
+    assert!(error_response
+        .get("error")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .contains("already exists"));
 }
 
 #[tokio::test]
@@ -193,15 +203,28 @@ async fn test_user_creation_with_password() {
         role: Some(UserRole::Admin),
     };
 
-    let response =
-        client.post(format!("{}/users", base)).json(&create_request).send().await.unwrap();
+    let response = client
+        .post(format!("{}/users", base))
+        .json(&create_request)
+        .send()
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), 201);
 
     let user_response: Value = response.json().await.unwrap();
-    assert_eq!(user_response.get("name").unwrap().as_str().unwrap(), "Admin User");
-    assert_eq!(user_response.get("email").unwrap().as_str().unwrap(), "admin@example.com");
-    assert_eq!(user_response.get("role").unwrap().as_str().unwrap(), "Admin");
+    assert_eq!(
+        user_response.get("name").unwrap().as_str().unwrap(),
+        "Admin User"
+    );
+    assert_eq!(
+        user_response.get("email").unwrap().as_str().unwrap(),
+        "admin@example.com"
+    );
+    assert_eq!(
+        user_response.get("role").unwrap().as_str().unwrap(),
+        "Admin"
+    );
     // Password hash should not be in response
     assert!(user_response.get("password_hash").is_none());
 }
@@ -230,10 +253,16 @@ async fn test_password_service() {
 async fn test_jwt_service() {
     use axum_integration_example::{JwtService, UserRole};
 
-    let jwt_service = JwtService::new("this-is-a-test-secret-with-enough-length".to_string(), Some(1)).unwrap();
+    let jwt_service = JwtService::new(
+        "this-is-a-test-secret-with-enough-length".to_string(),
+        Some(1),
+    )
+    .unwrap();
 
     // Test token generation
-    let token = jwt_service.generate_token(1, "test@example.com", UserRole::User).unwrap();
+    let token = jwt_service
+        .generate_token(1, "test@example.com", UserRole::User)
+        .unwrap();
     assert!(!token.is_empty());
 
     // Test token validation
@@ -243,7 +272,7 @@ async fn test_jwt_service() {
     assert_eq!(claims.role, UserRole::User);
 
     // Test invalid token
-    let result = jwt_service.validate_token("invalid_token");
+    let _result = jwt_service.validate_token("invalid_token");
     assert!(result.is_err());
 }
 

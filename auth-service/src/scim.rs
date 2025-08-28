@@ -88,7 +88,7 @@ pub fn router() -> Router<AppState> {
 // SCIM endpoints should be protected by the main admin_auth_middleware.
 
 async fn create_user(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(user): Json<ScimUser>,
 ) -> Result<Json<ScimUser>, AuthError> {
     let created_user = state.store.create_user(&user).await?;
@@ -122,7 +122,7 @@ struct ListResponse<T> {
 // ... (filter parsing logic remains the same)
 
 async fn list_users(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<ListResponse<ScimUser>>, AuthError> {
     let filter = p.filter.as_deref();
@@ -150,15 +150,15 @@ async fn list_users(
 }
 
 async fn get_user(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
+    State(_state): State<AppState>,
+    Path(_id): Path<String>,
 ) -> Result<Json<Option<ScimUser>>, AuthError> {
     let user = state.store.get_user(&id).await?;
     Ok(Json(user))
 }
 
 async fn create_group(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(group): Json<ScimGroup>,
 ) -> Result<Json<ScimGroup>, AuthError> {
     let created_group = state.store.create_group(&group).await?;
@@ -168,7 +168,7 @@ async fn create_group(
 // ... (filter parsing logic for groups remains the same)
 
 async fn list_groups(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<ListResponse<ScimGroup>>, AuthError> {
     let filter = p.filter.as_deref();
@@ -194,8 +194,8 @@ async fn list_groups(
 }
 
 async fn get_group(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
+    State(_state): State<AppState>,
+    Path(_id): Path<String>,
 ) -> Result<Json<Option<ScimGroup>>, AuthError> {
     let group = state.store.get_group(&id).await?;
     Ok(Json(group))
@@ -218,7 +218,7 @@ const ERROR_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:Error";
 
 #[allow(dead_code)]
 async fn bulk_operations(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(request): Json<BulkRequest>,
 ) -> Result<Json<BulkResponse>, AuthError> {
     // TODO: Implement transactional support for bulk operations.
@@ -241,7 +241,7 @@ async fn bulk_operations(
     let mut error_count = 0;
 
     for operation in &request.operations {
-        let result = process_single_operation(&state, operation).await;
+        let _result = process_single_operation(&state, operation).await;
 
         match result {
             Ok(response_op) => {

@@ -140,6 +140,28 @@ pub enum AuthError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
 
+    // Security and policy errors
+    #[error("Anomaly detected")]
+    AnomalyDetected,
+    #[error("Policy denied access")]
+    PolicyDenied,
+    #[error("Approval required")]
+    ApprovalRequired,
+    #[error("Identity not found")]
+    IdentityNotFound,
+    #[error("Token generation failed: {0}")]
+    TokenGenerationFailed(String),
+    #[error("Token revoked")]
+    TokenRevoked,
+    #[error("Token binding violation")]
+    TokenBindingViolation,
+    #[error("Token usage limit exceeded")]
+    TokenUsageLimitExceeded,
+    #[error("Insufficient data for baseline")]
+    InsufficientDataForBaseline,
+    #[error("Identity suspended")]
+    IdentitySuspended,
+
     // Generic errors (use sparingly)
     #[error("Internal server error")]
     InternalError { error_id: Uuid, context: String },
@@ -271,6 +293,66 @@ impl IntoResponse for AuthError {
                     true,
                 )
             }
+            AuthError::AnomalyDetected => (
+                StatusCode::FORBIDDEN,
+                "anomaly_detected",
+                "Access denied due to security anomaly",
+                false,
+            ),
+            AuthError::PolicyDenied => (
+                StatusCode::FORBIDDEN,
+                "access_denied",
+                "Access denied by policy",
+                false,
+            ),
+            AuthError::ApprovalRequired => (
+                StatusCode::ACCEPTED,
+                "approval_required",
+                "Request requires approval",
+                false,
+            ),
+            AuthError::IdentityNotFound => (
+                StatusCode::NOT_FOUND,
+                "identity_not_found",
+                "Identity not found",
+                false,
+            ),
+            AuthError::TokenGenerationFailed(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "token_generation_failed",
+                "Token generation failed",
+                true,
+            ),
+            AuthError::TokenRevoked => (
+                StatusCode::UNAUTHORIZED,
+                "token_revoked",
+                "Token has been revoked",
+                false,
+            ),
+            AuthError::TokenBindingViolation => (
+                StatusCode::FORBIDDEN,
+                "token_binding_violation",
+                "Token binding violation",
+                false,
+            ),
+            AuthError::TokenUsageLimitExceeded => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "token_usage_limit_exceeded",
+                "Token usage limit exceeded",
+                false,
+            ),
+            AuthError::InsufficientDataForBaseline => (
+                StatusCode::PRECONDITION_FAILED,
+                "insufficient_data",
+                "Insufficient data for baseline",
+                false,
+            ),
+            AuthError::IdentitySuspended => (
+                StatusCode::FORBIDDEN,
+                "identity_suspended",
+                "Identity suspended",
+                false,
+            ),
             // Default case for any other errors
             _ => {
                 let error_id = uuid::Uuid::new_v4();

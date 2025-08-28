@@ -50,27 +50,27 @@ fn test_scim_filter_security() {
 
     // Valid SCIM filter should parse
     let valid_filter = "userName eq \"john\"";
-    let result = parser.parse(valid_filter);
+    let _result = parser.parse(valid_filter);
     assert!(result.is_ok(), "Valid SCIM filter should parse successfully");
 
     // SQL injection attempt should be rejected
     let sql_injection = "userName eq \"john\"; DROP TABLE users";
-    let result = parser.parse(sql_injection);
+    let _result = parser.parse(sql_injection);
     assert!(result.is_err(), "SQL injection should be rejected");
 
     // XSS attempt should be rejected
     let xss_attempt = "userName eq \"<script>alert('xss')</script>\"";
-    let result = parser.parse(xss_attempt);
+    let _result = parser.parse(xss_attempt);
     assert!(result.is_err(), "XSS attempt should be rejected");
 
     // Unbalanced parentheses should be rejected
     let unbalanced = "userName eq \"john\" and (active eq true";
-    let result = parser.parse(unbalanced);
+    let _result = parser.parse(unbalanced);
     assert!(result.is_err(), "Unbalanced parentheses should be rejected");
 
     // Oversized filter should be rejected
     let oversized = format!("userName eq \"{}\"", "a".repeat(1000));
-    let result = parser.parse(&oversized);
+    let _result = parser.parse(&oversized);
     assert!(result.is_err(), "Oversized filter should be rejected");
 }
 
@@ -80,7 +80,7 @@ fn test_oauth_parameter_security() {
 
     // Valid OAuth parameters should parse
     let valid_params = "grant_type=authorization_code&client_id=test123&redirect_uri=https%3A%2F%2Fexample.com%2Fcallback";
-    let result = parser.parse(valid_params);
+    let _result = parser.parse(valid_params);
     assert!(result.is_ok(), "Valid OAuth parameters should parse successfully");
 
     let parsed = result.unwrap();
@@ -89,18 +89,18 @@ fn test_oauth_parameter_security() {
 
     // Invalid grant type should be rejected
     let invalid_grant = "grant_type=invalid_type&client_id=test123";
-    let result = parser.parse(invalid_grant);
+    let _result = parser.parse(invalid_grant);
     assert!(result.is_err(), "Invalid grant type should be rejected");
 
     // Malicious redirect URI should be rejected
     let malicious_redirect =
         "grant_type=authorization_code&redirect_uri=javascript%3Aalert%28%27xss%27%29";
-    let result = parser.parse(malicious_redirect);
+    let _result = parser.parse(malicious_redirect);
     assert!(result.is_err(), "Malicious redirect URI should be rejected");
 
     // PKCE parameters should be validated
     let invalid_pkce = "grant_type=authorization_code&code_verifier=too_short";
-    let result = parser.parse(invalid_pkce);
+    let _result = parser.parse(invalid_pkce);
     assert!(result.is_err(), "Invalid PKCE code_verifier should be rejected");
 }
 
@@ -115,24 +115,24 @@ fn test_jwt_token_security() {
     let signature = "fake_signature";
     let valid_jwt = format!("{}.{}.{}", header, payload, signature);
 
-    let result = parser.parse(&valid_jwt);
+    let _result = parser.parse(&valid_jwt);
     assert!(result.is_ok(), "Valid JWT structure should parse");
 
     // JWT with "none" algorithm should be rejected
     let none_header =
         base64::encode_config(r#"{"alg":"none","typ":"JWT"}"#, base64::URL_SAFE_NO_PAD);
     let none_jwt = format!("{}.{}.{}", none_header, payload, signature);
-    let result = parser.parse(&none_jwt);
+    let _result = parser.parse(&none_jwt);
     assert!(result.is_err(), "JWT with 'none' algorithm should be rejected");
 
     // Malformed JWT should be rejected
     let malformed_jwt = "not.a.valid.jwt.format";
-    let result = parser.parse(malformed_jwt);
+    let _result = parser.parse(malformed_jwt);
     assert!(result.is_err(), "Malformed JWT should be rejected");
 
     // JWT with only 2 parts should be rejected
     let incomplete_jwt = "header.payload";
-    let result = parser.parse(incomplete_jwt);
+    let _result = parser.parse(incomplete_jwt);
     assert!(result.is_err(), "Incomplete JWT should be rejected");
 }
 
@@ -226,30 +226,30 @@ fn test_input_type_specific_validation() {
     let valid_email = "user@example.com";
     let invalid_email = "not-an-email";
 
-    let result = validator.validate(valid_email, InputType::Email);
+    let _result = validator.validate(valid_email, InputType::Email);
     assert!(result.is_valid(), "Valid email should pass validation");
 
-    let result = validator.validate(invalid_email, InputType::Email);
+    let _result = validator.validate(invalid_email, InputType::Email);
     assert!(!result.is_valid(), "Invalid email should fail validation");
 
     // Phone validation
     let valid_phone = "+1-555-123-4567";
     let invalid_phone = "not-a-phone";
 
-    let result = validator.validate(valid_phone, InputType::Phone);
+    let _result = validator.validate(valid_phone, InputType::Phone);
     // Note: Phone validation rules might vary
 
-    let result = validator.validate(invalid_phone, InputType::Phone);
+    let _result = validator.validate(invalid_phone, InputType::Phone);
     // Should likely fail, but depends on validation rules
 
     // URL validation
     let valid_url = "https://example.com/path";
     let invalid_url = "not-a-url";
 
-    let result = validator.validate(valid_url, InputType::Url);
+    let _result = validator.validate(valid_url, InputType::Url);
     // URL validation depends on rules
 
-    let result = validator.validate(invalid_url, InputType::Url);
+    let _result = validator.validate(invalid_url, InputType::Url);
     // Should likely fail
 }
 
@@ -258,8 +258,8 @@ fn test_validation_error_handling() {
     let validator = SecurityValidator::new(ValidatorConfig::production()).unwrap();
 
     // Test with oversized input
-    let oversized_input = "a".repeat(100000);
-    let result = validator.validate(&oversized_input, InputType::Email);
+    let oversized_input = "a".repeat(100_000);
+    let _result = validator.validate(&oversized_input, InputType::Email);
 
     assert!(!result.is_valid(), "Oversized input should fail validation");
     assert!(!result.errors.is_empty(), "Should have validation errors");
@@ -290,14 +290,14 @@ fn test_security_middleware_integration() {
     oauth_params.insert("grant_type".to_string(), "authorization_code".to_string());
     oauth_params.insert("client_id".to_string(), "test123".to_string());
 
-    let result = request_validator.validate_oauth_params(&oauth_params);
+    let _result = request_validator.validate_oauth_params(&oauth_params);
     assert!(result.is_valid(), "Valid OAuth params should pass validation");
 
     // Test with malicious parameters
     let mut malicious_params = HashMap::new();
     malicious_params.insert("client_id".to_string(), "<script>alert('xss')</script>".to_string());
 
-    let result = request_validator.validate_oauth_params(&malicious_params);
+    let _result = request_validator.validate_oauth_params(&malicious_params);
     assert!(!result.is_valid(), "Malicious OAuth params should fail validation");
 }
 

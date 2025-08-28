@@ -1,4 +1,3 @@
-
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -133,42 +132,41 @@ impl AppError {
         }
     }
 
-    pub fn status_code(&self) -> StatusCode {
+    pub const fn status_code(&self) -> StatusCode {
         match self {
-            AppError::Policy(PolicyError::PolicyNotFound { .. }) => StatusCode::NOT_FOUND,
-            AppError::Entity(EntityError::EntityNotFound { .. }) => StatusCode::NOT_FOUND,
-            AppError::PolicyNotFound => StatusCode::NOT_FOUND,
-            
-            AppError::Policy(_) 
-            | AppError::Entity(_) 
-            | AppError::Authorization(_) 
-            | AppError::InvalidInput(_) => StatusCode::BAD_REQUEST,
-            
-            AppError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
-            
-            AppError::ServiceUnavailable { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            
-            AppError::Config(_) 
-            | AppError::Io { .. }
-            | AppError::Json { .. }
-            | AppError::Internal { .. }
-            | AppError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Policy(PolicyError::PolicyNotFound { .. }) => StatusCode::NOT_FOUND,
+            Self::Entity(EntityError::EntityNotFound { .. }) => StatusCode::NOT_FOUND,
+            Self::PolicyNotFound => StatusCode::NOT_FOUND,
+
+            Self::Policy(_) | Self::Entity(_) | Self::Authorization(_) | Self::InvalidInput(_) => {
+                StatusCode::BAD_REQUEST
+            }
+
+            Self::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+
+            Self::ServiceUnavailable { .. } => StatusCode::SERVICE_UNAVAILABLE,
+
+            Self::Config(_)
+            | Self::Io { .. }
+            | Self::Json { .. }
+            | Self::Internal { .. }
+            | Self::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
+    pub const fn error_type(&self) -> &'static str {
         match self {
-            AppError::Policy(_) => "policy_error",
-            AppError::Entity(_) => "entity_error",
-            AppError::Authorization(_) => "authorization_error",
-            AppError::Config(_) => "configuration_error",
-            AppError::Io { .. } => "io_error",
-            AppError::Json { .. } => "json_error",
-            AppError::Internal { .. } | AppError::InternalServerError => "internal_error",
-            AppError::ServiceUnavailable { .. } => "service_unavailable",
-            AppError::RateLimitExceeded { .. } => "rate_limit_exceeded",
-            AppError::InvalidInput(_) => "invalid_input",
-            AppError::PolicyNotFound => "policy_not_found",
+            Self::Policy(_) => "policy_error",
+            Self::Entity(_) => "entity_error",
+            Self::Authorization(_) => "authorization_error",
+            Self::Config(_) => "configuration_error",
+            Self::Io { .. } => "io_error",
+            Self::Json { .. } => "json_error",
+            Self::Internal { .. } | Self::InternalServerError => "internal_error",
+            Self::ServiceUnavailable { .. } => "service_unavailable",
+            Self::RateLimitExceeded { .. } => "rate_limit_exceeded",
+            Self::InvalidInput(_) => "invalid_input",
+            Self::PolicyNotFound => "policy_not_found",
         }
     }
 }

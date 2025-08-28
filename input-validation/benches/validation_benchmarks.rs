@@ -216,7 +216,7 @@ fn bench_dos_protection(c: &mut Criterion) {
     let dos_protection = DoSProtection::new(DoSConfig::production());
 
     // Benchmark size checks
-    let sizes = vec![100, 1000, 10000, 100000];
+    let sizes = vec![100, 1000, 10000, 100_000];
     for size in sizes {
         group.bench_with_input(BenchmarkId::new("size_check", size), &size, |b, &size| {
             b.iter(|| dos_protection.size_limiter().check_field_size(black_box(size)))

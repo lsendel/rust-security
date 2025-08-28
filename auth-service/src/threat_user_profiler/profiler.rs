@@ -1,9 +1,10 @@
-use crate::threat_types::*;
 use crate::threat_user_profiler::types::*;
 use crate::threat_user_profiler::config::*;
-use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
 use crate::threat_user_profiler::features::BehavioralFeatureExtractor;
 use crate::threat_user_profiler::risk_assessment::RiskAssessmentEngine;
+use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
+use crate::threat_user_profiler::types::*;
+use crate::core::security::SecurityEventType;
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 use redis::aio::ConnectionManager;
@@ -54,12 +55,12 @@ pub struct AdvancedUserBehaviorProfiler {
     time_series_data: Arc<RwLock<HashMap<Uuid, HashMap<String, BehavioralTimeSeries>>>>,
     profile_update_queue: Sender<ProfileUpdateRequest>,
     profile_update_receiver: Receiver<ProfileUpdateRequest>,
-    
+
     // Component engines
     time_series_analyzer: TimeSeriesAnalyzer,
     feature_extractor: BehavioralFeatureExtractor,
     risk_assessment_engine: RiskAssessmentEngine,
-    
+
     // Statistics and monitoring
     profiling_statistics: Arc<Mutex<ProfilingStatistics>>,
 }
@@ -90,7 +91,10 @@ impl AdvancedUserBehaviorProfiler {
         // Initialize component engines with their respective configurations
         let time_series_analyzer = TimeSeriesAnalyzer::new(
             config.temporal_analysis.time_series_window_size,
-            config.temporal_analysis.seasonality_detection_periods.clone(),
+            config
+                .temporal_analysis
+                .seasonality_detection_periods
+                .clone(),
             config.temporal_analysis.change_point_detection_sensitivity,
         );
 
@@ -139,9 +143,8 @@ impl AdvancedUserBehaviorProfiler {
         user_id: Uuid,
         events: Vec<UserSecurityEvent>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        
         let priority = self.determine_update_priority(&events);
-        
+
         let update_request = ProfileUpdateRequest {
             user_id,
             events,
@@ -149,7 +152,9 @@ impl AdvancedUserBehaviorProfiler {
             priority,
         };
 
-        self.profile_update_queue.send_async(update_request).await
+        self.profile_update_queue
+            .send_async(update_request)
+            .await
             .map_err(|e| format!("Failed to queue profile update: {}", e))?;
 
         Ok(())
@@ -162,18 +167,24 @@ impl AdvancedUserBehaviorProfiler {
     }
 
     /// Get risk assessment for a user
-    pub async fn assess_user_risk(&self, user_id: Uuid) -> Result<RiskAssessment, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn assess_user_risk(
+        &self,
+        user_id: Uuid,
+    ) -> Result<RiskAssessment, Box<dyn std::error::Error + Send + Sync>> {
         let profiles = self.user_profiles.read().await;
-        
+
         if let Some(profile) = profiles.get(&user_id) {
             // Get peer profiles for comparison
-            let peer_profiles: Vec<EnhancedUserBehaviorProfile> = profiles.values()
+            let peer_profiles: Vec<EnhancedUserBehaviorProfile> = profiles
+                .values()
                 .filter(|p| p.user_id != user_id)
                 .take(100) // Limit peer comparison set
                 .cloned()
                 .collect();
 
-            self.risk_assessment_engine.assess_risk(user_id, profile, &peer_profiles).await
+            self.risk_assessment_engine
+                .assess_risk(user_id, profile, &peer_profiles)
+                .await
         } else {
             Err("User profile not found".into())
         }
@@ -181,14 +192,14 @@ impl AdvancedUserBehaviorProfiler {
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let config = self.config.read().await;
-        
+        let _config = self.config.read().await;
+
         let client = redis::Client::open(config.redis_config.connection_url.as_str())?;
         let connection_manager = ConnectionManager::new(client).await?;
-        
+
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = Some(connection_manager);
-        
+
         info!("Redis connection initialized for user profiling");
         Ok(())
     }
@@ -212,7 +223,7 @@ impl AdvancedUserBehaviorProfiler {
 
         tokio::spawn(async move {
             info!("Starting profile processor task");
-            
+
             while let Ok(update_request) = receiver.recv_async().await {
                 #[cfg(feature = "monitoring")]
                 let _timer = PROFILE_ANALYSIS_DURATION.start_timer();
@@ -224,7 +235,9 @@ impl AdvancedUserBehaviorProfiler {
                     &feature_extractor,
                     &statistics,
                     &config,
-                ).await {
+                )
+                .await
+                {
                     error!("Failed to process profile update: {}", e);
                 }
 
@@ -241,11 +254,10 @@ impl AdvancedUserBehaviorProfiler {
         time_series_data: &Arc<RwLock<HashMap<Uuid, HashMap<String, BehavioralTimeSeries>>>>,
         feature_extractor: &BehavioralFeatureExtractor,
         statistics: &Arc<Mutex<ProfilingStatistics>>,
-        config: &Arc<RwLock<UserProfilingConfig>>,
+        _config: &Arc<RwLock<UserProfilingConfig>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        
         let start_time = std::time::Instant::now();
-        
+
         // Get existing profile or create new one
         let existing_profile = {
             let profiles_read = profiles.read().await;
@@ -289,15 +301,18 @@ impl AdvancedUserBehaviorProfiler {
         {
             let mut stats = statistics.lock().await;
             stats.profiles_analyzed += 1;
-            stats.average_processing_time_ms = 
+            stats.average_processing_time_ms =
                 (stats.average_processing_time_ms + start_time.elapsed().as_millis() as f64) / 2.0;
         }
 
         #[cfg(feature = "monitoring")]
         ACTIVE_USER_PROFILES.set(profiles.read().await.len() as f64);
 
-        debug!("Processed profile update for user {} in {:.2}ms", 
-               request.user_id, start_time.elapsed().as_millis());
+        debug!(
+            "Processed profile update for user {} in {:.2}ms",
+            request.user_id,
+            start_time.elapsed().as_millis()
+        );
 
         Ok(())
     }
@@ -307,14 +322,14 @@ impl AdvancedUserBehaviorProfiler {
         request: &ProfileUpdateRequest,
         time_series_data: &Arc<RwLock<HashMap<Uuid, HashMap<String, BehavioralTimeSeries>>>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        
         let mut data = time_series_data.write().await;
         let user_series = data.entry(request.user_id).or_insert_with(HashMap::new);
 
         // Extract time series points from events
         for event in &request.events {
             // Login frequency time series
-            let login_series = user_series.entry("login_frequency".to_string())
+            let login_series = user_series
+                .entry("login_frequency".to_string())
                 .or_insert_with(|| BehavioralTimeSeries {
                     user_id: request.user_id,
                     feature_name: "login_frequency".to_string(),
@@ -342,13 +357,13 @@ impl AdvancedUserBehaviorProfiler {
     async fn start_time_series_analyzer_task(&self) {
         let time_series_data = Arc::clone(&self.time_series_data);
         let analyzer = self.time_series_analyzer.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(300)); // Every 5 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let data = time_series_data.read().await;
                 for (user_id, user_series) in data.iter() {
                     for series in user_series.values() {
@@ -364,13 +379,13 @@ impl AdvancedUserBehaviorProfiler {
     /// Start anomaly detector background task
     async fn start_anomaly_detector(&self) {
         let profiles = Arc::clone(&self.user_profiles);
-        
+
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(600)); // Every 10 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let profiles_read = profiles.read().await;
                 for profile in profiles_read.values() {
                     // Perform anomaly detection on profile
@@ -379,7 +394,7 @@ impl AdvancedUserBehaviorProfiler {
                 }
 
                 #[cfg(feature = "monitoring")]
-                BEHAVIORAL_ANOMALIES_FOUND.inc_by(profiles_read.len() as u64);
+                BEHAVIORAL_ANOMALIES_FOUND.inc_by(profiles_read.len() as f64);
             }
         });
     }
@@ -388,24 +403,29 @@ impl AdvancedUserBehaviorProfiler {
     async fn start_risk_assessor(&self) {
         let profiles = Arc::clone(&self.user_profiles);
         let risk_engine = self.risk_assessment_engine.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(900)); // Every 15 minutes
-            
+
             loop {
                 interval.tick().await;
-                
+
                 let profiles_read = profiles.read().await;
-                let all_profiles: Vec<EnhancedUserBehaviorProfile> = profiles_read.values().cloned().collect();
-                
+                let all_profiles: Vec<EnhancedUserBehaviorProfile> =
+                    profiles_read.values().cloned().collect();
+
                 for profile in &all_profiles {
-                    let peer_profiles: Vec<EnhancedUserBehaviorProfile> = all_profiles.iter()
+                    let peer_profiles: Vec<EnhancedUserBehaviorProfile> = all_profiles
+                        .iter()
                         .filter(|p| p.user_id != profile.user_id)
                         .take(50)
                         .cloned()
                         .collect();
 
-                    if let Err(e) = risk_engine.assess_risk(profile.user_id, profile, &peer_profiles).await {
+                    if let Err(e) = risk_engine
+                        .assess_risk(profile.user_id, profile, &peer_profiles)
+                        .await
+                    {
                         debug!("Risk assessment failed for user {}: {}", profile.user_id, e);
                     }
                 }
@@ -415,7 +435,15 @@ impl AdvancedUserBehaviorProfiler {
 
     /// Determine update priority based on events
     fn determine_update_priority(&self, events: &[UserSecurityEvent]) -> UpdatePriority {
-        let high_risk_events = events.iter().filter(|e| e.risk_score > 0.7).count();
+        // Consider certain event types as high-risk
+        let high_risk_events = events.iter().filter(|e| {
+            matches!(e.event_type, 
+                SecurityEventType::ThreatDetected | 
+                SecurityEventType::AnomalyDetected | 
+                SecurityEventType::SuspiciousActivity |
+                SecurityEventType::PolicyViolation
+            )
+        }).count();
         let total_events = events.len();
 
         if high_risk_events > 0 && (high_risk_events as f64 / total_events as f64) > 0.5 {
@@ -438,16 +466,18 @@ impl AdvancedUserBehaviorProfiler {
     /// Shutdown the profiler gracefully
     pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Shutting down Advanced User Behavior Profiler");
-        
+
         // Save profiles to persistent storage
         self.save_profiles_to_storage().await?;
-        
+
         info!("Advanced User Behavior Profiler shutdown complete");
         Ok(())
     }
 
     /// Save profiles to persistent storage
-    async fn save_profiles_to_storage(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn save_profiles_to_storage(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // In a real implementation, this would save to Redis/database
         let profiles = self.user_profiles.read().await;
         info!("Saving {} user profiles to storage", profiles.len());
@@ -464,11 +494,11 @@ mod tests {
     async fn test_profiler_initialization() {
         let config = UserProfilingConfig::default();
         let profiler = AdvancedUserBehaviorProfiler::new(config);
-        
+
         // Test initialization (Redis connection may fail in test environment)
         let result = profiler.initialize().await;
         // Don't assert success since Redis may not be available in tests
-        
+
         let stats = profiler.get_statistics().await;
         assert_eq!(stats.profiles_analyzed, 0);
     }
@@ -477,23 +507,20 @@ mod tests {
     async fn test_event_processing() {
         let config = UserProfilingConfig::default();
         let profiler = AdvancedUserBehaviorProfiler::new(config);
-        
+
         let user_id = uuid::Uuid::new_v4();
-        let events = vec![
-            UserSecurityEvent {
-                event_id: uuid::Uuid::new_v4(),
-                user_id,
-                timestamp: Utc::now(),
-                event_type: SecurityEventType::Login,
-                source_ip: "192.168.1.1".to_string(),
-                user_agent: "Mozilla/5.0".to_string(),
-                location: None,
-                device_fingerprint: None,
-                session_id: None,
-                risk_score: 0.1,
-                metadata: std::collections::HashMap::new(),
-            }
-        ];
+        let events = vec![UserSecurityEvent {
+            id: uuid::Uuid::new_v4(),
+            user_id,
+            timestamp: Utc::now(),
+            event_type: SecurityEventType::AuthenticationSuccess,
+            source_ip: "192.168.1.1".to_string(),
+            user_agent: Some("Mozilla/5.0".to_string()),
+            location: None,
+            device_fingerprint: None,
+            session_id: None,
+            metadata: std::collections::HashMap::new(),
+        }];
 
         let result = profiler.process_user_events(user_id, events).await;
         assert!(result.is_ok());

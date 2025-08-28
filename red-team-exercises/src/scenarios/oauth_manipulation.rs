@@ -57,7 +57,7 @@ async fn oauth_flow_manipulation(
             urlencoding::encode(response_type)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "oauth_response_type_manipulation",
                 "GET",
@@ -97,7 +97,7 @@ async fn pkce_downgrade_attacks(
     // Test plain PKCE method
     let auth_url = "/oauth/authorize?response_type=code&client_id=test&redirect_uri=http://localhost&code_challenge=test&code_challenge_method=plain";
 
-    let result = framework
+    let _result = framework
         .execute_attack("pkce_downgrade", "GET", auth_url, None, None, Some(&session))
         .await?;
 
@@ -141,7 +141,7 @@ async fn redirect_uri_manipulation(
             urlencoding::encode(redirect_uri)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "redirect_uri_manipulation",
                 "GET",
@@ -192,7 +192,7 @@ async fn state_parameter_attacks(
             format!("/oauth/authorize?response_type=code&client_id=test&redirect_uri=http://localhost&state={}", state_value)
         };
 
-        let result = framework
+        let _result = framework
             .execute_attack("state_parameter_attack", "GET", &auth_url, None, None, Some(&session))
             .await?;
 
@@ -237,7 +237,7 @@ async fn scope_manipulation(
             urlencoding::encode(scope)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack("scope_manipulation", "GET", &auth_url, None, None, Some(&session))
             .await?;
 
@@ -311,7 +311,7 @@ async fn client_authentication_bypass(
             "grant_type=client_credentials".to_string()
         };
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "client_auth_bypass",
                 "POST",
@@ -363,7 +363,7 @@ async fn token_exchange_attacks(
                 valid_token, token_type, token_type
             );
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "token_exchange_elevation",
                     "POST",
@@ -389,7 +389,7 @@ async fn token_exchange_attacks(
                 malicious_token
             );
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "token_substitution",
                     "POST",
@@ -441,7 +441,7 @@ async fn oidc_specific_attacks(
             urlencoding::encode(nonce)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack("oidc_nonce_manipulation", "GET", &auth_url, None, None, Some(&session))
             .await?;
 
@@ -465,7 +465,7 @@ async fn oidc_specific_attacks(
                 reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token_param))?,
             );
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "oidc_userinfo_attack",
                     "GET",
@@ -516,7 +516,7 @@ async fn authorization_code_injection(
             urlencoding::encode(code)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "auth_code_injection",
                 "POST",

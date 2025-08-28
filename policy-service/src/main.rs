@@ -1,7 +1,7 @@
 // Explicitly acknowledge unused dependencies for future functionality
 use cedar_policy as _;
-use chrono as _;
 use cedar_policy_core as _;
+use chrono as _;
 use once_cell as _;
 use prometheus as _;
 use serde as _;

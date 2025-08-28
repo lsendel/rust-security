@@ -1171,7 +1171,7 @@ mod tests {
         let parser = ScimParser::new(config).unwrap();
 
         // Test simple attribute expression
-        let result = parser.parse("userName eq \"john\"");
+        let _result = parser.parse("userName eq \"john\"");
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
@@ -1191,7 +1191,7 @@ mod tests {
         let parser = ScimParser::new(config).unwrap();
 
         // Test complex expression with AND
-        let result = parser.parse("userName eq \"john\" and active eq true");
+        let _result = parser.parse("userName eq \"john\" and active eq true");
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
@@ -1209,7 +1209,7 @@ mod tests {
         let parser = ScimParser::new(config).unwrap();
 
         // Test SQL injection attempt
-        let result = parser.parse("userName eq \"john\"; DROP TABLE users");
+        let _result = parser.parse("userName eq \"john\"; DROP TABLE users");
         assert!(result.is_err());
     }
 
@@ -1219,7 +1219,7 @@ mod tests {
         let parser = OAuthParser::new(config).unwrap();
 
         let input = "grant_type=authorization_code&client_id=test123&redirect_uri=https://example.com/callback";
-        let result = parser.parse(input);
+        let _result = parser.parse(input);
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
@@ -1233,7 +1233,7 @@ mod tests {
         let parser = OAuthParser::new(config).unwrap();
 
         let input = "grant_type=invalid_type&client_id=test123";
-        let result = parser.parse(input);
+        let _result = parser.parse(input);
         assert!(result.is_err());
     }
 
@@ -1252,7 +1252,7 @@ mod tests {
 
         let jwt = format!("{}.{}.{}", header, payload, signature);
 
-        let result = parser.parse(&jwt);
+        let _result = parser.parse(&jwt);
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
@@ -1271,7 +1271,7 @@ mod tests {
 
         let jwt = format!("{}.{}.{}", header, payload, signature);
 
-        let result = parser.parse(&jwt);
+        let _result = parser.parse(&jwt);
         assert!(result.is_err());
     }
 
@@ -1283,7 +1283,7 @@ mod tests {
         let parser = ScimParser::new(config).unwrap();
 
         let large_input = "a".repeat(200);
-        let result = parser.parse(&large_input);
+        let _result = parser.parse(&large_input);
         assert!(matches!(result, Err(ParserError::SizeLimitExceeded)));
     }
 }

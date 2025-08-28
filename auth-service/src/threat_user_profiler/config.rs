@@ -149,7 +149,7 @@ impl Default for ProfilingRedisConfig {
         Self {
             connection_url: "redis://localhost:6379".to_string(),
             key_prefix: "user_profiling:".to_string(),
-            profile_ttl_seconds: 7776000, // 90 days
+            profile_ttl_seconds: 7776000,     // 90 days
             time_series_ttl_seconds: 2592000, // 30 days
             enable_compression: true,
             max_connections: 10,
@@ -189,7 +189,7 @@ impl UserProfilingConfig {
     pub fn development() -> Self {
         let mut config = Self::default();
         config.profile_retention_days = 7;
-        config.redis_config.profile_ttl_seconds = 604800; // 7 days
+        config.redis_config.profile_ttl_seconds = 604_800; // 7 days
         config.redis_config.time_series_ttl_seconds = 259200; // 3 days
         config.min_data_points_for_analysis = 3;
         config
@@ -242,7 +242,9 @@ impl UserProfilingConfig {
             return Err("Feature weight must be between 0.0 and 1.0".to_string());
         }
 
-        self.behavioral_features.feature_weights.insert(feature.to_string(), weight);
+        self.behavioral_features
+            .feature_weights
+            .insert(feature.to_string(), weight);
         Ok(())
     }
 
@@ -252,7 +254,9 @@ impl UserProfilingConfig {
             return Err("Risk weight must be between 0.0 and 1.0".to_string());
         }
 
-        self.risk_scoring.base_risk_weights.insert(risk_factor.to_string(), weight);
+        self.risk_scoring
+            .base_risk_weights
+            .insert(risk_factor.to_string(), weight);
         Ok(())
     }
 
@@ -261,7 +265,8 @@ impl UserProfilingConfig {
         // In a real implementation, this would load tenant-specific overrides
         // For now, return the base configuration
         let mut config = self.clone();
-        config.redis_config.key_prefix = format!("{}tenant:{}:", self.redis_config.key_prefix, tenant_id);
+        config.redis_config.key_prefix =
+            format!("{}tenant:{}:", self.redis_config.key_prefix, tenant_id);
         config
     }
 }

@@ -184,7 +184,7 @@ impl OptimizedDbPool {
         self.metrics.query_cache_misses.inc();
 
         // Execute query
-        let result = self.execute_query_internal(query, params).await?;
+        let _result = self.execute_query_internal(query, params).await?;
         let duration = start.elapsed();
 
         // Cache result if query is cacheable
@@ -287,7 +287,7 @@ impl OptimizedDbPool {
         let start = Instant::now();
         let mut tx = self.pool.begin().await?;
         
-        let result = f(&mut tx).await;
+        let _result = f(&mut tx).await;
         
         match result {
             Ok(value) => {

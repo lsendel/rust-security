@@ -23,40 +23,80 @@ interface PerformanceMetricsProps {
 }
 
 export function PerformanceMetrics({ metrics }: PerformanceMetricsProps) {
-  const chartData = useMemo(() => {
-    return metrics
-      .slice(-50) // Show last 50 data points
-      .map(metric => ({
+  // Memoize all calculations together for better performance
+  const { chartData, currentMetric, avgResponseTime, avgErrorRate, maxConnections } = useMemo(() => {
+    if (!metrics || metrics.length === 0) {
+      return {
+        chartData: [],
+        currentMetric: null,
+        avgResponseTime: 0,
+        avgErrorRate: 0,
+        maxConnections: 0
+      }
+    }
+
+    // Calculate all metrics in a single pass for better performance
+    let totalResponseTime = 0
+    let totalErrorRate = 0
+    let maxConn = 0
+
+    const recentMetrics = metrics.slice(-50) // Show last 50 data points
+    const processedChartData = recentMetrics.map(metric => {
+      // Accumulate values while processing chart data
+      totalResponseTime += metric.responseTime
+      totalErrorRate += metric.errorRate
+      maxConn = Math.max(maxConn, metric.activeConnections)
+
+      return {
         time: format(new Date(metric.timestamp), 'HH:mm:ss'),
         responseTime: metric.responseTime * 1000, // Convert to ms
         errorRate: metric.errorRate * 100, // Convert to percentage
         activeConnections: metric.activeConnections,
         throughput: (metric.authenticationSuccess + metric.authenticationFailure) || 0,
-      }))
+      }
+    })
+
+    return {
+      chartData: processedChartData,
+      currentMetric: metrics[0],
+      avgResponseTime: (totalResponseTime / recentMetrics.length) * 1000,
+      avgErrorRate: (totalErrorRate / recentMetrics.length) * 100,
+      maxConnections: maxConn
+    }
   }, [metrics])
 
-  // Calculate current metrics
-  const currentMetric = metrics[0]
-  const avgResponseTime = metrics.reduce((sum, m) => sum + m.responseTime, 0) / metrics.length * 1000
-  const avgErrorRate = metrics.reduce((sum, m) => sum + m.errorRate, 0) / metrics.length * 100
-  const maxConnections = Math.max(...metrics.map(m => m.activeConnections))
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-background border rounded-lg shadow-lg p-3">
-          <p className="text-sm font-medium mb-2">{`Time: ${label}`}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {`${entry.name}: ${entry.value.toLocaleString()}`}
-              {entry.dataKey === 'responseTime' && 'ms'}
-              {entry.dataKey === 'errorRate' && '%'}
-            </p>
-          ))}
-        </div>
-      )
+  const CustomTooltip = useMemo(() => ({ active, payload, label }: any) => {
+    if (!active || !payload || payload.length === 0) {
+      return null
     }
-    return null
+
+    return (
+      <div className="bg-background border rounded-lg shadow-lg p-3">
+        <p className="text-sm font-medium mb-2">{`Time: ${label}`}</p>
+        {payload.map((entry: any, index: number) => {
+          const value = typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value
+          const unit = entry.dataKey === 'responseTime' ? 'ms' : 
+                      entry.dataKey === 'errorRate' ? '%' : ''
+          
+          return (
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
+              {`${entry.name}: ${value}${unit}`}
+            </p>
+          )
+        })}
+      </div>
+    )
+  }, [])
+
+  // Early return for empty metrics to avoid unnecessary rendering
+  if (!metrics || metrics.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No performance metrics available</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -73,7 +113,7 @@ export function PerformanceMetrics({ metrics }: PerformanceMetricsProps) {
               {currentMetric ? Math.round(currentMetric.responseTime * 1000) : 0}ms
             </div>
             <div className="text-xs text-muted-foreground">
-              Avg: {avgResponseTime.toFixed(0)}ms
+              Avg: {Math.round(avgResponseTime)}ms
             </div>
             <Progress 
               value={Math.min((avgResponseTime / 1000) * 100, 100)} 
@@ -89,10 +129,10 @@ export function PerformanceMetrics({ metrics }: PerformanceMetricsProps) {
               <span className="text-sm font-medium">Error Rate</span>
             </div>
             <div className="text-2xl font-bold text-red-500">
-              {currentMetric ? (currentMetric.errorRate * 100).toFixed(1) : 0}%
+              {currentMetric ? Math.round(currentMetric.errorRate * 100 * 10) / 10 : 0}%
             </div>
             <div className="text-xs text-muted-foreground">
-              Avg: {avgErrorRate.toFixed(1)}%
+              Avg: {Math.round(avgErrorRate * 10) / 10}%
             </div>
             <Progress 
               value={avgErrorRate} 
@@ -114,7 +154,7 @@ export function PerformanceMetrics({ metrics }: PerformanceMetricsProps) {
               Peak: {maxConnections.toLocaleString()}
             </div>
             <Progress 
-              value={(currentMetric?.activeConnections || 0) / maxConnections * 100} 
+              value={maxConnections > 0 ? (currentMetric?.activeConnections || 0) / maxConnections * 100 : 0} 
               className="mt-2 h-1" 
             />
           </CardContent>

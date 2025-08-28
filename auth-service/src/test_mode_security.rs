@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use once_cell::sync::Lazy;
-use tracing::{warn, error, info};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::{error, info, warn};
 
 static TEST_MODE_ENABLED: Lazy<AtomicBool> = Lazy::new(|| {
     let enabled = is_test_mode_raw();
@@ -29,7 +29,9 @@ pub fn is_test_mode() -> bool {
     if is_production_environment() {
         if is_test_mode_raw() {
             error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
-            error!("This creates serious security vulnerabilities and MUST be disabled immediately");
+            error!(
+                "This creates serious security vulnerabilities and MUST be disabled immediately"
+            );
 
             // Log to security audit trail
             audit_log_security_violation();
@@ -45,7 +47,10 @@ pub fn is_test_mode() -> bool {
         TEST_MODE_USAGE_COUNT.fetch_add(1, Ordering::Relaxed);
 
         // Log each test mode usage for audit trail
-        warn!("Test mode bypass used (count: {})", TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed));
+        warn!(
+            "Test mode bypass used (count: {})",
+            TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed)
+        );
     }
 
     enabled
@@ -81,7 +86,11 @@ pub fn get_test_mode_status() -> TestModeStatus {
         raw_test_mode_var: is_test_mode_raw(),
         is_production: is_production_environment(),
         usage_count: TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed),
-        security_violations: if is_production_environment() && is_test_mode_raw() { 1 } else { 0 },
+        security_violations: if is_production_environment() && is_test_mode_raw() {
+            1
+        } else {
+            0
+        },
     }
 }
 
@@ -113,7 +122,10 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
     // Check for long-running test mode (potential forgotten test environment)
     let usage_count = TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed);
     if usage_count > 1000 {
-        issues.push(format!("Test mode has been used {} times - possible forgotten test environment", usage_count));
+        issues.push(format!(
+            "Test mode has been used {} times - possible forgotten test environment",
+            usage_count
+        ));
     }
 
     // Check for test mode in CI/CD environments that should be production-like
@@ -135,9 +147,11 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
 fn audit_log_security_violation() {
     // This would typically integrate with your security logging system
     error!("SECURITY_AUDIT: TEST_MODE_PRODUCTION_VIOLATION");
-    error!("Environment: RUST_ENV={}, ENVIRONMENT={}",
-           std::env::var("RUST_ENV").unwrap_or_default(),
-           std::env::var("ENVIRONMENT").unwrap_or_default());
+    error!(
+        "Environment: RUST_ENV={}, ENVIRONMENT={}",
+        std::env::var("RUST_ENV").unwrap_or_default(),
+        std::env::var("ENVIRONMENT").unwrap_or_default()
+    );
     error!("Process: PID={}", std::process::id());
     error!("Timestamp: {}", chrono::Utc::now().to_rfc3339());
 
@@ -238,7 +252,10 @@ mod tests {
 
         let validation = validate_test_mode_security();
         assert!(validation.is_err());
-        assert!(validation.unwrap_err().iter().any(|issue| issue.contains("production")));
+        assert!(validation
+            .unwrap_err()
+            .iter()
+            .any(|issue| issue.contains("production")));
 
         // Cleanup
         std::env::remove_var("RUST_ENV");

@@ -85,7 +85,7 @@ fuzz_target!(|data: &[u8]| {
         // Create a simple claims object
         let claims = serde_json::json!({
             "sub": "test",
-            "exp": 1000000000, // Fixed timestamp to avoid expiration issues
+            "exp": 1_000_000000, // Fixed timestamp to avoid expiration issues
             "iat": 999999999,
         });
         

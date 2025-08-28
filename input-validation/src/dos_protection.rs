@@ -838,7 +838,7 @@ mod tests {
             user_limits: HashMap::new(),
         };
 
-        let limiter = RateLimiter::new(config);
+        let _limiter = RateLimiter::new(config);
 
         // Should allow initial requests
         for _ in 0..7 {
@@ -861,7 +861,7 @@ mod tests {
             max_url_length: 200,
         };
 
-        let limiter = InputSizeLimiter::new(config);
+        let _limiter = InputSizeLimiter::new(config);
 
         assert!(limiter.check_body_size(500).is_ok());
         assert!(limiter.check_body_size(1500).is_err());

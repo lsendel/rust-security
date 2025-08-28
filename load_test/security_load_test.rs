@@ -259,7 +259,7 @@ impl LoadTestExecutor {
         while Instant::now() < end_time {
             let request_start = Instant::now();
 
-            let result = self.make_token_request(0).await;
+            let _result = self.make_token_request(0).await;
             let duration = request_start.elapsed();
 
             self.record_result(TestResult {
@@ -293,7 +293,7 @@ impl LoadTestExecutor {
         // Phase 1: Normal requests to establish baseline
         info!("Phase 1: Normal requests");
         for _ in 0..50 {
-            let result = self.make_token_request(0).await;
+            let _result = self.make_token_request(0).await;
             self.record_result(TestResult {
                 endpoint: "/oauth/token".to_string(),
                 method: "POST".to_string(),
@@ -309,7 +309,7 @@ impl LoadTestExecutor {
         // Phase 2: Trigger circuit breaker with bad requests
         info!("Phase 2: Triggering circuit breaker");
         for _ in 0..20 {
-            let result = self.make_bad_request().await;
+            let _result = self.make_bad_request().await;
             self.record_result(TestResult {
                 endpoint: "/oauth/token".to_string(),
                 method: "POST".to_string(),
@@ -325,7 +325,7 @@ impl LoadTestExecutor {
         // Phase 3: Test if circuit breaker is open
         info!("Phase 3: Testing circuit breaker state");
         while Instant::now() < end_time {
-            let result = self.make_token_request(0).await;
+            let _result = self.make_token_request(0).await;
             self.record_result(TestResult {
                 endpoint: "/oauth/token".to_string(),
                 method: "POST".to_string(),
@@ -362,7 +362,7 @@ impl LoadTestExecutor {
             while Instant::now() < phase_end {
                 let request_start = Instant::now();
 
-                let result = self.make_token_request(0).await;
+                let _result = self.make_token_request(0).await;
                 self.record_result(TestResult {
                     endpoint: "/oauth/token".to_string(),
                     method: "POST".to_string(),
@@ -396,7 +396,7 @@ impl LoadTestExecutor {
         while Instant::now() < end_time {
             let request_start = Instant::now();
 
-            let result = self.make_token_request(client_id).await;
+            let _result = self.make_token_request(client_id).await;
             let request_duration = request_start.elapsed();
 
             self.record_result(TestResult {
@@ -426,7 +426,7 @@ impl LoadTestExecutor {
             let request_start = Instant::now();
 
             let token = &tokens[rand::random::<usize>() % tokens.len()];
-            let result = self.make_introspection_request(token).await;
+            let _result = self.make_introspection_request(token).await;
             let request_duration = request_start.elapsed();
 
             self.record_result(TestResult {
@@ -453,7 +453,7 @@ impl LoadTestExecutor {
         while Instant::now() < end_time {
             let request_start = Instant::now();
 
-            let result = match attack_type {
+            let _result = match attack_type {
                 AttackType::CredentialStuffing => self.make_credential_stuffing_request(client_id).await,
                 AttackType::BruteForce => self.make_brute_force_request(client_id).await,
                 AttackType::TokenEnumeration => self.make_token_enumeration_request(client_id).await,
@@ -502,7 +502,7 @@ impl LoadTestExecutor {
                 }
             }
 
-            let result = match request_type {
+            let _result = match request_type {
                 "token" => {
                     let res = self.make_token_request(client_id).await;
                     TestResult {
@@ -571,7 +571,7 @@ impl LoadTestExecutor {
         match response {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                let size = resp.content_length().unwrap_or(0) as usize;
+                let _size = resp.content_length().unwrap_or(0) as usize;
                 RequestResult {
                     status_code: status,
                     response_size: size,
@@ -604,7 +604,7 @@ impl LoadTestExecutor {
         match response {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                let size = resp.content_length().unwrap_or(0) as usize;
+                let _size = resp.content_length().unwrap_or(0) as usize;
                 RequestResult {
                     status_code: status,
                     response_size: size,
@@ -631,7 +631,7 @@ impl LoadTestExecutor {
         match response {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                let size = resp.content_length().unwrap_or(0) as usize;
+                let _size = resp.content_length().unwrap_or(0) as usize;
                 RequestResult {
                     status_code: status,
                     response_size: size,
@@ -664,7 +664,7 @@ impl LoadTestExecutor {
         match response {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                let size = resp.content_length().unwrap_or(0) as usize;
+                let _size = resp.content_length().unwrap_or(0) as usize;
                 RequestResult {
                     status_code: status,
                     response_size: size,

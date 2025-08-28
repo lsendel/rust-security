@@ -23,7 +23,7 @@ pub enum SecuritySeverity {
 #[serde(rename_all = "snake_case")]
 pub enum SecurityEventType {
     AuthenticationAttempt,
-    AuthenticationFailure, 
+    AuthenticationFailure,
     AuthenticationSuccess,
     TokenIssued,
     TokenRevoked,
@@ -120,7 +120,7 @@ impl SecurityEvent {
         self.ip_address = Some(ip);
         self
     }
-    
+
     pub fn with_ip_address(mut self, ip: String) -> Self {
         self.ip_address = Some(ip);
         self
@@ -234,13 +234,15 @@ impl SecurityEvent {
     /// Basic PII redaction for MVP
     fn redact_basic_pii(&self, text: &str) -> String {
         // Simple email redaction
-        let email_regex = regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
+        let email_regex =
+            regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
         let text = email_regex.replace_all(text, "[EMAIL_REDACTED]");
-        
+
         // Simple phone number redaction
-        let phone_regex = regex::Regex::new(r"\b\d{3}-\d{3}-\d{4}\b|\b\(\d{3}\)\s?\d{3}-\d{4}\b").unwrap();
+        let phone_regex =
+            regex::Regex::new(r"\b\d{3}-\d{3}-\d{4}\b|\b\(\d{3}\)\s?\d{3}-\d{4}\b").unwrap();
         let text = phone_regex.replace_all(&text, "[PHONE_REDACTED]");
-        
+
         text.to_string()
     }
 

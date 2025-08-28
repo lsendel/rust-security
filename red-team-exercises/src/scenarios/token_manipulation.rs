@@ -103,7 +103,7 @@ async fn jwt_manipulation_attacks(
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", malicious_jwt))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "jwt_manipulation",
                 "GET",
@@ -160,7 +160,7 @@ async fn token_substitution_attacks(
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "token_substitution",
                 "GET",
@@ -186,7 +186,7 @@ async fn token_substitution_attacks(
             reqwest::header::HeaderValue::from_str(&format!("{} admin_token", auth_type))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "auth_type_substitution",
                 "GET",
@@ -291,7 +291,7 @@ async fn token_replay_attacks(
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", expired_token))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "expired_token_replay",
                 "GET",
@@ -351,7 +351,7 @@ async fn token_enumeration_attacks(
                 reqwest::header::HeaderValue::from_str(&format!("Basic {}", auth))?,
             );
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "token_enumeration",
                     "POST",
@@ -407,7 +407,7 @@ async fn token_enumeration_attacks(
                 reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token))?,
             );
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "uuid_token_enumeration",
                     "GET",
@@ -474,7 +474,7 @@ async fn jwt_timing_attacks(
             );
 
             let start = Instant::now();
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "jwt_timing_attack",
                     "GET",
@@ -555,7 +555,7 @@ async fn token_binding_attacks(
             headers.insert("X-Forwarded-For", reqwest::header::HeaderValue::from_str(spoofed_ip)?);
             headers.insert("X-Real-IP", reqwest::header::HeaderValue::from_str(spoofed_ip)?);
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "token_ip_binding_bypass",
                     "GET",
@@ -589,7 +589,7 @@ async fn token_binding_attacks(
             );
             headers.insert("User-Agent", reqwest::header::HeaderValue::from_str(user_agent)?);
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "token_useragent_binding_bypass",
                     "GET",
@@ -642,7 +642,7 @@ async fn token_validation_bypass(
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", malicious_token))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "token_sql_injection",
                 "GET",
@@ -672,7 +672,7 @@ async fn token_validation_bypass(
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", encoded_token))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "token_nosql_injection",
                 "GET",
@@ -705,7 +705,7 @@ async fn token_validation_bypass(
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", encoded_token))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "token_path_traversal",
                 "GET",

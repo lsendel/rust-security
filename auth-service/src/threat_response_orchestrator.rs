@@ -565,7 +565,7 @@ impl ThreatResponseOrchestrator {
     async fn initialize_external_integrations(
         &self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let mut clients = self.external_clients.write().await;
 
         // Initialize SIEM integration
@@ -610,7 +610,7 @@ impl ThreatResponseOrchestrator {
         threat_signature: ThreatSignature,
         threat_context: ThreatContext,
     ) -> Result<ThreatResponsePlan, Box<dyn std::error::Error + Send + Sync>> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         if !config.enabled {
             return Err("Threat response orchestrator is disabled".into());
@@ -1054,7 +1054,7 @@ impl ThreatResponseOrchestrator {
                 let timer = RESPONSE_PLAN_DURATION.start_timer();
 
                 // Execute the response plan
-                let result = Self::execute_response_plan(
+                let _result = Self::execute_response_plan(
                     &response_request,
                     &active_plans,
                     &execution_contexts,

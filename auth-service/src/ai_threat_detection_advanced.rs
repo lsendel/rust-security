@@ -35,7 +35,7 @@ impl Default for ThreatDetectionConfig {
             enable_threat_scoring: true,
             alert_threshold: 0.7,
             learning_window_hours: 168, // 1 week
-            max_user_profiles: 100000,
+            max_user_profiles: 100_000,
             feature_window_minutes: 60,
         }
     }

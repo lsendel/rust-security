@@ -109,11 +109,6 @@ full = ["production", "database", "integrations", "docs", "web-security"]
 # Build profiles are defined at workspace root
 
 [dev-dependencies]
-http-body-util = { workspace = true }
-http = { workspace = true }
-tokio-test = { workspace = true }
-reqwest = { workspace = true }
-wiremock = { workspace = true }
-tempfile = { workspace = true }
-criterion = { workspace = true }
-pretty_assertions = { workspace = true }
+http.workspace = true
+http-body-util.workspace = true
+reqwest = { workspace = true, features = ["json"] }

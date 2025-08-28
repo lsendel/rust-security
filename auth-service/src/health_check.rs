@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// Health check response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +78,7 @@ impl HealthChecker {
     /// Perform comprehensive health check
     pub async fn check_health(&self) -> Result<HealthResponse> {
         let start = Instant::now();
-        
+
         // Execute all health checks concurrently
         let (db_result, redis_result, external_result, system_result) = tokio::join!(
             self.check_database(),
@@ -101,13 +101,13 @@ impl HealthChecker {
                 components.insert(name, health);
             }
         }
-        
+
         // Determine overall status
         let overall_status = self.determine_overall_status(&components).await;
-        
+
         // Get current metrics
         let metrics = self.metrics.read().await.clone();
-        
+
         let response = HealthResponse {
             status: overall_status,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -134,10 +134,10 @@ impl HealthChecker {
     async fn check_database(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
-        
+
         // Simulate database check (replace with actual database ping)
-        let result = self.simulate_component_check("database", 0.95).await;
-        
+        let _result = self.simulate_component_check("database", 0.95).await;
+
         let health = match result {
             Ok(_) => {
                 metadata.insert("connection_pool".to_string(), "healthy".to_string());
@@ -153,18 +153,16 @@ impl HealthChecker {
                     metadata,
                 }
             }
-            Err(e) => {
-                ComponentHealth {
-                    status: HealthStatus::Unhealthy,
-                    response_time_ms: start.elapsed().as_millis() as u64,
-                    last_check: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    error: Some(e.to_string()),
-                    metadata,
-                }
-            }
+            Err(e) => ComponentHealth {
+                status: HealthStatus::Unhealthy,
+                response_time_ms: start.elapsed().as_millis() as u64,
+                last_check: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                error: Some(e.to_string()),
+                metadata,
+            },
         };
 
         Ok(("database".to_string(), health))
@@ -174,10 +172,10 @@ impl HealthChecker {
     async fn check_redis(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
-        
+
         // Simulate Redis check (replace with actual Redis ping)
-        let result = self.simulate_component_check("redis", 0.98).await;
-        
+        let _result = self.simulate_component_check("redis", 0.98).await;
+
         let health = match result {
             Ok(_) => {
                 metadata.insert("memory_usage".to_string(), "45%".to_string());
@@ -193,18 +191,16 @@ impl HealthChecker {
                     metadata,
                 }
             }
-            Err(e) => {
-                ComponentHealth {
-                    status: HealthStatus::Unhealthy,
-                    response_time_ms: start.elapsed().as_millis() as u64,
-                    last_check: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    error: Some(e.to_string()),
-                    metadata,
-                }
-            }
+            Err(e) => ComponentHealth {
+                status: HealthStatus::Unhealthy,
+                response_time_ms: start.elapsed().as_millis() as u64,
+                last_check: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                error: Some(e.to_string()),
+                metadata,
+            },
         };
 
         Ok(("redis".to_string(), health))
@@ -214,10 +210,12 @@ impl HealthChecker {
     async fn check_external_services(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
-        
+
         // Check external dependencies (OIDC providers, etc.)
-        let result = self.simulate_component_check("external_services", 0.92).await;
-        
+        let _result = self
+            .simulate_component_check("external_services", 0.92)
+            .await;
+
         let health = match result {
             Ok(_) => {
                 metadata.insert("oidc_providers".to_string(), "2 healthy".to_string());
@@ -254,14 +252,14 @@ impl HealthChecker {
     async fn check_system_resources(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
-        
+
         // Get system metrics
         let memory_usage = self.get_memory_usage().await;
         let cpu_usage = self.get_cpu_usage().await;
-        
+
         metadata.insert("memory_mb".to_string(), memory_usage.to_string());
         metadata.insert("cpu_percent".to_string(), format!("{:.1}", cpu_usage));
-        
+
         let status = if memory_usage > 400.0 || cpu_usage > 80.0 {
             HealthStatus::Degraded
         } else if memory_usage > 500.0 || cpu_usage > 90.0 {
@@ -288,7 +286,7 @@ impl HealthChecker {
     async fn simulate_component_check(&self, component: &str, success_rate: f64) -> Result<()> {
         // Add realistic delay
         tokio::time::sleep(Duration::from_millis(10 + rand::random::<u64>() % 50)).await;
-        
+
         if rand::random::<f64>() < success_rate {
             Ok(())
         } else {
@@ -311,7 +309,10 @@ impl HealthChecker {
     }
 
     /// Determine overall health status
-    async fn determine_overall_status(&self, components: &HashMap<String, ComponentHealth>) -> HealthStatus {
+    async fn determine_overall_status(
+        &self,
+        components: &HashMap<String, ComponentHealth>,
+    ) -> HealthStatus {
         let mut _healthy_count = 0;
         let mut degraded_count = 0;
         let mut unhealthy_count = 0;
@@ -389,7 +390,7 @@ pub async fn readiness_handler(
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     // Quick readiness check - just verify critical components
     let components = health_checker.components.read().await;
-    
+
     let database_healthy = components
         .get("database")
         .map(|h| matches!(h.status, HealthStatus::Healthy))
@@ -443,7 +444,7 @@ mod tests {
     async fn test_health_check() {
         let checker = HealthChecker::new();
         let response = checker.check_health().await.unwrap();
-        
+
         assert_eq!(response.version, env!("CARGO_PKG_VERSION"));
         assert!(response.uptime_seconds < 10); // Should be very recent
         assert!(!response.components.is_empty());
@@ -452,11 +453,11 @@ mod tests {
     #[tokio::test]
     async fn test_component_checks() {
         let checker = HealthChecker::new();
-        
+
         let (name, health) = checker.check_database().await.unwrap();
         assert_eq!(name, "database");
         assert!(health.response_time_ms < 1000);
-        
+
         let (name, health) = checker.check_redis().await.unwrap();
         assert_eq!(name, "redis");
         assert!(health.response_time_ms < 1000);
@@ -465,7 +466,7 @@ mod tests {
     #[tokio::test]
     async fn test_metrics_update() {
         let checker = HealthChecker::new();
-        
+
         let metrics = HealthMetrics {
             memory_usage_mb: 256,
             cpu_usage_percent: 25.0,
@@ -473,9 +474,9 @@ mod tests {
             request_rate: 100.0,
             error_rate_percent: 0.1,
         };
-        
+
         checker.update_metrics(metrics.clone()).await;
-        
+
         let stored_metrics = checker.metrics.read().await;
         assert_eq!(stored_metrics.memory_usage_mb, 256);
         assert_eq!(stored_metrics.cpu_usage_percent, 25.0);

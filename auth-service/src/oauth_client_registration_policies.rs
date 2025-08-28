@@ -1394,7 +1394,7 @@ impl Default for ClientRegistrationPolicyEngine {
                 global_limits: RateLimitConfig {
                     requests_per_hour: 1000,
                     requests_per_day: 10000,
-                    requests_per_month: 100000,
+                    requests_per_month: 100_000,
                     burst_size: 100,
                 },
                 burst_protection: BurstProtectionConfig {

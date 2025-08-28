@@ -140,7 +140,7 @@ impl RedisSessionStore {
         // Test the connection with timeout
         let connection_test = pool.get();
         let timeout_duration = std::time::Duration::from_secs(2);
-        
+
         match tokio::time::timeout(timeout_duration, connection_test).await {
             Ok(Ok(_conn)) => {
                 info!("Redis session store initialized successfully");
@@ -650,7 +650,7 @@ impl SessionStore for EnhancedRedisSessionStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis with retry mechanism
         let _session_clone = session.clone();
-        let result = self
+        let _result = self
             .with_redis_retry(|| {
                 // In a real implementation, this would contain the actual Redis operations
                 // For now, we'll simulate success
@@ -721,7 +721,7 @@ impl SessionStore for EnhancedRedisSessionStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Similar implementation to create_session but for updates
         let _session_clone = session.clone();
-        let result = self
+        let _result = self
             .with_redis_retry(|| Ok::<(), Box<dyn StdError + Send + Sync>>(()))
             .await;
 
@@ -828,7 +828,6 @@ impl SessionStore for EnhancedRedisSessionStore {
 mod chaos_tests {
     use super::*;
     use tokio::time::{sleep, Duration};
-
 
     /// Test Redis outage scenarios
     #[tokio::test]

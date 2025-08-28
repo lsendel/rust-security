@@ -179,7 +179,7 @@ impl ResilientRedisClient {
         loop {
             let conn = self.connection_manager.clone();
 
-            let result = self.circuit_breaker.call(operation(conn)).await;
+            let _result = self.circuit_breaker.call(operation(conn)).await;
 
             match result {
                 Ok(value) => return Ok(value),
@@ -288,7 +288,7 @@ impl ResilientPipeline {
             let conn = self.connection_manager.clone();
             let pipe = self.pipe.clone();
 
-            let result = self
+            let _result = self
                 .circuit_breaker
                 .call(async move { pipe.query_async(&mut conn.clone()).await })
                 .await;

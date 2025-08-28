@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityAlert {
@@ -163,11 +163,12 @@ impl SecurityMonitor {
     }
 
     pub async fn start_monitoring(&self) {
-        let config = self.config.clone();
-        let active_alerts = self.active_alerts.clone();
-        let alert_history = self.alert_history.clone();
-        let metric_snapshots = self.metric_snapshots.clone();
-        let client = self.client.clone();
+        // Use Arc references directly instead of cloning Arc contents
+        let config = Arc::clone(&self.config);
+        let _active_alerts = Arc::clone(&self.active_alerts);
+        let alert_history = Arc::clone(&self.alert_history);
+        let _metric_snapshots = Arc::clone(&self.metric_snapshots);
+        let _client = self.client.clone();
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
@@ -181,21 +182,19 @@ impl SecurityMonitor {
                 }
 
                 // Get current metrics
-                let encoder = TextEncoder::new();
-                let metric_families = SECURITY_METRICS.registry.gather();
-                let mut buffer = Vec::new();
-                if encoder.encode(&metric_families, &mut buffer).is_ok() {
-                    let metrics_text = String::from_utf8_lossy(&buffer);
-
-                    // Parse metrics and check thresholds
+                #[cfg(feature = "monitoring")]
+                {
+                    // Get metrics from our security metrics collector
+                    let all_metrics = SECURITY_METRICS.get_all_metrics();
+                    
+                    // Check thresholds against our collected metrics
                     for threshold in &config_guard.thresholds {
                         if !threshold.enabled {
                             continue;
                         }
 
-                        if let Some(current_value) =
-                            Self::extract_metric_value(&metrics_text, &threshold.metric_name)
-                        {
+                        if let Some(&current_value) = all_metrics.get(&threshold.metric_name) {
+                            let current_value = current_value as f64;
                             let mut snapshots = metric_snapshots.lock().await;
                             let previous_value = snapshots
                                 .get(&threshold.metric_name)
@@ -220,6 +219,8 @@ impl SecurityMonitor {
                                     ),
                                     timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
                                     source_ip: None,
+                                    destination_ip: None,
+                                    source: "security_monitoring".to_string(),
                                     user_id: None,
                                     client_id: None,
                                     metadata: [
@@ -285,6 +286,10 @@ impl SecurityMonitor {
                         }
                     }
                 }
+                #[cfg(not(feature = "monitoring"))]
+                {
+                    warn!("Security monitoring feature not enabled");
+                }
 
                 // Clean up old alerts
                 Self::cleanup_old_alerts(&alert_history, config_guard.alert_retention_days).await;
@@ -294,6 +299,7 @@ impl SecurityMonitor {
         info!("Security monitoring started");
     }
 
+    #[allow(dead_code)]
     async fn send_notification(
         client: &reqwest::Client,
         endpoint: &NotificationEndpoint,
@@ -377,6 +383,7 @@ impl SecurityMonitor {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn extract_metric_value(metrics_text: &str, metric_name: &str) -> Option<f64> {
         for line in metrics_text.lines() {
             if line.starts_with(metric_name) && !line.starts_with('#') {
@@ -461,6 +468,8 @@ impl SecurityMonitor {
                 .unwrap()
                 .as_secs(),
             source_ip,
+            destination_ip: None,
+            source: "security_monitoring".to_string(),
             user_id,
             client_id,
             metadata,

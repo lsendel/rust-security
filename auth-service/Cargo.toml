@@ -63,6 +63,7 @@ hex = { workspace = true }
 rand = { workspace = true }
 once_cell = { workspace = true }
 base64 = { workspace = true }
+constant_time_eq = { workspace = true }
 # Configuration file parsing
 toml = { workspace = true }
 # Additional dependencies for features
@@ -211,7 +212,7 @@ docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
 tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
-# benchmarks = []  # Removed pprof2 due to security vulnerability
+benchmarks = []  # Removed pprof2 due to security vulnerability
 simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]
 crypto = ["ed25519-dalek"]

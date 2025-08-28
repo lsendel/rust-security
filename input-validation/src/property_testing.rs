@@ -183,7 +183,7 @@ impl ValidationProperty for InputLengthProperty {
         {
             total += 1;
             let test_input = "a".repeat(len);
-            let result = self.validator.validate(&test_input, self.input_type);
+            let _result = self.validator.validate(&test_input, self.input_type);
 
             if len > self.max_length {
                 // Should be rejected
@@ -259,7 +259,7 @@ impl ValidationProperty for CharacterSetProperty {
 
         for (case_name, test_input) in test_cases {
             total += 1;
-            let result = self.validator.validate(test_input, self.input_type);
+            let _result = self.validator.validate(test_input, self.input_type);
 
             // Check that validation is deterministic
             let result2 = self.validator.validate(test_input, self.input_type);
@@ -355,7 +355,7 @@ impl ValidationProperty for InjectionResistanceProperty {
 
             // Test validation rejection
             for input_type in [InputType::ScimFilter, InputType::Text, InputType::Username] {
-                let result = self.validator.validate(pattern, input_type);
+                let _result = self.validator.validate(pattern, input_type);
                 // Note: Not all input types may reject all patterns, but critical ones should
                 if input_type == InputType::ScimFilter && result.is_valid() {
                     counterexample =
@@ -711,7 +711,7 @@ impl ValidationProperty for SizeLimitProperty {
         for (size, should_pass) in test_sizes {
             total += 1;
 
-            let result = size_limiter.check_field_size(size);
+            let _result = size_limiter.check_field_size(size);
             let passed = result.is_ok();
 
             if passed != should_pass {
@@ -741,7 +741,7 @@ impl ValidationProperty for SizeLimitProperty {
     fn generate_test_cases(&self, count: u32) -> Vec<String> {
         (0..count)
             .map(|i| {
-                let size = (i as usize * 1024 * 1024 / count as usize).max(1);
+                let _size = (i as usize * 1024 * 1024 / count as usize).max(1);
                 "a".repeat(size)
             })
             .collect()
@@ -858,7 +858,7 @@ pub mod quickcheck_integration {
         let dos_protection = DoSProtection::new(config);
         let size_limiter = dos_protection.size_limiter();
 
-        let result = size_limiter.check_field_size(size);
+        let _result = size_limiter.check_field_size(size);
         let should_pass = size <= 64 * 1024; // Max field size
 
         TestResult::from_bool(result.is_ok() == should_pass)
@@ -870,7 +870,7 @@ pub mod quickcheck_integration {
 
     impl Arbitrary for TestString {
         fn arbitrary(g: &mut Gen) -> Self {
-            let size = g.size();
+            let _size = g.size();
             let mut result = String::new();
 
             for _ in 0..size {
@@ -915,7 +915,7 @@ mod tests {
     #[test]
     fn test_input_length_property() {
         let property = InputLengthProperty::new(InputType::Email, 320).unwrap();
-        let result = property.test("");
+        let _result = property.test("");
 
         // This property should pass for well-defined limits
         assert!(result.passed || result.error_message.is_some());
@@ -924,7 +924,7 @@ mod tests {
     #[test]
     fn test_injection_resistance_property() {
         let property = InjectionResistanceProperty::new().unwrap();
-        let result = property.test("");
+        let _result = property.test("");
 
         // This property should detect injection patterns
         assert!(result.test_cases > 0);
@@ -933,7 +933,7 @@ mod tests {
     #[test]
     fn test_sanitization_idempotence_property() {
         let property = SanitizationIdempotenceProperty::new().unwrap();
-        let result = property.test("");
+        let _result = property.test("");
 
         // Sanitization should be idempotent
         assert!(result.passed);
@@ -942,7 +942,7 @@ mod tests {
     #[test]
     fn test_sanitization_safety_property() {
         let property = SanitizationSafetyProperty::new().unwrap();
-        let result = property.test("");
+        let _result = property.test("");
 
         // Sanitization should preserve safety
         assert!(result.passed);

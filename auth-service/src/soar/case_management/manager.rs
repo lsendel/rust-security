@@ -427,7 +427,7 @@ impl CaseManager {
     }
     
     async fn create_default_sla(&self, priority: &CasePriority) -> CaseSla {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         
         let (response_time, resolution_time) = match priority {
             CasePriority::Emergency => (

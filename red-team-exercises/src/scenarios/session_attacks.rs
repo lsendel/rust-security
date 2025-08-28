@@ -58,7 +58,7 @@ async fn session_fixation_attacks(
         "client_id": "test_client"
     });
 
-    let result = framework
+    let _result = framework
         .execute_attack(
             "session_fixation",
             "POST",
@@ -108,7 +108,7 @@ async fn session_hijacking_attempts(
     ];
 
     for session_id in &session_patterns {
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "session_hijacking",
                 "GET",
@@ -157,7 +157,7 @@ async fn session_enumeration(
     for i in 0..range {
         let session_id = format!("session_{:06}", i);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "session_enumeration",
                 "GET",
@@ -207,7 +207,7 @@ async fn concurrent_session_abuse(
             "client_id": format!("client_{}", i)
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "concurrent_session_creation",
                 "POST",
@@ -299,7 +299,7 @@ async fn session_timeout_bypass(
                     // Simulate expired session by waiting
                     tokio::time::sleep(Duration::from_secs(1)).await;
 
-                    let result = framework
+                    let _result = framework
                         .execute_attack(
                             "session_timeout_bypass",
                             "POST",
@@ -335,7 +335,7 @@ async fn session_timeout_bypass(
                         ))?,
                     );
 
-                    let result = framework
+                    let _result = framework
                         .execute_attack(
                             "session_extension_attack",
                             "POST",
@@ -417,7 +417,7 @@ async fn cross_subdomain_attacks(
                     );
                     headers.insert("Host", reqwest::header::HeaderValue::from_str(subdomain)?);
 
-                    let result = framework
+                    let _result = framework
                         .execute_attack(
                             "cross_subdomain_access",
                             "GET",
@@ -447,7 +447,7 @@ async fn cross_subdomain_attacks(
                     let mut headers = reqwest::header::HeaderMap::new();
                     headers.insert("Cookie", reqwest::header::HeaderValue::from_str(&cookie)?);
 
-                    let result = framework
+                    let _result = framework
                         .execute_attack(
                             "subdomain_cookie_injection",
                             "GET",
@@ -553,7 +553,7 @@ async fn session_token_manipulation(
                         ))?,
                     );
 
-                    let result = framework
+                    let _result = framework
                         .execute_attack(
                             "session_token_manipulation",
                             "GET",
@@ -590,7 +590,7 @@ async fn session_token_manipulation(
                         ))?,
                     );
 
-                    let result = framework
+                    let _result = framework
                         .execute_attack(
                             "session_token_prediction",
                             "GET",

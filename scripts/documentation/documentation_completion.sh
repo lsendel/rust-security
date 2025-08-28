@@ -430,7 +430,7 @@ docker run -d \
 #### Using Helm (Recommended)
 ```bash
 # Add custom values
-cat > values-production.yaml << EOF
+cat > values-production.yaml << 'YAML_EOF'
 replicaCount: 3
 
 image:
@@ -466,7 +466,7 @@ security:
     enabled: true
   podSecurityPolicy:
     enabled: true
-EOF
+YAML_EOF
 
 # Deploy with Helm
 helm install auth-service ./helm/ -f values-production.yaml
@@ -661,7 +661,7 @@ groups:
       summary: "Auth service is down"
       
   - alert: HighAuthFailureRate
-    expr: rate(auth_failures_total{5m}) > 10
+    expr: rate(auth_failures_total[5m]) > 10
     for: 2m
     labels:
       severity: warning
@@ -3192,7 +3192,7 @@ curl -I https://external-api.com
 2. **Network policy restrictions:**
    ```bash
    # Allow external egress
-   kubectl apply -f - <<EOF
+   kubectl apply -f - <<'KUBE_EOF'
    apiVersion: networking.k8s.io/v1
    kind: NetworkPolicy
    metadata:
@@ -3205,7 +3205,7 @@ curl -I https://external-api.com
      - Egress
      egress:
      - {}
-   EOF
+   KUBE_EOF
    ```
 
 ### Problem: Load Balancer Issues

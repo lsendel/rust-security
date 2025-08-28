@@ -1,7 +1,7 @@
 use crate::scim_filter::{parse_scim_filter, ScimOperator};
 use anyhow::anyhow;
 use async_trait::async_trait;
-use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
+use common::{hash_token, AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::error::Error as StdError;
 use std::sync::Arc;
@@ -13,14 +13,6 @@ pub struct Migration {
     pub version: String,
     pub description: String,
     pub queries: Vec<String>,
-}
-
-fn hash_token(token: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    let result = hasher.finalize();
-    hex::encode(result)
 }
 
 #[derive(Clone)]

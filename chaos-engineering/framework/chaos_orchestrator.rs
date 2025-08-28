@@ -1046,7 +1046,7 @@ mod tests {
             },
         };
 
-        let result = safety_manager.validate_experiment(&valid_experiment).await;
+        let _result = safety_manager.validate_experiment(&valid_experiment).await;
         assert!(result.is_ok());
     }
 }

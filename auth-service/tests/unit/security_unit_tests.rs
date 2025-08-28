@@ -387,7 +387,7 @@ async fn test_rate_limiter_basic_functionality() {
         cleanup_interval_secs: 300,
     };
 
-    let limiter = ShardedRateLimiter::new(config);
+    let _limiter = ShardedRateLimiter::new(config);
     let client_key = "test_client";
 
     // First requests should be allowed (burst + normal)
@@ -423,7 +423,7 @@ async fn test_rate_limiter_cleanup() {
         cleanup_interval_secs: 1,
     };
 
-    let limiter = ShardedRateLimiter::new(config);
+    let _limiter = ShardedRateLimiter::new(config);
 
     // Add some entries
     let _ = limiter.check_rate_limit("client1");
@@ -453,12 +453,12 @@ async fn test_concurrent_rate_limiting() {
         cleanup_interval_secs: 300,
     };
 
-    let limiter = Arc::new(ShardedRateLimiter::new(config));
+    let _limiter = Arc::new(ShardedRateLimiter::new(config));
     let mut handles = Vec::new();
 
     // Spawn multiple concurrent tasks
     for i in 0..10 {
-        let limiter = Arc::clone(&limiter);
+        let _limiter = Arc::clone(&limiter);
         let handle = tokio::spawn(async move {
             let client_key = format!("client_{}", i);
             let mut allowed_count = 0;
@@ -543,7 +543,7 @@ async fn test_invalid_token_handling_property_based() {
 
     for token in invalid_tokens {
         // Should handle gracefully without panicking
-        let result = store.get_record(&token).await;
+        let _result = store.get_record(&token).await;
 
         match result {
             Ok(record) => {

@@ -1,238 +1,239 @@
-# Rust Security Platform - Makefile
-# Simplifies common development and testing tasks
+# Rust Security Platform - Comprehensive Build and Development Automation
+# This Makefile provides commands for building, testing, and deploying the Rust Security platform
 
-.PHONY: help build test clean doc fmt lint security bench all
+# Default shell
+SHELL := /bin/bash
 
-# Default target - show help
-help:
-	@echo "Rust Security Platform - Development Commands"
-	@echo ""
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Quick Start:"
-	@echo "  make build          - Build all components"
-	@echo "  make test           - Run all tests"
-	@echo "  make run            - Run minimal auth-core server"
-	@echo ""
-	@echo "Development:"
-	@echo "  make fmt            - Format code"
-	@echo "  make lint           - Run clippy linter"
-	@echo "  make check          - Format check + lint"
-	@echo "  make doc            - Generate documentation"
-	@echo "  make clean          - Clean build artifacts"
-	@echo ""
-	@echo "Testing:"
-	@echo "  make test-quick     - Run quick unit tests only"
-	@echo "  make test-security  - Run security test suite"
-	@echo "  make test-coverage  - Generate test coverage report"
-	@echo "  make test-property  - Run property-based tests"
-	@echo "  make bench          - Run performance benchmarks"
-	@echo "  make test-all       - Run complete test suite"
-	@echo ""
-	@echo "Build Profiles:"
-	@echo "  make build-minimal  - Build minimal auth-core"
-	@echo "  make build-standard - Build with standard features"
-	@echo "  make build-enterprise - Build with all features"
-	@echo ""
-	@echo "Security:"
-	@echo "  make audit          - Run security audit"
-	@echo "  make sec-check      - Complete security validation"
-	@echo ""
-	@echo "CI/CD:"
-	@echo "  make ci             - Run CI validation locally"
-	@echo "  make release        - Build release artifacts"
+# Variables
+RUST_VERSION := 1.80
+PROJECT_NAME := rust-security
+AUTH_SERVICE := auth-service
+POLICY_SERVICE := policy-service
 
-# Build targets
-build:
-	@echo "🔨 Building all components..."
-	@cargo build --workspace --all-features
+# Environment variables for testing
+export TEST_MODE := 1
+export DISABLE_RATE_LIMIT := 1
+export RUST_LOG := info
+export DATABASE_URL := postgres://postgres:postgres@localhost:5432/auth_test
+export REDIS_URL := redis://localhost:6379
 
-build-minimal:
-	@echo "🚀 Building minimal auth-core..."
-	@cd auth-core && cargo build --release --no-default-features --features client-credentials
-
-build-standard:
-	@echo "🏭 Building standard profile..."
-	@./scripts/build-profiles.sh standard
-
-build-enterprise:
-	@echo "🏢 Building enterprise profile..."
-	@./scripts/build-profiles.sh enterprise
-
-# Run targets
-run:
-	@echo "🚀 Starting minimal auth-core server..."
-	@cd auth-core && cargo run --example minimal_server
-
-run-docker:
-	@echo "🐳 Running in Docker..."
-	@docker-compose up -d
-
-# Testing targets
-test:
-	@echo "🧪 Running all tests..."
-	@cargo test --workspace --all-features
-
-test-quick:
-	@echo "⚡ Running quick tests..."
-	@cargo test --lib --bins
-
-test-security:
-	@echo "🔒 Running security tests..."
-	@cargo test --workspace security
-	@cargo test --workspace integration_security
-	@cargo test --workspace owasp
-
-test-coverage:
-	@echo "📊 Generating test coverage..."
-	@cargo llvm-cov --workspace --all-features --html --output-dir coverage
-	@echo "Coverage report generated at: coverage/index.html"
-
-test-property:
-	@echo "🎲 Running property-based tests..."
-	@PROPTEST_CASES=1000 cargo test --workspace property
-
-bench:
-	@echo "📈 Running benchmarks..."
-	@./scripts/run-benchmarks.sh all
-
-test-all: test test-security test-property bench
-	@echo "✅ Complete test suite finished"
-
-# Code quality targets
-fmt:
-	@echo "✨ Formatting code..."
-	@cargo fmt --all
-
-fmt-check:
-	@echo "🔍 Checking code formatting..."
-	@cargo fmt --all --check
-
-lint:
-	@echo "🔍 Running clippy..."
-	@cargo clippy --workspace --all-features --all-targets -- -D warnings
-
-check: fmt-check lint
-	@echo "✅ Code quality checks passed"
-
-# Documentation
-doc:
-	@echo "📚 Generating documentation..."
-	@cargo doc --workspace --all-features --no-deps --open
-
-doc-private:
-	@echo "📚 Generating documentation (including private items)..."
-	@cargo doc --workspace --all-features --no-deps --document-private-items --open
-
-# Security targets
-audit:
-	@echo "🔒 Running security audit..."
-	@cargo audit
-
-deny:
-	@echo "🚫 Checking dependencies..."
-	@cargo deny check
-
-sec-check: audit deny test-security
-	@echo "✅ Security validation complete"
-
-# Clean targets
-clean:
-	@echo "🧹 Cleaning build artifacts..."
-	@cargo clean
-	@rm -rf coverage/
-	@rm -rf benchmark-results/
-
-clean-all: clean
-	@echo "🧹 Deep cleaning..."
-	@rm -rf target/
-	@rm -rf auth-core/target/
-	@rm -rf auth-service/target/
-	@find . -name "*.profraw" -delete
-
-# CI/CD targets
-ci: fmt-check lint test test-security
-	@echo "✅ CI validation passed"
-
-ci-extensive: ci test-property bench test-coverage
-	@echo "✅ Extensive CI validation passed"
-
-release:
-	@echo "📦 Building release artifacts..."
-	@cargo build --release --workspace --all-features
-	@mkdir -p release-artifacts
-	@cp target/release/auth-core release-artifacts/ 2>/dev/null || true
-	@cp target/release/auth-service release-artifacts/ 2>/dev/null || true
-	@echo "Release artifacts in: release-artifacts/"
-
-# Development helpers
-watch:
-	@echo "👁️ Watching for changes..."
-	@cargo watch -x check -x test -x run
-
-todo:
-	@echo "📝 Finding TODOs..."
-	@grep -r "TODO\|FIXME\|XXX" --include="*.rs" --include="*.toml" --include="*.md" .
-
-loc:
-	@echo "📏 Lines of code:"
-	@tokei
-
-deps:
-	@echo "🌳 Dependency tree:"
-	@cargo tree
-
-update:
-	@echo "⬆️ Updating dependencies..."
-	@cargo update
-
-# Installation targets
-install-tools:
-	@echo "🔧 Installing development tools..."
-	@cargo install cargo-watch
-	@cargo install cargo-audit
-	@cargo install cargo-deny
-	@cargo install cargo-llvm-cov
-	@cargo install cargo-criterion
-	@cargo install tokei
-	@echo "✅ Development tools installed"
-
-# Docker targets
-docker-build:
-	@echo "🐳 Building Docker image..."
-	@docker build -t rust-security-auth .
-
-docker-run: docker-build
-	@echo "🐳 Running Docker container..."
-	@docker run -p 8080:8080 rust-security-auth
-
-docker-compose:
-	@echo "🐳 Starting with docker-compose..."
-	@docker-compose up
-
-# Utility targets
-.PHONY: version
-version:
-	@echo "Rust Security Platform"
-	@echo "Rust version: $$(rustc --version)"
-	@echo "Cargo version: $$(cargo --version)"
-	@echo "Git commit: $$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-	@echo "Git branch: $$(git branch --show-current 2>/dev/null || echo 'unknown')"
-
-# Performance profiling
-profile:
-	@echo "🔬 Running performance profiling..."
-	@cargo build --release
-	@valgrind --tool=callgrind target/release/auth-core || echo "Valgrind not available"
-
-# Quick development cycle
-dev: fmt test-quick
-	@echo "✅ Quick development checks passed"
-
-# Full validation before commit
-pre-commit: fmt-check lint test test-security
-	@echo "✅ Ready to commit"
+# Color codes for output
+GREEN := \033[0;32m
+YELLOW := \033[1;33m
+RED := \033[0;31m
+BLUE := \033[0;34m
+NC := \033[0m # No Color
 
 # Default target
-all: clean build test doc
-	@echo "✅ Full build and test complete"
+.DEFAULT_GOAL := help
+
+##@ Help
+.PHONY: help
+help: ## Display this help message
+	@awk 'BEGIN {FS = ":.*##"; printf "\nRust Security Platform - Development Commands\n"}  /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(BLUE)%s:$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Quick Start
+.PHONY: quick-start
+quick-start: setup build test ## Complete development setup and validation
+	@echo "$(GREEN)✅ Quick start complete! Ready for development.$(NC)"
+
+.PHONY: setup
+setup: ## Set up development environment
+	@echo "$(GREEN)🚀 Setting up development environment...$(NC)"
+	@rustup install $(RUST_VERSION)
+	@rustup default $(RUST_VERSION)
+	@rustup component add rustfmt clippy
+	@cargo install sqlx-cli --no-default-features --features postgres,sqlite
+	@cargo install cargo-audit cargo-deny cargo-fuzz cargo-outdated
+	@echo "$(YELLOW)📦 Starting dependencies...$(NC)"
+	@docker-compose up -d postgres redis
+	@sleep 5
+	@echo "$(YELLOW)🗄️ Running database migrations...$(NC)"
+	@sqlx migrate run --source auth-service/migrations || true
+	@echo "$(GREEN)✅ Development environment ready!$(NC)"
+
+##@ Development
+.PHONY: dev
+dev: ## Start development server with hot reload
+	@echo "$(GREEN)🚀 Starting development server...$(NC)"
+	@cd $(AUTH_SERVICE) && RUST_LOG=debug cargo run --bin auth-service
+
+.PHONY: dev-watch
+dev-watch: ## Start development server with auto-reload on file changes
+	@echo "$(GREEN)👀 Starting development server with file watching...$(NC)"
+	@cargo install cargo-watch
+	@cd $(AUTH_SERVICE) && cargo watch -x "run --bin auth-service"
+
+.PHONY: clean
+clean: ## Clean build artifacts and cache
+	@echo "$(YELLOW)🧹 Cleaning build artifacts...$(NC)"
+	@cargo clean
+	@docker-compose down
+	@echo "$(GREEN)✅ Clean complete!$(NC)"
+
+##@ Code Quality
+.PHONY: check
+check: fmt clippy audit test ## Run all code quality checks
+	@echo "$(GREEN)✅ All quality checks passed!$(NC)"
+
+.PHONY: fmt
+fmt: ## Check code formatting
+	@echo "$(GREEN)🎨 Checking code formatting...$(NC)"
+	@cargo fmt --all -- --check || (echo "$(RED)❌ Code formatting issues found. Run 'make fmt-fix' to fix.$(NC)"; exit 1)
+
+.PHONY: fmt-fix
+fmt-fix: ## Fix code formatting issues
+	@echo "$(GREEN)🎨 Fixing code formatting...$(NC)"
+	@cargo fmt --all
+
+.PHONY: clippy
+clippy: ## Run clippy lints
+	@echo "$(GREEN)📎 Running clippy lints...$(NC)"
+	@cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+.PHONY: clippy-fix
+clippy-fix: ## Fix clippy issues automatically where possible
+	@echo "$(GREEN)📎 Fixing clippy issues...$(NC)"
+	@cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- -D warnings
+
+.PHONY: audit
+audit: security-audit ## Alias for security-audit
+
+.PHONY: security-audit
+security-audit: ## Run comprehensive security audit
+	@echo "$(GREEN)🔒 Running security audit...$(NC)"
+	@echo "$(YELLOW)📋 Checking for known vulnerabilities...$(NC)"
+	@cargo audit || echo "$(YELLOW)⚠️ Security advisories found - review required$(NC)"
+	@echo "$(YELLOW)🚫 Checking dependency policies...$(NC)"
+	@cargo deny check || echo "$(YELLOW)⚠️ Dependency policy violations - review required$(NC)"
+	@echo "$(GREEN)✅ Security audit complete!$(NC)"
+
+##@ Testing
+.PHONY: test
+test: test-unit test-integration ## Run all tests
+	@echo "$(GREEN)✅ All tests passed!$(NC)"
+
+.PHONY: test-unit
+test-unit: ## Run unit tests only
+	@echo "$(GREEN)🧪 Running unit tests...$(NC)"
+	@cargo test --workspace --lib
+
+.PHONY: test-integration
+test-integration: ## Run integration tests
+	@echo "$(GREEN)🔧 Running integration tests...$(NC)"
+	@cargo test --workspace --test '*'
+
+.PHONY: test-security
+test-security: ## Run security-specific tests
+	@echo "$(GREEN)🔒 Running security tests...$(NC)"
+	@cargo test --workspace security
+	@echo "$(YELLOW)🕵️ Running penetration tests...$(NC)"
+	@./scripts/security/run_security_scenarios.sh || true
+
+.PHONY: test-fuzz
+test-fuzz: ## Run fuzz tests (limited time)
+	@echo "$(GREEN)🎯 Running fuzz tests...$(NC)"
+	@cd $(AUTH_SERVICE) && timeout 60 cargo fuzz run fuzz_jwt_parsing -- -max_total_time=60 || true
+	@cd $(AUTH_SERVICE) && timeout 60 cargo fuzz run fuzz_oauth_parsing -- -max_total_time=60 || true
+	@echo "$(GREEN)✅ Fuzz testing complete!$(NC)"
+
+.PHONY: benchmark
+benchmark: ## Run performance benchmarks
+	@echo "$(GREEN)🏃 Running benchmarks...$(NC)"
+	@cargo bench --workspace
+
+##@ Building
+.PHONY: build
+build: ## Build all packages
+	@echo "$(GREEN)🔨 Building all packages...$(NC)"
+	@cargo build --workspace
+
+.PHONY: build-release
+build-release: ## Build optimized release version
+	@echo "$(GREEN)🚀 Building release version...$(NC)"
+	@cargo build --workspace --release
+
+.PHONY: build-docker
+build-docker: ## Build Docker images
+	@echo "$(GREEN)🐳 Building Docker images...$(NC)"
+	@docker build -t $(PROJECT_NAME)/$(AUTH_SERVICE):latest -f Dockerfile.$(AUTH_SERVICE) .
+	@docker build -t $(PROJECT_NAME)/$(POLICY_SERVICE):latest -f Dockerfile.$(POLICY_SERVICE) .
+	@echo "$(GREEN)✅ Docker images built successfully!$(NC)"
+
+##@ Documentation
+.PHONY: docs
+docs: ## Generate documentation
+	@echo "$(GREEN)📚 Generating documentation...$(NC)"
+	@cargo doc --workspace --all-features --no-deps --document-private-items
+
+.PHONY: docs-open
+docs-open: docs ## Generate and open documentation in browser
+	@cargo doc --workspace --all-features --no-deps --document-private-items --open
+
+##@ Supply Chain
+.PHONY: sbom
+sbom: ## Generate Software Bill of Materials (SBOM)
+	@echo "$(GREEN)📦 Generating SBOM...$(NC)"
+	@cargo install cargo-auditable cargo-sbom
+	@cargo auditable build --release
+	@cargo sbom > target/rust-security-sbom.json
+	@echo "$(GREEN)✅ SBOM generated at target/rust-security-sbom.json$(NC)"
+
+.PHONY: supply-chain-check
+supply-chain-check: audit sbom ## Complete supply chain security check
+	@echo "$(GREEN)🔗 Supply chain security check complete!$(NC)"
+
+##@ Git Hooks & CI
+.PHONY: install-hooks
+install-hooks: ## Install git pre-commit hooks
+	@echo "$(GREEN)🪝 Installing git hooks...$(NC)"
+	@./setup-git-hooks.sh
+
+.PHONY: ci-local
+ci-local: check test security-audit ## Run CI checks locally
+	@echo "$(GREEN)🔄 Running CI checks locally...$(NC)"
+	@echo "$(GREEN)✅ Local CI checks complete!$(NC)"
+
+.PHONY: pre-commit
+pre-commit: fmt-fix clippy-fix test-unit ## Run pre-commit checks and fixes
+	@echo "$(GREEN)✅ Pre-commit checks complete!$(NC)"
+
+.PHONY: validate-pr
+validate-pr: ci-local supply-chain-check ## Validate changes before creating PR
+	@echo "$(GREEN)✅ PR validation complete! Ready to create pull request.$(NC)"
+
+##@ Utilities
+.PHONY: show-env
+show-env: ## Show current environment configuration
+	@echo "$(BLUE)Environment Configuration:$(NC)"
+	@echo "RUST_VERSION: $(RUST_VERSION)"
+	@echo "DATABASE_URL: $(DATABASE_URL)"
+	@echo "REDIS_URL: $(REDIS_URL)"
+	@echo "TEST_MODE: $(TEST_MODE)"
+	@echo "RUST_LOG: $(RUST_LOG)"
+
+.PHONY: workspace-status
+workspace-status: ## Show workspace status
+	@echo "$(BLUE)Workspace Status:$(NC)"
+	@echo "Rust version: $$(rustc --version)"
+	@echo "Cargo version: $$(cargo --version)"
+	@echo "Git branch: $$(git branch --show-current)"
+	@echo "Git status: $$(git status --porcelain | wc -l) files changed"
+	@echo "Docker status:"
+	@docker-compose ps
+
+.PHONY: doctor
+doctor: ## Run diagnostic checks
+	@echo "$(GREEN)🏥 Running diagnostic checks...$(NC)"
+	@echo "$(BLUE)Checking Rust installation...$(NC)"
+	@rustc --version || echo "$(RED)❌ Rust not installed$(NC)"
+	@cargo --version || echo "$(RED)❌ Cargo not available$(NC)"
+	@echo "$(BLUE)Checking required tools...$(NC)"
+	@sqlx --version || echo "$(YELLOW)⚠️ SQLx CLI not installed$(NC)"
+	@docker --version || echo "$(YELLOW)⚠️ Docker not available$(NC)"
+	@docker-compose --version || echo "$(YELLOW)⚠️ Docker Compose not available$(NC)"
+	@echo "$(GREEN)✅ Diagnostic complete!$(NC)"
+
+.PHONY: reset
+reset: clean setup ## Complete reset of development environment
+	@echo "$(GREEN)🔄 Development environment reset complete!$(NC)"

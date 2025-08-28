@@ -1,8 +1,8 @@
 //! API module for auth-service
-//! 
+//!
 //! This module contains the main API endpoints and handlers for the authentication service.
 
-use axum::{Router, response::Json};
+use axum::{response::Json, Router};
 use serde_json::{json, Value};
 
 /// Create the main API router

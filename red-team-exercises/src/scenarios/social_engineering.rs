@@ -127,7 +127,7 @@ async fn automated_phishing_campaigns(
                 generate_state_token()
             );
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "phishing_campaign",
                     "GET",
@@ -258,7 +258,7 @@ async fn voice_phone_social_engineering(
                 })
                 .to_string();
 
-                let result = framework
+                let _result = framework
                     .execute_attack(
                         "phone_enumeration",
                         "POST",
@@ -661,7 +661,7 @@ async fn phishing_simulation(
     ];
 
     for (attack_type, endpoint, payload) in &phishing_attempts {
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "phishing_simulation",
                 "POST",
@@ -734,7 +734,7 @@ async fn pretexting_attacks(
         }
 
         // Test on admin endpoints
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "pretexting_attack",
                 "GET",
@@ -808,7 +808,7 @@ async fn information_disclosure_tests(
     ];
 
     for (endpoint, description) in &test_endpoints {
-        let result = framework
+        let _result = framework
             .execute_attack("information_disclosure", "GET", endpoint, None, None, Some(&session))
             .await?;
 
@@ -877,7 +877,7 @@ async fn information_disclosure_tests(
             );
         }
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "error_information_disclosure",
                 "POST",
@@ -1000,7 +1000,7 @@ async fn user_enumeration_attacks(
                 _ => continue,
             };
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "user_enumeration",
                     "POST",
@@ -1157,7 +1157,7 @@ async fn test_email_link_manipulation(
             format!("https://{}/oauth/authorize?response_type=code&client_id=evil", domain);
 
         // Test if the system validates redirect URLs properly
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "link_manipulation",
                 "GET",
@@ -1208,7 +1208,7 @@ async fn test_attachment_phishing(
             HeaderValue::from_str(&format!("multipart/form-data; boundary=test"))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "attachment_phishing",
                 "POST",
@@ -1259,7 +1259,7 @@ async fn test_bec_scenarios(
             "spoofed_sender": true
         }).to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "bec_simulation",
                 "POST",
@@ -1333,7 +1333,7 @@ async fn test_voice_authentication_bypass(
         ];
 
         for payload in &voice_payloads {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "voice_auth_bypass",
                     "POST",
@@ -1398,7 +1398,7 @@ async fn test_caller_id_spoofing(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "caller_id_spoofing",
                 "POST",
@@ -1447,7 +1447,7 @@ async fn test_ivr_vulnerabilities(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "ivr_bypass",
                 "POST",
@@ -1495,7 +1495,7 @@ async fn test_support_channel_manipulation(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "support_manipulation",
                 "POST",
@@ -1548,7 +1548,7 @@ async fn test_badge_authentication(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "badge_authentication",
                 "POST",
@@ -1604,7 +1604,7 @@ async fn test_visitor_management(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "visitor_management",
                 "POST",
@@ -1651,7 +1651,7 @@ async fn test_physical_access_controls(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "access_control_bypass",
                 "POST",
@@ -1698,7 +1698,7 @@ async fn test_rfid_vulnerabilities(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "rfid_attack",
                 "POST",
@@ -1745,7 +1745,7 @@ async fn test_tailgating_detection(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "tailgating_simulation",
                 "POST",
@@ -1792,7 +1792,7 @@ async fn test_surveillance_systems(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "surveillance_evasion",
                 "POST",
@@ -1839,7 +1839,7 @@ async fn test_physical_device_access(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "physical_device_access",
                 "POST",
@@ -1943,7 +1943,7 @@ async fn test_api_pretexting(
     })
     .to_string();
 
-    let result = framework
+    let _result = framework
         .execute_attack(
             "api_pretexting",
             "POST",
@@ -1993,7 +1993,7 @@ async fn test_support_pretexting(
     })
     .to_string();
 
-    let result = framework
+    let _result = framework
         .execute_attack(
             "support_pretexting",
             "POST",
@@ -2038,7 +2038,7 @@ async fn test_credential_recovery_pretexting(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "credential_recovery_pretexting",
                 "POST",
@@ -2084,7 +2084,7 @@ async fn test_administrative_pretexting(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "administrative_pretexting",
                 "POST",
@@ -2130,7 +2130,7 @@ async fn test_vendor_impersonation(
             "contact_verification": "Contract manager approval"
         }).to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "vendor_impersonation",
                 "POST",
@@ -2180,7 +2180,7 @@ async fn test_executive_impersonation(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "executive_impersonation",
                 "POST",
@@ -2227,7 +2227,7 @@ async fn test_emergency_pretexting(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "emergency_pretexting",
                 "POST",
@@ -2275,7 +2275,7 @@ async fn test_social_media_pretexting(
             "credibility_indicators": ["verified_profile", "mutual_connections", "company_affiliation"]
         }).to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "social_media_pretexting",
                 "POST",
@@ -2364,7 +2364,7 @@ async fn test_domain_enumeration(
             })
             .to_string();
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "domain_enumeration",
                     "GET",
@@ -2433,7 +2433,7 @@ async fn test_email_enumeration(
             })
             .to_string();
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "email_enumeration",
                     "POST",
@@ -2512,7 +2512,7 @@ async fn test_employee_enumeration(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "employee_enumeration",
                 "POST",
@@ -2566,7 +2566,7 @@ async fn test_technology_disclosure(
     ];
 
     for endpoint in &tech_endpoints {
-        let result = framework
+        let _result = framework
             .execute_attack("technology_disclosure", "GET", endpoint, None, None, Some(session))
             .await?;
 
@@ -2622,7 +2622,7 @@ async fn test_social_media_reconnaissance(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "social_media_recon",
                 "POST",
@@ -2654,7 +2654,7 @@ async fn test_social_media_reconnaissance(
     ];
 
     for endpoint in &social_endpoints {
-        let result = framework
+        let _result = framework
             .execute_attack("social_integration_recon", "GET", endpoint, None, None, Some(session))
             .await?;
 
@@ -2693,7 +2693,7 @@ async fn test_api_documentation_disclosure(
     ];
 
     for endpoint in &doc_endpoints {
-        let result = framework
+        let _result = framework
             .execute_attack("api_documentation_recon", "GET", endpoint, None, None, Some(session))
             .await?;
 
@@ -2743,7 +2743,7 @@ async fn test_certificate_intelligence(
     })
     .to_string();
 
-    let result = framework
+    let _result = framework
         .execute_attack(
             "certificate_intelligence",
             "POST",
@@ -2794,7 +2794,7 @@ async fn test_breach_database_correlation(
             })
             .to_string();
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "breach_correlation",
                     "POST",
@@ -2872,7 +2872,7 @@ async fn test_metadata_extraction(
         })
         .to_string();
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "metadata_extraction",
                 "POST",
@@ -2926,7 +2926,7 @@ async fn test_business_intelligence(
     ];
 
     for endpoint in &business_endpoints {
-        let result = framework
+        let _result = framework
             .execute_attack("business_intelligence", "GET", endpoint, None, None, Some(session))
             .await?;
 

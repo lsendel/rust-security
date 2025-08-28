@@ -35,7 +35,8 @@ impl<T> ApiResponse<T> {
         }
     }
 
-    pub fn with_request_id(mut self, request_id: Uuid) -> Self {
+    #[must_use]
+    pub const fn with_request_id(mut self, request_id: Uuid) -> Self {
         self.request_id = Some(request_id);
         self
     }

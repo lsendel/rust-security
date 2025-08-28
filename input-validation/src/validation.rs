@@ -853,11 +853,11 @@ mod tests {
         let validator = SecurityValidator::new(config).unwrap();
 
         let valid_param = "abc123";
-        let result = validator.validate(valid_param, InputType::OAuth);
+        let _result = validator.validate(valid_param, InputType::OAuth);
         assert!(result.is_valid());
 
         let invalid_param = "abc<script>";
-        let result = validator.validate(invalid_param, InputType::OAuth);
+        let _result = validator.validate(invalid_param, InputType::OAuth);
         assert!(!result.is_valid());
     }
 
@@ -867,11 +867,11 @@ mod tests {
         let validator = SecurityValidator::new(config).unwrap();
 
         let valid_filter = "userName eq \"john\"";
-        let result = validator.validate(valid_filter, InputType::ScimFilter);
+        let _result = validator.validate(valid_filter, InputType::ScimFilter);
         assert!(result.is_valid());
 
         let invalid_filter = "userName eq \"john\"; DROP TABLE users";
-        let result = validator.validate(invalid_filter, InputType::ScimFilter);
+        let _result = validator.validate(invalid_filter, InputType::ScimFilter);
         assert!(!result.is_valid());
     }
 
@@ -908,7 +908,7 @@ mod tests {
         let config = ValidatorConfig::production();
         let validator = SecurityValidator::new(config).unwrap();
 
-        let result = validator.validate("test", InputType::Text);
+        let _result = validator.validate("test", InputType::Text);
         assert!(result.metadata.duration_micros > 0);
         assert_eq!(result.metadata.input_size, 4);
         assert_eq!(result.metadata.input_type, "text");

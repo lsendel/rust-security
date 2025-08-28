@@ -67,7 +67,7 @@ export function debounce<T extends (...args: any[]) => any>(
   func: T,
   delay: number
 ): (...args: Parameters<T>) => void {
-  let timeoutId: number
+  let timeoutId: ReturnType<typeof setTimeout>
   return (...args: Parameters<T>) => {
     clearTimeout(timeoutId)
     timeoutId = setTimeout(() => func(...args), delay)
@@ -94,6 +94,16 @@ export function generateId(): string {
 
 export function sanitizeInput(input: string): string {
   return input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+}
+
+export function sanitizeLogMessage(input: string): string {
+  // Remove potential XSS vectors and control characters
+  return input
+    .replace(/[<>'"]/g, '') // Remove HTML/JS special characters
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F]/g, '') // Remove control characters
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .substring(0, 200) // Limit length to prevent log injection
 }
 
 export function isValidEmail(email: string): boolean {

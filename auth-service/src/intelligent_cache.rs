@@ -304,7 +304,7 @@ where
     /// Put value into cache
     pub async fn put(&self, key: K, value: V, ttl: Option<Duration>) -> Result<(), CacheError> {
         let mut storage = self.storage.write().await;
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         // Calculate entry size (simplified)
         let entry_size = std::mem::size_of::<V>();
@@ -391,7 +391,7 @@ where
         F: Fn(String) -> Fut + Send + Sync,
         Fut: std::future::Future<Output = Option<V>> + Send,
     {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         if !config.warming_config.enabled {
             return Ok(());
@@ -475,7 +475,7 @@ where
     }
 
     async fn trigger_prefetch(&self, _accessed_key: &K) {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         if !config.enable_prefetching {
             return;

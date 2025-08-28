@@ -15,6 +15,7 @@ pub struct PrometheusClient {
 }
 
 impl PrometheusClient {
+    #[must_use]
     pub fn new(base_url: String) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -116,7 +117,7 @@ impl PrometheusClient {
         let metric_queries = vec![
             (
                 "authentication_success_rate",
-                r#"rate(auth_service_authentication_success_total[5m]) / (rate(auth_service_authentication_success_total[5m]) + rate(auth_service_authentication_failure_total[5m])) * 100"#,
+                r"rate(auth_service_authentication_success_total[5m]) / (rate(auth_service_authentication_success_total[5m]) + rate(auth_service_authentication_failure_total[5m])) * 100",
                 95.0,
                 "Authentication success rate percentage",
             ),
@@ -146,7 +147,7 @@ impl PrometheusClient {
             ),
             (
                 "mfa_success_rate",
-                r#"rate(auth_service_mfa_success_total[5m]) / (rate(auth_service_mfa_success_total[5m]) + rate(auth_service_mfa_failure_total[5m])) * 100"#,
+                r"rate(auth_service_mfa_success_total[5m]) / (rate(auth_service_mfa_success_total[5m]) + rate(auth_service_mfa_failure_total[5m])) * 100",
                 98.0,
                 "MFA success rate percentage",
             ),
@@ -207,7 +208,7 @@ impl PrometheusClient {
                         value: 0.0,
                         threshold,
                         status: MetricStatus::Unknown,
-                        description: format!("{} (collection failed: {})", description, e),
+                        description: format!("{description} (collection failed: {e})"),
                         timestamp: now,
                         tags: HashMap::new(),
                     });
@@ -250,7 +251,13 @@ impl PrometheusClient {
             .data
             .result
             .into_iter()
-            .filter_map(|result| result.value.first()?.as_str().map(|s| s.to_string()))
+            .filter_map(|result| {
+                result
+                    .value
+                    .first()?
+                    .as_str()
+                    .map(std::string::ToString::to_string)
+            })
             .collect();
 
         Ok(metrics)
@@ -330,7 +337,7 @@ mod tests {
             .await;
 
         let client = PrometheusClient::new(mock_server.uri());
-        let result = client.query("test_metric", None).await.unwrap();
+        let _result = client.query("test_metric", None).await.unwrap();
 
         assert_eq!(result.status, "success");
         assert_eq!(result.data.result.len(), 1);

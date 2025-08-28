@@ -50,7 +50,7 @@ impl HybridStore {
         // Test the connection with timeout for tests
         let connection_test = pool.get();
         let timeout_duration = std::time::Duration::from_secs(2); // 2 second timeout
-        
+
         match tokio::time::timeout(timeout_duration, connection_test).await {
             Ok(Ok(_conn)) => {
                 info!("Redis connection pool initialized successfully");
@@ -81,7 +81,10 @@ impl HybridStore {
     }
 
     /// Get token record - inherent method for direct access
-    pub async fn get_token_record(&self, token: &str) -> Result<Option<crate::IntrospectionRecord>, crate::errors::AuthError> {
+    pub async fn get_token_record(
+        &self,
+        token: &str,
+    ) -> Result<Option<crate::IntrospectionRecord>, crate::errors::AuthError> {
         // Try to get from the Store trait implementation and convert
         match Store::get_token_record(self, token).await {
             Ok(Some(token_record)) => {
@@ -113,7 +116,12 @@ impl HybridStore {
     }
 
     /// Set token record - inherent method for direct access with IntrospectionRecord
-    pub async fn set_token_record(&self, token: &str, record: &crate::IntrospectionRecord, ttl_secs: Option<u64>) -> Result<(), crate::errors::AuthError> {
+    pub async fn set_token_record(
+        &self,
+        token: &str,
+        record: &crate::IntrospectionRecord,
+        ttl_secs: Option<u64>,
+    ) -> Result<(), crate::errors::AuthError> {
         // Convert IntrospectionRecord to TokenRecord for storage
         let token_record = TokenRecord {
             active: record.active,
@@ -125,7 +133,7 @@ impl HybridStore {
             token_binding: record.token_binding.clone(),
             mfa_verified: record.mfa_verified,
         };
-        
+
         // Use the trait method to store
         match Store::set_token_record(self, token, &token_record, ttl_secs).await {
             Ok(()) => Ok(()),
@@ -288,7 +296,7 @@ impl Store for HybridStore {
                     // Delete the key and remove from memory backup
                     let _: Result<(), _> = conn.del(&key).await;
                     self.auth_codes.write().await.remove(code);
-                    return Ok(serde_json::from_str(&json)?);
+                    return Ok(Some(serde_json::from_str::<AuthCodeRecord>(&json)?));
                 }
                 Ok(None) => {
                     // Not found in Redis, try memory fallback
@@ -317,7 +325,7 @@ impl Store for HybridStore {
             let key = format!("token_record:{}", token);
             match conn.get::<_, Option<String>>(&key).await {
                 Ok(Some(json)) => {
-                    return Ok(serde_json::from_str(&json)?);
+                    return Ok(Some(serde_json::from_str::<TokenRecord>(&json)?));
                 }
                 Ok(None) => {
                     // Not found in Redis, try memory fallback

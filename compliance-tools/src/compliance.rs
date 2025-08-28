@@ -11,6 +11,7 @@ pub struct ComplianceFrameworks;
 
 impl ComplianceFrameworks {
     /// Get SOC 2 control definitions
+    #[must_use]
     pub fn get_soc2_controls() -> Vec<ComplianceControl> {
         vec![
             ComplianceControl {
@@ -107,6 +108,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get ISO 27001 control definitions
+    #[must_use]
     pub fn get_iso27001_controls() -> Vec<ComplianceControl> {
         vec![
             ComplianceControl {
@@ -167,6 +169,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get GDPR control definitions
+    #[must_use]
     pub fn get_gdpr_controls() -> Vec<ComplianceControl> {
         vec![
             ComplianceControl {
@@ -230,6 +233,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get controls for a specific framework
+    #[must_use]
     pub fn get_controls_for_framework(framework: &ComplianceFramework) -> Vec<ComplianceControl> {
         match framework {
             ComplianceFramework::Soc2 => Self::get_soc2_controls(),
@@ -243,6 +247,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get NIST control definitions (placeholder)
+    #[must_use]
     pub fn get_nist_controls() -> Vec<ComplianceControl> {
         vec![ComplianceControl {
             control_id: "AC-1".to_string(),
@@ -262,6 +267,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get PCI DSS control definitions (placeholder)
+    #[must_use]
     pub fn get_pci_controls() -> Vec<ComplianceControl> {
         vec![ComplianceControl {
             control_id: "PCI-1.1".to_string(),
@@ -281,6 +287,7 @@ impl ComplianceFrameworks {
     }
 
     /// Get HIPAA control definitions (placeholder)
+    #[must_use]
     pub fn get_hipaa_controls() -> Vec<ComplianceControl> {
         vec![
             ComplianceControl {
@@ -301,7 +308,8 @@ impl ComplianceFrameworks {
     }
 
     /// Get custom framework controls
-    pub fn get_custom_controls(_framework_name: &str) -> Vec<ComplianceControl> {
+    #[must_use]
+    pub const fn get_custom_controls(_framework_name: &str) -> Vec<ComplianceControl> {
         // Return empty vec for now - in practice, this would load from configuration
         Vec::new()
     }

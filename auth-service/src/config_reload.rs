@@ -3,7 +3,7 @@
 //! This module provides the ability to reload configuration without restarting the service,
 //! enabling operational flexibility and reducing downtime during configuration changes.
 
-use crate::config::{AppConfig, StoreBackend};
+use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -11,7 +11,6 @@ use tokio::fs;
 use tokio::signal;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{error, info, warn};
-use validator::Validate;
 
 /// Configuration reload events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,7 +38,7 @@ pub struct ConfigChange {
 #[derive(Debug)]
 pub struct ConfigReloadManager {
     /// Current configuration
-    config: Arc<RwLock<AppConfig>>,
+    config: Arc<RwLock<Config>>,
     /// Configuration file path
     config_path: Option<String>,
     /// Reload event broadcaster
@@ -47,13 +46,13 @@ pub struct ConfigReloadManager {
     /// Configuration version (incremented on each reload)
     version: Arc<RwLock<u64>>,
     /// Backup configuration for fallback
-    backup_config: Arc<RwLock<Option<AppConfig>>>,
+    backup_config: Arc<RwLock<Option<Config>>>,
 }
 
 impl ConfigReloadManager {
     /// Create a new configuration reload manager
     pub fn new(
-        initial_config: AppConfig,
+        initial_config: Config,
         config_path: Option<String>,
     ) -> (Self, broadcast::Receiver<ConfigReloadEvent>) {
         let (event_sender, event_receiver) = broadcast::channel(100);
@@ -70,7 +69,7 @@ impl ConfigReloadManager {
     }
 
     /// Get the current configuration
-    pub async fn get_config(&self) -> AppConfig {
+    pub async fn get_config(&self) -> Config {
         self.config.read().await.clone()
     }
 
@@ -152,7 +151,7 @@ impl ConfigReloadManager {
         let new_config = if let Some(config_path) = &self.config_path {
             self.load_config_from_file(config_path).await?
         } else {
-            AppConfig::from_env()?
+            Config::load()?
         };
 
         // Validate the new configuration
@@ -218,12 +217,12 @@ impl ConfigReloadManager {
     }
 
     /// Load configuration from file
-    async fn load_config_from_file(&self, path: &str) -> Result<AppConfig> {
+    async fn load_config_from_file(&self, path: &str) -> Result<Config> {
         let config_content = fs::read_to_string(path)
             .await
             .with_context(|| format!("Failed to read configuration file: {}", path))?;
 
-        let config: AppConfig = if path.ends_with(".toml") {
+        let config: Config = if path.ends_with(".toml") {
             toml::from_str(&config_content).with_context(|| "Failed to parse TOML configuration")?
         } else if path.ends_with(".json") {
             serde_json::from_str(&config_content)
@@ -239,46 +238,22 @@ impl ConfigReloadManager {
     }
 
     /// Validate configuration
-    async fn validate_config(&self, config: &AppConfig) -> Result<(), Vec<String>> {
+    pub async fn validate_config(&self, config: &Config) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
         // Validate using validator crate
-        if let Err(validation_errors) = config.validate() {
-            for (field, field_errors) in validation_errors.field_errors() {
-                for error in field_errors {
-                    errors.push(format!("Field '{}': {}", field, error.code));
-                }
-            }
+        if let Err(e) = config.validate() {
+            errors.push(e.to_string());
         }
 
         // Custom validation logic
-        if config.bind_addr.is_empty() {
-            errors.push("bind_addr cannot be empty".to_string());
-        }
-
-        if config.client_credentials.is_empty() {
-            errors.push("At least one client credential must be configured".to_string());
+        if config.server.bind_addr.ip().is_unspecified() {
+            errors.push("bind_addr cannot be unspecified".to_string());
         }
 
         // Validate Redis URL if provided
-        if let Some(redis_url) = &config.redis_url {
-            if redis_url.is_empty() {
-                errors.push("redis_url cannot be empty if provided".to_string());
-            }
-        }
-
-        // Validate store configuration
-        match &config.store.backend {
-            StoreBackend::Hybrid => {
-                if config.redis_url.is_none() {
-                    errors.push("Redis URL required for hybrid store backend".to_string());
-                }
-            }
-            StoreBackend::Sql => {
-                if config.store.database_url.is_none() {
-                    errors.push("Database URL required for SQL store backend".to_string());
-                }
-            }
+        if config.redis.url.is_empty() {
+            errors.push("redis_url cannot be empty if provided".to_string());
         }
 
         if errors.is_empty() {
@@ -289,80 +264,46 @@ impl ConfigReloadManager {
     }
 
     /// Detect changes between configurations
-    async fn detect_changes(
-        &self,
-        old_config: &AppConfig,
-        new_config: &AppConfig,
-    ) -> Vec<ConfigChange> {
+    async fn detect_changes(&self, old_config: &Config, new_config: &Config) -> Vec<ConfigChange> {
         let mut changes = Vec::new();
 
         // Compare bind address
-        if old_config.bind_addr != new_config.bind_addr {
+        if old_config.server.bind_addr != new_config.server.bind_addr {
             changes.push(ConfigChange {
-                field: "bind_addr".to_string(),
-                old_value: old_config.bind_addr.clone(),
-                new_value: new_config.bind_addr.clone(),
+                field: "server.bind_addr".to_string(),
+                old_value: old_config.server.bind_addr.to_string(),
+                new_value: new_config.server.bind_addr.to_string(),
                 requires_restart: true, // Server bind address change requires restart
             });
         }
 
         // Compare Redis URL
-        if old_config.redis_url != new_config.redis_url {
+        if old_config.redis.url != new_config.redis.url {
             changes.push(ConfigChange {
-                field: "redis_url".to_string(),
-                old_value: old_config
-                    .redis_url
-                    .as_deref()
-                    .unwrap_or("None")
-                    .to_string(),
-                new_value: new_config
-                    .redis_url
-                    .as_deref()
-                    .unwrap_or("None")
-                    .to_string(),
+                field: "redis.url".to_string(),
+                old_value: old_config.redis.url.clone(),
+                new_value: new_config.redis.url.clone(),
                 requires_restart: false, // Can reconnect to Redis
             });
         }
 
         // Compare rate limiting settings
-        if old_config.rate_limiting.oauth_requests_per_minute
-            != new_config.rate_limiting.oauth_requests_per_minute
-        {
+        if old_config.rate_limiting.global_limit != new_config.rate_limiting.global_limit {
             changes.push(ConfigChange {
-                field: "rate_limiting.oauth_requests_per_minute".to_string(),
-                old_value: old_config
-                    .rate_limiting
-                    .oauth_requests_per_minute
-                    .to_string(),
-                new_value: new_config
-                    .rate_limiting
-                    .oauth_requests_per_minute
-                    .to_string(),
+                field: "rate_limiting.global_limit".to_string(),
+                old_value: old_config.rate_limiting.global_limit.to_string(),
+                new_value: new_config.rate_limiting.global_limit.to_string(),
                 requires_restart: false, // Rate limiting can be updated dynamically
             });
         }
 
         // Compare security settings
-        if old_config.security.jwt_access_token_ttl_seconds
-            != new_config.security.jwt_access_token_ttl_seconds
-        {
+        if old_config.security.bcrypt_cost != new_config.security.bcrypt_cost {
             changes.push(ConfigChange {
-                field: "security.jwt_access_token_ttl_seconds".to_string(),
-                old_value: old_config.security.jwt_access_token_ttl_seconds.to_string(),
-                new_value: new_config.security.jwt_access_token_ttl_seconds.to_string(),
+                field: "security.bcrypt_cost".to_string(),
+                old_value: old_config.security.bcrypt_cost.to_string(),
+                new_value: new_config.security.bcrypt_cost.to_string(),
                 requires_restart: false, // TTL changes can be applied to new tokens
-            });
-        }
-
-        // Compare store backend
-        if std::mem::discriminant(&old_config.store.backend)
-            != std::mem::discriminant(&new_config.store.backend)
-        {
-            changes.push(ConfigChange {
-                field: "store.backend".to_string(),
-                old_value: format!("{:?}", old_config.store.backend),
-                new_value: format!("{:?}", new_config.store.backend),
-                requires_restart: true, // Store backend change requires restart
             });
         }
 
@@ -441,87 +382,10 @@ pub struct ConfigReloadMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        FeatureFlags, MonitoringConfig, OAuthConfig, RateLimitConfig, ScimConfig, SecurityConfig,
-        StoreConfig,
-    };
-    use std::collections::HashMap;
+    use crate::config::Config;
 
-    fn create_test_config() -> AppConfig {
-        AppConfig {
-            bind_addr: "127.0.0.1:8080".to_string(),
-            redis_url: Some("redis://localhost:6379".to_string()),
-            oidc_providers: crate::config::OidcProviders {
-                google: None,
-                microsoft: None,
-                github: None,
-            },
-            security: SecurityConfig {
-                jwt_access_token_ttl_seconds: 3600,
-                jwt_refresh_token_ttl_seconds: 86400,
-                rsa_key_size: 2048,
-                request_signing_secret: None,
-                request_timestamp_window_seconds: 300,
-                session_ttl_seconds: 3600,
-                allowed_origins: vec!["http://localhost:3000".to_string()],
-                max_request_body_size: 1048576,
-            },
-            rate_limiting: RateLimitConfig {
-                requests_per_minute_global: 1000,
-                requests_per_minute_per_ip: 100,
-                oauth_requests_per_minute: 60,
-                admin_requests_per_minute: 10,
-                enable_banlist: true,
-                enable_allowlist: false,
-                banlist_ips: vec![],
-                allowlist_ips: vec![],
-            },
-            monitoring: MonitoringConfig {
-                prometheus_metrics_enabled: true,
-                opentelemetry_enabled: true,
-                jaeger_endpoint: None,
-                metrics_scrape_interval_seconds: 30,
-                security_monitoring_enabled: true,
-                audit_logging_enabled: true,
-            },
-            features: FeatureFlags {
-                soar_integration: false,
-                google_oidc: true,
-                microsoft_oidc: true,
-                github_oidc: true,
-                webauthn: true,
-                scim_v2: true,
-                advanced_mfa: true,
-                threat_detection: false,
-                policy_engine: true,
-            },
-            oauth: OAuthConfig {
-                authorization_code_ttl_seconds: 600,
-                max_authorization_codes_per_client: 10,
-                enforce_pkce: true,
-                require_state_parameter: true,
-                strict_redirect_validation: true,
-                allowed_redirect_schemes: vec!["https".to_string(), "http".to_string()],
-            },
-            scim: ScimConfig {
-                enabled: true,
-                max_filter_length: 1000,
-                max_results_per_page: 100,
-                default_results_per_page: 20,
-            },
-            store: StoreConfig {
-                backend: StoreBackend::Hybrid,
-                database_url: None,
-            },
-            client_credentials: HashMap::from([
-                ("client1".to_string(), "secret1".to_string()),
-                ("client2".to_string(), "secret2".to_string()),
-            ]),
-            allowed_scopes: vec!["read".to_string(), "write".to_string()],
-            jwt_secret: "test-secret".to_string(),
-            token_expiry_seconds: 3600,
-            rate_limit_requests_per_minute: 60,
-        }
+    fn create_test_config() -> Config {
+        Config::default()
     }
 
     #[tokio::test]
@@ -530,7 +394,7 @@ mod tests {
         let (manager, _receiver) = ConfigReloadManager::new(config.clone(), None);
 
         let current_config = manager.get_config().await;
-        assert_eq!(current_config.bind_addr, config.bind_addr);
+        assert_eq!(current_config.server.bind_addr, config.server.bind_addr);
         assert_eq!(manager.get_version().await, 1);
     }
 
@@ -538,8 +402,8 @@ mod tests {
     async fn test_change_detection() {
         let old_config = create_test_config();
         let mut new_config = old_config.clone();
-        new_config.rate_limiting.oauth_requests_per_minute = 120;
-        new_config.bind_addr = "0.0.0.0:8080".to_string();
+        new_config.rate_limiting.global_limit = 120;
+        new_config.server.bind_addr = "0.0.0.0:8080".parse().unwrap();
 
         let (manager, _receiver) = ConfigReloadManager::new(old_config.clone(), None);
         let changes = manager.detect_changes(&old_config, &new_config).await;
@@ -547,16 +411,15 @@ mod tests {
         assert_eq!(changes.len(), 2);
         assert!(changes
             .iter()
-            .any(|c| c.field == "rate_limiting.oauth_requests_per_minute"));
-        assert!(changes.iter().any(|c| c.field == "bind_addr"));
+            .any(|c| c.field == "rate_limiting.global_limit"));
+        assert!(changes.iter().any(|c| c.field == "server.bind_addr"));
         assert!(changes.iter().any(|c| c.requires_restart));
     }
 
     #[tokio::test]
     async fn test_config_validation() {
         let mut config = create_test_config();
-        config.bind_addr = "".to_string(); // Invalid empty bind address
-        config.client_credentials.clear(); // Invalid empty credentials
+        config.server.bind_addr = "0.0.0.0:0".parse().unwrap(); // Invalid empty bind address
 
         let (manager, _receiver) = ConfigReloadManager::new(create_test_config(), None);
         let result = manager.validate_config(&config).await;
@@ -564,6 +427,5 @@ mod tests {
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert!(errors.iter().any(|e| e.contains("bind_addr")));
-        assert!(errors.iter().any(|e| e.contains("client credential")));
     }
 }

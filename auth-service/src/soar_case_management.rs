@@ -3337,7 +3337,7 @@ impl CaseManagementSystem {
         let now = Utc::now();
 
         // Calculate SLA deadlines based on severity
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let response_deadline = now
             + Duration::minutes(
                 config
@@ -3627,7 +3627,7 @@ impl CaseManagementSystem {
         &self,
         alert: &SecurityAlert,
     ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         // Check if auto case creation is enabled
         if !config.auto_create_cases {

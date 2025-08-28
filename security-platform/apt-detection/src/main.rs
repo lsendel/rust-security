@@ -923,7 +923,7 @@ async fn get_campaigns(
 
 async fn get_campaign(
     State(engine): State<APTDetectionEngine>,
-    Path(campaign_id): Path<Uuid>,
+    Path(campaign__id): Path<Uuid>,
 ) -> Result<Json<APTCampaign>, StatusCode> {
     match engine.get_campaign_details(campaign_id).await {
         Some(campaign) => Ok(Json(campaign)),

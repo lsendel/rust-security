@@ -19,13 +19,13 @@ async fn property_test_token_validation() {
 
     for token in valid_tokens {
         // Property: All validly formatted tokens should pass input validation
-        let result = validate_token_input(&token);
+        let _result = validate_token_input(&token);
         assert!(result.is_ok(), "Valid token format should pass validation: {}", token);
     }
 
     for token in invalid_tokens {
         // Property: Invalid tokens should either fail validation or be handled gracefully
-        let result = validate_token_input(&token);
+        let _result = validate_token_input(&token);
         // Some might pass if they happen to be valid format, that's OK
         // The key is that no panic or undefined behavior occurs
         let _ = result;
@@ -188,7 +188,7 @@ async fn property_test_client_credential_validation() {
         let secret = SecurityTestUtils::generate_secure_random(32);
 
         // Property: Valid format should pass validation
-        let result = validate_client_credentials(&client_id, &secret);
+        let _result = validate_client_credentials(&client_id, &secret);
         if client_id.len() <= 255 && secret.len() <= 255 {
             assert!(result.is_ok(), "Valid credentials should pass: {}", client_id);
         }
@@ -201,7 +201,7 @@ async fn property_test_client_credential_validation() {
         let secret = "valid_secret";
 
         // Property: Invalid characters should be rejected
-        let result = validate_client_credentials(&client_id, secret);
+        let _result = validate_client_credentials(&client_id, secret);
         assert!(result.is_err(), "Invalid character should be rejected: {}", invalid_char);
     }
 }
@@ -291,7 +291,7 @@ async fn property_test_rate_limiter_fairness() {
         cleanup_interval_secs: 300,
     };
 
-    let limiter = ShardedRateLimiter::new(config);
+    let _limiter = ShardedRateLimiter::new(config);
     let clients = 20;
     let requests_per_client = 20;
 

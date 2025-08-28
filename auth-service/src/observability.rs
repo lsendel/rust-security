@@ -21,7 +21,12 @@ pub fn log_auth_success(user_id: &str, auth_method: &str, client_ip: Option<&str
 }
 
 /// Log failed authentication attempt
-pub fn log_auth_failure(user_id: Option<&str>, auth_method: &str, reason: &str, client_ip: Option<&str>) {
+pub fn log_auth_failure(
+    user_id: Option<&str>,
+    auth_method: &str,
+    reason: &str,
+    client_ip: Option<&str>,
+) {
     match (user_id, client_ip) {
         (Some(uid), Some(ip)) => tracing::warn!(
             user_id = uid,

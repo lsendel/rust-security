@@ -11,8 +11,14 @@ pub struct MLModelManager {
 
 /// Trait for ML models used in behavioral analysis
 pub trait MLModel {
-    fn predict(&self, features: &BehavioralFeatureVector) -> Result<f64, Box<dyn std::error::Error + Send + Sync>>;
-    fn train(&mut self, training_data: &[BehavioralFeatureVector]) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    fn predict(
+        &self,
+        features: &BehavioralFeatureVector,
+    ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>>;
+    fn train(
+        &mut self,
+        training_data: &[BehavioralFeatureVector],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
     fn model_type(&self) -> String;
 }
 
@@ -28,7 +34,11 @@ impl MLModelManager {
         models.insert(name, model);
     }
 
-    pub async fn predict(&self, model_name: &str, features: &BehavioralFeatureVector) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn predict(
+        &self,
+        model_name: &str,
+        features: &BehavioralFeatureVector,
+    ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         let models = self.models.read().await;
         if let Some(model) = models.get(model_name) {
             model.predict(features)

@@ -34,17 +34,17 @@ pub enum DbError {
 impl From<sqlx::Error> for DbError {
     fn from(err: sqlx::Error) -> Self {
         match err {
-            sqlx::Error::RowNotFound => DbError::NotFound,
+            sqlx::Error::RowNotFound => Self::NotFound,
             sqlx::Error::Database(db_err) => {
                 if db_err.message().contains("UNIQUE constraint failed")
                     || db_err.message().contains("duplicate key value")
                 {
-                    DbError::EmailExists
+                    Self::EmailExists
                 } else {
-                    DbError::Query(db_err.message().to_string())
+                    Self::Query(db_err.message().to_string())
                 }
             }
-            _ => DbError::Query(err.to_string()),
+            _ => Self::Query(err.to_string()),
         }
     }
 }
@@ -69,8 +69,12 @@ pub struct InMemoryUserRepository {
 }
 
 impl InMemoryUserRepository {
+    #[must_use]
     pub fn new() -> Self {
-        Self { users: Arc::new(Mutex::new(HashMap::new())), next_id: Arc::new(Mutex::new(1)) }
+        Self {
+            users: Arc::new(Mutex::new(HashMap::new())),
+            next_id: Arc::new(Mutex::new(1)),
+        }
     }
 }
 
@@ -189,14 +193,15 @@ impl UserRepository for InMemoryUserRepository {
 }
 
 #[cfg(feature = "postgres")]
-/// PostgreSQL repository implementation
+/// `PostgreSQL` repository implementation
 pub struct PostgresUserRepository {
     pool: PgPool,
 }
 
 #[cfg(feature = "postgres")]
 impl PostgresUserRepository {
-    pub fn new(pool: PgPool) -> Self {
+    #[must_use]
+    pub const fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
@@ -228,20 +233,30 @@ impl UserRepository for PostgresUserRepository {
         .fetch_one(&self.pool)
         .await?;
 
-        let role_str: String = row.try_get("role").map_err(|e| DbError::Query(e.to_string()))?;
+        let role_str: String = row
+            .try_get("role")
+            .map_err(|e| DbError::Query(e.to_string()))?;
         let role = match role_str.as_str() {
             "admin" => UserRole::Admin,
             _ => UserRole::User,
         };
 
-        let created_str: String =
-            row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
-        let updated_str: String =
-            row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let created_str: String = row
+            .try_get("created_at")
+            .map_err(|e| DbError::Query(e.to_string()))?;
+        let updated_str: String = row
+            .try_get("updated_at")
+            .map_err(|e| DbError::Query(e.to_string()))?;
         Ok(User {
-            id: row.try_get("id").map_err(|e| DbError::Query(e.to_string()))?,
-            name: row.try_get("name").map_err(|e| DbError::Query(e.to_string()))?,
-            email: row.try_get("email").map_err(|e| DbError::Query(e.to_string()))?,
+            id: row
+                .try_get("id")
+                .map_err(|e| DbError::Query(e.to_string()))?,
+            name: row
+                .try_get("name")
+                .map_err(|e| DbError::Query(e.to_string()))?,
+            email: row
+                .try_get("email")
+                .map_err(|e| DbError::Query(e.to_string()))?,
             password_hash: row
                 .try_get("password_hash")
                 .map_err(|e| DbError::Query(e.to_string()))?,
@@ -270,11 +285,17 @@ impl UserRepository for PostgresUserRepository {
 
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String =
-                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String =
-                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let role = if role_str == "admin" {
+                UserRole::Admin
+            } else {
+                UserRole::User
+            };
+            let created_str: String = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
@@ -306,11 +327,17 @@ impl UserRepository for PostgresUserRepository {
 
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String =
-                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String =
-                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let role = if role_str == "admin" {
+                UserRole::Admin
+            } else {
+                UserRole::User
+            };
+            let created_str: String = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
@@ -336,8 +363,8 @@ impl UserRepository for PostgresUserRepository {
             FROM users ORDER BY id LIMIT $1 OFFSET $2
             "#,
         )
-        .bind(limit as i64)
-        .bind(offset as i64)
+        .bind(i64::from(limit))
+        .bind(i64::from(offset))
         .fetch_all(&self.pool)
         .await?;
 
@@ -345,11 +372,17 @@ impl UserRepository for PostgresUserRepository {
             .into_iter()
             .map(|r| {
                 let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-                let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-                let created_str: String =
-                    r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-                let updated_str: String =
-                    r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let role = if role_str == "admin" {
+                    UserRole::Admin
+                } else {
+                    UserRole::User
+                };
+                let created_str: String = r
+                    .try_get("created_at")
+                    .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let updated_str: String = r
+                    .try_get("updated_at")
+                    .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
                 User {
                     id: r.try_get("id").unwrap_or_default(),
                     name: r.try_get("name").unwrap_or_default(),
@@ -373,7 +406,7 @@ impl UserRepository for PostgresUserRepository {
         user_update: UpdateUserRequest,
     ) -> Result<Option<User>, DbError> {
         // This is a simplified version - in practice, you'd use a query builder or dynamic query construction
-        let result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
+        let _result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
             sqlx::query(
                 r#"
                 UPDATE users SET name = $1, email = $2, updated_at = NOW()
@@ -422,11 +455,17 @@ impl UserRepository for PostgresUserRepository {
 
         Ok(result.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String =
-                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String =
-                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let role = if role_str == "admin" {
+                UserRole::Admin
+            } else {
+                UserRole::User
+            };
+            let created_str: String = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
@@ -444,8 +483,10 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let result =
-            sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&self.pool).await?;
+        let _result = sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -460,14 +501,15 @@ impl UserRepository for PostgresUserRepository {
 }
 
 #[cfg(feature = "sqlite")]
-/// SQLite repository implementation
+/// `SQLite` repository implementation
 pub struct SqliteUserRepository {
     pool: SqlitePool,
 }
 
 #[cfg(feature = "sqlite")]
 impl SqliteUserRepository {
-    pub fn new(pool: SqlitePool) -> Self {
+    #[must_use]
+    pub const fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 }
@@ -486,11 +528,11 @@ impl UserRepository for SqliteUserRepository {
         };
 
         let row = sqlx::query(
-            r#"
+            r"
             INSERT INTO users (name, email, password_hash, role)
             VALUES (?, ?, ?, ?)
             RETURNING id, name, email, password_hash, role, created_at, updated_at
-            "#,
+            ",
         )
         .bind(user.name.trim())
         .bind(user.email.trim())
@@ -499,20 +541,30 @@ impl UserRepository for SqliteUserRepository {
         .fetch_one(&self.pool)
         .await?;
 
-        let role_col: String = row.try_get("role").map_err(|e| DbError::Query(e.to_string()))?;
+        let role_col: String = row
+            .try_get("role")
+            .map_err(|e| DbError::Query(e.to_string()))?;
         let role = match role_col.as_str() {
             "admin" => UserRole::Admin,
             _ => UserRole::User,
         };
 
-        let created_str: String =
-            row.try_get("created_at").map_err(|e| DbError::Query(e.to_string()))?;
-        let updated_str: String =
-            row.try_get("updated_at").map_err(|e| DbError::Query(e.to_string()))?;
+        let created_str: String = row
+            .try_get("created_at")
+            .map_err(|e| DbError::Query(e.to_string()))?;
+        let updated_str: String = row
+            .try_get("updated_at")
+            .map_err(|e| DbError::Query(e.to_string()))?;
         Ok(User {
-            id: row.try_get("id").map_err(|e| DbError::Query(e.to_string()))?,
-            name: row.try_get("name").map_err(|e| DbError::Query(e.to_string()))?,
-            email: row.try_get("email").map_err(|e| DbError::Query(e.to_string()))?,
+            id: row
+                .try_get("id")
+                .map_err(|e| DbError::Query(e.to_string()))?,
+            name: row
+                .try_get("name")
+                .map_err(|e| DbError::Query(e.to_string()))?,
+            email: row
+                .try_get("email")
+                .map_err(|e| DbError::Query(e.to_string()))?,
             password_hash: row
                 .try_get("password_hash")
                 .map_err(|e| DbError::Query(e.to_string()))?,
@@ -536,11 +588,17 @@ impl UserRepository for SqliteUserRepository {
 
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String =
-                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String =
-                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let role = if role_str == "admin" {
+                UserRole::Admin
+            } else {
+                UserRole::User
+            };
+            let created_str: String = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
@@ -567,11 +625,17 @@ impl UserRepository for SqliteUserRepository {
 
         Ok(row.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String =
-                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String =
-                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let role = if role_str == "admin" {
+                UserRole::Admin
+            } else {
+                UserRole::User
+            };
+            let created_str: String = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
@@ -601,11 +665,17 @@ impl UserRepository for SqliteUserRepository {
             .into_iter()
             .map(|r| {
                 let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-                let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-                let created_str: String =
-                    r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-                let updated_str: String =
-                    r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let role = if role_str == "admin" {
+                    UserRole::Admin
+                } else {
+                    UserRole::User
+                };
+                let created_str: String = r
+                    .try_get("created_at")
+                    .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+                let updated_str: String = r
+                    .try_get("updated_at")
+                    .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
                 User {
                     id: r.try_get("id").unwrap_or_default(),
                     name: r.try_get("name").unwrap_or_default(),
@@ -629,13 +699,13 @@ impl UserRepository for SqliteUserRepository {
         user_update: UpdateUserRequest,
     ) -> Result<Option<User>, DbError> {
         // Similar to PostgreSQL but with SQLite syntax
-        let result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
+        let _result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
             sqlx::query(
-                r#"
+                r"
                 UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 RETURNING id, name, email, password_hash, role, created_at, updated_at
-                "#,
+                ",
             )
             .bind(name.trim())
             .bind(email.trim())
@@ -644,11 +714,11 @@ impl UserRepository for SqliteUserRepository {
             .await?
         } else if let Some(name) = &user_update.name {
             sqlx::query(
-                r#"
+                r"
                 UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 RETURNING id, name, email, password_hash, role, created_at, updated_at
-                "#,
+                ",
             )
             .bind(name.trim())
             .bind(id)
@@ -656,11 +726,11 @@ impl UserRepository for SqliteUserRepository {
             .await?
         } else if let Some(email) = &user_update.email {
             sqlx::query(
-                r#"
+                r"
                 UPDATE users SET email = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 RETURNING id, name, email, password_hash, role, created_at, updated_at
-                "#,
+                ",
             )
             .bind(email.trim())
             .bind(id)
@@ -672,11 +742,17 @@ impl UserRepository for SqliteUserRepository {
 
         Ok(result.map(|r| {
             let role_str: String = r.try_get("role").unwrap_or_else(|_| "user".to_string());
-            let role = if role_str == "admin" { UserRole::Admin } else { UserRole::User };
-            let created_str: String =
-                r.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
-            let updated_str: String =
-                r.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let role = if role_str == "admin" {
+                UserRole::Admin
+            } else {
+                UserRole::User
+            };
+            let created_str: String = r
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
+            let updated_str: String = r
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now().to_rfc3339());
             User {
                 id: r.try_get("id").unwrap_or_default(),
                 name: r.try_get("name").unwrap_or_default(),
@@ -694,8 +770,10 @@ impl UserRepository for SqliteUserRepository {
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let result =
-            sqlx::query("DELETE FROM users WHERE id = ?").bind(id).execute(&self.pool).await?;
+        let _result = sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }

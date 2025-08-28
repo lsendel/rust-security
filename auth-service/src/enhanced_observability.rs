@@ -22,14 +22,11 @@ use uuid::Uuid;
 
 #[cfg(feature = "monitoring")]
 use crate::{
-    business_metrics::BusinessMetricsRegistry,
-    metrics::MetricsRegistry,
+    business_metrics::BusinessMetricsRegistry, metrics::MetricsRegistry,
     security_metrics::SecurityMetrics,
 };
 
-use crate::{
-    security_logging::{SecurityEvent, SecuritySeverity},
-};
+use crate::security_logging::{SecurityEvent, SecuritySeverity};
 
 /// Service Level Indicators (SLIs) configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,8 +199,7 @@ impl EnhancedObservability {
         sli_config: SliConfig,
         metrics_registry: Arc<MetricsRegistry>,
         security_metrics: Arc<SecurityMetrics>,
-        #[cfg(feature = "monitoring")]
-        business_metrics: Arc<BusinessMetricsRegistry>,
+        #[cfg(feature = "monitoring")] business_metrics: Arc<BusinessMetricsRegistry>,
     ) -> Result<Self> {
         info!("Initializing enhanced observability system");
 

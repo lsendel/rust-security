@@ -1,15 +1,15 @@
+use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use opentelemetry::{global, KeyValue};
+#[allow(deprecated)]
+use opentelemetry_jaeger::new_agent_pipeline;
 use opentelemetry_sdk::{
     trace::{self, RandomIdGenerator, Sampler},
     Resource,
 };
-#[allow(deprecated)]
-use opentelemetry_jaeger::new_agent_pipeline;
 use rand::RngCore;
-use std::env;
 use std::collections::HashMap;
-use axum::http::{HeaderMap, HeaderName, HeaderValue};
-use tracing::{info, Span, Instrument};
+use std::env;
+use tracing::{info, Instrument, Span};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use uuid::Uuid;
@@ -48,13 +48,11 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
     // Configure tracing subscriber with multiple layers
     let telemetry_layer = OpenTelemetryLayer::new(tracer);
 
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            match environment.as_str() {
-                "production" => EnvFilter::new("info,auth_service=info,policy_service=info"),
-                "staging" => EnvFilter::new("debug,auth_service=debug,policy_service=debug"),
-                _ => EnvFilter::new("debug,auth_service=trace,policy_service=trace"),
-            }
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| match environment.as_str() {
+            "production" => EnvFilter::new("info,auth_service=info,policy_service=info"),
+            "staging" => EnvFilter::new("debug,auth_service=debug,policy_service=debug"),
+            _ => EnvFilter::new("debug,auth_service=trace,policy_service=trace"),
         });
 
     Registry::default()
@@ -65,7 +63,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
                 .with_thread_ids(true)
                 .with_file(true)
                 .with_line_number(true)
-                .with_writer(std::io::stdout) // Use structured logging
+                .with_writer(std::io::stdout), // Use structured logging
         )
         .with(telemetry_layer)
         .init();
@@ -123,20 +121,26 @@ impl RequestContext {
         let mut context = Self::new();
 
         // Extract existing request ID or generate new one
-        if let Some(req_id) = headers.get(X_REQUEST_ID_HEADER)
-            .and_then(|v| v.to_str().ok()) {
+        if let Some(req_id) = headers
+            .get(X_REQUEST_ID_HEADER)
+            .and_then(|v| v.to_str().ok())
+        {
             context.request_id = req_id.to_string();
         }
 
         // Extract existing correlation ID or generate new one
-        if let Some(corr_id) = headers.get(X_CORRELATION_ID_HEADER)
-            .and_then(|v| v.to_str().ok()) {
+        if let Some(corr_id) = headers
+            .get(X_CORRELATION_ID_HEADER)
+            .and_then(|v| v.to_str().ok())
+        {
             context.correlation_id = corr_id.to_string();
         }
 
         // Parse W3C Trace Context from traceparent header
-        if let Some(traceparent) = headers.get(TRACEPARENT_HEADER)
-            .and_then(|v| v.to_str().ok()) {
+        if let Some(traceparent) = headers
+            .get(TRACEPARENT_HEADER)
+            .and_then(|v| v.to_str().ok())
+        {
             if let Ok(trace_context) = parse_traceparent(traceparent) {
                 context.trace_id = Some(trace_context.trace_id);
                 context.parent_span_id = Some(trace_context.span_id);
@@ -145,8 +149,7 @@ impl RequestContext {
         }
 
         // Extract tracestate
-        if let Some(tracestate) = headers.get(TRACESTATE_HEADER)
-            .and_then(|v| v.to_str().ok()) {
+        if let Some(tracestate) = headers.get(TRACESTATE_HEADER).and_then(|v| v.to_str().ok()) {
             context.trace_state = Some(tracestate.to_string());
         }
 
@@ -195,14 +198,26 @@ impl RequestContext {
     /// Get trace context for logging
     pub fn to_log_fields(&self) -> HashMap<String, serde_json::Value> {
         let mut fields = HashMap::new();
-        fields.insert("request_id".to_string(), serde_json::Value::String(self.request_id.clone()));
-        fields.insert("correlation_id".to_string(), serde_json::Value::String(self.correlation_id.clone()));
+        fields.insert(
+            "request_id".to_string(),
+            serde_json::Value::String(self.request_id.clone()),
+        );
+        fields.insert(
+            "correlation_id".to_string(),
+            serde_json::Value::String(self.correlation_id.clone()),
+        );
 
         if let Some(trace_id) = &self.trace_id {
-            fields.insert("trace_id".to_string(), serde_json::Value::String(trace_id.clone()));
+            fields.insert(
+                "trace_id".to_string(),
+                serde_json::Value::String(trace_id.clone()),
+            );
         }
         if let Some(span_id) = &self.span_id {
-            fields.insert("span_id".to_string(), serde_json::Value::String(span_id.clone()));
+            fields.insert(
+                "span_id".to_string(),
+                serde_json::Value::String(span_id.clone()),
+            );
         }
 
         fields
@@ -256,8 +271,7 @@ fn parse_traceparent(traceparent: &str) -> Result<TraceContext, &'static str> {
     }
 
     // Parse trace flags
-    let trace_flags = u8::from_str_radix(parts[3], 16)
-        .map_err(|_| "Invalid trace flags")?;
+    let trace_flags = u8::from_str_radix(parts[3], 16).map_err(|_| "Invalid trace flags")?;
 
     Ok(TraceContext {
         trace_id: parts[1].to_string(),
@@ -484,9 +498,7 @@ impl TracingHttpClient {
             otel.kind = "client"
         );
 
-        async move {
-            request.send().await
-        }.instrument(span).await
+        async move { request.send().await }.instrument(span).await
     }
 
     /// Make POST request with context propagation
@@ -517,9 +529,7 @@ impl TracingHttpClient {
             otel.kind = "client"
         );
 
-        async move {
-            request.send().await
-        }.instrument(span).await
+        async move { request.send().await }.instrument(span).await
     }
 }
 
@@ -573,7 +583,9 @@ mod tests {
         assert!(parse_traceparent("invalid").is_err());
 
         // Wrong version
-        assert!(parse_traceparent("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err());
+        assert!(
+            parse_traceparent("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+        );
 
         // Invalid trace ID
         assert!(parse_traceparent("00-invalid-00f067aa0ba902b7-01").is_err());
@@ -587,13 +599,21 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("x-request-id", "test-request-id".parse().unwrap());
         headers.insert("x-correlation-id", "test-correlation-id".parse().unwrap());
-        headers.insert("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".parse().unwrap());
+        headers.insert(
+            "traceparent",
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+                .parse()
+                .unwrap(),
+        );
 
         let context = RequestContext::from_headers(&headers);
 
         assert_eq!(context.request_id, "test-request-id");
         assert_eq!(context.correlation_id, "test-correlation-id");
-        assert_eq!(context.trace_id, Some("4bf92f3577b34da6a3ce929d0e0e4736".to_string()));
+        assert_eq!(
+            context.trace_id,
+            Some("4bf92f3577b34da6a3ce929d0e0e4736".to_string())
+        );
         assert_eq!(context.parent_span_id, Some("00f067aa0ba902b7".to_string()));
         assert_eq!(context.trace_flags, Some(1));
     }

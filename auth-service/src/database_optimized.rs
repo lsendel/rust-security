@@ -10,7 +10,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, Instant};
 use tokio::sync::RwLock;
 #[cfg(feature = "simd")]
-use rayon::prelude::*;
 use base64;
 use hex;
 use redis;
@@ -441,7 +440,7 @@ impl DatabaseOptimized {
         // Start transaction
         redis::cmd("MULTI").query_async::<()>(&mut *conn).await?;
 
-        let result = match operations(&mut conn).await {
+        let _result = match operations(&mut conn).await {
             Ok(result) => {
                 // Commit transaction
                 redis::cmd("EXEC").query_async::<()>(&mut *conn).await?;

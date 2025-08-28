@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[tokio::test]
 async fn test_red_team_framework_initialization() {
     let target_url = "http://localhost:8080".to_string();
-    let result = RedTeamFramework::new(target_url.clone()).await;
+    let _result = RedTeamFramework::new(target_url.clone()).await;
 
     assert!(result.is_ok());
     let framework = result.unwrap();
@@ -32,13 +32,13 @@ async fn test_social_engineering_scenario_validation() {
     let mut reporter = RedTeamReporter::new("test_campaign".to_string());
 
     // Test with low intensity (safe for testing)
-    let result = run_token_scenarios(&mut framework, &mut reporter, "low").await;
+    let _result = run_token_scenarios(&mut framework, &mut reporter, "low").await;
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_scenario_result_creation() {
-    let result = ScenarioResult {
+    let _result = ScenarioResult {
         scenario_name: "test_scenario".to_string(),
         success: true,
         details: "Test scenario executed successfully".to_string(),
@@ -178,7 +178,7 @@ async fn test_scenario_execution_safety() {
     let mut reporter = RedTeamReporter::new("safety_test".to_string());
 
     // All scenarios should run in "test" mode without making real network requests
-    let result = run_token_scenarios(&mut framework, &mut reporter, "test").await;
+    let _result = run_token_scenarios(&mut framework, &mut reporter, "test").await;
     assert!(result.is_ok());
 
     // Verify that the reporter has captured some results

@@ -22,7 +22,7 @@ pub async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
 
 /// Kubernetes-style readiness check
 pub async fn readiness_check(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     // In a real implementation, you might check:
     // - Database connectivity

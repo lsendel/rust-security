@@ -1112,7 +1112,7 @@ pub async fn register_client_handler(
 }
 
 pub async fn get_client_configuration_handler(
-    Path(client_id): Path<String>,
+    Path(client__id): Path<String>,
     headers: HeaderMap,
     State(manager): State<Arc<ClientRegistrationManager>>,
 ) -> Result<Json<ClientRegistrationResponse>, ClientRegistrationError> {
@@ -1129,7 +1129,7 @@ pub async fn get_client_configuration_handler(
 }
 
 pub async fn update_client_configuration_handler(
-    Path(client_id): Path<String>,
+    Path(client__id): Path<String>,
     headers: HeaderMap,
     State(manager): State<Arc<ClientRegistrationManager>>,
     Json(request): Json<ClientRegistrationRequest>,
@@ -1147,7 +1147,7 @@ pub async fn update_client_configuration_handler(
 }
 
 pub async fn delete_client_handler(
-    Path(client_id): Path<String>,
+    Path(client__id): Path<String>,
     headers: HeaderMap,
     State(manager): State<Arc<ClientRegistrationManager>>,
 ) -> Result<StatusCode, ClientRegistrationError> {

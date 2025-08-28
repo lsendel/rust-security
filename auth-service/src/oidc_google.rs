@@ -57,7 +57,7 @@ pub async fn google_login() -> impl IntoResponse {
 }
 
 pub async fn google_callback(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(q): Query<OAuthCallbackQuery>,
 ) -> impl IntoResponse {
     let client_id = std::env::var("GOOGLE_CLIENT_ID").unwrap_or_default();

@@ -3,6 +3,34 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use uuid::Uuid;
 
+// Import SecurityEventType from core security module
+use crate::core::security::SecurityEventType;
+
+/// Geographic location information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoLocation {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub region: Option<String>,
+}
+
+/// User security event for behavioral analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSecurityEvent {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub timestamp: DateTime<Utc>,
+    pub event_type: SecurityEventType,
+    pub source_ip: String,
+    pub user_agent: Option<String>,
+    pub location: Option<GeoLocation>,
+    pub device_fingerprint: Option<String>,
+    pub session_id: Option<String>,
+    pub metadata: HashMap<String, String>,
+}
+
 /// Time series data point for behavioral analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimeSeriesPoint {

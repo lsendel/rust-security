@@ -68,7 +68,7 @@ async fn credential_stuffing_attack(
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/x-www-form-urlencoded"));
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "credential_stuffing",
                 "POST",
@@ -148,7 +148,7 @@ async fn brute_force_attack(
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/x-www-form-urlencoded"));
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "brute_force",
                 "POST",
@@ -218,7 +218,7 @@ async fn client_credentials_manipulation(
             urlencoding::encode(payload)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "sql_injection",
                 "POST",
@@ -244,7 +244,7 @@ async fn client_credentials_manipulation(
             urlencoding::encode(payload)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "nosql_injection",
                 "POST",
@@ -270,7 +270,7 @@ async fn client_credentials_manipulation(
             urlencoding::encode(payload)
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "ldap_injection",
                 "POST",
@@ -325,7 +325,7 @@ async fn authorization_header_manipulation(
             HeaderValue::from_str(&format!("{} {}", auth_type, auth_value))?,
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "auth_header_manipulation",
                 "GET",
@@ -354,7 +354,7 @@ async fn authorization_header_manipulation(
         if let Ok(header_value) = HeaderValue::from_str(injected_header) {
             headers.insert(AUTHORIZATION, header_value);
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "header_injection",
                     "GET",
@@ -411,7 +411,7 @@ async fn http_basic_auth_bypass(
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Basic {}", credentials))?);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "basic_auth_bypass",
                 "POST",
@@ -440,7 +440,7 @@ async fn http_basic_auth_bypass(
         headers
             .insert(AUTHORIZATION, HeaderValue::from_str(&format!("{} {}", scheme, credentials))?);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "auth_scheme_bypass",
                 "POST",
@@ -507,7 +507,7 @@ async fn default_credentials_testing(
             client_id, client_secret
         );
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "default_credentials",
                 "POST",
@@ -557,7 +557,7 @@ async fn authentication_state_confusion(
         HeaderValue::from_str(&format!("session_id={}", fixed_session_id))?,
     );
 
-    let result = framework
+    let _result = framework
         .execute_attack(
             "session_fixation",
             "GET",
@@ -586,7 +586,7 @@ async fn authentication_state_confusion(
         let mut headers = HeaderMap::new();
         headers.insert(*header_name, HeaderValue::from_str(header_value)?);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "state_manipulation",
                 "GET",
@@ -612,7 +612,7 @@ async fn authentication_state_confusion(
     );
     headers.insert(reqwest::header::COOKIE, HeaderValue::from_str("auth_token=admin_session")?);
 
-    let result = framework
+    let _result = framework
         .execute_attack(
             "multiple_auth_bypass",
             "GET",

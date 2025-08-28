@@ -64,7 +64,7 @@ pub async fn github_login() -> impl IntoResponse {
 }
 
 pub async fn github_callback(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(q): Query<OAuthCallbackQuery>,
 ) -> impl IntoResponse {
     // Check for OAuth errors first

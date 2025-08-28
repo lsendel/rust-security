@@ -38,7 +38,7 @@ pub async fn microsoft_login() -> impl IntoResponse {
 }
 
 pub async fn microsoft_callback(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Query(q): Query<OAuthCallbackQuery>,
 ) -> impl IntoResponse {
     let client_id = std::env::var("MICROSOFT_CLIENT_ID").unwrap_or_default();

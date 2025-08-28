@@ -1,9 +1,7 @@
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
-use auth_service::{
-    api_key_store::ApiKeyStore, app, AppState, IntrospectRequest,
-};
+use auth_service::{api_key_store::ApiKeyStore, app, AppState, IntrospectRequest};
 use base64::Engine as _;
 use common::TokenRecord;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};

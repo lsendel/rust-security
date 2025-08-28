@@ -220,7 +220,7 @@ async fn totp_brute_force_attack(
             "code": totp_code
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "totp_brute_force",
                 "POST",
@@ -321,7 +321,7 @@ async fn backup_code_enumeration(
             "code": pattern
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "backup_code_enumeration",
                 "POST",
@@ -379,7 +379,7 @@ async fn time_window_exploitation(
             "code": totp_code
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "time_skew_attack",
                 "POST",
@@ -414,7 +414,7 @@ async fn time_window_exploitation(
             "code": totp_code
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "time_window_test",
                 "POST",
@@ -478,7 +478,7 @@ async fn mfa_header_bypass(
             "code": "000000" // Invalid code
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "mfa_header_bypass",
                 "POST",
@@ -514,7 +514,7 @@ async fn mfa_header_bypass(
             "user_id": "redteam_session_user"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "mfa_session_bypass",
                 "POST",
@@ -584,7 +584,7 @@ async fn otp_interception_simulation(
                 "code": otp_code
             });
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "otp_brute_force",
                     "POST",
@@ -854,14 +854,14 @@ async fn webauthn_bypass_attempts(
 
 fn generate_realistic_totp() -> String {
     // Generate a realistic-looking 6-digit TOTP code
-    format!("{:06}", rand::random::<u32>() % 1000000)
+    format!("{:06}", rand::random::<u32>() % 1_000_000)
 }
 
 fn generate_totp_for_time(timestamp: u64) -> String {
     // Simplified TOTP generation for testing
     // In a real implementation, this would use HMAC-SHA1 with the secret
     let time_step = timestamp / 30;
-    format!("{:06}", (time_step % 1000000) as u32)
+    format!("{:06}", (time_step % 1_000_000) as u32)
 }
 
 async fn biometric_bypass_attacks(
@@ -945,7 +945,7 @@ async fn biometric_bypass_attacks(
             "liveness_check": false
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "face_spoofing_attack",
                 "POST",
@@ -978,7 +978,7 @@ async fn biometric_bypass_attacks(
             "eye": "both"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "iris_bypass_attack",
                 "POST",
@@ -1011,7 +1011,7 @@ async fn biometric_bypass_attacks(
             "phrase": "my voice is my password"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "voice_bypass_attack",
                 "POST",
@@ -1044,7 +1044,7 @@ async fn biometric_bypass_attacks(
             "session_duration": 3600
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "behavioral_bypass_attack",
                 "POST",
@@ -1080,7 +1080,7 @@ async fn biometric_bypass_attacks(
             }
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "multimodal_confusion_attack",
                 "POST",
@@ -1132,7 +1132,7 @@ async fn push_notification_bypass(
             "push_service": "fcm"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "push_interception",
                 "POST",
@@ -1186,7 +1186,7 @@ async fn push_notification_bypass(
                 "auto_approve": true
             });
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "auto_approval_attack",
                     "POST",
@@ -1243,7 +1243,7 @@ async fn hardware_token_emulation(
             "serial_number": "123456789"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "yubikey_emulation",
                 "POST",
@@ -1276,7 +1276,7 @@ async fn hardware_token_emulation(
             "serial_number": "000123456789"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "securid_emulation",
                 "POST",
@@ -1309,7 +1309,7 @@ async fn hardware_token_emulation(
             "pin": "123456"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "smartcard_attack",
                 "POST",
@@ -1362,7 +1362,7 @@ async fn voice_recognition_bypass(
             "synthesis_method": attack_type
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "ai_voice_synthesis",
                 "POST",
@@ -1397,7 +1397,7 @@ async fn voice_recognition_bypass(
             "preprocessing": manipulation
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "voice_manipulation",
                 "POST",
@@ -1431,7 +1431,7 @@ async fn voice_recognition_bypass(
             "passphrase": "voice authentication test"
         });
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "cross_lingual_voice_attack",
                 "POST",

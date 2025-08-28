@@ -1,9 +1,9 @@
+use base64;
+use chrono;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ring;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use base64;
-use ring;
-use chrono;
 
 // Import the actual auth service modules for realistic benchmarks
 use auth_service::{
@@ -22,15 +22,21 @@ impl PerformanceMonitor {
     pub fn new() -> Result<Self, &'static str> {
         Ok(Self)
     }
-    
+
     pub fn record_operation(&self, _operation: &str, _duration: Duration) {
         // Mock implementation for benchmarks
     }
-    
-    pub fn record_request(&self, _endpoint: &str, _method: &str, _status: u16, _duration: Duration) {
+
+    pub fn record_request(
+        &self,
+        _endpoint: &str,
+        _method: &str,
+        _status: u16,
+        _duration: Duration,
+    ) {
         // Mock implementation for benchmarks
     }
-    
+
     pub fn get_metrics(&self) -> String {
         // Mock implementation returning empty metrics
         String::new()
@@ -95,7 +101,7 @@ fn bench_rate_limiting(c: &mut Criterion) {
 
     group.bench_function("rate_limit_check", |b| {
         let config = RateLimitConfig::default();
-        let limiter = SecureRateLimiter::new(config);
+        let _limiter = SecureRateLimiter::new(config);
         let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
 
         b.iter(|| {
@@ -232,7 +238,7 @@ fn bench_security_validation_pipeline(c: &mut Criterion) {
 
     group.bench_function("full_security_validation", |b| {
         let config = RateLimitConfig::default();
-        let limiter = SecureRateLimiter::new(config);
+        let _limiter = SecureRateLimiter::new(config);
         let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
         let secret = "test-secret-key-that-is-long-enough-for-security";
 

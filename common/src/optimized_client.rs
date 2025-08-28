@@ -421,7 +421,7 @@ mod tests {
         let breaker = CircuitBreaker::new(config);
         
         // Test successful calls
-        let result = breaker.call(async { Ok::<_, ()>("success") }).await;
+        let _result = breaker.call(async { Ok::<_, ()>("success") }).await;
         assert!(result.is_ok());
         
         // Test failure threshold
@@ -430,7 +430,7 @@ mod tests {
         }
         
         // Circuit should be open now
-        let result = breaker.call(async { Ok::<_, ()>("should_fail") }).await;
+        let _result = breaker.call(async { Ok::<_, ()>("should_fail") }).await;
         assert!(matches!(result, Err(CircuitBreakerError::CircuitOpen)));
     }
 

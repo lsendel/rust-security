@@ -249,10 +249,12 @@ impl AuthFailureTracker {
             if let Some(ip) = ip_address {
                 if let Some(ip_stats) = self.ip_failures.get(ip) {
                     let (count, first, _last, suspicious) = ip_stats.get_stats();
-                    event = event.with_detail_string("ip_failure_count".to_string(), count.to_string());
-                    event = event.with_detail_string("ip_first_failure".to_string(), first.to_string());
                     event =
-                        event.with_detail_string("ip_is_suspicious".to_string(), suspicious.to_string());
+                        event.with_detail_string("ip_failure_count".to_string(), count.to_string());
+                    event =
+                        event.with_detail_string("ip_first_failure".to_string(), first.to_string());
+                    event = event
+                        .with_detail_string("ip_is_suspicious".to_string(), suspicious.to_string());
                 }
             }
         }

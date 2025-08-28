@@ -89,7 +89,7 @@ async fn session_id_enumeration(
     let mut blocked_attempts = 0;
 
     for session_id in &session_ids {
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "session_enumeration",
                 "GET",
@@ -177,7 +177,7 @@ async fn user_id_parameter_tampering(
 
     for user_id in &user_ids {
         // Test user ID in session invalidation endpoint
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "user_id_tampering",
                 "POST",
@@ -288,7 +288,7 @@ async fn token_introspection_bypass(
         let auth_header = general_purpose::STANDARD.encode("admin:admin");
         headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Basic {}", auth_header))?);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "token_introspection_bypass",
                 "POST",
@@ -358,7 +358,7 @@ async fn admin_endpoint_access(
 
     for endpoint in &admin_endpoints {
         // Test without any authentication
-        let result = framework
+        let _result = framework
             .execute_attack("admin_no_auth", "GET", endpoint, None, None, Some(&session))
             .await?;
 
@@ -455,7 +455,7 @@ async fn cross_user_data_access(
         ];
 
         for endpoint in &user_endpoints {
-            let result = framework
+            let _result = framework
                 .execute_attack("cross_user_access", "GET", &endpoint, None, None, Some(&session))
                 .await?;
 
@@ -781,7 +781,7 @@ async fn uuid_manipulation_attacks(
         for uuid in &uuid_patterns {
             let endpoint = endpoint_template.replace("{}", uuid);
 
-            let result = framework
+            let _result = framework
                 .execute_attack("uuid_manipulation", "GET", &endpoint, None, None, Some(&session))
                 .await?;
 
@@ -804,7 +804,7 @@ async fn uuid_manipulation_attacks(
     for version in 1..=5 {
         let version_uuid = base_uuid.replace("4234", &format!("{version}234"));
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "uuid_version_confusion",
                 "GET",
@@ -871,7 +871,7 @@ async fn database_enumeration_attacks(
 
             let endpoint = endpoint_template.replace("{}", &probe_id.to_string());
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "database_enumeration_probe",
                     "GET",
@@ -897,7 +897,7 @@ async fn database_enumeration_attacks(
             for id in start..=end {
                 let endpoint = endpoint_template.replace("{}", &id.to_string());
 
-                let result = framework
+                let _result = framework
                     .execute_attack(
                         "database_enumeration_focused",
                         "GET",
@@ -950,7 +950,7 @@ async fn database_enumeration_attacks(
     for suffix in &table_suffixes {
         let modified_endpoint = format!("/admin/users{}/1", suffix);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "table_enumeration",
                 "GET",
@@ -1025,7 +1025,7 @@ async fn file_path_traversal_attacks(
         for payload in &traversal_payloads {
             let endpoint = endpoint_template.replace("{}", &urlencoding::encode(payload));
 
-            let result = framework
+            let _result = framework
                 .execute_attack("path_traversal", "GET", &endpoint, None, None, Some(&session))
                 .await?;
 
@@ -1054,7 +1054,7 @@ async fn file_path_traversal_attacks(
     for payload in &directory_payloads {
         let directory_endpoint = format!("/session/{}config.json", payload);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "directory_traversal",
                 "GET",
@@ -1105,7 +1105,7 @@ async fn privilege_escalation_attacks(
         // Test user info access
         let userinfo_endpoint = format!("/oauth/userinfo?sub={}", target_id);
 
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "privilege_escalation_userinfo",
                 "GET",
@@ -1252,7 +1252,7 @@ async fn tenant_isolation_bypass(
         for tenant_id in &tenant_ids {
             let endpoint = endpoint_template.replace("{}", tenant_id);
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "tenant_isolation_bypass",
                     "GET",

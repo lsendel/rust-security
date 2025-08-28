@@ -84,11 +84,6 @@ impl SecureKeyManager {
         Ok(())
     }
 }
-        let n = der[der.len().saturating_sub(256)..].to_vec(); // Extract last 256 bytes as modulus
-
-        Ok((n, e))
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -100,8 +95,8 @@ mod tests {
         let jwks = key_manager.get_jwks().await.unwrap();
 
         assert_eq!(jwks.keys.len(), 1);
-        assert_eq!(jwks.keys[0].kty, "RSA");
-        assert_eq!(jwks.keys[0].alg, Some("RS256".to_string()));
+        assert_eq!(jwks.keys[0].kty, "OKP");
+        assert_eq!(jwks.keys[0].alg, Some("EdDSA".to_string()));
     }
 
     #[tokio::test]
@@ -127,6 +122,6 @@ mod tests {
         let jwks2 = key_manager.get_jwks().await.unwrap();
 
         // Keys should be different (different modulus)
-        assert_ne!(jwks1.keys[0].n, jwks2.keys[0].n);
+        assert_ne!(jwks1.keys[0].x, jwks2.keys[0].x);
     }
 }

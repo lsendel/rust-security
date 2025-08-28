@@ -316,7 +316,7 @@ fn format_code(code: u32, digits: u32) -> String {
 }
 
 pub async fn totp_register(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(req): Json<TotpRegisterRequest>,
 ) -> Json<TotpRegisterResponse> {
     // 20-byte random secret
@@ -354,7 +354,7 @@ pub async fn totp_register(
 }
 
 pub async fn totp_verify(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(req): Json<TotpVerifyRequest>,
 ) -> Json<TotpVerifyResponse> {
     // Check backup code in Redis first
@@ -478,7 +478,7 @@ pub async fn totp_verify(
 }
 
 pub async fn totp_generate_backup_codes(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(req): Json<TotpRegisterRequest>,
 ) -> Json<BackupCodesResponse> {
     // generate 8 codes, 10 chars each base32-like
@@ -546,7 +546,7 @@ fn generate_otp_code() -> String {
 }
 
 pub async fn otp_send(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(req): Json<OtpSendRequest>,
 ) -> Json<OtpSendResponse> {
     // simple rate limit: N sends per hour per user
@@ -648,7 +648,7 @@ pub async fn otp_send(
 }
 
 pub async fn otp_verify(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(req): Json<OtpVerifyRequest>,
 ) -> Json<OtpVerifyResponse> {
     if let Some(mut conn) = redis_conn().await {
@@ -707,7 +707,7 @@ pub struct MfaSessionVerifyResponse {
 }
 
 pub async fn mfa_session_verify(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<MfaSessionVerifyRequest>,
 ) -> Json<MfaSessionVerifyResponse> {

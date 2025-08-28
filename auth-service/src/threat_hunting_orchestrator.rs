@@ -344,7 +344,7 @@ impl Default for ThreatHuntingConfig {
         Self {
             enabled: true,
             processing_mode: ProcessingMode::Hybrid,
-            event_buffer_size: 100000,
+            event_buffer_size: 100_000,
             correlation_window_minutes: 60,
             threat_retention_hours: 168, // 1 week
             performance_tuning: PerformanceTuning {
@@ -445,7 +445,7 @@ impl ThreatHuntingOrchestrator {
 
     /// Initialize Redis connection with cluster support
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         // For now, use the first URL (in production, implement cluster support)
         let redis_url = config.redis_config.cluster_urls.first().ok_or_else(|| {

@@ -159,7 +159,9 @@ fn assert_status(actual: StatusCode, expected: StatusCode, context: &str) {
 /// }));
 /// ```
 fn json_request_builder(method: &str, uri: &str, json_body: Value) -> Request<Body> {
-    request_builder(method, uri).body(Body::from(json_body.to_string())).unwrap()
+    request_builder(method, uri)
+        .body(Body::from(json_body.to_string()))
+        .unwrap()
 }
 
 /// Validates JSON responses with comprehensive status and content checks.
@@ -206,14 +208,19 @@ fn validate_user_response(
     expected_id: Option<u64>,
 ) {
     assert_eq!(user_json["name"], expected_name, "User name should match");
-    assert_eq!(user_json["email"], expected_email, "User email should match");
+    assert_eq!(
+        user_json["email"], expected_email,
+        "User email should match"
+    );
 
     if let Some(id) = expected_id {
         assert_eq!(user_json["id"], id, "User ID should match expected value");
     }
 
     // Validate ID is present and positive
-    let id = user_json["id"].as_u64().expect("User ID should be a positive integer");
+    let id = user_json["id"]
+        .as_u64()
+        .expect("User ID should be a positive integer");
     assert!(id > 0, "User ID should be positive");
 
     // Validate email format
@@ -239,16 +246,32 @@ fn validate_user_response(
 fn assert_json_response(json: &Value, expected_type: &str, context: &str) {
     match expected_type {
         "array" => {
-            assert!(json.is_array(), "Response should be JSON array in {}", context);
+            assert!(
+                json.is_array(),
+                "Response should be JSON array in {}",
+                context
+            );
         }
         "object" => {
-            assert!(json.is_object(), "Response should be JSON object in {}", context);
+            assert!(
+                json.is_object(),
+                "Response should be JSON object in {}",
+                context
+            );
         }
         "string" => {
-            assert!(json.is_string(), "Response should be JSON string in {}", context);
+            assert!(
+                json.is_string(),
+                "Response should be JSON string in {}",
+                context
+            );
         }
         "number" => {
-            assert!(json.is_number(), "Response should be JSON number in {}", context);
+            assert!(
+                json.is_number(),
+                "Response should be JSON number in {}",
+                context
+            );
         }
         _ => panic!("Unknown expected type: {}", expected_type),
     }
@@ -264,7 +287,9 @@ mod integration_tests {
         let app = create_test_app();
 
         // Build GET /users request with proper Accept headers
-        let request = request_builder("GET", "/users").body(Body::empty()).unwrap();
+        let request = request_builder("GET", "/users")
+            .body(Body::empty())
+            .unwrap();
 
         // Execute request using ServiceExt::oneshot and capture full response
         let response = app.clone().oneshot(request).await.unwrap();
@@ -274,13 +299,20 @@ mod integration_tests {
 
         // Verify Content-Type header is application/json
         let content_type = response.headers().get("content-type");
-        assert!(content_type.is_some(), "Content-Type header should be present");
+        assert!(
+            content_type.is_some(),
+            "Content-Type header should be present"
+        );
 
         // Parse response body and assert it's exactly an empty JSON array []
         let body = response.into_body();
         let json = response_body_to_json(body).await.unwrap();
 
-        assert_eq!(json, json!([]), "Empty users list should return empty JSON array");
+        assert_eq!(
+            json,
+            json!([]),
+            "Empty users list should return empty JSON array"
+        );
     }
 
     #[tokio::test]
@@ -305,7 +337,10 @@ mod integration_tests {
 
         // Verify Content-Type header is application/json
         let content_type = response.headers().get("content-type");
-        assert!(content_type.is_some(), "Content-Type header should be present for created user");
+        assert!(
+            content_type.is_some(),
+            "Content-Type header should be present for created user"
+        );
 
         // Parse response body and validate it contains created User with generated ID
         let body = response.into_body();
@@ -343,7 +378,10 @@ mod integration_tests {
 
         assert_eq!(json2["id"], 1);
         assert_eq!(json3["id"], 2);
-        assert_ne!(json2["id"], json3["id"], "Sequential users should have different IDs");
+        assert_ne!(
+            json2["id"], json3["id"],
+            "Sequential users should have different IDs"
+        );
     }
 
     #[tokio::test]
@@ -360,7 +398,11 @@ mod integration_tests {
         let create_request = json_request_builder("POST", "/users", user_data);
         let create_response = app.clone().oneshot(create_request).await.unwrap();
 
-        assert_status(create_response.status(), StatusCode::CREATED, "User creation for GET test");
+        assert_status(
+            create_response.status(),
+            StatusCode::CREATED,
+            "User creation for GET test",
+        );
 
         // Extract the generated user ID from creation response
         let create_body = create_response.into_body();
@@ -368,8 +410,9 @@ mod integration_tests {
         let user_id = create_json["id"].as_u64().unwrap();
 
         // Build GET /users/:id request using the actual generated ID
-        let get_request =
-            request_builder("GET", &format!("/users/{}", user_id)).body(Body::empty()).unwrap();
+        let get_request = request_builder("GET", &format!("/users/{}", user_id))
+            .body(Body::empty())
+            .unwrap();
 
         // Execute request and validate complete response
         let get_response = app.clone().oneshot(get_request).await.unwrap();
@@ -379,7 +422,10 @@ mod integration_tests {
 
         // Verify Content-Type header is application/json
         let content_type = get_response.headers().get("content-type");
-        assert!(content_type.is_some(), "Content-Type header should be present");
+        assert!(
+            content_type.is_some(),
+            "Content-Type header should be present"
+        );
 
         // Parse response body and validate User data matches exactly what was created
         let get_body = get_response.into_body();
@@ -404,20 +450,28 @@ mod integration_tests {
 
         let create_request2 = json_request_builder("POST", "/users", user_data2);
         let create_response2 = app.clone().oneshot(create_request2).await.unwrap();
-        let create_json2 = response_body_to_json(create_response2.into_body()).await.unwrap();
+        let create_json2 = response_body_to_json(create_response2.into_body())
+            .await
+            .unwrap();
         let user_id2 = create_json2["id"].as_u64().unwrap();
 
         // Verify we can get both users correctly
-        let get_request1 =
-            request_builder("GET", &format!("/users/{}", user_id)).body(Body::empty()).unwrap();
-        let get_request2 =
-            request_builder("GET", &format!("/users/{}", user_id2)).body(Body::empty()).unwrap();
+        let get_request1 = request_builder("GET", &format!("/users/{}", user_id))
+            .body(Body::empty())
+            .unwrap();
+        let get_request2 = request_builder("GET", &format!("/users/{}", user_id2))
+            .body(Body::empty())
+            .unwrap();
 
         let get_response1 = app.clone().oneshot(get_request1).await.unwrap();
         let get_response2 = app.oneshot(get_request2).await.unwrap();
 
-        let get_json1 = response_body_to_json(get_response1.into_body()).await.unwrap();
-        let get_json2 = response_body_to_json(get_response2.into_body()).await.unwrap();
+        let get_json1 = response_body_to_json(get_response1.into_body())
+            .await
+            .unwrap();
+        let get_json2 = response_body_to_json(get_response2.into_body())
+            .await
+            .unwrap();
 
         assert_eq!(get_json1["name"], "Test User");
         assert_eq!(get_json2["name"], "Second User");
@@ -434,8 +488,9 @@ mod integration_tests {
 
         for test_id in test_ids {
             // Build GET /users/:id requests for each non-existent ID
-            let request =
-                request_builder("GET", &format!("/users/{}", test_id)).body(Body::empty()).unwrap();
+            let request = request_builder("GET", &format!("/users/{}", test_id))
+                .body(Body::empty())
+                .unwrap();
 
             // Execute requests and validate error responses
             let response = app.clone().oneshot(request).await.unwrap();
@@ -457,7 +512,10 @@ mod integration_tests {
                 test_id
             );
             assert!(
-                json["error"].as_str().unwrap().contains(&test_id.to_string()),
+                json["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&test_id.to_string()),
                 "Error message should mention the requested ID {}",
                 test_id
             );
@@ -478,14 +536,21 @@ mod integration_tests {
             "User creation after 404 tests",
         );
 
-        let create_json = response_body_to_json(create_response.into_body()).await.unwrap();
+        let create_json = response_body_to_json(create_response.into_body())
+            .await
+            .unwrap();
         let valid_id = create_json["id"].as_u64().unwrap();
 
-        let get_request =
-            request_builder("GET", &format!("/users/{}", valid_id)).body(Body::empty()).unwrap();
+        let get_request = request_builder("GET", &format!("/users/{}", valid_id))
+            .body(Body::empty())
+            .unwrap();
         let get_response = app.oneshot(get_request).await.unwrap();
 
-        assert_status(get_response.status(), StatusCode::OK, "GET valid user after 404 tests");
+        assert_status(
+            get_response.status(),
+            StatusCode::OK,
+            "GET valid user after 404 tests",
+        );
     }
 
     #[tokio::test]
@@ -526,18 +591,26 @@ mod integration_tests {
                 &format!("User creation {}", i + 1),
             );
 
-            let create_json = response_body_to_json(create_response.into_body()).await.unwrap();
+            let create_json = response_body_to_json(create_response.into_body())
+                .await
+                .unwrap();
             created_users.push(create_json);
         }
 
         // Build GET /users request to retrieve complete user list
-        let list_request = request_builder("GET", "/users").body(Body::empty()).unwrap();
+        let list_request = request_builder("GET", "/users")
+            .body(Body::empty())
+            .unwrap();
 
         // Execute request and validate comprehensive response
         let list_response = app.oneshot(list_request).await.unwrap();
 
         // Assert response status is exactly 200 OK
-        assert_status(list_response.status(), StatusCode::OK, "GET /users after creations");
+        assert_status(
+            list_response.status(),
+            StatusCode::OK,
+            "GET /users after creations",
+        );
 
         // Parse response body into Vec<User> and validate count matches created users
         let list_body = list_response.into_body();
@@ -550,12 +623,20 @@ mod integration_tests {
         .await;
 
         let users_array = list_json.as_array().unwrap();
-        assert_eq!(users_array.len(), created_users.len(), "User count should match created users");
+        assert_eq!(
+            users_array.len(),
+            created_users.len(),
+            "User count should match created users"
+        );
 
         // Verify all created users are present in response
         for (i, created_user) in created_users.iter().enumerate() {
             let found_user = users_array.iter().find(|u| u["id"] == created_user["id"]);
-            assert!(found_user.is_some(), "Created user {} should be present in list", i + 1);
+            assert!(
+                found_user.is_some(),
+                "Created user {} should be present in list",
+                i + 1
+            );
 
             let found_user = found_user.unwrap();
             assert_eq!(found_user["name"], created_user["name"]);
@@ -601,11 +682,16 @@ mod integration_tests {
         let app = create_test_app();
 
         // Test malformed JSON
-        let malformed_request =
-            request_builder("POST", "/users").body(Body::from("{invalid json")).unwrap();
+        let malformed_request = request_builder("POST", "/users")
+            .body(Body::from("{invalid json"))
+            .unwrap();
 
         let response = app.clone().oneshot(malformed_request).await.unwrap();
-        assert_status(response.status(), StatusCode::UNPROCESSABLE_ENTITY, "Malformed JSON");
+        assert_status(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Malformed JSON",
+        );
 
         // Test missing fields
         let missing_name = json!({
@@ -613,14 +699,22 @@ mod integration_tests {
         });
         let missing_name_request = json_request_builder("POST", "/users", missing_name);
         let response = app.clone().oneshot(missing_name_request).await.unwrap();
-        assert_status(response.status(), StatusCode::UNPROCESSABLE_ENTITY, "Missing name field");
+        assert_status(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Missing name field",
+        );
 
         let missing_email = json!({
             "name": "Test User"
         });
         let missing_email_request = json_request_builder("POST", "/users", missing_email);
         let response = app.clone().oneshot(missing_email_request).await.unwrap();
-        assert_status(response.status(), StatusCode::UNPROCESSABLE_ENTITY, "Missing email field");
+        assert_status(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Missing email field",
+        );
 
         // Test invalid data types
         let invalid_types = json!({
@@ -629,7 +723,11 @@ mod integration_tests {
         });
         let invalid_types_request = json_request_builder("POST", "/users", invalid_types);
         let response = app.oneshot(invalid_types_request).await.unwrap();
-        assert_status(response.status(), StatusCode::UNPROCESSABLE_ENTITY, "Invalid data types");
+        assert_status(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid data types",
+        );
     }
 
     #[tokio::test]
@@ -637,18 +735,23 @@ mod integration_tests {
         let app = create_test_app();
 
         // Test non-numeric IDs
-        let non_numeric_request = request_builder("GET", "/users/abc").body(Body::empty()).unwrap();
+        let non_numeric_request = request_builder("GET", "/users/abc")
+            .body(Body::empty())
+            .unwrap();
         let response = app.clone().oneshot(non_numeric_request).await.unwrap();
         assert_status(response.status(), StatusCode::BAD_REQUEST, "Non-numeric ID");
 
         // Test negative numbers (should be caught by path parsing)
-        let negative_request = request_builder("GET", "/users/-1").body(Body::empty()).unwrap();
+        let negative_request = request_builder("GET", "/users/-1")
+            .body(Body::empty())
+            .unwrap();
         let response = app.clone().oneshot(negative_request).await.unwrap();
         assert_status(response.status(), StatusCode::BAD_REQUEST, "Negative ID");
 
         // Test overflow values
-        let overflow_request =
-            request_builder("GET", "/users/999999999999999999999").body(Body::empty()).unwrap();
+        let overflow_request = request_builder("GET", "/users/999999999999999999999")
+            .body(Body::empty())
+            .unwrap();
         let response = app.oneshot(overflow_request).await.unwrap();
         assert_status(response.status(), StatusCode::BAD_REQUEST, "Overflow ID");
     }
@@ -680,7 +783,11 @@ mod integration_tests {
         let mut responses = Vec::new();
         for handle in handles {
             let response = handle.await.unwrap();
-            assert_status(response.status(), StatusCode::CREATED, "Concurrent user creation");
+            assert_status(
+                response.status(),
+                StatusCode::CREATED,
+                "Concurrent user creation",
+            );
             responses.push(response);
         }
 
@@ -694,16 +801,28 @@ mod integration_tests {
 
         user_ids.sort();
         for i in 1..user_ids.len() {
-            assert_ne!(user_ids[i - 1], user_ids[i], "All user IDs should be unique");
+            assert_ne!(
+                user_ids[i - 1],
+                user_ids[i],
+                "All user IDs should be unique"
+            );
         }
 
         // Verify final state consistency
-        let list_request = request_builder("GET", "/users").body(Body::empty()).unwrap();
+        let list_request = request_builder("GET", "/users")
+            .body(Body::empty())
+            .unwrap();
         let list_response = app.oneshot(list_request).await.unwrap();
-        let list_json = response_body_to_json(list_response.into_body()).await.unwrap();
+        let list_json = response_body_to_json(list_response.into_body())
+            .await
+            .unwrap();
         let users_array = list_json.as_array().unwrap();
 
-        assert_eq!(users_array.len(), 5, "All concurrent users should be created");
+        assert_eq!(
+            users_array.len(),
+            5,
+            "All concurrent users should be created"
+        );
     }
 
     #[tokio::test]
@@ -723,7 +842,11 @@ mod integration_tests {
             let request = json_request_builder("POST", "/users", user_data);
             let response = app.clone().oneshot(request).await.unwrap();
 
-            assert_status(response.status(), StatusCode::CREATED, &format!("User {} creation", i));
+            assert_status(
+                response.status(),
+                StatusCode::CREATED,
+                &format!("User {} creation", i),
+            );
 
             let json = response_body_to_json(response.into_body()).await.unwrap();
             created_ids.push(json["id"].as_u64().unwrap());
@@ -736,12 +859,16 @@ mod integration_tests {
         }
 
         // Test listing all users
-        let list_request = request_builder("GET", "/users").body(Body::empty()).unwrap();
+        let list_request = request_builder("GET", "/users")
+            .body(Body::empty())
+            .unwrap();
         let list_response = app.clone().oneshot(list_request).await.unwrap();
 
         assert_status(list_response.status(), StatusCode::OK, "List large dataset");
 
-        let list_json = response_body_to_json(list_response.into_body()).await.unwrap();
+        let list_json = response_body_to_json(list_response.into_body())
+            .await
+            .unwrap();
         let users_array = list_json.as_array().unwrap();
 
         assert_eq!(users_array.len(), user_count, "All users should be listed");
@@ -749,11 +876,16 @@ mod integration_tests {
         // Test getting individual users from large dataset
         for &id in created_ids.iter().take(10) {
             // Test first 10 users
-            let get_request =
-                request_builder("GET", &format!("/users/{}", id)).body(Body::empty()).unwrap();
+            let get_request = request_builder("GET", &format!("/users/{}", id))
+                .body(Body::empty())
+                .unwrap();
             let get_response = app.clone().oneshot(get_request).await.unwrap();
 
-            assert_status(get_response.status(), StatusCode::OK, &format!("Get user {}", id));
+            assert_status(
+                get_response.status(),
+                StatusCode::OK,
+                &format!("Get user {}", id),
+            );
         }
     }
 
@@ -765,11 +897,18 @@ mod integration_tests {
         let error_scenarios = vec![
             // Invalid JSON
             (
-                request_builder("POST", "/users").body(Body::from("{invalid")).unwrap(),
+                request_builder("POST", "/users")
+                    .body(Body::from("{invalid"))
+                    .unwrap(),
                 "Invalid JSON",
             ),
             // Missing user
-            (request_builder("GET", "/users/999").body(Body::empty()).unwrap(), "Missing user"),
+            (
+                request_builder("GET", "/users/999")
+                    .body(Body::empty())
+                    .unwrap(),
+                "Missing user",
+            ),
             // Invalid validation
             (
                 json_request_builder(

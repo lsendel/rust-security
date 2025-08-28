@@ -168,7 +168,7 @@ async fn test_rate_limiter_performance() {
         cleanup_interval_secs: 300,
     };
 
-    let limiter = ShardedRateLimiter::new(config);
+    let _limiter = ShardedRateLimiter::new(config);
     let iterations = 10000;
     let concurrent_clients = 100;
 
@@ -496,7 +496,7 @@ async fn test_stress_test() {
                     total_operations += 1;
 
                     let operation_type = operation % 4;
-                    let result = match operation_type {
+                    let _result = match operation_type {
                         0 => {
                             // Token issuance
                             client

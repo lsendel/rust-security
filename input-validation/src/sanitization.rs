@@ -212,7 +212,7 @@ impl SanitizationConfig {
             aggressive_mode: false,
             type_rules,
             global_patterns: GlobalPatterns::default(),
-            max_sanitized_length: 100000,
+            max_sanitized_length: 100_000,
             preserve_structure: true,
         }
     }
@@ -679,12 +679,12 @@ mod tests {
         let sanitizer = Sanitizer::strict();
 
         let xss_input = "<script>alert('xss')</script>";
-        let result = sanitizer.sanitize(xss_input, InputType::Text).unwrap();
+        let _result = sanitizer.sanitize(xss_input, InputType::Text).unwrap();
         assert!(result.was_sanitized);
         assert!(!result.sanitized.contains("<script>"));
 
         let safe_input = "Hello world";
-        let result = sanitizer.sanitize(safe_input, InputType::Text).unwrap();
+        let _result = sanitizer.sanitize(safe_input, InputType::Text).unwrap();
         assert!(!result.was_sanitized);
         assert_eq!(result.sanitized, safe_input);
     }

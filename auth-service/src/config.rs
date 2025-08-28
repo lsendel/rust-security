@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use common::{constants, UnifiedRedisConfig};
 use config::{Config as ConfigBuilder, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -10,7 +11,7 @@ use std::time::Duration;
 pub struct Config {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
-    pub redis: RedisConfig,
+    pub redis: UnifiedRedisConfig,
     pub security: SecurityConfig,
     pub jwt: JwtConfig,
     pub oauth: OAuthConfig,
@@ -54,16 +55,6 @@ pub struct DatabaseConfig {
     pub idle_timeout: Duration,
     pub max_lifetime: Duration,
     pub test_before_acquire: bool,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RedisConfig {
-    pub url: String,
-    pub pool_size: u32,
-    pub connection_timeout: Duration,
-    pub command_timeout: Duration,
-    pub ttl_seconds: u64,
-    pub key_prefix: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -169,7 +160,7 @@ pub struct MonitoringConfig {
     pub log_format: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct FeatureFlags {
     pub mfa_enabled: bool,
     pub webauthn_enabled: bool,
@@ -207,91 +198,76 @@ impl Config {
     pub fn load() -> Result<Self> {
         let environment = env::var("APP_ENV").unwrap_or_else(|_| "development".to_string());
         let config_dir = env::var("CONFIG_DIR").unwrap_or_else(|_| "config".to_string());
-        
+
         let mut builder = ConfigBuilder::builder();
-        
+
         // Load base configuration
         let base_config = Path::new(&config_dir).join("base.toml");
         if base_config.exists() {
             builder = builder.add_source(File::from(base_config));
         }
-        
+
         // Load environment-specific configuration
         let env_config = Path::new(&config_dir).join(format!("{}.toml", environment));
         if env_config.exists() {
             builder = builder.add_source(File::from(env_config));
         }
-        
+
         // Load local configuration (not committed to git)
         let local_config = Path::new(&config_dir).join("local.toml");
         if local_config.exists() {
             builder = builder.add_source(File::from(local_config));
         }
-        
+
         // Override with environment variables
         builder = builder.add_source(
             Environment::with_prefix("AUTH")
                 .separator("__")
                 .try_parsing(true),
         );
-        
+
         let config = builder
             .build()
             .context("Failed to build configuration")?
             .try_deserialize()
             .context("Failed to deserialize configuration")?;
-        
+
         Ok(config)
     }
-    
+
     pub fn validate(&self) -> Result<()> {
         // Validate server configuration
         if self.server.port == 0 {
             anyhow::bail!("Server port must be greater than 0");
         }
-        
+
         // Validate security configuration
         if self.security.bcrypt_cost < 10 {
             anyhow::bail!("BCrypt cost must be at least 10 for security");
         }
-        
+
         if self.security.password_min_length < 8 {
             anyhow::bail!("Password minimum length must be at least 8");
         }
-        
+
         // Validate JWT configuration
         if self.jwt.secret.len() < 32 {
             anyhow::bail!("JWT secret must be at least 32 characters");
         }
-        
+
         // Validate database configuration
         if self.database.max_connections < self.database.min_connections {
             anyhow::bail!("Database max_connections must be >= min_connections");
         }
-        
+
         // Validate rate limiting
         if self.rate_limiting.global_limit == 0 {
             anyhow::bail!("Rate limit must be greater than 0");
         }
-        
-        Ok(())
-    }
-    
-    pub fn is_production(&self) -> bool {
-        env::var("APP_ENV")
-            .map(|env| env == "production")
-            .unwrap_or(false)
-    }
-    
-    pub fn reload(&mut self) -> Result<()> {
-        *self = Self::load()?;
-        self.validate()?;
+
         Ok(())
     }
 }
-
-// Type alias for backward compatibility
-pub type AppConfig = Config;
 
 impl Default for Config {
     fn default() -> Self {
@@ -299,7 +275,9 @@ impl Default for Config {
             server: ServerConfig {
                 host: "127.0.0.1".to_string(),
                 port: 8080,
-                bind_addr: "127.0.0.1:8080".parse().unwrap(),
+                bind_addr: "127.0.0.1:8080"
+                    .parse()
+                    .expect("Failed to parse default bind address"),
                 workers: None,
                 max_connections: 10000,
                 request_timeout: Duration::from_secs(30),
@@ -316,30 +294,25 @@ impl Default for Config {
                 max_lifetime: Duration::from_secs(1800),
                 test_before_acquire: true,
             },
-            redis: RedisConfig {
-                url: "redis://localhost:6379".to_string(),
-                pool_size: 10,
-                connection_timeout: Duration::from_secs(5),
-                command_timeout: Duration::from_secs(5),
-                ttl_seconds: 3600,
-                key_prefix: "auth:".to_string(),
-            },
+            redis: UnifiedRedisConfig::for_sessions("redis://localhost:6379"),
             security: SecurityConfig {
                 bcrypt_cost: 12,
                 argon2_params: Argon2Config {
-                    memory_cost: 65536,
-                    time_cost: 3,
-                    parallelism: 4,
-                    salt_length: 16,
+                    memory_cost: constants::crypto::ARGON2_MEMORY_COST,
+                    time_cost: constants::crypto::ARGON2_TIME_COST,
+                    parallelism: constants::crypto::ARGON2_PARALLELISM,
+                    salt_length: constants::crypto::DEFAULT_SALT_LENGTH,
                     hash_length: 32,
                 },
-                password_min_length: 12,
+                password_min_length: constants::security::MIN_PASSWORD_LENGTH,
                 password_require_uppercase: true,
                 password_require_lowercase: true,
                 password_require_digit: true,
                 password_require_special: true,
-                max_login_attempts: 5,
-                lockout_duration: Duration::from_secs(900),
+                max_login_attempts: constants::security::MAX_LOGIN_ATTEMPTS,
+                lockout_duration: Duration::from_secs(
+                    constants::security::ACCOUNT_LOCKOUT_DURATION,
+                ),
                 secure_cookies: true,
                 csrf_protection: true,
                 cors: CorsConfig {
@@ -355,8 +328,10 @@ impl Default for Config {
                 secret: "change-me-in-production".to_string(),
                 issuer: "auth-service".to_string(),
                 audience: vec!["api".to_string()],
-                access_token_ttl: Duration::from_secs(900),
-                refresh_token_ttl: Duration::from_secs(86400),
+                access_token_ttl: Duration::from_secs(constants::security::JWT_TOKEN_EXPIRY as u64),
+                refresh_token_ttl: Duration::from_secs(
+                    constants::security::REFRESH_TOKEN_EXPIRY as u64,
+                ),
                 algorithm: "HS256".to_string(),
                 key_rotation_interval: Duration::from_secs(86400 * 30),
                 leeway: Duration::from_secs(60),
@@ -418,22 +393,22 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.server.port, 8080);
         assert_eq!(config.security.bcrypt_cost, 12);
     }
-    
+
     #[test]
     fn test_config_validation() {
         let mut config = Config::default();
         assert!(config.validate().is_ok());
-        
+
         config.server.port = 0;
         assert!(config.validate().is_err());
-        
+
         config.server.port = 8080;
         config.security.bcrypt_cost = 5;
         assert!(config.validate().is_err());

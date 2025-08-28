@@ -14,10 +14,10 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
+use common::hash_password_sha256;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
@@ -102,11 +102,15 @@ pub struct Claims {
 pub struct RegisterRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
-    
+
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     pub password: String,
-    
-    #[validate(length(min = 1, max = 100, message = "Name must be between 1 and 100 characters"))]
+
+    #[validate(length(
+        min = 1,
+        max = 100,
+        message = "Name must be between 1 and 100 characters"
+    ))]
     pub name: String,
 }
 
@@ -115,7 +119,7 @@ pub struct RegisterRequest {
 pub struct LoginRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
-    
+
     #[validate(length(min = 1, message = "Password is required"))]
     pub password: String,
 }
@@ -182,12 +186,12 @@ impl AuthState {
     pub fn new(jwt_secret: String) -> Self {
         let mut users = HashMap::new();
         let mut oauth_clients = HashMap::new();
-        
+
         // Create a demo user
         let demo_user = User {
             id: "demo-user-123".to_string(),
             email: "demo@example.com".to_string(),
-            password_hash: hash_password("demo123"),
+            password_hash: hash_password_sha256("demo123"),
             name: "Demo User".to_string(),
             created_at: Utc::now(),
             last_login: None,
@@ -195,7 +199,7 @@ impl AuthState {
             roles: vec!["user".to_string()],
         };
         users.insert(demo_user.email.clone(), demo_user);
-        
+
         // Create a demo OAuth client
         let demo_client = OAuthClient {
             client_id: "demo-client".to_string(),
@@ -207,7 +211,7 @@ impl AuthState {
             created_at: Utc::now(),
         };
         oauth_clients.insert(demo_client.client_id.clone(), demo_client);
-        
+
         Self {
             jwt_secret,
             users: Arc::new(tokio::sync::RwLock::new(users)),
@@ -220,14 +224,8 @@ impl AuthState {
 
 // Utility functions
 
-fn hash_password(password: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
-
 fn verify_password(password: &str, hash: &str) -> bool {
-    hash_password(password) == hash
+    hash_password_sha256(password) == hash
 }
 
 fn generate_token() -> String {
@@ -248,7 +246,7 @@ fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoke
         iat: Utc::now().timestamp() as usize,
         iss: "rust-security-platform".to_string(),
     };
-    
+
     encode(
         &Header::default(),
         &claims,
@@ -260,7 +258,7 @@ fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoke
 
 /// User registration endpoint
 pub async fn register(
-    State(state): State<AuthState>,
+    State(_state): State<AuthState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -273,9 +271,9 @@ pub async fn register(
             }),
         ));
     }
-    
+
     let mut users = state.users.write().await;
-    
+
     // Check if user already exists
     if users.contains_key(&request.email) {
         return Err((
@@ -286,42 +284,41 @@ pub async fn register(
             }),
         ));
     }
-    
+
     // Create new user
     let user = User {
         id: Uuid::new_v4().to_string(),
         email: request.email.clone(),
-        password_hash: hash_password(&request.password),
+        password_hash: hash_password_sha256(&request.password),
         name: request.name,
         created_at: Utc::now(),
         last_login: None,
         is_active: true,
         roles: vec!["user".to_string()],
     };
-    
+
     // Generate JWT token
-    let token = create_jwt_token(&user, &state.jwt_secret)
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "token_generation_failed".to_string(),
-                    error_description: "Failed to generate access token".to_string(),
-                }),
-            )
-        })?;
-    
+    let token = create_jwt_token(&user, &state.jwt_secret).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "token_generation_failed".to_string(),
+                error_description: "Failed to generate access token".to_string(),
+            }),
+        )
+    })?;
+
     let user_info = UserInfo {
         id: user.id.clone(),
         email: user.email.clone(),
         name: user.name.clone(),
         roles: user.roles.clone(),
     };
-    
+
     users.insert(request.email, user);
-    
+
     info!("User registered successfully: {}", user_info.email);
-    
+
     Ok(Json(AuthResponse {
         access_token: token,
         token_type: "Bearer".to_string(),
@@ -333,7 +330,7 @@ pub async fn register(
 
 /// User login endpoint
 pub async fn login(
-    State(state): State<AuthState>,
+    State(_state): State<AuthState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -346,9 +343,9 @@ pub async fn login(
             }),
         ));
     }
-    
+
     let mut users = state.users.write().await;
-    
+
     // Find user
     let user = users.get_mut(&request.email).ok_or_else(|| {
         (
@@ -359,7 +356,7 @@ pub async fn login(
             }),
         )
     })?;
-    
+
     // Verify password
     if !verify_password(&request.password, &user.password_hash) {
         return Err((
@@ -370,31 +367,30 @@ pub async fn login(
             }),
         ));
     }
-    
+
     // Update last login
     user.last_login = Some(Utc::now());
-    
+
     // Generate JWT token
-    let token = create_jwt_token(user, &state.jwt_secret)
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "token_generation_failed".to_string(),
-                    error_description: "Failed to generate access token".to_string(),
-                }),
-            )
-        })?;
-    
+    let token = create_jwt_token(user, &state.jwt_secret).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "token_generation_failed".to_string(),
+                error_description: "Failed to generate access token".to_string(),
+            }),
+        )
+    })?;
+
     let user_info = UserInfo {
         id: user.id.clone(),
         email: user.email.clone(),
         name: user.name.clone(),
         roles: user.roles.clone(),
     };
-    
+
     info!("User logged in successfully: {}", user.email);
-    
+
     Ok(Json(AuthResponse {
         access_token: token,
         token_type: "Bearer".to_string(),
@@ -406,7 +402,7 @@ pub async fn login(
 
 /// OAuth authorization endpoint
 pub async fn authorize(
-    State(state): State<AuthState>,
+    State(_state): State<AuthState>,
     Query(request): Query<AuthorizeRequest>,
 ) -> Result<Redirect, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -419,9 +415,9 @@ pub async fn authorize(
             }),
         ));
     }
-    
+
     let oauth_clients = state.oauth_clients.read().await;
-    
+
     // Validate client
     let client = oauth_clients.get(&request.client_id).ok_or_else(|| {
         (
@@ -432,7 +428,7 @@ pub async fn authorize(
             }),
         )
     })?;
-    
+
     // Validate redirect URI
     if !client.redirect_uris.contains(&request.redirect_uri) {
         return Err((
@@ -443,35 +439,38 @@ pub async fn authorize(
             }),
         ));
     }
-    
+
     // For demo purposes, auto-approve with demo user
     let code = generate_token();
     let mut authorization_codes = state.authorization_codes.write().await;
-    
-    authorization_codes.insert(code.clone(), AuthorizationCode {
-        code: code.clone(),
-        client_id: request.client_id,
-        user_id: "demo-user-123".to_string(),
-        redirect_uri: request.redirect_uri.clone(),
-        scope: request.scope.unwrap_or_else(|| "read".to_string()),
-        created_at: Utc::now(),
-        expires_at: Utc::now() + Duration::minutes(10),
-        used: false,
-    });
-    
+
+    authorization_codes.insert(
+        code.clone(),
+        AuthorizationCode {
+            code: code.clone(),
+            client_id: request.client_id,
+            user_id: "demo-user-123".to_string(),
+            redirect_uri: request.redirect_uri.clone(),
+            scope: request.scope.unwrap_or_else(|| "read".to_string()),
+            created_at: Utc::now(),
+            expires_at: Utc::now() + Duration::minutes(10),
+            used: false,
+        },
+    );
+
     let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
     if let Some(state_param) = request.state {
         redirect_url.push_str(&format!("&state={}", state_param));
     }
-    
+
     info!("Authorization code generated for client: {}", client.name);
-    
+
     Ok(Redirect::to(&redirect_url))
 }
 
 /// OAuth token endpoint
 pub async fn token(
-    State(state): State<AuthState>,
+    State(_state): State<AuthState>,
     Json(request): Json<TokenRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -484,9 +483,9 @@ pub async fn token(
             }),
         ));
     }
-    
+
     let oauth_clients = state.oauth_clients.read().await;
-    
+
     // Validate client credentials
     let client = oauth_clients.get(&request.client_id).ok_or_else(|| {
         (
@@ -497,7 +496,7 @@ pub async fn token(
             }),
         )
     })?;
-    
+
     if client.client_secret != request.client_secret {
         return Err((
             StatusCode::UNAUTHORIZED,
@@ -507,7 +506,7 @@ pub async fn token(
             }),
         ));
     }
-    
+
     match request.grant_type.as_str() {
         "authorization_code" => {
             let code = request.code.ok_or_else(|| {
@@ -519,7 +518,7 @@ pub async fn token(
                     }),
                 )
             })?;
-            
+
             let mut authorization_codes = state.authorization_codes.write().await;
             let auth_code = authorization_codes.get_mut(&code).ok_or_else(|| {
                 (
@@ -530,7 +529,7 @@ pub async fn token(
                     }),
                 )
             })?;
-            
+
             // Check if code is expired or used
             if auth_code.used || Utc::now() > auth_code.expires_at {
                 return Err((
@@ -541,36 +540,38 @@ pub async fn token(
                     }),
                 ));
             }
-            
+
             // Mark code as used
             auth_code.used = true;
-            
+
             // Get user
             let users = state.users.read().await;
-            let user = users.values().find(|u| u.id == auth_code.user_id).ok_or_else(|| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "server_error".to_string(),
-                        error_description: "User not found".to_string(),
-                    }),
-                )
-            })?;
-            
-            // Generate access token
-            let access_token = create_jwt_token(user, &state.jwt_secret)
-                .map_err(|_| {
+            let user = users
+                .values()
+                .find(|u| u.id == auth_code.user_id)
+                .ok_or_else(|| {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
                             error: "server_error".to_string(),
-                            error_description: "Failed to generate access token".to_string(),
+                            error_description: "User not found".to_string(),
                         }),
                     )
                 })?;
-            
+
+            // Generate access token
+            let access_token = create_jwt_token(user, &state.jwt_secret).map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "server_error".to_string(),
+                        error_description: "Failed to generate access token".to_string(),
+                    }),
+                )
+            })?;
+
             info!("Access token generated for user: {}", user.email);
-            
+
             Ok(Json(TokenResponse {
                 access_token,
                 token_type: "Bearer".to_string(),
@@ -591,7 +592,7 @@ pub async fn token(
 
 /// Get current user info
 pub async fn me(
-    State(state): State<AuthState>,
+    State(_state): State<AuthState>,
     headers: HeaderMap,
 ) -> Result<Json<UserInfo>, (StatusCode, Json<ErrorResponse>)> {
     // Extract token from Authorization header
@@ -604,7 +605,7 @@ pub async fn me(
             }),
         )
     })?;
-    
+
     let token = auth_header
         .to_str()
         .map_err(|_| {
@@ -626,7 +627,7 @@ pub async fn me(
                 }),
             )
         })?;
-    
+
     // Decode JWT token
     let token_data = decode::<Claims>(
         token,
@@ -642,9 +643,9 @@ pub async fn me(
             }),
         )
     })?;
-    
+
     let claims = token_data.claims;
-    
+
     Ok(Json(UserInfo {
         id: claims.sub,
         email: claims.email,

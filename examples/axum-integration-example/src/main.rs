@@ -3,7 +3,7 @@ use std::env;
 use std::net::SocketAddr;
 use tokio::signal;
 
-// Phantom imports to satisfy unused dependency warnings  
+// Phantom imports to satisfy unused dependency warnings
 use async_trait as _;
 use bcrypt as _;
 use chrono as _;
@@ -18,7 +18,10 @@ use tower_http as _;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for structured logging
-    tracing_subscriber::fmt().with_target(false).compact().init();
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .compact()
+        .init();
 
     // Get bind address from environment or use default (secure by default)
     let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
@@ -26,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::error!("Invalid bind address '{}': {}", bind_addr, e);
         e
     })?;
-    
+
     // Security check: warn if binding to all interfaces in production
     if addr.ip().is_unspecified() && env::var("ENVIRONMENT").unwrap_or_default() == "production" {
         tracing::warn!("Binding to all interfaces (0.0.0.0) in production - ensure firewall is configured properly");
@@ -51,10 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Server successfully bound to {}", addr);
 
     // Start the server with graceful shutdown
-    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await.map_err(|e| {
-        eprintln!("Server error: {}", e);
-        e
-    })?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .map_err(|e| {
+            eprintln!("Server error: {}", e);
+            e
+        })?;
 
     tracing::info!("Server shutdown complete");
     Ok(())
@@ -63,7 +69,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Handle graceful shutdown signals
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c().await.expect("failed to install Ctrl+C handler");
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
     };
 
     #[cfg(unix)]

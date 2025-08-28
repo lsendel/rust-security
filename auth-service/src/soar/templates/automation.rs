@@ -331,7 +331,7 @@ impl AutomationEngine {
                 continue;
             }
 
-            let result = self.evaluate_rule(rule, context);
+            let _result = self.evaluate_rule(rule, context);
             results.push(result);
         }
 
@@ -344,7 +344,7 @@ impl AutomationEngine {
         let mut overall_match = true;
 
         for condition in &rule.conditions {
-            let result = self.evaluate_condition(condition, context);
+            let _result = self.evaluate_condition(condition, context);
             let passed = result.passed;
             condition_results.push(result);
 

@@ -8,6 +8,8 @@ description = "Security Orchestration, Automation, and Response (SOAR) integrati
 authors = ["Security Team"]
 keywords = ["security", "soar", "automation", "orchestration", "incident-response"]
 categories = ["security"]
+repository = "https://github.com/example/rust-security"
+readme = "README.md"
 
 [dependencies]
 # Core dependencies
@@ -15,46 +17,11 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
-async-trait = { workspace = true }
-chrono = { workspace = true }
 uuid = { workspace = true }
-tracing = { workspace = true }
+chrono = { workspace = true }
 
-# Database
-sqlx = { workspace = true, features = ["postgres", "sqlite", "runtime-tokio-rustls", "chrono", "uuid", "json", "migrate", "macros"], optional = true }
-
-# Template engines
-handlebars = { workspace = true, optional = true }
-tera = { workspace = true, optional = true }
-
-# Email notifications
-lettre = { workspace = true, optional = true }
-
-# File operations
-tempfile = { workspace = true, optional = true }
-walkdir = { workspace = true, optional = true }
-
-# HTTP client for integrations
-reqwest = { workspace = true }
-
-# Configuration
-config = { workspace = true }
-
-# Common workspace dependency
-common = { path = "../common" }
 
 [dev-dependencies]
-tokio-test = { workspace = true }
-tempfile = { workspace = true }
-
-[features]
-default = ["database", "templates", "notifications"]
-database = ["sqlx"]
-templates = ["handlebars", "tera"]
-notifications = ["lettre"]
-file-ops = ["tempfile", "walkdir"]
-full = ["database", "templates", "notifications", "file-ops"]
 
 [lints]
 workspace = true

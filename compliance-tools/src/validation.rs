@@ -7,6 +7,7 @@ pub struct Validator;
 
 impl Validator {
     /// Validate email address format
+    #[must_use]
     pub fn validate_email(email: &str) -> bool {
         // Simple email validation - in production use a proper regex or validation library
         email.contains('@') && email.contains('.') && email.len() > 5
@@ -16,7 +17,7 @@ impl Validator {
     pub fn validate_url(url: &str) -> ComplianceResult<()> {
         match url::Url::parse(url) {
             Ok(_) => Ok(()),
-            Err(e) => Err(ComplianceError::Validation(format!("Invalid URL: {}", e))),
+            Err(e) => Err(ComplianceError::Validation(format!("Invalid URL: {e}"))),
         }
     }
 
@@ -26,8 +27,7 @@ impl Validator {
             Ok(())
         } else {
             Err(ComplianceError::Validation(format!(
-                "File path does not exist: {}",
-                path
+                "File path does not exist: {path}"
             )))
         }
     }
@@ -51,8 +51,7 @@ impl Validator {
             Ok(())
         } else {
             Err(ComplianceError::Validation(format!(
-                "Value must be positive: {}",
-                value
+                "Value must be positive: {value}"
             )))
         }
     }
@@ -63,8 +62,7 @@ impl Validator {
             Ok(())
         } else {
             Err(ComplianceError::Validation(format!(
-                "Percentage must be between 0 and 100: {}",
-                value
+                "Percentage must be between 0 and 100: {value}"
             )))
         }
     }

@@ -5,7 +5,7 @@ use auth_service::{api_key_store::ApiKeyStore, app, AppState};
 use base64::Engine as _;
 use common::TokenRecord;
 use reqwest::Client;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 // Removed unused import: use tokio::sync::RwLock;

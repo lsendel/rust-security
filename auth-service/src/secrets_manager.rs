@@ -23,13 +23,15 @@ use tracing::{debug, error, info, warn};
 #[cfg(feature = "aws")]
 use aws_config::meta::region::RegionProviderChain;
 #[cfg(feature = "aws")]
+use aws_config::{BehaviorVersion, Region};
+#[cfg(feature = "aws")]
 use aws_sdk_secretsmanager::{Client as SecretsManagerClient, Error as AwsError};
 
 #[cfg(feature = "vault")]
 use vaultrs::{
     client::{VaultClient, VaultClientSettingsBuilder},
-    kv2,
     error::ClientError as VaultError,
+    kv2,
 };
 
 use crate::crypto_unified::{EncryptedData, UnifiedCryptoError, UnifiedCryptoManager};
@@ -293,12 +295,12 @@ impl SecretsManager {
     async fn init_aws_backend(&mut self) -> Result<(), SecretsError> {
         let region_provider = RegionProviderChain::default_provider();
         let region_provider = if let Some(region) = &self.config.aws_region {
-            region_provider.or_else(region.as_str())
+            region_provider.or_else(Region::new(region.clone()))
         } else {
-            region_provider.or_else("us-east-1")
+            region_provider.or_else(Region::new("us-east-1"))
         };
 
-        let config = aws_config::from_env().region(region_provider).load().await;
+        let config = aws_config::defaults(BehaviorVersion::latest()).region(region_provider).load().await;
         self.aws_client = Some(SecretsManagerClient::new(&config));
 
         info!("AWS Secrets Manager client initialized");
@@ -401,7 +403,7 @@ impl SecretsManager {
             .as_ref()
             .ok_or_else(|| SecretsError::AwsError("AWS client not initialized".to_string()))?;
 
-        let result = client
+        let _result = client
             .get_secret_value()
             .secret_id(name)
             .send()

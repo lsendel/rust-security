@@ -209,7 +209,7 @@ impl SecurityStrategies {
             // NoSQL injection
             Just("userName eq \"{$ne: null}\"".to_string()),
             // Extremely long filters
-            Just(format!("userName eq \"{}\"", "A".repeat(100000))),
+            Just(format!("userName eq \"{}\"", "A".repeat(100_000))),
             // Nested injection
             Just("emails[value eq \"test@example.com'; DROP TABLE emails; --\"].type".to_string()),
         ]
@@ -233,7 +233,7 @@ impl SecurityStrategies {
             // XSS in headers
             Just("<script>alert('xss')</script>".to_string()),
             // Extremely long headers
-            Just("A".repeat(100000)),
+            Just("A".repeat(100_000)),
             // Null bytes
             Just("value\0injected".to_string()),
         ];

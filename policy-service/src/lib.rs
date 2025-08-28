@@ -28,9 +28,9 @@ use reqwest as _;
 use tempfile as _;
 
 use axum::{
-    response::IntoResponse,
     extract::State,
     http::{self},
+    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
@@ -44,7 +44,7 @@ use tower_http::{
 use utoipa::ToSchema;
 
 mod documentation;
-mod errors;
+pub mod errors;
 mod metrics;
 
 use documentation::{ErrorResponse, HealthCheckResponse};
@@ -75,16 +75,18 @@ pub fn load_policies_and_entities() -> Result<Arc<AppState>, AppError> {
     let policies_path = concat!(env!("CARGO_MANIFEST_DIR"), "/policies.cedar");
     let policies_str = std::fs::read_to_string(policies_path)
         .map_err(|e| AppError::io("Failed to read policies file", e))?;
-    let policies = policies_str.parse::<PolicySet>()
+    let policies = policies_str
+        .parse::<PolicySet>()
         .map_err(|e| PolicyError::PolicyCompilationFailed { source: e })?;
-    
+
     let entities_path = concat!(env!("CARGO_MANIFEST_DIR"), "/entities.json");
     let entities_str = std::fs::read_to_string(entities_path)
         .map_err(|e| AppError::io("Failed to read entities file", e))?;
-    let entities = Entities::from_json_str(&entities_str, None)
-        .map_err(|e| PolicyError::PolicyValidationFailed { 
-            reason: format!("Failed to parse entities: {}", e) 
-        })?;
+    let entities = Entities::from_json_str(&entities_str, None).map_err(|e| {
+        PolicyError::PolicyValidationFailed {
+            reason: format!("Failed to parse entities: {e}"),
+        }
+    })?;
 
     Ok(Arc::new(AppState {
         authorizer: Authorizer::new(),
@@ -114,37 +116,40 @@ pub async fn authorize(
 ) -> Result<Json<AuthorizeResponse>, AppError> {
     // Validate action is non-empty and basic format (e.g., contains a colon like "domain:verb")
     if body.action.trim().is_empty() {
-        return Err(AuthorizationError::InvalidAction { 
-            action: "(empty)".to_string() 
-        }.into());
+        return Err(AuthorizationError::InvalidAction {
+            action: "(empty)".to_string(),
+        }
+        .into());
     }
     let action = cedar_policy::EntityUid::from_json(serde_json::json!({
         "type": "Action",
         "id": body.action
     }))
-    .map_err(|e| AuthorizationError::InvalidAction { 
-        action: format!("{}: {}", body.action, e) 
+    .map_err(|e| AuthorizationError::InvalidAction {
+        action: format!("{}: {}", body.action, e),
     })?;
 
-    let principal = parse_entity(&body.principal)
-        .map_err(|e| AuthorizationError::InvalidPrincipal { 
-            details: e.to_string() 
+    let principal =
+        parse_entity(&body.principal).map_err(|e| AuthorizationError::InvalidPrincipal {
+            details: e.to_string(),
         })?;
 
-    let resource = parse_entity(&body.resource)
-        .map_err(|e| AuthorizationError::InvalidResource { 
-            details: e.to_string() 
+    let resource =
+        parse_entity(&body.resource).map_err(|e| AuthorizationError::InvalidResource {
+            details: e.to_string(),
         })?;
 
-    let context = Context::from_json_value(body.context, None)
-        .map_err(|e| AuthorizationError::InvalidContext { 
-            reason: e.to_string() 
-        })?;
+    let context = Context::from_json_value(body.context, None).map_err(|e| {
+        AuthorizationError::InvalidContext {
+            reason: e.to_string(),
+        }
+    })?;
 
-    let request = Request::new(principal, action, resource, context, None)
-        .map_err(|e| AuthorizationError::RequestFailed { 
-            reason: e.to_string() 
-        })?;
+    let request = Request::new(principal, action, resource, context, None).map_err(|e| {
+        AuthorizationError::RequestFailed {
+            reason: e.to_string(),
+        }
+    })?;
 
     let auth_start = Instant::now();
     let decision = state
@@ -191,10 +196,9 @@ pub async fn authorize(
 }
 
 fn parse_entity(v: &serde_json::Value) -> Result<cedar_policy::EntityUid, AuthorizationError> {
-    cedar_policy::EntityUid::from_json(v.clone())
-        .map_err(|e| AuthorizationError::RequestFailed {
-            reason: format!("Invalid entity format: {}", e)
-        })
+    cedar_policy::EntityUid::from_json(v.clone()).map_err(|e| AuthorizationError::RequestFailed {
+        reason: format!("Invalid entity format: {e}"),
+    })
 }
 
 #[utoipa::path(
@@ -230,7 +234,7 @@ pub async fn get_metrics() -> impl IntoResponse {
 fn extract_entity_type(v: &serde_json::Value) -> Option<String> {
     v.get("type")
         .and_then(|t| t.as_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 /// Extract action type from action string
@@ -260,7 +264,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         }
     };
 
-    let router = Router::new()
+    Router::new()
         .route("/health", get(health_check))
         .route("/v1/authorize", post(authorize))
         .route("/metrics", get(get_metrics))
@@ -269,9 +273,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
-
-    router
+        .with_state(state)
 }
 
 pub use documentation::ApiDoc;

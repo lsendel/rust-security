@@ -1,7 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use tokio::runtime::Runtime;
 use base64;
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rand;
+use tokio::runtime::Runtime;
 
 // Mock implementations for benchmarking
 mod mock_auth_service {
@@ -249,7 +249,8 @@ fn bench_jwt_operations(c: &mut Criterion) {
         b.iter(|| {
             // Mock JWT encoding
             use base64::Engine;
-            let header = base64::engine::general_purpose::STANDARD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+            let header =
+                base64::engine::general_purpose::STANDARD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
             let payload = base64::engine::general_purpose::STANDARD.encode(claims.to_string());
             let signature = base64::engine::general_purpose::STANDARD.encode("mock_signature");
             black_box(format!("{}.{}.{}", header, payload, signature))
@@ -264,9 +265,15 @@ fn bench_jwt_operations(c: &mut Criterion) {
             let parts: Vec<&str> = mock_jwt.split('.').collect();
             if parts.len() == 3 {
                 use base64::Engine;
-                let _header = base64::engine::general_purpose::STANDARD.decode(parts[0]).unwrap_or_default();
-                let payload = base64::engine::general_purpose::STANDARD.decode(parts[1]).unwrap_or_default();
-                let _signature = base64::engine::general_purpose::STANDARD.decode(parts[2]).unwrap_or_default();
+                let _header = base64::engine::general_purpose::STANDARD
+                    .decode(parts[0])
+                    .unwrap_or_default();
+                let payload = base64::engine::general_purpose::STANDARD
+                    .decode(parts[1])
+                    .unwrap_or_default();
+                let _signature = base64::engine::general_purpose::STANDARD
+                    .decode(parts[2])
+                    .unwrap_or_default();
                 black_box(String::from_utf8_lossy(&payload).to_string())
             } else {
                 black_box(String::new())
@@ -287,7 +294,11 @@ fn bench_security_operations(c: &mut Criterion) {
             // Mock bcrypt hashing (simplified)
             let salt = "mock_salt_value";
             use base64::Engine;
-            let hash = format!("$2b$12${}${}", salt, base64::engine::general_purpose::STANDARD.encode(password));
+            let hash = format!(
+                "$2b$12${}${}",
+                salt,
+                base64::engine::general_purpose::STANDARD.encode(password)
+            );
             black_box(hash)
         })
     });
@@ -344,7 +355,7 @@ fn bench_cache_operations(c: &mut Criterion) {
                 let cache_read = cache.read().await;
                 let key = format!("key_{}", rand::random::<usize>() % 1000);
                 // Clone the value to avoid lifetime issues with the lock guard
-                let result = cache_read.get(&key).cloned();
+                let _result = cache_read.get(&key).cloned();
                 black_box(result)
             })
         })

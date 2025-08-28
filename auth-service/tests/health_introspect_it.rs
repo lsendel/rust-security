@@ -1,11 +1,10 @@
-use common::TokenRecord;
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::session_store::RedisSessionStore;
 use auth_service::store::HybridStore;
 use auth_service::{
-    api_key_store::ApiKeyStore, app, AppState, IntrospectRequest,
-    IntrospectResponse,
+    api_key_store::ApiKeyStore, app, AppState, IntrospectRequest, IntrospectResponse,
 };
+use common::TokenRecord;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -51,7 +50,10 @@ async fn spawn_app() -> String {
         session_store,
         token_store: Arc::new(std::sync::RwLock::new(token_store_map)),
         client_credentials: Arc::new(std::sync::RwLock::new(client_credentials)),
-        allowed_scopes: Arc::new(std::sync::RwLock::new(HashSet::from(["read".to_string(), "write".to_string()]))),
+        allowed_scopes: Arc::new(std::sync::RwLock::new(HashSet::from([
+            "read".to_string(),
+            "write".to_string(),
+        ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),

@@ -2,10 +2,10 @@
 //!
 //! Simplified TLS configuration for basic secure connections.
 
+use crate::error_handling::{SecurityError, SecurityResult};
+use rustls::{ClientConfig, ServerConfig};
 use std::sync::Arc;
 use tracing::info;
-use rustls::{ServerConfig, ClientConfig};
-use crate::error_handling::{SecurityError, SecurityResult};
 
 /// Basic TLS configuration for MVP
 #[derive(Debug, Clone)]
@@ -24,7 +24,7 @@ pub fn create_secure_client_config(
     _config: &TlsSecurityConfig,
 ) -> SecurityResult<Arc<ClientConfig>> {
     info!("Creating basic TLS client configuration");
-    
+
     let client_config = ClientConfig::builder()
         .with_root_certificates({
             let mut root_store = rustls::RootCertStore::empty();
@@ -32,7 +32,7 @@ pub fn create_secure_client_config(
             root_store
         })
         .with_no_client_auth();
-    
+
     info!("TLS client configuration created successfully");
     Ok(Arc::new(client_config))
 }
@@ -51,7 +51,7 @@ mod tests {
     fn test_basic_config_creation() {
         let config = TlsSecurityConfig::default();
         assert!(config.enabled);
-        
+
         let client_config = create_secure_client_config(&config);
         assert!(client_config.is_ok());
     }

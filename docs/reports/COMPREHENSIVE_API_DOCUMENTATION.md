@@ -1,8 +1,8 @@
 # 🔐 Comprehensive API Documentation
 
-**Rust Authentication Service - Enterprise Security Platform**  
-**Version**: 2.0.0  
-**API Version**: v1  
+**Rust Authentication Service - Enterprise Security Platform**
+**Version**: 2.0.0
+**API Version**: v1
 
 ## 📋 Table of Contents
 
@@ -121,7 +121,6 @@ Exchanges authorization code for access tokens with security validations.
 - `grant_type` (required): `authorization_code` or `client_credentials`
 - `code` (required for auth code): Authorization code
 - `client_id` (required): Client identifier
-- `client_secret` (required): Client secret
 - `redirect_uri` (required for auth code): Original redirect URI
 - `code_verifier` (required for auth code): PKCE verifier
 
@@ -136,18 +135,18 @@ Exchanges authorization code for access tokens with security validations.
 POST /oauth/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=authorization_code&code=auth_code_123&client_id=my_app&client_secret=secret&redirect_uri=https://myapp.com/callback&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+grant_type=authorization_code&code=auth_code_123&client_id=my_app&redirect_uri=https://myapp.com/callback&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
 ```
 
 **Response:**
 ```json
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "refresh_token_123",
   "scope": "read write",
-  "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "id_token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 }
 ```
 
@@ -394,7 +393,7 @@ GET /oauth/authorize?response_type=code&client_id=my_app&redirect_uri=https://my
 POST /oauth/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=authorization_code&code=auth_code&client_id=my_app&client_secret=secret&redirect_uri=https://myapp.com/callback&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+grant_type=authorization_code&code=auth_code&client_id=my_app&client_secret=YOUR_CLIENT_SECRET&redirect_uri=https://myapp.com/callback&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
 ```
 
 ### **MFA Authentication Flow**
@@ -429,8 +428,8 @@ import { AuthClient } from '@yourcompany/auth-sdk';
 
 const auth = new AuthClient({
   baseUrl: 'https://auth.yourcompany.com',
-  clientId: 'your_client_id',
-  clientSecret: 'your_client_secret'
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET
 });
 
 // OAuth2 with PKCE
@@ -450,12 +449,13 @@ const tokens = await auth.exchangeCode({
 
 ### **Python**
 ```python
+import os
 from auth_sdk import AuthClient
 
 auth = AuthClient(
     base_url='https://auth.yourcompany.com',
-    client_id='your_client_id',
-    client_secret='your_client_secret'
+    client_id=os.environ.get('CLIENT_ID'),
+    client_secret=os.environ.get('CLIENT_SECRET')
 )
 
 # OAuth2 with PKCE
@@ -507,6 +507,6 @@ Content-Security-Policy: default-src 'self'
 
 ---
 
-**Last Updated**: August 17, 2025  
-**API Version**: v1  
+**Last Updated**: August 17, 2025
+**API Version**: v1
 **Documentation Version**: 2.0.0

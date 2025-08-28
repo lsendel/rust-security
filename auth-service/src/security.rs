@@ -1,11 +1,11 @@
 use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
 use base64::Engine as _;
+use common::{constants, ShardedRateLimiter};
+use common::sharded_rate_limiter::RateLimitConfig as CommonRateLimitConfig;
 use once_cell::sync::Lazy;
 use ring::rand::SecureRandom;
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
 
@@ -15,13 +15,33 @@ const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
 /// Secure token binding salt - loaded from environment or generated
 static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
     std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
-        // Generate a cryptographically secure salt
+        // Generate a cryptographically secure salt with proper error handling
         let mut salt = [0u8; 32];
         use ring::rand::SystemRandom;
-        SystemRandom::new()
-            .fill(&mut salt)
-            .expect("Failed to generate salt");
-        hex::encode(salt)
+
+        // Try multiple times with fallback to ensure we get entropy
+        for attempt in 0..3 {
+            if SystemRandom::new().fill(&mut salt).is_ok() {
+                return hex::encode(salt);
+            }
+            tracing::warn!(
+                "Salt generation attempt {} failed, retrying...",
+                attempt + 1
+            );
+        }
+
+        // Final fallback: use a deterministic but still secure approach
+        tracing::error!("Failed to generate random salt after 3 attempts, using fallback");
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        std::process::id().hash(&mut hasher);
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+            .hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
     })
 });
 
@@ -61,15 +81,18 @@ pub fn validate_token_binding(
     // For validation, we need to check against recent timestamps (5 minute window)
     let now = chrono::Utc::now().timestamp();
 
-    // Check multiple recent timestamps to account for clock skew
-    for offset in 0..=300 {
-        // 5 minutes
-        let test_timestamp = now - offset;
+    // Optimize validation using time windows instead of iterating all timestamps
+    let salt = TOKEN_BINDING_SALT.as_bytes();
+    let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
 
-        let salt = TOKEN_BINDING_SALT.as_bytes();
-        let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
+    // Check current time window and previous window (30-second windows for 5min total)
+    let window_size = 30; // seconds per window
+    let max_windows = 10; // 300 seconds / 30 seconds = 10 windows
+
+    for window in 0..max_windows {
+        let test_timestamp = now - (window * window_size);
+
         let mut ctx = hmac::Context::with_key(&key);
-
         ctx.update(client_ip.as_bytes());
         ctx.update(b"|");
         ctx.update(user_agent.as_bytes());
@@ -426,26 +449,30 @@ pub fn security_middleware() -> ServiceBuilder<
     ServiceBuilder::new().layer(RequestBodyLimitLayer::new(crate::MAX_REQUEST_BODY_SIZE))
 }
 
-static RATE_LIMITER: Lazy<Mutex<HashMap<String, (u32, Instant)>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-
-static RATE_LIMIT_PER_MIN: Lazy<u32> = Lazy::new(|| {
-    std::env::var("RATE_LIMIT_REQUESTS_PER_MINUTE")
+/// Global sharded rate limiter instance
+static RATE_LIMITER: Lazy<ShardedRateLimiter> = Lazy::new(|| {
+    let rate_limit = std::env::var("RATE_LIMIT_REQUESTS_PER_MINUTE")
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
         .filter(|v| *v > 0)
-        .unwrap_or(60)
+        .unwrap_or(constants::rate_limiting::DEFAULT_RATE_LIMIT);
+
+    let config = CommonRateLimitConfig {
+        default_limit: rate_limit,
+        window_duration: Duration::from_secs(constants::rate_limiting::RATE_LIMITER_SHARDS as u64),
+        burst_multiplier: constants::rate_limiting::BURST_MULTIPLIER,
+        cleanup_interval: Duration::from_secs(constants::rate_limiting::CLEANUP_INTERVAL_SECS),
+    };
+
+    ShardedRateLimiter::new(config)
 });
 
 /// Cleanup expired entries from the rate limiter to prevent memory leaks
 async fn cleanup_rate_limiter() {
-    let mut limiter = RATE_LIMITER.lock().await;
-    let now = Instant::now();
-    let cleanup_threshold = Duration::from_secs(3600); // 1 hour
-    
-    limiter.retain(|_, (_, last_access)| {
-        now.duration_since(*last_access) < cleanup_threshold
-    });
+    let cleaned_entries = RATE_LIMITER.cleanup_expired().await;
+    if cleaned_entries > 0 {
+        tracing::debug!("Cleaned up {} expired rate limit entries", cleaned_entries);
+    }
 }
 
 /// Start periodic cleanup task for rate limiter
@@ -459,14 +486,17 @@ pub fn start_rate_limiter_cleanup() {
     });
 }
 
-/// Simple global rate limiter: configurable requests/min per client IP (via X-Forwarded-For)
+/// High-performance sharded rate limiter: configurable requests/min per client IP (via X-Forwarded-For)
 pub async fn rate_limit(request: Request, next: Next) -> Response {
+    // Allow bypass in test mode or when explicitly disabled
     if std::env::var("DISABLE_RATE_LIMIT").ok().as_deref() == Some("1")
         || std::env::var("TEST_MODE").ok().as_deref() == Some("1")
     {
         return next.run(request).await;
     }
-    let key = request
+
+    // Extract client IP from headers
+    let client_ip = request
         .headers()
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -474,34 +504,66 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
         .split(',')
         .next()
         .unwrap_or("unknown")
-        .trim()
-        .to_string();
+        .trim();
 
-    let now = Instant::now();
-    let mut map = RATE_LIMITER.lock().await;
-    let window = Duration::from_secs(60);
-    let limit: u32 = *RATE_LIMIT_PER_MIN;
-    let entry = map.entry(key).or_insert((0, now));
-    if now.duration_since(entry.1) > window {
-        *entry = (0, now);
-    }
-    if entry.0 >= limit {
-        let elapsed = now.duration_since(entry.1).as_secs();
-        let mut retry_after = 60u64.saturating_sub(elapsed);
-        if retry_after == 0 {
-            retry_after = 1;
+    // Create rate limiting key
+    let key = format!("ip:{}", client_ip);
+
+    // Check rate limit using the sharded rate limiter
+    match RATE_LIMITER.check_rate_limit(&key).await {
+        Ok(true) => {
+            // Request allowed, continue processing
+            next.run(request).await
         }
-        let mut response =
-            (axum::http::StatusCode::TOO_MANY_REQUESTS, "rate limited").into_response();
-        response
-            .headers_mut()
-            .insert("Retry-After", format!("{}", retry_after).parse().unwrap());
-        return response;
-    }
-    entry.0 += 1;
-    drop(map);
+        Ok(false) | Err(_) => {
+            // Rate limit exceeded or error occurred
+            tracing::warn!(
+                client_ip = %client_ip,
+                "Rate limit exceeded for client"
+            );
 
-    next.run(request).await
+            // Get rate limit info for retry-after header
+            let retry_after = if let Some(info) = RATE_LIMITER.get_rate_limit_info(&key).await {
+                info.reset_time
+                    .duration_since(std::time::Instant::now())
+                    .as_secs()
+                    .max(1)
+            } else {
+                60 // Default to 60 seconds
+            };
+
+            let mut response = (
+                axum::http::StatusCode::TOO_MANY_REQUESTS,
+                "Rate limit exceeded",
+            )
+                .into_response();
+
+            response.headers_mut().insert(
+                "Retry-After",
+                format!("{}", retry_after)
+                    .parse()
+                    .expect("Failed to parse retry-after header"),
+            );
+
+            // Add rate limit headers for client information
+            if let Some(info) = RATE_LIMITER.get_rate_limit_info(&key).await {
+                response.headers_mut().insert(
+                    "X-RateLimit-Limit",
+                    format!("{}", info.limit)
+                        .parse()
+                        .expect("Failed to parse rate limit header"),
+                );
+                response.headers_mut().insert(
+                    "X-RateLimit-Remaining",
+                    format!("{}", info.remaining)
+                        .parse()
+                        .expect("Failed to parse rate limit remaining header"),
+                );
+            }
+
+            response
+        }
+    }
 }
 
 /// Sanitize log output to prevent log injection

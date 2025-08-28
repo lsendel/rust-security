@@ -17,7 +17,7 @@ async fn test_token_manipulation_scenarios() {
     let mut reporter = RedTeamReporter::new("token_manipulation_test".to_string());
 
     // Run token manipulation scenarios with low intensity for testing
-    let result = run_token_scenarios(&mut framework, &mut reporter, "low").await;
+    let _result = run_token_scenarios(&mut framework, &mut reporter, "low").await;
 
     // Verify scenarios executed without panicking
     assert!(result.is_ok(), "Token manipulation scenarios should execute successfully");
@@ -123,7 +123,7 @@ mod integration_tests {
 
         // Simulate an attack execution
         let headers = reqwest::header::HeaderMap::new();
-        let result = framework
+        let _result = framework
             .execute_attack("test_attack", "GET", "/health", Some(headers), None, Some(&session))
             .await;
 

@@ -2,7 +2,11 @@
 //!
 //! Enterprise-grade authentication service with comprehensive security features.
 
+use common::constants;
 use std::sync::Arc;
+
+// Core modules providing fundamental functionality
+pub mod core;
 
 // Suppress warnings for unused extern crate dependencies
 #[allow(unused_extern_crates)]
@@ -16,8 +20,8 @@ extern crate zeroize;
 #[cfg(feature = "enhanced-session-store")]
 use crate::store::HybridStore;
 
-/// Maximum request body size (1MB)
-pub const MAX_REQUEST_BODY_SIZE: usize = 1_048_576;
+/// Maximum request body size - use centralized constant
+pub const MAX_REQUEST_BODY_SIZE: usize = constants::security::MAX_REQUEST_BODY_SIZE;
 
 /// Application state shared across handlers
 #[derive(Clone)]
@@ -141,22 +145,23 @@ pub mod lib {
 // All existing module declarations preserved for backward compatibility
 pub mod config;
 pub mod config_endpoints;
-pub mod config_migration;
+
 pub mod config_reload;
 pub mod config_static;
 mod config_tests;
 pub mod crypto_unified;
 pub mod errors;
 pub use errors::{internal_error, AuthError};
+pub mod jwks_rotation;
+pub mod policy_cache;
+pub mod rate_limit_secure;
 pub mod secrets_manager;
+pub mod session_store;
 #[cfg(feature = "api-keys")]
 pub mod sql_store;
 #[cfg(feature = "enhanced-session-store")]
 pub mod store;
-pub mod session_store;
-pub mod jwks_rotation;
-pub mod policy_cache;
-pub mod rate_limit_secure;
+pub mod token_cache;
 
 // Removed all advanced AI/ML and enterprise security modules for MVP
 
@@ -308,7 +313,7 @@ pub mod security_logging;
 pub mod security_metrics;
 // Removed security monitoring for MVP
 // #[cfg(feature = "threat-hunting")]
-// pub mod security_monitoring;
+pub mod security_monitoring;
 pub mod security_tests;
 // Removed advanced session management for MVP - keep basic only
 // #[cfg(feature = "enhanced-session-store")]
@@ -350,13 +355,17 @@ pub mod tls_security;
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
 // Disabled due to OpenTelemetry compatibility issues
-// #[cfg(feature = "tracing")]  
+// #[cfg(feature = "tracing")]
 // pub mod tracing_instrumentation;
+pub mod app;
 pub mod validation;
 pub mod validation_secure;
-pub mod app;
 pub use app::app;
 pub mod auth_api;
+pub mod jit_token_manager;
+pub mod non_human_monitoring;
+pub mod service_identity;
+pub mod service_identity_api;
 // Removed WebAuthn and Zero Trust for MVP
 // pub mod webauthn;
 // pub mod zero_trust_auth;

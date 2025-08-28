@@ -131,7 +131,7 @@ impl JwksCache {
 fn calculate_etag(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
-    let result = hasher.finalize();
+    let _result = hasher.finalize();
     format!("W/\"{:x}\"", result)
 }
 

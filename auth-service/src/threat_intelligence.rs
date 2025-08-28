@@ -17,37 +17,49 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Prometheus metrics for threat intelligence
-lazy_static::lazy_static! {
-    static ref THREAT_INTEL_QUERIES: Counter = register_counter!(
+use once_cell::sync::Lazy;
+
+static THREAT_INTEL_QUERIES: Lazy<Counter> = Lazy::new(|| {
+    register_counter!(
         "threat_hunting_intel_queries_total",
         "Total threat intelligence queries made"
-    ).unwrap();
+    ).expect("Failed to create threat_intel_queries counter")
+});
 
-    static ref THREAT_INTEL_MATCHES: Counter = register_counter!(
+static THREAT_INTEL_MATCHES: Lazy<Counter> = Lazy::new(|| {
+    register_counter!(
         "threat_hunting_intel_matches_total",
         "Total threat intelligence matches found"
-    ).unwrap();
+    ).expect("Failed to create threat_intel_matches counter")
+});
 
-    static ref THREAT_INTEL_ERRORS: Counter = register_counter!(
+static THREAT_INTEL_ERRORS: Lazy<Counter> = Lazy::new(|| {
+    register_counter!(
         "threat_hunting_intel_errors_total",
         "Total threat intelligence query errors"
-    ).unwrap();
+    ).expect("Failed to create threat_intel_errors counter")
+});
 
-    static ref THREAT_INTEL_CACHE_HITS: Counter = register_counter!(
+static THREAT_INTEL_CACHE_HITS: Lazy<Counter> = Lazy::new(|| {
+    register_counter!(
         "threat_hunting_intel_cache_hits_total",
         "Total threat intelligence cache hits"
-    ).unwrap();
+    ).expect("Failed to create threat_intel_cache_hits counter")
+});
 
-    static ref THREAT_INTEL_RESPONSE_TIME: Histogram = register_histogram!(
+static THREAT_INTEL_RESPONSE_TIME: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
         "threat_hunting_intel_response_time_seconds",
         "Response time for threat intelligence queries"
-    ).unwrap();
+    ).expect("Failed to create threat_intel_response_time histogram")
+});
 
-    static ref ACTIVE_INDICATORS: Gauge = register_gauge!(
+static ACTIVE_INDICATORS: Lazy<Gauge> = Lazy::new(|| {
+    register_gauge!(
         "threat_hunting_active_indicators",
         "Number of active threat indicators"
-    ).unwrap();
-}
+    ).expect("Failed to create active_indicators gauge")
+});
 
 /// Configuration for threat intelligence correlation
 #[derive(Debug, Clone)]
@@ -369,7 +381,7 @@ impl ThreatIntelligenceCorrelator {
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let client = redis::Client::open(config.redis_config.url.as_str())?;
         let manager = ConnectionManager::new(client).await?;
 
@@ -384,7 +396,7 @@ impl ThreatIntelligenceCorrelator {
     async fn load_cached_indicators(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let redis_client = self.redis_client.lock().await;
         if let Some(ref client) = *redis_client {
-            let config = self.config.read().await;
+            let _config = self.config.read().await;
             let pattern = format!("{}indicator:*", config.redis_config.key_prefix);
 
             let keys: Vec<String> = redis::cmd("KEYS")
@@ -418,7 +430,7 @@ impl ThreatIntelligenceCorrelator {
 
     /// Initialize rate limiters for feeds
     async fn initialize_rate_limiters(&self) {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let mut rate_limiters = self.rate_limiters.write().await;
 
         for feed in &config.feeds {
@@ -630,7 +642,7 @@ impl ThreatIntelligenceCorrelator {
     ) {
         let mut cache = self.indicator_cache.write().await;
         let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         let cached_result = CachedResult {
             result,
@@ -668,7 +680,7 @@ impl ThreatIntelligenceCorrelator {
                 let start_time = SystemTime::now();
 
                 // Process the query
-                let result = Self::process_intelligence_query(
+                let _result = Self::process_intelligence_query(
                     &query,
                     &http_client,
                     &config,
@@ -817,7 +829,7 @@ impl ThreatIntelligenceCorrelator {
     ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
         let timer = THREAT_INTEL_RESPONSE_TIME.start_timer();
 
-        let result = match feed.feed_type {
+        let _result = match feed.feed_type {
             ThreatFeedType::AbuseIpdb => {
                 Self::query_abuse_ipdb(feed, indicator, indicator_type, http_client).await
             }

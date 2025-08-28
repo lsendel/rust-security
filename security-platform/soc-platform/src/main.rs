@@ -772,7 +772,7 @@ async fn get_dashboard(
 
 async fn update_incident_status(
     State(platform): State<SOCPlatform>,
-    Path(incident_id): Path<Uuid>,
+    Path(incident__id): Path<Uuid>,
     Json(request): Json<HashMap<String, String>>,
 ) -> Result<Json<HashMap<String, String>>, StatusCode> {
     let status_str = request.get("status").ok_or(StatusCode::BAD_REQUEST)?;

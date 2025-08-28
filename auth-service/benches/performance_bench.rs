@@ -58,7 +58,10 @@ fn bench_jwt_operations(c: &mut Criterion) {
             // Handle Result return type properly
             match rt.block_on(auth_service::keys::current_signing_key()) {
                 Ok(key_pair) => black_box(key_pair),
-                Err(_) => black_box(("error".to_string(), EncodingKey::from_secret("fallback".as_ref()))),
+                Err(_) => black_box((
+                    "error".to_string(),
+                    EncodingKey::from_secret("fallback".as_ref()),
+                )),
             }
         });
     });
@@ -96,11 +99,8 @@ fn bench_crypto_operations(c: &mut Criterion) {
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
             black_box(
-                generate_token_binding(
-                    "192.168.1.1",
-                    "Mozilla/5.0 (compatible; test)",
-                )
-                .unwrap_or_else(|_| "fallback_binding".to_string()),
+                generate_token_binding("192.168.1.1", "Mozilla/5.0 (compatible; test)")
+                    .unwrap_or_else(|_| "fallback_binding".to_string()),
             );
         });
     });
@@ -108,7 +108,10 @@ fn bench_crypto_operations(c: &mut Criterion) {
     group.bench_function("pkce_code_challenge", |b| {
         let verifier = generate_code_verifier().unwrap_or_else(|_| "fallback_verifier".to_string());
         b.iter(|| {
-            black_box(generate_code_challenge(&verifier).unwrap_or_else(|_| "fallback_challenge".to_string()));
+            black_box(
+                generate_code_challenge(&verifier)
+                    .unwrap_or_else(|_| "fallback_challenge".to_string()),
+            );
         });
     });
 

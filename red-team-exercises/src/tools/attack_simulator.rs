@@ -51,7 +51,7 @@ impl AttackSimulator {
                     client_id, client_secret
                 );
 
-                let result = client
+                let _result = client
                     .post(&format!("{}/oauth/token", target))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .body(body)
@@ -116,7 +116,7 @@ impl AttackSimulator {
                 target_user, password
             );
 
-            let result = self
+            let _result = self
                 .client
                 .post(&format!("{}/oauth/token", target))
                 .header("Content-Type", "application/x-www-form-urlencoded")
@@ -182,7 +182,7 @@ impl AttackSimulator {
         for session_id in session_ids {
             let start = Instant::now();
 
-            let result = self
+            let _result = self
                 .client
                 .get(&format!("{}/session/{}", target, session_id))
                 .header("Authorization", "Bearer fake_token")

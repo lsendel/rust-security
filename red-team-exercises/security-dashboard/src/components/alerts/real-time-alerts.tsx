@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, X, Eye, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SecurityAlert } from '@/types/security'
 import { formatRelativeTime } from '@/lib/utils'
+import { AuthContext } from '@/contexts/AuthContext'
 
 interface RealTimeAlertsProps {
   alerts: SecurityAlert[]
@@ -13,6 +14,11 @@ interface RealTimeAlertsProps {
 
 export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
+  const authContext = useContext(AuthContext)
+  if (!authContext) {
+    throw new Error('RealTimeAlerts must be used within an AuthProvider')
+  }
+  const { getAuthToken, currentUser } = authContext
 
   const visibleAlerts = alerts
     .filter(alert => !dismissedAlerts.has(alert.id))
@@ -23,34 +29,53 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
   }
 
   const acknowledgeAlert = async (alertId: string) => {
+    // Validate alertId format
+    if (!alertId || typeof alertId !== 'string' || !/^[a-zA-Z0-9-_]+$/.test(alertId)) {
+      console.error('Invalid alert ID format')
+      return
+    }
+
     try {
+      const authToken = await getAuthToken() // Secure token retrieval
+      if (!authToken) {
+        throw new Error('Authentication required')
+      }
+
       // Call API to acknowledge alert
-      const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+      const response = await fetch(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           acknowledged_at: new Date().toISOString(),
-          acknowledged_by: 'current_user', // Would come from auth context
+          acknowledged_by: currentUser?.id || 'unknown',
         }),
       })
-      
+
       if (!response.ok) {
         throw new Error(`Failed to acknowledge alert: ${response.statusText}`)
       }
-      
+
+      // Validate response
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid response format')
+      }
+
       const result = await response.json()
-      console.warn('Alert acknowledged successfully:', result)
       
+      // Validate response structure
+      if (typeof result !== 'object' || !result.success) {
+        throw new Error('Invalid response structure')
+      }
+
+      // Alert acknowledged successfully
+
       // Update local state to reflect acknowledgment
       setDismissedAlerts(prev => new Set([...prev, alertId]))
-      
-      // Show success notification
-      // You could use a toast library here
-      console.warn(`Alert ${alertId} has been acknowledged`)
-      
+
     } catch (error) {
       console.error('Error acknowledging alert:', error)
       // Handle error (show toast, etc.)
@@ -100,15 +125,15 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 className={`border rounded-lg p-3 ${
-                  alert.severity === 'critical' 
-                    ? 'border-red-500 bg-red-50 dark:bg-red-950/10' 
+                  alert.severity === 'critical'
+                    ? 'border-red-500 bg-red-50 dark:bg-red-950/10'
                     : 'border-orange-500 bg-orange-50 dark:bg-orange-950/10'
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <Badge 
+                      <Badge
                         variant={alert.severity === 'critical' ? 'destructive' : 'outline'}
                         className={alert.severity === 'critical' ? 'animate-pulse' : ''}
                       >
@@ -150,7 +175,7 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
                     </Button>
                   </div>
                 </div>
-                
+
                 {alert.correlatedEvents.length > 0 && (
                   <div className="mt-2 pt-2 border-t">
                     <p className="text-xs text-muted-foreground">
@@ -162,7 +187,7 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
             ))}
           </AnimatePresence>
         </div>
-        
+
         {alerts.length > 5 && (
           <div className="mt-3 pt-3 border-t text-center">
             <Button variant="outline" size="sm">

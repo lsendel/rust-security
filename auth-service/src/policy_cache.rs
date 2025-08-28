@@ -272,7 +272,7 @@ impl PolicyCache {
     /// Clear entire cache
     #[instrument(skip(self))]
     pub async fn clear(&self) -> usize {
-        let size = self.cache.len();
+        let _size = self.cache.len();
         self.cache.clear();
 
         let mut stats = self.stats.write().await;

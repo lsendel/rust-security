@@ -6,8 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{error, info, instrument, warn};
 
-#[cfg(feature = "simd")]
-use rayon::prelude::*;
+
 
 use crate::errors::{internal_error, AuthError};
 

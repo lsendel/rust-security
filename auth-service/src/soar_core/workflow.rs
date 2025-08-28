@@ -213,7 +213,7 @@ impl WorkflowEngine {
 
             if let Some(request) = request {
                 // Execute workflow
-                let result = self.execute_workflow_instance(request).await;
+                let _result = self.execute_workflow_instance(request).await;
 
                 // Update metrics
                 {
@@ -323,7 +323,7 @@ impl WorkflowEngine {
             workflow.outputs = execution_context.variables.clone();
         }
 
-        let result = WorkflowResult {
+        let _result = WorkflowResult {
             instance_id: instance_id.clone(),
             status: WorkflowStatus::Completed,
             outputs: execution_context.variables,

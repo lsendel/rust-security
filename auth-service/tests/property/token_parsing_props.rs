@@ -204,7 +204,7 @@ proptest! {
         method in prop::sample::select(&["GET", "POST", "PUT", "DELETE", "PATCH"]),
         path in r"/[a-zA-Z0-9/\-_\.]*",
         body in r"[a-zA-Z0-9 \{\}\[\]\"':,\-_\.]*{0,500}",
-        timestamp in 1000000000i64..2000000000i64,
+        timestamp in 1_000_000000i64..2000000000i64,
         secret in r"[a-zA-Z0-9_\-\.=]{32,128}"
     ) {
         // Property: Signature generation should be deterministic

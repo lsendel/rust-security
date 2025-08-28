@@ -170,7 +170,7 @@ impl RedTeamFramework {
         let detected = self.analyze_detection_indicators(&response_body, status.as_u16());
         let blocked = self.analyze_blocking_indicators(&response_body, status.as_u16());
 
-        let result = AttackResult {
+        let _result = AttackResult {
             attack_id,
             attack_type: attack_type.to_string(),
             target_endpoint: endpoint.to_string(),

@@ -29,7 +29,7 @@ async fn spawn_app() -> String {
             Arc::new(auth_service::jwks_rotation::InMemoryKeyStorage::new()),
         )
         .await
-        .expect("Failed to create JWKS manager")
+        .expect("Failed to create JWKS manager"),
     );
 
     let app_state = AppState {

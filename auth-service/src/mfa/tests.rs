@@ -26,7 +26,7 @@ mod property_tests {
         #[test]
         fn test_totp_code_generation_roundtrip(
             secret in prop::collection::vec(any::<u8>(), 20..=32),
-            timestamp in 1000000000u64..=2000000000u64,
+            timestamp in 1_000_000000u64..=2000000000u64,
             algorithm in prop_oneof![
                 Just(TotpAlgorithm::SHA1),
                 Just(TotpAlgorithm::SHA256),
@@ -119,14 +119,14 @@ mod property_tests {
                     max_verification_attempts_per_5min: max_attempts,
                     ..RateLimitConfig::default()
                 };
-                let limiter = MfaRateLimiter::new(config).await;
+                let _limiter = MfaRateLimiter::new(config).await;
                 let user_id = "prop_test_user";
 
                 let mut allowed_count = 0;
                 let mut denied_count = 0;
 
                 for _ in 0..attempt_count {
-                    let result = limiter.check_verification_attempts(user_id).await.unwrap();
+                    let _result = limiter.check_verification_attempts(user_id).await.unwrap();
                     if result.allowed {
                         allowed_count += 1;
                     } else {
@@ -570,7 +570,7 @@ mod performance_tests {
         // Check rate limits 10,000 times
         for i in 0..10_000 {
             let user_id = format!("perf_user_{}", i % 100); // 100 different users
-            let _result = rate_limiter.check_verification_attempts(&user_id).await.unwrap();
+            let result = rate_limiter.check_verification_attempts(&user_id).await.unwrap();
         }
 
         let duration = start.elapsed();
@@ -612,7 +612,7 @@ mod performance_tests {
                         cache_clone.set_totp_data(&user_id, &test_data_clone).await.unwrap();
                     } else {
                         // Read operation
-                        let _result = cache_clone.get_totp_data(&user_id).await.unwrap();
+                        let result = cache_clone.get_totp_data(&user_id).await.unwrap();
                     }
                 }
             });
@@ -666,7 +666,7 @@ mod security_tests {
                 remember_device: Some(false),
             };
 
-            let _result = service.verify_totp(verification_request, context.clone()).await;
+            let result = service.verify_totp(verification_request, context.clone()).await;
             incorrect_times.push(start.elapsed());
 
             // Small delay to avoid rate limiting

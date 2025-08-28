@@ -118,14 +118,12 @@ impl MetricsCollector {
         let total_events = metrics
             .iter()
             .find(|m| m.name == "audit_total_events")
-            .map(|m| m.value as u64)
-            .unwrap_or(0);
+            .map_or(0, |m| m.value as u64);
 
         let failed_events = metrics
             .iter()
             .find(|m| m.name == "audit_failed_events")
-            .map(|m| m.value as u64)
-            .unwrap_or(0);
+            .map_or(0, |m| m.value as u64);
 
         if total_events > 0 {
             let success_rate =
@@ -204,7 +202,7 @@ impl MetricsCollector {
                 value: total_events as f64,
                 threshold: 0.0, // No threshold for count metrics
                 status: MetricStatus::Pass,
-                description: format!("Total audit events in {}", log_path),
+                description: format!("Total audit events in {log_path}"),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
@@ -213,7 +211,7 @@ impl MetricsCollector {
                 value: successful_events as f64,
                 threshold: 0.0,
                 status: MetricStatus::Pass,
-                description: format!("Successful audit events in {}", log_path),
+                description: format!("Successful audit events in {log_path}"),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
@@ -226,7 +224,7 @@ impl MetricsCollector {
                 } else {
                     MetricStatus::Fail
                 },
-                description: format!("Failed audit events in {}", log_path),
+                description: format!("Failed audit events in {log_path}"),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
@@ -239,7 +237,7 @@ impl MetricsCollector {
                 } else {
                     MetricStatus::Warning
                 },
-                description: format!("Blocked audit events in {}", log_path),
+                description: format!("Blocked audit events in {log_path}"),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
@@ -248,7 +246,7 @@ impl MetricsCollector {
                 value: unique_users.len() as f64,
                 threshold: 0.0,
                 status: MetricStatus::Pass,
-                description: format!("Unique users in audit events from {}", log_path),
+                description: format!("Unique users in audit events from {log_path}"),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
@@ -261,7 +259,7 @@ impl MetricsCollector {
                 } else {
                     MetricStatus::Warning
                 },
-                description: format!("Unique IP addresses in audit events from {}", log_path),
+                description: format!("Unique IP addresses in audit events from {log_path}"),
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
@@ -329,7 +327,7 @@ impl MetricsCollector {
                 value: days_until_expiry,
                 threshold: 30.0,
                 status,
-                description: format!("Days until certificate expiry for {}", cert_path),
+                description: format!("Days until certificate expiry for {cert_path}"),
                 timestamp: now,
                 tags: HashMap::from([("certificate_path".to_string(), cert_path.to_string())]),
             });
@@ -359,7 +357,7 @@ impl MetricsCollector {
 
         for (policy_name, description, enabled) in policies {
             metrics.push(SecurityMetric {
-                name: format!("security_policy_{}", policy_name),
+                name: format!("security_policy_{policy_name}"),
                 value: if enabled { 1.0 } else { 0.0 },
                 threshold: 1.0,
                 status: if enabled {
@@ -399,7 +397,7 @@ impl MetricsCollector {
             };
 
             metrics.push(SecurityMetric {
-                name: format!("service_health_{}", service_name),
+                name: format!("service_health_{service_name}"),
                 value: if is_healthy { 1.0 } else { 0.0 },
                 threshold: 1.0,
                 status: if is_healthy {
@@ -407,7 +405,7 @@ impl MetricsCollector {
                 } else {
                     MetricStatus::Fail
                 },
-                description: format!("Health status of {}", service_name),
+                description: format!("Health status of {service_name}"),
                 timestamp: now,
                 tags: HashMap::from([
                     ("service".to_string(), service_name.to_string()),

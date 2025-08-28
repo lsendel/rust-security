@@ -65,7 +65,7 @@ async fn ip_spoofing_bypass(
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert(*header_name, reqwest::header::HeaderValue::from_str(&ip)?);
 
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "ip_spoofing_bypass",
                     "GET",
@@ -209,7 +209,7 @@ async fn header_manipulation_bypass(
 
             // Send multiple requests with this header value
             for _ in 0..5 {
-                let result = framework
+                let _result = framework
                     .execute_attack(
                         "header_manipulation_bypass",
                         "GET",
@@ -264,7 +264,7 @@ async fn timing_based_bypass(
     // Test 1: Burst then wait strategy
     let mut burst_successful = 0;
     for i in 0..10 {
-        let result = framework
+        let _result = framework
             .execute_attack("timing_burst", "GET", "/health", None, None, Some(&session))
             .await?;
 
@@ -300,7 +300,7 @@ async fn timing_based_bypass(
     // Test 2: Slow and steady approach
     let mut slow_successful = 0;
     for _ in 0..20 {
-        let result = framework
+        let _result = framework
             .execute_attack("timing_slow_steady", "GET", "/health", None, None, Some(&session))
             .await?;
 
@@ -361,7 +361,7 @@ async fn user_agent_rotation_bypass(
 
         // Send multiple requests with each User-Agent
         for j in 0..5 {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "user_agent_rotation",
                     "GET",
@@ -425,7 +425,7 @@ async fn token_bucket_exploitation(
 
     // Rapid burst to find the bucket size
     for i in 0..100 {
-        let result = framework
+        let _result = framework
             .execute_attack("token_bucket_burst", "GET", "/health", None, None, Some(&session))
             .await?;
 
@@ -453,7 +453,7 @@ async fn token_bucket_exploitation(
 
     let mut refill_successful = 0;
     for _ in 0..10 {
-        let result = framework
+        let _result = framework
             .execute_attack(
                 "token_bucket_refill_test",
                 "GET",
@@ -485,7 +485,7 @@ async fn token_bucket_exploitation(
     for _ in 0..20 {
         // Send requests at the estimated safe rate
         for _ in 0..safe_rate {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "token_bucket_slow_leak",
                     "GET",
@@ -549,7 +549,7 @@ async fn protocol_level_bypass(
 
         let mut version_successful = 0;
         for _ in 0..10 {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "protocol_version_bypass",
                     "GET",
@@ -589,7 +589,7 @@ async fn protocol_level_bypass(
 
         let mut connection_successful = 0;
         for _ in 0..10 {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "connection_header_bypass",
                     "GET",
@@ -620,7 +620,7 @@ async fn protocol_level_bypass(
     for method in &methods {
         let mut method_successful = 0;
         for _ in 0..5 {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "method_variation_bypass",
                     method,
@@ -676,7 +676,7 @@ async fn adaptive_rate_limit_detection(
         info!("Testing delay: {}ms (iteration {})", test_delay, iteration + 1);
 
         for _ in 0..20 {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "adaptive_rate_detection",
                     "GET",
@@ -720,7 +720,7 @@ async fn adaptive_rate_limit_detection(
         // Test the discovered optimal delay with a longer run
         let mut sustained_successful = 0;
         for _ in 0..50 {
-            let result = framework
+            let _result = framework
                 .execute_attack(
                     "sustained_optimal_rate",
                     "GET",
@@ -757,7 +757,7 @@ async fn adaptive_rate_limit_detection(
         let mut round_successful = 0;
 
         for _ in 0..10 {
-            let result = framework
+            let _result = framework
                 .execute_attack("dynamic_adaptation", "GET", "/health", None, None, Some(&session))
                 .await?;
 

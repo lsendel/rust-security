@@ -1,5 +1,5 @@
 //! Security-focused error handling for the auth service
-//! 
+//!
 //! This module provides comprehensive error handling patterns that prioritize
 //! security, prevent information leakage, and maintain system resilience.
 
@@ -18,37 +18,37 @@ use tracing::{error, warn};
 pub enum SecurityError {
     #[error("Authentication failed")]
     AuthenticationFailed,
-    
+
     #[error("Authorization denied")]
     AuthorizationDenied,
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Invalid input provided")]
     InvalidInput,
-    
+
     #[error("Cryptographic operation failed")]
     CryptographicFailure,
-    
+
     #[error("Configuration error")]
     Configuration,
-    
+
     #[error("Service temporarily unavailable")]
     ServiceUnavailable,
-    
+
     #[error("Internal system error")]
     Internal,
-    
+
     #[error("Request timeout")]
     Timeout,
-    
+
     #[error("Resource not found")]
     NotFound,
-    
+
     #[error("Conflict with existing resource")]
     Conflict,
-    
+
     #[error("Request payload too large")]
     PayloadTooLarge,
 }
@@ -71,28 +71,31 @@ impl SecurityError {
             SecurityError::PayloadTooLarge => "Request payload too large",
         }
     }
-    
+
     /// Check if this error should be logged for security monitoring
     pub fn should_log(&self) -> bool {
-        matches!(self, 
-            SecurityError::AuthenticationFailed |
-            SecurityError::AuthorizationDenied |
-            SecurityError::CryptographicFailure |
-            SecurityError::Internal |
-            SecurityError::Configuration
+        matches!(
+            self,
+            SecurityError::AuthenticationFailed
+                | SecurityError::AuthorizationDenied
+                | SecurityError::CryptographicFailure
+                | SecurityError::Internal
+                | SecurityError::Configuration
         )
     }
-    
+
     /// Get the severity level for logging
     pub fn severity(&self) -> ErrorSeverity {
         match self {
             SecurityError::Internal | SecurityError::CryptographicFailure => ErrorSeverity::High,
-            SecurityError::AuthenticationFailed | SecurityError::AuthorizationDenied => ErrorSeverity::Medium,
+            SecurityError::AuthenticationFailed | SecurityError::AuthorizationDenied => {
+                ErrorSeverity::Medium
+            }
             SecurityError::RateLimitExceeded | SecurityError::InvalidInput => ErrorSeverity::Low,
             _ => ErrorSeverity::Low,
         }
     }
-    
+
     /// Get error code for monitoring and alerting
     pub fn error_code(&self) -> &'static str {
         match self {
@@ -110,13 +113,12 @@ impl SecurityError {
             SecurityError::PayloadTooLarge => "PAYLOAD_TOO_LARGE",
         }
     }
-    
+
     /// Check if the operation should be retried
     pub fn is_retryable(&self) -> bool {
-        matches!(self, 
-            SecurityError::ServiceUnavailable |
-            SecurityError::Timeout |
-            SecurityError::Internal
+        matches!(
+            self,
+            SecurityError::ServiceUnavailable | SecurityError::Timeout | SecurityError::Internal
         )
     }
 }
@@ -189,7 +191,7 @@ impl<T> SecurityResultExt<T> for SecurityResult<T> {
         }
         self
     }
-    
+
     fn log_security_error_with_context(self, context: &str) -> SecurityResult<T> {
         if let Err(ref e) = self {
             if e.should_log() {
@@ -205,7 +207,7 @@ impl<T> SecurityResultExt<T> for SecurityResult<T> {
         }
         self
     }
-    
+
     fn sanitize_error(self) -> SecurityResult<T> {
         self.map_err(|e| {
             // Replace internal errors with generic ones to prevent information leakage
@@ -215,7 +217,7 @@ impl<T> SecurityResultExt<T> for SecurityResult<T> {
             }
         })
     }
-    
+
     fn map_internal_error(self) -> SecurityResult<T> {
         self.map_err(|_| SecurityError::Internal)
     }
@@ -338,17 +340,19 @@ impl CircuitBreaker {
             recovery_timeout,
             current_failures: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
             last_failure_time: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            state: std::sync::Arc::new(std::sync::atomic::AtomicU8::new(CircuitState::Closed as u8)),
+            state: std::sync::Arc::new(std::sync::atomic::AtomicU8::new(
+                CircuitState::Closed as u8,
+            )),
         }
     }
-    
+
     pub async fn call<F, T, E>(&self, operation: F) -> Result<T, SecurityError>
     where
         F: std::future::Future<Output = Result<T, E>>,
         E: Into<SecurityError>,
     {
         let current_state = self.get_state();
-        
+
         match current_state {
             CircuitState::Open => {
                 if self.should_attempt_reset() {
@@ -364,7 +368,7 @@ impl CircuitBreaker {
                 // Normal operation
             }
         }
-        
+
         match operation.await {
             Ok(result) => {
                 self.on_success();
@@ -376,31 +380,36 @@ impl CircuitBreaker {
             }
         }
     }
-    
+
     fn get_state(&self) -> CircuitState {
         self.state.load(std::sync::atomic::Ordering::Relaxed).into()
     }
-    
+
     fn set_state(&self, new_state: CircuitState) {
-        self.state.store(new_state as u8, std::sync::atomic::Ordering::Relaxed);
+        self.state
+            .store(new_state as u8, std::sync::atomic::Ordering::Relaxed);
     }
-    
+
     fn on_success(&self) {
-        self.current_failures.store(0, std::sync::atomic::Ordering::Relaxed);
+        self.current_failures
+            .store(0, std::sync::atomic::Ordering::Relaxed);
         if matches!(self.get_state(), CircuitState::HalfOpen) {
             self.set_state(CircuitState::Closed);
         }
     }
-    
+
     fn on_failure(&self) {
-        let failures = self.current_failures.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-        
+        let failures = self
+            .current_failures
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+
         if failures >= self.failure_threshold {
             self.set_state(CircuitState::Open);
             *self.last_failure_time.lock().unwrap() = Some(std::time::Instant::now());
         }
     }
-    
+
     fn should_attempt_reset(&self) -> bool {
         if let Some(last_failure) = *self.last_failure_time.lock().unwrap() {
             std::time::Instant::now().duration_since(last_failure) > self.recovery_timeout
@@ -427,7 +436,7 @@ impl RetryPolicy {
             jitter: true,
         }
     }
-    
+
     pub async fn execute<F, T, E>(&self, mut operation: F) -> SecurityResult<T>
     where
         F: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, E>> + Send>>,
@@ -435,21 +444,21 @@ impl RetryPolicy {
     {
         let mut attempt = 0;
         let mut last_error = SecurityError::Internal;
-        
+
         while attempt < self.max_attempts {
             match operation().await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     let error = e.into();
                     last_error = error.clone();
-                    
+
                     // Don't retry non-retryable errors
                     if !error.is_retryable() {
                         return Err(error);
                     }
-                    
+
                     attempt += 1;
-                    
+
                     if attempt < self.max_attempts {
                         let delay = self.calculate_delay(attempt);
                         tokio::time::sleep(delay).await;
@@ -457,14 +466,14 @@ impl RetryPolicy {
                 }
             }
         }
-        
+
         Err(last_error)
     }
-    
+
     fn calculate_delay(&self, attempt: u32) -> std::time::Duration {
         let exponential_delay = self.base_delay * 2_u32.pow(attempt - 1);
         let delay = std::cmp::min(exponential_delay, self.max_delay);
-        
+
         if self.jitter {
             let jitter_range = delay.as_millis() / 10; // 10% jitter
             let jitter = fastrand::u64(0..=jitter_range as u64);
@@ -476,10 +485,7 @@ impl RetryPolicy {
 }
 
 /// Timeout wrapper for operations
-pub async fn with_timeout<F, T>(
-    duration: std::time::Duration,
-    operation: F,
-) -> SecurityResult<T>
+pub async fn with_timeout<F, T>(duration: std::time::Duration, operation: F) -> SecurityResult<T>
 where
     F: std::future::Future<Output = SecurityResult<T>>,
 {
@@ -493,19 +499,18 @@ where
 pub mod validation {
     use super::*;
     use validator::Validate;
-    
+
     pub fn validate_input<T: Validate>(input: &T) -> SecurityResult<()> {
-        input.validate()
-            .map_err(|e| {
-                tracing::debug!(
-                    target = "security_audit",
-                    validation_errors = ?e,
-                    "Input validation failed"
-                );
-                SecurityError::InvalidInput
-            })
+        input.validate().map_err(|e| {
+            tracing::debug!(
+                target = "security_audit",
+                validation_errors = ?e,
+                "Input validation failed"
+            );
+            SecurityError::InvalidInput
+        })
     }
-    
+
     pub fn validate_string_length(s: &str, min: usize, max: usize) -> SecurityResult<()> {
         if s.len() < min || s.len() > max {
             Err(SecurityError::InvalidInput)
@@ -513,7 +518,7 @@ pub mod validation {
             Ok(())
         }
     }
-    
+
     pub fn validate_email(email: &str) -> SecurityResult<()> {
         if email.contains('@') && email.len() <= 254 {
             Ok(())
@@ -521,7 +526,7 @@ pub mod validation {
             Err(SecurityError::InvalidInput)
         }
     }
-    
+
     pub fn validate_url(url: &str) -> SecurityResult<()> {
         if url.starts_with("https://") || url.starts_with("http://") {
             Ok(())
@@ -535,103 +540,103 @@ pub mod validation {
 mod tests {
     use super::*;
     use tokio::time::Duration;
-    
+
     #[test]
     fn test_security_error_public_message() {
         let error = SecurityError::AuthenticationFailed;
         assert_eq!(error.public_message(), "Authentication failed");
-        
+
         let error = SecurityError::Internal;
         assert_eq!(error.public_message(), "Internal error");
     }
-    
+
     #[test]
     fn test_security_error_should_log() {
         assert!(SecurityError::AuthenticationFailed.should_log());
         assert!(SecurityError::CryptographicFailure.should_log());
         assert!(!SecurityError::InvalidInput.should_log());
     }
-    
+
     #[test]
     fn test_security_error_is_retryable() {
         assert!(SecurityError::ServiceUnavailable.is_retryable());
         assert!(SecurityError::Timeout.is_retryable());
         assert!(!SecurityError::AuthenticationFailed.is_retryable());
     }
-    
+
     #[tokio::test]
     async fn test_circuit_breaker_open_state() {
         let circuit_breaker = CircuitBreaker::new(2, Duration::from_secs(1));
-        
+
         // Simulate failures to open the circuit
         for _ in 0..3 {
-            let result = circuit_breaker.call(async { 
-                Err::<(), SecurityError>(SecurityError::Internal) 
-            }).await;
+            let result = circuit_breaker
+                .call(async { Err::<(), SecurityError>(SecurityError::Internal) })
+                .await;
             assert!(result.is_err());
         }
-        
+
         // Circuit should be open now
         assert!(matches!(circuit_breaker.get_state(), CircuitState::Open));
-        
+
         // Subsequent calls should fail fast
-        let result = circuit_breaker.call(async { 
-            Ok::<(), SecurityError>(()) 
-        }).await;
+        let result = circuit_breaker
+            .call(async { Ok::<(), SecurityError>(()) })
+            .await;
         assert_eq!(result.unwrap_err().error_code(), "SERVICE_UNAVAILABLE");
     }
-    
+
     #[tokio::test]
     async fn test_retry_policy() {
         let retry_policy = RetryPolicy::new(3, Duration::from_millis(10));
         let mut call_count = 0;
-        
-        let result = retry_policy.execute(|| {
-            call_count += 1;
-            Box::pin(async move {
-                if call_count < 3 {
-                    Err(SecurityError::ServiceUnavailable)
-                } else {
-                    Ok("success")
-                }
+
+        let result = retry_policy
+            .execute(|| {
+                call_count += 1;
+                Box::pin(async move {
+                    if call_count < 3 {
+                        Err(SecurityError::ServiceUnavailable)
+                    } else {
+                        Ok("success")
+                    }
+                })
             })
-        }).await;
-        
+            .await;
+
         assert_eq!(result.unwrap(), "success");
         assert_eq!(call_count, 3);
     }
-    
+
     #[tokio::test]
     async fn test_timeout_wrapper() {
         // Test successful operation within timeout
-        let result = with_timeout(
-            Duration::from_millis(100),
-            async { Ok::<_, SecurityError>("success") }
-        ).await;
+        let result = with_timeout(Duration::from_millis(100), async {
+            Ok::<_, SecurityError>("success")
+        })
+        .await;
         assert_eq!(result.unwrap(), "success");
-        
+
         // Test operation that times out
-        let result = with_timeout(
-            Duration::from_millis(10),
-            async { 
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                Ok::<_, SecurityError>("success")
-            }
-        ).await;
+        let result = with_timeout(Duration::from_millis(10), async {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            Ok::<_, SecurityError>("success")
+        })
+        .await;
         assert_eq!(result.unwrap_err().error_code(), "TIMEOUT");
     }
-    
+
     #[test]
     fn test_validation_helpers() {
         use validation::*;
-        
+
         assert!(validate_string_length("test", 1, 10).is_ok());
         assert!(validate_string_length("", 1, 10).is_err());
         assert!(validate_string_length("toolongstring", 1, 5).is_err());
-        
+
         assert!(validate_email("test@example.com").is_ok());
         assert!(validate_email("invalid-email").is_err());
-        
+
         assert!(validate_url("https://example.com").is_ok());
         assert!(validate_url("ftp://example.com").is_err());
     }

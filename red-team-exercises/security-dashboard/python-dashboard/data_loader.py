@@ -18,8 +18,21 @@ class ReportLoader:
     """Handles loading and caching of red team reports"""
     
     def __init__(self, reports_directory: str = "reports"):
+        if not reports_directory or not isinstance(reports_directory, str):
+            raise ValueError("Reports directory must be a non-empty string")
+        
+        # Prevent path traversal attacks
+        reports_directory = os.path.normpath(reports_directory)
+        if ".." in reports_directory or reports_directory.startswith("/"):
+            raise ValueError("Invalid reports directory path")
+        
         self.reports_dir = Path(reports_directory)
-        self.reports_dir.mkdir(exist_ok=True)
+        try:
+            self.reports_dir.mkdir(exist_ok=True)
+        except OSError as e:
+            logger.error(f"Failed to create reports directory {reports_directory}: {e}")
+            raise
+        
         self._cached_reports: Dict[str, RedTeamReport] = {}
         self._last_load_time: Optional[datetime] = None
         
@@ -41,8 +54,20 @@ class ReportLoader:
                 reports.append(report)
                 self._cached_reports[str(file_path)] = report
                 logger.debug(f"Loaded report: {file_path}")
+            except FileNotFoundError:
+                logger.error(f"Report file not found: {file_path}")
+                continue
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in report {file_path}: {e}")
+                continue
+            except PermissionError:
+                logger.error(f"Permission denied reading report {file_path}")
+                continue
+            except ValueError as e:
+                logger.error(f"Invalid data format in report {file_path}: {e}")
+                continue
             except Exception as e:
-                logger.error(f"Failed to load report {file_path}: {e}")
+                logger.error(f"Unexpected error loading report {file_path}: {e}")
                 continue
                 
         self._last_load_time = datetime.now()
@@ -51,25 +76,51 @@ class ReportLoader:
     
     def load_report_by_id(self, report_id: str) -> Optional[RedTeamReport]:
         """Load a specific report by ID"""
-        report_file = self.reports_dir / f"{report_id}.json"
+        if not report_id or not isinstance(report_id, str):
+            raise ValueError("Report ID must be a non-empty string")
+        
+        # Sanitize report_id to prevent path traversal
+        safe_report_id = os.path.basename(report_id.replace("..", ""))
+        if not safe_report_id:
+            raise ValueError("Invalid report ID")
+        
+        report_file = self.reports_dir / f"{safe_report_id}.json"
         if report_file.exists():
             try:
                 return RedTeamReport.from_json_file(report_file)
+            except FileNotFoundError:
+                logger.error(f"Report file not found: {report_id}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in report {report_id}: {e}")
+            except PermissionError:
+                logger.error(f"Permission denied reading report {report_id}")
+            except ValueError as e:
+                logger.error(f"Invalid data format in report {report_id}: {e}")
             except Exception as e:
-                logger.error(f"Failed to load report {report_id}: {e}")
+                logger.error(f"Unexpected error loading report {report_id}: {e}")
         return None
     
     def get_reports_in_date_range(self, 
                                   start_date: datetime, 
                                   end_date: datetime) -> List[RedTeamReport]:
         """Get reports within a specific date range"""
+        if not isinstance(start_date, datetime) or not isinstance(end_date, datetime):
+            raise ValueError("start_date and end_date must be datetime objects")
+        
+        if start_date > end_date:
+            raise ValueError("start_date must be before or equal to end_date")
+        
         all_reports = self.load_all_reports()
         filtered_reports = []
         
         for report in all_reports:
-            report_date = report.exercise_metadata.datetime
-            if start_date <= report_date <= end_date:
-                filtered_reports.append(report)
+            try:
+                report_date = report.exercise_metadata.datetime
+                if start_date <= report_date <= end_date:
+                    filtered_reports.append(report)
+            except (AttributeError, TypeError) as e:
+                logger.warning(f"Skipping report with invalid datetime: {e}")
+                continue
                 
         return sorted(filtered_reports, 
                      key=lambda r: r.exercise_metadata.datetime, 
@@ -220,8 +271,18 @@ class ReportLoader:
             "detailed_findings": [finding.__dict__ for finding in sample_report.detailed_findings]
         }
         
-        with open(filepath, 'w') as f:
-            json.dump(report_dict, f, indent=2)
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(report_dict, f, indent=2)
+        except PermissionError:
+            logger.error(f"Permission denied writing to {filepath}")
+            raise
+        except OSError as e:
+            logger.error(f"OS error writing report to {filepath}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error saving report to {filepath}: {e}")
+            raise
             
         logger.info(f"Sample report saved to {filepath}")
 

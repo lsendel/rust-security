@@ -412,7 +412,7 @@ impl SOAREngine {
         let start_time = std::time::Instant::now();
 
         // Execute the action
-        let result = if let Some(handler) = self.action_handlers.get(&step.action_type) {
+        let _result = if let Some(handler) = self.action_handlers.get(&step.action_type) {
             handler.execute(&step.parameters).await?
         } else {
             return Err(anyhow::anyhow!("No handler found for action type: {:?}", step.action_type));
@@ -816,7 +816,7 @@ async fn create_incident(
 
 async fn get_incident(
     State(engine): State<SOAREngine>,
-    Path(incident_id): Path<Uuid>,
+    Path(incident__id): Path<Uuid>,
 ) -> Result<Json<SecurityIncident>, StatusCode> {
     match engine.get_incident(incident_id).await {
         Some(incident) => Ok(Json(incident)),
@@ -826,7 +826,7 @@ async fn get_incident(
 
 async fn update_incident_status(
     State(engine): State<SOAREngine>,
-    Path(incident_id): Path<Uuid>,
+    Path(incident__id): Path<Uuid>,
     Json(request): Json<HashMap<String, String>>,
 ) -> Result<Json<HashMap<String, String>>, StatusCode> {
     let status_str = request.get("status").ok_or(StatusCode::BAD_REQUEST)?;

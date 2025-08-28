@@ -15,7 +15,7 @@ pub fn generate_totp_for_time(timestamp: u64) -> String {
     // Simple TOTP-like generation for testing purposes
     // In real implementation, this would use proper HMAC-SHA1
     let time_step = timestamp / 30; // 30-second window
-    let code = (time_step % 1000000) as u32;
+    let code = (time_step % 1_000_000) as u32;
     format!("{:06}", code)
 }
 

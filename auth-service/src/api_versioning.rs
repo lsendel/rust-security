@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Request, Path},
+    extract::{Path, Request},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -56,7 +56,9 @@ impl IntoResponse for ApiVersionError {
         let (status, error_message) = match &self {
             ApiVersionError::UnsupportedVersion(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ApiVersionError::MissingVersion => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiVersionError::DeprecatedVersion(_, _, _) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ApiVersionError::DeprecatedVersion(_, _, _) => {
+                (StatusCode::BAD_REQUEST, self.to_string())
+            }
         };
 
         let body = Json(ApiErrorResponse {
@@ -106,21 +108,22 @@ impl Default for ApiVersionConfig {
         Self {
             current_version: ApiVersion::V2,
             default_version: ApiVersion::V1, // Conservative default
-            deprecated_versions: vec![
-                DeprecatedVersion {
-                    version: "v1".to_string(),
-                    deprecation_date: "2024-01-01".to_string(),
-                    sunset_date: "2024-07-01".to_string(),
-                    replacement_version: "v2".to_string(),
-                }
-            ],
+            deprecated_versions: vec![DeprecatedVersion {
+                version: "v1".to_string(),
+                deprecation_date: "2024-01-01".to_string(),
+                sunset_date: "2024-07-01".to_string(),
+                replacement_version: "v2".to_string(),
+            }],
             require_version_header: false,
         }
     }
 }
 
 /// Extract API version from request
-pub fn extract_api_version(headers: &HeaderMap, path: Option<&Path<String>>) -> Result<ApiVersion, ApiVersionError> {
+pub fn extract_api_version(
+    headers: &HeaderMap,
+    path: Option<&Path<String>>,
+) -> Result<ApiVersion, ApiVersionError> {
     // 1. Try to get version from URL path (e.g., /v1/users, /v2/oauth/token)
     if let Some(path) = path {
         if let Some(version_str) = extract_version_from_path(&path.0) {
@@ -193,33 +196,35 @@ pub async fn api_version_middleware(
     let mut response = next.run(request).await;
 
     // Add version headers to response
-    response.headers_mut().insert(
-        "api-version",
-        version.to_string().parse().unwrap(),
-    );
+    response
+        .headers_mut()
+        .insert("api-version", version.to_string().parse().unwrap());
 
-    response.headers_mut().insert(
-        "api-supported-versions",
-        "v1,v2".parse().unwrap(),
-    );
+    response
+        .headers_mut()
+        .insert("api-supported-versions", "v1,v2".parse().unwrap());
 
     // Check if version is deprecated
-    if let Some(deprecated) = config.deprecated_versions.iter().find(|d| d.version == version.to_string()) {
-        response.headers_mut().insert(
-            "deprecation",
-            "true".parse().unwrap(),
-        );
+    if let Some(deprecated) = config
+        .deprecated_versions
+        .iter()
+        .find(|d| d.version == version.to_string())
+    {
+        response
+            .headers_mut()
+            .insert("deprecation", "true".parse().unwrap());
 
-        response.headers_mut().insert(
-            "sunset",
-            deprecated.sunset_date.parse().unwrap(),
-        );
+        response
+            .headers_mut()
+            .insert("sunset", deprecated.sunset_date.parse().unwrap());
 
         response.headers_mut().insert(
             "link",
             format!(
                 "<https://docs.example.com/api/migration>; rel=\"deprecation\"; type=\"text/html\""
-            ).parse().unwrap(),
+            )
+            .parse()
+            .unwrap(),
         );
 
         tracing::warn!(
@@ -257,7 +262,7 @@ pub struct TokenResponseV2 {
     pub expires_at: u64, // Added in V2
     pub refresh_token: Option<String>,
     pub scope: Option<String>,
-    pub id_token: Option<String>, // Added in V2
+    pub id_token: Option<String>,            // Added in V2
     pub token_binding: Option<TokenBinding>, // Added in V2
 }
 
@@ -283,8 +288,8 @@ pub struct ScimUserResponseV2 {
     pub user_name: String,
     pub active: bool,
     pub emails: Vec<ScimEmail>,
-    pub roles: Option<Vec<String>>, // Added in V2
-    pub groups: Option<Vec<ScimGroupRef>>, // Added in V2
+    pub roles: Option<Vec<String>>,              // Added in V2
+    pub groups: Option<Vec<ScimGroupRef>>,       // Added in V2
     pub enterprise_user: Option<EnterpriseUser>, // Added in V2
     pub meta: ScimMeta,
 }
@@ -326,26 +331,33 @@ pub fn versioned_routes() -> axum::Router {
     axum::Router::new()
         // V1 routes (legacy)
         .route("/v1/oauth/token", axum::routing::post(oauth_token_v1))
-        .route("/v1/oauth/introspect", axum::routing::post(oauth_introspect_v1))
+        .route(
+            "/v1/oauth/introspect",
+            axum::routing::post(oauth_introspect_v1),
+        )
         .route("/v1/scim/Users", axum::routing::get(scim_users_v1))
         .route("/v1/scim/Users", axum::routing::post(scim_create_user_v1))
-
         // V2 routes (current)
         .route("/v2/oauth/token", axum::routing::post(oauth_token_v2))
-        .route("/v2/oauth/introspect", axum::routing::post(oauth_introspect_v2))
+        .route(
+            "/v2/oauth/introspect",
+            axum::routing::post(oauth_introspect_v2),
+        )
         .route("/v2/scim/Users", axum::routing::get(scim_users_v2))
         .route("/v2/scim/Users", axum::routing::post(scim_create_user_v2))
-
         // Version-agnostic routes (auto-detect version)
         .route("/oauth/token", axum::routing::post(oauth_token_versioned))
-        .route("/oauth/introspect", axum::routing::post(oauth_introspect_versioned))
-        .route("/scim/Users", axum::routing::get(scim_users_versioned))
-        .route("/scim/Users", axum::routing::post(scim_create_user_versioned))
-
-        // Middleware for version detection and deprecation warnings
-        .layer(ServiceBuilder::new()
-            .layer(axum::middleware::from_fn(api_version_middleware))
+        .route(
+            "/oauth/introspect",
+            axum::routing::post(oauth_introspect_versioned),
         )
+        .route("/scim/Users", axum::routing::get(scim_users_versioned))
+        .route(
+            "/scim/Users",
+            axum::routing::post(scim_create_user_versioned),
+        )
+        // Middleware for version detection and deprecation warnings
+        .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(api_version_middleware)))
 }
 
 // Placeholder handlers for different API versions
@@ -439,14 +451,12 @@ async fn scim_create_user_versioned(headers: HeaderMap) -> impl IntoResponse {
 /// Get deprecation information
 pub fn get_deprecation_info() -> DeprecationInfo {
     DeprecationInfo {
-        deprecated_versions: vec![
-            DeprecatedVersion {
-                version: "v1".to_string(),
-                deprecation_date: "2024-01-01".to_string(),
-                sunset_date: "2024-07-01".to_string(),
-                replacement_version: "v2".to_string(),
-            }
-        ],
+        deprecated_versions: vec![DeprecatedVersion {
+            version: "v1".to_string(),
+            deprecation_date: "2024-01-01".to_string(),
+            sunset_date: "2024-07-01".to_string(),
+            replacement_version: "v2".to_string(),
+        }],
         migration_guide_url: "https://docs.example.com/api/migration-guide".to_string(),
     }
 }
@@ -496,7 +506,10 @@ mod tests {
         assert_eq!(version, ApiVersion::V2);
 
         let mut headers = HeaderMap::new();
-        headers.insert("accept", HeaderValue::from_static("application/json;version=1"));
+        headers.insert(
+            "accept",
+            HeaderValue::from_static("application/json;version=1"),
+        );
 
         let version = extract_api_version(&headers, None).unwrap();
         assert_eq!(version, ApiVersion::V1);

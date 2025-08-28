@@ -69,7 +69,7 @@ Auth-Core is designed to be the **simplest** way to add OAuth 2.0 to your Rust a
 ```rust
 // Just 5 lines to get started!
 let server = AuthServer::minimal()
-    .with_client("my_app", "secret123")
+    .with_client("my_app", &std::env::var("CLIENT_SECRET")?)
     .build()?;
 ```
 
@@ -87,8 +87,8 @@ AuthServer::minimal()
 
 // Level 3: Multiple clients
 AuthServer::minimal()
-    .with_client("web_app", "web_secret")
-    .with_client("mobile_app", "mobile_secret")
+    .with_client("web_app", &std::env::var("WEB_SECRET")?)
+    .with_client("mobile_app", &std::env::var("MOBILE_SECRET")?)
 
 // Level 4: Advanced features
 AuthServer::minimal()
@@ -166,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Create the simplest possible OAuth server
     let server = AuthServer::minimal()
-        .with_client("my_app", "super_secret_123")
+        .with_client("my_app", "$CLIENT_SECRET")
         .build()
         .expect("Failed to build auth server");
     
@@ -174,7 +174,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
     println!("🌐 Server running at http://localhost:8080");
     println!("📖 Try: curl -X POST http://localhost:8080/oauth/token \\");
-    println!("         -d 'grant_type=client_credentials&client_id=my_app&client_secret=super_secret_123'");
+    println!("         -d 'grant_type=client_credentials&client_id=my_app&client_secret=$CLIENT_SECRET'");
     
     axum::serve(listener, server.into_router()).await?;
     
@@ -193,7 +193,7 @@ You should see:
 🚀 Starting your first OAuth server!
 🌐 Server running at http://localhost:8080
 📖 Try: curl -X POST http://localhost:8080/oauth/token \
-         -d 'grant_type=client_credentials&client_id=my_app&client_secret=super_secret_123'
+         -d 'grant_type=client_credentials&client_id=my_app&client_secret=$CLIENT_SECRET'
 ```
 
 ### Step 4: Test It!
@@ -204,7 +204,7 @@ Open a new terminal and run:
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=my_app" \
-  -d "client_secret=super_secret_123"
+  -d "client_secret=$CLIENT_SECRET"
 ```
 
 **Expected Response:**
@@ -298,7 +298,7 @@ let client = reqwest::Client::new();
 let params = [
     ("grant_type", "client_credentials"),
     ("client_id", "my_app"),
-    ("client_secret", "super_secret_123"),
+    ("client_secret", &std::env::var("CLIENT_SECRET")?),
     ("scope", "read write"), // Optional: what permissions you want
 ];
 ```
@@ -310,7 +310,7 @@ POST /oauth/token HTTP/1.1
 Host: localhost:8080
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id=my_app&client_secret=super_secret_123&scope=read+write
+grant_type=client_credentials&client_id=my_app&client_secret=$CLIENT_SECRET&scope=read+write
 ```
 
 #### 3. Server Validates Request
@@ -377,7 +377,7 @@ curl -X POST http://localhost:8080/oauth/token \
 ```bash
 curl -X POST http://localhost:8080/oauth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=my_app&client_secret=super_secret_123"
+  -d "grant_type=client_credentials&client_id=my_app&client_secret=$CLIENT_SECRET"
 ```
 
 #### ❌ **Mistake 2: Spaces in curl**
@@ -417,8 +417,8 @@ Try these exercises:
 **Exercise 1:**
 ```rust
 let server = AuthServer::minimal()
-    .with_client("my_app", "super_secret_123")
-    .with_client("second_app", "another_secret_456")  // Add this line
+    .with_client("my_app", "$CLIENT_SECRET")
+    .with_client("second_app", "$SECOND_SECRET")  // Add this line
     .build()?;
 ```
 
@@ -427,7 +427,7 @@ let server = AuthServer::minimal()
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=nonexistent" \
-  -d "client_secret=super_secret_123"
+  -d "client_secret=$CLIENT_SECRET"
   
 # Expected: {"error": "invalid_client"}
 ```
@@ -437,7 +437,7 @@ curl -X POST http://localhost:8080/oauth/token \
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=my_app" \
-  -d "client_secret=wrong_secret"
+  -d "client_secret=INVALID_SECRET"
   
 # Expected: {"error": "invalid_client"}
 ```
@@ -447,7 +447,7 @@ curl -X POST http://localhost:8080/oauth/token \
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=my_app" \
-  -d "client_secret=super_secret_123" \
+  -d "client_secret=$CLIENT_SECRET" \
   -d "scope=read"
   
 # Expected: Token with "scope": "read"
@@ -660,9 +660,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Create auth server with multiple clients and scopes
     let auth_server = AuthServer::minimal()
-        .with_client("web_app", "web_secret_123")       // read, write
-        .with_client("mobile_app", "mobile_secret_456") // read only
-        .with_client("admin_app", "admin_secret_789")   // read, write, admin
+        .with_client("web_app", "$WEB_SECRET")       // read, write
+        .with_client("mobile_app", "$MOBILE_SECRET") // read only
+        .with_client("admin_app", "$ADMIN_SECRET")   // read, write, admin
         .with_scope("read")
         .with_scope("write")
         .with_scope("admin")
@@ -703,7 +703,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("🌐 Server running at http://localhost:8080");
     println!("\n📖 Try these examples:");
-    println!("1. Get token:    curl -X POST http://localhost:8080/oauth/token -d 'grant_type=client_credentials&client_id=web_app&client_secret=web_secret_123&scope=read write'");
+    println!("1. Get token:    curl -X POST http://localhost:8080/oauth/token -d 'grant_type=client_credentials&client_id=web_app&client_secret=$WEB_SECRET&scope=read write'");
     println!("2. Get profile:  curl -H 'Authorization: Bearer YOUR_TOKEN' http://localhost:8080/api/profile");
     println!("3. List users:   curl -H 'Authorization: Bearer YOUR_TOKEN' http://localhost:8080/api/users");
     println!("4. Create user:  curl -X POST -H 'Authorization: Bearer YOUR_TOKEN' -H 'Content-Type: application/json' http://localhost:8080/api/users -d '{{\"name\":\"Charlie\",\"email\":\"charlie@example.com\"}}'");
@@ -725,7 +725,7 @@ Now let's test the complete flow:
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=web_app" \
-  -d "client_secret=web_secret_123" \
+  -d "client_secret=$WEB_SECRET" \
   -d "scope=read write"
 ```
 
@@ -779,7 +779,7 @@ The delete will fail because the `web_app` client doesn't have `admin` scope!
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=admin_app" \
-  -d "client_secret=admin_secret_789" \
+  -d "client_secret=$ADMIN_SECRET" \
   -d "scope=read write admin"
 
 # Save admin token
@@ -1435,10 +1435,10 @@ Now you can test the complete document management system:
 ```bash
 # 1. Get tokens for different clients
 curl -X POST http://localhost:8080/oauth/token \
-  -d "grant_type=client_credentials&client_id=user_app&client_secret=user_secret"
+  -d "grant_type=client_credentials&client_id=user_app&client_secret=$USER_SECRET"
 
 curl -X POST http://localhost:8080/oauth/token \
-  -d "grant_type=client_credentials&client_id=editor_app&client_secret=editor_secret"
+  -d "grant_type=client_credentials&client_id=editor_app&client_secret=$EDITOR_SECRET"
 
 # 2. List documents (shows different results based on permissions)
 curl -H "Authorization: Bearer USER_TOKEN" http://localhost:8080/api/documents
@@ -1696,7 +1696,7 @@ curl -X POST http://localhost:8080/oauth/token \
 
 # 2. Check for typos in your server code
 let server = AuthServer::minimal()
-    .with_client("my_app", "secret123")  // Make sure these match exactly
+    .with_client("my_app", &std::env::var("CLIENT_SECRET")?)  // Make sure these match exactly
     .build()?;
 
 # 3. Enable debug logging
@@ -1737,11 +1737,11 @@ curl -H "Authorization: Bearer YOUR_TOKEN_HERE" http://localhost:8080/api/profil
 curl -X POST http://localhost:8080/oauth/introspect \
   -d "token=YOUR_TOKEN" \
   -d "client_id=my_app" \
-  -d "client_secret=secret123"
+  -d "client_secret=$CLIENT_SECRET"
 
 # 3. Get fresh token
 curl -X POST http://localhost:8080/oauth/token \
-  -d "grant_type=client_credentials&client_id=my_app&client_secret=secret123"
+  -d "grant_type=client_credentials&client_id=my_app&client_secret=$CLIENT_SECRET"
 ```
 
 #### 🚨 **403 Forbidden on API Calls**
@@ -1756,13 +1756,13 @@ curl -X POST http://localhost:8080/oauth/token \
 curl -X POST http://localhost:8080/oauth/introspect \
   -d "token=YOUR_TOKEN" \
   -d "client_id=my_app" \
-  -d "client_secret=secret123"
+  -d "client_secret=$CLIENT_SECRET"
 
 # Request token with needed scopes
 curl -X POST http://localhost:8080/oauth/token \
   -d "grant_type=client_credentials" \
   -d "client_id=my_app" \
-  -d "client_secret=secret123" \
+  -d "client_secret=$CLIENT_SECRET" \
   -d "scope=read write admin"  # Add required scopes
 ```
 
@@ -1810,7 +1810,7 @@ RUST_LOG=debug cargo run 2>&1 | ts '[%Y-%m-%d %H:%M:%S]'
 pip install httpie
 
 # Get token
-http POST localhost:8080/oauth/token grant_type=client_credentials client_id=my_app client_secret=secret123
+http POST localhost:8080/oauth/token grant_type=client_credentials client_id=my_app client_secret=$CLIENT_SECRET
 
 # Use token
 http GET localhost:8080/api/profile Authorization:"Bearer YOUR_TOKEN"
@@ -1847,7 +1847,7 @@ Create a Postman collection for easy testing:
   "variable": [
     {"key": "base_url", "value": "http://localhost:8080"},
     {"key": "client_id", "value": "my_app"},
-    {"key": "client_secret", "value": "secret123"}
+    {"key": "client_secret", "value": "{{client_secret}}"}
   ]
 }
 ```

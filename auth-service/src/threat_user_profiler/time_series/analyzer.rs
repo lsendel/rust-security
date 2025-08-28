@@ -2,11 +2,31 @@ use crate::threat_user_profiler::types::*;
 use chrono::{DateTime, Utc};
 use nalgebra::{DMatrix, DVector};
 use statrs::distribution::{ChiSquared, ContinuousCDF, Normal};
-use statrs::statistics::{OrderStatistics, Statistics};
+use statrs::statistics::Statistics;
 use std::collections::VecDeque;
 use tracing::{debug, warn};
 
+/// Helper trait to calculate median for Vec<f64>
+trait MedianCalculation {
+    fn median(&self) -> f64;
+}
+
+impl MedianCalculation for Vec<f64> {
+    fn median(&self) -> f64 {
+        if self.is_empty() {
+            return 0.0;
+        }
+        let len = self.len();
+        if len % 2 == 0 {
+            (self[len / 2 - 1] + self[len / 2]) / 2.0
+        } else {
+            self[len / 2]
+        }
+    }
+}
+
 /// Advanced time series analyzer for behavioral patterns
+#[derive(Clone)]
 pub struct TimeSeriesAnalyzer {
     window_size: usize,
     seasonality_periods: Vec<usize>,
@@ -15,7 +35,11 @@ pub struct TimeSeriesAnalyzer {
 
 impl TimeSeriesAnalyzer {
     /// Create a new time series analyzer
-    pub fn new(window_size: usize, seasonality_periods: Vec<usize>, change_point_sensitivity: f64) -> Self {
+    pub fn new(
+        window_size: usize,
+        seasonality_periods: Vec<usize>,
+        change_point_sensitivity: f64,
+    ) -> Self {
         Self {
             window_size,
             seasonality_periods,
@@ -24,34 +48,53 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Analyze a behavioral time series for patterns and anomalies
-    pub async fn analyze_series(&self, series: &BehavioralTimeSeries) -> Result<SeriesStatistics, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn analyze_series(
+        &self,
+        series: &BehavioralTimeSeries,
+    ) -> Result<SeriesStatistics, Box<dyn std::error::Error + Send + Sync>> {
         if series.data_points.len() < 3 {
             return Err("Insufficient data points for analysis".into());
         }
 
         let values: Vec<f64> = series.data_points.iter().map(|p| p.value).collect();
         
+        if values.is_empty() {
+            return Err("No data points available".into());
+        }
+
+        let mut sorted_values = values.clone();
+        sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        
+        let mean = values.iter().sum::<f64>() / values.len() as f64;
+        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
+        let std_dev = variance.sqrt();
+
         let statistics = SeriesStatistics {
-            mean: values.mean(),
-            median: values.median(),
-            std_dev: values.std_dev(),
-            variance: values.variance(),
-            min: values.min(),
-            max: values.max(),
-            percentile_95: self.calculate_percentile(&values, 0.95),
-            percentile_99: self.calculate_percentile(&values, 0.99),
+            mean,
+            median: sorted_values.median(),
+            std_dev,
+            variance,
+            min: *sorted_values.first().unwrap(),
+            max: *sorted_values.last().unwrap(),
+            percentile_95: self.calculate_percentile(&sorted_values, 0.95),
+            percentile_99: self.calculate_percentile(&sorted_values, 0.99),
             trend_slope: self.calculate_trend_slope(&values),
             seasonality_strength: self.calculate_seasonality_strength(&values),
         };
 
-        debug!("Analyzed time series for user {}: mean={:.3}, std_dev={:.3}, trend_slope={:.3}", 
-               series.user_id, statistics.mean, statistics.std_dev, statistics.trend_slope);
+        debug!(
+            "Analyzed time series for user {}: mean={:.3}, std_dev={:.3}, trend_slope={:.3}",
+            series.user_id, statistics.mean, statistics.std_dev, statistics.trend_slope
+        );
 
         Ok(statistics)
     }
 
     /// Perform trend analysis on time series data
-    pub async fn analyze_trend(&self, series: &BehavioralTimeSeries) -> Result<TrendAnalysis, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn analyze_trend(
+        &self,
+        series: &BehavioralTimeSeries,
+    ) -> Result<TrendAnalysis, Box<dyn std::error::Error + Send + Sync>> {
         if series.data_points.len() < 10 {
             return Err("Insufficient data points for trend analysis".into());
         }
@@ -60,7 +103,7 @@ impl TimeSeriesAnalyzer {
         let x_values: Vec<f64> = (0..values.len()).map(|i| i as f64).collect();
 
         let regression_result = self.linear_regression(&x_values, &values);
-        
+
         let trend_direction = match regression_result.slope {
             slope if slope > 0.01 => TrendDirection::Increasing,
             slope if slope < -0.01 => TrendDirection::Decreasing,
@@ -83,7 +126,10 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Detect change points in behavioral patterns
-    pub async fn detect_change_points(&self, series: &BehavioralTimeSeries) -> Result<Vec<ChangePoint>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn detect_change_points(
+        &self,
+        series: &BehavioralTimeSeries,
+    ) -> Result<Vec<ChangePoint>, Box<dyn std::error::Error + Send + Sync>> {
         if series.data_points.len() < 20 {
             return Ok(Vec::new());
         }
@@ -92,9 +138,10 @@ impl TimeSeriesAnalyzer {
         let mut change_points = Vec::new();
 
         // Use CUSUM (Cumulative Sum) algorithm for change point detection
-        let mean = values.mean();
-        let std_dev = values.std_dev();
-        
+        let mean = values.iter().sum::<f64>() / values.len() as f64;
+        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
+        let std_dev = variance.sqrt();
+
         if std_dev == 0.0 {
             return Ok(change_points);
         }
@@ -105,12 +152,16 @@ impl TimeSeriesAnalyzer {
 
         for (i, &value) in values.iter().enumerate().skip(1) {
             let deviation = value - mean;
-            
+
             cusum_pos = (cusum_pos + deviation - threshold).max(0.0);
             cusum_neg = (cusum_neg - deviation - threshold).max(0.0);
 
             if cusum_pos > threshold || cusum_neg > threshold {
-                let change_magnitude = if cusum_pos > cusum_neg { cusum_pos } else { -cusum_neg };
+                let change_magnitude = if cusum_pos > cusum_neg {
+                    cusum_pos
+                } else {
+                    -cusum_neg
+                };
                 let confidence = self.calculate_change_point_confidence(change_magnitude, std_dev);
 
                 if confidence > 0.8 {
@@ -128,12 +179,19 @@ impl TimeSeriesAnalyzer {
             }
         }
 
-        debug!("Detected {} change points for user {}", change_points.len(), series.user_id);
+        debug!(
+            "Detected {} change points for user {}",
+            change_points.len(),
+            series.user_id
+        );
         Ok(change_points)
     }
 
     /// Analyze seasonality patterns in behavioral data
-    pub async fn analyze_seasonality(&self, series: &BehavioralTimeSeries) -> Result<SeasonalityAnalysis, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn analyze_seasonality(
+        &self,
+        series: &BehavioralTimeSeries,
+    ) -> Result<SeasonalityAnalysis, Box<dyn std::error::Error + Send + Sync>> {
         if series.data_points.len() < self.seasonality_periods.iter().max().unwrap_or(&24) * 2 {
             return Ok(SeasonalityAnalysis::default());
         }
@@ -145,8 +203,9 @@ impl TimeSeriesAnalyzer {
 
         for &period_length in &self.seasonality_periods {
             if values.len() >= period_length * 2 {
-                let (amplitude, phase, confidence) = self.detect_seasonality(&values, period_length);
-                
+                let (amplitude, phase, confidence) =
+                    self.detect_seasonality(&values, period_length);
+
                 if confidence > 0.3 {
                     let seasonal_period = SeasonalPeriod {
                         period_length,
@@ -180,7 +239,7 @@ impl TimeSeriesAnalyzer {
 
         let mut sorted_values = values.to_vec();
         sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        
+
         let index = (percentile * (sorted_values.len() - 1) as f64) as usize;
         sorted_values[index.min(sorted_values.len() - 1)]
     }
@@ -203,9 +262,10 @@ impl TimeSeriesAnalyzer {
         }
 
         // Use autocorrelation to detect seasonality
-        let mut max_correlation = 0.0;
-        
-        for lag in 1..=values.len().min(168) { // Check up to weekly patterns
+        let mut max_correlation: f64 = 0.0;
+
+        for lag in 1..=values.len().min(168) {
+            // Check up to weekly patterns
             let correlation = self.calculate_autocorrelation(values, lag);
             max_correlation = max_correlation.max(correlation.abs());
         }
@@ -228,9 +288,13 @@ impl TimeSeriesAnalyzer {
         let n = x_values.len() as f64;
         let sum_x: f64 = x_values.iter().sum();
         let sum_y: f64 = y_values.iter().sum();
-        let sum_xy: f64 = x_values.iter().zip(y_values.iter()).map(|(x, y)| x * y).sum();
+        let sum_xy: f64 = x_values
+            .iter()
+            .zip(y_values.iter())
+            .map(|(x, y)| x * y)
+            .sum();
         let sum_x_squared: f64 = x_values.iter().map(|x| x * x).sum();
-        let sum_y_squared: f64 = y_values.iter().map(|y| y * y).sum();
+        let _sum_y_squared: f64 = y_values.iter().map(|y| y * y).sum();
 
         let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x_squared - sum_x * sum_x);
         let intercept = (sum_y - slope * sum_x) / n;
@@ -238,19 +302,33 @@ impl TimeSeriesAnalyzer {
         // Calculate R-squared
         let y_mean = sum_y / n;
         let ss_tot: f64 = y_values.iter().map(|y| (y - y_mean).powi(2)).sum();
-        let ss_res: f64 = x_values.iter().zip(y_values.iter())
+        let ss_res: f64 = x_values
+            .iter()
+            .zip(y_values.iter())
             .map(|(x, y)| (y - (slope * x + intercept)).powi(2))
             .sum();
-        
-        let r_squared = if ss_tot > 0.0 { 1.0 - (ss_res / ss_tot) } else { 0.0 };
+
+        let r_squared = if ss_tot > 0.0 {
+            1.0 - (ss_res / ss_tot)
+        } else {
+            0.0
+        };
 
         // Calculate residuals
-        let residuals: Vec<f64> = x_values.iter().zip(y_values.iter())
+        let residuals: Vec<f64> = x_values
+            .iter()
+            .zip(y_values.iter())
             .map(|(x, y)| y - (slope * x + intercept))
             .collect();
 
         // Simple p-value calculation (would need more sophisticated method in production)
-        let p_value = if r_squared > 0.5 { 0.01 } else if r_squared > 0.3 { 0.05 } else { 0.1 };
+        let p_value = if r_squared > 0.5 {
+            0.01
+        } else if r_squared > 0.3 {
+            0.05
+        } else {
+            0.1
+        };
 
         LinearRegressionResult {
             slope,
@@ -269,15 +347,18 @@ impl TimeSeriesAnalyzer {
 
         let mean = values.mean();
         let variance = values.variance();
-        
+
         if variance == 0.0 {
             return 0.0;
         }
 
-        let covariance: f64 = values.iter().take(values.len() - lag)
+        let covariance: f64 = values
+            .iter()
+            .take(values.len() - lag)
             .zip(values.iter().skip(lag))
             .map(|(x, y)| (x - mean) * (y - mean))
-            .sum::<f64>() / (values.len() - lag) as f64;
+            .sum::<f64>()
+            / (values.len() - lag) as f64;
 
         covariance / variance
     }
@@ -310,12 +391,17 @@ impl TimeSeriesAnalyzer {
         }
 
         // Calculate amplitude (range of seasonal component)
-        let min_seasonal = seasonal_component.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_seasonal = seasonal_component.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let min_seasonal = seasonal_component
+            .iter()
+            .fold(f64::INFINITY, |a, &b| a.min(b));
+        let max_seasonal = seasonal_component
+            .iter()
+            .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let amplitude = max_seasonal - min_seasonal;
 
         // Calculate phase (position of maximum)
-        let max_index = seasonal_component.iter()
+        let max_index = seasonal_component
+            .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .map(|(i, _)| i)
@@ -326,22 +412,26 @@ impl TimeSeriesAnalyzer {
         let mut confidence = 0.0;
         if cycles > 1 {
             let mut consistency_scores = Vec::new();
-            
+
             for cycle in 1..cycles {
                 let mut correlation_sum = 0.0;
                 for i in 0..period_length {
                     let current_index = cycle * period_length + i;
                     let prev_index = (cycle - 1) * period_length + i;
-                    
+
                     if current_index < values.len() && prev_index < values.len() {
                         correlation_sum += (values[current_index] - values[prev_index]).abs();
                     }
                 }
                 consistency_scores.push(correlation_sum / period_length as f64);
             }
-            
+
             let mean_consistency = consistency_scores.mean();
-            confidence = if mean_consistency > 0.0 { 1.0 / (1.0 + mean_consistency) } else { 1.0 };
+            confidence = if mean_consistency > 0.0 {
+                1.0 / (1.0 + mean_consistency)
+            } else {
+                1.0
+            };
         }
 
         (amplitude, phase, confidence)
@@ -359,9 +449,14 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Classify the type of change detected
-    fn classify_change_type(&self, change_magnitude: f64, values: &[f64], change_index: usize) -> ChangeType {
+    fn classify_change_type(
+        &self,
+        change_magnitude: f64,
+        values: &[f64],
+        change_index: usize,
+    ) -> ChangeType {
         let window_size = 10.min(change_index).min(values.len() - change_index);
-        
+
         if window_size < 3 {
             return ChangeType::Anomaly;
         }
@@ -395,7 +490,7 @@ mod tests {
     #[tokio::test]
     async fn test_time_series_analysis() {
         let analyzer = TimeSeriesAnalyzer::new(100, vec![24, 168], 0.05);
-        
+
         // Create test time series with trend and noise
         let mut data_points = VecDeque::new();
         for i in 0..50 {

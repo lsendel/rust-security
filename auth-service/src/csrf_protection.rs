@@ -1,16 +1,16 @@
 // CSRF Protection Implementation
 // Double-submit cookie pattern with secure token generation
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use hmac::{Hmac, Mac};
+use rand::{rngs::OsRng, RngCore};
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
-use tracing::{info, error};
-use serde::{Deserialize, Serialize};
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use rand::{RngCore, rngs::OsRng};
+use tracing::{error, info};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -42,7 +42,7 @@ impl Default for CsrfConfig {
         // Generate a random secret key
         let mut secret_key = vec![0u8; 32];
         OsRng.fill_bytes(&mut secret_key);
-        
+
         Self {
             secret_key,
             token_lifetime: Duration::from_secs(24 * 60 * 60), // 24 hours
@@ -96,12 +96,13 @@ impl CsrfToken {
         let mut token_bytes = vec![0u8; 32];
         OsRng.fill_bytes(&mut token_bytes);
         let token = URL_SAFE_NO_PAD.encode(&token_bytes);
-        
+
         let expires_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() + lifetime.as_secs();
-        
+            .as_secs()
+            + lifetime.as_secs();
+
         Self {
             token,
             expires_at,
@@ -120,15 +121,16 @@ impl CsrfToken {
 
     /// Generate HMAC signature for the token
     pub fn sign(&self, secret_key: &[u8]) -> Result<String, CsrfError> {
-        let mut mac = HmacSha256::new_from_slice(secret_key)
-            .map_err(|_| CsrfError::InvalidSecretKey)?;
-        
-        let payload = format!("{}:{}:{}", 
-            self.token, 
+        let mut mac =
+            HmacSha256::new_from_slice(secret_key).map_err(|_| CsrfError::InvalidSecretKey)?;
+
+        let payload = format!(
+            "{}:{}:{}",
+            self.token,
             self.expires_at,
             self.session_id.as_deref().unwrap_or("")
         );
-        
+
         mac.update(payload.as_bytes());
         let signature = mac.finalize().into_bytes();
         Ok(URL_SAFE_NO_PAD.encode(&signature))
@@ -137,7 +139,10 @@ impl CsrfToken {
     /// Verify HMAC signature
     pub fn verify(&self, signature: &str, secret_key: &[u8]) -> Result<bool, CsrfError> {
         let expected_signature = self.sign(secret_key)?;
-        Ok(constant_time_eq(signature.as_bytes(), expected_signature.as_bytes()))
+        Ok(constant_time_eq(
+            signature.as_bytes(),
+            expected_signature.as_bytes(),
+        ))
     }
 }
 
@@ -174,19 +179,22 @@ impl CsrfProtection {
     }
 
     /// Generate a new CSRF token
-    pub async fn generate_token(&self, session_id: Option<String>) -> Result<(String, String), CsrfError> {
+    pub async fn generate_token(
+        &self,
+        session_id: Option<String>,
+    ) -> Result<(String, String), CsrfError> {
         let token = CsrfToken::new(self.config.token_lifetime, session_id.clone());
         let signature = token.sign(&self.config.secret_key)?;
-        
+
         // Store token for validation
         {
             let mut tokens = self.active_tokens.write().await;
             tokens.insert(token.token.clone(), token.clone());
         }
-        
+
         // Create signed token for client
         let signed_token = format!("{}:{}", token.token, signature);
-        
+
         info!("Generated CSRF token for session: {:?}", session_id);
         Ok((token.token, signed_token))
     }
@@ -201,7 +209,8 @@ impl CsrfProtection {
         // Get token from storage
         let token = {
             let tokens = self.active_tokens.read().await;
-            tokens.get(token_value)
+            tokens
+                .get(token_value)
                 .cloned()
                 .ok_or(CsrfError::TokenInvalid)?
         };
@@ -230,9 +239,10 @@ impl CsrfProtection {
 
     /// Check if endpoint is exempt from CSRF protection
     pub fn is_exempt_endpoint(&self, path: &str) -> bool {
-        self.config.exempt_endpoints.iter().any(|exempt| {
-            path.starts_with(exempt)
-        })
+        self.config
+            .exempt_endpoints
+            .iter()
+            .any(|exempt| path.starts_with(exempt))
     }
 
     /// Generate cookie header for CSRF token
@@ -242,8 +252,16 @@ impl CsrfProtection {
             self.config.cookie_name,
             signed_token,
             self.config.same_site_policy,
-            if self.config.secure_cookie { "; Secure" } else { "" },
-            if self.config.http_only { "; HttpOnly" } else { "" },
+            if self.config.secure_cookie {
+                "; Secure"
+            } else {
+                ""
+            },
+            if self.config.http_only {
+                "; HttpOnly"
+            } else {
+                ""
+            },
             format!("; Max-Age={}", self.config.token_lifetime.as_secs())
         )
     }
@@ -277,9 +295,9 @@ impl CsrfProtection {
     pub async fn cleanup_expired_tokens(&self) {
         let mut tokens = self.active_tokens.write().await;
         let initial_count = tokens.len();
-        
+
         tokens.retain(|_, token| !token.is_expired());
-        
+
         let cleaned_count = initial_count - tokens.len();
         if cleaned_count > 0 {
             info!("Cleaned up {} expired CSRF tokens", cleaned_count);
@@ -297,7 +315,7 @@ impl CsrfProtection {
         let tokens = self.active_tokens.read().await;
         let total_tokens = tokens.len();
         let expired_tokens = tokens.values().filter(|t| t.is_expired()).count();
-        
+
         TokenStats {
             total_tokens,
             active_tokens: total_tokens - expired_tokens,
@@ -366,9 +384,12 @@ mod tests {
     async fn test_csrf_token_generation() {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
-        
-        let (token, signed_token) = csrf.generate_token(Some("session123".to_string())).await.unwrap();
-        
+
+        let (token, signed_token) = csrf
+            .generate_token(Some("session123".to_string()))
+            .await
+            .unwrap();
+
         assert!(!token.is_empty());
         assert!(signed_token.contains(':'));
     }
@@ -377,25 +398,37 @@ mod tests {
     async fn test_csrf_token_validation() {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
-        
-        let (_token, signed_token) = csrf.generate_token(Some("session123".to_string())).await.unwrap();
+
+        let (_token, signed_token) = csrf
+            .generate_token(Some("session123".to_string()))
+            .await
+            .unwrap();
         let (token_part, signature_part) = signed_token.split_once(':').unwrap();
-        
+
         // Valid token should pass
-        assert!(csrf.validate_token(token_part, signature_part, Some("session123")).await.is_ok());
-        
+        assert!(csrf
+            .validate_token(token_part, signature_part, Some("session123"))
+            .await
+            .is_ok());
+
         // Invalid signature should fail
-        assert!(csrf.validate_token(token_part, "invalid_signature", Some("session123")).await.is_err());
-        
+        assert!(csrf
+            .validate_token(token_part, "invalid_signature", Some("session123"))
+            .await
+            .is_err());
+
         // Wrong session should fail
-        assert!(csrf.validate_token(token_part, signature_part, Some("wrong_session")).await.is_err());
+        assert!(csrf
+            .validate_token(token_part, signature_part, Some("wrong_session"))
+            .await
+            .is_err());
     }
 
     #[test]
     fn test_exempt_endpoints() {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
-        
+
         assert!(csrf.is_exempt_endpoint("/health"));
         assert!(csrf.is_exempt_endpoint("/oauth/token"));
         assert!(!csrf.is_exempt_endpoint("/admin/users"));
@@ -405,9 +438,9 @@ mod tests {
     fn test_cookie_header_generation() {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
-        
+
         let header = csrf.generate_cookie_header("token123:signature456");
-        
+
         assert!(header.contains("csrf_token=token123:signature456"));
         assert!(header.contains("SameSite=Strict"));
         assert!(header.contains("Secure"));
@@ -417,10 +450,13 @@ mod tests {
     fn test_token_extraction() {
         let config = CsrfConfig::default();
         let csrf = CsrfProtection::new(config);
-        
+
         let mut headers = HashMap::new();
-        headers.insert("X-CSRF-Token".to_string(), "token123:signature456".to_string());
-        
+        headers.insert(
+            "X-CSRF-Token".to_string(),
+            "token123:signature456".to_string(),
+        );
+
         let (token, signature) = csrf.extract_token_from_request(&headers, None).unwrap();
         assert_eq!(token, "token123");
         assert_eq!(signature, "signature456");
@@ -430,18 +466,18 @@ mod tests {
     async fn test_token_cleanup() {
         let mut config = CsrfConfig::default();
         config.token_lifetime = Duration::from_millis(1); // Very short lifetime
-        
+
         let csrf = CsrfProtection::new(config);
-        
+
         // Generate token
         let (_token, _) = csrf.generate_token(None).await.unwrap();
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         // Cleanup should remove expired token
         csrf.cleanup_expired_tokens().await;
-        
+
         let stats = csrf.get_token_stats().await;
         assert_eq!(stats.active_tokens, 0);
     }

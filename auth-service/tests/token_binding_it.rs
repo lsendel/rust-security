@@ -4,7 +4,7 @@ use auth_service::store::HybridStore;
 use auth_service::{api_key_store::ApiKeyStore, app, AppState};
 use common::TokenRecord;
 use reqwest::Client;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 // Removed unused import: use tokio::sync::RwLock;
@@ -30,7 +30,10 @@ async fn spawn_app() -> String {
         session_store,
         token_store: Arc::new(std::sync::RwLock::new(HashMap::<String, TokenRecord>::new())),
         client_credentials: Arc::new(std::sync::RwLock::new(client_credentials)),
-        allowed_scopes: Arc::new(std::sync::RwLock::new(std::collections::HashSet::from(["read".to_string(), "openid".to_string()]))),
+        allowed_scopes: Arc::new(std::sync::RwLock::new(std::collections::HashSet::from([
+            "read".to_string(),
+            "openid".to_string(),
+        ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
             auth_service::policy_cache::PolicyCacheConfig::default(),

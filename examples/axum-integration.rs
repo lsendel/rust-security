@@ -133,7 +133,7 @@ async fn create_router(state: AppState) -> Router {
 
 // OAuth Token Endpoint
 async fn handle_token(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     axum::Form(req): axum::Form<TokenRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     info!("Token request from client: {}", req.client_id);
@@ -171,7 +171,7 @@ async fn handle_token(
 
 // OAuth Token Introspection Endpoint
 async fn handle_introspect(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     axum::Form(params): axum::Form<HashMap<String, String>>,
 ) -> Json<serde_json::Value> {
     let token = params.get("token").unwrap_or(&String::new()).clone();
@@ -200,7 +200,7 @@ async fn handle_introspect(
 
 // Authentication middleware
 async fn auth_middleware(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> Result<impl IntoResponse, StatusCode> {

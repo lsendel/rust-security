@@ -17,6 +17,7 @@ pub struct ReportRenderer {
 
 impl ReportRenderer {
     /// Create a new report renderer
+    #[must_use]
     pub fn new() -> Self {
         let mut tera = Tera::new("templates/**/*").unwrap_or_else(|_| Tera::new("").unwrap());
 

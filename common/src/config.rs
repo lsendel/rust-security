@@ -61,3 +61,43 @@ impl Default for RateLimitConfig {
         }
     }
 }
+
+impl PlatformConfiguration {
+    /// Basic validation to ensure sane configuration; returns Err with reason when invalid
+    pub fn validate(&self) -> Result<(), String> {
+        // environment should be one of known values
+        let env = self.environment.to_lowercase();
+        let valid_env = matches!(
+            env.as_str(),
+            "development" | "staging" | "production" | "test"
+        );
+        if !valid_env {
+            return Err(format!("invalid environment: {}", self.environment));
+        }
+        if self.service_name.trim().is_empty() {
+            return Err("service_name must not be empty".to_string());
+        }
+        if !matches!(
+            self.log_level.as_str(),
+            "trace" | "debug" | "info" | "warn" | "error"
+        ) {
+            return Err(format!("invalid log_level: {}", self.log_level));
+        }
+        self.security.validate()
+    }
+}
+
+impl SecurityConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        self.rate_limit.validate()
+    }
+}
+
+impl RateLimitConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.enabled && (self.requests_per_minute == 0 || self.requests_per_minute > 1_000_000) {
+            return Err("requests_per_minute must be in 1..=1_000_000 when enabled".to_string());
+        }
+        Ok(())
+    }
+}

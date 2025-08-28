@@ -3,8 +3,6 @@
 //! This crate provides comprehensive SOAR capabilities for security incident management,
 //! automated response workflows, and integration with external security tools.
 
-use anyhow::Result;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -15,19 +13,19 @@ use uuid::Uuid;
 pub enum SoarError {
     #[error("Case not found: {id}")]
     CaseNotFound { id: Uuid },
-    
+
     #[error("Workflow execution failed: {reason}")]
     WorkflowFailed { reason: String },
-    
+
     #[error("Integration error: {service}")]
     IntegrationError { service: String },
-    
+
     #[error("Database error")]
     DatabaseError(#[from] anyhow::Error),
-    
+
     #[error("Template error: {reason}")]
     TemplateError { reason: String },
-    
+
     #[error("Notification failed: {channel}")]
     NotificationFailed { channel: String },
 }
@@ -46,7 +44,7 @@ pub struct SecurityIncident {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IncidentSeverity {
     Critical,
     High,
@@ -55,7 +53,7 @@ pub enum IncidentSeverity {
     Info,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IncidentStatus {
     Open,
     InProgress,
@@ -82,7 +80,7 @@ mod tests {
             tags: vec!["authentication".to_string(), "brute-force".to_string()],
             metadata: HashMap::new(),
         };
-        
+
         assert_eq!(incident.status, IncidentStatus::Open);
         assert_eq!(incident.severity, IncidentSeverity::Medium);
     }

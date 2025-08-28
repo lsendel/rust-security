@@ -186,7 +186,7 @@ impl SoarCore {
     ) -> Result<String, SoarError> {
         debug!("Triggering playbook: {}", playbook_id);
 
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let playbook = config
             .playbooks
             .get(playbook_id)
@@ -337,7 +337,7 @@ impl SoarCore {
 
     /// Check if an alert should trigger auto-response
     async fn should_auto_respond(&self, alert: &SecurityAlert) -> Result<bool, SoarError> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         if !config.auto_response_config.enabled {
             return Ok(false);
@@ -372,7 +372,7 @@ impl SoarCore {
 
     /// Check if a case should be created for an alert
     async fn should_create_case(&self, alert: &SecurityAlert) -> Result<bool, SoarError> {
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         if !config.case_management.auto_create_cases {
             return Ok(false);

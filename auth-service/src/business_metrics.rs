@@ -127,7 +127,12 @@ impl BusinessMetricsHelper {
     }
 
     /// Record rate limit enforcement
-    pub fn record_rate_limit_enforcement(_path: &str, _client_key: &str, _action: &str, _request_type: &str) {
+    pub fn record_rate_limit_enforcement(
+        _path: &str,
+        _client_key: &str,
+        _action: &str,
+        _request_type: &str,
+    ) {
         let metrics = get_metrics();
         if _action == "allowed" {
             metrics.record_login_success();
@@ -137,7 +142,12 @@ impl BusinessMetricsHelper {
     }
 
     /// Record cache operation
-    pub fn record_cache_operation(_cache_type: &str, _operation: &str, _result: &str, _duration: Duration) {
+    pub fn record_cache_operation(
+        _cache_type: &str,
+        _operation: &str,
+        _result: &str,
+        _duration: Duration,
+    ) {
         // For now, just track as general operations
         let _metrics = get_metrics();
         // Could extend to track cache-specific metrics
@@ -160,7 +170,12 @@ impl BusinessMetricsHelper {
     }
 
     /// Record API endpoint access
-    pub fn record_api_access(_endpoint: &str, _method: &str, _status_code: u16, _duration: Duration) {
+    pub fn record_api_access(
+        _endpoint: &str,
+        _method: &str,
+        _status_code: u16,
+        _duration: Duration,
+    ) {
         let _metrics = get_metrics();
         // Could extend to track API-specific metrics
     }
@@ -187,11 +202,11 @@ mod tests {
     #[test]
     fn test_login_tracking() {
         let metrics = AuthMetrics::new();
-        
+
         metrics.record_login_success();
         metrics.record_login_success();
         metrics.record_login_failure();
-        
+
         let attempts = metrics.get_login_attempts();
         assert_eq!(attempts.get("success"), Some(&2));
         assert_eq!(attempts.get("failure"), Some(&1));
@@ -200,14 +215,14 @@ mod tests {
     #[test]
     fn test_session_tracking() {
         let metrics = AuthMetrics::new();
-        
+
         metrics.session_started();
         metrics.session_started();
         assert_eq!(metrics.get_active_sessions(), 2);
-        
+
         metrics.session_ended();
         assert_eq!(metrics.get_active_sessions(), 1);
-        
+
         // Should not go below 0
         metrics.session_ended();
         metrics.session_ended();
@@ -217,11 +232,11 @@ mod tests {
     #[test]
     fn test_token_operations() {
         let metrics = AuthMetrics::new();
-        
+
         metrics.record_token_issued();
         metrics.record_token_issued();
         metrics.record_token_revoked();
-        
+
         let operations = metrics.get_token_operations();
         assert_eq!(operations.get("issued"), Some(&2));
         assert_eq!(operations.get("revoked"), Some(&1));
@@ -230,13 +245,13 @@ mod tests {
     #[test]
     fn test_metrics_reset() {
         let metrics = AuthMetrics::new();
-        
+
         metrics.record_login_success();
         metrics.session_started();
         metrics.record_token_issued();
-        
+
         metrics.reset();
-        
+
         assert_eq!(metrics.get_active_sessions(), 0);
         assert!(metrics.get_login_attempts().is_empty());
         assert!(metrics.get_token_operations().is_empty());

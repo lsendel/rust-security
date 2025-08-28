@@ -64,7 +64,7 @@ impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
             global_requests_per_minute: 10000,
-            global_requests_per_hour: 100000,
+            global_requests_per_hour: 100_000,
             per_ip_requests_per_minute: 100,
             per_ip_requests_per_hour: 1000,
             per_ip_requests_per_day: 10000,
@@ -87,7 +87,7 @@ impl Default for RateLimitConfig {
             suspicious_threshold: 1000,
             ban_duration_minutes: 60,
             cleanup_interval_seconds: 300, // 5 minutes
-            max_tracked_ips: 100000,
+            max_tracked_ips: 100_000,
         }
     }
 }
@@ -745,7 +745,7 @@ pub async fn advanced_rate_limit_middleware(
 
     // Get rate limiter instance (in real implementation, this would be injected)
     let config = RateLimitConfig::from_env();
-    let limiter = AdvancedRateLimiter::new(config);
+    let _limiter = AdvancedRateLimiter::new(config);
 
     // Check rate limits
     match limiter.check_rate_limit(client_ip, client_id.as_deref(), endpoint).await {

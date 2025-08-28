@@ -54,7 +54,7 @@ static CREDENTIALS: Lazy<RwLock<HashMap<String, Vec<serde_json::Value>>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub async fn begin_register(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(body): Json<BeginRegisterRequest>,
 ) -> Json<BeginRegisterResponse> {
     // Stub challenge (library to generate real challenge later)
@@ -80,7 +80,7 @@ pub async fn begin_register(
 }
 
 pub async fn finish_register(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(body): Json<FinishRegisterRequest>,
 ) -> Json<FinishRegisterResponse> {
     // Stub: accept any credential, store it
@@ -93,7 +93,7 @@ pub async fn finish_register(
 }
 
 pub async fn begin_assert(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(body): Json<BeginAssertRequest>,
 ) -> Json<BeginAssertResponse> {
     let challenge = serde_json::json!({ "challenge": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4().as_bytes()) });
@@ -119,7 +119,7 @@ pub async fn begin_assert(
 }
 
 pub async fn finish_assert(
-    State(_state): State<AppState>,
+    State(__state): State<AppState>,
     Json(_body): Json<FinishAssertRequest>,
 ) -> Json<FinishAssertResponse> {
     // Stub: accept any assertion; mark session verified via set_mfa_verified

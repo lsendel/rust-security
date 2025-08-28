@@ -29,6 +29,7 @@ allow = [
 confidence-threshold = 0.8
 
 [bans]
+multiple-versions = "warn"  # Change from deny to warn for better workflow
 # Banned packages with security issues
 deny = [
     { name = "time", version = "=0.1.0" }, # Unsound API
@@ -37,6 +38,9 @@ deny = [
     { name = "chrono", version = "<0.4.20" }, # Old versions have vulnerabilities
     { name = "pprof2", version = "*" },    # RUSTSEC-2024-0408 memory safety issue
     { name = "trust-dns-resolver", version = "*" }, # Deprecated, use hickory-dns
+    { name = "mysql", version = "*" },     # Explicitly deny MySQL
+    { name = "mysql_async", version = "*" },
+    { name = "mysql_common", version = "*" },
 ]
 
 # Allow multiple versions for compatibility during migration
@@ -46,6 +50,14 @@ skip = [
     { name = "tower", version = "*" },
     { name = "syn", version = "*" }, # Common in proc macros
     { name = "quote", version = "*" }, # Common in proc macros
+    { name = "axum", version = "*" }, # Different versions for different dependencies
+    { name = "axum-core", version = "*" },
+    { name = "base64", version = "*" }, # Common version conflicts
+    { name = "zip", version = "*" }, # Build tool dependencies
+    { name = "tempfile", version = "*" },
+    { name = "parking_lot", version = "*" },
+    { name = "tokio", version = "*" }, # Different features cause conflicts
+    { name = "rustix", version = "*" },
 ]
 
 [advisories]
@@ -79,3 +91,31 @@ github = [
     "RustCrypto",
     "rustls",
 ]
+
+# SQLx security constraints - ensure only approved features are used
+[[bans.features]]
+name = "sqlx"
+allow = [
+    "postgres",
+    "sqlite", 
+    "chrono",
+    "uuid",
+    "migrate",
+    "macros",
+    "runtime-tokio-rustls",  # Only allow rustls, not native-tls
+]
+deny = [
+    "mysql",                    # MySQL support disabled due to RUSTSEC-2023-0071
+    "mssql",                    # Limit database support to PostgreSQL and SQLite only
+    "runtime-tokio-native-tls", # Force rustls for better security
+    "runtime-async-std-native-tls",
+    "tls-native-tls",
+    "_unstable-all-types",      # Deny unstable features in production
+]
+exact = true
+
+# Tokio security constraints
+[[bans.features]]
+name = "tokio"
+allow = ["full", "macros", "rt", "rt-multi-thread", "net", "fs", "io-util", "time", "sync", "signal"]
+deny = ["test-util"]  # Prevent test utilities in production

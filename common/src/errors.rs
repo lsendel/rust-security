@@ -45,20 +45,21 @@ pub enum CommonError {
 
 impl CommonError {
     /// Convert to HTTP status code
-    pub fn status_code(&self) -> u16 {
+    #[must_use]
+    pub const fn status_code(&self) -> u16 {
         match self {
-            CommonError::Authentication { .. } => 401,
-            CommonError::Authorization { .. } => 403,
-            CommonError::NotFound { .. } => 404,
-            CommonError::RateLimit { .. } => 429,
-            CommonError::ServiceUnavailable { .. } => 503,
-            CommonError::InvalidInput { .. } => 400,
-            CommonError::Configuration { .. }
-            | CommonError::Network { .. }
-            | CommonError::Database { .. }
-            | CommonError::Cache { .. }
-            | CommonError::Security { .. }
-            | CommonError::Internal { .. } => 500,
+            Self::Authentication { .. } => 401,
+            Self::Authorization { .. } => 403,
+            Self::NotFound { .. } => 404,
+            Self::RateLimit { .. } => 429,
+            Self::ServiceUnavailable { .. } => 503,
+            Self::InvalidInput { .. } => 400,
+            Self::Configuration { .. }
+            | Self::Network { .. }
+            | Self::Database { .. }
+            | Self::Cache { .. }
+            | Self::Security { .. }
+            | Self::Internal { .. } => 500,
         }
     }
 }
