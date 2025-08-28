@@ -51,7 +51,7 @@ pub struct ConfigReloadManager {
 
 impl ConfigReloadManager {
     /// Create a new configuration reload manager
-    pub fn new(
+    #[must_use] pub fn new(
         initial_config: Config,
         config_path: Option<String>,
     ) -> (Self, broadcast::Receiver<ConfigReloadEvent>) {
@@ -220,7 +220,7 @@ impl ConfigReloadManager {
     async fn load_config_from_file(&self, path: &str) -> Result<Config> {
         let config_content = fs::read_to_string(path)
             .await
-            .with_context(|| format!("Failed to read configuration file: {}", path))?;
+            .with_context(|| format!("Failed to read configuration file: {path}"))?;
 
         let config: Config = if path.ends_with(".toml") {
             toml::from_str(&config_content).with_context(|| "Failed to parse TOML configuration")?

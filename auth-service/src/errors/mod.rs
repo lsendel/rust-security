@@ -169,7 +169,7 @@ pub enum AuthError {
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        AuthError::InternalError {
+        Self::InternalError {
             error_id: Uuid::new_v4(),
             context: err.to_string(),
         }
@@ -179,25 +179,25 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_code, user_message, log_details) = match &self {
-            AuthError::InvalidClientCredentials => (
+            Self::InvalidClientCredentials => (
                 StatusCode::UNAUTHORIZED,
                 "invalid_client",
                 "Authentication failed",
                 false,
             ),
-            AuthError::InvalidToken { .. } => (
+            Self::InvalidToken { .. } => (
                 StatusCode::UNAUTHORIZED,
                 "invalid_token",
                 "Token validation failed",
                 false,
             ),
-            AuthError::RateLimitExceeded => (
+            Self::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limit_exceeded",
                 "Too many requests",
                 false,
             ),
-            AuthError::IpRateLimitExceeded { ip } => {
+            Self::IpRateLimitExceeded { ip } => {
                 // Log security event but don't expose IP to client
                 tracing::warn!(
                     ip = %ip,
@@ -210,26 +210,26 @@ impl IntoResponse for AuthError {
                     false,
                 )
             }
-            AuthError::ValidationError { .. } => (
+            Self::ValidationError { .. } => (
                 StatusCode::BAD_REQUEST,
                 "invalid_request",
                 "Request validation failed",
                 false,
             ),
-            AuthError::SessionExpired => (
+            Self::SessionExpired => (
                 StatusCode::UNAUTHORIZED,
                 "session_expired",
                 "Session has expired",
                 false,
             ),
-            AuthError::MfaChallengeRequired { .. } => (
+            Self::MfaChallengeRequired { .. } => (
                 StatusCode::UNAUTHORIZED,
                 "mfa_required",
                 "Multi-factor authentication required",
                 false,
             ),
             // Internal errors - don't leak details to client
-            AuthError::InternalError { error_id, context } => {
+            Self::InternalError { error_id, context } => {
                 // Log full details internally with error ID for tracking
                 tracing::error!(
                     error_id = %error_id,
@@ -245,7 +245,7 @@ impl IntoResponse for AuthError {
                     true,
                 )
             }
-            AuthError::TokenStoreError { operation, .. } => {
+            Self::TokenStoreError { operation, .. } => {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
                     error_id = %error_id,
@@ -262,7 +262,7 @@ impl IntoResponse for AuthError {
                 )
             }
             #[cfg(feature = "enhanced-session-store")]
-            AuthError::RedisConnectionError { .. } => {
+            Self::RedisConnectionError { .. } => {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
                     error_id = %error_id,
@@ -277,7 +277,7 @@ impl IntoResponse for AuthError {
                     true,
                 )
             }
-            AuthError::ConfigurationError { field, .. } => {
+            Self::ConfigurationError { field, .. } => {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
                     error_id = %error_id,
@@ -293,61 +293,61 @@ impl IntoResponse for AuthError {
                     true,
                 )
             }
-            AuthError::AnomalyDetected => (
+            Self::AnomalyDetected => (
                 StatusCode::FORBIDDEN,
                 "anomaly_detected",
                 "Access denied due to security anomaly",
                 false,
             ),
-            AuthError::PolicyDenied => (
+            Self::PolicyDenied => (
                 StatusCode::FORBIDDEN,
                 "access_denied",
                 "Access denied by policy",
                 false,
             ),
-            AuthError::ApprovalRequired => (
+            Self::ApprovalRequired => (
                 StatusCode::ACCEPTED,
                 "approval_required",
                 "Request requires approval",
                 false,
             ),
-            AuthError::IdentityNotFound => (
+            Self::IdentityNotFound => (
                 StatusCode::NOT_FOUND,
                 "identity_not_found",
                 "Identity not found",
                 false,
             ),
-            AuthError::TokenGenerationFailed(_) => (
+            Self::TokenGenerationFailed(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "token_generation_failed",
                 "Token generation failed",
                 true,
             ),
-            AuthError::TokenRevoked => (
+            Self::TokenRevoked => (
                 StatusCode::UNAUTHORIZED,
                 "token_revoked",
                 "Token has been revoked",
                 false,
             ),
-            AuthError::TokenBindingViolation => (
+            Self::TokenBindingViolation => (
                 StatusCode::FORBIDDEN,
                 "token_binding_violation",
                 "Token binding violation",
                 false,
             ),
-            AuthError::TokenUsageLimitExceeded => (
+            Self::TokenUsageLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "token_usage_limit_exceeded",
                 "Token usage limit exceeded",
                 false,
             ),
-            AuthError::InsufficientDataForBaseline => (
+            Self::InsufficientDataForBaseline => (
                 StatusCode::PRECONDITION_FAILED,
                 "insufficient_data",
                 "Insufficient data for baseline",
                 false,
             ),
-            AuthError::IdentitySuspended => (
+            Self::IdentitySuspended => (
                 StatusCode::FORBIDDEN,
                 "identity_suspended",
                 "Identity suspended",
@@ -383,7 +383,7 @@ impl IntoResponse for AuthError {
 
         // Only include error_id for internal errors to help with debugging
         if log_details {
-            if let AuthError::InternalError { error_id, .. } = &self {
+            if let Self::InternalError { error_id, .. } = &self {
                 error_response.error_id = Some(error_id.to_string());
             }
         }
@@ -416,7 +416,7 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    pub fn new(error: &str, description: &str) -> Self {
+    #[must_use] pub fn new(error: &str, description: &str) -> Self {
         Self {
             error: error.to_string(),
             error_description: description.to_string(),
@@ -427,17 +427,17 @@ impl ErrorResponse {
         }
     }
 
-    pub fn with_error_id(mut self, error_id: Uuid) -> Self {
+    #[must_use] pub fn with_error_id(mut self, error_id: Uuid) -> Self {
         self.error_id = Some(error_id.to_string());
         self
     }
 
-    pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
+    #[must_use] pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
         self.correlation_id = Some(correlation_id);
         self
     }
 
-    pub fn with_detail(mut self, key: &str, value: serde_json::Value) -> Self {
+    #[must_use] pub fn with_detail(mut self, key: &str, value: serde_json::Value) -> Self {
         if self.details.is_none() {
             self.details = Some(HashMap::new());
         }
@@ -448,7 +448,7 @@ impl ErrorResponse {
         self
     }
 
-    pub fn with_error_uri(mut self, uri: String) -> Self {
+    #[must_use] pub fn with_error_uri(mut self, uri: String) -> Self {
         self.error_uri = Some(uri);
         self
     }
@@ -459,35 +459,35 @@ impl ErrorResponse {
 #[cfg(feature = "enhanced-session-store")]
 impl From<redis::RedisError> for AuthError {
     fn from(err: redis::RedisError) -> Self {
-        AuthError::RedisConnectionError { source: err }
+        Self::RedisConnectionError { source: err }
     }
 }
 
 impl From<serde_json::Error> for AuthError {
     fn from(err: serde_json::Error) -> Self {
-        AuthError::SerializationError { source: err }
+        Self::SerializationError { source: err }
     }
 }
 
 impl From<reqwest::Error> for AuthError {
     fn from(err: reqwest::Error) -> Self {
-        AuthError::HttpClientError { source: err }
+        Self::HttpClientError { source: err }
     }
 }
 
 impl From<jsonwebtoken::errors::Error> for AuthError {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
         match err.kind() {
-            jsonwebtoken::errors::ErrorKind::InvalidToken => AuthError::JwtVerificationError {
+            jsonwebtoken::errors::ErrorKind::InvalidToken => Self::JwtVerificationError {
                 reason: "invalid token format".to_string(),
             },
-            jsonwebtoken::errors::ErrorKind::InvalidSignature => AuthError::JwtVerificationError {
+            jsonwebtoken::errors::ErrorKind::InvalidSignature => Self::JwtVerificationError {
                 reason: "invalid signature".to_string(),
             },
-            jsonwebtoken::errors::ErrorKind::ExpiredSignature => AuthError::JwtVerificationError {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => Self::JwtVerificationError {
                 reason: "token expired".to_string(),
             },
-            _ => AuthError::JwtVerificationError {
+            _ => Self::JwtVerificationError {
                 reason: "token validation failed".to_string(),
             },
         }
@@ -498,9 +498,9 @@ impl From<anyhow::Error> for AuthError {
     fn from(err: anyhow::Error) -> Self {
         let error_id = uuid::Uuid::new_v4();
         tracing::error!(error_id = %error_id, error = %redact_log(&err.to_string()), "Converting anyhow error to AuthError");
-        AuthError::InternalError {
+        Self::InternalError {
             error_id,
-            context: format!("Internal error: {}", err),
+            context: format!("Internal error: {err}"),
         }
     }
 }
@@ -549,7 +549,7 @@ pub fn internal_error(context: &str) -> AuthError {
 }
 
 /// Create a validation error
-pub fn validation_error(field: &str, reason: &str) -> AuthError {
+#[must_use] pub fn validation_error(field: &str, reason: &str) -> AuthError {
     AuthError::ValidationError {
         field: field.to_string(),
         reason: reason.to_string(),
@@ -557,7 +557,7 @@ pub fn validation_error(field: &str, reason: &str) -> AuthError {
 }
 
 /// Create a token store error
-pub fn token_store_error(
+#[must_use] pub fn token_store_error(
     operation: &str,
     source: Box<dyn std::error::Error + Send + Sync>,
 ) -> AuthError {

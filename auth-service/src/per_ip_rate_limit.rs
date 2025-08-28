@@ -179,7 +179,7 @@ pub struct PerIpRateLimiter {
 }
 
 impl PerIpRateLimiter {
-    pub fn new(config: PerIpRateLimitConfig) -> Self {
+    #[must_use] pub fn new(config: PerIpRateLimitConfig) -> Self {
         Self {
             entries: DashMap::new(),
             config,
@@ -238,14 +238,14 @@ impl PerIpRateLimiter {
         let mut total_requests = 0;
         let mut total_violations = 0;
 
-        for entry in self.entries.iter() {
+        for entry in &self.entries {
             total_ips += 1;
             let stats = entry.value().get_stats();
             if stats.is_suspicious {
                 suspicious_ips += 1;
             }
             total_requests += stats.total_requests;
-            total_violations += stats.rate_limit_violations as u64;
+            total_violations += u64::from(stats.rate_limit_violations);
         }
 
         OverallStats {
@@ -342,7 +342,7 @@ impl PerIpRateLimiter {
         .with_action(action)
         .with_target(target)
         .with_outcome(outcome)
-        .with_reason(format!("Per-IP rate limiting: {}", reason))
+        .with_reason(format!("Per-IP rate limiting: {reason}"))
         .with_detail_string("ip_address".to_string(), ip.to_string())
         .with_detail_string("reason".to_string(), reason.to_string());
 
@@ -442,7 +442,7 @@ pub fn get_ip_specific_stats(ip: &IpAddr) -> Option<IpStats> {
 }
 
 /// Blacklist an IP address
-pub fn blacklist_ip(ip: IpAddr) {
+pub const fn blacklist_ip(ip: IpAddr) {
     // Configuration mutation is rare; create a temporary mutable copy via interior mutability pattern if needed.
     // Here we rely on methods to take &mut self; use a static mutable pattern by casting (safe due to single writer usage) or redesign API if required.
     // For simplicity in current context, we shadow a new limiter is not feasible; leave as no-op in read-only global.
@@ -450,7 +450,7 @@ pub fn blacklist_ip(ip: IpAddr) {
 }
 
 /// Remove IP from blacklist
-pub fn unblacklist_ip(ip: &IpAddr) {
+pub const fn unblacklist_ip(ip: &IpAddr) {
     let _ = ip; // See note in blacklist_ip
 }
 

@@ -41,14 +41,14 @@ impl SecureString {
             ));
         }
         
-        Ok(SecureString(value))
+        Ok(Self(value))
     }
     
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.0
     }
     
-    pub fn as_bytes(&self) -> &[u8] {
+    #[must_use] pub fn as_bytes(&self) -> &[u8] {
         self.0.as_bytes()
     }
 }
@@ -132,7 +132,7 @@ impl SecureConfig {
             ));
         }
         
-        Ok(SecureConfig {
+        Ok(Self {
             jwt_secret,
             encryption_key,
             database_url,

@@ -182,7 +182,7 @@ pub enum PolicyCondition {
     RequireAttestation,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PolicyEffect {
     Allow,
     Deny,
@@ -265,7 +265,7 @@ impl ServiceIdentityManager {
                     alert_type: SecurityAlertType::AnomalousPattern,
                     severity: AlertSeverity::High,
                     title: format!("Anomalous JIT request from {:?}", identity.identity_type),
-                    description: format!("Suspicious JIT access request detected"),
+                    description: "Suspicious JIT access request detected".to_string(),
                     timestamp: Utc::now().timestamp() as u64,
                     source_ip: Some(request.request_context.source_ip.clone()),
                     destination_ip: None,
@@ -411,7 +411,7 @@ impl ServiceIdentityManager {
     }
 
     /// Helper: Determine max token lifetime based on identity type
-    fn get_max_lifetime(&self, identity_type: &IdentityType) -> u64 {
+    const fn get_max_lifetime(&self, identity_type: &IdentityType) -> u64 {
         match identity_type {
             IdentityType::Human { .. } => 900, // 15 minutes
             IdentityType::ServiceAccount {
@@ -426,7 +426,7 @@ impl ServiceIdentityManager {
     }
 
     /// Helper: Check if identity requires attestation
-    fn requires_attestation(&self, identity_type: &IdentityType) -> bool {
+    const fn requires_attestation(&self, identity_type: &IdentityType) -> bool {
         matches!(
             identity_type,
             IdentityType::AiAgent { .. } | IdentityType::MachineWorkload { .. }
@@ -434,7 +434,7 @@ impl ServiceIdentityManager {
     }
 
     /// Helper: Check if identity requires continuous auth
-    fn requires_continuous_auth(&self, identity_type: &IdentityType) -> bool {
+    const fn requires_continuous_auth(&self, identity_type: &IdentityType) -> bool {
         matches!(
             identity_type,
             IdentityType::AiAgent { .. }
@@ -454,8 +454,14 @@ pub struct IdentityConfig {
     pub allowed_hours: Option<(u8, u8)>,
 }
 
+impl Default for PolicyEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolicyEngine {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             policies: Arc::new(RwLock::new(Vec::new())),
         }

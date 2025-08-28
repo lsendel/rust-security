@@ -36,7 +36,7 @@ pub struct RequestSignature {
 
 impl ReplayProtection {
     /// Create a new replay protection instance
-    pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64) -> Self {
+    #[must_use] pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64) -> Self {
         let redis_client = redis_url.and_then(|url| {
             redis::Client::open(url)
                 .map_err(|e| {
@@ -136,7 +136,7 @@ impl ReplayProtection {
         nonce: &str,
     ) -> Result<bool, redis::RedisError> {
         let mut conn = client.get_multiplexed_async_connection().await?;
-        let key = format!("admin:nonce:{}", nonce);
+        let key = format!("admin:nonce:{nonce}");
         let exists: bool = conn.exists(&key).await?;
         Ok(exists)
     }
@@ -151,7 +151,7 @@ impl ReplayProtection {
                 .store_redis_nonce(client, nonce, timestamp, expiry)
                 .await
             {
-                Ok(_) => {
+                Ok(()) => {
                     // Also store locally for redundancy
                     self.local_cache.insert(nonce.to_string(), timestamp);
                     self.cleanup_local_cache();
@@ -178,7 +178,7 @@ impl ReplayProtection {
         expiry: u64,
     ) -> Result<(), redis::RedisError> {
         let mut conn = client.get_multiplexed_async_connection().await?;
-        let key = format!("admin:nonce:{}", nonce);
+        let key = format!("admin:nonce:{nonce}");
 
         // Store with expiry
         conn.set_ex::<_, _, ()>(&key, timestamp, expiry).await?;
@@ -200,16 +200,16 @@ impl ReplayProtection {
     }
 
     /// Generate a secure nonce
-    pub fn generate_nonce() -> String {
+    #[must_use] pub fn generate_nonce() -> String {
         use base64::{engine::general_purpose, Engine as _};
         use rand::RngCore;
         let mut bytes = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut bytes);
-        general_purpose::STANDARD.encode(&bytes)
+        general_purpose::STANDARD.encode(bytes)
     }
 
     /// Create HMAC signature for request
-    pub fn create_signature(
+    #[must_use] pub fn create_signature(
         secret: &str,
         method: &str,
         path: &str,
@@ -219,14 +219,14 @@ impl ReplayProtection {
         use crate::crypto_unified::UnifiedHmac;
         use base64::{engine::general_purpose, Engine as _};
 
-        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
+        let message = format!("{method}:{path}:{nonce}:{timestamp}");
         let hmac_result = UnifiedHmac::hmac_sha256(secret.as_bytes(), message.as_bytes());
 
         general_purpose::STANDARD.encode(hmac_result)
     }
 
     /// Verify HMAC signature
-    pub fn verify_signature(
+    #[must_use] pub fn verify_signature(
         secret: &str,
         method: &str,
         path: &str,
@@ -237,7 +237,7 @@ impl ReplayProtection {
         use crate::crypto_unified::UnifiedHmac;
         use base64::{engine::general_purpose, Engine as _};
 
-        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
+        let message = format!("{method}:{path}:{nonce}:{timestamp}");
 
         // Decode the provided signature
         let Ok(provided_bytes) = general_purpose::STANDARD.decode(provided_signature) else {
@@ -260,7 +260,7 @@ pub struct AdminRateLimiter {
 }
 
 impl AdminRateLimiter {
-    pub fn new(max_requests: u32, window_seconds: u64) -> Self {
+    #[must_use] pub fn new(max_requests: u32, window_seconds: u64) -> Self {
         Self {
             requests: Arc::new(DashMap::new()),
             max_requests,
@@ -281,7 +281,7 @@ impl AdminRateLimiter {
         let mut entry = self
             .requests
             .entry(admin_key.to_string())
-            .or_insert_with(Vec::new);
+            .or_default();
 
         // Remove old entries outside the window
         entry.retain(|timestamp| *timestamp > window_start);

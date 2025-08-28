@@ -4,7 +4,7 @@ use regex::Regex;
 use std::collections::HashSet;
 use url::Url;
 
-/// Comprehensive redirect URI validation for OAuth2 security
+/// Comprehensive redirect URI validation for `OAuth2` security
 #[allow(dead_code)]
 pub struct RedirectUriValidator {
     /// Registered redirect URIs for each client
@@ -13,7 +13,7 @@ pub struct RedirectUriValidator {
     enforce_https: bool,
     /// Allowed schemes (https, http for localhost only)
     allowed_schemes: HashSet<String>,
-    /// Maximum URI length to prevent DoS
+    /// Maximum URI length to prevent `DoS`
     max_uri_length: usize,
     /// Allowed TLDs for validation
     allowed_tlds: HashSet<String>,
@@ -270,7 +270,7 @@ impl RedirectUriValidator {
             return true;
         }
 
-        if let Some(tld) = host.split('.').last() {
+        if let Some(tld) = host.split('.').next_back() {
             self.allowed_tlds.contains(&tld.to_lowercase())
         } else {
             // Single word hosts like "localhost" are allowed
@@ -642,7 +642,7 @@ mod tests {
 // Additional validation for configuration loading
 impl RedirectUriValidator {
     /// Load blocked domains from environment
-    pub fn from_env() -> Self {
+    #[must_use] pub fn from_env() -> Self {
         let enforce_https =
             std::env::var("OAUTH_ENFORCE_HTTPS").unwrap_or_else(|_| "true".to_string()) == "true";
 

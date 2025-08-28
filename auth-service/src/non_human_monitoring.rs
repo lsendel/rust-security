@@ -191,9 +191,7 @@ impl NonHumanIdentityMonitor {
         identity_metrics.last_activity = Utc::now();
 
         if !success {
-            identity_metrics.error_rate = (identity_metrics.error_rate
-                * (identity_metrics.total_requests as f64 - 1.0)
-                + 1.0)
+            identity_metrics.error_rate = identity_metrics.error_rate.mul_add(identity_metrics.total_requests as f64 - 1.0, 1.0)
                 / identity_metrics.total_requests as f64;
         }
 
@@ -263,7 +261,7 @@ impl NonHumanIdentityMonitor {
             // Calculate request rate
             let config = self.config.read().await;
             let rate = self
-                .calculate_request_rate(&identity_logs, config.rate_window_minutes)
+                .calculate_request_rate(identity_logs, config.rate_window_minutes)
                 .await;
             identity_metrics.request_rate_per_minute = rate;
         }
@@ -279,9 +277,9 @@ impl NonHumanIdentityMonitor {
         // Check usage rate anomaly
         if usage.usage_count > 100 {
             let usage_rate =
-                usage.usage_count as f64 / (Utc::now() - usage.last_used).num_minutes() as f64;
+                f64::from(usage.usage_count) / (Utc::now() - usage.last_used).num_minutes() as f64;
 
-            if usage_rate > 10.0 * config.anomaly_sensitivity as f64 {
+            if usage_rate > 10.0 * f64::from(config.anomaly_sensitivity) {
                 anomaly_detected = true;
                 warn!(
                     "High token usage rate detected: {} requests/min",
@@ -344,7 +342,7 @@ impl NonHumanIdentityMonitor {
         let max_size = request_sizes.iter().max().copied().unwrap_or(0);
 
         // Calculate typical hours
-        let mut hour_counts = vec![0u32; 24];
+        let mut hour_counts = [0u32; 24];
         for log in identity_logs {
             let hour = log.timestamp.hour() as usize;
             hour_counts[hour] += 1;
@@ -466,7 +464,7 @@ impl NonHumanIdentityMonitor {
                         alert_type: SecurityAlertType::AnomalousPattern,
                         severity,
                         title: format!("Critical anomaly for {:?}", identity.identity_type),
-                        description: format!("Detected {:?} anomaly", anomaly_type),
+                        description: format!("Detected {anomaly_type:?} anomaly"),
                         timestamp: Utc::now().timestamp() as u64,
                         source_ip: None,
                         destination_ip: None,

@@ -26,8 +26,8 @@ static TEST_MODE_USAGE_COUNT: Lazy<std::sync::atomic::AtomicU64> =
 /// Production safety check - prevents test mode in production environments
 pub fn is_test_mode() -> bool {
     // First check if we're in production
-    if is_production_environment() {
-        if is_test_mode_raw() {
+    if is_production_environment()
+        && is_test_mode_raw() {
             error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
             error!(
                 "This creates serious security vulnerabilities and MUST be disabled immediately"
@@ -39,7 +39,6 @@ pub fn is_test_mode() -> bool {
             // In production, we force disable test mode regardless of environment variable
             return false;
         }
-    }
 
     let enabled = TEST_MODE_ENABLED.load(Ordering::Relaxed);
     if enabled {
@@ -86,11 +85,7 @@ pub fn get_test_mode_status() -> TestModeStatus {
         raw_test_mode_var: is_test_mode_raw(),
         is_production: is_production_environment(),
         usage_count: TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed),
-        security_violations: if is_production_environment() && is_test_mode_raw() {
-            1
-        } else {
-            0
-        },
+        security_violations: u64::from(is_production_environment() && is_test_mode_raw()),
     }
 }
 
@@ -123,8 +118,7 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
     let usage_count = TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed);
     if usage_count > 1000 {
         issues.push(format!(
-            "Test mode has been used {} times - possible forgotten test environment",
-            usage_count
+            "Test mode has been used {usage_count} times - possible forgotten test environment"
         ));
     }
 
@@ -132,7 +126,7 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
     if std::env::var("CI").is_ok() && is_test_mode_raw() {
         let ci_env = std::env::var("CI_ENVIRONMENT_NAME").unwrap_or_default();
         if ci_env.contains("prod") || ci_env.contains("staging") {
-            issues.push(format!("Test mode enabled in CI environment: {}", ci_env));
+            issues.push(format!("Test mode enabled in CI environment: {ci_env}"));
         }
     }
 

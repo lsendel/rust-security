@@ -85,7 +85,7 @@ pub struct IntrospectRequest {
     pub token_type_hint: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IntrospectResponse {
     pub active: bool,
     pub scope: Option<String>,
@@ -118,7 +118,7 @@ pub struct TokenResponse {
 pub const REFRESH_TOKEN_EXPIRY_SECONDS: u64 = 86400 * 30; // 30 days
 
 // Missing function - stub for compilation
-pub fn get_token_expiry_seconds() -> u64 {
+#[must_use] pub const fn get_token_expiry_seconds() -> u64 {
     3600 // 1 hour
 }
 

@@ -104,7 +104,7 @@ impl Default for RequestContext {
 
 impl RequestContext {
     /// Create a new request context with generated IDs
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             request_id: Uuid::new_v4().to_string(),
             correlation_id: Uuid::new_v4().to_string(),
@@ -117,7 +117,7 @@ impl RequestContext {
     }
 
     /// Create context from incoming headers
-    pub fn from_headers(headers: &HeaderMap) -> Self {
+    #[must_use] pub fn from_headers(headers: &HeaderMap) -> Self {
         let mut context = Self::new();
 
         // Extract existing request ID or generate new one
@@ -163,7 +163,7 @@ impl RequestContext {
     }
 
     /// Convert context to headers for outbound requests
-    pub fn to_headers(&self) -> HeaderMap {
+    #[must_use] pub fn to_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
 
         // Always include request ID
@@ -179,7 +179,7 @@ impl RequestContext {
         // Include traceparent if we have trace context
         if let (Some(trace_id), Some(span_id)) = (&self.trace_id, &self.span_id) {
             let trace_flags = self.trace_flags.unwrap_or(0);
-            let traceparent = format!("00-{}-{}-{:02x}", trace_id, span_id, trace_flags);
+            let traceparent = format!("00-{trace_id}-{span_id}-{trace_flags:02x}");
             if let Ok(value) = HeaderValue::from_str(&traceparent) {
                 headers.insert(HeaderName::from_static(TRACEPARENT_HEADER), value);
             }
@@ -196,7 +196,7 @@ impl RequestContext {
     }
 
     /// Get trace context for logging
-    pub fn to_log_fields(&self) -> HashMap<String, serde_json::Value> {
+    #[must_use] pub fn to_log_fields(&self) -> HashMap<String, serde_json::Value> {
         let mut fields = HashMap::new();
         fields.insert(
             "request_id".to_string(),
@@ -281,7 +281,7 @@ fn parse_traceparent(traceparent: &str) -> Result<TraceContext, &'static str> {
 }
 
 /// Generate a new 32-character trace ID
-pub fn generate_trace_id() -> String {
+#[must_use] pub fn generate_trace_id() -> String {
     use rand::rngs::OsRng;
     let mut bytes = [0u8; 16];
     OsRng.fill_bytes(&mut bytes);
@@ -289,7 +289,7 @@ pub fn generate_trace_id() -> String {
 }
 
 /// Generate a new 16-character span ID
-pub fn generate_span_id() -> String {
+#[must_use] pub fn generate_span_id() -> String {
     use rand::rngs::OsRng;
     let mut bytes = [0u8; 8];
     OsRng.fill_bytes(&mut bytes);
@@ -297,7 +297,7 @@ pub fn generate_span_id() -> String {
 }
 
 /// Create a new root trace context
-pub fn create_root_context() -> RequestContext {
+#[must_use] pub fn create_root_context() -> RequestContext {
     let mut context = RequestContext::new();
     context.trace_id = Some(generate_trace_id());
     context.with_new_span_id();
@@ -465,7 +465,7 @@ pub struct TracingHttpClient {
 }
 
 impl TracingHttpClient {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
         }
@@ -545,15 +545,15 @@ pub fn extract_request_context(request: &axum::extract::Request) -> Option<Reque
 }
 
 /// Helper function to get current request context from Axum State
-pub fn current_request_context() -> RequestContext {
+#[must_use] pub fn current_request_context() -> RequestContext {
     // Try to get from current span context
     let _span = Span::current();
-    let context = RequestContext::new();
+    
 
     // Extract fields from current span if available - simplified for compilation
     // In a real implementation, would extract context from the tracing span
 
-    context
+    RequestContext::new()
 }
 
 /// Graceful shutdown for tracing

@@ -71,43 +71,43 @@ pub struct UnifiedRedisConfig {
 }
 
 /// Default values for configuration fields
-fn default_pool_size() -> u32 {
+const fn default_pool_size() -> u32 {
     redis_constants::DEFAULT_POOL_SIZE
 }
 
-fn default_timeout_ms() -> u64 {
+const fn default_timeout_ms() -> u64 {
     redis_constants::DEFAULT_TIMEOUT_MS
 }
 
-fn default_ttl_secs() -> i64 {
+const fn default_ttl_secs() -> i64 {
     redis_constants::DEFAULT_TTL_SECS
 }
 
-fn default_enable_pooling() -> bool {
+const fn default_enable_pooling() -> bool {
     true
 }
 
-fn default_idle_timeout_secs() -> u64 {
+const fn default_idle_timeout_secs() -> u64 {
     300 // 5 minutes
 }
 
-fn default_max_retries() -> u32 {
+const fn default_max_retries() -> u32 {
     3
 }
 
-fn default_retry_delay_ms() -> u64 {
+const fn default_retry_delay_ms() -> u64 {
     100
 }
 
-fn default_enable_cluster() -> bool {
+const fn default_enable_cluster() -> bool {
     false
 }
 
-fn default_database() -> u8 {
+const fn default_database() -> u8 {
     0
 }
 
-fn default_keep_alive_secs() -> u64 {
+const fn default_keep_alive_secs() -> u64 {
     30
 }
 
@@ -226,27 +226,27 @@ impl UnifiedRedisConfig {
     }
 
     /// Get connection timeout as Duration
-    pub fn timeout_duration(&self) -> Duration {
+    #[must_use] pub const fn timeout_duration(&self) -> Duration {
         Duration::from_millis(self.timeout_ms)
     }
 
     /// Get retry delay as Duration
-    pub fn retry_delay_duration(&self) -> Duration {
+    #[must_use] pub const fn retry_delay_duration(&self) -> Duration {
         Duration::from_millis(self.retry_delay_ms)
     }
 
     /// Get idle timeout as Duration
-    pub fn idle_timeout_duration(&self) -> Duration {
+    #[must_use] pub const fn idle_timeout_duration(&self) -> Duration {
         Duration::from_secs(self.idle_timeout_secs)
     }
 
     /// Get keep-alive as Duration
-    pub fn keep_alive_duration(&self) -> Duration {
+    #[must_use] pub const fn keep_alive_duration(&self) -> Duration {
         Duration::from_secs(self.keep_alive_secs)
     }
 
     /// Create a Redis client URL with database selection
-    pub fn client_url(&self) -> String {
+    #[must_use] pub fn client_url(&self) -> String {
         if self.enable_cluster {
             self.url.clone()
         } else {

@@ -15,7 +15,7 @@ pub struct App {
 
 impl App {
     /// Create a new application instance
-    pub fn new(config: Arc<crate::config::Config>) -> Self {
+    #[must_use] pub fn new(config: Arc<crate::config::Config>) -> Self {
         let router = crate::lib::api::create_router();
 
         Self { router, config }
@@ -24,7 +24,7 @@ impl App {
     /// Start the application server
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // TODO: Fix server config structure - using available fields
-        let addr = self.config.server.bind_addr.clone();
+        let addr = self.config.server.bind_addr;
 
         info!("Starting auth-service on {}", addr);
 

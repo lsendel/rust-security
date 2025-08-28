@@ -33,7 +33,7 @@ pub struct SessionData {
 }
 
 impl SessionData {
-    pub fn new(
+    #[must_use] pub fn new(
         user_id: String,
         client_id: String,
         ttl_seconds: u64,
@@ -61,7 +61,7 @@ impl SessionData {
         }
     }
 
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -171,11 +171,11 @@ impl RedisSessionStore {
     }
 
     fn session_key(&self, session_id: &str) -> String {
-        format!("session:{}", session_id)
+        format!("session:{session_id}")
     }
 
     fn user_sessions_key(&self, user_id: &str) -> String {
-        format!("user_sessions:{}", user_id)
+        format!("user_sessions:{user_id}")
     }
 }
 
@@ -207,7 +207,7 @@ impl SessionStore for RedisSessionStore {
             let result2: Result<(), _> = conn.sadd(&user_sessions_key, &session.session_id).await;
 
             match (result1, result2) {
-                (Ok(_), Ok(_)) => {
+                (Ok(()), Ok(())) => {
                     // Successfully stored in Redis, also store in memory as backup
                     self.memory_fallback
                         .write()
@@ -305,14 +305,14 @@ impl SessionStore for RedisSessionStore {
         // Update in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = self.session_key(&session.session_id);
-            match {
+            let res = {
                 let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
                 if set_result.is_ok() {
                     let _: Result<(), _> = conn.expire(&session_key, ttl as i64).await;
                 }
                 set_result
-            } {
-                Ok(_) => {
+            }; match res {
+                Ok(()) => {
                     // Successfully updated in Redis, also update memory backup
                     self.memory_fallback
                         .write()
@@ -602,7 +602,7 @@ impl EnhancedRedisSessionStore {
                 Err(e) => {
                     if attempt == self.retry_config.max_retries {
                         error!("All Redis retry attempts exhausted: {}", e);
-                        return Err(e.into());
+                        return Err(e);
                     }
 
                     let delay = self.calculate_retry_delay(attempt);
@@ -630,12 +630,12 @@ impl EnhancedRedisSessionStore {
 
     #[allow(dead_code)]
     fn session_key(&self, session_id: &str) -> String {
-        format!("auth:session:{}", session_id)
+        format!("auth:session:{session_id}")
     }
 
     #[allow(dead_code)]
     fn user_sessions_key(&self, user_id: &str) -> String {
-        format!("auth:user_sessions:{}", user_id)
+        format!("auth:user_sessions:{user_id}")
     }
 }
 
@@ -705,13 +705,10 @@ impl SessionStore for EnhancedRedisSessionStore {
             })
             .await;
 
-        match redis_result {
-            Ok(Some(session)) => Ok(Some(session)),
-            Ok(None) | Err(_) => {
-                // Check memory fallback
-                let memory = self.memory_fallback.read().await;
-                Ok(memory.get(session_id).cloned())
-            }
+        if let Ok(Some(session)) = redis_result { Ok(Some(session)) } else {
+            // Check memory fallback
+            let memory = self.memory_fallback.read().await;
+            Ok(memory.get(session_id).cloned())
         }
     }
 

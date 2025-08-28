@@ -82,7 +82,7 @@ pub enum SessionError {
 }
 
 impl SecureSessionManager {
-    pub fn new(config: SecureSessionConfig) -> Self {
+    #[must_use] pub fn new(config: SecureSessionConfig) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             user_sessions: Arc::new(RwLock::new(HashMap::new())),

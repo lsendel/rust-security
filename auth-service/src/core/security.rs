@@ -32,7 +32,7 @@ pub struct SecurityContext {
 
 impl SecurityContext {
     /// Create a new security context
-    pub fn new(client_ip: IpAddr, user_agent: String) -> Self {
+    #[must_use] pub fn new(client_ip: IpAddr, user_agent: String) -> Self {
         let crypto = CryptoProvider::new();
         let fingerprint = Self::generate_fingerprint(&client_ip, &user_agent, &crypto);
 
@@ -50,7 +50,7 @@ impl SecurityContext {
 
     /// Generate a unique fingerprint for the request
     fn generate_fingerprint(client_ip: &IpAddr, user_agent: &str, crypto: &CryptoProvider) -> String {
-        let combined = format!("{}:{}", client_ip, user_agent);
+        let combined = format!("{client_ip}:{user_agent}");
         let hash = crypto.hash_sha256(combined.as_bytes());
         hex::encode(&hash[..16]) // First 16 bytes as hex
     }
@@ -65,7 +65,7 @@ impl SecurityContext {
     fn recalculate_risk_score(&mut self) {
         let base_score = self.threat_indicators
             .iter()
-            .map(|indicator| indicator.severity_score())
+            .map(ThreatIndicator::severity_score)
             .fold(0.0, |acc, score| acc + score);
         
         self.risk_score = (base_score / 10.0).min(1.0); // Normalize to 0.0-1.0
@@ -80,7 +80,7 @@ impl SecurityContext {
     }
 
     /// Check if the security context indicates a high-risk situation
-    pub fn is_high_risk(&self) -> bool {
+    #[must_use] pub fn is_high_risk(&self) -> bool {
         self.risk_score > 0.7 || matches!(self.security_level, SecurityLevel::Critical)
     }
 
@@ -101,7 +101,7 @@ pub enum SecurityLevel {
 
 impl SecurityLevel {
     /// Get the minimum required authentication strength for this security level
-    pub fn required_auth_strength(&self) -> AuthenticationStrength {
+    #[must_use] pub const fn required_auth_strength(&self) -> AuthenticationStrength {
         match self {
             Self::Low => AuthenticationStrength::Basic,
             Self::Standard => AuthenticationStrength::Standard,
@@ -162,11 +162,11 @@ pub enum ThreatIndicator {
 
 impl ThreatIndicator {
     /// Get the severity score for this threat indicator (0.0 - 10.0)
-    pub fn severity_score(&self) -> f64 {
+    #[must_use] pub fn severity_score(&self) -> f64 {
         match self {
             Self::SuspiciousIp { .. } => 6.0,
             Self::RateLimitViolation { limit, current } => {
-                let ratio = *current as f64 / *limit as f64;
+                let ratio = f64::from(*current) / f64::from(*limit);
                 (ratio * 5.0).min(8.0)
             }
             Self::AnomalousUserAgent { .. } => 3.0,
@@ -178,7 +178,7 @@ impl ThreatIndicator {
     }
 
     /// Get the threat category
-    pub fn category(&self) -> &'static str {
+    #[must_use] pub const fn category(&self) -> &'static str {
         match self {
             Self::SuspiciousIp { .. } => "network",
             Self::RateLimitViolation { .. } => "rate_limit",
@@ -214,12 +214,12 @@ pub struct SecurityFlags {
 
 impl SecurityFlags {
     /// Check if any blocking flags are set
-    pub fn has_blocking_flags(&self) -> bool {
+    #[must_use] pub const fn has_blocking_flags(&self) -> bool {
         self.rate_limited || self.geo_blocked
     }
 
     /// Check if any suspicious flags are set
-    pub fn has_suspicious_flags(&self) -> bool {
+    #[must_use] pub const fn has_suspicious_flags(&self) -> bool {
         self.suspicious_activity || self.vpn_detected || self.tor_detected
     }
 }
@@ -247,7 +247,7 @@ pub struct SecurityPolicy {
 
 impl SecurityPolicy {
     /// Evaluate a security context against this policy
-    pub fn evaluate(&self, context: &SecurityContext) -> PolicyEvaluationResult {
+    #[must_use] pub fn evaluate(&self, context: &SecurityContext) -> PolicyEvaluationResult {
         let mut violations = Vec::new();
         let mut warnings = Vec::new();
 
@@ -328,7 +328,7 @@ impl SecurityPolicy {
     }
 
     /// Check if an IP address is blocked by this policy
-    fn is_ip_blocked(&self, _ip: &IpAddr) -> bool {
+    const fn is_ip_blocked(&self, _ip: &IpAddr) -> bool {
         // Simplified implementation - in reality would check CIDR ranges
         false
     }
@@ -369,7 +369,7 @@ pub struct SecurityRule {
 
 impl SecurityRule {
     /// Evaluate this rule against a security context
-    pub fn evaluate(&self, _context: &SecurityContext) -> RuleResult {
+    #[must_use] pub const fn evaluate(&self, _context: &SecurityContext) -> RuleResult {
         // Simplified implementation - in reality would evaluate conditions
         RuleResult::Allow
     }

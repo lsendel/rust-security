@@ -112,7 +112,7 @@ static DANGEROUS_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar", "app",
         "deb", "pkg", "dmg", "rpm", "msi", "run", "bin", "sh", "ps1", "php",
         "asp", "aspx", "jsp", "py", "rb", "pl", "cgi"
-    ].iter().cloned().collect()
+    ].iter().copied().collect()
 });
 
 /// Input sanitizer with comprehensive validation
@@ -124,7 +124,7 @@ pub struct InputSanitizer {
 
 impl InputSanitizer {
     /// Create new sanitizer with default settings
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self {
             max_length: 1024,
             allow_html: false,
@@ -133,7 +133,7 @@ impl InputSanitizer {
     }
     
     /// Create sanitizer for specific use cases
-    pub fn for_username() -> Self {
+    #[must_use] pub const fn for_username() -> Self {
         Self {
             max_length: 64,
             allow_html: false,
@@ -141,7 +141,7 @@ impl InputSanitizer {
         }
     }
     
-    pub fn for_email() -> Self {
+    #[must_use] pub const fn for_email() -> Self {
         Self {
             max_length: 254, // RFC 5321 limit
             allow_html: false,
@@ -149,7 +149,7 @@ impl InputSanitizer {
         }
     }
     
-    pub fn for_password() -> Self {
+    #[must_use] pub const fn for_password() -> Self {
         Self {
             max_length: 128,
             allow_html: false,
@@ -157,7 +157,7 @@ impl InputSanitizer {
         }
     }
     
-    pub fn for_token() -> Self {
+    #[must_use] pub const fn for_token() -> Self {
         Self {
             max_length: 2048,
             allow_html: false,
@@ -165,7 +165,7 @@ impl InputSanitizer {
         }
     }
     
-    pub fn for_url() -> Self {
+    #[must_use] pub const fn for_url() -> Self {
         Self {
             max_length: 2048,
             allow_html: false,
@@ -194,7 +194,7 @@ impl InputSanitizer {
         for ch in input.chars() {
             if ch.is_control() && ch != '\t' && ch != '\n' && ch != '\r' {
                 return Err(SanitizationError::InvalidCharacters(
-                    format!("Control character not allowed: {:?}", ch),
+                    format!("Control character not allowed: {ch:?}"),
                 ));
             }
         }
@@ -302,7 +302,7 @@ impl InputSanitizer {
         for ch in input.chars() {
             if !safe_chars.contains(&ch) {
                 return Err(SanitizationError::InvalidCharacters(
-                    format!("Character not allowed in strict mode: {}", ch),
+                    format!("Character not allowed in strict mode: {ch}"),
                 ));
             }
         }
@@ -335,14 +335,14 @@ impl InputSanitizer {
         
         // Parse URL to validate format
         let parsed_url = url::Url::parse(&sanitized)
-            .map_err(|e| SanitizationError::ValidationFailed(format!("Invalid URL: {}", e)))?;
+            .map_err(|e| SanitizationError::ValidationFailed(format!("Invalid URL: {e}")))?;
         
         // Only allow safe schemes
         match parsed_url.scheme() {
             "http" | "https" => {},
             scheme => {
                 return Err(SanitizationError::ValidationFailed(
-                    format!("Unsafe URL scheme: {}", scheme),
+                    format!("Unsafe URL scheme: {scheme}"),
                 ));
             }
         }
@@ -376,7 +376,7 @@ impl InputSanitizer {
             if let Some(ext_str) = extension.to_str() {
                 if DANGEROUS_EXTENSIONS.contains(ext_str.to_lowercase().as_str()) {
                     return Err(SanitizationError::ValidationFailed(
-                        format!("Dangerous file extension: {}", ext_str),
+                        format!("Dangerous file extension: {ext_str}"),
                     ));
                 }
             }
@@ -393,7 +393,7 @@ impl Default for InputSanitizer {
 }
 
 /// Sanitize log output to prevent log injection
-pub fn sanitize_log_output(input: &str) -> String {
+#[must_use] pub fn sanitize_log_output(input: &str) -> String {
     input
         .replace('\n', "\\n")
         .replace('\r', "\\r")

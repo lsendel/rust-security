@@ -73,9 +73,7 @@ pub async fn config_status(
     let _config = state.reload_manager.get_config().await;
 
     // Determine configuration source
-    let source = std::env::var("CONFIG_FILE")
-        .map(|_| "file".to_string())
-        .unwrap_or_else(|_| "environment".to_string());
+    let source = std::env::var("CONFIG_FILE").map_or_else(|_| "environment".to_string(), |_| "file".to_string());
 
     Ok(Json(ConfigStatus {
         version,

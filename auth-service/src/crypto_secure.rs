@@ -54,7 +54,7 @@ impl SecureKey {
             .map_err(|_| CryptoError::KeyGenerationFailed)?;
         let key = LessSafeKey::new(unbound_key);
         
-        Ok(SecureKey {
+        Ok(Self {
             key,
             id,
             created_at: chrono::Utc::now(),
@@ -137,7 +137,7 @@ impl SecureCryptoManager {
         let process_id = std::process::id();
         
         // Mix additional entropy using HMAC
-        let additional_entropy = format!("{}{}", timestamp, process_id);
+        let additional_entropy = format!("{timestamp}{process_id}");
         let hmac_key = hmac::Key::new(hmac::HMAC_SHA256, &key_material);
         let mixed_entropy = hmac::sign(&hmac_key, additional_entropy.as_bytes());
         
@@ -167,7 +167,7 @@ impl SecureCryptoManager {
         current_key
             .key
             .seal_in_place_append_tag(nonce, Aad::empty(), &mut in_out)
-            .map_err(|e| CryptoError::EncryptionFailed(format!("AES-GCM encryption failed: {:?}", e)))?;
+            .map_err(|e| CryptoError::EncryptionFailed(format!("AES-GCM encryption failed: {e:?}")))?;
         
         Ok(EncryptedData {
             ciphertext: in_out,
@@ -216,7 +216,7 @@ impl SecureCryptoManager {
         let mut ciphertext = encrypted.ciphertext.clone();
         let plaintext = key
             .open_in_place(nonce, Aad::empty(), &mut ciphertext)
-            .map_err(|e| CryptoError::DecryptionFailed(format!("AES-GCM decryption failed: {:?}", e)))?;
+            .map_err(|e| CryptoError::DecryptionFailed(format!("AES-GCM decryption failed: {e:?}")))?;
         
         Ok(plaintext.to_vec())
     }
@@ -260,17 +260,17 @@ pub struct SecureHasher;
 
 impl SecureHasher {
     /// SHA-256 hash
-    pub fn sha256(data: &[u8]) -> Vec<u8> {
+    #[must_use] pub fn sha256(data: &[u8]) -> Vec<u8> {
         digest::digest(&SHA256, data).as_ref().to_vec()
     }
     
     /// SHA-512 hash
-    pub fn sha512(data: &[u8]) -> Vec<u8> {
+    #[must_use] pub fn sha512(data: &[u8]) -> Vec<u8> {
         digest::digest(&SHA512, data).as_ref().to_vec()
     }
     
     /// Multi-input SHA-256 hash
-    pub fn sha256_multi(inputs: &[&[u8]]) -> Vec<u8> {
+    #[must_use] pub fn sha256_multi(inputs: &[&[u8]]) -> Vec<u8> {
         let mut context = digest::Context::new(&SHA256);
         for input in inputs {
             context.update(input);
@@ -284,25 +284,25 @@ pub struct SecureHmac;
 
 impl SecureHmac {
     /// HMAC-SHA256
-    pub fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
+    #[must_use] pub fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA256, key);
         hmac::sign(&key, data).as_ref().to_vec()
     }
     
     /// HMAC-SHA512
-    pub fn hmac_sha512(key: &[u8], data: &[u8]) -> Vec<u8> {
+    #[must_use] pub fn hmac_sha512(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA512, key);
         hmac::sign(&key, data).as_ref().to_vec()
     }
     
     /// Verify HMAC-SHA256 in constant time
-    pub fn verify_hmac_sha256(key: &[u8], data: &[u8], expected: &[u8]) -> bool {
+    #[must_use] pub fn verify_hmac_sha256(key: &[u8], data: &[u8], expected: &[u8]) -> bool {
         let key = hmac::Key::new(hmac::HMAC_SHA256, key);
         hmac::verify(&key, data, expected).is_ok()
     }
     
     /// Verify HMAC-SHA512 in constant time
-    pub fn verify_hmac_sha512(key: &[u8], data: &[u8], expected: &[u8]) -> bool {
+    #[must_use] pub fn verify_hmac_sha512(key: &[u8], data: &[u8], expected: &[u8]) -> bool {
         let key = hmac::Key::new(hmac::HMAC_SHA512, key);
         hmac::verify(&key, data, expected).is_ok()
     }

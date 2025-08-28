@@ -22,21 +22,21 @@ pub enum CircuitBreakerError {
 impl From<CircuitBreakerError> for AuthError {
     fn from(err: CircuitBreakerError) -> Self {
         match err {
-            CircuitBreakerError::Open => AuthError::ServiceUnavailable {
+            CircuitBreakerError::Open => Self::ServiceUnavailable {
                 reason: "Circuit breaker is open".to_string(),
             },
-            CircuitBreakerError::Timeout { timeout } => AuthError::ServiceUnavailable {
-                reason: format!("Operation timeout after {:?}", timeout),
+            CircuitBreakerError::Timeout { timeout } => Self::ServiceUnavailable {
+                reason: format!("Operation timeout after {timeout:?}"),
             },
-            CircuitBreakerError::TooManyRequests => AuthError::RateLimitExceeded,
-            CircuitBreakerError::OperationFailed(msg) => AuthError::ServiceUnavailable {
-                reason: format!("Operation failed: {}", msg),
+            CircuitBreakerError::TooManyRequests => Self::RateLimitExceeded,
+            CircuitBreakerError::OperationFailed(msg) => Self::ServiceUnavailable {
+                reason: format!("Operation failed: {msg}"),
             },
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CircuitState {
     Closed,   // Normal operation
     Open,     // Failing, rejecting requests
@@ -97,11 +97,11 @@ impl CircuitBreaker {
         }
     }
 
-    pub fn name(&self) -> &str {
+    #[must_use] pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn state(&self) -> CircuitState {
+    #[must_use] pub fn state(&self) -> CircuitState {
         self.state
             .state
             .lock()
@@ -112,7 +112,7 @@ impl CircuitBreaker {
             })
     }
 
-    pub fn stats(&self) -> CircuitBreakerStats {
+    #[must_use] pub fn stats(&self) -> CircuitBreakerStats {
         CircuitBreakerStats {
             state: self.state(),
             failure_count: self.state.failure_count.load(Ordering::Relaxed),
@@ -236,7 +236,7 @@ impl CircuitBreaker {
                 let request_count = self.state.request_count.load(Ordering::Relaxed);
 
                 // Only open circuit if we have enough requests and failures
-                if request_count >= self.config.minimum_request_threshold as u64
+                if request_count >= u64::from(self.config.minimum_request_threshold)
                     && failure_count >= self.config.failure_threshold
                 {
                     self.transition_to_open();
@@ -376,7 +376,7 @@ pub struct RetryBackoff {
 }
 
 impl RetryBackoff {
-    pub fn new(config: RetryConfig) -> Self {
+    #[must_use] pub const fn new(config: RetryConfig) -> Self {
         Self { config, attempt: 0 }
     }
 
@@ -415,7 +415,7 @@ impl RetryBackoff {
         Some(delay)
     }
 
-    pub fn attempt(&self) -> u32 {
+    #[must_use] pub const fn attempt(&self) -> u32 {
         self.attempt
     }
 }

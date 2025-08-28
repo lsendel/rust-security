@@ -79,9 +79,15 @@ pub enum TrendDirection {
     Volatile,
 }
 
+impl Default for PerformanceOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PerformanceOptimizer {
     /// Create new performance optimizer
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             metrics: Arc::new(RwLock::new(PerformanceMetrics::default())),
             config: Arc::new(RwLock::new(OptimizationConfig::default())),
@@ -99,10 +105,10 @@ impl PerformanceOptimizer {
         }
 
         // Update error rates
-        if !success {
-            metrics.error_rate = (metrics.error_rate * 0.95) + 0.05; // Exponential moving average
-        } else {
+        if success {
             metrics.error_rate *= 0.99;
+        } else {
+            metrics.error_rate = metrics.error_rate.mul_add(0.95, 0.05); // Exponential moving average
         }
 
         info!(
@@ -138,7 +144,7 @@ impl PerformanceOptimizer {
 
             // Auto-optimize connection pool
             if config.max_connections < 100 {
-                let increased = (config.max_connections as f64 * 1.2).round() as u32;
+                let increased = (f64::from(config.max_connections) * 1.2).round() as u32;
                 config.max_connections = increased.max(config.max_connections + 1);
                 info!(
                     new_max_connections = config.max_connections,

@@ -286,7 +286,7 @@ pub enum CacheError {
 
 impl CoreError {
     /// Get the HTTP status code for this error
-    pub fn status_code(&self) -> StatusCode {
+    #[must_use] pub const fn status_code(&self) -> StatusCode {
         match self {
             Self::Authentication(auth_err) => match auth_err {
                 AuthenticationError::InvalidCredentials
@@ -327,7 +327,7 @@ impl CoreError {
     }
 
     /// Get the error category for logging and metrics
-    pub fn category(&self) -> &'static str {
+    #[must_use] pub const fn category(&self) -> &'static str {
         match self {
             Self::Authentication(_) => "authentication",
             Self::Authorization(_) => "authorization",
@@ -345,15 +345,14 @@ impl CoreError {
     }
 
     /// Check if the error is retryable
-    pub fn is_retryable(&self) -> bool {
+    #[must_use] pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
-            Self::Network(NetworkError::ConnectionTimeout)
-                | Self::Network(NetworkError::NetworkUnreachable)
-                | Self::Storage(StorageError::ConnectionFailed)
-                | Self::Cache(CacheError::Timeout)
-                | Self::Cache(CacheError::ConnectionFailed)
-                | Self::RateLimit(RateLimitError::Exceeded)
+            Self::Network(NetworkError::ConnectionTimeout |
+NetworkError::NetworkUnreachable) |
+Self::Storage(StorageError::ConnectionFailed) |
+Self::Cache(CacheError::Timeout | CacheError::ConnectionFailed) |
+Self::RateLimit(RateLimitError::Exceeded)
         )
     }
 

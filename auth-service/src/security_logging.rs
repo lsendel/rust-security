@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 /// Basic security event severity levels
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecuritySeverity {
     Low,
     Medium,
@@ -78,7 +78,7 @@ pub struct SecurityEvent {
 }
 
 impl SecurityEvent {
-    pub fn new(
+    #[must_use] pub fn new(
         event_type: SecurityEventType,
         severity: SecuritySeverity,
         source: String,
@@ -116,117 +116,117 @@ impl SecurityEvent {
         }
     }
 
-    pub fn with_ip(mut self, ip: String) -> Self {
+    #[must_use] pub fn with_ip(mut self, ip: String) -> Self {
         self.ip_address = Some(ip);
         self
     }
 
-    pub fn with_ip_address(mut self, ip: String) -> Self {
+    #[must_use] pub fn with_ip_address(mut self, ip: String) -> Self {
         self.ip_address = Some(ip);
         self
     }
 
-    pub fn with_user_id(mut self, user_id: String) -> Self {
+    #[must_use] pub fn with_user_id(mut self, user_id: String) -> Self {
         self.user_id = Some(user_id);
         self
     }
 
-    pub fn with_detail(mut self, key: String, value: Value) -> Self {
+    #[must_use] pub fn with_detail(mut self, key: String, value: Value) -> Self {
         self.details.insert(key, value);
         self
     }
 
-    pub fn with_detail_string(mut self, key: String, value: String) -> Self {
+    #[must_use] pub fn with_detail_string(mut self, key: String, value: String) -> Self {
         self.details.insert(key, Value::String(value));
         self
     }
 
-    pub fn with_actor(mut self, actor: String) -> Self {
+    #[must_use] pub fn with_actor(mut self, actor: String) -> Self {
         self.actor = Some(actor);
         self
     }
 
-    pub fn with_action(mut self, action: String) -> Self {
+    #[must_use] pub fn with_action(mut self, action: String) -> Self {
         self.action = Some(action);
         self
     }
 
-    pub fn with_target(mut self, target: String) -> Self {
+    #[must_use] pub fn with_target(mut self, target: String) -> Self {
         self.target = Some(target);
         self
     }
 
-    pub fn with_outcome(mut self, outcome: String) -> Self {
+    #[must_use] pub fn with_outcome(mut self, outcome: String) -> Self {
         self.outcome = outcome;
         self
     }
 
-    pub fn with_reason(mut self, reason: String) -> Self {
+    #[must_use] pub fn with_reason(mut self, reason: String) -> Self {
         self.reason = Some(reason);
         self
     }
 
-    pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
+    #[must_use] pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
         self.correlation_id = Some(correlation_id);
         self
     }
 
-    pub fn with_user_agent(mut self, user_agent: String) -> Self {
+    #[must_use] pub fn with_user_agent(mut self, user_agent: String) -> Self {
         self.user_agent = Some(user_agent);
         self
     }
 
-    pub fn with_client_id(mut self, client_id: String) -> Self {
+    #[must_use] pub fn with_client_id(mut self, client_id: String) -> Self {
         self.client_id = Some(client_id);
         self
     }
 
-    pub fn with_request_id(mut self, request_id: String) -> Self {
+    #[must_use] pub fn with_request_id(mut self, request_id: String) -> Self {
         self.request_id = Some(request_id);
         self
     }
 
-    pub fn with_session_id(mut self, session_id: String) -> Self {
+    #[must_use] pub fn with_session_id(mut self, session_id: String) -> Self {
         self.session_id = Some(session_id);
         self
     }
 
-    pub fn with_resource(mut self, resource: String) -> Self {
+    #[must_use] pub fn with_resource(mut self, resource: String) -> Self {
         self.resource = Some(resource);
         self
     }
 
-    pub fn with_risk_score(mut self, risk_score: u8) -> Self {
+    #[must_use] pub const fn with_risk_score(mut self, risk_score: u8) -> Self {
         self.risk_score = Some(risk_score);
         self
     }
 
-    pub fn with_location(mut self, location: String) -> Self {
+    #[must_use] pub fn with_location(mut self, location: String) -> Self {
         self.location = Some(location);
         self
     }
 
-    pub fn with_device_fingerprint(mut self, device_fingerprint: String) -> Self {
+    #[must_use] pub fn with_device_fingerprint(mut self, device_fingerprint: String) -> Self {
         self.device_fingerprint = Some(device_fingerprint);
         self
     }
 
-    pub fn with_http_method(mut self, http_method: String) -> Self {
+    #[must_use] pub fn with_http_method(mut self, http_method: String) -> Self {
         self.http_method = Some(http_method);
         self
     }
 
-    pub fn with_http_status(mut self, http_status: u16) -> Self {
+    #[must_use] pub const fn with_http_status(mut self, http_status: u16) -> Self {
         self.http_status = Some(http_status);
         self
     }
 
-    pub fn with_request_path(mut self, request_path: String) -> Self {
+    #[must_use] pub fn with_request_path(mut self, request_path: String) -> Self {
         self.request_path = Some(request_path);
         self
     }
 
-    pub fn with_response_time_ms(mut self, response_time_ms: u64) -> Self {
+    #[must_use] pub const fn with_response_time_ms(mut self, response_time_ms: u64) -> Self {
         self.response_time_ms = Some(response_time_ms);
         self
     }
@@ -274,7 +274,7 @@ impl Default for SecurityLoggerConfig {
 }
 
 impl SecurityLogger {
-    pub fn new(config: SecurityLoggerConfig) -> Self {
+    #[must_use] pub const fn new(config: SecurityLoggerConfig) -> Self {
         Self { config }
     }
 
@@ -294,7 +294,7 @@ impl SecurityLogger {
 
     /// Static method for backwards compatibility
     pub fn log_event_static(event: &SecurityEvent) {
-        let logger = SecurityLogger::default();
+        let logger = Self::default();
         logger.log_event(event.clone());
     }
 }

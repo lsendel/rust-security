@@ -20,8 +20,8 @@ pub enum ApiVersion {
 impl fmt::Display for ApiVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ApiVersion::V1 => write!(f, "v1"),
-            ApiVersion::V2 => write!(f, "v2"),
+            Self::V1 => write!(f, "v1"),
+            Self::V2 => write!(f, "v2"),
         }
     }
 }
@@ -31,8 +31,8 @@ impl FromStr for ApiVersion {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "v1" | "1" | "1.0" => Ok(ApiVersion::V1),
-            "v2" | "2" | "2.0" => Ok(ApiVersion::V2),
+            "v1" | "1" | "1.0" => Ok(Self::V1),
+            "v2" | "2" | "2.0" => Ok(Self::V2),
             _ => Err(ApiVersionError::UnsupportedVersion(s.to_string())),
         }
     }
@@ -54,9 +54,9 @@ pub enum ApiVersionError {
 impl IntoResponse for ApiVersionError {
     fn into_response(self) -> Response {
         let (status, error_message) = match &self {
-            ApiVersionError::UnsupportedVersion(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiVersionError::MissingVersion => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiVersionError::DeprecatedVersion(_, _, _) => {
+            Self::UnsupportedVersion(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            Self::MissingVersion => (StatusCode::BAD_REQUEST, self.to_string()),
+            Self::DeprecatedVersion(_, _, _) => {
                 (StatusCode::BAD_REQUEST, self.to_string())
             }
         };
@@ -220,9 +220,7 @@ pub async fn api_version_middleware(
 
         response.headers_mut().insert(
             "link",
-            format!(
-                "<https://docs.example.com/api/migration>; rel=\"deprecation\"; type=\"text/html\""
-            )
+            "<https://docs.example.com/api/migration>; rel=\"deprecation\"; type=\"text/html\"".to_string()
             .parse()
             .unwrap(),
         );
@@ -449,7 +447,7 @@ async fn scim_create_user_versioned(headers: HeaderMap) -> impl IntoResponse {
 }
 
 /// Get deprecation information
-pub fn get_deprecation_info() -> DeprecationInfo {
+#[must_use] pub fn get_deprecation_info() -> DeprecationInfo {
     DeprecationInfo {
         deprecated_versions: vec![DeprecatedVersion {
             version: "v1".to_string(),

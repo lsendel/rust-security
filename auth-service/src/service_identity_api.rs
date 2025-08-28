@@ -401,18 +401,18 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            ApiError::NotFound => (StatusCode::NOT_FOUND, "Identity not found"),
-            ApiError::Forbidden => (StatusCode::FORBIDDEN, "Access denied"),
-            ApiError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Anomaly detected"),
-            ApiError::ValidationError(msg) => {
+            Self::NotFound => (StatusCode::NOT_FOUND, "Identity not found"),
+            Self::Forbidden => (StatusCode::FORBIDDEN, "Access denied"),
+            Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Anomaly detected"),
+            Self::ValidationError(msg) => {
                 return (StatusCode::BAD_REQUEST, msg).into_response()
             }
-            ApiError::InsufficientData => (
+            Self::InsufficientData => (
                 StatusCode::PRECONDITION_FAILED,
                 "Insufficient data for operation",
             ),
-            ApiError::NotImplemented => (StatusCode::NOT_IMPLEMENTED, "Not yet implemented"),
-            ApiError::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal error"),
+            Self::NotImplemented => (StatusCode::NOT_IMPLEMENTED, "Not yet implemented"),
+            Self::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal error"),
         };
         (status, message).into_response()
     }

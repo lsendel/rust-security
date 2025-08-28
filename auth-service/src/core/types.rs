@@ -14,23 +14,23 @@ pub struct Id(String);
 
 impl Id {
     /// Create a new ID from a string
-    pub fn new(id: String) -> Self {
+    #[must_use] pub const fn new(id: String) -> Self {
         Self(id)
     }
 
     /// Generate a new random ID
-    pub fn generate() -> Self {
+    #[must_use] pub fn generate() -> Self {
         use uuid::Uuid;
         Self(Uuid::new_v4().to_string())
     }
 
     /// Get the string representation
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Convert to string
-    pub fn into_string(self) -> String {
+    #[must_use] pub fn into_string(self) -> String {
         self.0
     }
 }
@@ -96,7 +96,7 @@ pub struct User {
 
 impl User {
     /// Create a new user
-    pub fn new(username: String, email: Option<String>) -> Self {
+    #[must_use] pub fn new(username: String, email: Option<String>) -> Self {
         Self {
             id: UserId::generate(),
             username,
@@ -114,23 +114,23 @@ impl User {
     }
 
     /// Check if user has a specific role
-    pub fn has_role(&self, role: &str) -> bool {
+    #[must_use] pub fn has_role(&self, role: &str) -> bool {
         self.roles.contains(&role.to_string())
     }
 
     /// Check if user is in a specific group
-    pub fn in_group(&self, group: &str) -> bool {
+    #[must_use] pub fn in_group(&self, group: &str) -> bool {
         self.groups.contains(&group.to_string())
     }
 
     /// Check if account is locked
-    pub fn is_locked(&self) -> bool {
+    #[must_use] pub fn is_locked(&self) -> bool {
         matches!(self.status, AccountStatus::Locked) ||
-        self.locked_until.map_or(false, |until| SystemTime::now() < until)
+        self.locked_until.is_some_and(|until| SystemTime::now() < until)
     }
 
     /// Check if account is active
-    pub fn is_active(&self) -> bool {
+    #[must_use] pub fn is_active(&self) -> bool {
         matches!(self.status, AccountStatus::Active) && !self.is_locked()
     }
 }
@@ -187,7 +187,7 @@ pub struct Session {
 
 impl Session {
     /// Create a new session
-    pub fn new(
+    #[must_use] pub fn new(
         user_id: UserId,
         client_ip: String,
         user_agent: String,
@@ -208,12 +208,12 @@ impl Session {
     }
 
     /// Check if session is expired
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         SystemTime::now() > self.expires_at
     }
 
     /// Check if session is active
-    pub fn is_active(&self) -> bool {
+    #[must_use] pub fn is_active(&self) -> bool {
         matches!(self.status, SessionStatus::Active) && !self.is_expired()
     }
 
@@ -254,7 +254,7 @@ pub struct Permission {
 
 impl Permission {
     /// Create a new permission
-    pub fn new(resource: String, action: String) -> Self {
+    #[must_use] pub const fn new(resource: String, action: String) -> Self {
         Self {
             resource,
             action,
@@ -263,7 +263,7 @@ impl Permission {
     }
 
     /// Create a permission with conditions
-    pub fn with_conditions(
+    #[must_use] pub const fn with_conditions(
         resource: String,
         action: String,
         conditions: HashMap<String, String>,
@@ -276,7 +276,7 @@ impl Permission {
     }
 
     /// Check if this permission matches another permission
-    pub fn matches(&self, other: &Permission) -> bool {
+    #[must_use] pub fn matches(&self, other: &Self) -> bool {
         self.resource == other.resource && self.action == other.action
     }
 }
@@ -304,7 +304,7 @@ pub struct Role {
 
 impl Role {
     /// Create a new role
-    pub fn new(name: String, permissions: Vec<Permission>) -> Self {
+    #[must_use] pub fn new(name: String, permissions: Vec<Permission>) -> Self {
         Self {
             name,
             description: None,
@@ -315,7 +315,7 @@ impl Role {
     }
 
     /// Check if role has a specific permission
-    pub fn has_permission(&self, permission: &Permission) -> bool {
+    #[must_use] pub fn has_permission(&self, permission: &Permission) -> bool {
         self.permissions.iter().any(|p| p.matches(permission))
     }
 }
@@ -351,7 +351,7 @@ pub struct RequestMetadata {
 
 impl RequestMetadata {
     /// Create new request metadata
-    pub fn new(method: String, path: String, client_ip: String, user_agent: String) -> Self {
+    #[must_use] pub fn new(method: String, path: String, client_ip: String, user_agent: String) -> Self {
         Self {
             id: RequestId::generate(),
             timestamp: SystemTime::now(),
@@ -421,7 +421,7 @@ pub struct Pagination {
 
 impl Pagination {
     /// Create new pagination
-    pub fn new(page: usize, limit: usize) -> Self {
+    #[must_use] pub const fn new(page: usize, limit: usize) -> Self {
         Self {
             page,
             limit,
@@ -431,11 +431,11 @@ impl Pagination {
     }
 
     /// Calculate offset for database queries
-    pub fn offset(&self) -> usize {
+    #[must_use] pub const fn offset(&self) -> usize {
         self.page * self.limit
     }
 
-    /// Set total count and update has_more
+    /// Set total count and update `has_more`
     pub fn set_total(&mut self, total: usize) {
         self.total = Some(total);
         self.has_more = (self.page + 1) * self.limit < total;
@@ -473,7 +473,7 @@ pub enum AuditResult {
 
 impl AuditEntry {
     /// Create a new audit entry
-    pub fn new(
+    #[must_use] pub fn new(
         user_id: Option<UserId>,
         action: String,
         resource: String,

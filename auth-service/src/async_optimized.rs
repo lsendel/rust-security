@@ -42,7 +42,7 @@ impl AsyncTokenStorage {
             serde_json::to_string(data).map_err(|e| TokenError::Serialization(e.to_string()))?;
 
         redis::cmd("SET")
-            .arg(format!("token:{}", token))
+            .arg(format!("token:{token}"))
             .arg(&json_data)
             .arg("EX")
             .arg(3600) // 1 hour expiration
@@ -57,7 +57,7 @@ impl AsyncTokenStorage {
         let mut conn = self.get_connection().await?;
 
         let result: Option<String> = redis::cmd("GET")
-            .arg(format!("token:{}", token))
+            .arg(format!("token:{token}"))
             .query_async(&mut conn)
             .await?;
 
@@ -76,7 +76,7 @@ impl AsyncTokenStorage {
         let mut conn = self.get_connection().await?;
 
         let deleted: i32 = redis::cmd("DEL")
-            .arg(format!("token:{}", token))
+            .arg(format!("token:{token}"))
             .query_async(&mut conn)
             .await?;
 
@@ -93,7 +93,7 @@ impl AsyncTokenStorage {
 }
 
 /// Utility function to create token data
-pub fn create_token_data(user_id: String, expires_at: u64, permissions: Vec<String>) -> TokenData {
+#[must_use] pub const fn create_token_data(user_id: String, expires_at: u64, permissions: Vec<String>) -> TokenData {
     TokenData {
         user_id,
         expires_at,
@@ -102,7 +102,7 @@ pub fn create_token_data(user_id: String, expires_at: u64, permissions: Vec<Stri
 }
 
 /// Check if token is expired
-pub fn is_token_expired(data: &TokenData) -> bool {
+#[must_use] pub fn is_token_expired(data: &TokenData) -> bool {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

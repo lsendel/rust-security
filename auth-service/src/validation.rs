@@ -616,21 +616,21 @@ fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
     }
 
     // Check for uppercase letters
-    if password.chars().any(|c| c.is_uppercase()) {
+    if password.chars().any(char::is_uppercase) {
         score += 1;
     } else {
         errors.push("Password must contain at least one uppercase letter");
     }
 
     // Check for lowercase letters
-    if password.chars().any(|c| c.is_lowercase()) {
+    if password.chars().any(char::is_lowercase) {
         score += 1;
     } else {
         errors.push("Password must contain at least one lowercase letter");
     }
 
     // Check for digits
-    if password.chars().any(|c| c.is_numeric()) {
+    if password.chars().any(char::is_numeric) {
         score += 1;
     } else {
         errors.push("Password must contain at least one digit");
@@ -729,7 +729,7 @@ impl From<ValidationErrors> for ValidationResult {
             error_map.insert(field.to_string(), error_messages);
         }
 
-        ValidationResult {
+        Self {
             valid: false,
             errors: Some(error_map),
         }
@@ -776,7 +776,7 @@ impl ValidatedDto for RateLimitConfig {}
 
 /// Validation middleware for Axum extractors
 pub mod middleware {
-    use super::*;
+    use super::{ValidatedDto, Deserialize};
     use crate::errors::{validation_error, AuthError};
     use axum::{extract::FromRequest, http::Request};
 
@@ -800,7 +800,7 @@ pub mod middleware {
                 .map_err(|_| validation_error("json", "Invalid JSON format"))?;
 
             match dto.validate_and_return() {
-                Ok(validated_dto) => Ok(ValidatedJson(validated_dto)),
+                Ok(validated_dto) => Ok(Self(validated_dto)),
                 Err(validation_result) => {
                     let field_errors = validation_result.errors.unwrap_or_default();
                     let error_msg = field_errors
@@ -835,7 +835,7 @@ pub mod middleware {
                 .map_err(|_| validation_error("query", "Invalid query parameters"))?;
 
             match dto.validate_and_return() {
-                Ok(validated_dto) => Ok(ValidatedQuery(validated_dto)),
+                Ok(validated_dto) => Ok(Self(validated_dto)),
                 Err(validation_result) => {
                     let field_errors = validation_result.errors.unwrap_or_default();
                     let error_msg = field_errors

@@ -115,7 +115,7 @@ impl HybridStore {
         }
     }
 
-    /// Set token record - inherent method for direct access with IntrospectionRecord
+    /// Set token record - inherent method for direct access with `IntrospectionRecord`
     pub async fn set_token_record(
         &self,
         token: &str,
@@ -249,7 +249,7 @@ impl Store for HybridStore {
 
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("authcode:{}", code);
+            let key = format!("authcode:{code}");
             // Use the simpler Redis interface
             let result: Result<(), _> = {
                 let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
@@ -261,7 +261,7 @@ impl Store for HybridStore {
             };
 
             match result {
-                Ok(_) => {
+                Ok(()) => {
                     // Successfully stored in Redis, also store in memory as backup
                     self.auth_codes
                         .write()
@@ -290,7 +290,7 @@ impl Store for HybridStore {
     ) -> Result<Option<AuthCodeRecord>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("authcode:{}", code);
+            let key = format!("authcode:{code}");
             match conn.get::<_, Option<String>>(&key).await {
                 Ok(Some(json)) => {
                     // Delete the key and remove from memory backup
@@ -322,7 +322,7 @@ impl Store for HybridStore {
     ) -> Result<Option<TokenRecord>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("token_record:{}", token);
+            let key = format!("token_record:{token}");
             match conn.get::<_, Option<String>>(&key).await {
                 Ok(Some(json)) => {
                     return Ok(Some(serde_json::from_str::<TokenRecord>(&json)?));
@@ -350,7 +350,7 @@ impl Store for HybridStore {
 
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("token_record:{}", token);
+            let key = format!("token_record:{token}");
             let redis_result = if let Some(ttl) = ttl_secs {
                 {
                     let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
@@ -364,7 +364,7 @@ impl Store for HybridStore {
             };
 
             match redis_result {
-                Ok(_) => {
+                Ok(()) => {
                     // Successfully stored in Redis, also store in memory as backup
                     self.tokens
                         .write()
@@ -407,15 +407,15 @@ impl Store for HybridStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("refresh_token:{}", refresh_token);
-            match {
+            let key = format!("refresh_token:{refresh_token}");
+            let res = {
                 let set_result = conn.set::<_, _, ()>(&key, access_token).await;
                 if set_result.is_ok() {
                     let _: Result<(), _> = conn.expire(&key, ttl_secs as i64).await;
                 }
                 set_result
-            } {
-                Ok(_) => {
+            }; match res {
+                Ok(()) => {
                     // Successfully stored in Redis, also store in memory as backup
                     self.refresh_tokens
                         .write()
@@ -446,7 +446,7 @@ impl Store for HybridStore {
 
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("refresh_token:{}", refresh_token);
+            let key = format!("refresh_token:{refresh_token}");
             match conn.get::<_, Option<String>>(&key).await {
                 Ok(token) => {
                     if token.is_some() {
@@ -475,7 +475,7 @@ impl Store for HybridStore {
                 .insert(refresh_token.to_string(), ());
 
             if let Some(mut conn) = self.get_redis_connection().await {
-                let key = format!("refresh_reused:{}", refresh_token);
+                let key = format!("refresh_reused:{refresh_token}");
                 // Reuse detection window 10 minutes
                 let _: Result<(), _> = {
                     let set_result = conn.set::<_, _, ()>(&key, 1).await;
@@ -496,7 +496,7 @@ impl Store for HybridStore {
     ) -> Result<bool, Box<dyn StdError + Send + Sync>> {
         // Check Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("refresh_reused:{}", refresh_token);
+            let key = format!("refresh_reused:{refresh_token}");
             match conn.exists::<_, bool>(&key).await {
                 Ok(exists) => return Ok(exists),
                 Err(e) => {
@@ -556,7 +556,7 @@ impl TokenStore {
         exp: Option<i64>,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         match self {
-            TokenStore::InMemory(store) => {
+            Self::InMemory(store) => {
                 let mut tokens = store.write().await;
                 if let Some(record) = tokens.get_mut(token) {
                     record.active = active;
@@ -586,7 +586,7 @@ impl TokenStore {
 
     pub async fn get_active(&self, token: &str) -> Result<bool, Box<dyn StdError + Send + Sync>> {
         match self {
-            TokenStore::InMemory(store) => {
+            Self::InMemory(store) => {
                 let tokens = store.read().await;
                 if let Some(record) = tokens.get(token) {
                     // Check if token is expired
@@ -605,7 +605,7 @@ impl TokenStore {
 
     pub async fn revoke(&self, token: &str) -> Result<(), Box<dyn StdError + Send + Sync>> {
         match self {
-            TokenStore::InMemory(store) => {
+            Self::InMemory(store) => {
                 let mut tokens = store.write().await;
                 if let Some(record) = tokens.get_mut(token) {
                     record.active = false;

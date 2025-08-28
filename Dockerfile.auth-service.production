@@ -1,0 +1,97 @@
+# Production Dockerfile for auth-service
+# Multi-stage build for minimal production image
+
+# Stage 1: Build stage with all dependencies
+FROM rust:1.82-slim-bookworm AS builder
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user and group for security
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Copy dependency files first to leverage Docker layer caching
+COPY Cargo.toml Cargo.lock ./
+COPY common/Cargo.toml ./common/
+COPY auth-service/Cargo.toml ./auth-service/
+COPY policy-service/Cargo.toml ./policy-service/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p auth-service/src policy-service/src common/src && \
+    echo "fn main() {}" > auth-service/src/main.rs && \
+    echo "fn main() {}" > policy-service/src/main.rs && \
+    echo "" > auth-service/src/lib.rs && \
+    echo "" > policy-service/src/lib.rs && \
+    echo "" > common/src/lib.rs
+
+# Build dependencies only
+RUN cargo build --release --bin auth-service && \
+    rm -rf auth-service/src policy-service/src common/src
+
+# Copy actual source code
+COPY common/src ./common/src/
+COPY auth-service/src ./auth-service/src/
+COPY auth-service/migrations ./auth-service/migrations/
+
+# Build the actual application
+RUN cargo build --release --bin auth-service
+
+# Stage 2: Production runtime image
+FROM debian:bookworm-slim AS runtime
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libpq5 \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN groupadd -r appgroup && useradd -r -g appgroup -s /bin/false appuser
+
+# Create necessary directories
+RUN mkdir -p /app /var/log/auth-service /app/config && \
+    chown -R appuser:appgroup /app /var/log/auth-service
+
+# Copy the binary from builder stage
+COPY --from=builder /usr/src/app/target/release/auth-service /app/
+COPY --from=builder --chown=appuser:appgroup /usr/src/app/auth-service/migrations /app/migrations/
+
+# Copy configuration files
+COPY auth-service/config/ /app/config/
+
+# Set up proper permissions
+RUN chmod +x /app/auth-service && \
+    chown appuser:appgroup /app/auth-service
+
+# Switch to non-root user
+USER appuser
+
+# Set working directory
+WORKDIR /app
+
+# Expose port (non-privileged port)
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Set environment variables for production
+ENV RUST_LOG=info \
+    RUST_BACKTRACE=0 \
+    AUTH_SERVICE_ENV=production \
+    AUTH_SERVICE_LOG_LEVEL=info \
+    AUTH_SERVICE_LOG_FORMAT=json
+
+# Use exec form to ensure proper signal handling
+ENTRYPOINT ["./auth-service"]

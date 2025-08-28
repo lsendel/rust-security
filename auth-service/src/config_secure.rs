@@ -89,7 +89,7 @@ pub struct SecurityHeaders {
     pub csp: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FrameOptions {
     Deny,
     SameOrigin,
@@ -419,7 +419,7 @@ pub fn load_secure_config() -> Result<SecureAppConfig, ConfigError> {
     // Validate configuration
     config
         .validate()
-        .map_err(|e| ConfigError::InvalidConfiguration(format!("Validation failed: {}", e)))?;
+        .map_err(|e| ConfigError::InvalidConfiguration(format!("Validation failed: {e}")))?;
 
     // Additional security validations
     validate_security_requirements(&config)?;
@@ -445,7 +445,7 @@ fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigE
             return Err(ConfigError::WeakSecret(
                 "REQUEST_SIGNING_SECRET must be at least 32 characters"
                     .to_string()
-                    .to_string(),
+                    ,
             ));
         }
     }
@@ -525,7 +525,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
         return Err(ConfigError::WeakCrypto(
             "RSA key size must be at least 2048 bits"
                 .to_string()
-                .to_string(),
+                ,
         ));
     }
 
@@ -534,7 +534,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
         return Err(ConfigError::InvalidConfiguration(
             "Access token TTL too short (minimum 5 minutes)"
                 .to_string()
-                .to_string(),
+                ,
         ));
     }
 
@@ -542,7 +542,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
         return Err(ConfigError::InvalidConfiguration(
             "Access token TTL too long (maximum 24 hours)"
                 .to_string()
-                .to_string(),
+                ,
         ));
     }
 
@@ -550,7 +550,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
         return Err(ConfigError::InvalidConfiguration(
             "Session TTL too short (minimum 15 minutes)"
                 .to_string()
-                .to_string(),
+                ,
         ));
     }
 
@@ -559,7 +559,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
         return Err(ConfigError::WeakCrypto(
             "Password minimum length must be at least 8"
                 .to_string()
-                .to_string(),
+                ,
         ));
     }
 
@@ -568,7 +568,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
         return Err(ConfigError::InvalidConfiguration(
             "Per-IP rate limit too high (maximum 1000)"
                 .to_string()
-                .to_string(),
+                ,
         ));
     }
 
@@ -582,8 +582,7 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
 
         if !origin.starts_with("http://") && !origin.starts_with("https://") {
             return Err(ConfigError::InvalidConfiguration(format!(
-                "Invalid CORS origin format: {}",
-                origin
+                "Invalid CORS origin format: {origin}"
             )));
         }
     }

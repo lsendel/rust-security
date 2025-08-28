@@ -74,12 +74,12 @@ struct IpTokenBucket {
 
 impl TokenBucket {
     fn new(requests_per_minute: u32, burst_size: u32) -> Self {
-        let capacity = burst_size as f64;
+        let capacity = f64::from(burst_size);
         Self {
             tokens: capacity,
             last_refill: Utc::now(),
             capacity,
-            refill_rate: requests_per_minute as f64 / 60.0, // per second
+            refill_rate: f64::from(requests_per_minute) / 60.0, // per second
         }
     }
 
@@ -135,7 +135,7 @@ pub enum RateLimitError {
 }
 
 impl SecureRateLimiter {
-    pub fn new(config: RateLimitConfig) -> Self {
+    #[must_use] pub fn new(config: RateLimitConfig) -> Self {
         Self {
             ip_buckets: Arc::new(RwLock::new(HashMap::new())),
             client_buckets: Arc::new(RwLock::new(HashMap::new())),
@@ -163,10 +163,9 @@ impl SecureRateLimiter {
             if let Some(ban_expiry) = banned_ips.get(&ip) {
                 if Utc::now() < *ban_expiry {
                     return Err(RateLimitError::IpBanned { ip });
-                } else {
-                    // Ban expired, remove it
-                    banned_ips.remove(&ip);
                 }
+                // Ban expired, remove it
+                banned_ips.remove(&ip);
             }
         }
 
@@ -205,7 +204,7 @@ impl SecureRateLimiter {
                 // Check if IP should be banned
                 if ip_bucket.violation_count >= self.config.ban_threshold {
                     let ban_expiry =
-                        Utc::now() + Duration::minutes(self.config.ban_duration_minutes as i64);
+                        Utc::now() + Duration::minutes(i64::from(self.config.ban_duration_minutes));
 
                     let mut banned_ips = self.banned_ips.write().await;
                     banned_ips.insert(ip, ban_expiry);

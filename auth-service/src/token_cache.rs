@@ -66,14 +66,20 @@ pub struct LruTokenCache {
     cleanup_task: Option<tokio::task::JoinHandle<()>>,
 }
 
+impl Default for LruTokenCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LruTokenCache {
     /// Create a new LRU token cache with default configuration
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::with_config(TokenCacheConfig::default())
     }
 
     /// Create a new LRU token cache with custom configuration
-    pub fn with_config(config: TokenCacheConfig) -> Self {
+    #[must_use] pub fn with_config(config: TokenCacheConfig) -> Self {
         let cache = Arc::new(RwLock::new(HashMap::new()));
         let mut instance = Self {
             cache,

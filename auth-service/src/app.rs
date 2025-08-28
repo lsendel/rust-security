@@ -34,18 +34,18 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    pub fn new(config: AppConfig) -> Self {
+    #[must_use] pub fn new(config: AppConfig) -> Self {
         Self {
             config,
             startup_time: std::time::SystemTime::now(),
         }
     }
 
-    pub fn with_default_config() -> Self {
+    #[must_use] pub fn with_default_config() -> Self {
         Self::new(AppConfig::default())
     }
 
-    pub fn get_uptime(&self) -> std::time::Duration {
+    #[must_use] pub fn get_uptime(&self) -> std::time::Duration {
         self.startup_time.elapsed().unwrap_or_default()
     }
 }
@@ -133,38 +133,38 @@ pub struct AppBuilder {
 }
 
 impl AppBuilder {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             config: AppConfig::default(),
         }
     }
 
-    pub fn with_host(mut self, host: String) -> Self {
+    #[must_use] pub fn with_host(mut self, host: String) -> Self {
         self.config.host = host;
         self
     }
 
-    pub fn with_port(mut self, port: u16) -> Self {
+    #[must_use] pub const fn with_port(mut self, port: u16) -> Self {
         self.config.port = port;
         self
     }
 
-    pub fn with_database_url(mut self, url: String) -> Self {
+    #[must_use] pub fn with_database_url(mut self, url: String) -> Self {
         self.config.database_url = Some(url);
         self
     }
 
-    pub fn with_redis_url(mut self, url: String) -> Self {
+    #[must_use] pub fn with_redis_url(mut self, url: String) -> Self {
         self.config.redis_url = Some(url);
         self
     }
 
-    pub fn with_jwt_secret(mut self, secret: String) -> Self {
+    #[must_use] pub fn with_jwt_secret(mut self, secret: String) -> Self {
         self.config.jwt_secret = secret;
         self
     }
 
-    pub fn build(self) -> AppContext {
+    #[must_use] pub fn build(self) -> AppContext {
         AppContext::new(self.config)
     }
 }

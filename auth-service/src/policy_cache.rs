@@ -81,7 +81,7 @@ pub struct PolicyCacheStats {
 
 /// Thread-safe policy cache with TTL and metrics
 pub struct PolicyCache {
-    /// Cache storage using DashMap for better concurrency
+    /// Cache storage using `DashMap` for better concurrency
     cache: DashMap<String, CacheEntry>,
     /// Configuration
     config: PolicyCacheConfig,
@@ -93,7 +93,7 @@ pub struct PolicyCache {
 
 impl PolicyCache {
     /// Create new policy cache with configuration
-    pub fn new(config: PolicyCacheConfig) -> Self {
+    #[must_use] pub fn new(config: PolicyCacheConfig) -> Self {
         Self {
             cache: DashMap::new(),
             config,
@@ -290,7 +290,7 @@ impl PolicyCache {
         let target_remove = std::cmp::max(1, self.config.max_entries / 10); // Remove 10% when full
 
         // Collect candidates for eviction
-        for entry in self.cache.iter() {
+        for entry in &self.cache {
             let (key, cache_entry) = (entry.key().clone(), entry.value().clone());
             to_remove.push((key, cache_entry.hit_count, cache_entry.created_at));
         }
@@ -400,7 +400,7 @@ pub async fn start_cache_cleanup_task(cache: Arc<PolicyCache>) {
 }
 
 /// Normalize policy request for consistent caching
-pub fn normalize_policy_request(
+#[must_use] pub fn normalize_policy_request(
     principal: Value,
     action: String,
     resource: Value,

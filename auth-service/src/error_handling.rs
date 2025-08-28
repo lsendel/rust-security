@@ -55,70 +55,70 @@ pub enum SecurityError {
 
 impl SecurityError {
     /// Get the public-facing error message that's safe to expose
-    pub fn public_message(&self) -> &'static str {
+    #[must_use] pub const fn public_message(&self) -> &'static str {
         match self {
-            SecurityError::AuthenticationFailed => "Authentication failed",
-            SecurityError::AuthorizationDenied => "Access denied",
-            SecurityError::RateLimitExceeded => "Rate limit exceeded",
-            SecurityError::InvalidInput => "Invalid request",
-            SecurityError::CryptographicFailure => "Security operation failed",
-            SecurityError::Configuration => "Service unavailable",
-            SecurityError::ServiceUnavailable => "Service temporarily unavailable",
-            SecurityError::Internal => "Internal error",
-            SecurityError::Timeout => "Request timeout",
-            SecurityError::NotFound => "Resource not found",
-            SecurityError::Conflict => "Resource conflict",
-            SecurityError::PayloadTooLarge => "Request payload too large",
+            Self::AuthenticationFailed => "Authentication failed",
+            Self::AuthorizationDenied => "Access denied",
+            Self::RateLimitExceeded => "Rate limit exceeded",
+            Self::InvalidInput => "Invalid request",
+            Self::CryptographicFailure => "Security operation failed",
+            Self::Configuration => "Service unavailable",
+            Self::ServiceUnavailable => "Service temporarily unavailable",
+            Self::Internal => "Internal error",
+            Self::Timeout => "Request timeout",
+            Self::NotFound => "Resource not found",
+            Self::Conflict => "Resource conflict",
+            Self::PayloadTooLarge => "Request payload too large",
         }
     }
 
     /// Check if this error should be logged for security monitoring
-    pub fn should_log(&self) -> bool {
+    #[must_use] pub const fn should_log(&self) -> bool {
         matches!(
             self,
-            SecurityError::AuthenticationFailed
-                | SecurityError::AuthorizationDenied
-                | SecurityError::CryptographicFailure
-                | SecurityError::Internal
-                | SecurityError::Configuration
+            Self::AuthenticationFailed
+                | Self::AuthorizationDenied
+                | Self::CryptographicFailure
+                | Self::Internal
+                | Self::Configuration
         )
     }
 
     /// Get the severity level for logging
-    pub fn severity(&self) -> ErrorSeverity {
+    #[must_use] pub const fn severity(&self) -> ErrorSeverity {
         match self {
-            SecurityError::Internal | SecurityError::CryptographicFailure => ErrorSeverity::High,
-            SecurityError::AuthenticationFailed | SecurityError::AuthorizationDenied => {
+            Self::Internal | Self::CryptographicFailure => ErrorSeverity::High,
+            Self::AuthenticationFailed | Self::AuthorizationDenied => {
                 ErrorSeverity::Medium
             }
-            SecurityError::RateLimitExceeded | SecurityError::InvalidInput => ErrorSeverity::Low,
+            Self::RateLimitExceeded | Self::InvalidInput => ErrorSeverity::Low,
             _ => ErrorSeverity::Low,
         }
     }
 
     /// Get error code for monitoring and alerting
-    pub fn error_code(&self) -> &'static str {
+    #[must_use] pub const fn error_code(&self) -> &'static str {
         match self {
-            SecurityError::AuthenticationFailed => "AUTH_FAILED",
-            SecurityError::AuthorizationDenied => "ACCESS_DENIED",
-            SecurityError::RateLimitExceeded => "RATE_LIMITED",
-            SecurityError::InvalidInput => "INVALID_INPUT",
-            SecurityError::CryptographicFailure => "CRYPTO_FAILURE",
-            SecurityError::Configuration => "CONFIG_ERROR",
-            SecurityError::ServiceUnavailable => "SERVICE_UNAVAILABLE",
-            SecurityError::Internal => "INTERNAL_ERROR",
-            SecurityError::Timeout => "TIMEOUT",
-            SecurityError::NotFound => "NOT_FOUND",
-            SecurityError::Conflict => "CONFLICT",
-            SecurityError::PayloadTooLarge => "PAYLOAD_TOO_LARGE",
+            Self::AuthenticationFailed => "AUTH_FAILED",
+            Self::AuthorizationDenied => "ACCESS_DENIED",
+            Self::RateLimitExceeded => "RATE_LIMITED",
+            Self::InvalidInput => "INVALID_INPUT",
+            Self::CryptographicFailure => "CRYPTO_FAILURE",
+            Self::Configuration => "CONFIG_ERROR",
+            Self::ServiceUnavailable => "SERVICE_UNAVAILABLE",
+            Self::Internal => "INTERNAL_ERROR",
+            Self::Timeout => "TIMEOUT",
+            Self::NotFound => "NOT_FOUND",
+            Self::Conflict => "CONFLICT",
+            Self::PayloadTooLarge => "PAYLOAD_TOO_LARGE",
         }
     }
 
     /// Check if the operation should be retried
-    pub fn is_retryable(&self) -> bool {
+    #[must_use] pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
-            SecurityError::ServiceUnavailable | SecurityError::Timeout | SecurityError::Internal
+            Self::ServiceUnavailable | Self::Timeout | Self::Internal
         )
     }
 }
@@ -135,10 +135,10 @@ pub enum ErrorSeverity {
 impl fmt::Display for ErrorSeverity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorSeverity::Low => write!(f, "LOW"),
-            ErrorSeverity::Medium => write!(f, "MEDIUM"),
-            ErrorSeverity::High => write!(f, "HIGH"),
-            ErrorSeverity::Critical => write!(f, "CRITICAL"),
+            Self::Low => write!(f, "LOW"),
+            Self::Medium => write!(f, "MEDIUM"),
+            Self::High => write!(f, "HIGH"),
+            Self::Critical => write!(f, "CRITICAL"),
         }
     }
 }
@@ -146,7 +146,7 @@ impl fmt::Display for ErrorSeverity {
 /// Custom result type for security operations
 pub type SecurityResult<T> = Result<T, SecurityError>;
 
-/// Extensions for SecurityResult to add logging and sanitization
+/// Extensions for `SecurityResult` to add logging and sanitization
 pub trait SecurityResultExt<T> {
     fn log_security_error(self) -> SecurityResult<T>;
     fn log_security_error_with_context(self, context: &str) -> SecurityResult<T>;
@@ -155,7 +155,7 @@ pub trait SecurityResultExt<T> {
 }
 
 impl<T> SecurityResultExt<T> for SecurityResult<T> {
-    fn log_security_error(self) -> SecurityResult<T> {
+    fn log_security_error(self) -> Self {
         if let Err(ref e) = self {
             if e.should_log() {
                 match e.severity() {
@@ -192,7 +192,7 @@ impl<T> SecurityResultExt<T> for SecurityResult<T> {
         self
     }
 
-    fn log_security_error_with_context(self, context: &str) -> SecurityResult<T> {
+    fn log_security_error_with_context(self, context: &str) -> Self {
         if let Err(ref e) = self {
             if e.should_log() {
                 error!(
@@ -208,7 +208,7 @@ impl<T> SecurityResultExt<T> for SecurityResult<T> {
         self
     }
 
-    fn sanitize_error(self) -> SecurityResult<T> {
+    fn sanitize_error(self) -> Self {
         self.map_err(|e| {
             // Replace internal errors with generic ones to prevent information leakage
             match e {
@@ -218,56 +218,56 @@ impl<T> SecurityResultExt<T> for SecurityResult<T> {
         })
     }
 
-    fn map_internal_error(self) -> SecurityResult<T> {
+    fn map_internal_error(self) -> Self {
         self.map_err(|_| SecurityError::Internal)
     }
 }
 
-/// HTTP response implementation for SecurityError
+/// HTTP response implementation for `SecurityError`
 impl IntoResponse for SecurityError {
     fn into_response(self) -> Response {
         let (status, error_code, message) = match self {
-            SecurityError::AuthenticationFailed => (
+            Self::AuthenticationFailed => (
                 StatusCode::UNAUTHORIZED,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::AuthorizationDenied => (
+            Self::AuthorizationDenied => (
                 StatusCode::FORBIDDEN,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::RateLimitExceeded => (
+            Self::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::InvalidInput => (
+            Self::InvalidInput => (
                 StatusCode::BAD_REQUEST,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::NotFound => (
+            Self::NotFound => (
                 StatusCode::NOT_FOUND,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::Conflict => (
+            Self::Conflict => (
                 StatusCode::CONFLICT,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::PayloadTooLarge => (
+            Self::PayloadTooLarge => (
                 StatusCode::PAYLOAD_TOO_LARGE,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::Timeout => (
+            Self::Timeout => (
                 StatusCode::REQUEST_TIMEOUT,
                 self.error_code(),
                 self.public_message(),
             ),
-            SecurityError::ServiceUnavailable => (
+            Self::ServiceUnavailable => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 self.error_code(),
                 self.public_message(),
@@ -284,7 +284,7 @@ impl IntoResponse for SecurityError {
                 "code": error_code,
                 "message": message,
                 "timestamp": chrono::Utc::now().to_rfc3339(),
-                "request_id": tracing::Span::current().id().map(|id| format!("{:?}", id)),
+                "request_id": tracing::Span::current().id().map(|id| format!("{id:?}")),
             }
         }));
 
@@ -319,22 +319,22 @@ pub enum CircuitState {
 impl From<u8> for CircuitState {
     fn from(value: u8) -> Self {
         match value {
-            0 => CircuitState::Closed,
-            1 => CircuitState::Open,
-            2 => CircuitState::HalfOpen,
-            _ => CircuitState::Closed,
+            0 => Self::Closed,
+            1 => Self::Open,
+            2 => Self::HalfOpen,
+            _ => Self::Closed,
         }
     }
 }
 
 impl From<rustls::Error> for SecurityError {
     fn from(_error: rustls::Error) -> Self {
-        SecurityError::CryptographicFailure
+        Self::CryptographicFailure
     }
 }
 
 impl CircuitBreaker {
-    pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
+    #[must_use] pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
         Self {
             failure_threshold,
             recovery_timeout,
@@ -428,7 +428,7 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    pub fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
+    #[must_use] pub const fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
         Self {
             max_attempts,
             base_delay,
@@ -495,9 +495,9 @@ where
     }
 }
 
-/// Validation helpers that return SecurityError
+/// Validation helpers that return `SecurityError`
 pub mod validation {
-    use super::*;
+    use super::{SecurityResult, SecurityError};
     use validator::Validate;
 
     pub fn validate_input<T: Validate>(input: &T) -> SecurityResult<()> {
@@ -511,7 +511,7 @@ pub mod validation {
         })
     }
 
-    pub fn validate_string_length(s: &str, min: usize, max: usize) -> SecurityResult<()> {
+    pub const fn validate_string_length(s: &str, min: usize, max: usize) -> SecurityResult<()> {
         if s.len() < min || s.len() > max {
             Err(SecurityError::InvalidInput)
         } else {

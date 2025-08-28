@@ -86,7 +86,7 @@ pub struct HealthStatus {
     pub timestamp: SystemTime,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum HealthCheckStatus {
     Healthy,
     Degraded,
@@ -102,7 +102,7 @@ pub struct ComponentHealth {
 }
 
 /// Alert severity levels
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AlertSeverity {
     Critical,
     Warning,
@@ -461,8 +461,7 @@ impl EnhancedObservability {
         }
 
         // Update duration statistics (simplified running average)
-        profile.avg_duration_ms = (profile.avg_duration_ms * (profile.call_count - 1) as f64
-            + duration_ms)
+        profile.avg_duration_ms = profile.avg_duration_ms.mul_add((profile.call_count - 1) as f64, duration_ms)
             / profile.call_count as f64;
         profile.max_duration_ms = profile.max_duration_ms.max(duration_ms);
         profile.timestamp = SystemTime::now();
@@ -472,7 +471,7 @@ impl EnhancedObservability {
             self.trigger_alert(
                 AlertSeverity::Warning,
                 "High Latency",
-                &format!("Operation {} took {:.2}ms", operation, duration_ms),
+                &format!("Operation {operation} took {duration_ms:.2}ms"),
                 duration_ms,
                 self.sli_config.latency_target_ms as f64,
             )
@@ -632,7 +631,7 @@ impl EnhancedObservability {
                         "title": "SLO Status",
                         "type": "stat",
                         "targets": [{
-                            "expr": format!("availability_{}", self.config.service_name.replace("-", "_")),
+                            "expr": format!("availability_{}", self.config.service_name.replace('-', "_")),
                             "legendFormat": "Availability %"
                         }]
                     },
@@ -642,8 +641,8 @@ impl EnhancedObservability {
                         "targets": profiles.keys().map(|op| {
                             serde_json::json!({
                                 "expr": format!("operation_duration_{}_{}",
-                                    self.config.service_name.replace("-", "_"),
-                                    op.replace(" ", "_")),
+                                    self.config.service_name.replace('-', "_"),
+                                    op.replace(' ', "_")),
                                 "legendFormat": op
                             })
                         }).collect::<Vec<_>>()

@@ -52,7 +52,7 @@ impl Drop for SecureKey {
 
 impl SecureKey {
     /// Create a new secure key
-    pub fn new(key_data: Vec<u8>, key_type: KeyType, key_id: String) -> Self {
+    #[must_use] pub const fn new(key_data: Vec<u8>, key_type: KeyType, key_id: String) -> Self {
         Self {
             key_data,
             key_type,
@@ -61,27 +61,27 @@ impl SecureKey {
     }
 
     /// Get the key type
-    pub fn key_type(&self) -> KeyType {
+    #[must_use] pub const fn key_type(&self) -> KeyType {
         self.key_type
     }
 
     /// Get the key ID
-    pub fn key_id(&self) -> &str {
+    #[must_use] pub fn key_id(&self) -> &str {
         &self.key_id
     }
 
     /// Get the key data (use with caution)
-    pub fn key_data(&self) -> &[u8] {
+    #[must_use] pub fn key_data(&self) -> &[u8] {
         &self.key_data
     }
 
     /// Get the key length
-    pub fn len(&self) -> usize {
+    #[must_use] pub fn len(&self) -> usize {
         self.key_data.len()
     }
 
     /// Check if key is empty
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.key_data.is_empty()
     }
 }
@@ -103,7 +103,7 @@ pub struct CryptoProvider {
 
 impl CryptoProvider {
     /// Create a new crypto provider
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             rng: SystemRandom::new(),
         }
@@ -140,7 +140,7 @@ impl CryptoProvider {
     }
 
     /// Hash data using SHA-256
-    pub fn hash_sha256(&self, data: &[u8]) -> Vec<u8> {
+    #[must_use] pub fn hash_sha256(&self, data: &[u8]) -> Vec<u8> {
         digest::digest(&digest::SHA256, data).as_ref().to_vec()
     }
 
@@ -185,7 +185,7 @@ impl CryptoProvider {
     }
 
     /// Sign data with Ed25519
-    pub fn sign_ed25519(&self, keypair: &Ed25519KeyPair, data: &[u8]) -> Vec<u8> {
+    #[must_use] pub fn sign_ed25519(&self, keypair: &Ed25519KeyPair, data: &[u8]) -> Vec<u8> {
         keypair.sign(data).as_ref().to_vec()
     }
 
@@ -217,7 +217,7 @@ impl CryptoProvider {
         pbkdf2::derive(
             pbkdf2::PBKDF2_HMAC_SHA256,
             std::num::NonZeroU32::new(iterations)
-                .ok_or_else(|| CoreError::Cryptographic(CryptographicError::KeyDerivationFailed))?,
+                .ok_or(CoreError::Cryptographic(CryptographicError::KeyDerivationFailed))?,
             salt,
             password.as_bytes(),
             &mut derived_key,
@@ -227,7 +227,7 @@ impl CryptoProvider {
     }
 
     /// Constant-time comparison of byte arrays
-    pub fn constant_time_eq(&self, a: &[u8], b: &[u8]) -> bool {
+    #[must_use] pub fn constant_time_eq(&self, a: &[u8], b: &[u8]) -> bool {
         if a.len() != b.len() {
             return false;
         }
@@ -251,7 +251,7 @@ pub struct CryptoUtils;
 
 impl CryptoUtils {
     /// Encode bytes to base64url (no padding)
-    pub fn encode_base64url(data: &[u8]) -> String {
+    #[must_use] pub fn encode_base64url(data: &[u8]) -> String {
         BASE64_URL_SAFE_NO_PAD.encode(data)
     }
 
@@ -263,7 +263,7 @@ impl CryptoUtils {
     }
 
     /// Encode bytes to base64 (standard)
-    pub fn encode_base64(data: &[u8]) -> String {
+    #[must_use] pub fn encode_base64(data: &[u8]) -> String {
         BASE64_STANDARD.encode(data)
     }
 
@@ -286,8 +286,8 @@ impl CryptoUtils {
     }
 
     /// Convert bytes to hex string
-    pub fn bytes_to_hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    #[must_use] pub fn bytes_to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 }
 
@@ -305,22 +305,22 @@ impl Drop for SecureString {
 
 impl SecureString {
     /// Create a new secure string
-    pub fn new(data: String) -> Self {
+    #[must_use] pub const fn new(data: String) -> Self {
         Self { data }
     }
 
     /// Get the string content (use with caution)
-    pub fn expose_secret(&self) -> &str {
+    #[must_use] pub fn expose_secret(&self) -> &str {
         &self.data
     }
 
     /// Get the length
-    pub fn len(&self) -> usize {
+    #[must_use] pub fn len(&self) -> usize {
         self.data.len()
     }
 
     /// Check if empty
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 }

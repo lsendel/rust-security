@@ -16,9 +16,7 @@ const MIN_AUTH_DURATION_MS: u64 = 200;
 static DUMMY_HASH: Lazy<String> = Lazy::new(|| {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
-        .hash_password(b"timing_balance_dummy_secret", &salt)
-        .map(|ph| ph.to_string())
-        .unwrap_or_else(|_| "".to_string())
+        .hash_password(b"timing_balance_dummy_secret", &salt).map_or_else(|_| String::new(), |ph| ph.to_string())
 });
 
 /// Secure client authentication with timing attack protection
@@ -74,7 +72,7 @@ impl ClientAuthenticator {
         let password_hash = self
             .argon2
             .hash_password(client_secret.as_bytes(), &salt)
-            .map_err(|e| internal_error(&format!("Failed to hash client secret: {}", e)))?;
+            .map_err(|e| internal_error(&format!("Failed to hash client secret: {e}")))?;
 
         // Store hashed secret and metadata
         self.client_secrets
@@ -97,55 +95,52 @@ impl ClientAuthenticator {
         let stored_hash = self.client_secrets.get(client_id);
         let client_metadata = self.client_metadata.get(client_id);
 
-        let is_valid = match (stored_hash, client_metadata) {
-            (Some(hash), Some(metadata)) => {
-                // Check if client is active
-                if !metadata.is_active {
-                    self.log_auth_attempt(client_id, false, "inactive_client", ip_address);
-                    false
-                } else {
-                    // Verify password hash
-                    let parsed_hash = PasswordHash::new(hash)
-                        .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
+        let is_valid = if let (Some(hash), Some(metadata)) = (stored_hash, client_metadata) {
+            // Check if client is active
+            if metadata.is_active {
+                // Verify password hash
+                let parsed_hash = PasswordHash::new(hash)
+                    .map_err(|e| internal_error(&format!("Invalid stored hash: {e}")))?;
 
-                    let verification_result = self
-                        .argon2
-                        .verify_password(client_secret.as_bytes(), &parsed_hash)
-                        .is_ok();
+                let verification_result = self
+                    .argon2
+                    .verify_password(client_secret.as_bytes(), &parsed_hash)
+                    .is_ok();
 
-                    self.log_auth_attempt(
-                        client_id,
-                        verification_result,
-                        if verification_result {
-                            "success"
-                        } else {
-                            "invalid_credentials"
-                        },
-                        ip_address,
-                    );
+                self.log_auth_attempt(
+                    client_id,
+                    verification_result,
+                    if verification_result {
+                        "success"
+                    } else {
+                        "invalid_credentials"
+                    },
+                    ip_address,
+                );
 
-                    verification_result
-                }
-            }
-            _ => {
-                // Client doesn't exist - still perform a password verification against a dummy hash
-                // to align timing and code path with existing clients
-                if !DUMMY_HASH.is_empty() {
-                    if let Ok(parsed) = PasswordHash::new(&DUMMY_HASH) {
-                        let _ = self
-                            .argon2
-                            .verify_password(client_secret.as_bytes(), &parsed);
-                    }
-                }
-
-                self.log_auth_attempt(client_id, false, "unknown_client", ip_address);
+                verification_result
+            } else {
+                self.log_auth_attempt(client_id, false, "inactive_client", ip_address);
                 false
             }
+        } else {
+            // Client doesn't exist - still perform a password verification against a dummy hash
+            // to align timing and code path with existing clients
+            if !DUMMY_HASH.is_empty() {
+                if let Ok(parsed) = PasswordHash::new(&DUMMY_HASH) {
+                    let _ = self
+                        .argon2
+                        .verify_password(client_secret.as_bytes(), &parsed);
+                }
+            }
+
+            self.log_auth_attempt(client_id, false, "unknown_client", ip_address);
+            false
         };
 
         // Ensure consistent timing (minimum duration to prevent timing attacks)
         let elapsed = start_time.elapsed();
-        if elapsed.as_millis() < MIN_AUTH_DURATION_MS as u128 {
+        if elapsed.as_millis() < u128::from(MIN_AUTH_DURATION_MS) {
             std::thread::sleep(std::time::Duration::from_millis(
                 MIN_AUTH_DURATION_MS - elapsed.as_millis() as u64,
             ));
@@ -155,16 +150,15 @@ impl ClientAuthenticator {
     }
 
     /// Get client metadata
-    pub fn get_client_metadata(&self, client_id: &str) -> Option<&ClientMetadata> {
+    #[must_use] pub fn get_client_metadata(&self, client_id: &str) -> Option<&ClientMetadata> {
         self.client_metadata.get(client_id)
     }
 
     /// Check if client exists and is active
-    pub fn is_client_active(&self, client_id: &str) -> bool {
+    #[must_use] pub fn is_client_active(&self, client_id: &str) -> bool {
         self.client_metadata
             .get(client_id)
-            .map(|m| m.is_active)
-            .unwrap_or(false)
+            .is_some_and(|m| m.is_active)
     }
 
     /// Validate client secret strength
@@ -237,7 +231,7 @@ impl ClientAuthenticator {
             "invalid_credentials" => "Invalid client secret provided".to_string(),
             "inactive_client" => "Client account is inactive".to_string(),
             "unknown_client" => "Client ID not found in system".to_string(),
-            _ => format!("Authentication failed: {}", reason),
+            _ => format!("Authentication failed: {reason}"),
         })
         .with_detail_string("client_id".to_string(), client_id.to_string())
         .with_detail_string("reason".to_string(), reason.to_string());
@@ -255,7 +249,7 @@ impl ClientAuthenticator {
             for entry in client_creds.split(';') {
                 if let Some((client_id, client_secret)) = entry.split_once(':') {
                     let metadata = ClientMetadata {
-                        name: format!("Client {}", client_id),
+                        name: format!("Client {client_id}"),
                         redirect_uris: vec![], // Will be populated from REDIRECT_URIS env var
                         grant_types: vec![
                             "client_credentials".to_string(),
@@ -274,7 +268,7 @@ impl ClientAuthenticator {
                             .argon2
                             .hash_password(client_secret.as_bytes(), &salt)
                             .map_err(|e| {
-                                internal_error(&format!("Failed to hash client secret: {}", e))
+                                internal_error(&format!("Failed to hash client secret: {e}"))
                             })?;
                         self.client_secrets
                             .insert(client_id.to_string(), password_hash.to_string());
@@ -336,7 +330,7 @@ pub async fn authenticate_client(
         if let Ok(Some(api_key)) = api_key_store.get_api_key_by_prefix(&prefix).await {
             let argon2 = Argon2::default();
             let parsed_hash = PasswordHash::new(&api_key.hashed_key)
-                .map_err(|e| internal_error(&format!("Invalid stored hash: {}", e)))?;
+                .map_err(|e| internal_error(&format!("Invalid stored hash: {e}")))?;
 
             if argon2
                 .verify_password(client_secret.as_bytes(), &parsed_hash)

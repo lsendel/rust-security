@@ -20,7 +20,7 @@ pub struct SecureJwtClaims {
 }
 
 /// Token types for validation
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
     AccessToken,
     IdToken,
@@ -28,7 +28,7 @@ pub enum TokenType {
 }
 
 /// Create secure JWT validation with strict security constraints
-pub fn create_secure_jwt_validation() -> Validation {
+#[must_use] pub fn create_secure_jwt_validation() -> Validation {
     let mut validation = Validation::new(Algorithm::RS256);
 
     // Security constraints - ONLY allow RS256
@@ -70,7 +70,7 @@ pub fn validate_jwt_secure(
 ) -> Result<SecureJwtClaims, AuthError> {
     // Decode header first to check algorithm
     let header = decode_header(token).map_err(|e| AuthError::InvalidToken {
-        reason: format!("Invalid JWT header: {}", e),
+        reason: format!("Invalid JWT header: {e}"),
     })?;
 
     // Prevent algorithm confusion attacks - ONLY RS256 allowed
@@ -91,7 +91,7 @@ pub fn validate_jwt_secure(
     let validation = create_secure_jwt_validation();
     let token_data = decode::<SecureJwtClaims>(token, decoding_key, &validation).map_err(|e| {
         AuthError::InvalidToken {
-            reason: format!("JWT validation failed: {}", e),
+            reason: format!("JWT validation failed: {e}"),
         }
     })?;
 

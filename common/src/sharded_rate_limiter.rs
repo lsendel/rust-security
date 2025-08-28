@@ -38,7 +38,7 @@ pub struct RateLimitEntry {
 
 impl RateLimitEntry {
     /// Create a new rate limit entry
-    pub fn new(limit: u32, window_duration: Duration) -> Self {
+    #[must_use] pub fn new(limit: u32, window_duration: Duration) -> Self {
         Self {
             count: 0,
             window_start: Instant::now(),
@@ -48,7 +48,7 @@ impl RateLimitEntry {
     }
 
     /// Check if the entry is in a new window and should be reset
-    pub fn should_reset(&self) -> bool {
+    #[must_use] pub fn should_reset(&self) -> bool {
         self.window_start.elapsed() >= self.window_duration
     }
 
@@ -59,7 +59,7 @@ impl RateLimitEntry {
     }
 
     /// Check if adding one more request would exceed the limit
-    pub fn would_exceed_limit(&self) -> bool {
+    #[must_use] pub const fn would_exceed_limit(&self) -> bool {
         self.count >= self.limit
     }
 
@@ -69,12 +69,12 @@ impl RateLimitEntry {
     }
 
     /// Get remaining requests in the current window
-    pub fn remaining(&self) -> u32 {
+    #[must_use] pub const fn remaining(&self) -> u32 {
         self.limit.saturating_sub(self.count)
     }
 
     /// Get time until window reset
-    pub fn time_until_reset(&self) -> Duration {
+    #[must_use] pub fn time_until_reset(&self) -> Duration {
         self.window_duration
             .saturating_sub(self.window_start.elapsed())
     }
@@ -116,17 +116,11 @@ pub struct ShardedRateLimiter {
 
 impl ShardedRateLimiter {
     /// Create a new sharded rate limiter
-    pub fn new(config: RateLimitConfig) -> Self {
+    #[must_use] pub fn new(config: RateLimitConfig) -> Self {
         // Validate configuration
-        if config.default_limit == 0 {
-            panic!("Rate limit must be greater than 0");
-        }
-        if config.window_duration.is_zero() {
-            panic!("Window duration must be greater than 0");
-        }
-        if config.burst_multiplier < 1.0 {
-            panic!("Burst multiplier must be >= 1.0");
-        }
+        assert!((config.default_limit != 0), "Rate limit must be greater than 0");
+        assert!(!config.window_duration.is_zero(), "Window duration must be greater than 0");
+        assert!(!(config.burst_multiplier < 1.0), "Burst multiplier must be >= 1.0");
 
         // Create shards array
         let mut shards = Vec::with_capacity(rate_limiting::RATE_LIMITER_SHARDS);
@@ -144,7 +138,7 @@ impl ShardedRateLimiter {
     }
 
     /// Create a rate limiter with default configuration
-    pub fn with_default_config() -> Self {
+    #[must_use] pub fn with_default_config() -> Self {
         Self::new(RateLimitConfig::default())
     }
 
@@ -198,31 +192,28 @@ impl ShardedRateLimiter {
         // Acquire write lock for more complex operations
         let mut shard_write = shard.write().await;
 
-        match shard_write.get_mut(key) {
-            Some(entry) => {
-                // Reset if in new window
-                if entry.should_reset() {
-                    entry.reset();
-                    entry.limit = custom_limit; // Update limit
-                }
-
-                // Check if we can allow this request
-                if entry.would_exceed_limit() {
-                    Err(RateLimitError::RateLimitExceeded {
-                        key: key.to_string(),
-                    })
-                } else {
-                    entry.increment();
-                    Ok(true)
-                }
+        if let Some(entry) = shard_write.get_mut(key) {
+            // Reset if in new window
+            if entry.should_reset() {
+                entry.reset();
+                entry.limit = custom_limit; // Update limit
             }
-            None => {
-                // Create new entry
-                let mut entry = RateLimitEntry::new(custom_limit, self.config.window_duration);
+
+            // Check if we can allow this request
+            if entry.would_exceed_limit() {
+                Err(RateLimitError::RateLimitExceeded {
+                    key: key.to_string(),
+                })
+            } else {
                 entry.increment();
-                shard_write.insert(key.to_string(), entry);
                 Ok(true)
             }
+        } else {
+            // Create new entry
+            let mut entry = RateLimitEntry::new(custom_limit, self.config.window_duration);
+            entry.increment();
+            shard_write.insert(key.to_string(), entry);
+            Ok(true)
         }
     }
 
@@ -324,7 +315,7 @@ impl ShardedRateLimiter {
             stats.total_keys += shard_read.len();
 
             for entry in shard_read.values() {
-                stats.total_requests += entry.count as u64;
+                stats.total_requests += u64::from(entry.count);
                 if entry.would_exceed_limit() {
                     stats.blocked_keys += 1;
                 }

@@ -160,7 +160,7 @@ pub struct MonitoringConfig {
     pub log_format: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct FeatureFlags {
     pub mfa_enabled: bool,
     pub webauthn_enabled: bool,
@@ -208,7 +208,7 @@ impl Config {
         }
 
         // Load environment-specific configuration
-        let env_config = Path::new(&config_dir).join(format!("{}.toml", environment));
+        let env_config = Path::new(&config_dir).join(format!("{environment}.toml"));
         if env_config.exists() {
             builder = builder.add_source(File::from(env_config));
         }

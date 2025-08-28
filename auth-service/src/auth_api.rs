@@ -183,7 +183,7 @@ pub struct ErrorResponse {
 // Implementation
 
 impl AuthState {
-    pub fn new(jwt_secret: String) -> Self {
+    #[must_use] pub fn new(jwt_secret: String) -> Self {
         let mut users = HashMap::new();
         let mut oauth_clients = HashMap::new();
 
@@ -267,7 +267,7 @@ pub async fn register(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "validation_error".to_string(),
-                error_description: format!("Validation failed: {:?}", errors),
+                error_description: format!("Validation failed: {errors:?}"),
             }),
         ));
     }
@@ -339,7 +339,7 @@ pub async fn login(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "validation_error".to_string(),
-                error_description: format!("Validation failed: {:?}", errors),
+                error_description: format!("Validation failed: {errors:?}"),
             }),
         ));
     }
@@ -411,7 +411,7 @@ pub async fn authorize(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "invalid_request".to_string(),
-                error_description: format!("Validation failed: {:?}", errors),
+                error_description: format!("Validation failed: {errors:?}"),
             }),
         ));
     }
@@ -460,7 +460,7 @@ pub async fn authorize(
 
     let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
     if let Some(state_param) = request.state {
-        redirect_url.push_str(&format!("&state={}", state_param));
+        redirect_url.push_str(&format!("&state={state_param}"));
     }
 
     info!("Authorization code generated for client: {}", client.name);
@@ -479,7 +479,7 @@ pub async fn token(
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "invalid_request".to_string(),
-                error_description: format!("Validation failed: {:?}", errors),
+                error_description: format!("Validation failed: {errors:?}"),
             }),
         ));
     }

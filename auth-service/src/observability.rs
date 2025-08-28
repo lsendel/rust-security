@@ -5,19 +5,16 @@
 
 /// Log successful authentication
 pub fn log_auth_success(user_id: &str, auth_method: &str, client_ip: Option<&str>) {
-    match client_ip {
-        Some(ip) => tracing::info!(
-            user_id = user_id,
-            auth_method = auth_method,
-            client_ip = ip,
-            "Authentication successful"
-        ),
-        None => tracing::info!(
-            user_id = user_id,
-            auth_method = auth_method,
-            "Authentication successful"
-        ),
-    }
+    if let Some(ip) = client_ip { tracing::info!(
+        user_id = user_id,
+        auth_method = auth_method,
+        client_ip = ip,
+        "Authentication successful"
+    ); } else { tracing::info!(
+        user_id = user_id,
+        auth_method = auth_method,
+        "Authentication successful"
+    ); }
 }
 
 /// Log failed authentication attempt

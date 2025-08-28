@@ -32,7 +32,7 @@ pub struct SecureRandom {
 
 impl SecureRandom {
     /// Create a new secure random number generator
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             rng: SystemRandom::new(),
         }
@@ -71,36 +71,36 @@ impl Default for SecureRandom {
 }
 
 /// Hash a token using SHA-256
-pub fn hash_token(token: &str) -> String {
+#[must_use] pub fn hash_token(token: &str) -> String {
     let digest = digest::digest(&digest::SHA256, token.as_bytes());
     hex::encode(digest.as_ref())
 }
 
 /// Hash a password using SHA-256 (for backwards compatibility)
 /// Note: This should be replaced with Argon2 for new implementations
-pub fn hash_password_sha256(password: &str) -> String {
+#[must_use] pub fn hash_password_sha256(password: &str) -> String {
     let digest = digest::digest(&digest::SHA256, password.as_bytes());
     hex::encode(digest.as_ref())
 }
 
 /// Hash a secret using SHA-256
-pub fn hash_secret(secret: &str) -> String {
+#[must_use] pub fn hash_secret(secret: &str) -> String {
     let digest = digest::digest(&digest::SHA256, secret.as_bytes());
     hex::encode(digest.as_ref())
 }
 
 /// Hash a backup code using SHA-256
-pub fn hash_backup_code(code: &str) -> String {
+#[must_use] pub fn hash_backup_code(code: &str) -> String {
     hash_token(code) // Reuse the same implementation
 }
 
 /// Hash an OTP using SHA-256
-pub fn hash_otp(otp: &str) -> String {
+#[must_use] pub fn hash_otp(otp: &str) -> String {
     hash_token(otp) // Reuse the same implementation
 }
 
 /// Hash a user agent string using SHA-256
-pub fn hash_user_agent(user_agent: &str) -> String {
+#[must_use] pub fn hash_user_agent(user_agent: &str) -> String {
     hash_token(user_agent) // Reuse the same implementation
 }
 
@@ -151,17 +151,17 @@ pub fn generate_salt_hex() -> Result<String, CryptoError> {
 }
 
 /// Constant-time comparison of byte slices
-pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+#[must_use] pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     constant_time_eq::constant_time_eq(a, b)
 }
 
 /// Constant-time comparison of strings
-pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
+#[must_use] pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
     constant_time_eq(a.as_bytes(), b.as_bytes())
 }
 
 /// Hash input data with optional salt
-pub fn hash_with_salt(data: &[u8], salt: Option<&[u8]>) -> String {
+#[must_use] pub fn hash_with_salt(data: &[u8], salt: Option<&[u8]>) -> String {
     let mut hasher_input = Vec::new();
 
     if let Some(salt) = salt {
@@ -176,7 +176,7 @@ pub fn hash_with_salt(data: &[u8], salt: Option<&[u8]>) -> String {
 }
 
 /// Validate hash format (hex string)
-pub fn is_valid_hash(hash: &str) -> bool {
+#[must_use] pub fn is_valid_hash(hash: &str) -> bool {
     hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
 }
 

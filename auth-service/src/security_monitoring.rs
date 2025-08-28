@@ -99,7 +99,7 @@ pub struct SecurityMonitor {
 }
 
 impl SecurityMonitor {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let default_config = MonitoringConfig {
             enabled: std::env::var("SECURITY_MONITORING_ENABLED").unwrap_or_default() == "true",
             alert_retention_days: 30,

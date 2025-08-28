@@ -66,7 +66,7 @@ impl Default for BackpressureConfig {
 }
 
 impl BackpressureConfig {
-    pub fn from_env() -> Self {
+    #[must_use] pub fn from_env() -> Self {
         let mut config = Self::default();
 
         if let Ok(val) = std::env::var("OAUTH_REQUEST_LIMIT_KB") {
@@ -169,7 +169,7 @@ fn inc_requests_total() {
 }
 #[cfg(not(feature = "monitoring"))]
 #[inline]
-fn inc_requests_total() {}
+const fn inc_requests_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
@@ -179,7 +179,7 @@ fn inc_requests_rejected_total() {
 }
 #[cfg(not(feature = "monitoring"))]
 #[inline]
-fn inc_requests_rejected_total() {}
+const fn inc_requests_rejected_total() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
@@ -189,7 +189,7 @@ fn inc_concurrent_requests() {
 }
 #[cfg(not(feature = "monitoring"))]
 #[inline]
-fn inc_concurrent_requests() {}
+const fn inc_concurrent_requests() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
@@ -199,7 +199,7 @@ fn dec_concurrent_requests() {
 }
 #[cfg(not(feature = "monitoring"))]
 #[inline]
-fn dec_concurrent_requests() {}
+const fn dec_concurrent_requests() {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
@@ -209,7 +209,7 @@ fn observe_request_body_size(_size: f64) {
 }
 #[cfg(not(feature = "monitoring"))]
 #[inline]
-fn observe_request_body_size(_size: f64) {}
+const fn observe_request_body_size(_size: f64) {}
 
 #[cfg(feature = "monitoring")]
 #[inline]
@@ -218,7 +218,7 @@ fn observe_request_duration(duration: f64) {
 }
 #[cfg(not(feature = "monitoring"))]
 #[inline]
-fn observe_request_duration(_duration: f64) {}
+const fn observe_request_duration(_duration: f64) {}
 
 // Backpressure state tracking
 #[derive(Debug)]
@@ -232,7 +232,7 @@ pub struct BackpressureState {
 }
 
 impl BackpressureState {
-    pub fn new(config: BackpressureConfig) -> Self {
+    #[must_use] pub fn new(config: BackpressureConfig) -> Self {
         Self {
             concurrent_requests: AtomicUsize::new(0),
             queue_depth: AtomicUsize::new(0),
@@ -426,7 +426,7 @@ pub async fn backpressure_middleware(
 }
 
 // Request body size limit based on endpoint
-pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize {
+#[must_use] pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize {
     if path.starts_with("/oauth") || path.starts_with("/auth") {
         config.oauth_request_limit
     } else if path.starts_with("/scim") {
@@ -439,7 +439,7 @@ pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize 
 }
 
 // Create comprehensive backpressure middleware stack
-pub fn create_backpressure_middleware(
+#[must_use] pub fn create_backpressure_middleware(
     config: BackpressureConfig,
 ) -> (
     ServiceBuilder<tower::layer::util::Stack<TimeoutLayer, tower::layer::util::Identity>>,
@@ -470,8 +470,7 @@ pub async fn adaptive_body_limit_middleware(
                     return Err(AuthError::ValidationError {
                         field: "request_body".to_string(),
                         reason: format!(
-                            "Request body too large: {} bytes (limit: {} bytes)",
-                            size, limit
+                            "Request body too large: {size} bytes (limit: {limit} bytes)"
                         ),
                     });
                 }

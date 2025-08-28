@@ -2,7 +2,7 @@
 //!
 //! This module provides secure secrets management with multiple backend support:
 //! - AWS Secrets Manager (production recommended)
-//! - HashiCorp Vault (enterprise preferred)
+//! - `HashiCorp` Vault (enterprise preferred)
 //! - Environment variables (development/fallback)
 //!
 //! Features:
@@ -64,7 +64,7 @@ pub enum SecretsError {
 pub enum SecretBackend {
     /// AWS Secrets Manager - recommended for AWS environments
     AwsSecretsManager,
-    /// HashiCorp Vault - enterprise secret management
+    /// `HashiCorp` Vault - enterprise secret management
     Vault,
     /// Environment variables - development and fallback
     Environment,
@@ -98,7 +98,7 @@ struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-    fn new(failure_threshold: u32, recovery_timeout: Duration) -> Self {
+    const fn new(failure_threshold: u32, recovery_timeout: Duration) -> Self {
         Self {
             failure_count: 0,
             last_failure_time: None,
@@ -175,13 +175,13 @@ pub struct SecretsManager {
 }
 
 impl SecretsManager {
-    /// Create a new SecretsManager with automatic backend detection
+    /// Create a new `SecretsManager` with automatic backend detection
     pub async fn new() -> Result<Self, SecretsError> {
         let config = Self::load_config_from_env();
         Self::new_with_config(config).await
     }
 
-    /// Create a new SecretsManager with explicit configuration
+    /// Create a new `SecretsManager` with explicit configuration
     pub async fn new_with_config(config: SecretsManagerConfig) -> Result<Self, SecretsError> {
         let crypto_manager =
             UnifiedCryptoManager::new_aes().map_err(SecretsError::EncryptionError)?;
@@ -455,14 +455,13 @@ impl SecretsManager {
             if cached.cached_at.elapsed().unwrap_or_default() < cached.ttl {
                 let decrypted = self.crypto_manager.decrypt(&cached.value).await?;
                 let value = String::from_utf8(decrypted).map_err(|e| {
-                    SecretsError::CacheError(format!("Invalid UTF-8 in cached secret: {}", e))
+                    SecretsError::CacheError(format!("Invalid UTF-8 in cached secret: {e}"))
                 })?;
 
                 debug!("Cache hit for secret: {}", name);
                 return Ok(Some(value));
-            } else {
-                debug!("Cache entry expired for secret: {}", name);
             }
+            debug!("Cache entry expired for secret: {}", name);
         }
         Ok(None)
     }
@@ -523,7 +522,7 @@ impl SecretsManager {
 
     async fn is_circuit_breaker_open(&self, backend: &SecretBackend) -> bool {
         let breakers = self.circuit_breakers.read().await;
-        breakers.get(backend).is_some_and(|cb| cb.is_open())
+        breakers.get(backend).is_some_and(CircuitBreaker::is_open)
     }
 
     async fn record_backend_success(&self, backend: &SecretBackend) {

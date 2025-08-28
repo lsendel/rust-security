@@ -130,7 +130,7 @@ pub fn validate_scope(scope: &str) -> Result<(), ValidationError> {
 
     // Check for duplicate scopes
     let tokens: Vec<&str> = scope.split_whitespace().collect();
-    let unique_tokens: HashSet<&str> = tokens.iter().cloned().collect();
+    let unique_tokens: HashSet<&str> = tokens.iter().copied().collect();
     if tokens.len() != unique_tokens.len() {
         return Err(ValidationError::new("Duplicate scopes not allowed"));
     }
@@ -400,7 +400,7 @@ pub fn validate_password_strength(password: &str) -> Result<(), ValidationError>
 }
 
 /// Sanitize string input by removing dangerous characters
-pub fn sanitize_string(input: &str) -> String {
+#[must_use] pub fn sanitize_string(input: &str) -> String {
     input
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || " -_.@".contains(*c))

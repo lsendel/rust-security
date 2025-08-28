@@ -7,6 +7,7 @@ use tracing::{info, warn};
 
 /// Production configuration management
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ProductionConfig {
     /// Server configuration
     pub server: ServerConfig,
@@ -130,18 +131,6 @@ pub struct FeatureFlags {
     pub quantum_safe: bool,
 }
 
-impl Default for ProductionConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            database: DatabaseConfig::default(),
-            redis: RedisConfig::default(),
-            security: SecurityConfig::default(),
-            observability: ObservabilityConfig::default(),
-            features: FeatureFlags::default(),
-        }
-    }
-}
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -340,15 +329,15 @@ impl ConfigLoader {
         }
 
         let content = std::fs::read_to_string(file_path)
-            .with_context(|| format!("Failed to read config file: {}", file_path))?;
+            .with_context(|| format!("Failed to read config file: {file_path}"))?;
 
         let file_config: ProductionConfig =
             if file_path.ends_with(".yaml") || file_path.ends_with(".yml") {
                 serde_yaml::from_str(&content)
-                    .with_context(|| format!("Failed to parse YAML config: {}", file_path))?
+                    .with_context(|| format!("Failed to parse YAML config: {file_path}"))?
             } else if file_path.ends_with(".json") {
                 serde_json::from_str(&content)
-                    .with_context(|| format!("Failed to parse JSON config: {}", file_path))?
+                    .with_context(|| format!("Failed to parse JSON config: {file_path}"))?
             } else {
                 return Err(anyhow::anyhow!(
                     "Unsupported config file format: {}",
@@ -432,7 +421,7 @@ impl ConfigLoader {
     }
 
     /// Get configuration summary for logging (without secrets)
-    pub fn get_config_summary(config: &ProductionConfig) -> HashMap<String, String> {
+    #[must_use] pub fn get_config_summary(config: &ProductionConfig) -> HashMap<String, String> {
         let mut summary = HashMap::new();
 
         summary.insert("server_host".to_string(), config.server.host.clone());

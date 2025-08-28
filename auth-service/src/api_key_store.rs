@@ -50,7 +50,7 @@ impl ApiKeyStore {
 
         let pool = SqlitePool::connect(database_url).await?;
         // Run migrations manually for now to avoid compile-time database dependency
-        let migration_query = r#"
+        let migration_query = r"
             CREATE TABLE IF NOT EXISTS api_keys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 client_id TEXT NOT NULL,
@@ -62,7 +62,7 @@ impl ApiKeyStore {
                 last_used_at DATETIME,
                 status TEXT DEFAULT 'active'
             )
-        "#;
+        ";
         sqlx::query(migration_query).execute(&pool).await?;
 
         Ok(Self { pool })

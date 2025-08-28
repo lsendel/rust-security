@@ -28,7 +28,7 @@ pub struct AuthContext {
 
 impl AuthContext {
     /// Create a new authentication context
-    pub fn new(
+    #[must_use] pub fn new(
         user_id: String,
         session_id: String,
         expires_in: Duration,
@@ -46,12 +46,12 @@ impl AuthContext {
     }
 
     /// Check if the authentication context is expired
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         SystemTime::now() > self.expires_at
     }
 
     /// Check if the context has a specific scope
-    pub fn has_scope(&self, scope: &str) -> bool {
+    #[must_use] pub fn has_scope(&self, scope: &str) -> bool {
         self.scopes.contains(&scope.to_string())
     }
 
@@ -61,7 +61,7 @@ impl AuthContext {
     }
 
     /// Get a custom claim
-    pub fn get_claim(&self, key: &str) -> Option<&String> {
+    #[must_use] pub fn get_claim(&self, key: &str) -> Option<&String> {
         self.claims.get(key)
     }
 }
@@ -89,7 +89,7 @@ pub struct TokenInfo {
 
 impl TokenInfo {
     /// Create new token information
-    pub fn new(
+    #[must_use] pub fn new(
         token_id: String,
         token_type: String,
         expires_in: Duration,
@@ -112,12 +112,12 @@ impl TokenInfo {
     }
 
     /// Check if token is expired
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         SystemTime::now() > self.expires_at
     }
 
     /// Check if token is valid for a specific audience
-    pub fn is_valid_for_audience(&self, aud: &str) -> bool {
+    #[must_use] pub fn is_valid_for_audience(&self, aud: &str) -> bool {
         self.audience.contains(&aud.to_string())
     }
 
@@ -143,7 +143,7 @@ pub struct AuthResult {
 
 impl AuthResult {
     /// Create a new authentication result
-    pub fn new(context: AuthContext, token_info: TokenInfo, token_record: TokenRecord) -> Self {
+    #[must_use] pub const fn new(context: AuthContext, token_info: TokenInfo, token_record: TokenRecord) -> Self {
         Self {
             context,
             token_info,
@@ -152,7 +152,7 @@ impl AuthResult {
     }
 
     /// Check if the authentication result is valid
-    pub fn is_valid(&self) -> bool {
+    #[must_use] pub fn is_valid(&self) -> bool {
         !self.context.is_expired() && !self.token_info.is_expired()
     }
 }
@@ -191,7 +191,7 @@ pub enum AuthCredentials {
     Certificate {
         cert_data: Vec<u8>,
     },
-    /// OAuth2 authorization code
+    /// `OAuth2` authorization code
     OAuth2Code {
         code: String,
         redirect_uri: String,
@@ -204,7 +204,7 @@ pub enum AuthCredentials {
 
 impl AuthCredentials {
     /// Get the credential type as a string
-    pub fn credential_type(&self) -> &'static str {
+    #[must_use] pub const fn credential_type(&self) -> &'static str {
         match self {
             Self::UsernamePassword { .. } => "username_password",
             Self::ApiKey { .. } => "api_key",

@@ -63,7 +63,7 @@ pub struct CryptoKey {
     pub status: KeyStatus,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum KeyStatus {
     Active,   // Current signing key
     Valid,    // Can be used for validation
@@ -205,7 +205,7 @@ impl JwksManager {
         let (public_key, private_key) = self.generate_key_pair()?;
 
         Ok(CryptoKey {
-            kid: kid.clone(),
+            kid,
             kty: "RSA".to_string(),
             alg: match self.config.algorithm {
                 Algorithm::RS256 => "RS256".to_string(),
@@ -226,7 +226,7 @@ impl JwksManager {
         })
     }
 
-    /// Generate EdDSA key pair (Ed25519 - more secure than RSA)
+    /// Generate `EdDSA` key pair (Ed25519 - more secure than RSA)
     fn generate_key_pair(&self) -> Result<(String, String), AuthError> {
         use ed25519_dalek::SigningKey;
 
@@ -348,7 +348,7 @@ impl JwksManager {
 
         EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
-            context: format!("Invalid private key: {}", e),
+            context: format!("Invalid private key: {e}"),
         })
     }
 
@@ -358,12 +358,12 @@ impl JwksManager {
             .get_key(kid)
             .await
             .ok_or_else(|| AuthError::InvalidToken {
-                reason: format!("Unknown kid: {}", kid),
+                reason: format!("Unknown kid: {kid}"),
             })?;
 
         DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
-            context: format!("Invalid public key: {}", e),
+            context: format!("Invalid public key: {e}"),
         })
     }
 
@@ -438,8 +438,14 @@ pub struct InMemoryKeyStorage {
     keys: Arc<RwLock<Vec<CryptoKey>>>,
 }
 
+impl Default for InMemoryKeyStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryKeyStorage {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             keys: Arc::new(RwLock::new(Vec::new())),
         }
@@ -484,7 +490,7 @@ impl RedisKeyStorage {
     pub fn new(redis_url: &str) -> Result<Self, AuthError> {
         let client = redis::Client::open(redis_url).map_err(|e| AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
-            context: format!("Failed to create Redis client: {}", e),
+            context: format!("Failed to create Redis client: {e}"),
         })?;
 
         Ok(Self {
@@ -503,13 +509,13 @@ impl KeyStorage for RedisKeyStorage {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e),
+                context: format!("Redis connection failed: {e}"),
             })?;
 
         let redis_key = format!("{}{}", self.key_prefix, key.kid);
         let key_json = serde_json::to_string(key).map_err(|e| AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
-            context: format!("Failed to serialize key: {}", e),
+            context: format!("Failed to serialize key: {e}"),
         })?;
 
         // Store with expiration based on key expiry
@@ -522,7 +528,7 @@ impl KeyStorage for RedisKeyStorage {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to store key in Redis: {}", e),
+                context: format!("Failed to store key in Redis: {e}"),
             })?;
 
         Ok(())
@@ -535,7 +541,7 @@ impl KeyStorage for RedisKeyStorage {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e),
+                context: format!("Redis connection failed: {e}"),
             })?;
 
         let pattern = format!("{}*", self.key_prefix);
@@ -544,7 +550,7 @@ impl KeyStorage for RedisKeyStorage {
                 .await
                 .map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to scan keys: {}", e),
+                    context: format!("Failed to scan keys: {e}"),
                 })?;
 
         let mut keys = Vec::new();
@@ -554,7 +560,7 @@ impl KeyStorage for RedisKeyStorage {
                     .await
                     .map_err(|e| AuthError::InternalError {
                         error_id: uuid::Uuid::new_v4(),
-                        context: format!("Failed to get key {}: {}", key_name, e),
+                        context: format!("Failed to get key {key_name}: {e}"),
                     })?;
 
             if let Some(json) = key_json {
@@ -578,7 +584,7 @@ impl KeyStorage for RedisKeyStorage {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e),
+                context: format!("Redis connection failed: {e}"),
             })?;
 
         let redis_key = format!("{}{}", self.key_prefix, kid);
@@ -586,7 +592,7 @@ impl KeyStorage for RedisKeyStorage {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to delete key: {}", e),
+                context: format!("Failed to delete key: {e}"),
             })?;
 
         Ok(())
@@ -599,7 +605,7 @@ impl KeyStorage for RedisKeyStorage {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {}", e),
+                context: format!("Redis connection failed: {e}"),
             })?;
 
         let redis_key = format!("{}{}", self.key_prefix, kid);
@@ -608,14 +614,14 @@ impl KeyStorage for RedisKeyStorage {
                 .await
                 .map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to get key for status update: {}", e),
+                    context: format!("Failed to get key for status update: {e}"),
                 })?;
 
         if let Some(json) = key_json {
             let mut key: CryptoKey =
                 serde_json::from_str(&json).map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to deserialize key: {}", e),
+                    context: format!("Failed to deserialize key: {e}"),
                 })?;
 
             key.status = status;
@@ -626,14 +632,14 @@ impl KeyStorage for RedisKeyStorage {
             let updated_json =
                 serde_json::to_string(&key).map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to serialize updated key: {}", e),
+                    context: format!("Failed to serialize updated key: {e}"),
                 })?;
 
             conn.set::<_, _, ()>(&redis_key, updated_json)
                 .await
                 .map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to update key status: {}", e),
+                    context: format!("Failed to update key status: {e}"),
                 })?;
         }
 

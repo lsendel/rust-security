@@ -27,11 +27,11 @@ pub struct CsrfConfig {
     pub header_name: String,
     /// Form field name for CSRF token
     pub form_field_name: String,
-    /// SameSite cookie policy
+    /// `SameSite` cookie policy
     pub same_site_policy: SameSite,
     /// Secure cookie flag
     pub secure_cookie: bool,
-    /// HttpOnly cookie flag
+    /// `HttpOnly` cookie flag
     pub http_only: bool,
     /// Endpoints exempt from CSRF protection
     pub exempt_endpoints: Vec<String>,
@@ -61,7 +61,7 @@ impl Default for CsrfConfig {
     }
 }
 
-/// SameSite cookie policy
+/// `SameSite` cookie policy
 #[derive(Debug, Clone, Copy)]
 pub enum SameSite {
     Strict,
@@ -72,9 +72,9 @@ pub enum SameSite {
 impl std::fmt::Display for SameSite {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SameSite::Strict => write!(f, "Strict"),
-            SameSite::Lax => write!(f, "Lax"),
-            SameSite::None => write!(f, "None"),
+            Self::Strict => write!(f, "Strict"),
+            Self::Lax => write!(f, "Lax"),
+            Self::None => write!(f, "None"),
         }
     }
 }
@@ -92,7 +92,7 @@ pub struct CsrfToken {
 
 impl CsrfToken {
     /// Create a new CSRF token
-    pub fn new(lifetime: Duration, session_id: Option<String>) -> Self {
+    #[must_use] pub fn new(lifetime: Duration, session_id: Option<String>) -> Self {
         let mut token_bytes = vec![0u8; 32];
         OsRng.fill_bytes(&mut token_bytes);
         let token = URL_SAFE_NO_PAD.encode(&token_bytes);
@@ -111,7 +111,7 @@ impl CsrfToken {
     }
 
     /// Check if token is expired
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -133,7 +133,7 @@ impl CsrfToken {
 
         mac.update(payload.as_bytes());
         let signature = mac.finalize().into_bytes();
-        Ok(URL_SAFE_NO_PAD.encode(&signature))
+        Ok(URL_SAFE_NO_PAD.encode(signature))
     }
 
     /// Verify HMAC signature
@@ -171,7 +171,7 @@ pub struct CsrfProtection {
 
 impl CsrfProtection {
     /// Create new CSRF protection service
-    pub fn new(config: CsrfConfig) -> Self {
+    #[must_use] pub fn new(config: CsrfConfig) -> Self {
         Self {
             config,
             active_tokens: Arc::new(RwLock::new(HashMap::new())),
@@ -238,7 +238,7 @@ impl CsrfProtection {
     }
 
     /// Check if endpoint is exempt from CSRF protection
-    pub fn is_exempt_endpoint(&self, path: &str) -> bool {
+    #[must_use] pub fn is_exempt_endpoint(&self, path: &str) -> bool {
         self.config
             .exempt_endpoints
             .iter()
@@ -246,7 +246,7 @@ impl CsrfProtection {
     }
 
     /// Generate cookie header for CSRF token
-    pub fn generate_cookie_header(&self, signed_token: &str) -> String {
+    #[must_use] pub fn generate_cookie_header(&self, signed_token: &str) -> String {
         format!(
             "{}={}; Path=/; SameSite={}{}{}{}",
             self.config.cookie_name,
@@ -267,7 +267,7 @@ impl CsrfProtection {
     }
 
     /// Extract token from request headers or form data
-    pub fn extract_token_from_request(
+    #[must_use] pub fn extract_token_from_request(
         &self,
         headers: &HashMap<String, String>,
         form_data: Option<&HashMap<String, String>>,

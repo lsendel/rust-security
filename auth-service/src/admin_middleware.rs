@@ -124,7 +124,7 @@ pub async fn admin_auth_middleware(
                 source: "admin_middleware".to_string(),
                 description: "Admin rate limit exceeded".to_string(),
                 actor: Some(admin_key.clone()),
-                action: Some(format!("{} {}", method, path)),
+                action: Some(format!("{method} {path}")),
                 target: Some(path.to_string()),
                 outcome: "failure".to_string(),
                 reason: Some("rate_limit_exceeded".to_string()),
@@ -155,7 +155,7 @@ pub async fn admin_auth_middleware(
 
     // Verify Bearer token and admin scope
     match require_admin_scope(&headers, &state).await {
-        Ok(_) => {
+        Ok(()) => {
             tracing::debug!(
                 method = method,
                 path = path,
@@ -170,9 +170,9 @@ pub async fn admin_auth_middleware(
                 event_type: SecurityEventType::AdminAccess,
                 severity: SecuritySeverity::Info,
                 source: "admin_middleware".to_string(),
-                description: format!("Admin access granted for {} {}", method, path),
+                description: format!("Admin access granted for {method} {path}"),
                 actor: Some("admin_user".to_string()), // Would be extracted from token in real implementation
-                action: Some(format!("{} {}", method, path)),
+                action: Some(format!("{method} {path}")),
                 target: Some(path.to_string()),
                 outcome: "success".to_string(),
                 reason: Some("valid_admin_token".to_string()),
@@ -209,7 +209,7 @@ pub async fn admin_auth_middleware(
             Ok(next.run(request).await)
         }
         Err(auth_error) => {
-            return handle_auth_failure(auth_error, method, path, &client_ip, &headers);
+            handle_auth_failure(auth_error, method, path, &client_ip, &headers)
         }
     }
 }
@@ -405,7 +405,7 @@ async fn validate_request_with_replay_protection(
     if let Some(replay_protection) = REPLAY_PROTECTION.get() {
         replay_protection
             .validate_request(nonce, timestamp, signature)
-            .await?
+            .await?;
     }
 
     Ok(())
@@ -464,7 +464,7 @@ async fn validate_request_signature(
     }
 
     // Calculate expected signature
-    let payload = format!("{}:{}:{}", method, path, timestamp);
+    let payload = format!("{method}:{path}:{timestamp}");
     let expected_signature = calculate_hmac_sha256(signing_secret, &payload)?;
 
     // Constant-time comparison to prevent timing attacks
@@ -506,9 +506,9 @@ fn handle_auth_failure(
         event_type: SecurityEventType::AuthenticationFailure,
         severity: SecuritySeverity::Medium,
         source: "admin_middleware".to_string(),
-        description: format!("Admin authentication failed for {} {}", method, path),
+        description: format!("Admin authentication failed for {method} {path}"),
         actor: Some("unknown".to_string()),
-        action: Some(format!("{} {}", method, path)),
+        action: Some(format!("{method} {path}")),
         target: Some(path.to_string()),
         outcome: "failure".to_string(),
         reason: Some("invalid_or_missing_admin_token".to_string()),
@@ -570,7 +570,7 @@ fn handle_signature_failure(
             redact_log(&error.to_string())
         ),
         actor: Some("admin_user".to_string()),
-        action: Some(format!("{} {}", method, path)),
+        action: Some(format!("{method} {path}")),
         target: Some(path.to_string()),
         outcome: "failure".to_string(),
         reason: Some(reason.to_string()),
@@ -594,7 +594,7 @@ fn handle_signature_failure(
     };
     crate::security_logging::log_event(&event);
 
-    Err((status_code, format!("Request validation failed: {}", error)).into_response())
+    Err((status_code, format!("Request validation failed: {error}")).into_response())
 }
 
 /// Calculate HMAC-SHA256 signature

@@ -55,7 +55,9 @@ impl SqlStore {
         let applied_migrations = self.get_applied_migrations().await?;
 
         for migration in migrations {
-            if !applied_migrations.contains(&migration.version) {
+            if applied_migrations.contains(&migration.version) {
+                info!("Migration {} already applied, skipping", migration.version);
+            } else {
                 info!(
                     "Applying migration {}: {}",
                     migration.version, migration.description
@@ -80,8 +82,6 @@ impl SqlStore {
 
                 tx.commit().await?;
                 info!("Migration {} applied successfully", migration.version);
-            } else {
-                info!("Migration {} already applied, skipping", migration.version);
             }
         }
 
@@ -91,11 +91,11 @@ impl SqlStore {
 
     async fn create_migration_table(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
         sqlx::query(
-            r#"CREATE TABLE IF NOT EXISTS schema_migrations (
+            r"CREATE TABLE IF NOT EXISTS schema_migrations (
                 version VARCHAR(255) PRIMARY KEY,
                 description VARCHAR(255) NOT NULL,
                 applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-            )"#,
+            )",
         )
         .execute(&*self.pool)
         .await?;
@@ -115,7 +115,7 @@ impl SqlStore {
                 version: "001_initial_schema".to_string(),
                 description: "Create initial users and groups tables".to_string(),
                 queries: vec![
-                    r#"CREATE TABLE IF NOT EXISTS users (
+                    r"CREATE TABLE IF NOT EXISTS users (
                         id TEXT PRIMARY KEY,
                         user_name TEXT NOT NULL UNIQUE,
                         display_name TEXT,
@@ -123,29 +123,29 @@ impl SqlStore {
                         emails JSONB,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_users_user_name ON users(user_name)"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_users_active ON users(active)"#.to_string(),
-                    r#"CREATE TABLE IF NOT EXISTS groups (
+                    )".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_users_user_name ON users(user_name)".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_users_active ON users(active)".to_string(),
+                    r"CREATE TABLE IF NOT EXISTS groups (
                         id TEXT PRIMARY KEY,
                         display_name TEXT NOT NULL,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )"#.to_string(),
-                    r#"CREATE TABLE IF NOT EXISTS group_members (
+                    )".to_string(),
+                    r"CREATE TABLE IF NOT EXISTS group_members (
                         group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
                         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                         added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
                         PRIMARY KEY (group_id, user_id)
-                    )"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id)"#.to_string(),
+                    )".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id)".to_string(),
                 ],
             },
             Migration {
                 version: "002_auth_tokens".to_string(),
                 description: "Create authentication and token tables".to_string(),
                 queries: vec![
-                    r#"CREATE TABLE IF NOT EXISTS auth_codes (
+                    r"CREATE TABLE IF NOT EXISTS auth_codes (
                         code TEXT PRIMARY KEY,
                         client_id TEXT NOT NULL,
                         redirect_uri TEXT NOT NULL,
@@ -156,10 +156,10 @@ impl SqlStore {
                         user_id TEXT NOT NULL,
                         exp BIGINT NOT NULL,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_auth_codes_exp ON auth_codes(exp)"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_auth_codes_user_id ON auth_codes(user_id)"#.to_string(),
-                    r#"CREATE TABLE IF NOT EXISTS tokens (
+                    )".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_auth_codes_exp ON auth_codes(exp)".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_auth_codes_user_id ON auth_codes(user_id)".to_string(),
+                    r"CREATE TABLE IF NOT EXISTS tokens (
                         token_hash TEXT PRIMARY KEY,
                         token_display TEXT NOT NULL,
                         active BOOLEAN DEFAULT TRUE,
@@ -171,38 +171,38 @@ impl SqlStore {
                         token_binding TEXT,
                         mfa_verified BOOLEAN DEFAULT FALSE,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_tokens_active ON tokens(active)"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_tokens_exp ON tokens(exp)"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_tokens_sub ON tokens(sub)"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_tokens_client_id ON tokens(client_id)"#.to_string(),
+                    )".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_tokens_active ON tokens(active)".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_tokens_exp ON tokens(exp)".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_tokens_sub ON tokens(sub)".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_tokens_client_id ON tokens(client_id)".to_string(),
                 ],
             },
             Migration {
                 version: "003_refresh_tokens".to_string(),
                 description: "Create refresh token tables".to_string(),
                 queries: vec![
-                    r#"CREATE TABLE IF NOT EXISTS refresh_tokens (
+                    r"CREATE TABLE IF NOT EXISTS refresh_tokens (
                         refresh_token_hash TEXT PRIMARY KEY,
                         access_token_hash TEXT NOT NULL,
                         exp BIGINT NOT NULL,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_refresh_tokens_exp ON refresh_tokens(exp)"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_refresh_tokens_access_token ON refresh_tokens(access_token_hash)"#.to_string(),
-                    r#"CREATE TABLE IF NOT EXISTS refresh_token_reuse (
+                    )".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_refresh_tokens_exp ON refresh_tokens(exp)".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_refresh_tokens_access_token ON refresh_tokens(access_token_hash)".to_string(),
+                    r"CREATE TABLE IF NOT EXISTS refresh_token_reuse (
                         refresh_token_hash TEXT PRIMARY KEY,
                         exp BIGINT NOT NULL,
                         detected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    )"#.to_string(),
-                    r#"CREATE INDEX IF NOT EXISTS idx_refresh_token_reuse_exp ON refresh_token_reuse(exp)"#.to_string(),
+                    )".to_string(),
+                    r"CREATE INDEX IF NOT EXISTS idx_refresh_token_reuse_exp ON refresh_token_reuse(exp)".to_string(),
                 ],
             },
             Migration {
                 version: "004_cleanup_jobs".to_string(),
                 description: "Create stored procedures for cleanup".to_string(),
                 queries: vec![
-                    r#"CREATE OR REPLACE FUNCTION cleanup_expired_tokens() RETURNS INTEGER AS $$
+                    r"CREATE OR REPLACE FUNCTION cleanup_expired_tokens() RETURNS INTEGER AS $$
                     DECLARE
                         deleted_count INTEGER;
                     BEGIN
@@ -210,8 +210,8 @@ impl SqlStore {
                         GET DIAGNOSTICS deleted_count = ROW_COUNT;
                         RETURN deleted_count;
                     END;
-                    $$ LANGUAGE plpgsql;"#.to_string(),
-                    r#"CREATE OR REPLACE FUNCTION cleanup_expired_auth_codes() RETURNS INTEGER AS $$
+                    $$ LANGUAGE plpgsql;".to_string(),
+                    r"CREATE OR REPLACE FUNCTION cleanup_expired_auth_codes() RETURNS INTEGER AS $$
                     DECLARE
                         deleted_count INTEGER;
                     BEGIN
@@ -219,8 +219,8 @@ impl SqlStore {
                         GET DIAGNOSTICS deleted_count = ROW_COUNT;
                         RETURN deleted_count;
                     END;
-                    $$ LANGUAGE plpgsql;"#.to_string(),
-                    r#"CREATE OR REPLACE FUNCTION cleanup_expired_refresh_tokens() RETURNS INTEGER AS $$
+                    $$ LANGUAGE plpgsql;".to_string(),
+                    r"CREATE OR REPLACE FUNCTION cleanup_expired_refresh_tokens() RETURNS INTEGER AS $$
                     DECLARE
                         deleted_count INTEGER;
                     BEGIN
@@ -229,7 +229,7 @@ impl SqlStore {
                         DELETE FROM refresh_token_reuse WHERE exp < EXTRACT(EPOCH FROM NOW());
                         RETURN deleted_count;
                     END;
-                    $$ LANGUAGE plpgsql;"#.to_string(),
+                    $$ LANGUAGE plpgsql;".to_string(),
                 ],
             },
         ]
@@ -354,9 +354,9 @@ impl Store for SqlStore {
                     Box::<dyn StdError + Send + Sync>::from(anyhow!("Filter value is required"))
                 })?;
                 let bind_value = match parsed_filter.operator {
-                    ScimOperator::Co => format!("%{}%", value),
-                    ScimOperator::Sw => format!("{}%", value),
-                    ScimOperator::Ew => format!("%{}", value),
+                    ScimOperator::Co => format!("%{value}%"),
+                    ScimOperator::Sw => format!("{value}%"),
+                    ScimOperator::Ew => format!("%{value}"),
                     _ => value,
                 };
                 builder.push_bind(bind_value);
@@ -495,7 +495,7 @@ impl Store for SqlStore {
                 Box::<dyn StdError + Send + Sync>::from(anyhow!("Filter value is required"))
             })?;
             let bind_value = if parsed_filter.operator == ScimOperator::Co {
-                format!("%{}%", value)
+                format!("%{value}%")
             } else {
                 value
             };

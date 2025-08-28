@@ -51,46 +51,46 @@ pub enum SensitiveDataType {
 
 impl SensitiveDataType {
     /// Get the data classification for this sensitive data type
-    pub fn classification(&self) -> DataClassification {
+    #[must_use] pub const fn classification(&self) -> DataClassification {
         match self {
             // PII data
-            SensitiveDataType::EmailAddress
-            | SensitiveDataType::PhoneNumber
-            | SensitiveDataType::IpAddress
-            | SensitiveDataType::MacAddress
-            | SensitiveDataType::Uuid => DataClassification::Pii,
+            Self::EmailAddress
+            | Self::PhoneNumber
+            | Self::IpAddress
+            | Self::MacAddress
+            | Self::Uuid => DataClassification::Pii,
 
             // SPI data (highly sensitive PII)
-            SensitiveDataType::SocialSecurityNumber
-            | SensitiveDataType::CreditCardNumber
-            | SensitiveDataType::BankAccountNumber
-            | SensitiveDataType::Passport
-            | SensitiveDataType::DriversLicense
-            | SensitiveDataType::HealthRecord
-            | SensitiveDataType::BiometricData
-            | SensitiveDataType::TaxId => DataClassification::Spi,
+            Self::SocialSecurityNumber
+            | Self::CreditCardNumber
+            | Self::BankAccountNumber
+            | Self::Passport
+            | Self::DriversLicense
+            | Self::HealthRecord
+            | Self::BiometricData
+            | Self::TaxId => DataClassification::Spi,
 
             // Confidential authentication/security data
-            SensitiveDataType::JwtToken
-            | SensitiveDataType::ApiKey
-            | SensitiveDataType::Password
-            | SensitiveDataType::CryptographicKey
-            | SensitiveDataType::SessionId
-            | SensitiveDataType::AuthorizationCode
-            | SensitiveDataType::RefreshToken
-            | SensitiveDataType::AccessToken
-            | SensitiveDataType::ClientSecret
-            | SensitiveDataType::DatabaseConnectionString => DataClassification::Confidential,
+            Self::JwtToken
+            | Self::ApiKey
+            | Self::Password
+            | Self::CryptographicKey
+            | Self::SessionId
+            | Self::AuthorizationCode
+            | Self::RefreshToken
+            | Self::AccessToken
+            | Self::ClientSecret
+            | Self::DatabaseConnectionString => DataClassification::Confidential,
 
             // Internal system data
-            SensitiveDataType::Url
-            | SensitiveDataType::FilePath
-            | SensitiveDataType::CustomerId => DataClassification::Internal,
+            Self::Url
+            | Self::FilePath
+            | Self::CustomerId => DataClassification::Internal,
         }
     }
 
     /// Get the redaction strategy for this data type
-    pub fn redaction_strategy(&self) -> RedactionStrategy {
+    #[must_use] pub const fn redaction_strategy(&self) -> RedactionStrategy {
         match self.classification() {
             DataClassification::Spi => RedactionStrategy::FullRedaction,
             DataClassification::Confidential => RedactionStrategy::FullRedaction,
@@ -219,7 +219,7 @@ impl Default for PiiSpiRedactor {
 
 impl PiiSpiRedactor {
     /// Create a new PII/SPI redactor
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             aggressive_mode: false,
             custom_patterns: HashMap::new(),
@@ -227,13 +227,13 @@ impl PiiSpiRedactor {
     }
 
     /// Enable aggressive redaction mode
-    pub fn with_aggressive_mode(mut self, aggressive: bool) -> Self {
+    #[must_use] pub const fn with_aggressive_mode(mut self, aggressive: bool) -> Self {
         self.aggressive_mode = aggressive;
         self
     }
 
     /// Add a custom pattern for organization-specific sensitive data
-    pub fn with_custom_pattern(mut self, name: String, pattern: Regex) -> Self {
+    #[must_use] pub fn with_custom_pattern(mut self, name: String, pattern: Regex) -> Self {
         self.custom_patterns.insert(name, pattern);
         self
     }
@@ -283,7 +283,7 @@ impl PiiSpiRedactor {
     }
 
     /// Check if a data type should be redacted based on classification level
-    fn should_redact_type(
+    const fn should_redact_type(
         &self,
         data_type: &SensitiveDataType,
         max_classification: &DataClassification,
@@ -321,13 +321,13 @@ impl PiiSpiRedactor {
         match data_type.redaction_strategy() {
             RedactionStrategy::NoRedaction => text.to_string(),
             RedactionStrategy::FullRedaction => pattern
-                .replace_all(text, &format!("[{:?}_REDACTED]", data_type))
+                .replace_all(text, &format!("[{data_type:?}_REDACTED]"))
                 .to_string(),
             RedactionStrategy::PartialRedaction => self.partial_redact(text, pattern, data_type),
             RedactionStrategy::HashRedaction => {
                 // For now, treat as full redaction. Could implement hashing later.
                 pattern
-                    .replace_all(text, &format!("[{:?}_HASH]", data_type))
+                    .replace_all(text, &format!("[{data_type:?}_HASH]"))
                     .to_string()
             }
         }
@@ -345,7 +345,7 @@ impl PiiSpiRedactor {
                             if user.len() > 2 {
                                 format!("{}****{}", &user[0..1], domain)
                             } else {
-                                format!("****{}", domain)
+                                format!("****{domain}")
                             }
                         } else {
                             "[EMAIL_REDACTED]".to_string()
@@ -369,26 +369,26 @@ impl PiiSpiRedactor {
                     SensitiveDataType::Uuid => {
                         format!("****-****-****-{}", &matched[matched.len() - 4..])
                     }
-                    _ => format!("[{:?}_REDACTED]", data_type),
+                    _ => format!("[{data_type:?}_REDACTED]"),
                 }
             })
             .to_string()
     }
 
     /// Redact error messages specifically
-    pub fn redact_error_message(&self, error: &str) -> String {
+    #[must_use] pub fn redact_error_message(&self, error: &str) -> String {
         // Apply stricter redaction for error messages (Confidential level)
         self.redact_text(error, DataClassification::Internal)
     }
 
     /// Redact log messages
-    pub fn redact_log_message(&self, log_message: &str) -> String {
+    #[must_use] pub fn redact_log_message(&self, log_message: &str) -> String {
         // Standard redaction for logs (PII level)
         self.redact_text(log_message, DataClassification::Internal)
     }
 
     /// Redact HTTP response data
-    pub fn redact_response_data(&self, response: &str) -> String {
+    #[must_use] pub fn redact_response_data(&self, response: &str) -> String {
         // Conservative redaction for responses (Public level max)
         self.redact_text(response, DataClassification::Public)
     }
@@ -424,7 +424,7 @@ impl PiiSpiRedactor {
 /// Global PII/SPI redactor instance
 static GLOBAL_REDACTOR: Lazy<PiiSpiRedactor> = Lazy::new(|| {
     PiiSpiRedactor::new()
-        .with_aggressive_mode(std::env::var("PII_AGGRESSIVE_MODE").map_or(false, |v| v == "true"))
+        .with_aggressive_mode(std::env::var("PII_AGGRESSIVE_MODE").is_ok_and(|v| v == "true"))
 });
 
 /// Convenience function for redacting text with the global redactor

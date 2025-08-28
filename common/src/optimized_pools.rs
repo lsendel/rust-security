@@ -41,7 +41,7 @@ pub enum HealthStatus {
 
 impl Default for HealthStatus {
     fn default() -> Self {
-        HealthStatus::Healthy
+        Self::Healthy
     }
 }
 
@@ -279,7 +279,7 @@ impl OptimizedRedisPool {
         // Update moving average of acquisition time
         let total_acquisitions = stats.successful_acquisitions + stats.failed_acquisitions;
         stats.avg_acquisition_time_ms =
-            (stats.avg_acquisition_time_ms * (total_acquisitions - 1) as f64 + acquisition_time_ms)
+            stats.avg_acquisition_time_ms.mul_add((total_acquisitions - 1) as f64, acquisition_time_ms)
                 / total_acquisitions as f64;
     }
 

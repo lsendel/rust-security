@@ -7,8 +7,8 @@ use rand::RngCore;
 pub struct SecureRandomGenerator;
 
 impl SecureRandomGenerator {
-    pub fn new() -> Self {
-        Self::default()
+    #[must_use] pub const fn new() -> Self {
+        Self
     }
 
     /// Generate cryptographically secure random bytes
@@ -25,7 +25,7 @@ impl SecureRandomGenerator {
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
 
-    /// Generate secure authorization code (OAuth2)
+    /// Generate secure authorization code (`OAuth2`)
     pub fn generate_authorization_code(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("ac_{}", BASE64URL_NOPAD.encode(&bytes)))
@@ -67,7 +67,7 @@ impl SecureRandomGenerator {
             // Generate 8-digit backup codes
             let bytes = self.generate_bytes(4)?;
             let code = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) % 100_000_000;
-            codes.push(format!("{:08}", code));
+            codes.push(format!("{code:08}"));
         }
         Ok(codes)
     }
@@ -79,13 +79,13 @@ impl SecureRandomGenerator {
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
 
-    /// Generate secure state parameter for OAuth2
+    /// Generate secure state parameter for `OAuth2`
     pub fn generate_oauth_state(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
 
-    /// Generate secure nonce for OpenID Connect
+    /// Generate secure nonce for `OpenID` Connect
     pub fn generate_oidc_nonce(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(BASE64URL_NOPAD.encode(&bytes))
@@ -157,7 +157,7 @@ pub fn generate_secure_api_key() -> Result<String, AuthError> {
 }
 
 /// Legacy function for backward compatibility - now uses secure generation
-pub fn generate_secure_code() -> String {
+#[must_use] pub fn generate_secure_code() -> String {
     generate_secure_authorization_code().unwrap_or_else(|_| format!("ac_{}", uuid::Uuid::new_v4()))
     // Fallback to UUID
 }

@@ -24,7 +24,7 @@ pub struct HealthResponse {
     pub timestamp: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum HealthStatus {
     Healthy,
     Degraded,
@@ -66,8 +66,14 @@ pub struct HealthChecker {
     metrics: Arc<RwLock<HealthMetrics>>,
 }
 
+impl Default for HealthChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HealthChecker {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             start_time: Instant::now(),
             components: Arc::new(RwLock::new(HashMap::new())),
@@ -96,10 +102,8 @@ impl HealthChecker {
 
         // Update component statuses
         let mut components = self.components.write().await;
-        for result in component_results {
-            if let Ok((name, health)) = result {
-                components.insert(name, health);
-            }
+        for (name, health) in component_results.into_iter().flatten() {
+            components.insert(name, health);
         }
 
         // Determine overall status
@@ -139,7 +143,7 @@ impl HealthChecker {
         let result = self.simulate_component_check("database", 0.95).await;
 
         let health = match result {
-            Ok(_) => {
+            Ok(()) => {
                 metadata.insert("connection_pool".to_string(), "healthy".to_string());
                 metadata.insert("active_connections".to_string(), "5".to_string());
                 ComponentHealth {
@@ -177,7 +181,7 @@ impl HealthChecker {
         let result = self.simulate_component_check("redis", 0.98).await;
 
         let health = match result {
-            Ok(_) => {
+            Ok(()) => {
                 metadata.insert("memory_usage".to_string(), "45%".to_string());
                 metadata.insert("connected_clients".to_string(), "12".to_string());
                 ComponentHealth {
@@ -217,7 +221,7 @@ impl HealthChecker {
             .await;
 
         let health = match result {
-            Ok(_) => {
+            Ok(()) => {
                 metadata.insert("oidc_providers".to_string(), "2 healthy".to_string());
                 metadata.insert("saml_providers".to_string(), "1 healthy".to_string());
                 ComponentHealth {
@@ -258,7 +262,7 @@ impl HealthChecker {
         let cpu_usage = self.get_cpu_usage().await;
 
         metadata.insert("memory_mb".to_string(), memory_usage.to_string());
-        metadata.insert("cpu_percent".to_string(), format!("{:.1}", cpu_usage));
+        metadata.insert("cpu_percent".to_string(), format!("{cpu_usage:.1}"));
 
         let status = if memory_usage > 400.0 || cpu_usage > 80.0 {
             HealthStatus::Degraded
@@ -298,14 +302,14 @@ impl HealthChecker {
     async fn get_memory_usage(&self) -> f64 {
         // In a real implementation, you would use system APIs
         // This is a simulation
-        150.0 + rand::random::<f64>() * 100.0
+        rand::random::<f64>().mul_add(100.0, 150.0)
     }
 
     /// Get CPU usage (simplified)
     async fn get_cpu_usage(&self) -> f64 {
         // In a real implementation, you would use system APIs
         // This is a simulation
-        10.0 + rand::random::<f64>() * 30.0
+        rand::random::<f64>().mul_add(30.0, 10.0)
     }
 
     /// Determine overall health status
@@ -378,7 +382,7 @@ pub async fn health_handler(
             error!(error = %e, "Health check failed");
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Health check failed: {}", e),
+                format!("Health check failed: {e}"),
             ))
         }
     }
@@ -393,8 +397,7 @@ pub async fn readiness_handler(
 
     let database_healthy = components
         .get("database")
-        .map(|h| matches!(h.status, HealthStatus::Healthy))
-        .unwrap_or(false);
+        .is_some_and(|h| matches!(h.status, HealthStatus::Healthy));
 
     if database_healthy {
         Ok((

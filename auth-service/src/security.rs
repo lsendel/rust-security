@@ -183,7 +183,7 @@ impl std::str::FromStr for CodeChallengeMethod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "S256" => Ok(CodeChallengeMethod::S256),
+            "S256" => Ok(Self::S256),
             "plain" => Err("Plain PKCE method is not supported for security reasons"),
             _ => Err("Invalid code challenge method. Only S256 is supported"),
         }
@@ -217,7 +217,7 @@ pub fn generate_request_signature(
         return Err("Signing secret too weak (minimum 32 characters)");
     }
 
-    let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
+    let message = format!("{method}\n{path}\n{body}\n{timestamp}");
 
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let signature = hmac::sign(&key, message.as_bytes());
@@ -248,7 +248,7 @@ pub fn verify_request_signature(
         return Err("Signing secret too weak");
     }
 
-    let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
+    let message = format!("{method}\n{path}\n{body}\n{timestamp}");
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let expected_signature = hmac::sign(&key, message.as_bytes());
 
@@ -335,7 +335,7 @@ pub async fn validate_request_signature(
 }
 
 /// Extract client information for token binding
-pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) {
+#[must_use] pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) {
     let client_ip = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -440,7 +440,7 @@ pub fn validate_client_credentials(
 }
 
 /// Create security middleware stack (without rate limiting for now)
-pub fn security_middleware() -> ServiceBuilder<
+#[must_use] pub fn security_middleware() -> ServiceBuilder<
     tower::layer::util::Stack<
         tower_http::limit::RequestBodyLimitLayer,
         tower::layer::util::Identity,
@@ -507,67 +507,64 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
         .trim();
 
     // Create rate limiting key
-    let key = format!("ip:{}", client_ip);
+    let key = format!("ip:{client_ip}");
 
     // Check rate limit using the sharded rate limiter
-    match RATE_LIMITER.check_rate_limit(&key).await {
-        Ok(true) => {
-            // Request allowed, continue processing
-            next.run(request).await
-        }
-        Ok(false) | Err(_) => {
-            // Rate limit exceeded or error occurred
-            tracing::warn!(
-                client_ip = %client_ip,
-                "Rate limit exceeded for client"
-            );
+    if matches!(RATE_LIMITER.check_rate_limit(&key).await, Ok(true)) {
+        // Request allowed, continue processing
+        next.run(request).await
+    } else {
+        // Rate limit exceeded or error occurred
+        tracing::warn!(
+            client_ip = %client_ip,
+            "Rate limit exceeded for client"
+        );
 
-            // Get rate limit info for retry-after header
-            let retry_after = if let Some(info) = RATE_LIMITER.get_rate_limit_info(&key).await {
-                info.reset_time
-                    .duration_since(std::time::Instant::now())
-                    .as_secs()
-                    .max(1)
-            } else {
-                60 // Default to 60 seconds
-            };
+        // Get rate limit info for retry-after header
+        let retry_after = if let Some(info) = RATE_LIMITER.get_rate_limit_info(&key).await {
+            info.reset_time
+                .duration_since(std::time::Instant::now())
+                .as_secs()
+                .max(1)
+        } else {
+            60 // Default to 60 seconds
+        };
 
-            let mut response = (
-                axum::http::StatusCode::TOO_MANY_REQUESTS,
-                "Rate limit exceeded",
-            )
-                .into_response();
+        let mut response = (
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded",
+        )
+            .into_response();
 
+        response.headers_mut().insert(
+            "Retry-After",
+            format!("{retry_after}")
+                .parse()
+                .expect("Failed to parse retry-after header"),
+        );
+
+        // Add rate limit headers for client information
+        if let Some(info) = RATE_LIMITER.get_rate_limit_info(&key).await {
             response.headers_mut().insert(
-                "Retry-After",
-                format!("{}", retry_after)
+                "X-RateLimit-Limit",
+                format!("{}", info.limit)
                     .parse()
-                    .expect("Failed to parse retry-after header"),
+                    .expect("Failed to parse rate limit header"),
             );
-
-            // Add rate limit headers for client information
-            if let Some(info) = RATE_LIMITER.get_rate_limit_info(&key).await {
-                response.headers_mut().insert(
-                    "X-RateLimit-Limit",
-                    format!("{}", info.limit)
-                        .parse()
-                        .expect("Failed to parse rate limit header"),
-                );
-                response.headers_mut().insert(
-                    "X-RateLimit-Remaining",
-                    format!("{}", info.remaining)
-                        .parse()
-                        .expect("Failed to parse rate limit remaining header"),
-                );
-            }
-
-            response
+            response.headers_mut().insert(
+                "X-RateLimit-Remaining",
+                format!("{}", info.remaining)
+                    .parse()
+                    .expect("Failed to parse rate limit remaining header"),
+            );
         }
+
+        response
     }
 }
 
 /// Sanitize log output to prevent log injection
-pub fn sanitize_log_input(input: &str) -> String {
+#[must_use] pub fn sanitize_log_input(input: &str) -> String {
     input
         .replace('\n', "\\n")
         .replace('\r', "\\r")

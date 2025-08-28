@@ -538,7 +538,7 @@ fn normalize_path_for_cardinality(path: &str) -> String {
             .collect();
         normalized = mapped.join("/");
         if !normalized.starts_with('/') {
-            normalized = format!("/{}", normalized);
+            normalized = format!("/{normalized}");
         }
     }
     normalized

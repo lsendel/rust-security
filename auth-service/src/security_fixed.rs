@@ -135,7 +135,7 @@ impl std::str::FromStr for CodeChallengeMethod {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "S256" => Ok(CodeChallengeMethod::S256),
+            "S256" => Ok(Self::S256),
             "plain" => Err(SecurityError::UnsupportedChallengeMethod(
                 "Plain PKCE method is not supported for security reasons".to_string(),
             )),
@@ -185,7 +185,7 @@ pub fn generate_request_signature(
         return Err(SecurityError::WeakSigningSecret);
     }
 
-    let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
+    let message = format!("{method}\n{path}\n{body}\n{timestamp}");
 
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
     let signature = hmac::sign(&key, message.as_bytes());
@@ -246,7 +246,7 @@ pub struct SecureRandom {
 }
 
 impl SecureRandom {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             rng: SystemRandom::new(),
         }

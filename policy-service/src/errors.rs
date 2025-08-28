@@ -132,7 +132,7 @@ impl AppError {
         }
     }
 
-    pub const fn status_code(&self) -> StatusCode {
+    #[must_use] pub const fn status_code(&self) -> StatusCode {
         match self {
             Self::Policy(PolicyError::PolicyNotFound { .. }) => StatusCode::NOT_FOUND,
             Self::Entity(EntityError::EntityNotFound { .. }) => StatusCode::NOT_FOUND,
@@ -154,7 +154,7 @@ impl AppError {
         }
     }
 
-    pub const fn error_type(&self) -> &'static str {
+    #[must_use] pub const fn error_type(&self) -> &'static str {
         match self {
             Self::Policy(_) => "policy_error",
             Self::Entity(_) => "entity_error",

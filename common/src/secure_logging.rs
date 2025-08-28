@@ -84,8 +84,8 @@ pub fn sanitize_for_logging(input: &str) -> String {
 
                 // Find the value part (after = or :)
                 if let Some(pos) = full_match.find([':', '=']) {
-                    let key_part = &full_match[..pos + 1];
-                    format!("{}[REDACTED]", key_part)
+                    let key_part = &full_match[..=pos];
+                    format!("{key_part}[REDACTED]")
                 } else {
                     "[REDACTED]".to_string()
                 }
@@ -169,7 +169,7 @@ pub trait SafeForLogging {
     fn safe_to_log(&self) -> String;
 }
 
-/// Implement SafeForLogging for common types
+/// Implement `SafeForLogging` for common types
 impl SafeForLogging for String {
     fn safe_to_log(&self) -> String {
         sanitize_for_logging(self)
@@ -189,7 +189,7 @@ pub struct SanitizedValue<T: std::fmt::Display> {
 }
 
 impl<T: std::fmt::Display> SanitizedValue<T> {
-    pub fn new(value: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self { inner: value }
     }
 }
@@ -197,7 +197,7 @@ impl<T: std::fmt::Display> SanitizedValue<T> {
 impl<T: std::fmt::Display> std::fmt::Display for SanitizedValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let sanitized = sanitize_for_logging(&self.inner.to_string());
-        write!(f, "{}", sanitized)
+        write!(f, "{sanitized}")
     }
 }
 
@@ -327,7 +327,7 @@ pub fn validate_safe_to_log(input: &str) -> Result<(), Vec<String>> {
     // Check for sensitive field names
     for field_name in SENSITIVE_FIELD_NAMES.iter() {
         if input.to_lowercase().contains(field_name) {
-            violations.push(format!("Contains sensitive field name: {}", field_name));
+            violations.push(format!("Contains sensitive field name: {field_name}"));
         }
     }
 

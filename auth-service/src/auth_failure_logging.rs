@@ -93,7 +93,7 @@ impl FailureStats {
         let count = self.count.fetch_add(1, Ordering::Relaxed) + 1;
 
         // Check if should be marked suspicious
-        if count >= max_failures as u64 {
+        if count >= u64::from(max_failures) {
             self.is_suspicious.store(true, Ordering::Relaxed);
             return true;
         }
@@ -112,7 +112,7 @@ impl FailureStats {
 }
 
 impl AuthFailureTracker {
-    pub fn new(config: AuthFailureConfig) -> Self {
+    #[must_use] pub fn new(config: AuthFailureConfig) -> Self {
         Self {
             ip_failures: DashMap::new(),
             client_failures: DashMap::new(),
@@ -149,7 +149,7 @@ impl AuthFailureTracker {
                 self.config.failure_window_secs,
             ) {
                 is_suspicious = true;
-                suspicious_reasons.push(format!("IP {} exceeded failure threshold", ip));
+                suspicious_reasons.push(format!("IP {ip} exceeded failure threshold"));
             }
         }
 
@@ -164,7 +164,7 @@ impl AuthFailureTracker {
                 self.config.failure_window_secs,
             ) {
                 is_suspicious = true;
-                suspicious_reasons.push(format!("Client {} exceeded failure threshold", client));
+                suspicious_reasons.push(format!("Client {client} exceeded failure threshold"));
             }
         }
 
@@ -208,10 +208,10 @@ impl AuthFailureTracker {
             SecurityEventType::AuthenticationFailure,
             severity,
             "auth-service".to_string(),
-            format!("Authentication failure: {}", failure_reason),
+            format!("Authentication failure: {failure_reason}"),
         )
         .with_action("authentication".to_string())
-        .with_detail_string("failure_type".to_string(), format!("{:?}", failure_type))
+        .with_detail_string("failure_type".to_string(), format!("{failure_type:?}"))
         .with_detail_string("failure_reason".to_string(), failure_reason.to_string())
         .with_outcome("failure".to_string());
 
@@ -358,21 +358,19 @@ impl AuthFailureTracker {
     pub fn is_ip_suspicious(&self, ip: &str) -> bool {
         self.ip_failures
             .get(ip)
-            .map(|entry| entry.is_suspicious.load(Ordering::Relaxed))
-            .unwrap_or(false)
+            .is_some_and(|entry| entry.is_suspicious.load(Ordering::Relaxed))
     }
 
     /// Check if client is marked as suspicious
     pub fn is_client_suspicious(&self, client_id: &str) -> bool {
         self.client_failures
             .get(client_id)
-            .map(|entry| entry.is_suspicious.load(Ordering::Relaxed))
-            .unwrap_or(false)
+            .is_some_and(|entry| entry.is_suspicious.load(Ordering::Relaxed))
     }
 }
 
 /// Types of authentication failures
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthFailureType {
     InvalidCredentials,
     AccountLocked,

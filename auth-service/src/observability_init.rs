@@ -44,7 +44,7 @@ impl ObservabilitySystem {
         info!("Initializing comprehensive observability system");
 
         // Initialize business metrics
-        let business_metrics = Arc::new(BusinessMetricsRegistry::default());
+        let business_metrics = Arc::new(BusinessMetricsRegistry);
 
         // Load configuration from environment
         let observability_config = Self::load_observability_config();
@@ -87,7 +87,7 @@ impl ObservabilitySystem {
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to initialize enhanced observability: {}", e),
+                context: format!("Failed to initialize enhanced observability: {e}"),
             })?,
         );
 
@@ -308,7 +308,7 @@ impl ObservabilitySystem {
     ) {
         // Record in enhanced observability
         self.enhanced_observability
-            .record_operation_performance(&format!("token_{}", operation), duration, success)
+            .record_operation_performance(&format!("token_{operation}"), duration, success)
             .await;
 
         // Record in metrics registry
