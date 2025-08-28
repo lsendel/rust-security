@@ -1,0 +1,2079 @@
+openapi: 3.1.0
+info:
+  title: Rust Security Platform - Complete API
+  description: |
+    Comprehensive API documentation for the Rust Security Platform including Authentication,
+    Authorization, SOAR (Security Orchestration, Automation, and Response), and Threat Detection services.
+    
+    ## Features
+    - JWT-based authentication with OAuth 2.0 support
+    - Policy-based authorization using Cedar policy language
+    - Multi-factor authentication (TOTP, WebAuthn, SMS)
+    - SCIM 2.0 user provisioning
+    - Security incident management
+    - Automated response playbooks
+    - Threat intelligence and behavioral analysis
+    - AI-powered threat detection
+    
+    ## Security
+    All endpoints require authentication unless otherwise specified.
+    Rate limiting is applied per client based on subscription tier.
+  version: 2.0.0
+  contact:
+    name: Security Team
+    email: security@rust-security.example.com
+    url: https://docs.rust-security.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.rust-security.com
+    description: Production server
+  - url: https://staging-api.rust-security.com
+    description: Staging server
+  - url: http://localhost:8001
+    description: Local development - Auth Service
+  - url: http://localhost:8002
+    description: Local development - Policy Service
+  - url: http://localhost:8003
+    description: Local development - SOAR Service
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+  - OAuth2: [read, write, admin]
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Authorization
+    description: Policy evaluation and access control
+  - name: Multi-Factor Authentication
+    description: MFA setup, verification, and management
+  - name: WebAuthn
+    description: FIDO2/WebAuthn passwordless authentication
+  - name: SCIM
+    description: System for Cross-domain Identity Management v2.0
+  - name: OAuth 2.0
+    description: OAuth 2.0 authorization framework
+  - name: Sessions
+    description: Session management and monitoring
+  - name: Incidents
+    description: Security incident management
+  - name: Playbooks
+    description: Automated security response workflows
+  - name: Threat Intelligence
+    description: Threat indicators and intelligence feeds
+  - name: Behavioral Analysis
+    description: User and system behavior analysis
+  - name: AI Threat Detection
+    description: Machine learning powered threat detection
+  - name: Health & Monitoring
+    description: Service health and monitoring endpoints
+
+paths:
+  # Authentication Endpoints
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new user account
+      description: Create a new user account with email verification
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              basic:
+                summary: Basic user registration
+                value:
+                  email: user@example.com
+                  password: SecurePassword123!
+                  full_name: John Doe
+              with_metadata:
+                summary: Registration with metadata
+                value:
+                  email: jane@company.com
+                  password: SecurePassword123!
+                  full_name: Jane Smith
+                  metadata:
+                    department: engineering
+                    employee_id: EMP001
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      description: Authenticate user with credentials, handle MFA if required
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              basic:
+                summary: Basic login
+                value:
+                  email: user@example.com
+                  password: SecurePassword123!
+              with_mfa:
+                summary: Login with MFA code
+                value:
+                  email: user@example.com
+                  password: SecurePassword123!
+                  mfa_code: "123456"
+                  remember_device: true
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '202':
+          description: MFA required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaChallenge'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user information
+      description: Retrieve authenticated user's profile and permissions
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User information retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: User logout
+      description: Invalidate current session and access token
+      operationId: logoutUser
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Successfully logged out
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # OAuth 2.0 Endpoints
+  /oauth/authorize:
+    get:
+      tags: [OAuth 2.0]
+      summary: OAuth 2.0 Authorization
+      description: OAuth 2.0 authorization endpoint with PKCE support
+      operationId: oauthAuthorize
+      security: []
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          description: PKCE code challenge
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          description: PKCE code challenge method
+          schema:
+            type: string
+            enum: [S256, plain]
+            default: S256
+      responses:
+        '302':
+          description: Redirect to authorization or callback
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  /oauth/token:
+    post:
+      tags: [OAuth 2.0]
+      summary: OAuth 2.0 Token Exchange
+      description: Exchange authorization code or refresh token for access token
+      operationId: oauthToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AuthorizationCodeTokenRequest'
+                - $ref: '#/components/schemas/RefreshTokenRequest'
+                - $ref: '#/components/schemas/ClientCredentialsTokenRequest'
+            examples:
+              authorization_code:
+                summary: Authorization Code Flow
+                value:
+                  grant_type: authorization_code
+                  code: auth_code_123
+                  redirect_uri: https://app.example.com/callback
+                  client_id: your_client_id
+                  code_verifier: dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+              client_credentials:
+                summary: Client Credentials Flow
+                value:
+                  grant_type: client_credentials
+                  client_id: service_client
+                  client_secret: service_secret
+                  scope: api:read api:write
+      responses:
+        '200':
+          description: Token issued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Policy Authorization Endpoints
+  /policy/authorize:
+    post:
+      tags: [Authorization]
+      summary: Authorize access request
+      description: Evaluate access request against Cedar policies
+      operationId: authorizeAccess
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+            examples:
+              document_read:
+                summary: Document read access
+                value:
+                  request_id: req_123
+                  principal:
+                    type: User
+                    id: user_alice
+                  action:
+                    type: Action
+                    id: "Document::Read"
+                  resource:
+                    type: Document
+                    id: doc_confidential
+                  context:
+                    ip_address: "192.168.1.100"
+                    mfa_verified: true
+                    security_clearance: secret
+      responses:
+        '200':
+          description: Authorization decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /policy/authorize/batch:
+    post:
+      tags: [Authorization]
+      summary: Batch authorization evaluation
+      description: Evaluate multiple access requests in a single call
+      operationId: batchAuthorize
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchAuthorizationRequest'
+      responses:
+        '200':
+          description: Batch authorization results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchAuthorizationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  # MFA Endpoints
+  /mfa/totp/register:
+    post:
+      tags: [Multi-Factor Authentication]
+      summary: Register TOTP authenticator
+      description: Setup TOTP-based MFA with QR code generation
+      operationId: registerTotp
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpRegistrationRequest'
+      responses:
+        '200':
+          description: TOTP registration data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpRegistrationResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /mfa/totp/verify:
+    post:
+      tags: [Multi-Factor Authentication]
+      summary: Verify TOTP code
+      description: Verify TOTP code for authentication or setup completion
+      operationId: verifyTotp
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpVerificationRequest'
+      responses:
+        '200':
+          description: TOTP verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpVerificationResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # WebAuthn Endpoints
+  /webauthn/register/begin:
+    post:
+      tags: [WebAuthn]
+      summary: Begin WebAuthn registration
+      description: Start WebAuthn credential registration process
+      operationId: beginWebAuthnRegistration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnRegistrationBeginRequest'
+      responses:
+        '200':
+          description: WebAuthn registration options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebAuthnRegistrationOptions'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /webauthn/register/finish:
+    post:
+      tags: [WebAuthn]
+      summary: Complete WebAuthn registration
+      description: Complete WebAuthn credential registration
+      operationId: finishWebAuthnRegistration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebAuthnRegistrationFinishRequest'
+      responses:
+        '200':
+          description: Registration completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebAuthnRegistrationResult'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # SCIM 2.0 Endpoints
+  /scim/v2/Users:
+    get:
+      tags: [SCIM]
+      summary: List users (SCIM)
+      description: SCIM 2.0 compliant user listing with filtering
+      operationId: scimListUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: startIndex
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: count
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+        - name: filter
+          in: query
+          description: SCIM filter expression
+          schema:
+            type: string
+          example: 'userName eq "john@example.com"'
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/scim+json:
+              schema:
+                $ref: '#/components/schemas/ScimUserListResponse'
+    post:
+      tags: [SCIM]
+      summary: Create user (SCIM)
+      description: SCIM 2.0 compliant user creation
+      operationId: scimCreateUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/scim+json:
+            schema:
+              $ref: '#/components/schemas/ScimUser'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/scim+json:
+              schema:
+                $ref: '#/components/schemas/ScimUser'
+        '409':
+          $ref: '#/components/responses/ScimConflictError'
+
+  # Security Incident Endpoints
+  /soar/incidents:
+    get:
+      tags: [Incidents]
+      summary: List security incidents
+      description: Retrieve security incidents with advanced filtering
+      operationId: listIncidents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [low, medium, high, critical]
+          style: form
+          explode: false
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [open, in_progress, resolved, closed]
+          style: form
+          explode: false
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: assigned_to
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Start date filter
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End date filter
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Incidents retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags: [Incidents]
+      summary: Create security incident
+      description: Create a new security incident with evidence and context
+      operationId: createIncident
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentRequest'
+            examples:
+              malware_detection:
+                summary: Malware detection incident
+                value:
+                  title: "Malware Detected on Production Server"
+                  description: "Suspicious executable found during security scan"
+                  severity: "high"
+                  category: "malware_detection"
+                  affected_assets:
+                    - type: "server"
+                      identifier: "prod-web-01"
+                      criticality: "high"
+                  evidence:
+                    - type: "file_hash"
+                      data:
+                        sha256: "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4"
+                        path: "/tmp/suspicious.exe"
+      responses:
+        '201':
+          description: Incident created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /soar/incidents/{incidentId}:
+    get:
+      tags: [Incidents]
+      summary: Get incident details
+      description: Retrieve detailed information about a security incident
+      operationId: getIncident
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: incidentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Incident details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedIncidentResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Playbook Automation Endpoints
+  /soar/playbooks:
+    get:
+      tags: [Playbooks]
+      summary: List available playbooks
+      description: List security response playbooks with filtering
+      operationId: listPlaybooks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [incident_response, threat_hunting, compliance]
+        - name: automation_level
+          in: query
+          schema:
+            type: string
+            enum: [manual, supervised, automated]
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: false
+      responses:
+        '200':
+          description: Playbooks retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookListResponse'
+
+  /soar/playbooks/{playbookId}/execute:
+    post:
+      tags: [Playbooks]
+      summary: Execute security playbook
+      description: Start execution of a security response playbook
+      operationId: executePlaybook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: playbookId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaybookExecutionRequest'
+      responses:
+        '202':
+          description: Playbook execution started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaybookExecutionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  # Threat Intelligence Endpoints
+  /threat-intelligence/indicators:
+    get:
+      tags: [Threat Intelligence]
+      summary: Search threat indicators
+      description: Search and retrieve threat intelligence indicators
+      operationId: searchThreatIndicators
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: types
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [ip, domain, hash, url, email]
+          style: form
+          explode: false
+        - name: confidence
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [low, medium, high]
+          style: form
+          explode: false
+        - name: threat_types
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: false
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: include_context
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Threat indicators retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatIndicatorListResponse'
+
+    post:
+      tags: [Threat Intelligence]
+      summary: Add threat indicator
+      description: Add new threat intelligence indicator
+      operationId: addThreatIndicator
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateThreatIndicatorRequest'
+      responses:
+        '201':
+          description: Threat indicator added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatIndicatorResponse'
+
+  # Behavioral Analysis Endpoints
+  /behavioral-analysis/users/{userId}/profile:
+    get:
+      tags: [Behavioral Analysis]
+      summary: Get user behavioral profile
+      description: Retrieve user behavioral analysis and risk assessment
+      operationId: getUserBehavioralProfile
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: analysis_depth
+          in: query
+          schema:
+            type: string
+            enum: [basic, comprehensive]
+            default: basic
+        - name: time_window_days
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 30
+      responses:
+        '200':
+          description: Behavioral profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BehavioralProfileResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /behavioral-analysis/evaluate:
+    post:
+      tags: [Behavioral Analysis]
+      summary: Evaluate user behavior
+      description: Analyze current user activity against behavioral baseline
+      operationId: evaluateUserBehavior
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BehavioralEvaluationRequest'
+      responses:
+        '200':
+          description: Behavioral evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BehavioralEvaluationResponse'
+
+  # AI Threat Detection Endpoints
+  /ai-threat-detection/analyze:
+    post:
+      tags: [AI Threat Detection]
+      summary: Analyze data for threats
+      description: Submit data for AI-powered threat analysis
+      operationId: analyzeThreats
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreatAnalysisRequest'
+      responses:
+        '202':
+          description: Analysis job submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatAnalysisJobResponse'
+
+  /ai-threat-detection/analysis/{jobId}:
+    get:
+      tags: [AI Threat Detection]
+      summary: Get analysis results
+      description: Retrieve AI threat analysis results
+      operationId: getThreatAnalysisResult
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatAnalysisResultResponse'
+        '202':
+          description: Analysis still in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatAnalysisJobResponse'
+
+  # Health and Monitoring
+  /health:
+    get:
+      tags: [Health & Monitoring]
+      summary: Service health check
+      description: Get service health status and metrics
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      tags: [Health & Monitoring]
+      summary: Service metrics
+      description: Get service performance and usage metrics
+      operationId: getMetrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Metrics retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # TYPE requests_total counter
+                requests_total{method="GET",status="200"} 1234
+                # TYPE request_duration_seconds histogram
+                request_duration_seconds_bucket{le="0.1"} 100
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from login or OAuth flow
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for service-to-service authentication
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth/authorize
+          tokenUrl: /oauth/token
+          refreshUrl: /oauth/token
+          scopes:
+            read: Read access to resources
+            write: Write access to resources
+            admin: Administrative access
+            incidents:read: Read access to security incidents
+            incidents:write: Create and update security incidents
+            playbooks:execute: Execute security playbooks
+            threat-intel:read: Access threat intelligence data
+            threat-intel:write: Add threat intelligence indicators
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number (1-based)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+
+  schemas:
+    # Authentication Schemas
+    RegisterRequest:
+      type: object
+      required: [email, password, full_name]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          format: password
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        metadata:
+          type: object
+          additionalProperties: true
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        mfa_code:
+          type: string
+          pattern: '^[0-9]{6}$'
+        remember_device:
+          type: boolean
+          default: false
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Token expiration in seconds
+        user:
+          $ref: '#/components/schemas/User'
+
+    MfaChallenge:
+      type: object
+      properties:
+        requires_mfa:
+          type: boolean
+          enum: [true]
+        challenge_token:
+          type: string
+        mfa_methods:
+          type: array
+          items:
+            type: string
+            enum: [totp, sms, webauthn, backup_codes]
+        backup_codes_available:
+          type: integer
+
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        email_verified:
+          type: boolean
+        phone_verified:
+          type: boolean
+        mfa_enabled:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+
+    UserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    CurrentUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        security:
+          type: object
+          properties:
+            active_sessions:
+              type: integer
+            trusted_devices:
+              type: integer
+            security_score:
+              type: integer
+              minimum: 0
+              maximum: 100
+            last_password_change:
+              type: string
+              format: date-time
+
+    # OAuth 2.0 Schemas
+    AuthorizationCodeTokenRequest:
+      type: object
+      required: [grant_type, code, redirect_uri, client_id]
+      properties:
+        grant_type:
+          type: string
+          enum: [authorization_code]
+        code:
+          type: string
+        redirect_uri:
+          type: string
+          format: uri
+        client_id:
+          type: string
+        code_verifier:
+          type: string
+          description: PKCE code verifier
+
+    ClientCredentialsTokenRequest:
+      type: object
+      required: [grant_type, client_id, client_secret]
+      properties:
+        grant_type:
+          type: string
+          enum: [client_credentials]
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        scope:
+          type: string
+
+    RefreshTokenRequest:
+      type: object
+      required: [grant_type, refresh_token]
+      properties:
+        grant_type:
+          type: string
+          enum: [refresh_token]
+        refresh_token:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        id_token:
+          type: string
+          description: OpenID Connect ID token
+
+    # Authorization Schemas
+    AuthorizationRequest:
+      type: object
+      required: [request_id, principal, action, resource]
+      properties:
+        request_id:
+          type: string
+        principal:
+          $ref: '#/components/schemas/Principal'
+        action:
+          $ref: '#/components/schemas/Action'
+        resource:
+          $ref: '#/components/schemas/Resource'
+        context:
+          type: object
+          additionalProperties: true
+
+    Principal:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [User, Service, Group]
+        id:
+          type: string
+
+    Action:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [Action]
+        id:
+          type: string
+
+    Resource:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+
+    AuthorizationResponse:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum: [Allow, Deny]
+        request_id:
+          type: string
+        evaluation_time_ms:
+          type: number
+        reasons:
+          type: array
+          items:
+            type: string
+        applied_policies:
+          type: array
+          items:
+            type: object
+            properties:
+              policy_id:
+                type: string
+              policy_name:
+                type: string
+              effect:
+                type: string
+                enum: [allow, deny]
+
+    BatchAuthorizationRequest:
+      type: object
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AuthorizationRequest'
+
+    BatchAuthorizationResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthorizationResponse'
+        total_time_ms:
+          type: number
+
+    # MFA Schemas
+    TotpRegistrationRequest:
+      type: object
+      required: [user_id, display_name]
+      properties:
+        user_id:
+          type: string
+        display_name:
+          type: string
+        security_level:
+          type: string
+          enum: [standard, high, maximum]
+          default: standard
+
+    TotpRegistrationResponse:
+      type: object
+      properties:
+        secret_base32:
+          type: string
+        otpauth_url:
+          type: string
+        qr_code_data_url:
+          type: string
+        backup_codes:
+          type: array
+          items:
+            type: string
+
+    TotpVerificationRequest:
+      type: object
+      required: [user_id, code]
+      properties:
+        user_id:
+          type: string
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+        remember_device:
+          type: boolean
+          default: false
+
+    TotpVerificationResponse:
+      type: object
+      properties:
+        verified:
+          type: boolean
+        reason:
+          type: string
+        session_timeout:
+          type: integer
+        requires_step_up:
+          type: boolean
+        backup_codes_remaining:
+          type: integer
+
+    # WebAuthn Schemas
+    WebAuthnRegistrationBeginRequest:
+      type: object
+      required: [user_id, username]
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+
+    WebAuthnRegistrationOptions:
+      type: object
+      properties:
+        public_key:
+          type: object
+          description: WebAuthn PublicKeyCredentialCreationOptions
+
+    WebAuthnRegistrationFinishRequest:
+      type: object
+      required: [user_id, credential]
+      properties:
+        user_id:
+          type: string
+        credential:
+          type: object
+          description: WebAuthn PublicKeyCredential
+
+    WebAuthnRegistrationResult:
+      type: object
+      properties:
+        registered:
+          type: boolean
+        credential_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # SCIM Schemas
+    ScimUser:
+      type: object
+      required: [schemas, userName]
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          example: ["urn:ietf:params:scim:schemas:core:2.0:User"]
+        id:
+          type: string
+        externalId:
+          type: string
+        userName:
+          type: string
+        name:
+          type: object
+          properties:
+            formatted:
+              type: string
+            familyName:
+              type: string
+            givenName:
+              type: string
+            middleName:
+              type: string
+        displayName:
+          type: string
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+                format: email
+              type:
+                type: string
+              primary:
+                type: boolean
+        active:
+          type: boolean
+        meta:
+          type: object
+          properties:
+            resourceType:
+              type: string
+            created:
+              type: string
+              format: date-time
+            lastModified:
+              type: string
+              format: date-time
+            location:
+              type: string
+              format: uri
+            version:
+              type: string
+
+    ScimUserListResponse:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+          example: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"]
+        totalResults:
+          type: integer
+        startIndex:
+          type: integer
+        itemsPerPage:
+          type: integer
+        Resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScimUser'
+
+    # Incident Management Schemas
+    CreateIncidentRequest:
+      type: object
+      required: [title, severity, category]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        category:
+          type: string
+        source:
+          type: string
+        affected_assets:
+          type: array
+          items:
+            type: object
+            required: [type, identifier]
+            properties:
+              type:
+                type: string
+              identifier:
+                type: string
+              criticality:
+                type: string
+                enum: [low, medium, high, critical]
+        evidence:
+          type: array
+          items:
+            type: object
+            required: [type, data]
+            properties:
+              type:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              source:
+                type: string
+              data:
+                type: object
+                additionalProperties: true
+        context:
+          type: object
+          additionalProperties: true
+
+    IncidentResponse:
+      type: object
+      properties:
+        incident_id:
+          type: string
+        title:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        category:
+          type: string
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        created_at:
+          type: string
+          format: date-time
+        assigned_to:
+          type: string
+        workflow_status:
+          type: object
+          properties:
+            current_step:
+              type: string
+            automated_actions:
+              type: array
+              items:
+                type: object
+
+    DetailedIncidentResponse:
+      allOf:
+        - $ref: '#/components/schemas/IncidentResponse'
+        - type: object
+          properties:
+            description:
+              type: string
+            affected_assets:
+              type: array
+              items:
+                type: object
+            evidence:
+              type: array
+              items:
+                type: object
+            timeline:
+              type: array
+              items:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+                  event:
+                    type: string
+                  user:
+                    type: string
+                  details:
+                    type: string
+
+    IncidentListResponse:
+      type: object
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+        summary:
+          type: object
+          properties:
+            total_open:
+              type: integer
+            total_in_progress:
+              type: integer
+            total_resolved:
+              type: integer
+
+    # Playbook Schemas
+    PlaybookExecutionRequest:
+      type: object
+      properties:
+        incident_id:
+          type: string
+        execution_mode:
+          type: string
+          enum: [manual, supervised, automated]
+          default: supervised
+        parameters:
+          type: object
+          additionalProperties: true
+        approvals_required:
+          type: boolean
+          default: true
+
+    PlaybookExecutionResponse:
+      type: object
+      properties:
+        execution_id:
+          type: string
+        playbook_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, cancelled]
+        started_at:
+          type: string
+          format: date-time
+        estimated_completion:
+          type: string
+          format: date-time
+        current_step:
+          type: object
+          properties:
+            step_number:
+              type: integer
+            step_name:
+              type: string
+            status:
+              type: string
+
+    PlaybookListResponse:
+      type: object
+      properties:
+        playbooks:
+          type: array
+          items:
+            type: object
+            properties:
+              playbook_id:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+              category:
+                type: string
+              automation_level:
+                type: string
+              tags:
+                type: array
+                items:
+                  type: string
+
+    # Threat Intelligence Schemas
+    CreateThreatIndicatorRequest:
+      type: object
+      required: [type, value, confidence, threat_types]
+      properties:
+        type:
+          type: string
+          enum: [ip, domain, hash, url, email]
+        value:
+          type: string
+        confidence:
+          type: string
+          enum: [low, medium, high]
+        threat_types:
+          type: array
+          items:
+            type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        context:
+          type: object
+          additionalProperties: true
+        expires_at:
+          type: string
+          format: date-time
+
+    ThreatIndicatorResponse:
+      type: object
+      properties:
+        indicator_id:
+          type: string
+        type:
+          type: string
+        value:
+          type: string
+        confidence:
+          type: string
+        threat_types:
+          type: array
+          items:
+            type: string
+        severity:
+          type: string
+        first_seen:
+          type: string
+          format: date-time
+        last_seen:
+          type: string
+          format: date-time
+        sources:
+          type: array
+          items:
+            type: object
+        context:
+          type: object
+          additionalProperties: true
+
+    ThreatIndicatorListResponse:
+      type: object
+      properties:
+        indicators:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreatIndicatorResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Behavioral Analysis Schemas
+    BehavioralEvaluationRequest:
+      type: object
+      required: [user_id, activity]
+      properties:
+        user_id:
+          type: string
+        activity:
+          type: object
+          required: [timestamp, action]
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            action:
+              type: string
+            source_ip:
+              type: string
+            user_agent:
+              type: string
+            location:
+              type: object
+        context:
+          type: object
+          additionalProperties: true
+
+    BehavioralEvaluationResponse:
+      type: object
+      properties:
+        risk_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        anomalies_detected:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              severity:
+                type: string
+              description:
+                type: string
+              confidence:
+                type: number
+        recommended_actions:
+          type: array
+          items:
+            type: object
+            properties:
+              action:
+                type: string
+              priority:
+                type: string
+              reasoning:
+                type: string
+
+    BehavioralProfileResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+        assessment_timestamp:
+          type: string
+          format: date-time
+        overall_risk_score:
+          type: integer
+        risk_level:
+          type: string
+        baseline_established:
+          type: boolean
+        typical_patterns:
+          type: object
+          additionalProperties: true
+        current_anomalies:
+          type: array
+          items:
+            type: object
+
+    # AI Threat Detection Schemas
+    ThreatAnalysisRequest:
+      type: object
+      required: [analysis_request]
+      properties:
+        analysis_request:
+          type: object
+          required: [request_id, data_sources]
+          properties:
+            request_id:
+              type: string
+            data_sources:
+              type: array
+              items:
+                type: object
+            analysis_options:
+              type: object
+              properties:
+                models:
+                  type: array
+                  items:
+                    type: string
+                analysis_depth:
+                  type: string
+                  enum: [basic, comprehensive]
+
+    ThreatAnalysisJobResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        submitted_at:
+          type: string
+          format: date-time
+        estimated_completion:
+          type: string
+          format: date-time
+
+    ThreatAnalysisResultResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+          enum: [completed]
+        completed_at:
+          type: string
+          format: date-time
+        overall_assessment:
+          type: object
+          properties:
+            threat_detected:
+              type: boolean
+            threat_level:
+              type: string
+            confidence_score:
+              type: number
+            threat_classification:
+              type: string
+        model_results:
+          type: array
+          items:
+            type: object
+
+    # Health and Monitoring Schemas
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        service:
+          type: string
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [pass, warn, fail]
+              response_time_ms:
+                type: number
+
+    MetricsResponse:
+      type: object
+      properties:
+        service:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        metrics:
+          type: object
+          properties:
+            requests:
+              type: object
+              properties:
+                total:
+                  type: integer
+                success_rate:
+                  type: number
+                avg_response_time:
+                  type: number
+            authentication:
+              type: object
+              properties:
+                logins:
+                  type: integer
+                mfa_challenges:
+                  type: integer
+                failed_attempts:
+                  type: integer
+            authorization:
+              type: object
+              properties:
+                policy_evaluations:
+                  type: integer
+                allow_rate:
+                  type: number
+                avg_evaluation_time:
+                  type: number
+
+    # Common Schemas
+    ResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        api_version:
+          type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+        has_next:
+          type: boolean
+        has_previous:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+            field_errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required or failed
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "AUTH_TOKEN_MISSING"
+              message: "Authentication required"
+            meta:
+              request_id: "req_123"
+              timestamp: "2025-01-28T12:00:00Z"
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ConflictError:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: "VALIDATION_FAILED"
+              message: "Request validation failed"
+              field_errors:
+                email: ["Invalid email format"]
+                password: ["Password too weak", "Must contain special characters"]
+
+    RateLimitError:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    BadRequestError:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ScimConflictError:
+      description: SCIM resource conflict
+      content:
+        application/scim+json:
+          schema:
+            type: object
+            properties:
+              schemas:
+                type: array
+                items:
+                  type: string
+                example: ["urn:ietf:params:scim:api:messages:2.0:Error"]
+              detail:
+                type: string
+              status:
+                type: string
