@@ -4,6 +4,127 @@
 
 This guide provides comprehensive security hardening procedures for the Rust Security Platform, covering application-level security, infrastructure hardening, compliance requirements, and incident response procedures.
 
+### Security Architecture Layers
+
+```mermaid
+graph TB
+    subgraph "Defense in Depth - Multi-Layer Security"
+        subgraph "Perimeter Security"
+            WAF[Web Application Firewall]
+            DDoS[DDoS Protection]
+            RateLimit[Rate Limiting]
+        end
+        
+        subgraph "Network Security"
+            ServiceMesh[Istio Service Mesh<br/>mTLS + Network Policies]
+            Ingress[TLS 1.3 Termination]
+            Firewall[Network Firewalls]
+        end
+        
+        subgraph "Application Security"
+            AuthZ[Authorization Layer]
+            JWT[JWT Validation]
+            MFA[Multi-Factor Auth]
+            InputVal[Input Validation]
+        end
+        
+        subgraph "Data Security"
+            Encryption[Data Encryption at Rest]
+            TLS[TLS 1.3 in Transit]
+            KeyManagement[Key Management]
+            PII[PII Masking]
+        end
+        
+        subgraph "Runtime Security"
+            SOAR[SOAR Threat Detection]
+            Monitoring[Security Monitoring]
+            Audit[Audit Logging]
+            Response[Incident Response]
+        end
+    end
+    
+    WAF --> ServiceMesh
+    ServiceMesh --> AuthZ
+    AuthZ --> Encryption
+    Encryption --> SOAR
+    
+    DDoS --> Ingress
+    Ingress --> JWT
+    JWT --> TLS
+    TLS --> Monitoring
+    
+    RateLimit --> Firewall
+    Firewall --> MFA
+    MFA --> KeyManagement
+    KeyManagement --> Audit
+    
+    InputVal --> PII
+    PII --> Response
+    
+    style WAF fill:#ffebee
+    style ServiceMesh fill:#e8f5e8
+    style AuthZ fill:#e1f5fe
+    style Encryption fill:#f3e5f5
+    style SOAR fill:#fff3e0
+```
+
+### Threat Model & Attack Vectors
+
+```mermaid
+graph LR
+    subgraph "External Threats"
+        Attacker[Malicious Actor]
+        Bot[Automated Bots]
+        Insider[Insider Threat]
+    end
+    
+    subgraph "Attack Vectors"
+        AuthAttack[Authentication Bypass]
+        TokenTheft[Token Theft/Replay]
+        Injection[SQL/NoSQL Injection]
+        XSS[Cross-Site Scripting]
+        CSRF[Cross-Site Request Forgery]
+        APIAbuse[API Abuse/DoS]
+    end
+    
+    subgraph "Security Controls"
+        RateLimiting[Rate Limiting]
+        TokenBinding[Token Binding]
+        InputValidation[Input Validation]
+        CSP[Content Security Policy]
+        SameSite[SameSite Cookies]
+        Throttling[Request Throttling]
+    end
+    
+    subgraph "Detection & Response"
+        SIEM[SIEM Integration]
+        Alerting[Real-time Alerting]
+        Forensics[Digital Forensics]
+        Playbooks[Response Playbooks]
+    end
+    
+    Attacker --> AuthAttack
+    Bot --> TokenTheft
+    Insider --> Injection
+    
+    AuthAttack --> RateLimiting
+    TokenTheft --> TokenBinding
+    Injection --> InputValidation
+    XSS --> CSP
+    CSRF --> SameSite
+    APIAbuse --> Throttling
+    
+    RateLimiting --> SIEM
+    TokenBinding --> Alerting
+    InputValidation --> Forensics
+    CSP --> Playbooks
+    
+    style Attacker fill:#ffebee
+    style AuthAttack fill:#fff3e0
+    style RateLimiting fill:#e8f5e8
+    style SIEM fill:#e1f5fe
+```
+
 ## Application Security Hardening
 
 ### Authentication Security

@@ -4,6 +4,134 @@
 
 This guide provides comprehensive instructions for deploying the Rust Security Platform in production environments, covering Docker, Kubernetes, and cloud provider-specific deployments.
 
+### Production Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "External Traffic"
+        Users[Users]
+        Apps[Applications]
+        APIs[API Clients]
+    end
+    
+    subgraph "Edge Layer"
+        CDN[CloudFlare/CDN]
+        WAF[Web Application Firewall]
+        LB[Load Balancer<br/>ALB/ELB/GCP LB]
+    end
+    
+    subgraph "Kubernetes Cluster"
+        subgraph "Ingress"
+            Ingress[NGINX/Istio Ingress]
+        end
+        
+        subgraph "Auth Namespace"
+            AuthPods[Auth Service Pods<br/>3+ replicas]
+            AuthHPA[Horizontal Pod Autoscaler]
+        end
+        
+        subgraph "Policy Namespace"
+            PolicyPods[Policy Service Pods<br/>2+ replicas]
+            PolicyHPA[HPA]
+        end
+        
+        subgraph "Monitoring Namespace"
+            Prometheus[Prometheus]
+            Grafana[Grafana]
+            AlertManager[AlertManager]
+        end
+    end
+    
+    subgraph "Data Layer"
+        PostgresCluster[(PostgreSQL<br/>Primary + Replica)]
+        RedisCluster[(Redis Cluster<br/>3 Masters + 3 Slaves)]
+        S3[Object Storage<br/>S3/GCS/Azure Blob]
+    end
+    
+    subgraph "Security & Secrets"
+        Vault[HashiCorp Vault]
+        KMS[Cloud KMS]
+        CertManager[cert-manager]
+    end
+    
+    Users --> CDN
+    Apps --> CDN
+    APIs --> WAF
+    
+    CDN --> WAF
+    WAF --> LB
+    LB --> Ingress
+    
+    Ingress --> AuthPods
+    Ingress --> PolicyPods
+    
+    AuthHPA --> AuthPods
+    PolicyHPA --> PolicyPods
+    
+    AuthPods --> RedisCluster
+    AuthPods --> PostgresCluster
+    PolicyPods --> RedisCluster
+    
+    AuthPods --> Prometheus
+    PolicyPods --> Prometheus
+    
+    Prometheus --> AlertManager
+    Prometheus --> Grafana
+    
+    AuthPods --> Vault
+    PolicyPods --> Vault
+    Vault --> KMS
+    
+    CertManager --> Ingress
+    
+    PostgresCluster --> S3
+    
+    style AuthPods fill:#e1f5fe
+    style PolicyPods fill:#f3e5f5
+    style Prometheus fill:#fff3e0
+```
+
+### Deployment Pipeline Overview
+
+```mermaid
+flowchart TD
+    subgraph "CI/CD Pipeline"
+        Code[Code Commit] --> Build[Build & Test]
+        Build --> Security[Security Scan]
+        Security --> Package[Build Container]
+        Package --> Registry[Push to Registry]
+    end
+    
+    subgraph "Deployment Stages"
+        Registry --> Staging[Staging Deployment]
+        Staging --> StagingTests[Integration Tests]
+        StagingTests --> Approval[Manual Approval]
+        Approval --> Production[Production Deployment]
+    end
+    
+    subgraph "Deployment Strategies"
+        Production --> BlueGreen[Blue-Green Deployment]
+        Production --> Canary[Canary Deployment]
+        Production --> Rolling[Rolling Update]
+    end
+    
+    subgraph "Post-Deployment"
+        BlueGreen --> HealthCheck[Health Checks]
+        Canary --> HealthCheck
+        Rolling --> HealthCheck
+        HealthCheck --> Monitor[Monitor Metrics]
+        Monitor --> Success{Success?}
+        Success -->|No| Rollback[Automatic Rollback]
+        Success -->|Yes| Complete[Deployment Complete]
+        Rollback --> Monitor
+    end
+    
+    style Build fill:#e8f5e8
+    style Security fill:#fff3e0
+    style Production fill:#e1f5fe
+    style HealthCheck fill:#f3e5f5
+```
+
 ## Pre-Deployment Checklist
 
 ### Infrastructure Requirements

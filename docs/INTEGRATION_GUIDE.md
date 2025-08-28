@@ -4,6 +4,97 @@
 
 This guide provides comprehensive instructions for integrating applications with the Rust Security Platform. Whether you're migrating from existing solutions like Auth0, Okta, or AWS Cognito, or building new applications, this guide covers all integration patterns and enterprise scenarios.
 
+### Integration Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "Client Applications"
+        SPA[Single Page App<br/>React/Vue/Angular]
+        Mobile[Mobile App<br/>iOS/Android]
+        Server[Server Application<br/>Node.js/Python/Go]
+        Legacy[Legacy System<br/>SAML/LDAP]
+    end
+    
+    subgraph "Rust Security Platform"
+        Gateway[API Gateway]
+        Auth[Auth Service]
+        Policy[Policy Service]
+        SOAR[SOAR Engine]
+    end
+    
+    subgraph "Integration Patterns"
+        OAuth[OAuth 2.0/OIDC]
+        SAML[SAML 2.0]
+        SCIM[SCIM 2.0]
+        Webhooks[Event Webhooks]
+    end
+    
+    subgraph "Identity Providers"
+        Google[Google OIDC]
+        Azure[Azure AD]
+        GitHub[GitHub OAuth]
+        LDAP[Enterprise LDAP]
+    end
+    
+    SPA --> OAuth
+    Mobile --> OAuth  
+    Server --> OAuth
+    Legacy --> SAML
+    
+    OAuth --> Gateway
+    SAML --> Gateway
+    SCIM --> Gateway
+    
+    Gateway --> Auth
+    Gateway --> Policy
+    Auth --> SOAR
+    
+    Auth <--> Google
+    Auth <--> Azure
+    Auth <--> GitHub
+    Auth <--> LDAP
+    
+    style Auth fill:#e1f5fe
+    style Policy fill:#f3e5f5
+    style SOAR fill:#fff3e0
+```
+
+### Common Integration Patterns
+
+```mermaid
+graph LR
+    subgraph "Pattern 1: Frontend + API"
+        Frontend[Frontend App]
+        Backend[Backend API]
+        Frontend -->|Auth Code Flow| Backend
+    end
+    
+    subgraph "Pattern 2: Microservices"
+        Service1[Service A]
+        Service2[Service B]
+        Service3[Service C]
+        Service1 <-->|JWT Validation| Service2
+        Service2 <-->|JWT Validation| Service3
+    end
+    
+    subgraph "Pattern 3: Enterprise SSO"
+        Portal[Enterprise Portal]
+        Apps[Multiple Apps]
+        Portal -->|SAML/OIDC| Apps
+    end
+    
+    subgraph "Rust Security Platform"
+        AuthSvc[Auth Service]
+        PolicySvc[Policy Service]
+    end
+    
+    Frontend --> AuthSvc
+    Backend --> AuthSvc
+    Service1 --> AuthSvc
+    Service2 --> PolicySvc
+    Portal --> AuthSvc
+```
+
 ## Quick Start Integration
 
 ### 1. Basic Authentication Flow

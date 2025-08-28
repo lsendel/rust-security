@@ -4,6 +4,68 @@
 
 Get the Rust Security Platform running in under 30 seconds with our pre-configured demo environment.
 
+### Platform Architecture Overview
+
+```mermaid
+graph LR
+    subgraph "Your Application"
+        Web[Web Frontend]
+        API[Backend API]
+        Mobile[Mobile App]
+    end
+    
+    subgraph "Rust Security Platform"
+        Auth[Auth Service :8080]
+        Policy[Policy Service :8081]
+        Dashboard[Security Dashboard :8082]
+    end
+    
+    subgraph "Data Layer"
+        Redis[(Redis Cache)]
+        DB[(PostgreSQL)]
+    end
+    
+    Web --> Auth
+    API --> Auth
+    Mobile --> Auth
+    
+    Auth --> Policy
+    Auth --> Redis
+    Auth --> DB
+    Policy --> Redis
+    
+    Auth --> Dashboard
+    Policy --> Dashboard
+    
+    style Auth fill:#e1f5fe
+    style Policy fill:#f3e5f5
+    style Dashboard fill:#fff3e0
+```
+
+### Quick Setup Flow
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Setup as Setup Script
+    participant Auth as Auth Service
+    participant Policy as Policy Service
+    participant Redis as Redis Cache
+    
+    Dev->>Setup: ./start-services.sh --demo
+    Setup->>Redis: Start Redis server
+    Setup->>Auth: Build & start auth-service
+    Setup->>Policy: Build & start policy-service
+    
+    Auth->>Redis: Initialize demo data
+    Auth->>Auth: Create demo OAuth client
+    Policy->>Policy: Load default policies
+    
+    Setup-->>Dev: ✅ Platform ready!
+    
+    Note over Dev,Redis: Total time: ~30 seconds
+```
+
 ### Prerequisites Check
 ```bash
 # Verify requirements (takes 10 seconds)
@@ -51,6 +113,34 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 ```
 
 ### Test OAuth 2.0 Flow (30 seconds)
+
+```mermaid
+sequenceDiagram
+    participant User as Demo User
+    participant Browser as Browser
+    participant Auth as Auth Service
+    participant Client as Demo Client
+    
+    Note over User,Client: Quick OAuth 2.0 Test Flow
+    
+    User->>Browser: Click authorization link
+    Browser->>Auth: GET /oauth/authorize
+    Auth->>Browser: Show login form
+    Browser->>User: Display login
+    
+    User->>Browser: Enter demo credentials
+    Browser->>Auth: POST login
+    Auth->>Auth: Validate demo@company.com
+    Auth->>Browser: Redirect with code
+    Browser->>Client: Authorization code
+    
+    Client->>Auth: POST /oauth/token
+    Auth->>Auth: Validate code + client
+    Auth->>Client: Access + Refresh tokens
+    
+    Note over User,Client: ✅ OAuth flow complete in 30s
+```
+
 ```bash
 # Start OAuth authorization
 open "http://localhost:8080/oauth/authorize?response_type=code&client_id=demo-client&redirect_uri=http://localhost:3000/callback&scope=read+write&state=abc123"

@@ -4,6 +4,100 @@
 
 This runbook provides step-by-step procedures for operating, monitoring, and troubleshooting the Rust Security Platform in production environments. Use this guide for incident response, maintenance, and routine operational tasks.
 
+### Operations Architecture Overview
+
+```mermaid
+graph TB
+    subgraph "Monitoring & Alerting"
+        Prometheus[Prometheus]
+        Grafana[Grafana Dashboards]
+        AlertManager[Alert Manager]
+        PagerDuty[PagerDuty/Slack]
+    end
+    
+    subgraph "Production Services"
+        LB[Load Balancer]
+        Auth[Auth Service]
+        Policy[Policy Service]
+        Redis[(Redis Cluster)]
+        DB[(PostgreSQL)]
+    end
+    
+    subgraph "Operations Team"
+        OnCall[On-Call Engineer]
+        SRE[SRE Team]
+        DevOps[DevOps Team]
+    end
+    
+    subgraph "Incident Response Flow"
+        Alert[Alert Triggered]
+        Assess[Assess Impact]
+        Mitigate[Immediate Mitigation]
+        Investigate[Root Cause Analysis]
+        Resolve[Full Resolution]
+    end
+    
+    Auth --> Prometheus
+    Policy --> Prometheus
+    Redis --> Prometheus
+    DB --> Prometheus
+    
+    Prometheus --> Grafana
+    Prometheus --> AlertManager
+    AlertManager --> PagerDuty
+    
+    PagerDuty --> OnCall
+    OnCall --> SRE
+    OnCall --> DevOps
+    
+    Alert --> Assess
+    Assess --> Mitigate
+    Mitigate --> Investigate
+    Investigate --> Resolve
+    
+    style Auth fill:#e1f5fe
+    style Policy fill:#f3e5f5
+    style Prometheus fill:#fff3e0
+```
+
+### Incident Response Process
+
+```mermaid
+flowchart TD
+    Start([Alert Received]) --> Assess{Service Impact?}
+    
+    Assess -->|Critical| Critical[CRITICAL: P1 Response<br/>5min acknowledge<br/>15min update]
+    Assess -->|High| High[HIGH: P2 Response<br/>15min acknowledge<br/>30min update]
+    Assess -->|Medium| Medium[MEDIUM: P3 Response<br/>1hr acknowledge<br/>4hr update]
+    Assess -->|Low| Low[LOW: P4 Response<br/>Next business day]
+    
+    Critical --> StatusPage[Update Status Page]
+    High --> StatusPage
+    StatusPage --> Incident[Create Incident]
+    Medium --> Incident
+    Low --> Incident
+    
+    Incident --> Bridge[Start War Room Bridge]
+    Bridge --> Mitigate[Immediate Mitigation]
+    Mitigate --> Working{Service Restored?}
+    
+    Working -->|No| Debug[Debug & Investigate]
+    Working -->|Yes| Monitor[Monitor Stability]
+    Debug --> Mitigate
+    
+    Monitor --> Stable{Stable 30min?}
+    Stable -->|No| Monitor
+    Stable -->|Yes| PostMortem[Schedule Post-Mortem]
+    
+    PostMortem --> Close[Close Incident]
+    Close --> End([Complete])
+    
+    style Critical fill:#ffebee
+    style High fill:#fff3e0
+    style Medium fill:#f3e5f5
+    style Low fill:#e8f5e8
+```
+
 ## Emergency Response
 
 ### 🚨 Service Outage Response
