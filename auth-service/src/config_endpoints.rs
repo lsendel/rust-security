@@ -30,7 +30,7 @@ pub struct ConfigState {
 /// # Security
 /// This endpoint should be protected by admin middleware and request signing.
 pub async fn reload_config(
-    State(_state): State<ConfigState>,
+    State(state): State<ConfigState>,
     Json(_request): Json<ConfigReloadRequest>,
 ) -> Result<Json<ConfigReloadResponse>, StatusCode> {
     info!("Configuration reload requested via HTTP endpoint");
@@ -67,7 +67,7 @@ pub async fn reload_config(
 ///
 /// Returns current configuration status and version information.
 pub async fn config_status(
-    State(_state): State<ConfigState>,
+    State(state): State<ConfigState>,
 ) -> Result<Json<ConfigStatus>, StatusCode> {
     let version = state.reload_manager.get_version().await;
     let _config = state.reload_manager.get_config().await;
@@ -90,7 +90,7 @@ pub async fn config_status(
 ///
 /// Rolls back to the previous configuration version.
 pub async fn rollback_config(
-    State(_state): State<ConfigState>,
+    State(state): State<ConfigState>,
 ) -> Result<Json<ConfigReloadResponse>, StatusCode> {
     info!("Configuration rollback requested via HTTP endpoint");
 
@@ -125,7 +125,7 @@ pub async fn rollback_config(
 ///
 /// Validates a configuration without applying it.
 pub async fn validate_config(
-    State(_state): State<ConfigState>,
+    State(state): State<ConfigState>,
     Json(config): Json<serde_json::Value>,
 ) -> Result<Json<ConfigValidationResponse>, StatusCode> {
     info!("Configuration validation requested via HTTP endpoint");

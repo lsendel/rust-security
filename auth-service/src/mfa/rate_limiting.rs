@@ -331,14 +331,14 @@ mod tests {
         // First 3 attempts should succeed
         for i in 1..=3 {
             let result = limiter.check_verification_attempts(user_id).await.unwrap();
-            assert!(result.allowed, "Attempt {} should be allowed", i);
-            assert_eq!(result.remaining_attempts, 3 - i);
+            assert!(operation_result.allowed, "Attempt {} should be allowed", i);
+            assert_eq!(operation_result.remaining_attempts, 3 - i);
         }
 
         // 4th attempt should fail
         let result = limiter.check_verification_attempts(user_id).await.unwrap();
-        assert!(!result.allowed);
-        assert_eq!(result.remaining_attempts, 0);
+        assert!(!operation_result.allowed);
+        assert_eq!(operation_result.remaining_attempts, 0);
     }
 
     #[tokio::test]
@@ -398,8 +398,8 @@ mod tests {
         let register_result = limiter.check_registration_attempts(user_id).await.unwrap();
         let otp_result = limiter.check_otp_send_attempts(user_id).await.unwrap();
 
-        assert!(verify_result.allowed);
-        assert!(register_result.allowed);
-        assert!(otp_result.allowed);
+        assert!(verify_operation_result.allowed);
+        assert!(register_operation_result.allowed);
+        assert!(otp_operation_result.allowed);
     }
 }

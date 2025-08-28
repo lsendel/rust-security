@@ -1,3 +1,4 @@
+import React from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from './button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './card'
@@ -21,12 +22,14 @@ export function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <details className="rounded-md bg-muted p-3">
-            <summary className="cursor-pointer font-medium">Error details</summary>
-            <pre className="mt-2 text-xs text-muted-foreground overflow-auto">
-              {error.message}
-            </pre>
-          </details>
+          {process.env.NODE_ENV !== 'production' && (
+            <details className="rounded-md bg-muted p-3">
+              <summary className="cursor-pointer font-medium">Error details</summary>
+              <pre className="mt-2 text-xs text-muted-foreground overflow-auto">
+                {error.message}
+              </pre>
+            </details>
+          )}
           <Button 
             onClick={resetErrorBoundary} 
             className="w-full"
@@ -38,4 +41,44 @@ export function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps)
       </Card>
     </div>
   )
+}
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode
+  fallback?: (error: Error, reset: () => void) => React.ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error('Error caught by boundary:', error, errorInfo)
+  }
+
+  resetErrorBoundary = () => {
+    this.setState({ hasError: false, error: null })
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      if (this.props.fallback) {
+        return this.props.fallback(this.state.error, this.resetErrorBoundary)
+      }
+      return <ErrorFallback error={this.state.error} resetErrorBoundary={this.resetErrorBoundary} />
+    }
+
+    return this.props.children
+  }
 }

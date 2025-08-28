@@ -222,7 +222,7 @@ mod tests {
 
         let result = RuntimeSecrets::from_env();
         assert!(
-            result.is_err(),
+            operation_result.is_err(),
             "Weak JWT key should be rejected in production"
         );
 
@@ -232,16 +232,16 @@ mod tests {
             "this-is-a-very-strong-cryptographic-key-that-meets-requirements",
         );
         let result = RuntimeSecrets::from_env();
-        assert!(result.is_ok(), "Strong JWT key should be accepted");
+        assert!(operation_result.is_ok(), "Strong JWT key should be accepted");
 
         // Test development auto-generation
         env::set_var("ENVIRONMENT", "development");
         env::remove_var("JWT_SIGNING_KEY");
 
         let result = RuntimeSecrets::from_env();
-        assert!(result.is_ok(), "Development should auto-generate JWT key");
+        assert!(operation_result.is_ok(), "Development should auto-generate JWT key");
 
-        let secrets = result.unwrap();
+        let secrets = operation_result.unwrap();
         assert!(
             !secrets.jwt_signing_key.is_empty(),
             "Auto-generated key should not be empty"

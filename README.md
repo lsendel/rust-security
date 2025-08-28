@@ -239,7 +239,7 @@ kubectl get pods -n rust-security
 
 ### **Cloud Platforms**
 - Amazon Web Services (AWS)
-- Google Cloud Platform (GCP) 
+- Google Cloud Platform (GCP)
 - Microsoft Azure
 - Kubernetes (any distribution)
 - Docker Swarm
@@ -257,6 +257,36 @@ kubectl get pods -n rust-security
 - Jenkins (planned)
 - ArgoCD
 - Terraform
+
+## 🧪 Testing & Maintenance
+
+### Rust Workspace
+- **Run all tests:**
+  ```bash
+  cargo test --workspace --all-features
+  ```
+- **Run linting:**
+  ```bash
+  cargo clippy --workspace --all-features -- -D warnings
+  ```
+- **Update dependencies:**
+  ```bash
+  cargo update
+  ```
+
+### Frontend (React)
+- **Run tests:**
+  ```bash
+  cd user-portal && npm test
+  cd red-team-exercises/security-dashboard && npm test
+  ```
+- **Update dependencies:**
+  ```bash
+  npm update
+  ```
+
+### CI/CD & Security
+- See [Security Hardening Guide](SECURITY_HARDENING_GUIDE.md) and [Deployment Guide](DEPLOYMENT_GUIDE.md) for production best practices.
 
 ## 🆚 Comparison with Commercial Solutions
 

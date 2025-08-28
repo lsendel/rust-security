@@ -17,7 +17,7 @@ pub struct PolicyCacheConfig {
     /// Default TTL for cache entries
     pub default_ttl: Duration,
     /// Maximum number of entries in cache
-    pub max_entries: usize,
+    pub max_entries: ucache_size,
     /// Enable/disable caching
     pub enabled: bool,
     /// TTL for deny decisions (usually shorter than allow)
@@ -72,7 +72,7 @@ struct CacheEntry {
 pub struct PolicyCacheStats {
     pub hits: u64,
     pub misses: u64,
-    pub entries: usize,
+    pub entries: ucache_size,
     pub evictions: u64,
     pub errors: u64,
     pub avg_response_time_ms: f64,
@@ -200,7 +200,7 @@ impl PolicyCache {
             return Ok(());
         }
 
-        // Check cache size limit before insertion
+        // Check cache cache_size limit before insertion
         if self.cache.len() >= self.config.max_entries {
             self.evict_lru().await;
         }
@@ -239,7 +239,7 @@ impl PolicyCache {
 
     /// Invalidate cache entries by pattern
     #[instrument(skip(self))]
-    pub async fn invalidate(&self, pattern: &str) -> usize {
+    pub async fn invalidate(&self, pattern: &str) -> ucache_size {
         let mut removed = 0;
 
         // For now, implement simple prefix matching
@@ -272,15 +272,15 @@ impl PolicyCache {
     /// Clear entire cache
     #[instrument(skip(self))]
     pub async fn clear(&self) -> usize {
-        let _size = self.cache.len();
+        let cache_size = self.cache.len();
         self.cache.clear();
 
         let mut stats = self.stats.write().await;
         stats.entries = 0;
-        stats.evictions += size as u64;
+        stats.evictions += cache_size as u64;
 
-        info!(cleared = size, "Policy cache cleared");
-        size
+        info!(cleared = cache_size, "Policy cache cleared");
+        cache_size
     }
 
     /// Evict least recently used entries when cache is full
@@ -494,7 +494,7 @@ mod tests {
             cache.put(&request, response).await.unwrap();
         }
 
-        // Cache should not exceed max size
+        // Cache should not exceed max cache_size
         let stats = cache.get_stats().await;
         assert!(stats.entries <= 2);
         assert!(stats.evictions > 0);

@@ -1,8 +1,9 @@
-use crate::{CreateUserRequest, UpdateUserRequest, User, UserRole};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
+
+use crate::{CreateUserRequest, UpdateUserRequest, User};
 
 #[cfg(feature = "postgres")]
 use sqlx::PgPool;
@@ -406,7 +407,7 @@ impl UserRepository for PostgresUserRepository {
         user_update: UpdateUserRequest,
     ) -> Result<Option<User>, DbError> {
         // This is a simplified version - in practice, you'd use a query builder or dynamic query construction
-        let _result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
+        let result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
             sqlx::query(
                 r#"
                 UPDATE users SET name = $1, email = $2, updated_at = NOW()
@@ -483,7 +484,7 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let _result = sqlx::query("DELETE FROM users WHERE id = $1")
+        let result = sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(id)
             .execute(&self.pool)
             .await?;
@@ -699,7 +700,7 @@ impl UserRepository for SqliteUserRepository {
         user_update: UpdateUserRequest,
     ) -> Result<Option<User>, DbError> {
         // Similar to PostgreSQL but with SQLite syntax
-        let _result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
+        let result = if let (Some(name), Some(email)) = (&user_update.name, &user_update.email) {
             sqlx::query(
                 r"
                 UPDATE users SET name = ?, email = ?, updated_at = CURRENT_TIMESTAMP
@@ -770,7 +771,7 @@ impl UserRepository for SqliteUserRepository {
     }
 
     async fn delete(&self, id: i32) -> Result<bool, DbError> {
-        let _result = sqlx::query("DELETE FROM users WHERE id = ?")
+        let result = sqlx::query("DELETE FROM users WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await?;

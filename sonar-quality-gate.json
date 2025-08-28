@@ -1,0 +1,62 @@
+{
+  "name": "Rust Security Platform Quality Gate",
+  "description": "Quality gate for Rust Security Platform with strict security and maintainability requirements",
+  "conditions": [
+    {
+      "metric": "new_coverage",
+      "operator": "LT",
+      "threshold": "80.0",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_duplicated_lines_density",
+      "operator": "GT", 
+      "threshold": "3.0",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_maintainability_rating",
+      "operator": "GT",
+      "threshold": "1",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_reliability_rating",
+      "operator": "GT",
+      "threshold": "1",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_security_rating",
+      "operator": "GT",
+      "threshold": "1",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_security_hotspots_reviewed",
+      "operator": "LT",
+      "threshold": "100.0",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_vulnerabilities",
+      "operator": "GT",
+      "threshold": "0",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_bugs",
+      "operator": "GT", 
+      "threshold": "0",
+      "onLeakPeriod": true
+    },
+    {
+      "metric": "new_code_smells",
+      "operator": "GT",
+      "threshold": "5",
+      "onLeakPeriod": true
+    }
+  ],
+  "isDefault": false,
+  "isBuiltIn": false
+}

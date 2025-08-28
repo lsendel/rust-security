@@ -69,11 +69,11 @@ pub enum AuthError {
 
 /// Default authentication service implementation
 pub struct DefaultAuthService {
-    _config: std::sync::Arc<crate::config::Config>,
+    _config: std::sync::Arc<crate::crate::config::Config>,
 }
 
 impl DefaultAuthService {
-    pub fn new(config: std::sync::Arc<crate::config::Config>) -> Self {
+    pub fn new(config: std::sync::Arc<crate::crate::config::Config>) -> Self {
         Self { _config: config }
     }
 }

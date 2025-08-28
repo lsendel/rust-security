@@ -1093,10 +1093,10 @@ impl WorkflowOrchestrator {
 
             match step_result {
                 Ok(result) => {
-                    step_results.insert(step.id.clone(), result.clone());
+                    step_results.insert(step.id.clone(), operation_result.clone());
 
                     // Merge step outputs into execution context
-                    for (key, value) in result.outputs {
+                    for (key, value) in operation_result.outputs {
                         execution_context.insert(key, value);
                     }
                 }
@@ -1307,7 +1307,7 @@ impl WorkflowOrchestrator {
         dependencies.iter().all(|dep| {
             step_results
                 .get(dep)
-                .map(|result| result.status == StepStatus::Completed)
+                .map(|result| operation_result.status == StepStatus::Completed)
                 .unwrap_or(false)
         })
     }

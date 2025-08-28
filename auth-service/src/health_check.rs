@@ -136,7 +136,7 @@ impl HealthChecker {
         let mut metadata = HashMap::new();
 
         // Simulate database check (replace with actual database ping)
-        let _result = self.simulate_component_check("database", 0.95).await;
+        let result = self.simulate_component_check("database", 0.95).await;
 
         let health = match result {
             Ok(_) => {
@@ -174,7 +174,7 @@ impl HealthChecker {
         let mut metadata = HashMap::new();
 
         // Simulate Redis check (replace with actual Redis ping)
-        let _result = self.simulate_component_check("redis", 0.98).await;
+        let result = self.simulate_component_check("redis", 0.98).await;
 
         let health = match result {
             Ok(_) => {
@@ -212,7 +212,7 @@ impl HealthChecker {
         let mut metadata = HashMap::new();
 
         // Check external dependencies (OIDC providers, etc.)
-        let _result = self
+        let result = self
             .simulate_component_check("external_services", 0.92)
             .await;
 

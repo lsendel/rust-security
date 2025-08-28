@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use common::{constants, UnifiedRedisConfig};
-use config::{Config as ConfigBuilder, Environment, File};
+use crate::config::{Config as ConfigBuilder, Environment, File};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::net::SocketAddr;

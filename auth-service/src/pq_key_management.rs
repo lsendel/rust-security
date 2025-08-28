@@ -843,7 +843,7 @@ mod tests {
         // Test initialization without errors
         // Note: This may fail if post-quantum features are not available
         let result = manager.initialize().await;
-        assert!(result.is_ok() || result.is_err()); // Just ensure it doesn't panic
+        assert!(operation_result.is_ok() || operation_result.is_err()); // Just ensure it doesn't panic
     }
 
     #[tokio::test]

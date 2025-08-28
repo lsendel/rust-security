@@ -81,7 +81,7 @@ async fn init_security_components(_config: &AdminAuthConfig) {
 
 /// Admin authentication middleware for protecting admin endpoints
 pub async fn admin_auth_middleware(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: HeaderMap,
     request: Request<Body>,
     next: Next,
@@ -272,7 +272,7 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(token.as_bytes());
-            let _result = hasher.finalize();
+            let result = hasher.finalize();
             Ok(format!("admin_{}", hex::encode(&result[..8]))) // Use first 8 bytes as key
         }
         _ => Err(AuthError::Forbidden {
@@ -616,7 +616,7 @@ fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, AuthErro
     })?;
 
     mac.update(payload.as_bytes());
-    let _result = mac.finalize();
+    let result = mac.finalize();
     Ok(hex::encode(result.into_bytes()))
 }
 

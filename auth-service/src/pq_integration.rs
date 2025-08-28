@@ -743,7 +743,7 @@ mod tests {
     async fn test_pq_integration_initialization() {
         // Test that initialization doesn't panic
         let result = initialize_post_quantum_integration().await;
-        assert!(result.is_ok() || result.is_err()); // Just ensure it completes
+        assert!(operation_result.is_ok() || operation_result.is_err()); // Just ensure it completes
     }
 
     #[test]

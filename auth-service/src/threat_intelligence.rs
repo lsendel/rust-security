@@ -555,11 +555,11 @@ impl ThreatIntelligenceCorrelator {
         if let Some(cached_result) = cache.get(&cache_key) {
             let now = Utc::now();
             let age = now
-                .signed_duration_since(cached_result.cached_at)
+                .signed_duration_since(cached_operation_result.cached_at)
                 .num_seconds() as u64;
 
-            if age < cached_result.ttl_seconds {
-                return cached_result.result.clone();
+            if age < cached_operation_result.ttl_seconds {
+                return cached_operation_result.operation_result.clone();
             }
         }
 
@@ -690,12 +690,12 @@ impl ThreatIntelligenceCorrelator {
                 .await;
 
                 // Cache the result
-                Self::cache_query_result(&query, result.clone(), &indicator_cache, &config).await;
+                Self::cache_query_result(&query, operation_result.clone(), &indicator_cache, &config).await;
 
                 // Update statistics
                 let mut stats = statistics.lock().await;
                 stats.queries_total += 1;
-                if result.is_some() {
+                if operation_result.is_some() {
                     stats.matches_total += 1;
                 }
 
@@ -876,15 +876,15 @@ impl ThreatIntelligenceCorrelator {
         if response.status().is_success() {
             let abuse_result: AbuseIpdbResponse = response.json().await?;
 
-            if abuse_result.abuse_confidence_percentage > 0 {
+            if abuse_operation_result.abuse_confidence_percentage > 0 {
                 let threat_indicator = ThreatIntelligenceIndicator {
                     indicator: indicator.to_string(),
                     indicator_type: IndicatorType::IpAddress,
                     threat_types: vec![ThreatType::MaliciousBot], // Simplified
-                    confidence: abuse_result.abuse_confidence_percentage as f64 / 100.0,
-                    severity: if abuse_result.abuse_confidence_percentage > 75 {
+                    confidence: abuse_operation_result.abuse_confidence_percentage as f64 / 100.0,
+                    severity: if abuse_operation_result.abuse_confidence_percentage > 75 {
                         ThreatSeverity::High
-                    } else if abuse_result.abuse_confidence_percentage > 50 {
+                    } else if abuse_operation_result.abuse_confidence_percentage > 50 {
                         ThreatSeverity::Medium
                     } else {
                         ThreatSeverity::Low
@@ -893,30 +893,30 @@ impl ThreatIntelligenceCorrelator {
                     last_seen: Utc::now(),
                     source: "AbuseIPDB".to_string(),
                     feed_name: feed.name.clone(),
-                    tags: abuse_result.usage_type.into_iter().collect(),
+                    tags: abuse_operation_result.usage_type.into_iter().collect(),
                     attributes: [
                         (
                             "country_code".to_string(),
                             serde_json::Value::String(
-                                abuse_result.country_code.unwrap_or_default(),
+                                abuse_operation_result.country_code.unwrap_or_default(),
                             ),
                         ),
                         (
                             "isp".to_string(),
-                            serde_json::Value::String(abuse_result.isp.unwrap_or_default()),
+                            serde_json::Value::String(abuse_operation_result.isp.unwrap_or_default()),
                         ),
                         (
                             "is_whitelisted".to_string(),
-                            serde_json::Value::Bool(abuse_result.is_whitelisted),
+                            serde_json::Value::Bool(abuse_operation_result.is_whitelisted),
                         ),
                     ]
                     .into_iter()
                     .collect(),
                     false_positive_rate: 0.1,
-                    reputation_score: abuse_result.abuse_confidence_percentage as f64 / 100.0,
+                    reputation_score: abuse_operation_result.abuse_confidence_percentage as f64 / 100.0,
                     malware_families: Vec::new(),
                     threat_actor_groups: Vec::new(),
-                    geographic_regions: vec![abuse_result.country_code.unwrap_or_default()],
+                    geographic_regions: vec![abuse_operation_result.country_code.unwrap_or_default()],
                     kill_chain_phases: vec![AttackPhase::InitialAccess],
                 };
 
@@ -1001,15 +1001,15 @@ impl ThreatIntelligenceCorrelator {
                                 info!(
                                     "Feed sync completed: {} - Added: {}, Updated: {}, Removed: {}",
                                     feed.name,
-                                    sync_result.added,
-                                    sync_result.updated,
-                                    sync_result.removed
+                                    sync_operation_result.added,
+                                    sync_operation_result.updated,
+                                    sync_operation_result.removed
                                 );
 
                                 // Update feed metadata
                                 if let Some(ref mut metadata) = feed_metadata.get_mut(&feed.name) {
                                     metadata.last_updated = Some(Utc::now());
-                                    metadata.total_indicators = Some(sync_result.total_indicators);
+                                    metadata.total_indicators = Some(sync_operation_result.total_indicators);
                                     metadata.error_count = 0;
                                 }
                             }
@@ -1052,9 +1052,9 @@ impl ThreatIntelligenceCorrelator {
 
                 cache.retain(|_, cached_result| {
                     let age = now
-                        .signed_duration_since(cached_result.cached_at)
+                        .signed_duration_since(cached_operation_result.cached_at)
                         .num_seconds() as u64;
-                    age < cached_result.ttl_seconds
+                    age < cached_operation_result.ttl_seconds
                 });
 
                 debug!("Cache cleanup completed, {} entries remaining", cache.len());
@@ -1185,12 +1185,12 @@ impl ThreatIntelligenceService {
                 .process_feed_indicator(&indicator, &feed.name, &existing_indicators)
                 .await
             {
-                Ok(ProcessResult::Added) => sync_result.added += 1,
-                Ok(ProcessResult::Updated) => sync_result.updated += 1,
-                Ok(ProcessResult::Skipped) => sync_result.skipped += 1,
+                Ok(ProcessResult::Added) => sync_operation_result.added += 1,
+                Ok(ProcessResult::Updated) => sync_operation_result.updated += 1,
+                Ok(ProcessResult::Skipped) => sync_operation_result.skipped += 1,
                 Err(e) => {
                     error!("Failed to process indicator {}: {}", indicator.value, e);
-                    sync_result.errors += 1;
+                    sync_operation_result.errors += 1;
                 }
             }
         }
@@ -1199,16 +1199,16 @@ impl ThreatIntelligenceService {
         let removed = self
             .cleanup_stale_indicators(&feed.name, &existing_indicators)
             .await?;
-        sync_result.removed = removed;
+        sync_operation_result.removed = removed;
 
-        sync_result.total_indicators =
-            sync_result.added + sync_result.updated + sync_result.skipped;
-        sync_result.duration_ms = start_time.elapsed().as_millis() as u64;
+        sync_operation_result.total_indicators =
+            sync_operation_result.added + sync_operation_result.updated + sync_operation_result.skipped;
+        sync_operation_result.duration_ms = start_time.elapsed().as_millis() as u64;
 
         info!(
             "Feed synchronization completed: {} in {}ms - Added: {}, Updated: {}, Removed: {}, Skipped: {}, Errors: {}",
-            feed.name, sync_result.duration_ms, sync_result.added, sync_result.updated,
-            sync_result.removed, sync_result.skipped, sync_result.errors
+            feed.name, sync_operation_result.duration_ms, sync_operation_result.added, sync_operation_result.updated,
+            sync_operation_result.removed, sync_operation_result.skipped, sync_operation_result.errors
         );
 
         Ok(sync_result)

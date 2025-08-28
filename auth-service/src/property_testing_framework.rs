@@ -407,7 +407,7 @@ impl InputValidationProperties {
                     parse_scim_filter(&filter)
                 });
 
-                if parse_result.is_err() {
+                if parse_operation_result.is_err() {
                     return Err(proptest::test_runner::TestCaseError::fail(
                         "SCIM filter parsing panicked".to_string()
                     ));
@@ -634,14 +634,14 @@ impl PropertyTestRunner {
         report.push_str("# Property Testing Report\n\n");
         
         for result in &self.results {
-            report.push_str(&format!("## Test: {}\n", result.test_name));
-            report.push_str(&format!("- **Status**: {}\n", if result.passed { "✅ PASSED" } else { "❌ FAILED" }));
-            report.push_str(&format!("- **Cases Tested**: {}\n", result.cases_tested));
-            report.push_str(&format!("- **Duration**: {:?}\n", result.duration));
+            report.push_str(&format!("## Test: {}\n", operation_result.test_name));
+            report.push_str(&format!("- **Status**: {}\n", if operation_result.passed { "✅ PASSED" } else { "❌ FAILED" }));
+            report.push_str(&format!("- **Cases Tested**: {}\n", operation_result.cases_tested));
+            report.push_str(&format!("- **Duration**: {:?}\n", operation_result.duration));
             
-            if !result.failures.is_empty() {
-                report.push_str(&format!("- **Failures**: {}\n", result.failures.len()));
-                for failure in &result.failures {
+            if !operation_result.failures.is_empty() {
+                report.push_str(&format!("- **Failures**: {}\n", operation_result.failures.len()));
+                for failure in &operation_result.failures {
                     report.push_str(&format!("  - Case {}: {}\n", failure.case_number, failure.error));
                 }
             }

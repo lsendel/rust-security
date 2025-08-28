@@ -673,7 +673,7 @@ impl KeyManagementService {
         if let Some(kid) = active_key_id.as_ref() {
             let keys = self.keys.read().await;
             if let Some(key) = keys.get(kid) {
-                result.active_key_age = Some(Self::current_timestamp() - key.created_at);
+                operation_result.active_key_age = Some(Self::current_timestamp() - key.created_at);
             }
         }
 

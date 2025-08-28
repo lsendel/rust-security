@@ -386,7 +386,7 @@ impl EnhancedJwtValidator {
             .with_reason("JWT token passed all security validations".to_string())
             .with_detail(
                 "algorithm".to_string(),
-                result.validation_metadata.algorithm_used.clone(),
+                operation_result.validation_metadata.algorithm_used.clone(),
             )
             .with_detail(
                 "issuer".to_string(),

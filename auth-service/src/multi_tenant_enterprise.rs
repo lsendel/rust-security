@@ -770,7 +770,7 @@ mod tests {
         };
 
         let result = manager.update_resource_usage(tenant.id, usage).await;
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), MultiTenantError::QuotaExceeded(_)));
+        assert!(operation_result.is_err());
+        assert!(matches!(operation_result.unwrap_err(), MultiTenantError::QuotaExceeded(_)));
     }
 }

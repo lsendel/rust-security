@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:substack.com)",
+      "WebFetch(domain:kenhuangus.substack.com)",
+      "Bash(python:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo run:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

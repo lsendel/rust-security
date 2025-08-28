@@ -219,7 +219,7 @@ impl WorkflowEngine {
                 {
                     let mut metrics = self.metrics.lock().await;
                     metrics.total_executions += 1;
-                    if result.is_ok() {
+                    if operation_result.is_ok() {
                         metrics.successful_executions += 1;
                     } else {
                         metrics.failed_executions += 1;
@@ -278,10 +278,10 @@ impl WorkflowEngine {
             // Execute step
             match self.execute_step(step, &execution_context).await {
                 Ok(result) => {
-                    step_results.insert(step.id.clone(), result.clone());
+                    step_results.insert(step.id.clone(), operation_result.clone());
 
                     // Update execution context with step outputs
-                    for (key, value) in result.outputs {
+                    for (key, value) in operation_result.outputs {
                         execution_context.variables.insert(key, value);
                     }
                 }
@@ -428,7 +428,7 @@ impl WorkflowEngine {
     ) -> bool {
         for dependency in &step.dependencies {
             if let Some(result) = step_results.get(dependency) {
-                if result.status != StepStatus::Completed {
+                if operation_result.status != StepStatus::Completed {
                     return false;
                 }
             } else {

@@ -104,11 +104,11 @@ impl TimeSeriesAnalyzer {
 
         let regression_result = self.linear_regression(&x_values, &values);
 
-        let trend_direction = match regression_result.slope {
+        let trend_direction = match regression_operation_result.slope {
             slope if slope > 0.01 => TrendDirection::Increasing,
             slope if slope < -0.01 => TrendDirection::Decreasing,
             _ => {
-                if regression_result.r_squared < 0.1 {
+                if regression_operation_result.r_squared < 0.1 {
                     TrendDirection::Volatile
                 } else {
                     TrendDirection::Stable
@@ -117,10 +117,10 @@ impl TimeSeriesAnalyzer {
         };
 
         Ok(TrendAnalysis {
-            slope: regression_result.slope,
-            intercept: regression_result.intercept,
-            r_squared: regression_result.r_squared,
-            p_value: regression_result.p_value,
+            slope: regression_operation_result.slope,
+            intercept: regression_operation_result.intercept,
+            r_squared: regression_operation_result.r_squared,
+            p_value: regression_operation_result.p_value,
             trend_direction,
         })
     }

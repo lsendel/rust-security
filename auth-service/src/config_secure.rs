@@ -614,7 +614,7 @@ mod tests {
         env::set_var("ALLOWED_ORIGINS", "https://example.com");
 
         let result = load_secure_config();
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
     }
 
     #[test]

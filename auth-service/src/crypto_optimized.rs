@@ -156,7 +156,7 @@ impl CryptoOptimized {
 
         // Prepend nonce to ciphertext
         let mut result = nonce_bytes.to_vec();
-        result.extend_from_slice(&in_out);
+        operation_result.extend_from_slice(&in_out);
 
         self.update_metrics(start.elapsed(), cache_hit).await;
         Ok(result)

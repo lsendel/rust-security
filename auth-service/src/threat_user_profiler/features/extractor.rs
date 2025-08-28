@@ -1,5 +1,5 @@
 use crate::threat_user_profiler::types::*;
-use crate::threat_user_profiler::config::*;
+use crate::threat_user_profiler::crate::config::*;
 use crate::threat_user_profiler::features::*;
 use crate::threat_user_profiler::types::*;
 use crate::core::security::SecurityEventType;

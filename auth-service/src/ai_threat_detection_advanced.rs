@@ -794,8 +794,8 @@ mod tests {
             SystemTime::now(),
         ).await;
         
-        assert!(result.threat_score >= 0.0 && result.threat_score <= 1.0);
-        assert!(result.confidence >= 0.0 && result.confidence <= 1.0);
+        assert!(operation_result.threat_score >= 0.0 && operation_result.threat_score <= 1.0);
+        assert!(operation_result.confidence >= 0.0 && operation_result.confidence <= 1.0);
     }
 
     #[tokio::test]

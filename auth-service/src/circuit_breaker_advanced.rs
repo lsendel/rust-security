@@ -330,7 +330,7 @@ impl AdvancedCircuitBreaker {
         }
 
         let recent_failures = history.iter()
-            .filter(|(_, result)| !result.success)
+            .filter(|(_, result)| !operation_result.success)
             .count();
         
         let failure_rate = recent_failures as f64 / history.len() as f64;
@@ -363,9 +363,9 @@ impl AdvancedCircuitBreaker {
         let history = self.call_history.read().await;
         
         let recent_calls = history.len();
-        let recent_failures = history.iter().filter(|(_, result)| !result.success).count();
+        let recent_failures = history.iter().filter(|(_, result)| !operation_result.success).count();
         let recent_slow_calls = history.iter()
-            .filter(|(_, result)| result.is_slow(self.config.slow_call_threshold))
+            .filter(|(_, result)| operation_result.is_slow(self.config.slow_call_threshold))
             .count();
 
         let health_score = if recent_calls > 0 {
@@ -526,8 +526,8 @@ mod tests {
 
         // Successful call should work
         let result = breaker.call(|| async { Ok::<i32, String>(42) }).await;
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 42);
+        assert!(operation_result.is_ok());
+        assert_eq!(operation_result.unwrap(), 42);
 
         let metrics = breaker.get_metrics().await;
         assert_eq!(metrics.state, CircuitState::Closed);
@@ -543,11 +543,11 @@ mod tests {
 
         // First failure
         let result = breaker.call(|| async { Err::<i32, String>("error".to_string()) }).await;
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
 
         // Second failure should open the circuit
         let result = breaker.call(|| async { Err::<i32, String>("error".to_string()) }).await;
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
 
         let metrics = breaker.get_metrics().await;
         assert_eq!(metrics.state, CircuitState::Open);
@@ -573,7 +573,7 @@ mod tests {
 
         // Next call should transition to half-open
         let result = breaker.call(|| async { Ok::<i32, String>(42) }).await;
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
 
         let metrics = breaker.get_metrics().await;
         assert_eq!(metrics.state, CircuitState::Closed);
@@ -588,7 +588,7 @@ mod tests {
         
         // Test successful call
         let result = breaker.call(|| async { Ok::<String, String>("success".to_string()) }).await;
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
 
         // Get breaker from registry
         let retrieved = registry.get("test-service").await;
@@ -613,7 +613,7 @@ mod tests {
             Ok::<i32, String>(42)
         }).await;
         
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
         
         let metrics = breaker.get_metrics().await;
         assert_eq!(metrics.slow_calls, 1);

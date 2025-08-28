@@ -1,4 +1,4 @@
-use crate::threat_user_profiler::config::*;
+use crate::threat_user_profiler::crate::config::*;
 use crate::threat_user_profiler::risk_assessment::peer_analysis::PeerComparisonAnalyzer;
 use crate::threat_user_profiler::risk_assessment::scoring::RiskScoringAlgorithm;
 use crate::threat_user_profiler::types::*;

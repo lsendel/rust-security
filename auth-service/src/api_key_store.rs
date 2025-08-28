@@ -110,7 +110,7 @@ impl ApiKeyStore {
     }
 
     pub async fn revoke_api_key(&self, prefix: &str) -> Result<(), ApiKeyError> {
-        let _result = sqlx::query("UPDATE api_keys SET status = 'revoked' WHERE prefix = $1")
+        let result = sqlx::query("UPDATE api_keys SET status = 'revoked' WHERE prefix = $1")
             .bind(prefix)
             .execute(&self.pool)
             .await?;

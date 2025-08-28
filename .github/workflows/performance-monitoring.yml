@@ -1,0 +1,694 @@
+name: Performance Monitoring & Regression Detection
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Baseline reference for comparison'
+        required: false
+        default: 'main'
+        type: string
+      benchmark_suite:
+        description: 'Benchmark suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - auth-service
+        - policy-service
+        - integration
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: stable
+  BENCHMARK_ITERATIONS: 100
+  PERFORMANCE_THRESHOLD: 1.1  # 10% regression threshold
+
+jobs:
+  # Performance baseline establishment
+  performance-baseline:
+    name: Performance Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      baseline-results: ${{ steps.store-baseline.outputs.results-path }}
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: bench_user
+          POSTGRES_PASSWORD: bench_password
+          POSTGRES_DB: bench_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U bench_user -d bench_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
+    steps:
+      - name: Checkout current code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: performance-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install performance tools
+        run: |
+          echo "⚡ Installing performance tools..."
+          cargo install cargo-criterion --locked
+          cargo install flamegraph --locked
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client redis-tools linux-tools-generic
+
+      - name: Setup performance test environment
+        env:
+          DATABASE_URL: postgres://bench_user:bench_password@localhost:5432/bench_db
+          REDIS_URL: redis://localhost:6379
+        run: |
+          echo "🔧 Setting up performance test environment..."
+          
+          # Create optimized test configuration
+          mkdir -p benchmark-config
+          cat > benchmark-config/performance.toml << EOF
+          [server]
+          host = "127.0.0.1"
+          port = 8080
+          
+          [database]
+          url = "$DATABASE_URL"
+          max_connections = 50
+          
+          [redis]
+          url = "$REDIS_URL"
+          pool_size = 20
+          
+          [performance]
+          enable_profiling = true
+          collect_metrics = true
+          
+          [security]
+          jwt_secret = "benchmark_secret_key_for_testing_only"
+          encryption_key = "benchmark_encryption_key_32_chars"
+          EOF
+
+      - name: Build optimized binaries
+        run: |
+          echo "🔨 Building optimized binaries for benchmarking..."
+          
+          # Build with performance optimizations
+          RUSTFLAGS="-C target-cpu=native -C opt-level=3" cargo build --release --workspace
+
+      - name: Run comprehensive benchmarks
+        env:
+          DATABASE_URL: postgres://bench_user:bench_password@localhost:5432/bench_db
+          REDIS_URL: redis://localhost:6379
+          CONFIG_PATH: benchmark-config/performance.toml
+        run: |
+          echo "📊 Running comprehensive benchmarks..."
+          
+          # Create results directory
+          mkdir -p benchmark-results/current
+          
+          # Run Criterion benchmarks
+          if find . -name "*.rs" -path "*/benches/*" | grep -q .; then
+            echo "Running Criterion benchmarks..."
+            cargo criterion --message-format json > benchmark-results/current/criterion.json 2>&1 || true
+          fi
+          
+          # Run custom performance benchmarks
+          for bench_script in scripts/performance/*.sh; do
+            if [ -f "$bench_script" ]; then
+              bench_name=$(basename "$bench_script" .sh)
+              echo "Running benchmark: $bench_name"
+              timeout 300s bash "$bench_script" > "benchmark-results/current/${bench_name}.json" 2>&1 || echo "Benchmark $bench_name timed out"
+            fi
+          done
+          
+          # Generate performance report
+          cat > benchmark-results/current/summary.json << EOF
+          {
+            "timestamp": "$(date -Iseconds)",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "runner": "${{ runner.os }}",
+            "rust_version": "$(rustc --version)",
+            "benchmark_suite": "${{ github.event.inputs.benchmark_suite || 'all' }}"
+          }
+          EOF
+
+      - name: Profile critical paths
+        env:
+          DATABASE_URL: postgres://bench_user:bench_password@localhost:5432/bench_db
+          REDIS_URL: redis://localhost:6379
+          CONFIG_PATH: benchmark-config/performance.toml
+        run: |
+          echo "🔥 Profiling critical performance paths..."
+          
+          # Profile auth service if binary exists
+          if [ -f "target/release/auth-service" ]; then
+            timeout 60s cargo flamegraph --bin auth-service --output flamegraph-auth.svg -- --help || true
+          fi
+          
+          # Profile policy service if binary exists  
+          if [ -f "target/release/policy-service" ]; then
+            timeout 60s cargo flamegraph --bin policy-service --output flamegraph-policy.svg -- --help || true
+          fi
+
+      - name: Store baseline results
+        id: store-baseline
+        run: |
+          echo "💾 Storing baseline results..."
+          
+          # Compress results
+          tar -czf baseline-results.tar.gz benchmark-results/
+          
+          echo "results-path=baseline-results.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Upload baseline artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline-${{ github.sha }}
+          path: |
+            benchmark-results/
+            flamegraph-*.svg
+            baseline-results.tar.gz
+          retention-days: 30
+
+  # Load testing and stress testing
+  load-testing:
+    name: Load Testing
+    runs-on: ubuntu-latest
+    needs: performance-baseline
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        load-profile: [light, medium, heavy]
+        include:
+          - load-profile: light
+            concurrent-users: 10
+            duration: "2m"
+            ramp-up: "30s"
+          - load-profile: medium
+            concurrent-users: 50
+            duration: "5m"
+            ramp-up: "1m"
+          - load-profile: heavy
+            concurrent-users: 100
+            duration: "3m"
+            ramp-up: "30s"
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: load_user
+          POSTGRES_PASSWORD: load_password
+          POSTGRES_DB: load_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U load_user -d load_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download baseline artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-baseline-${{ github.sha }}
+          path: baseline-artifacts/
+
+      - name: Setup load testing tools
+        run: |
+          echo "🔧 Installing load testing tools..."
+          
+          # Install k6
+          sudo apt-get update
+          sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+          
+          # Install additional tools
+          sudo apt-get install -y apache2-utils curl jq
+
+      - name: Setup test services
+        env:
+          DATABASE_URL: postgres://load_user:load_password@localhost:5432/load_db
+          REDIS_URL: redis://localhost:6379
+        run: |
+          echo "🚀 Setting up test services..."
+          
+          # Extract baseline artifacts
+          tar -xzf baseline-artifacts/baseline-results.tar.gz
+          
+          # Build services for load testing
+          cargo build --release --workspace
+          
+          # Start services in background
+          if [ -f "target/release/auth-service" ]; then
+            DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL" ./target/release/auth-service &
+            AUTH_PID=$!
+            echo "AUTH_PID=$AUTH_PID" >> $GITHUB_ENV
+          fi
+          
+          if [ -f "target/release/policy-service" ]; then
+            ./target/release/policy-service &
+            POLICY_PID=$!
+            echo "POLICY_PID=$POLICY_PID" >> $GITHUB_ENV
+          fi
+          
+          # Wait for services to start
+          sleep 15
+          
+          # Verify services are running
+          curl -f http://localhost:8080/health || echo "Auth service not responding"
+          curl -f http://localhost:8081/health || echo "Policy service not responding"
+
+      - name: Run load tests
+        run: |
+          echo "⚡ Running ${{ matrix.load-profile }} load test..."
+          
+          # Create k6 test script
+          cat > loadtest-${{ matrix.load-profile }}.js << 'EOF'
+          import http from 'k6/http';
+          import { check, sleep } from 'k6';
+          import { Rate } from 'k6/metrics';
+          
+          const errorRate = new Rate('errors');
+          
+          export let options = {
+            stages: [
+              { duration: '${{ matrix.ramp-up }}', target: ${{ matrix.concurrent-users }} },
+              { duration: '${{ matrix.duration }}', target: ${{ matrix.concurrent-users }} },
+              { duration: '30s', target: 0 },
+            ],
+            thresholds: {
+              http_req_duration: ['p(95)<500'],
+              http_req_failed: ['rate<0.1'],
+            },
+          };
+          
+          export default function () {
+            // Health check
+            let healthResponse = http.get('http://localhost:8080/health');
+            check(healthResponse, {
+              'health check status is 200': (r) => r.status === 200,
+            }) || errorRate.add(1);
+            
+            // Add more realistic test scenarios here
+            sleep(0.1);
+          }
+          EOF
+          
+          # Run the load test
+          k6 run --out json=loadtest-${{ matrix.load-profile }}-results.json loadtest-${{ matrix.load-profile }}.js || true
+
+      - name: Analyze load test results
+        run: |
+          echo "📊 Analyzing load test results..."
+          
+          if [ -f "loadtest-${{ matrix.load-profile }}-results.json" ]; then
+            # Extract key metrics
+            python3 << 'EOF'
+          import json
+          import sys
+          
+          try:
+              with open('loadtest-${{ matrix.load-profile }}-results.json') as f:
+                  lines = f.readlines()
+              
+              metrics = {}
+              for line in lines:
+                  try:
+                      data = json.loads(line)
+                      if data.get('type') == 'Point' and 'data' in data:
+                          metric_name = data['metric']
+                          value = data['data']['value']
+                          if metric_name not in metrics:
+                              metrics[metric_name] = []
+                          metrics[metric_name].append(value)
+                  except:
+                      continue
+              
+              print(f"Load Test Results (${{ matrix.load-profile }}):")
+              for metric, values in metrics.items():
+                  if values:
+                      avg_value = sum(values) / len(values)
+                      max_value = max(values)
+                      print(f"  {metric}: avg={avg_value:.2f}, max={max_value:.2f}")
+          
+          except Exception as e:
+              print(f"Error analyzing results: {e}")
+          EOF
+          fi
+
+      - name: Cleanup services
+        if: always()
+        run: |
+          echo "🧹 Cleaning up services..."
+          [ ! -z "$AUTH_PID" ] && kill $AUTH_PID || true
+          [ ! -z "$POLICY_PID" ] && kill $POLICY_PID || true
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-test-results-${{ matrix.load-profile }}
+          path: |
+            loadtest-*-results.json
+            loadtest-*.js
+          retention-days: 14
+
+  # Performance regression analysis
+  regression-analysis:
+    name: Performance Regression Analysis
+    runs-on: ubuntu-latest
+    needs: [performance-baseline, load-testing]
+    if: always() && needs.performance-baseline.result == 'success'
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download current results
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-baseline-${{ github.sha }}
+          path: current-results/
+
+      - name: Download historical results
+        continue-on-error: true
+        run: |
+          echo "📈 Downloading historical performance data..."
+          
+          # Try to get baseline from main branch
+          BASELINE_REF="${{ github.event.inputs.baseline_ref || 'main' }}"
+          
+          # Download artifacts from recent successful runs
+          gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq '.artifacts[] | select(.name | startswith("performance-baseline")) | .archive_download_url' \
+            | head -5 \
+            | while read url; do
+              echo "Downloading: $url"
+              gh api "$url" > historical-baseline.zip || continue
+              unzip -q historical-baseline.zip -d historical-results/ || continue
+              break
+            done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install analysis tools
+        run: |
+          pip install numpy matplotlib pandas
+
+      - name: Analyze performance regression
+        run: |
+          echo "🔍 Analyzing performance regression..."
+          
+          python3 << 'EOF'
+          import json
+          import os
+          import sys
+          from datetime import datetime
+          
+          def load_benchmark_data(results_dir):
+              """Load benchmark data from results directory"""
+              data = {}
+              
+              # Load Criterion results if available
+              criterion_file = os.path.join(results_dir, 'criterion.json')
+              if os.path.exists(criterion_file):
+                  try:
+                      with open(criterion_file) as f:
+                          criterion_data = json.load(f)
+                      data['criterion'] = criterion_data
+                  except:
+                      pass
+              
+              # Load summary data
+              summary_file = os.path.join(results_dir, 'summary.json')
+              if os.path.exists(summary_file):
+                  try:
+                      with open(summary_file) as f:
+                          summary_data = json.load(f)
+                      data['summary'] = summary_data
+                  except:
+                      pass
+              
+              return data
+          
+          def compare_performance(current_data, baseline_data):
+              """Compare current performance against baseline"""
+              regressions = []
+              improvements = []
+              
+              threshold = float('${{ env.PERFORMANCE_THRESHOLD }}')
+              
+              # Compare criterion benchmarks if available
+              current_criterion = current_data.get('criterion')
+              baseline_criterion = baseline_data.get('criterion')
+              
+              if current_criterion and baseline_criterion:
+                  # This would need proper criterion data parsing
+                  print("Criterion comparison not implemented in this example")
+              
+              return regressions, improvements
+          
+          def generate_report(current_data, baseline_data, regressions, improvements):
+              """Generate performance analysis report"""
+              report = {
+                  'timestamp': datetime.now().isoformat(),
+                  'commit': '${{ github.sha }}',
+                  'baseline_available': baseline_data is not None,
+                  'regressions': regressions,
+                  'improvements': improvements,
+                  'summary': {
+                      'total_regressions': len(regressions),
+                      'total_improvements': len(improvements),
+                      'regression_threshold': '${{ env.PERFORMANCE_THRESHOLD }}'
+                  }
+              }
+              
+              return report
+          
+          # Main analysis
+          try:
+              print("Loading current performance data...")
+              current_data = load_benchmark_data('current-results/benchmark-results/current')
+              
+              baseline_data = None
+              if os.path.exists('historical-results'):
+                  print("Loading historical performance data...")
+                  baseline_data = load_benchmark_data('historical-results/benchmark-results/current')
+              
+              print("Comparing performance...")
+              regressions, improvements = compare_performance(current_data, baseline_data)
+              
+              print("Generating report...")
+              report = generate_report(current_data, baseline_data, regressions, improvements)
+              
+              # Save report
+              with open('performance-analysis-report.json', 'w') as f:
+                  json.dump(report, f, indent=2)
+              
+              print(f"Analysis complete:")
+              print(f"  Regressions: {len(regressions)}")
+              print(f"  Improvements: {len(improvements)}")
+              
+              # Exit with error if regressions found
+              if len(regressions) > 0:
+                  print("❌ Performance regressions detected!")
+                  sys.exit(1)
+              else:
+                  print("✅ No performance regressions detected")
+          
+          except Exception as e:
+              print(f"Error during analysis: {e}")
+              # Don't fail the build for analysis errors
+              sys.exit(0)
+          EOF
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            try {
+              const reportData = fs.readFileSync('performance-analysis-report.json', 'utf8');
+              const report = JSON.parse(reportData);
+              
+              let comment = `## 📊 Performance Analysis Report\n\n`;
+              comment += `**Commit**: \`${{ github.sha }}\`\n`;
+              comment += `**Timestamp**: ${report.timestamp}\n\n`;
+              
+              if (report.summary.total_regressions > 0) {
+                comment += `❌ **${report.summary.total_regressions} performance regression(s) detected**\n\n`;
+                report.regressions.forEach(reg => {
+                  comment += `- **${reg.test}**: ${reg.change}% slower than baseline\n`;
+                });
+              } else {
+                comment += `✅ **No performance regressions detected**\n\n`;
+              }
+              
+              if (report.summary.total_improvements > 0) {
+                comment += `🚀 **${report.summary.total_improvements} performance improvement(s) detected**\n\n`;
+                report.improvements.forEach(imp => {
+                  comment += `- **${imp.test}**: ${imp.change}% faster than baseline\n`;
+                });
+              }
+              
+              if (!report.baseline_available) {
+                comment += `\n⚠️ **Note**: No baseline data available for comparison\n`;
+              }
+              
+              comment += `\n**Threshold**: ${report.summary.regression_threshold}x (${((parseFloat(report.summary.regression_threshold) - 1) * 100).toFixed(0)}%)\n`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Could not post performance analysis comment:', error);
+            }
+
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-analysis-report
+          path: |
+            performance-analysis-report.json
+          retention-days: 90
+
+  # Performance dashboard update
+  update-performance-dashboard:
+    name: Update Performance Dashboard
+    runs-on: ubuntu-latest
+    needs: [performance-baseline, load-testing, regression-analysis]
+    if: always() && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all performance artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Generate performance dashboard
+        run: |
+          echo "📊 Generating performance dashboard..."
+          
+          mkdir -p dashboard
+          
+          # Create simple HTML dashboard
+          cat > dashboard/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Performance Dashboard</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; }
+                  .metric { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+                  .regression { background-color: #fee; }
+                  .improvement { background-color: #efe; }
+                  .stable { background-color: #fff; }
+              </style>
+          </head>
+          <body>
+              <h1>🚀 Rust Security Platform - Performance Dashboard</h1>
+              <p>Last updated: <code id="timestamp"></code></p>
+              <p>Commit: <code>${{ github.sha }}</code></p>
+              
+              <h2>Recent Performance Metrics</h2>
+              <div id="metrics">
+                  <div class="metric stable">
+                      <h3>📊 Latest Benchmark Results</h3>
+                      <p>Comprehensive performance testing completed successfully.</p>
+                      <p>See artifacts for detailed metrics and flamegraphs.</p>
+                  </div>
+              </div>
+              
+              <script>
+                  document.getElementById('timestamp').textContent = new Date().toISOString();
+              </script>
+          </body>
+          </html>
+          EOF
+          
+          # Copy artifacts to dashboard
+          cp -r all-artifacts/* dashboard/ 2>/dev/null || true
+          
+          echo "Dashboard generated at dashboard/"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

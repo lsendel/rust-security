@@ -380,7 +380,7 @@ password = "actual_password_here"
 "#;
 
         let result = SecureSoarConfig::validate_no_hardcoded_secrets(config_with_secret);
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
 
         let config_without_secret = r#"
 [notifications.email]
@@ -388,7 +388,7 @@ password = ""  # Set via environment variable SMTP_PASSWORD
 "#;
 
         let result = SecureSoarConfig::validate_no_hardcoded_secrets(config_without_secret);
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
     }
 
     #[test]

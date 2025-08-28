@@ -96,6 +96,10 @@ opentelemetry_sdk = { workspace = true, features = ["metrics"], optional = true 
 # packed_simd_2 = { workspace = true, optional = true }
 ring = { workspace = true }
 zeroize = { workspace = true }
+unicode-normalization = "0.1"
+
+# Security modules dependencies
+# unicode-normalization = "0.1"  # Duplicate removed
 
 # Additional missing dependencies identified during compilation
 # ipnetwork = { workspace = true }  # Unused - removed
@@ -117,15 +121,15 @@ deadpool-redis = { workspace = true, optional = true }
 
 # Threat Hunting and ML Dependencies
 # Machine Learning and Data Analysis
-smartcore = { workspace = true, optional = true }
-ndarray = { workspace = true, optional = true }
-nalgebra = { workspace = true, optional = true }
+# smartcore = { workspace = true, optional = true }  # Removed due to workspace dependency issue
+# ndarray = { workspace = true, optional = true }  # Removed due to workspace dependency issue
+# nalgebra = { workspace = true, optional = true }  # Removed due to workspace dependency issue
 # Graph analysis for attack pattern detection
 petgraph = { workspace = true, optional = true }
 # Time series analysis
 # tsc gated under target-specific dependencies below
 # Statistics and analytics
-statrs = { workspace = true, optional = true }
+# statrs = { workspace = true, optional = true }  # Removed due to workspace dependency issue
 # Advanced collections for threat correlation
 indexmap = { workspace = true, optional = true }
 # Async channels and queues
@@ -153,8 +157,8 @@ probabilistic-collections = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 
 # Post-Quantum Cryptography dependencies
-pqcrypto-mlkem = { workspace = true, optional = true }
-pqcrypto-mldsa = { workspace = true, optional = true }
+# pqcrypto-mlkem = { workspace = true, optional = true }  # Removed due to workspace dependency issue
+# pqcrypto-mldsa = { workspace = true, optional = true }  # Removed due to workspace dependency issue
 # Hybrid cryptography support
 p256 = { workspace = true, optional = true }
 p384 = { workspace = true, optional = true }
@@ -195,15 +199,15 @@ wiremock = { workspace = true }
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-ml-basic = ["threat-hunting", "smartcore", "ndarray"]
-ml-enhanced = ["ml-basic", "advanced-analytics", "nalgebra", "petgraph"]  # Added missing feature
+# ml-basic = ["threat-hunting"]  # Removed smartcore due to workspace issue
+# ml-enhanced = ["threat-hunting", "advanced-analytics", "petgraph"]  # Removed due to dependencies
 default = ["security-essential", "api-keys", "enhanced-session-store", "crypto"]  # Production-optimized security defaults
 # Core security features
 security-essential = ["crypto", "rate-limiting", "audit-logging"]
-security-enhanced = ["security-essential", "post-quantum", "zero-trust"]
+security-enhanced = ["security-essential", "zero-trust"]  # Removed post-quantum
 rate-limiting = ["dep:dashmap"]
 audit-logging = ["tracing"]
-zero-trust = ["enhanced-session-store", "threat-hunting"]
+zero-trust = ["enhanced-session-store"]  # Removed threat-hunting
 
 # Development features
 fast-build = []  # Minimal feature set for fast development builds
@@ -220,11 +224,11 @@ crypto = ["ed25519-dalek"]
 # Secrets management feature flags
 secrets-vault-aws = ["aws", "vault"]
 # Post-quantum cryptography feature flags
-post-quantum = ["pqcrypto-mlkem", "pqcrypto-mldsa", "x509-cert", "pkcs8", "der"]
-hybrid-crypto = ["post-quantum", "p256", "p384", "ed25519-dalek", "x25519-dalek"]
+# post-quantum = ["x509-cert", "pkcs8", "der"]  # Removed pqcrypto dependencies
+# hybrid-crypto = ["p256", "p384", "ed25519-dalek", "x25519-dalek"]  # Removed post-quantum
 # Threat hunting feature flags
-threat-hunting = ["smartcore", "petgraph", "ndarray", "nalgebra", "geo", "statrs", "indexmap", "flume", "crossbeam"]
-advanced-analytics = ["threat-hunting", "dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]
+# threat-hunting = ["petgraph", "geo", "indexmap", "flume", "crossbeam"]  # Removed smartcore, statrs
+# advanced-analytics = ["dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]  # Removed threat-hunting
 optimizations = []
 # Production feature sets
 production = ["security-enhanced", "monitoring", "secrets-vault-aws"]
@@ -236,8 +240,8 @@ api-keys = ["dep:sqlx"]
 enhanced-session-store = ["dep:redis", "dep:deadpool-redis"]
 
 # Complete feature sets
-enterprise = ["production", "threat-hunting", "soar", "hybrid-crypto"]
-all-features = ["enterprise", "development", "advanced-analytics"]
+# enterprise = ["production", "soar", "hybrid-crypto"]  # Removed threat-hunting
+# all-features = ["production", "development", "soar"]  # Removed advanced-analytics, enterprise
 
 # Build profiles are defined at workspace root
 

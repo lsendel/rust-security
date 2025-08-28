@@ -399,18 +399,18 @@ impl WorkflowEngine {
         let step_result = self.execute_step_with_retry(step, instance).await;
         
         // Store step result
-        instance.step_results.insert(step.id.clone(), step_result.clone());
+        instance.step_results.insert(step.id.clone(), step_operation_result.clone());
         instance.updated_at = Utc::now();
         
         // Publish step completed/failed event
-        let event_type = if step_result.status == StepStatus::Completed {
+        let event_type = if step_operation_result.status == StepStatus::Completed {
             WorkflowEventType::StepCompleted
         } else {
             WorkflowEventType::StepFailed
         };
         
         let mut event_data = HashMap::new();
-        if let Some(ref error) = step_result.error {
+        if let Some(ref error) = step_operation_result.error {
             event_data.insert("error_code".to_string(), serde_json::Value::String(error.code.clone()));
             event_data.insert("error_message".to_string(), serde_json::Value::String(error.message.clone()));
         }
@@ -425,13 +425,13 @@ impl WorkflowEngine {
         }).await;
         
         // Handle step failure
-        if step_result.status == StepStatus::Failed {
+        if step_operation_result.status == StepStatus::Failed {
             match step.error_handling.strategy {
                 ErrorHandlingStrategy::FailFast => {
                     return Err(WorkflowError {
                         code: "STEP_FAILED".to_string(),
                         message: format!("Step {} failed: {}", step.id, 
-                            step_result.error.as_ref().map(|e| &e.message).unwrap_or(&"Unknown error".to_string())),
+                            step_operation_result.error.as_ref().map(|e| &e.message).unwrap_or(&"Unknown error".to_string())),
                         details: None,
                         source: None,
                     });
@@ -547,7 +547,7 @@ impl WorkflowEngine {
         // Execute step
         let step_result = executor.execute_step(step, &instance.context, &instance.variables).await?;
         
-        Ok(step_result.data)
+        Ok(step_operation_result.data)
     }
     
     /// Check if error should trigger a retry

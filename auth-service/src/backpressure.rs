@@ -399,7 +399,7 @@ pub async fn backpressure_middleware(
     }
 
     // Process request with timeout
-    let _result = timeout(state.config.request_timeout, next.run(request)).await;
+    let result = timeout(state.config.request_timeout, next.run(request)).await;
 
     // Track request end
     state.on_request_end(&client_ip);

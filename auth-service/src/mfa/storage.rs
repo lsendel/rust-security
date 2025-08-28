@@ -298,7 +298,7 @@ impl MfaStorage {
         if let Some(mut conn) = self.redis.clone() {
             // Test Redis connectivity
             let ping_result: Result<String, RedisError> = redis::cmd("PING").query_async(&mut conn).await;
-            let redis_responsive = ping_result.is_ok();
+            let redis_responsive = ping_operation_result.is_ok();
 
             // Get basic statistics
             let user_pattern = "mfa:user:*";

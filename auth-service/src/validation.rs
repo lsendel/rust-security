@@ -751,7 +751,7 @@ pub trait ValidatedDto: Validate + Sized {
 
     /// Validate and return the DTO or an error
     fn validate_and_return(self) -> Result<Self, ValidationResult> {
-        let _result = self.validate_dto();
+        let result = self.validate_dto();
         if result.valid {
             Ok(self)
         } else {

@@ -19,8 +19,7 @@ exclude = [
     "security-platform",
     "input-validation",
     "chaos-engineering",
-    "security-testing",
-    "tests"
+    "security-testing"
 ]
 
 resolver = "2"
@@ -37,17 +36,17 @@ clippy.nursery = "warn"
 
 [workspace.dependencies]
 # Core async runtime
-tokio = { version = "1.41", features = ["full"] }
-axum = { version = "0.7", features = ["macros"] }
-tower = { version = "0.5", features = ["util"] }
-hyper = { version = "1.5" }
+tokio = { version = "1.37", features = ["full"] }
+axum = { version = "0.7.4", features = ["macros"] }
+tower = { version = "0.4.13", features = ["util"] }
+hyper = { version = "1.2.0" }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
 
 # Error handling
-anyhow = "1.0"
+anyhow = "1.0.82"
 thiserror = "2.0"
 
 # Cryptography
@@ -132,7 +131,7 @@ x25519-dalek = "2.0"
 p256 = "0.13"
 p384 = "0.13"
 
-# Development/Testing - Keep wiremock at 0.6 for now
+# Development/Testing - Updated to avoid unmaintained dependencies
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.5"
 quickcheck = "1.0"
@@ -149,14 +148,14 @@ bb8-redis = "0.16"
 rmp-serde = "1.3"
 bincode = "1.3"
 
-# ML/Advanced features
-smartcore = "0.3"
-ndarray = "0.16"
-nalgebra = "0.33"
+# ML/Advanced features - Removed due to unmaintained paste dependency
+# smartcore = "0.3"
+# ndarray = "0.16"
+# nalgebra = "0.33"
 
-# Post-quantum crypto
-pqcrypto-mlkem = "0.1"
-pqcrypto-mldsa = "0.1"
+# Post-quantum crypto - Removed due to unmaintained paste dependency
+# pqcrypto-mlkem = "0.1"
+# pqcrypto-mldsa = "0.1"
 
 # Cloud integrations - compatible with Rust 1.89.0
 aws-config = "1.1"
@@ -209,8 +208,8 @@ petgraph = "0.6"
 flume = "0.11"
 crossbeam = "0.8"
 
-# Statistics
-statrs = "0.17"
+# Statistics - Removed due to unmaintained paste dependency
+# statrs = "0.17"
 
 # Time handling
 time = "0.3"
@@ -328,7 +327,3 @@ audit_policy = "strict"
 vulnerability_tolerance = "none"
 dependency_review_required = true
 security_contact = "security@company.com"
-
-
-
-

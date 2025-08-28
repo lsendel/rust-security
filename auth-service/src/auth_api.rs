@@ -258,7 +258,7 @@ fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoke
 
 /// User registration endpoint
 pub async fn register(
-    State(_state): State<AuthState>,
+    State(state): State<AuthState>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -330,7 +330,7 @@ pub async fn register(
 
 /// User login endpoint
 pub async fn login(
-    State(_state): State<AuthState>,
+    State(state): State<AuthState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -402,7 +402,7 @@ pub async fn login(
 
 /// OAuth authorization endpoint
 pub async fn authorize(
-    State(_state): State<AuthState>,
+    State(state): State<AuthState>,
     Query(request): Query<AuthorizeRequest>,
 ) -> Result<Redirect, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -470,7 +470,7 @@ pub async fn authorize(
 
 /// OAuth token endpoint
 pub async fn token(
-    State(_state): State<AuthState>,
+    State(state): State<AuthState>,
     Json(request): Json<TokenRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
@@ -592,7 +592,7 @@ pub async fn token(
 
 /// Get current user info
 pub async fn me(
-    State(_state): State<AuthState>,
+    State(state): State<AuthState>,
     headers: HeaderMap,
 ) -> Result<Json<UserInfo>, (StatusCode, Json<ErrorResponse>)> {
     // Extract token from Authorization header

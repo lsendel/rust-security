@@ -1,0 +1,11 @@
+extends: ["spectral:oas"]
+rules:
+  # Keep only essential rules that we know work
+  openapi-tags: error
+  operation-operationId: error
+  operation-tag-defined: error
+  path-params: error
+  no-$ref-siblings: error
+  path-declarations-must-exist: error
+  path-keys-no-trailing-slash: error
+  path-not-include-query: error

@@ -120,7 +120,7 @@ mod security_tests {
             weak_secret,
         );
 
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
     }
 
     /// Test input validation security
@@ -240,7 +240,7 @@ mod security_tests {
                 .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
                 .await;
             println!("Request {}: {:?}", i + 1, result);
-            assert!(result.is_ok(), "Request {} should be allowed", i + 1);
+            assert!(operation_result.is_ok(), "Request {} should be allowed", i + 1);
         }
 
         // Should start rate limiting on 4th request (implementation may vary)
@@ -376,7 +376,7 @@ mod security_tests {
         std::env::remove_var("REQUEST_SIGNING_SECRET");
 
         let result = load_secure_config();
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
 
         // Test that strong configurations are accepted
         std::env::set_var("REQUEST_SIGNING_SECRET", "a".repeat(32));
@@ -384,7 +384,7 @@ mod security_tests {
         std::env::set_var("ALLOWED_ORIGINS", "https://example.com");
 
         let result = load_secure_config();
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
     }
 
     /// Test CORS security
@@ -396,7 +396,7 @@ mod security_tests {
         std::env::set_var("ALLOWED_ORIGINS", "*");
 
         let result = load_secure_config();
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
 
         // Test that specific origins are accepted
         std::env::set_var(
@@ -405,8 +405,8 @@ mod security_tests {
         );
 
         let result = load_secure_config();
-        if result.is_ok() {
-            let config = result.unwrap();
+        if operation_result.is_ok() {
+            let config = operation_result.unwrap();
             assert!(!config.security.allowed_origins.contains(&"*".to_string()));
         }
     }

@@ -32,7 +32,7 @@ pub fn router() -> Router<AppState> {
 }
 
 async fn revoke_api_key(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(prefix): Path<String>,
 ) -> Result<(), AuthError> {
     state
@@ -50,7 +50,7 @@ async fn revoke_api_key(
 }
 
 async fn list_api_keys(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<ApiKeyDetails>>, AuthError> {
     let keys = state
         .api_key_store
@@ -62,7 +62,7 @@ async fn list_api_keys(
 }
 
 async fn get_api_key(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(prefix): Path<String>,
 ) -> Result<Json<ApiKeyDetails>, AuthError> {
     let api_key = state
@@ -88,7 +88,7 @@ async fn get_api_key(
 }
 
 async fn create_api_key(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> Result<Json<CreateApiKeyResponse>, AuthError> {
     // 1. Generate a new secure API key string.

@@ -345,7 +345,7 @@ impl AutomationEngine {
 
         for condition in &rule.conditions {
             let _result = self.evaluate_condition(condition, context);
-            let passed = result.passed;
+            let passed = operation_result.passed;
             condition_results.push(result);
 
             // Apply logical operators
@@ -634,6 +634,6 @@ mod tests {
         };
 
         let result = engine.evaluate_condition(&condition, &context);
-        assert!(result.passed);
+        assert!(operation_result.passed);
     }
 }

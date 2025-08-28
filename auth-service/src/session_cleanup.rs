@@ -347,7 +347,7 @@ impl SessionCleanupScheduler {
                 Ok(_) => {
                     if attempt > 1 {
                         info!(
-                            operation_id = result.operation_id,
+                            operation_id = operation_result.operation_id,
                             attempt = attempt,
                             "Cleanup succeeded after retry"
                         );
@@ -357,7 +357,7 @@ impl SessionCleanupScheduler {
                 Err(e) => {
                     _last_error = Some(format!("{}", e));
                     warn!(
-                        operation_id = result.operation_id,
+                        operation_id = operation_result.operation_id,
                         attempt = attempt,
                         max_attempts = self.config.retry_attempts,
                         error = %e,
@@ -399,10 +399,10 @@ impl SessionCleanupScheduler {
                         .cleanup_sessions()
                         .await
                         .map_err(|e| CleanupError::SessionManager(e))?;
-                    result.expired_sessions_cleaned += count;
+                    operation_result.expired_sessions_cleaned += count;
 
                     debug!(
-                        operation_id = result.operation_id,
+                        operation_id = operation_result.operation_id,
                         count = count,
                         "Cleaned expired sessions"
                     );
@@ -424,7 +424,7 @@ impl SessionCleanupScheduler {
         }
 
         // Log cleanup results
-        if result.total_cleaned() > 0 {
+        if operation_result.total_cleaned() > 0 {
             SecurityLogger::log_event(
                 &mut SecurityEvent::new(
                     SecurityEventType::DataAccess,
@@ -432,12 +432,12 @@ impl SessionCleanupScheduler {
                     "auth-service".to_string(),
                     "Session cleanup completed".to_string(),
                 )
-                .with_detail("operation_id".to_string(), result.operation_id)
+                .with_detail("operation_id".to_string(), operation_result.operation_id)
                 .with_detail(
                     "expired_cleaned".to_string(),
-                    result.expired_sessions_cleaned,
+                    operation_result.expired_sessions_cleaned,
                 )
-                .with_detail("total_cleaned".to_string(), result.total_cleaned()),
+                .with_detail("total_cleaned".to_string(), operation_result.total_cleaned()),
             );
         }
 
@@ -450,11 +450,11 @@ impl SessionCleanupScheduler {
 
         stats.total_runs += 1;
         stats.successful_runs += 1;
-        stats.total_sessions_cleaned += result.total_cleaned() as u64;
-        stats.expired_sessions_cleaned += result.expired_sessions_cleaned as u64;
-        stats.inactive_sessions_cleaned += result.inactive_sessions_cleaned as u64;
-        stats.revoked_sessions_cleaned += result.revoked_sessions_cleaned as u64;
-        stats.orphaned_sessions_cleaned += result.orphaned_sessions_cleaned as u64;
+        stats.total_sessions_cleaned += operation_result.total_cleaned() as u64;
+        stats.expired_sessions_cleaned += operation_result.expired_sessions_cleaned as u64;
+        stats.inactive_sessions_cleaned += operation_result.inactive_sessions_cleaned as u64;
+        stats.revoked_sessions_cleaned += operation_result.revoked_sessions_cleaned as u64;
+        stats.orphaned_sessions_cleaned += operation_result.orphaned_sessions_cleaned as u64;
         stats.last_cleanup_time = Some(current_timestamp());
 
         // Update average cleanup time using exponential moving average
@@ -641,9 +641,9 @@ mod tests {
 
         // Wait for shutdown with longer timeout
         let result = tokio::time::timeout(Duration::from_secs(10), handle).await;
-        assert!(result.is_ok(), "Scheduler should shutdown within timeout");
+        assert!(operation_result.is_ok(), "Scheduler should shutdown within timeout");
         assert!(
-            result.unwrap().is_ok(),
+            operation_result.unwrap().is_ok(),
             "Scheduler should shutdown without error"
         );
         assert!(!scheduler.is_running());
@@ -665,11 +665,11 @@ mod tests {
     #[test]
     fn test_cleanup_cycle_result() {
         let mut result = CleanupCycleResult::new(123);
-        assert_eq!(result.operation_id, 123);
-        assert_eq!(result.total_cleaned(), 0);
+        assert_eq!(operation_result.operation_id, 123);
+        assert_eq!(operation_result.total_cleaned(), 0);
 
-        result.expired_sessions_cleaned = 5;
-        result.inactive_sessions_cleaned = 3;
-        assert_eq!(result.total_cleaned(), 8);
+        operation_result.expired_sessions_cleaned = 5;
+        operation_result.inactive_sessions_cleaned = 3;
+        assert_eq!(operation_result.total_cleaned(), 8);
     }
 }

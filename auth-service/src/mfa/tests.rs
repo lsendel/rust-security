@@ -127,7 +127,7 @@ mod property_tests {
 
                 for _ in 0..attempt_count {
                     let _result = limiter.check_verification_attempts(user_id).await.unwrap();
-                    if result.allowed {
+                    if operation_result.allowed {
                         allowed_count += 1;
                     } else {
                         denied_count += 1;
@@ -501,7 +501,7 @@ mod integration_tests {
         };
 
         let result = service.verify_totp(verification_request, context).await;
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
 
         // Test invalid security level
         let invalid_registration = TotpRegistrationRequest {
@@ -514,7 +514,7 @@ mod integration_tests {
         let context = create_test_auth_context("invalid_user");
         let result = service.register_totp(invalid_registration, context).await;
         // Should succeed even with empty display name
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
     }
 }
 
@@ -777,8 +777,8 @@ mod security_tests {
         };
 
         let replay_result = service.verify_totp(replay_request, context.clone()).await.unwrap();
-        assert!(!replay_result.verified);
-        assert_eq!(replay_result.reason, Some("code_reused".to_string()));
+        assert!(!replay_operation_result.verified);
+        assert_eq!(replay_operation_result.reason, Some("code_reused".to_string()));
 
         // Use second code from different time window (should work)
         let verification_request2 = TotpVerificationRequest {

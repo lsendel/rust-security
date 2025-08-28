@@ -1,4 +1,4 @@
-use crate::threat_user_profiler::config::*;
+use crate::threat_user_profiler::crate::config::*;
 use crate::threat_user_profiler::types::*;
 #[derive(Clone)]
 pub struct RiskScoringAlgorithm;

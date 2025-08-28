@@ -143,15 +143,15 @@ impl HighPerformanceMfaService {
 
         // Rate limiting check
         let rate_limit_result = self.rate_limiter.check_registration_attempts(&request.user_id).await?;
-        if !rate_limit_result.allowed {
+        if !rate_limit_operation_result.allowed {
             let audit_event = MfaAuditEvent::rate_limit_exceeded(request.user_id.clone(), crate::mfa::audit::MfaMethod::TOTP)
                 .with_context("operation".to_string(), serde_json::Value::String("registration".to_string()));
             self.auditor.log_mfa_event(audit_event).await?;
 
             return Err(MfaError::rate_limit_exceeded(
                 "registration",
-                rate_limit_result.retry_after_secs.unwrap_or(3600),
-                rate_limit_result.remaining_attempts,
+                rate_limit_operation_result.retry_after_secs.unwrap_or(3600),
+                rate_limit_operation_result.remaining_attempts,
             ));
         }
 
@@ -225,7 +225,7 @@ impl HighPerformanceMfaService {
 
         // Rate limiting check (fast path)
         let rate_limit_result = self.rate_limiter.check_verification_attempts(&request.user_id).await?;
-        if !rate_limit_result.allowed {
+        if !rate_limit_operation_result.allowed {
             let audit_event = MfaAuditEvent::rate_limit_exceeded(request.user_id.clone(), crate::mfa::audit::MfaMethod::TOTP);
             self.auditor.log_mfa_event(audit_event).await?;
 
@@ -361,11 +361,11 @@ impl HighPerformanceMfaService {
 
         // Check rate limiting
         let rate_limit_result = self.rate_limiter.check_backup_code_attempts(&request.user_id).await?;
-        if !rate_limit_result.allowed {
+        if !rate_limit_operation_result.allowed {
             return Err(MfaError::rate_limit_exceeded(
                 "backup_code_generation",
-                rate_limit_result.retry_after_secs.unwrap_or(3600),
-                rate_limit_result.remaining_attempts,
+                rate_limit_operation_result.retry_after_secs.unwrap_or(3600),
+                rate_limit_operation_result.remaining_attempts,
             ));
         }
 

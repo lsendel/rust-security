@@ -501,7 +501,7 @@ impl ThreatHuntingOrchestrator {
 
         // Collect threat signatures
         if let Ok(threats) = behavioral_threats {
-            result.threats_detected.extend(threats);
+            operation_result.threats_detected.extend(threats);
         }
 
         if let Ok(matches) = intel_matches {
@@ -512,13 +512,13 @@ impl ThreatHuntingOrchestrator {
                     threat_match.indicator.severity.clone(),
                     threat_match.confidence,
                 );
-                result.threats_detected.push(threat_signature);
+                operation_result.threats_detected.push(threat_signature);
             }
         }
 
         if let Ok(sequences) = attack_sequences {
             for sequence in sequences {
-                result.threats_detected.push(ThreatSignature::new(
+                operation_result.threats_detected.push(ThreatSignature::new(
                     ThreatType::AdvancedPersistentThreat,
                     sequence.attack_pattern.potential_impact.into(),
                     sequence.confidence,
@@ -528,10 +528,10 @@ impl ThreatHuntingOrchestrator {
 
         // Analyze user behavior
         if let Ok(user_result) = user_analysis {
-            result.user_risk_assessment = Some(UserRiskAssessment {
-                user_id: user_result.user_id,
-                risk_score: user_result.risk_score,
-                risk_level: self.convert_risk_score_to_level(user_result.risk_score),
+            operation_result.user_risk_assessment = Some(UserRiskAssessment {
+                user_id: user_operation_result.user_id,
+                risk_score: user_operation_result.risk_score,
+                risk_level: self.convert_risk_score_to_level(user_operation_result.risk_score),
                 risk_factors: vec!["placeholder".to_string()],
                 behavioral_anomalies: user_result
                     .anomalies_detected
@@ -539,21 +539,21 @@ impl ThreatHuntingOrchestrator {
                     .map(|a| a.description.clone())
                     .collect(),
                 peer_comparison_percentile: 0.5, // Placeholder
-                recommended_actions: user_result.recommendations,
+                recommended_actions: user_operation_result.recommendations,
             });
         }
 
         // Perform threat correlation
-        if !result.threats_detected.is_empty() {
+        if !operation_result.threats_detected.is_empty() {
             let correlations = self
                 .correlation_engine
-                .correlate_threats(&result.threats_detected)
+                .correlate_threats(&operation_result.threats_detected)
                 .await;
-            result.correlations_found = correlations;
+            operation_result.correlations_found = correlations;
         }
 
         // Create response plans for high-severity threats
-        for threat in &result.threats_detected {
+        for threat in &operation_result.threats_detected {
             if threat.severity >= ThreatSeverity::High {
                 match self
                     .response_orchestrator
@@ -572,7 +572,7 @@ impl ThreatHuntingOrchestrator {
                     .await
                 {
                     Ok(plan) => {
-                        result.response_plans_created.push(plan.plan_id);
+                        operation_result.response_plans_created.push(plan.plan_id);
                         THREAT_HUNTING_RESPONSE_PLANS_EXECUTED.inc();
                     }
                     Err(e) => {
@@ -583,24 +583,24 @@ impl ThreatHuntingOrchestrator {
         }
 
         // Calculate overall confidence
-        if !result.threats_detected.is_empty() {
-            result.confidence_score = result
+        if !operation_result.threats_detected.is_empty() {
+            operation_result.confidence_score = result
                 .threats_detected
                 .iter()
                 .map(|t| t.confidence)
                 .sum::<f64>()
-                / result.threats_detected.len() as f64;
+                / operation_result.threats_detected.len() as f64;
         }
 
         // Record processing time
         if let Ok(duration) = start_time.elapsed() {
-            result.processing_time_ms = duration.as_millis() as u64;
+            operation_result.processing_time_ms = duration.as_millis() as u64;
         }
 
         // Update metrics
         THREAT_HUNTING_EVENTS_PROCESSED.inc();
-        if !result.threats_detected.is_empty() {
-            THREAT_HUNTING_THREATS_DETECTED.inc_by(result.threats_detected.len() as u64);
+        if !operation_result.threats_detected.is_empty() {
+            THREAT_HUNTING_THREATS_DETECTED.inc_by(operation_result.threats_detected.len() as u64);
         }
 
         drop(timer);

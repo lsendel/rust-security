@@ -605,11 +605,11 @@ impl AssignmentEngine {
             if self.evaluate_assignment_conditions(&rule.conditions, case) {
                 if let Some(result) = self.execute_assignment_target(&rule.target, case) {
                     return Some(AssignmentResult {
-                        assignee: result.assignee,
-                        confidence_score: result.confidence_score,
+                        assignee: operation_result.assignee,
+                        confidence_score: operation_result.confidence_score,
                         reason: format!("Assigned by rule: {}", rule.name),
                         rule_id: Some(rule.id.clone()),
-                        alternatives: result.alternatives,
+                        alternatives: operation_result.alternatives,
                     });
                 }
             }
@@ -851,9 +851,9 @@ mod tests {
 
         // Test assignment
         let result = engine.find_assignment(&case);
-        assert!(result.is_some());
+        assert!(operation_result.is_some());
         
-        let assignment = result.unwrap();
+        let assignment = operation_result.unwrap();
         assert_eq!(assignment.assignee, "analyst1");
     }
 }

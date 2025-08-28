@@ -1,5 +1,5 @@
 use crate::threat_user_profiler::types::*;
-use crate::threat_user_profiler::config::*;
+use crate::threat_user_profiler::crate::config::*;
 use crate::threat_user_profiler::features::BehavioralFeatureExtractor;
 use crate::threat_user_profiler::risk_assessment::RiskAssessmentEngine;
 use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
@@ -523,6 +523,6 @@ mod tests {
         }];
 
         let result = profiler.process_user_events(user_id, events).await;
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
     }
 }

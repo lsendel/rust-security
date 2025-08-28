@@ -662,7 +662,7 @@ impl AlertCorrelationEngine {
         // Store correlation results
         for result in &correlation_results {
             self.correlation_results
-                .insert(result.id.clone(), result.clone());
+                .insert(operation_result.id.clone(), operation_result.clone());
 
             // Publish correlation event
             if let Some(ref publisher) = self.event_publisher {

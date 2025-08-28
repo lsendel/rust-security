@@ -1,0 +1,59 @@
+{
+  "name": "rust-security-integration-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive integration testing suite for Rust Security Platform",
+  "private": true,
+  "scripts": {
+    "test": "npm run test:api-lint && npm run test:api-contract && npm run test:regression && npm run test:performance",
+    "test:api-lint": "spectral lint ../../api-specs/*.openapi.yaml",
+    "test:api-contract": "npm run test:schemathesis && npm run test:hurl",
+    "test:schemathesis": "schemathesis run ../../api-specs/auth-service.openapi.yaml --base-url=http://localhost:8001 --hypothesis-seed=42 --max-examples=50",
+    "test:hurl": "find ./hurl -name '*.hurl' -exec hurl --test {} \\;",
+    "test:regression": "npm run test:auth-regression && npm run test:policy-regression",
+    "test:auth-regression": "hurl --test ./regression/auth-service/*.hurl",
+    "test:policy-regression": "hurl --test ./regression/policy-service/*.hurl",
+    "test:performance": "npm run test:load-auth && npm run test:load-policy",
+    "test:load-auth": "hey -n 1000 -c 10 -H 'Authorization: Bearer test-token' http://localhost:8001/v1/auth/verify",
+    "test:load-policy": "hey -n 1000 -c 10 -H 'Authorization: Bearer test-token' http://localhost:8002/v1/policies",
+    "test:contract:auth": "dredd ../../api-specs/auth-service.openapi.yaml http://localhost:8001 --hookfiles=./hooks/auth-hooks.js",
+    "test:contract:policy": "dredd ../../api-specs/policy-service.openapi.yaml http://localhost:8002 --hookfiles=./hooks/policy-hooks.js",
+    "test:postman": "newman run ./postman/auth-service.postman_collection.json -e ./postman/local.postman_environment.json --reporters cli,junit --reporter-junit-export results/newman-results.xml",
+    "test:smoke": "npm run test:smoke-auth && npm run test:smoke-policy",
+    "test:smoke-auth": "hurl --test ./smoke/auth-service-smoke.hurl",
+    "test:smoke-policy": "hurl --test ./smoke/policy-service-smoke.hurl",
+    "generate-report": "allure generate allure-results -o allure-report --clean",
+    "serve-report": "allure serve allure-results",
+    "setup": "npm run setup:hooks",
+    "setup:hooks": "mkdir -p hooks results allure-results",
+    "clean": "rm -rf results/* allure-results/* allure-report/*",
+    "ci": "npm run clean && npm run test && npm run generate-report"
+  },
+  "devDependencies": {
+    "@stoplight/spectral-cli": "^6.11.0",
+    "@stoplight/spectral-rulesets": "^1.18.1",
+    "dredd": "^14.1.0",
+    "newman": "^6.0.0",
+    "allure-commandline": "^2.24.1",
+    "allure-mocha": "^2.10.0",
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
+    "nyc": "^15.1.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "faker": "^6.6.6",
+    "lodash": "^4.17.21",
+    "moment": "^2.29.4"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "api-testing",
+    "contract-testing",
+    "integration-testing",
+    "regression-testing",
+    "openapi",
+    "security"
+  ]
+}

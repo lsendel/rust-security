@@ -59,8 +59,8 @@ mod tests {
     #[test]
     fn test_server_config_not_implemented() {
         let result = create_secure_server_config();
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), SecurityError::Configuration));
+        assert!(operation_result.is_err());
+        assert!(matches!(operation_result.unwrap_err(), SecurityError::Configuration));
     }
 
     #[test]

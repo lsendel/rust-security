@@ -1,0 +1,968 @@
+openapi: 3.1.0
+info:
+  title: Policy Service API
+  description: Policy management and enforcement service for Rust Security Platform
+  version: 1.0.0
+  contact:
+    name: Security Team
+    email: security@rust-security.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.rust-security.example.com/policy
+    description: Production server
+  - url: https://staging-api.rust-security.example.com/policy
+    description: Staging server
+  - url: http://localhost:8002
+    description: Local development
+
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+tags:
+  - name: Policies
+    description: Policy CRUD operations
+  - name: Evaluation
+    description: Policy evaluation endpoints
+  - name: Rules
+    description: Rule management
+  - name: Templates
+    description: Policy templates
+  - name: Audit
+    description: Policy audit logs
+
+paths:
+  /v1/policies:
+    get:
+      tags:
+        - Policies
+      summary: List policies
+      description: Get a paginated list of policies
+      operationId: listPolicies
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [RBAC, ABAC, DAC, MAC]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, draft]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+    post:
+      tags:
+        - Policies
+      summary: Create policy
+      description: Create a new policy
+      operationId: createPolicy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePolicyRequest'
+      responses:
+        '201':
+          description: Policy created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/policies/{policyId}:
+    get:
+      tags:
+        - Policies
+      summary: Get policy
+      description: Get a specific policy by ID
+      operationId: getPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Policies
+      summary: Update policy
+      description: Update an existing policy
+      operationId: updatePolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePolicyRequest'
+      responses:
+        '200':
+          description: Policy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags:
+        - Policies
+      summary: Delete policy
+      description: Delete a policy
+      operationId: deletePolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Policy deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/policies/{policyId}/activate:
+    post:
+      tags:
+        - Policies
+      summary: Activate policy
+      description: Activate an inactive policy
+      operationId: activatePolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Policy activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /v1/policies/{policyId}/deactivate:
+    post:
+      tags:
+        - Policies
+      summary: Deactivate policy
+      description: Deactivate an active policy
+      operationId: deactivatePolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Policy deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/policies/{policyId}/rules:
+    get:
+      tags:
+        - Rules
+      summary: List policy rules
+      description: Get all rules for a specific policy
+      operationId: listPolicyRules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuleListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/evaluate:
+    post:
+      tags:
+        - Evaluation
+      summary: Evaluate access
+      description: Evaluate if access should be granted based on policies
+      operationId: evaluateAccess
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+      responses:
+        '200':
+          description: Evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/evaluate/batch:
+    post:
+      tags:
+        - Evaluation
+      summary: Batch evaluate
+      description: Evaluate multiple access requests in batch
+      operationId: batchEvaluate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchEvaluationRequest'
+      responses:
+        '200':
+          description: Batch evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchEvaluationResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/evaluate/simulate:
+    post:
+      tags:
+        - Evaluation
+      summary: Simulate evaluation
+      description: Simulate policy evaluation for testing
+      operationId: simulateEvaluation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationRequest'
+      responses:
+        '200':
+          description: Simulation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/templates:
+    get:
+      tags:
+        - Templates
+      summary: List templates
+      description: Get available policy templates
+      operationId: listTemplates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [security, compliance, access_control, data_protection]
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/templates/{templateId}/apply:
+    post:
+      tags:
+        - Templates
+      summary: Apply template
+      description: Create policy from template
+      operationId: applyTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyTemplateRequest'
+      responses:
+        '201':
+          description: Policy created from template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/audit/logs:
+    get:
+      tags:
+        - Audit
+      summary: Get audit logs
+      description: Retrieve policy audit logs
+      operationId: getAuditLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: policyId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [created, updated, deleted, evaluated, activated, deactivated]
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [RBAC, ABAC, DAC, MAC]
+        status:
+          type: string
+          enum: [active, inactive, draft]
+        version:
+          type: integer
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    Rule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        effect:
+          type: string
+          enum: [allow, deny]
+        priority:
+          type: integer
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        resources:
+          type: array
+          items:
+            type: string
+        actions:
+          type: array
+          items:
+            type: string
+
+    Condition:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [attribute, time, location, context]
+        operator:
+          type: string
+          enum: [eq, neq, gt, gte, lt, lte, in, not_in, contains, matches]
+        field:
+          type: string
+        value:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: array
+              items: {}
+
+    CreatePolicyRequest:
+      type: object
+      required:
+        - name
+        - type
+        - rules
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        type:
+          type: string
+          enum: [RBAC, ABAC, DAC, MAC]
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateRuleRequest'
+        tags:
+          type: array
+          items:
+            type: string
+
+    CreateRuleRequest:
+      type: object
+      required:
+        - name
+        - effect
+        - resources
+        - actions
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        effect:
+          type: string
+          enum: [allow, deny]
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+        resources:
+          type: array
+          items:
+            type: string
+        actions:
+          type: array
+          items:
+            type: string
+
+    UpdatePolicyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateRuleRequest'
+        tags:
+          type: array
+          items:
+            type: string
+
+    PolicyResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Policy'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    PolicyListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Policy'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    RuleListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    EvaluationRequest:
+      type: object
+      required:
+        - subject
+        - resource
+        - action
+      properties:
+        subject:
+          type: object
+          properties:
+            id:
+              type: string
+            type:
+              type: string
+              enum: [user, service, group]
+            attributes:
+              type: object
+              additionalProperties: true
+        resource:
+          type: string
+        action:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+
+    EvaluationResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        decision:
+          type: string
+          enum: [permit, deny, indeterminate, not_applicable]
+        reasons:
+          type: array
+          items:
+            type: string
+        applied_policies:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              effect:
+                type: string
+                enum: [allow, deny]
+        evaluation_time_ms:
+          type: number
+
+    BatchEvaluationRequest:
+      type: object
+      required:
+        - requests
+      properties:
+        requests:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/EvaluationRequest'
+
+    BatchEvaluationResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvaluationResponse'
+        total_time_ms:
+          type: number
+
+    SimulationRequest:
+      type: object
+      required:
+        - policy
+        - evaluation_request
+      properties:
+        policy:
+          $ref: '#/components/schemas/CreatePolicyRequest'
+        evaluation_request:
+          $ref: '#/components/schemas/EvaluationRequest'
+
+    SimulationResponse:
+      type: object
+      properties:
+        result:
+          $ref: '#/components/schemas/EvaluationResponse'
+        trace:
+          type: array
+          items:
+            type: object
+            properties:
+              step:
+                type: integer
+              rule_id:
+                type: string
+              rule_name:
+                type: string
+              matched:
+                type: boolean
+              details:
+                type: string
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [security, compliance, access_control, data_protection]
+        variables:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              type:
+                type: string
+              required:
+                type: boolean
+              default:
+                type: string
+
+    TemplateListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Template'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    ApplyTemplateRequest:
+      type: object
+      required:
+        - name
+        - variables
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        variables:
+          type: object
+          additionalProperties: true
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum: [created, updated, deleted, evaluated, activated, deactivated]
+        policy_id:
+          type: string
+          format: uuid
+        policy_name:
+          type: string
+        user_id:
+          type: string
+        user_name:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+
+    AuditLogResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        api_version:
+          type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+            field_errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

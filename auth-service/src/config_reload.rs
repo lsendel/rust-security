@@ -424,8 +424,8 @@ mod tests {
         let (manager, _receiver) = ConfigReloadManager::new(create_test_config(), None);
         let result = manager.validate_config(&config).await;
 
-        assert!(result.is_err());
-        let errors = result.unwrap_err();
+        assert!(operation_result.is_err());
+        let errors = operation_result.unwrap_err();
         assert!(errors.iter().any(|e| e.contains("bind_addr")));
     }
 }

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rules>
+  <!-- Security Rules -->
+  <rule>
+    <key>rust:S001</key>
+    <name>Hardcoded secrets should not be used</name>
+    <description>Hardcoded secrets in source code pose a security risk</description>
+    <severity>BLOCKER</severity>
+    <type>SECURITY_HOTSPOT</type>
+    <tag>security</tag>
+    <tag>cwe</tag>
+  </rule>
+  
+  <rule>
+    <key>rust:S002</key>
+    <name>Deprecated cryptographic functions should not be used</name>
+    <description>Using deprecated cryptographic functions can introduce vulnerabilities</description>
+    <severity>MAJOR</severity>
+    <type>VULNERABILITY</type>
+    <tag>security</tag>
+    <tag>cryptography</tag>
+  </rule>
+  
+  <rule>
+    <key>rust:S003</key>
+    <name>Unsafe blocks should be justified</name>
+    <description>Unsafe blocks bypass Rust's safety guarantees and should be well documented</description>
+    <severity>MAJOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>safety</tag>
+  </rule>
+  
+  <!-- Performance Rules -->
+  <rule>
+    <key>rust:P001</key>
+    <name>Unnecessary clones should be avoided</name>
+    <description>Unnecessary clones impact performance and memory usage</description>
+    <severity>MINOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>performance</tag>
+  </rule>
+  
+  <rule>
+    <key>rust:P002</key>
+    <name>String concatenation in loops should use StringBuilder</name>
+    <description>String concatenation in loops is inefficient</description>
+    <severity>MINOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>performance</tag>
+  </rule>
+  
+  <!-- Maintainability Rules -->
+  <rule>
+    <key>rust:M001</key>
+    <name>Functions should not be too complex</name>
+    <description>Complex functions are hard to understand and maintain</description>
+    <severity>MAJOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>maintainability</tag>
+  </rule>
+  
+  <rule>
+    <key>rust:M002</key>
+    <name>Public items should be documented</name>
+    <description>Public APIs should have documentation</description>
+    <severity>MINOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>documentation</tag>
+  </rule>
+  
+  <!-- Reliability Rules -->
+  <rule>
+    <key>rust:R001</key>
+    <name>Error handling should not be ignored</name>
+    <description>Ignoring errors can lead to unexpected behavior</description>
+    <severity>MAJOR</severity>
+    <type>BUG</type>
+    <tag>error-handling</tag>
+  </rule>
+  
+  <rule>
+    <key>rust:R002</key>
+    <name>Tests should have assertions</name>
+    <description>Tests without assertions don't verify behavior</description>
+    <severity>MINOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>testing</tag>
+  </rule>
+  
+  <!-- Code Style Rules -->
+  <rule>
+    <key>rust:C001</key>
+    <name>Numeric literals should be readable</name>
+    <description>Large numeric literals should use separators for readability</description>
+    <severity>MINOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>readability</tag>
+  </rule>
+  
+  <rule>
+    <key>rust:C002</key>
+    <name>Variable names should not be too similar</name>
+    <description>Similar variable names can cause confusion</description>
+    <severity>MINOR</severity>
+    <type>CODE_SMELL</type>
+    <tag>naming</tag>
+  </rule>
+</rules>

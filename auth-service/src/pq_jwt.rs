@@ -633,7 +633,7 @@ mod tests {
         // This might fail if keys are not initialized, which is expected in test
         let result = manager.create_token(payload, None, Some(3600)).await;
         // Just test that the function can be called
-        assert!(result.is_ok() || result.is_err());
+        assert!(operation_result.is_ok() || operation_result.is_err());
     }
 
     #[tokio::test]
@@ -643,7 +643,7 @@ mod tests {
         let manager = PQJwtManager::default();
 
         let result = manager.verify_token(invalid_token).await;
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
     }
 
     #[test]

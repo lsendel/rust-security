@@ -1,0 +1,508 @@
+name: Auto-merge Dependencies
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to evaluate for auto-merge'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  checks: read
+
+jobs:
+  # Evaluate if PR is eligible for auto-merge
+  evaluate-auto-merge:
+    name: Evaluate Auto-merge Eligibility
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') &&
+      (github.actor == 'dependabot[bot]' || github.actor == 'renovate[bot]' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 10
+    outputs:
+      eligible: ${{ steps.evaluation.outputs.eligible }}
+      reason: ${{ steps.evaluation.outputs.reason }}
+      risk-level: ${{ steps.evaluation.outputs.risk-level }}
+      pr-number: ${{ steps.pr-info.outputs.pr-number }}
+    
+    steps:
+      - name: Get PR information
+        id: pr-info
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUMBER="${{ github.event.inputs.pr_number }}"
+          else
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+          echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get PR details
+        id: pr-details
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ steps.pr-info.outputs.pr-number }}
+            });
+            
+            core.setOutput('title', pr.title);
+            core.setOutput('body', pr.body || '');
+            core.setOutput('author', pr.user.login);
+            core.setOutput('base', pr.base.ref);
+            core.setOutput('head', pr.head.ref);
+            core.setOutput('labels', JSON.stringify(pr.labels.map(l => l.name)));
+            
+            console.log('PR Title:', pr.title);
+            console.log('PR Author:', pr.user.login);
+            console.log('Base Branch:', pr.base.ref);
+
+      - name: Get file changes
+        id: changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ steps.pr-info.outputs.pr-number }}
+            });
+            
+            const changedFiles = files.map(f => f.filename);
+            const cargoLockChanged = changedFiles.some(f => f.includes('Cargo.lock'));
+            const cargoTomlChanged = changedFiles.some(f => f.includes('Cargo.toml'));
+            const onlyDependencyFiles = changedFiles.every(f => 
+              f.includes('Cargo.lock') || 
+              f.includes('Cargo.toml') ||
+              f.includes('package.json') ||
+              f.includes('package-lock.json') ||
+              f.includes('yarn.lock')
+            );
+            
+            core.setOutput('changed-files', JSON.stringify(changedFiles));
+            core.setOutput('cargo-lock-changed', cargoLockChanged);
+            core.setOutput('cargo-toml-changed', cargoTomlChanged);
+            core.setOutput('only-dependency-files', onlyDependencyFiles);
+            
+            console.log('Changed files:', changedFiles);
+            console.log('Only dependency files:', onlyDependencyFiles);
+
+      - name: Analyze dependency changes
+        id: dependency-analysis
+        run: |
+          echo "🔍 Analyzing dependency changes..."
+          
+          # Initialize variables
+          SECURITY_UPDATE="false"
+          PATCH_UPDATE="false"
+          MINOR_UPDATE="false"
+          MAJOR_UPDATE="false"
+          CRYPTO_LIBS="false"
+          CORE_RUNTIME="false"
+          
+          # Check PR title/body for update types
+          TITLE="${{ steps.pr-details.outputs.title }}"
+          BODY="${{ steps.pr-details.outputs.body }}"
+          
+          if echo "$TITLE $BODY" | grep -qi "security\|vulnerability\|CVE-\|RUSTSEC-"; then
+            SECURITY_UPDATE="true"
+          fi
+          
+          if echo "$TITLE" | grep -qi "patch\|bump.*to.*\.[0-9]\+$"; then
+            PATCH_UPDATE="true"
+          elif echo "$TITLE" | grep -qi "minor\|bump.*to.*\.[0-9]\+\.[0-9]\+$"; then
+            MINOR_UPDATE="true"
+          elif echo "$TITLE" | grep -qi "major\|bump.*to.*[0-9]\+\.[0-9]\+\.[0-9]\+$"; then
+            MAJOR_UPDATE="true"
+          fi
+          
+          # Check for crypto libraries
+          if echo "$TITLE $BODY" | grep -qi "ring\|rustls\|openssl\|crypto\|aes\|sha\|argon2\|bcrypt\|jsonwebtoken"; then
+            CRYPTO_LIBS="true"
+          fi
+          
+          # Check for core runtime libraries
+          if echo "$TITLE $BODY" | grep -qi "tokio\|serde\|axum\|hyper"; then
+            CORE_RUNTIME="true"
+          fi
+          
+          echo "security-update=$SECURITY_UPDATE" >> $GITHUB_OUTPUT
+          echo "patch-update=$PATCH_UPDATE" >> $GITHUB_OUTPUT
+          echo "minor-update=$MINOR_UPDATE" >> $GITHUB_OUTPUT
+          echo "major-update=$MAJOR_UPDATE" >> $GITHUB_OUTPUT
+          echo "crypto-libs=$CRYPTO_LIBS" >> $GITHUB_OUTPUT
+          echo "core-runtime=$CORE_RUNTIME" >> $GITHUB_OUTPUT
+
+      - name: Evaluate auto-merge eligibility
+        id: evaluation
+        run: |
+          echo "📊 Evaluating auto-merge eligibility..."
+          
+          ELIGIBLE="false"
+          REASON="manual-review-required"
+          RISK_LEVEL="medium"
+          
+          # Get analysis results
+          SECURITY_UPDATE="${{ steps.dependency-analysis.outputs.security-update }}"
+          PATCH_UPDATE="${{ steps.dependency-analysis.outputs.patch-update }}"
+          MINOR_UPDATE="${{ steps.dependency-analysis.outputs.minor-update }}"
+          MAJOR_UPDATE="${{ steps.dependency-analysis.outputs.major-update }}"
+          CRYPTO_LIBS="${{ steps.dependency-analysis.outputs.crypto-libs }}"
+          CORE_RUNTIME="${{ steps.dependency-analysis.outputs.core-runtime }}"
+          ONLY_DEPS="${{ steps.changes.outputs.only-dependency-files }}"
+          
+          # Security updates are high priority
+          if [ "$SECURITY_UPDATE" = "true" ] && [ "$ONLY_DEPS" = "true" ]; then
+            if [ "$MAJOR_UPDATE" = "false" ]; then
+              ELIGIBLE="true"
+              REASON="security-update"
+              RISK_LEVEL="low"
+            else
+              REASON="security-update-major-version"
+              RISK_LEVEL="high"
+            fi
+          # Patch updates are safe for auto-merge
+          elif [ "$PATCH_UPDATE" = "true" ] && [ "$ONLY_DEPS" = "true" ]; then
+            if [ "$CRYPTO_LIBS" = "false" ] && [ "$CORE_RUNTIME" = "false" ]; then
+              ELIGIBLE="true"
+              REASON="patch-update"
+              RISK_LEVEL="low"
+            else
+              REASON="patch-update-sensitive-libs"
+              RISK_LEVEL="medium"
+            fi
+          # Minor updates need more scrutiny
+          elif [ "$MINOR_UPDATE" = "true" ] && [ "$ONLY_DEPS" = "true" ]; then
+            if [ "$CRYPTO_LIBS" = "false" ] && [ "$CORE_RUNTIME" = "false" ]; then
+              # Check if it's a trusted dependency pattern
+              if echo "${{ steps.pr-details.outputs.title }}" | grep -qi "tracing\|metrics\|log\|pretty\|serde_"; then
+                ELIGIBLE="true"
+                REASON="minor-update-trusted"
+                RISK_LEVEL="low"
+              else
+                REASON="minor-update-requires-review"
+                RISK_LEVEL="medium"
+              fi
+            else
+              REASON="minor-update-sensitive-libs"
+              RISK_LEVEL="high"
+            fi
+          # Major updates always need manual review
+          elif [ "$MAJOR_UPDATE" = "true" ]; then
+            REASON="major-update"
+            RISK_LEVEL="high"
+          # Non-dependency changes need manual review
+          elif [ "$ONLY_DEPS" = "false" ]; then
+            REASON="non-dependency-changes"
+            RISK_LEVEL="high"
+          fi
+          
+          echo "eligible=$ELIGIBLE" >> $GITHUB_OUTPUT
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+          echo "risk-level=$RISK_LEVEL" >> $GITHUB_OUTPUT
+          
+          echo "Eligibility: $ELIGIBLE"
+          echo "Reason: $REASON"
+          echo "Risk Level: $RISK_LEVEL"
+
+  # Check CI status before auto-merge
+  check-ci-status:
+    name: Check CI Status
+    runs-on: ubuntu-latest
+    needs: evaluate-auto-merge
+    if: needs.evaluate-auto-merge.outputs.eligible == 'true'
+    timeout-minutes: 30
+    outputs:
+      all-checks-passed: ${{ steps.check-status.outputs.all-checks-passed }}
+    
+    steps:
+      - name: Wait for CI checks
+        id: wait-for-checks
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr_number = ${{ needs.evaluate-auto-merge.outputs.pr-number }};
+            const maxWaitTime = 25 * 60 * 1000; // 25 minutes
+            const checkInterval = 30 * 1000; // 30 seconds
+            const startTime = Date.now();
+            
+            while (Date.now() - startTime < maxWaitTime) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr_number
+              });
+              
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: pr.head.sha
+              });
+              
+              const relevantChecks = checks.check_runs.filter(check => 
+                !check.name.includes('Auto-merge') && 
+                !check.name.includes('evaluate-auto-merge') &&
+                !check.name.includes('check-ci-status')
+              );
+              
+              console.log(`Found ${relevantChecks.length} relevant checks`);
+              
+              const completedChecks = relevantChecks.filter(check => 
+                check.status === 'completed'
+              );
+              
+              if (completedChecks.length === relevantChecks.length && relevantChecks.length > 0) {
+                console.log('All checks completed');
+                break;
+              }
+              
+              console.log(`Waiting for checks: ${completedChecks.length}/${relevantChecks.length} completed`);
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+            }
+
+      - name: Check CI status
+        id: check-status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr_number = ${{ needs.evaluate-auto-merge.outputs.pr-number }};
+            
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr_number
+            });
+            
+            // Check commit status
+            const { data: status } = await github.rest.repos.getCombinedStatusForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: pr.head.sha
+            });
+            
+            // Check check runs
+            const { data: checks } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: pr.head.sha
+            });
+            
+            const relevantChecks = checks.check_runs.filter(check => 
+              !check.name.includes('Auto-merge') && 
+              !check.name.includes('evaluate-auto-merge') &&
+              !check.name.includes('check-ci-status')
+            );
+            
+            const failedChecks = relevantChecks.filter(check => 
+              check.conclusion === 'failure' || check.conclusion === 'cancelled'
+            );
+            
+            const allChecksPassed = status.state === 'success' && failedChecks.length === 0;
+            
+            console.log('Combined status:', status.state);
+            console.log('Failed checks:', failedChecks.map(c => c.name));
+            console.log('All checks passed:', allChecksPassed);
+            
+            core.setOutput('all-checks-passed', allChecksPassed);
+
+  # Perform the auto-merge
+  auto-merge:
+    name: Auto-merge PR
+    runs-on: ubuntu-latest
+    needs: [evaluate-auto-merge, check-ci-status]
+    if: |
+      needs.evaluate-auto-merge.outputs.eligible == 'true' && 
+      needs.check-ci-status.outputs.all-checks-passed == 'true'
+    timeout-minutes: 5
+    
+    steps:
+      - name: Add auto-merge label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              labels: ['auto-merged', 'dependencies']
+            });
+
+      - name: Approve PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              event: 'APPROVE',
+              body: `🤖 **Auto-approved dependency update**
+              
+              **Reason**: ${{ needs.evaluate-auto-merge.outputs.reason }}
+              **Risk Level**: ${{ needs.evaluate-auto-merge.outputs.risk-level }}
+              
+              This PR has been automatically approved because:
+              - All CI checks have passed ✅
+              - Only dependency files were modified
+              - The update type is considered safe for auto-merge
+              - Security and compatibility checks passed
+              
+              The merge will proceed automatically.`
+            });
+
+      - name: Enable auto-merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              commit_title: `Auto-merge: ${{ needs.evaluate-auto-merge.outputs.reason }}`,
+              commit_message: `Automatically merged dependency update.
+              
+              Risk Level: ${{ needs.evaluate-auto-merge.outputs.risk-level }}
+              Reason: ${{ needs.evaluate-auto-merge.outputs.reason }}
+              
+              All CI checks passed and the update was deemed safe for automatic merging.`,
+              merge_method: 'squash'
+            });
+
+      - name: Comment on successful merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              body: `✅ **Auto-merge completed successfully**
+              
+              This dependency update has been automatically merged after passing all checks:
+              - ✅ CI/CD pipeline passed
+              - ✅ Security scan passed  
+              - ✅ Risk assessment: ${{ needs.evaluate-auto-merge.outputs.risk-level }}
+              - ✅ Update type: ${{ needs.evaluate-auto-merge.outputs.reason }}
+              
+              Monitor the deployment for any issues and rollback if necessary.`
+            });
+
+  # Handle auto-merge failures
+  auto-merge-failed:
+    name: Auto-merge Failed
+    runs-on: ubuntu-latest
+    needs: [evaluate-auto-merge, check-ci-status]
+    if: |
+      always() && 
+      needs.evaluate-auto-merge.outputs.eligible == 'true' && 
+      needs.check-ci-status.outputs.all-checks-passed == 'false'
+    timeout-minutes: 5
+    
+    steps:
+      - name: Add failure label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              labels: ['auto-merge-failed', 'needs-manual-review']
+            });
+
+      - name: Comment on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              body: `❌ **Auto-merge failed**
+              
+              This dependency update was eligible for auto-merge but failed CI checks:
+              - Eligibility reason: ${{ needs.evaluate-auto-merge.outputs.reason }}
+              - Risk level: ${{ needs.evaluate-auto-merge.outputs.risk-level }}
+              - CI status: Failed ❌
+              
+              **Next steps:**
+              1. Review the failed CI checks
+              2. Fix any issues or conflicts
+              3. Manual review and merge required
+              
+              @security-team @maintainers please review`
+            });
+
+  # Handle ineligible PRs
+  not-eligible:
+    name: Not Eligible for Auto-merge
+    runs-on: ubuntu-latest
+    needs: evaluate-auto-merge
+    if: needs.evaluate-auto-merge.outputs.eligible == 'false'
+    timeout-minutes: 5
+    
+    steps:
+      - name: Add manual review label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              labels: ['needs-manual-review', 'dependencies']
+            });
+
+      - name: Comment on ineligibility
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reasons = {
+              'manual-review-required': 'This update requires manual review due to its nature',
+              'security-update-major-version': 'Security update with major version change needs careful review',
+              'patch-update-sensitive-libs': 'Patch update to cryptographic or core runtime libraries',
+              'minor-update-requires-review': 'Minor update to libraries that need manual verification',
+              'minor-update-sensitive-libs': 'Minor update to cryptographic or core runtime libraries',
+              'major-update': 'Major version updates always require manual review',
+              'non-dependency-changes': 'PR contains non-dependency changes'
+            };
+            
+            const reason = '${{ needs.evaluate-auto-merge.outputs.reason }}';
+            const explanation = reasons[reason] || 'Unknown reason for manual review requirement';
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ needs.evaluate-auto-merge.outputs.pr-number }},
+              body: `🔍 **Manual review required**
+              
+              This dependency update is not eligible for auto-merge:
+              - **Reason**: ${explanation}
+              - **Risk level**: ${{ needs.evaluate-auto-merge.outputs.risk-level }}
+              
+              **Review checklist:**
+              - [ ] Verify the update is necessary and safe
+              - [ ] Check for breaking changes in changelogs
+              - [ ] Run tests locally if needed
+              - [ ] Review security implications
+              - [ ] Approve and merge when ready
+              
+              @security-team @maintainers please review`
+            });

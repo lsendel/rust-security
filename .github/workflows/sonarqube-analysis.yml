@@ -1,0 +1,80 @@
+name: SonarQube Analysis
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  sonarqube:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better analysis
+        
+    - name: Setup Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+        components: clippy, rustfmt
+        
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Install cargo-sonar
+      run: cargo install cargo-sonar
+      
+    - name: Install coverage tools
+      run: |
+        cargo install cargo-tarpaulin
+        cargo install cargo-llvm-cov
+        
+    - name: Run tests with coverage
+      run: |
+        cargo llvm-cov --all-features --workspace --lcov --output-path target/coverage/lcov.info
+        
+    - name: Run Clippy analysis
+      run: |
+        cargo clippy --all-targets --all-features --message-format=json > target/clippy-report.json || true
+        
+    - name: Generate SonarQube report
+      run: |
+        cargo sonar --coverage-path target/coverage/lcov.info --clippy-path target/clippy-report.json
+        
+    - name: SonarQube Scan
+      uses: sonarqube-quality-gate-action@master
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      with:
+        projectBaseDir: .
+        
+    - name: Upload SonarQube results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: sonarqube-results
+        path: |
+          .scannerwork/
+          target/coverage/
+          target/clippy-report.json
+        retention-days: 30

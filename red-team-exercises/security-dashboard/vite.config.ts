@@ -8,6 +8,12 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
+    deps: {
+      inline: ['react', 'react-dom']
+    },
+    define: {
+      'process.env.NODE_ENV': '"test"'
+    }
   },
   resolve: {
     alias: {

@@ -271,11 +271,11 @@ impl CaseManagementSystem {
         let results = automation_engine.evaluate_rules(&context);
 
         for result in results {
-            if result.matched {
-                debug!("Automation rule {} matched for case {}", result.rule_id, case.id);
+            if operation_result.matched {
+                debug!("Automation rule {} matched for case {}", operation_result.rule_id, case.id);
                 
                 // Execute actions (simplified for now)
-                for action in result.actions {
+                for action in operation_result.actions {
                     debug!("Executing automation action: {:?}", action.action_type);
                     // TODO: Implement action execution
                 }

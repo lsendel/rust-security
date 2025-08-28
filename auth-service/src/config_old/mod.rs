@@ -571,15 +571,15 @@ mod tests {
     #[test]
     fn test_parse_client_credentials() {
         let result = parse_client_credentials("client1:secret1;client2:secret2").unwrap();
-        assert_eq!(result.len(), 2);
-        assert!(result.contains_key("client1"));
-        assert!(result.contains_key("client2"));
+        assert_eq!(operation_result.len(), 2);
+        assert!(operation_result.contains_key("client1"));
+        assert!(operation_result.contains_key("client2"));
     }
 
     #[test]
     fn test_parse_invalid_client_credentials() {
         let result = parse_client_credentials("invalid_format");
-        assert!(result.is_err());
+        assert!(operation_result.is_err());
     }
 }
 

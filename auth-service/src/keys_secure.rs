@@ -373,7 +373,7 @@ mod tests {
 
         let manager = SecureKeyManager::new();
         let result = manager.generate_development_key().await;
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
     }
 
     #[tokio::test]
@@ -398,8 +398,8 @@ mod tests {
         let manager = SecureKeyManager::new();
         let result = manager.load_private_key().await;
 
-        assert!(result.is_ok());
-        let (_, source) = result.unwrap();
+        assert!(operation_result.is_ok());
+        let (_, source) = operation_result.unwrap();
         assert!(matches!(source, KeySource::Environment));
 
         // Cleanup

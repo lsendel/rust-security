@@ -669,7 +669,7 @@ impl MetricsHelper {
         let _result = operation();
         let duration = start.elapsed();
 
-        let result_label = if result.is_ok() { "success" } else { "error" };
+        let result_label = if operation_result.is_ok() { "success" } else { "error" };
 
         METRICS
             .token_operation_duration

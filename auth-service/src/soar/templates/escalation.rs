@@ -784,7 +784,7 @@ mod tests {
 
         // Start escalation
         let result = manager.start_escalation(&case, &policy_id);
-        assert!(result.is_ok());
+        assert!(operation_result.is_ok());
 
         // Check escalation state
         let state = manager.get_escalation_state(&case.id);

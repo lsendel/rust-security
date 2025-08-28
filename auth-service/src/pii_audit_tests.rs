@@ -493,7 +493,7 @@ impl ComplianceReport {
         // Classification breakdown
         let mut classification_counts = std::collections::HashMap::new();
         for result in &self.test_results {
-            for data_type in &result.error_redaction.sensitive_types_found {
+            for data_type in &operation_result.error_redaction.sensitive_types_found {
                 let classification = data_type.classification();
                 *classification_counts.entry(classification).or_insert(0) += 1;
             }

@@ -1,0 +1,673 @@
+openapi: 3.1.0
+info:
+  title: Auth Service API
+  description: Authentication and authorization service for Rust Security Platform
+  version: 1.0.0
+  contact:
+    name: Security Team
+    email: security@rust-security.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.rust-security.example.com/auth
+    description: Production server
+  - url: https://staging-api.rust-security.example.com/auth
+    description: Staging server
+  - url: http://localhost:8001
+    description: Local development
+
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+tags:
+  - name: Authentication
+    description: User authentication endpoints
+  - name: Authorization
+    description: Access control and permissions
+  - name: Sessions
+    description: Session management
+  - name: Tokens
+    description: Token operations
+  - name: Users
+    description: User management
+
+paths:
+  /v1/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user with credentials
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /v1/auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Invalidate user session
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Successfully logged out
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/refresh:
+    post:
+      tags:
+        - Tokens
+      summary: Refresh access token
+      description: Exchange refresh token for new access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      description: Create a new user account
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/auth/verify:
+    post:
+      tags:
+        - Tokens
+      summary: Verify token
+      description: Verify and validate JWT token
+      operationId: verifyToken
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenValidation'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/sessions:
+    get:
+      tags:
+        - Sessions
+      summary: List active sessions
+      description: Get all active sessions for the authenticated user
+      operationId: listSessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: List of active sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/sessions/{sessionId}:
+    delete:
+      tags:
+        - Sessions
+      summary: Revoke session
+      description: Invalidate a specific session
+      operationId: revokeSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Session revoked successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/users/{userId}/permissions:
+    get:
+      tags:
+        - Authorization
+      summary: Get user permissions
+      description: Retrieve all permissions for a user
+      operationId: getUserPermissions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User permissions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /v1/auth/password/reset:
+    post:
+      tags:
+        - Authentication
+      summary: Request password reset
+      description: Send password reset email
+      operationId: requestPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '202':
+          description: Password reset email sent
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+
+  /v1/auth/password/confirm:
+    post:
+      tags:
+        - Authentication
+      summary: Confirm password reset
+      description: Reset password with token
+      operationId: confirmPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+      responses:
+        '200':
+          description: Password reset successful
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /v1/auth/2fa/enable:
+    post:
+      tags:
+        - Authentication
+      summary: Enable 2FA
+      description: Enable two-factor authentication
+      operationId: enable2FA
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 2FA setup initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwoFactorSetup'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /v1/auth/2fa/verify:
+    post:
+      tags:
+        - Authentication
+      summary: Verify 2FA code
+      description: Verify two-factor authentication code
+      operationId: verify2FA
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorVerification'
+      responses:
+        '200':
+          description: 2FA verified successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.rust-security.example.com/oauth2/authorize
+          tokenUrl: https://auth.rust-security.example.com/oauth2/token
+          refreshUrl: https://auth.rust-security.example.com/oauth2/refresh
+          scopes:
+            read: Read access
+            write: Write access
+            admin: Administrative access
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]+$'
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          format: password
+        remember_me:
+          type: boolean
+          default: false
+        two_factor_code:
+          type: string
+          pattern: '^[0-9]{6}$'
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Token expiration time in seconds
+        user:
+          $ref: '#/components/schemas/User'
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]+$'
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          format: password
+        full_name:
+          type: string
+          maxLength: 100
+
+    UserResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        email_verified:
+          type: boolean
+        two_factor_enabled:
+          type: boolean
+
+    TokenValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        claims:
+          type: object
+          properties:
+            sub:
+              type: string
+            exp:
+              type: integer
+            iat:
+              type: integer
+            jti:
+              type: string
+            roles:
+              type: array
+              items:
+                type: string
+
+    SessionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_agent:
+          type: string
+        ip_address:
+          type: string
+          format: ipv4
+        created_at:
+          type: string
+          format: date-time
+        last_accessed:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    PermissionsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            permissions:
+              type: array
+              items:
+                type: string
+            roles:
+              type: array
+              items:
+                type: string
+
+    PasswordResetRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+
+    PasswordResetConfirm:
+      type: object
+      required:
+        - token
+        - password
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          format: password
+
+    TwoFactorSetup:
+      type: object
+      properties:
+        secret:
+          type: string
+        qr_code:
+          type: string
+          format: byte
+          description: Base64 encoded QR code image
+        backup_codes:
+          type: array
+          items:
+            type: string
+
+    TwoFactorVerification:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+
+    ResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        api_version:
+          type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+            field_errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+    BadRequestError:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

@@ -1,0 +1,400 @@
+# Agent OS Service Discovery Configuration
+# Consul and Kubernetes-native service discovery setup
+# Version: 1.0.0
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-os-service-discovery
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: service-discovery
+data:
+  consul-config.json: |
+    {
+      "datacenter": "rust-security",
+      "data_dir": "/opt/consul/data",
+      "log_level": "INFO",
+      "node_name": "agent-os-consul",
+      "bind_addr": "0.0.0.0",
+      "client_addr": "0.0.0.0",
+      "retry_join": ["consul-server"],
+      "services": [
+        {
+          "id": "auth-service",
+          "name": "auth-service",
+          "tags": ["rust", "authentication", "oauth2"],
+          "address": "auth-service.rust-security.svc.cluster.local",
+          "port": 8080,
+          "check": {
+            "http": "http://auth-service.rust-security.svc.cluster.local:8080/health",
+            "interval": "30s",
+            "timeout": "5s"
+          },
+          "meta": {
+            "version": "1.0.0",
+            "protocol": "http",
+            "metrics_port": "9090",
+            "service_type": "authentication"
+          }
+        },
+        {
+          "id": "policy-service",
+          "name": "policy-service",
+          "tags": ["rust", "authorization", "cedar"],
+          "address": "policy-service.rust-security.svc.cluster.local",
+          "port": 8081,
+          "check": {
+            "http": "http://policy-service.rust-security.svc.cluster.local:8081/health",
+            "interval": "30s",
+            "timeout": "5s"
+          },
+          "meta": {
+            "version": "1.0.0",
+            "protocol": "http",
+            "metrics_port": "9091",
+            "service_type": "authorization"
+          }
+        }
+      ],
+      "connect": {
+        "enabled": true,
+        "ca_provider": "consul"
+      },
+      "ports": {
+        "grpc": 8502
+      },
+      "acl": {
+        "enabled": true,
+        "default_policy": "deny",
+        "enable_token_persistence": true
+      }
+    }
+  
+  service-discovery.yaml: |
+    # Agent OS Service Discovery Configuration
+    version: "1.0"
+    
+    discovery:
+      # Primary discovery method
+      primary:
+        type: "kubernetes"
+        config:
+          namespace: "rust-security"
+          label_selector: "app=rust-security-platform"
+          watch_interval: "10s"
+          
+      # Secondary discovery method (fallback)
+      secondary:
+        type: "consul"
+        config:
+          address: "consul.rust-security.svc.cluster.local:8500"
+          datacenter: "rust-security"
+          token_file: "/etc/consul/token"
+          
+      # DNS-based discovery
+      dns:
+        enabled: true
+        domains:
+          - "rust-security.svc.cluster.local"
+          - "consul.service.consul"
+        resolvers:
+          - "10.96.0.10:53"  # kube-dns
+          - "8.8.8.8:53"     # fallback
+    
+    # Service registration
+    registration:
+      enabled: true
+      auto_register: true
+      health_check_interval: "30s"
+      
+      services:
+        - name: "auth-service"
+          discovery_name: "auth-service"
+          health_endpoint: "/health"
+          ready_endpoint: "/ready"
+          metrics_endpoint: "/metrics"
+          tags:
+            - "authentication"
+            - "oauth2"
+            - "jwt"
+            - "rust"
+          metadata:
+            version: "${SERVICE_VERSION}"
+            protocol: "http"
+            encryption: "tls"
+            
+        - name: "policy-service"
+          discovery_name: "policy-service"
+          health_endpoint: "/health"
+          ready_endpoint: "/ready"
+          metrics_endpoint: "/metrics"
+          tags:
+            - "authorization"
+            - "cedar"
+            - "abac"
+            - "rust"
+          metadata:
+            version: "${SERVICE_VERSION}"
+            protocol: "http"
+            encryption: "tls"
+    
+    # Load balancing configuration
+    load_balancing:
+      algorithm: "round_robin"  # round_robin, least_connections, random, weighted
+      health_check_required: true
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        recovery_timeout: "30s"
+      
+      retry_policy:
+        max_retries: 3
+        backoff: "exponential"
+        base_interval: "100ms"
+        max_interval: "5s"
+    
+    # Service mesh integration
+    service_mesh:
+      enabled: true
+      type: "istio"  # istio, linkerd, consul-connect
+      mtls_mode: "strict"
+      traffic_policy:
+        connection_pool:
+          tcp:
+            max_connections: 100
+            connect_timeout: "30s"
+          http:
+            http1_max_pending_requests: 50
+            max_requests_per_connection: 10
+    
+    # Caching configuration
+    cache:
+      enabled: true
+      ttl: "300s"
+      max_entries: 1000
+      refresh_threshold: "60s"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consul-agent
+  namespace: rust-security
+  labels:
+    app: consul
+    component: agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consul
+      component: agent
+  template:
+    metadata:
+      labels:
+        app: consul
+        component: agent
+    spec:
+      serviceAccountName: consul-service-account
+      
+      containers:
+      - name: consul
+        image: consul:1.16
+        imagePullPolicy: IfNotPresent
+        
+        command:
+        - /bin/sh
+        - -c
+        - |
+          consul agent \
+            -config-file=/etc/consul/config/consul-config.json \
+            -client=0.0.0.0 \
+            -bind=0.0.0.0 \
+            -retry-join=consul-server.rust-security.svc.cluster.local \
+            -data-dir=/opt/consul/data
+        
+        ports:
+        - containerPort: 8500
+          name: http
+        - containerPort: 8502
+          name: grpc
+        - containerPort: 8301
+          name: serf-lan
+        - containerPort: 8302
+          name: serf-wan
+        
+        volumeMounts:
+        - name: consul-config
+          mountPath: /etc/consul/config
+          readOnly: true
+        - name: consul-data
+          mountPath: /opt/consul/data
+        
+        livenessProbe:
+          httpGet:
+            path: /v1/status/leader
+            port: 8500
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          
+        readinessProbe:
+          httpGet:
+            path: /v1/status/peers
+            port: 8500
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+      
+      volumes:
+      - name: consul-config
+        configMap:
+          name: agent-os-service-discovery
+      - name: consul-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: consul
+  namespace: rust-security
+  labels:
+    app: consul
+    component: agent
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8500
+    targetPort: 8500
+    protocol: TCP
+    name: http
+  - port: 8502
+    targetPort: 8502
+    protocol: TCP
+    name: grpc
+  selector:
+    app: consul
+    component: agent
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: consul-service-account
+  namespace: rust-security
+  labels:
+    app: consul
+
+---
+# Service discovery CronJob for periodic health checks
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: service-discovery-health-check
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: health-check
+spec:
+  schedule: "*/5 * * * *"  # Every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: agent-os-service-account
+          restartPolicy: OnFailure
+          
+          containers:
+          - name: health-checker
+            image: curlimages/curl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running service discovery health check..."
+              
+              # Check Auth Service
+              if curl -f -s -o /dev/null "http://auth-service.rust-security.svc.cluster.local:8080/health"; then
+                echo "✅ Auth Service is healthy"
+              else
+                echo "❌ Auth Service health check failed"
+                exit 1
+              fi
+              
+              # Check Policy Service
+              if curl -f -s -o /dev/null "http://policy-service.rust-security.svc.cluster.local:8081/health"; then
+                echo "✅ Policy Service is healthy"
+              else
+                echo "❌ Policy Service health check failed"
+                exit 1
+              fi
+              
+              # Check Consul
+              if curl -f -s -o /dev/null "http://consul.rust-security.svc.cluster.local:8500/v1/status/leader"; then
+                echo "✅ Consul is healthy"
+              else
+                echo "❌ Consul health check failed"
+                exit 1
+              fi
+              
+              echo "All services are healthy"
+              
+            resources:
+              requests:
+                cpu: "10m"
+                memory: "32Mi"
+              limits:
+                cpu: "50m"
+                memory: "64Mi"
+
+---
+# EndpointSlice for custom service discovery
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: rust-security-services
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: service-discovery
+    kubernetes.io/service-name: rust-security-services
+addressType: IPv4
+ports:
+- name: auth-http
+  protocol: TCP
+  port: 8080
+- name: policy-http
+  protocol: TCP
+  port: 8081
+endpoints:
+- addresses:
+  - "auth-service.rust-security.svc.cluster.local"
+  conditions:
+    ready: true
+    serving: true
+    terminating: false
+  hostname: auth-service
+  targetRef:
+    kind: Service
+    name: auth-service
+    namespace: rust-security
+- addresses:
+  - "policy-service.rust-security.svc.cluster.local"
+  conditions:
+    ready: true
+    serving: true
+    terminating: false
+  hostname: policy-service
+  targetRef:
+    kind: Service
+    name: policy-service
+    namespace: rust-security

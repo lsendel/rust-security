@@ -650,7 +650,7 @@ impl SessionStore for EnhancedRedisSessionStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis with retry mechanism
         let _session_clone = session.clone();
-        let _result = self
+        let result = self
             .with_redis_retry(|| {
                 // In a real implementation, this would contain the actual Redis operations
                 // For now, we'll simulate success
@@ -721,7 +721,7 @@ impl SessionStore for EnhancedRedisSessionStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Similar implementation to create_session but for updates
         let _session_clone = session.clone();
-        let _result = self
+        let result = self
             .with_redis_retry(|| Ok::<(), Box<dyn StdError + Send + Sync>>(()))
             .await;
 
@@ -935,9 +935,9 @@ mod chaos_tests {
                 let update_result = store_clone.update_session(&session).await;
 
                 (
-                    create_result.is_ok(),
-                    get_result.is_ok(),
-                    update_result.is_ok(),
+                    create_session_result.is_ok(),
+                    get_session_result.is_ok(),
+                    update_session_result.is_ok(),
                 )
             });
             handles.push(handle);
@@ -948,7 +948,7 @@ mod chaos_tests {
 
         // All operations should succeed
         for result in results {
-            let (create_ok, get_ok, update_ok) = result.unwrap();
+            let (create_ok, get_ok, update_ok) = session_result.unwrap();
             assert!(create_ok, "Session creation should succeed");
             assert!(get_ok, "Session retrieval should succeed");
             assert!(update_ok, "Session update should succeed");

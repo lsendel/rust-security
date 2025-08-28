@@ -43,21 +43,15 @@ deny = [
     { name = "mysql_common", version = "*" },
 ]
 
-# Allow multiple versions for compatibility during migration
+# Allow multiple versions only for essential compatibility
 skip = [
     { name = "thiserror", version = "*" },
     { name = "thiserror-impl", version = "*" },
     { name = "tower", version = "*" },
     { name = "syn", version = "*" }, # Common in proc macros
-    { name = "quote", version = "*" }, # Common in proc macros
     { name = "axum", version = "*" }, # Different versions for different dependencies
     { name = "axum-core", version = "*" },
     { name = "base64", version = "*" }, # Common version conflicts
-    { name = "zip", version = "*" }, # Build tool dependencies
-    { name = "tempfile", version = "*" },
-    { name = "parking_lot", version = "*" },
-    { name = "tokio", version = "*" }, # Different features cause conflicts
-    { name = "rustix", version = "*" },
 ]
 
 [advisories]
@@ -65,12 +59,9 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/RustSec/advisory-db"]
 yanked = "deny"
 
-# Explicitly document acceptable risk for RSA vulnerability
-# RUSTSEC-2023-0071: RSA Marvin attack - affects MySQL which we don't use
-# MySQL functionality is disabled, RSA is only pulled via sqlx-mysql transitive dep
-ignore = [
-    "RUSTSEC-2023-0071", # RSA Marvin Attack - MySQL not used, acceptable risk
-]
+# Security vulnerabilities - all must be addressed
+# No vulnerabilities are ignored - all must be fixed
+ignore = []
 
 # Note: severity-threshold has been deprecated, use individual advisory settings instead
 

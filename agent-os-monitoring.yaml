@@ -1,0 +1,377 @@
+# Agent OS Monitoring Integration
+# Prometheus ServiceMonitor and Grafana Dashboard Configuration
+# Version: 1.0.0
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agent-os-metrics
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: agent-os
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http
+    scrapeTimeout: 10s
+    honorLabels: true
+    
+    # Relabeling for better metric organization
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod_name
+    - sourceLabels: [__meta_kubernetes_pod_ip]
+      targetLabel: pod_ip
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: kubernetes_namespace
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rust-security-platform-metrics
+  namespace: rust-security
+  labels:
+    app: rust-security-platform
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: rust-security-platform
+  endpoints:
+  - port: metrics
+    interval: 15s
+    path: /metrics
+    scheme: http
+    scrapeTimeout: 5s
+    honorLabels: true
+    
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'http_requests_total'
+      targetLabel: __name__
+      replacement: 'rust_security_http_requests_total'
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: agent-os-alerts
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: alerting
+spec:
+  groups:
+  - name: agent-os.rules
+    rules:
+    
+    # Service Health Alerts
+    - alert: AgentOSServiceDown
+      expr: up{job="agent-os-coordinator"} == 0
+      for: 1m
+      labels:
+        severity: critical
+        component: agent-os
+      annotations:
+        summary: "Agent OS Coordinator is down"
+        description: "Agent OS Coordinator has been down for more than 1 minute"
+        
+    - alert: AgentOSHighLatency
+      expr: histogram_quantile(0.95, rate(agent_os_request_duration_seconds_bucket[5m])) > 1
+      for: 2m
+      labels:
+        severity: warning
+        component: agent-os
+      annotations:
+        summary: "Agent OS high request latency"
+        description: "Agent OS 95th percentile latency is above 1s for 2 minutes"
+        
+    # Integration Health Alerts
+    - alert: RustSecurityServiceDiscoveryFailed
+      expr: agent_os_service_discovery_failures_total > 5
+      for: 1m
+      labels:
+        severity: warning
+        component: service-discovery
+      annotations:
+        summary: "Service discovery failures detected"
+        description: "Agent OS has failed to discover Rust Security Platform services {{ $value }} times"
+        
+    - alert: AuthServiceIntegrationDown
+      expr: agent_os_integration_health{service="auth-service"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        component: integration
+      annotations:
+        summary: "Auth Service integration is down"
+        description: "Agent OS cannot reach the Auth Service"
+        
+    - alert: PolicyServiceIntegrationDown
+      expr: agent_os_integration_health{service="policy-service"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        component: integration
+      annotations:
+        summary: "Policy Service integration is down"
+        description: "Agent OS cannot reach the Policy Service"
+        
+    # Performance Alerts
+    - alert: AgentOSHighErrorRate
+      expr: rate(agent_os_requests_failed_total[5m]) / rate(agent_os_requests_total[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: warning
+        component: performance
+      annotations:
+        summary: "Agent OS high error rate"
+        description: "Agent OS error rate is above 5% for 2 minutes"
+        
+    - alert: AgentOSHighMemoryUsage
+      expr: container_memory_usage_bytes{pod=~"agent-os-coordinator.*"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+        component: resources
+      annotations:
+        summary: "Agent OS high memory usage"
+        description: "Agent OS memory usage is above 90% for 5 minutes"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-os-grafana-dashboard
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: dashboard
+    grafana_dashboard: "1"
+data:
+  agent-os-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Agent OS - Rust Security Platform Integration",
+        "tags": ["agent-os", "rust-security"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Discovery Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "agent_os_services_discovered",
+                "legendFormat": "Services Discovered"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Integration Health",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(agent_os_integration_health)",
+                "legendFormat": "Healthy Integrations"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(agent_os_requests_total[5m])",
+                "legendFormat": "{{method}} {{endpoint}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Response Times",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, rate(agent_os_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "50th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.95, rate(agent_os_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.99, rate(agent_os_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "99th percentile"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(agent_os_requests_failed_total[5m])",
+                "legendFormat": "Error Rate"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 6,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{pod=~\"agent-os-coordinator.*\"}",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "30s"
+      }
+    }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-os-logging-config
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: logging
+data:
+  fluentd.conf: |
+    <source>
+      @type kubernetes_metadata
+      @id agent_os_logs
+      
+      tag kubernetes.agent-os.*
+      
+      <parse>
+        @type json
+        time_key timestamp
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+      
+      <filter>
+        @type record_transformer
+        <record>
+          service_name "agent-os"
+          platform "rust-security"
+          log_type "application"
+        </record>
+      </filter>
+    </source>
+    
+    <match kubernetes.agent-os.**>
+      @type elasticsearch
+      @id agent_os_elasticsearch
+      
+      host elasticsearch.monitoring.svc.cluster.local
+      port 9200
+      index_name agent-os-logs
+      
+      <buffer>
+        @type file
+        path /var/log/fluentd-buffers/agent-os
+        flush_mode interval
+        flush_interval 10s
+        retry_wait 1s
+        retry_max_times 3
+      </buffer>
+    </match>
+
+---
+# Custom Metrics for Agent OS Integration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-os-custom-metrics
+  namespace: rust-security
+  labels:
+    app: agent-os
+    component: metrics
+data:
+  custom-metrics.yaml: |
+    metrics:
+      # Service Discovery Metrics
+      - name: agent_os_services_discovered
+        type: gauge
+        description: "Number of services discovered by Agent OS"
+        labels: ["namespace", "service_type"]
+        
+      - name: agent_os_service_discovery_failures_total
+        type: counter
+        description: "Total number of service discovery failures"
+        labels: ["namespace", "error_type"]
+        
+      # Integration Health Metrics
+      - name: agent_os_integration_health
+        type: gauge
+        description: "Health status of integrations (1=healthy, 0=unhealthy)"
+        labels: ["service", "endpoint", "protocol"]
+        
+      - name: agent_os_integration_latency_seconds
+        type: histogram
+        description: "Latency of integration calls"
+        labels: ["service", "method"]
+        buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+        
+      # Request Metrics
+      - name: agent_os_requests_total
+        type: counter
+        description: "Total number of requests handled by Agent OS"
+        labels: ["method", "endpoint", "status_code"]
+        
+      - name: agent_os_requests_failed_total
+        type: counter
+        description: "Total number of failed requests"
+        labels: ["method", "endpoint", "error_type"]
+        
+      - name: agent_os_request_duration_seconds
+        type: histogram
+        description: "Request duration in seconds"
+        labels: ["method", "endpoint"]
+        buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]
+        
+      # Performance Metrics
+      - name: agent_os_active_connections
+        type: gauge
+        description: "Number of active connections"
+        labels: ["target_service"]
+        
+      - name: agent_os_circuit_breaker_state
+        type: gauge
+        description: "Circuit breaker state (0=closed, 1=open, 2=half-open)"
+        labels: ["service", "endpoint"]
+        
+      # Security Metrics
+      - name: agent_os_auth_requests_total
+        type: counter
+        description: "Total number of authentication requests"
+        labels: ["method", "result"]
+        
+      - name: agent_os_auth_failures_total
+        type: counter
+        description: "Total number of authentication failures"
+        labels: ["reason", "client_id"]

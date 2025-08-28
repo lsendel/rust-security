@@ -1,0 +1,62 @@
+[server]
+host = "127.0.0.1"
+port = 8080
+bind_addr = "127.0.0.1:8080"
+max_connections = 1000
+request_timeout = "30s"
+shutdown_timeout = "30s"
+
+[database]
+url = "sqlite://memory"
+
+[redis]
+url = "redis://localhost:6379"
+pool_size = 10
+connection_timeout = "5s"
+command_timeout = "1s"
+
+[security]
+# JWT secret should be loaded from environment variable JWT_SECRET
+# jwt_secret = "REPLACE_WITH_ENV_VAR"
+token_expiry = "1h"
+refresh_token_expiry = "7d"
+password_hash_cost = 12
+bcrypt_cost = 12
+# Encryption key should be loaded from environment variable ENCRYPTION_KEY
+# encryption_key = "REPLACE_WITH_ENV_VAR"
+max_failed_attempts = 5
+lockout_duration = "15m"
+
+[jwt]
+# Secret should be loaded from environment variable SECRET_KEY
+# secret = "REPLACE_WITH_ENV_VAR"
+expiry = "1h"
+algorithm = "HS256"
+
+[oauth]
+authorization_code_expiry = "10m"
+access_token_expiry = "1h"
+refresh_token_expiry = "7d"
+
+[rate_limiting]
+requests_per_minute = 60
+burst_size = 10
+window_size = "1m"
+cleanup_interval = "5m"
+
+[session]
+duration = "1h"
+cleanup_interval = "30m"
+secure_cookies = false
+
+[monitoring]
+metrics_enabled = true
+tracing_enabled = true
+health_check_interval = "30s"
+
+[features]
+user_registration = true
+oauth2_flows = true
+jwt_authentication = true
+session_management = true
+rate_limiting = true

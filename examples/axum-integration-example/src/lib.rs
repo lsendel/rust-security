@@ -460,11 +460,11 @@ pub async fn create_user(
 /// Handler for GET /users/:id - returns a specific user by ID
 pub async fn get_user(
     State(state): State<AppState>,
-    Path(user__id): Path<u64>,
+    Path(user_id): Path<u64>,
 ) -> Result<Json<User>, AppError> {
     if user_id == 0 || user_id > i32::MAX as u64 {
         return Err(AppError::NotFound(format!(
-            "User with ID {user_id} not found"
+            "User with ID {} not found", user_id
         )));
     }
     let id32 = user_id as i32;
@@ -472,7 +472,7 @@ pub async fn get_user(
     match state.user_repository.find_by_id(id32).await? {
         Some(user) => Ok(Json(user)),
         None => Err(AppError::NotFound(format!(
-            "User with ID {user_id} not found"
+            "User with ID {} not found", id32
         ))),
     }
 }
@@ -556,7 +556,7 @@ pub async fn login(
 /// Handler for PUT /users/:id - update an existing user (authenticated)
 pub async fn update_user(
     State(state): State<AppState>,
-    Path(user__id): Path<i32>,
+    Path(user_id): Path<i32>,
     Json(request): Json<UpdateUserRequest>,
 ) -> Result<Json<User>, AppError> {
     // Validate the update request
@@ -566,7 +566,7 @@ pub async fn update_user(
     match state.user_repository.update(user_id, request).await? {
         Some(user) => Ok(Json(user)),
         None => Err(AppError::NotFound(format!(
-            "User with ID {user_id} not found"
+            "User with ID {} not found", user_id
         ))),
     }
 }
@@ -574,7 +574,7 @@ pub async fn update_user(
 /// Handler for DELETE /users/:id - delete a user (authenticated)
 pub async fn delete_user(
     State(state): State<AppState>,
-    Path(user__id): Path<i32>,
+    Path(user_id): Path<i32>,
 ) -> Result<StatusCode, AppError> {
     // Delete the user
     let deleted = state.user_repository.delete(user_id).await?;
@@ -583,7 +583,7 @@ pub async fn delete_user(
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(AppError::NotFound(format!(
-            "User with ID {user_id} not found"
+            "User with ID {} not found", user_id
         )))
     }
 }
@@ -725,7 +725,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_users_empty() {
         let state = AppState::new().unwrap();
-        let _result = list_users(State(state)).await;
+        let result = list_users(State(state)).await;
 
         assert!(result.is_ok());
         let Json(users) = result.unwrap();

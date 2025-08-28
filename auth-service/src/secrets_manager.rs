@@ -21,9 +21,9 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 #[cfg(feature = "aws")]
-use aws_config::meta::region::RegionProviderChain;
+use aws_crate::config::meta::region::RegionProviderChain;
 #[cfg(feature = "aws")]
-use aws_config::{BehaviorVersion, Region};
+use aws_crate::config::{BehaviorVersion, Region};
 #[cfg(feature = "aws")]
 use aws_sdk_secretsmanager::{Client as SecretsManagerClient, Error as AwsError};
 
@@ -300,7 +300,7 @@ impl SecretsManager {
             region_provider.or_else(Region::new("us-east-1"))
         };
 
-        let config = aws_config::defaults(BehaviorVersion::latest()).region(region_provider).load().await;
+        let config = aws_crate::config::defaults(BehaviorVersion::latest()).region(region_provider).load().await;
         self.aws_client = Some(SecretsManagerClient::new(&config));
 
         info!("AWS Secrets Manager client initialized");
@@ -678,8 +678,8 @@ mod tests {
         let manager = SecretsManager::new_with_config(config).await.unwrap();
         let result = manager.get_secret("NONEXISTENT_SECRET").await;
 
-        assert!(result.is_err());
-        match result.unwrap_err() {
+        assert!(operation_result.is_err());
+        match operation_result.unwrap_err() {
             SecretsError::EnvError { name } => assert_eq!(name, "NONEXISTENT_SECRET"),
             _ => panic!("Expected EnvError"),
         }

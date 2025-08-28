@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react'
+import React, { useState, useContext } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, X, Eye, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,7 @@ interface RealTimeAlertsProps {
 
 export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
+  const [loadingAlerts, setLoadingAlerts] = useState<Set<string>>(new Set())
   const authContext = useContext(AuthContext)
   if (!authContext) {
     throw new Error('RealTimeAlerts must be used within an AuthProvider')
@@ -34,6 +35,9 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
       console.error('Invalid alert ID format')
       return
     }
+
+    // Set loading state
+    setLoadingAlerts(prev => new Set([...prev, alertId]))
 
     try {
       const authToken = await getAuthToken() // Secure token retrieval
@@ -79,6 +83,13 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
     } catch (error) {
       console.error('Error acknowledging alert:', error)
       // Handle error (show toast, etc.)
+    } finally {
+      // Clear loading state
+      setLoadingAlerts(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(alertId)
+        return newSet
+      })
     }
   }
 
@@ -162,6 +173,7 @@ export function RealTimeAlerts({ alerts }: RealTimeAlertsProps) {
                         size="sm"
                         variant="outline"
                         onClick={() => acknowledgeAlert(alert.id)}
+                        disabled={loadingAlerts.has(alert.id)}
                       >
                         <Eye className="h-3 w-3" />
                       </Button>

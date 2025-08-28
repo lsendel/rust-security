@@ -136,7 +136,7 @@ impl CircuitBreaker {
         self.state.request_count.fetch_add(1, Ordering::Relaxed);
 
         // Execute with timeout
-        let _result = timeout(self.config.request_timeout, operation).await;
+        let result = timeout(self.config.request_timeout, operation).await;
 
         match result {
             Ok(Ok(response)) => {

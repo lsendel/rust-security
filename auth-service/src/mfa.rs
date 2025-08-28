@@ -707,7 +707,7 @@ pub struct MfaSessionVerifyResponse {
 }
 
 pub async fn mfa_session_verify(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     Json(body): Json<MfaSessionVerifyRequest>,
 ) -> Json<MfaSessionVerifyResponse> {

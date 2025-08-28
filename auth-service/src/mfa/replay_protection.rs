@@ -57,7 +57,7 @@ impl ReplayProtection {
             .await?;
 
         // If SET NX succeeded, the result will be "OK", meaning code was not used before
-        Ok(result.is_some())
+        Ok(operation_result.is_some())
     }
 
     pub async fn mark_code_used_in_window(

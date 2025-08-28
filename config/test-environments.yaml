@@ -1,0 +1,145 @@
+# Test Client Configuration Management
+# Supports multiple environments and test scenarios
+
+environments:
+  # Development environment
+  development:
+    base_url: "http://localhost:8080"
+    timeout: 10
+    verify_ssl: false
+    rate_limit:
+      requests_per_second: 100
+      burst_limit: 200
+    retries:
+      max_attempts: 3
+      backoff_factor: 1.0
+    auth:
+      token_refresh_threshold: 300  # seconds before expiry
+    test_user:
+      username: "test_user_dev"
+      email: "test@dev.local"
+      password: "DevPassword123!"
+    
+  # Staging environment  
+  staging:
+    base_url: "https://staging-auth.company.com"
+    timeout: 30
+    verify_ssl: true
+    rate_limit:
+      requests_per_second: 50
+      burst_limit: 100
+    retries:
+      max_attempts: 5
+      backoff_factor: 2.0
+    auth:
+      token_refresh_threshold: 600
+    test_user:
+      username: "test_user_staging"
+      email: "test@staging.company.com"
+      password: "StagingPassword456!"
+      
+  # Production environment (limited testing)
+  production:
+    base_url: "https://auth.company.com"
+    timeout: 60
+    verify_ssl: true
+    rate_limit:
+      requests_per_second: 10
+      burst_limit: 20
+    retries:
+      max_attempts: 3
+      backoff_factor: 3.0
+    auth:
+      token_refresh_threshold: 900
+    test_user:
+      username: "readonly_test_prod"
+      email: "readonly@company.com" 
+      password: "ProdReadOnlyPass789!"
+    restrictions:
+      read_only: true
+      allowed_endpoints: ["/health", "/metrics", "/auth/introspect"]
+
+# Test suite configurations
+test_suites:
+  smoke:
+    description: "Basic smoke tests"
+    tests:
+      - health_check
+      - basic_auth_flow
+    max_duration: 60  # seconds
+    
+  security:
+    description: "Security-focused tests"
+    tests:
+      - brute_force_protection
+      - token_validation
+      - rate_limiting
+      - csrf_protection
+      - input_validation
+    max_duration: 300
+    
+  performance:
+    description: "Performance and load tests"
+    tests:
+      - response_time_test
+      - concurrent_users_test  
+      - token_refresh_performance
+    max_duration: 600
+    concurrent_users: [1, 10, 50, 100]
+    
+  integration:
+    description: "Full integration tests"
+    tests:
+      - user_lifecycle
+      - token_lifecycle
+      - error_handling
+      - monitoring_integration
+    max_duration: 900
+    
+  ml_security:
+    description: "ML-based security threat detection tests"
+    tests:
+      - brute_force_detection
+      - sql_injection_detection
+      - ddos_detection
+      - reconnaissance_detection
+      - apt_detection
+      - zero_day_detection
+      - normal_behavior_validation
+    max_duration: 1200
+    ml_models: ["isolation_forest", "autoencoder", "random_forest"]
+    confidence_threshold: 0.7
+
+# Monitoring and reporting configuration
+monitoring:
+  metrics_collection: true
+  detailed_logging: true
+  performance_thresholds:
+    max_response_time_ms: 2000
+    max_error_rate_percent: 1.0
+    min_success_rate_percent: 99.0
+  
+  alerts:
+    enable_notifications: true
+    webhook_url: "${WEBHOOK_URL}"
+    notification_channels:
+      - email
+      - slack
+      
+  reports:
+    generate_html: true
+    generate_json: true
+    include_charts: true
+    retention_days: 30
+
+# Security configuration
+security:
+  sensitive_data_masking: true
+  log_auth_tokens: false
+  encrypt_test_data: true
+  audit_all_requests: true
+  
+  compliance:
+    gdpr_mode: true
+    data_retention_days: 7
+    anonymize_user_data: true
