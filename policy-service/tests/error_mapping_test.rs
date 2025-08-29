@@ -1,31 +1,10 @@
-// Suppress unused dependency warnings
-use anyhow as _;
-use cedar_policy as _;
-use cedar_policy_core as _;
-use chrono as _;
-use dotenvy as _;
-use futures as _;
-use once_cell as _;
-use prometheus as _;
-use reqwest as _;
-use serde as _;
-use serde_json as _;
-use tempfile as _;
-use thiserror as _;
-use tokio as _;
-use tower_http as _;
-use tracing as _;
-use tracing_subscriber as _;
-use utoipa as _;
-use utoipa_swagger_ui as _;
-
 use axum::http::StatusCode;
 use policy_service::errors::{AppError, AuthorizationError, ConfigError, EntityError, PolicyError};
 
 #[test]
 fn not_found_variants_map_to_404() {
-    let e1 = AppError::from(PolicyError::PolicyNotFound { id: "p1".into() });
-    let e2 = AppError::from(EntityError::EntityNotFound {
+    let e1 = AppError::from(PolicyError::NotFound { id: "p1".into() });
+    let e2 = AppError::from(EntityError::NotFound {
         entity_type: "User".into(),
         entity_id: "u1".into(),
     });
@@ -37,8 +16,8 @@ fn not_found_variants_map_to_404() {
 
 #[test]
 fn bad_request_group_maps_to_400() {
-    let e1 = AppError::from(PolicyError::PolicyValidationFailed { reason: "x".into() });
-    let e2 = AppError::from(EntityError::EntityValidationFailed { reason: "y".into() });
+    let e1 = AppError::from(PolicyError::ValidationFailed { reason: "x".into() });
+    let e2 = AppError::from(EntityError::ValidationFailed { reason: "y".into() });
     let e3 = AppError::from(AuthorizationError::InvalidAction {
         action: "read".into(),
     });
