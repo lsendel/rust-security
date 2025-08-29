@@ -66,7 +66,8 @@ impl Default for BackpressureConfig {
 }
 
 impl BackpressureConfig {
-    #[must_use] pub fn from_env() -> Self {
+    #[must_use]
+    pub fn from_env() -> Self {
         let mut config = Self::default();
 
         if let Ok(val) = std::env::var("OAUTH_REQUEST_LIMIT_KB") {
@@ -232,7 +233,8 @@ pub struct BackpressureState {
 }
 
 impl BackpressureState {
-    #[must_use] pub fn new(config: BackpressureConfig) -> Self {
+    #[must_use]
+    pub fn new(config: BackpressureConfig) -> Self {
         Self {
             concurrent_requests: AtomicUsize::new(0),
             queue_depth: AtomicUsize::new(0),
@@ -426,7 +428,8 @@ pub async fn backpressure_middleware(
 }
 
 // Request body size limit based on endpoint
-#[must_use] pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize {
+#[must_use]
+pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize {
     if path.starts_with("/oauth") || path.starts_with("/auth") {
         config.oauth_request_limit
     } else if path.starts_with("/scim") {
@@ -439,7 +442,8 @@ pub async fn backpressure_middleware(
 }
 
 // Create comprehensive backpressure middleware stack
-#[must_use] pub fn create_backpressure_middleware(
+#[must_use]
+pub fn create_backpressure_middleware(
     config: BackpressureConfig,
 ) -> (
     ServiceBuilder<tower::layer::util::Stack<TimeoutLayer, tower::layer::util::Identity>>,

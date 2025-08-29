@@ -6,16 +6,19 @@
 //! - Enhanced security metrics integration
 //! - Proper feature gating for experimental features
 
+use async_trait::async_trait;
 use auth_service::{
-    non_human_monitoring::{NonHumanMonitoringConfig, NonHumanIdentityMonitor, AlertHandler, GeoResolver},
-    service_identity::{
-        BehavioralBaseline, Environment, IdentityType, RequestContext, ServiceIdentity,
-        ServiceIdentityManager, IdentityConfig, IdentityStatus, JitAccessRequest, SecurityMonitoring,
+    errors::AuthError,
+    non_human_monitoring::{
+        AlertHandler, GeoResolver, NonHumanIdentityMonitor, NonHumanMonitoringConfig,
     },
     security_monitoring::SecurityAlert,
-    errors::AuthError,
+    service_identity::{
+        BehavioralBaseline, Environment, IdentityConfig, IdentityStatus, IdentityType,
+        JitAccessRequest, RequestContext, SecurityMonitoring, ServiceIdentity,
+        ServiceIdentityManager,
+    },
 };
-use async_trait::async_trait;
 use chrono::Utc;
 use serde_json;
 use std::collections::{HashMap, HashSet};
@@ -83,7 +86,9 @@ mod service_identity_tests {
         };
 
         let config = IdentityConfig {
-            allowed_scopes: ["user:read".to_string(), "user:write".to_string()].into_iter().collect(),
+            allowed_scopes: ["user:read".to_string(), "user:write".to_string()]
+                .into_iter()
+                .collect(),
             allowed_ips: None,
             allowed_hours: None,
         };
@@ -143,7 +148,9 @@ mod service_identity_tests {
                 "ai:generate_text".to_string(),
                 "ai:analyze_code".to_string(),
                 "api:read_only".to_string(),
-            ].into_iter().collect(),
+            ]
+            .into_iter()
+            .collect(),
             allowed_ips: Some(vec!["10.0.1.50".to_string()]),
             allowed_hours: Some((8, 18)), // Business hours
         };
@@ -155,7 +162,7 @@ mod service_identity_tests {
         assert_eq!(ai_agent.status, IdentityStatus::Active);
         assert!(ai_agent.allowed_scopes.contains("ai:generate_text"));
         assert!(ai_agent.allowed_hours.is_some());
-        
+
         if let IdentityType::AiAgent { capabilities, .. } = &ai_agent.identity_type {
             assert!(capabilities.contains(&"text_generation".to_string()));
         }
@@ -178,7 +185,10 @@ mod service_identity_tests {
             allowed_hours: Some((9, 17)), // Business hours
         };
 
-        let identity = manager.register_identity(identity_type, config).await.unwrap();
+        let identity = manager
+            .register_identity(identity_type, config)
+            .await
+            .unwrap();
 
         // Test JIT access request
         let jit_request = JitAccessRequest {
@@ -197,7 +207,10 @@ mod service_identity_tests {
         };
 
         let jit_result = manager.request_jit_access(jit_request).await;
-        assert!(jit_result.is_ok(), "Should grant JIT access for valid request");
+        assert!(
+            jit_result.is_ok(),
+            "Should grant JIT access for valid request"
+        );
     }
 }
 
@@ -221,7 +234,7 @@ mod non_human_monitoring_tests {
 
         let alert_handler = Arc::new(MockAlertHandler);
         let geo_resolver = Arc::new(MockGeoResolver);
-        
+
         let _service = NonHumanIdentityMonitor::new(config, alert_handler, geo_resolver);
         // Note: The actual constructor might return Result<Self, Error> or Self
         // For now, we'll assume it returns Self and test basic functionality
@@ -241,7 +254,10 @@ mod non_human_monitoring_tests {
         assert!(baseline_result.is_ok(), "Should establish baseline");
 
         let baseline = baseline_result.unwrap();
-        assert_eq!(baseline.established_at.date_naive(), Utc::now().date_naive());
+        assert_eq!(
+            baseline.established_at.date_naive(),
+            Utc::now().date_naive()
+        );
         assert!(baseline.confidence_score >= 0.0);
     }
 
@@ -258,7 +274,7 @@ mod non_human_monitoring_tests {
         let alert_handler = Arc::new(MockAlertHandler);
         let geo_resolver = Arc::new(MockGeoResolver);
         let service = NonHumanIdentityMonitor::new(config, alert_handler, geo_resolver);
-        
+
         // Create a mock service identity for testing
         let service_identity = ServiceIdentity {
             id: Uuid::new_v4(),
@@ -297,7 +313,10 @@ mod non_human_monitoring_tests {
             .calculate_anomaly_score(&service_identity, &normal_context)
             .await;
         // anomaly_score is f32, check if it's a valid number
-        assert!(!anomaly_score.is_nan(), "Anomaly score should be a valid number");
+        assert!(
+            !anomaly_score.is_nan(),
+            "Anomaly score should be a valid number"
+        );
         assert!(anomaly_score >= 0.0, "Anomaly score should be non-negative");
     }
 
@@ -344,10 +363,12 @@ mod non_human_monitoring_tests {
         };
 
         // Test successful authentication logging
-        let log_result = service.log_authentication(&service_identity, true, &auth_context).await;
+        let log_result = service
+            .log_authentication(&service_identity, true, &auth_context)
+            .await;
         assert!(log_result.is_ok(), "Should log successful authentication");
 
-        // Test failed authentication logging  
+        // Test failed authentication logging
         let failed_context = RequestContext {
             source_ip: "192.168.1.100".to_string(),
             user_agent: Some("ServiceBot/1.0".to_string()),
@@ -355,7 +376,9 @@ mod non_human_monitoring_tests {
             parent_span_id: None,
             attestation_data: None,
         };
-        let log_result = service.log_authentication(&service_identity, false, &failed_context).await;
+        let log_result = service
+            .log_authentication(&service_identity, false, &failed_context)
+            .await;
         assert!(log_result.is_ok(), "Should log failed authentication");
     }
 
@@ -382,10 +405,10 @@ mod security_metrics_tests {
     fn test_metrics_feature_gating() {
         // This test ensures that experimental security metrics features
         // are properly feature-gated and basic functionality always works
-        
+
         // Basic metrics should always be available regardless of feature flags
         assert!(true, "Basic security metrics are available");
-        
+
         // Note: Enhanced metrics availability depends on feature flag configuration
         // This test validates the feature gating mechanism works correctly
     }
@@ -401,7 +424,10 @@ mod security_metrics_tests {
             title: "Unusual API access pattern detected".to_string(),
             description: "Service account accessing admin endpoints outside normal hours"
                 .to_string(),
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             source_ip: Some("203.0.113.50".to_string()),
             destination_ip: None,
             source: "security_monitoring".to_string(),
@@ -409,8 +435,14 @@ mod security_metrics_tests {
             client_id: None,
             metadata: {
                 let mut metadata = HashMap::new();
-                metadata.insert("anomaly_score".to_string(), serde_json::Value::String("0.95".to_string()));
-                metadata.insert("baseline_deviation".to_string(), serde_json::Value::String("high".to_string()));
+                metadata.insert(
+                    "anomaly_score".to_string(),
+                    serde_json::Value::String("0.95".to_string()),
+                );
+                metadata.insert(
+                    "baseline_deviation".to_string(),
+                    serde_json::Value::String("high".to_string()),
+                );
                 metadata
             },
             resolved: false,
@@ -437,11 +469,12 @@ mod integration_tests {
         // Initialize services
         let security_monitoring = Arc::new(MockSecurityMonitoring);
         let identity_manager = ServiceIdentityManager::new(security_monitoring);
-        
+
         let monitoring_config = NonHumanMonitoringConfig::default();
         let alert_handler = Arc::new(MockAlertHandler);
         let geo_resolver = Arc::new(MockGeoResolver);
-        let monitoring_service = NonHumanIdentityMonitor::new(monitoring_config, alert_handler, geo_resolver);
+        let monitoring_service =
+            NonHumanIdentityMonitor::new(monitoring_config, alert_handler, geo_resolver);
 
         // Create a service identity
         let identity_type = IdentityType::ServiceAccount {
@@ -477,7 +510,10 @@ mod integration_tests {
         let log_result = monitoring_service
             .log_authentication(&service_identity, true, &auth_context)
             .await;
-        assert!(log_result.is_ok(), "Should log payment service authentication");
+        assert!(
+            log_result.is_ok(),
+            "Should log payment service authentication"
+        );
 
         // Test request logging
         let request_log = monitoring_service
@@ -488,7 +524,7 @@ mod integration_tests {
                 200,
                 1024,
                 2048,
-                150
+                150,
             )
             .await;
         assert!(request_log.is_ok(), "Should log payment request");
@@ -506,7 +542,13 @@ mod integration_tests {
             .calculate_anomaly_score(&service_identity, &suspicious_context)
             .await;
         // anomaly_score is f32, check if it's a valid number for suspicious activity
-        assert!(!anomaly_score.is_nan(), "Anomaly score should be a valid number for suspicious activity");
-        assert!(anomaly_score >= 0.0, "Anomaly score should be non-negative for suspicious activity");
+        assert!(
+            !anomaly_score.is_nan(),
+            "Anomaly score should be a valid number for suspicious activity"
+        );
+        assert!(
+            anomaly_score >= 0.0,
+            "Anomaly score should be non-negative for suspicious activity"
+        );
     }
 }

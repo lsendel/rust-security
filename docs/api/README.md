@@ -4,6 +4,275 @@
 
 The Rust Security Platform provides a comprehensive REST API for authentication, authorization, and user management. All endpoints support JSON request/response format and follow RESTful conventions.
 
+## ✅ Quick Start (Configuration Issues Fixed)
+
+**Status:** 🟢 **Both services now start successfully with proper configuration**
+
+### 1. Setup Configuration
+
+Create `config/development.toml`:
+```bash
+mkdir -p config
+# Use the complete configuration from docs/WORKING_CONFIGURATION_GUIDE.md
+```
+
+### 2. Start Services
+
+```bash
+# Tested startup method
+./test-with-config-file.sh
+
+# Or manually:
+export CONFIG_PATH="config/development.toml"
+export POLICY_BIND_ADDR="127.0.0.1:8081"
+CONFIG_PATH=config/development.toml ./target/debug/auth-service &
+./target/debug/policy-service &
+```
+
+### 3. Verify Services
+
+```bash
+# Health checks (✅ Working)
+curl http://localhost:8080/health
+curl http://localhost:8081/health
+```
+
+### 4. Test Authentication
+
+```bash
+# Register user (✅ Working)
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "password": "SecurePass123!", "name": "Test User"}'
+
+# Login (✅ Working)
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "password": "SecurePass123!"}'
+```
+
+**✅ Configuration Fixes Applied:**
+- Duration parsing supports string formats ("30s", "15m", "1h") 
+- Duplicate OpenAPI route conflict resolved
+- Complete TOML configuration provided
+
+### 5. Test Bearer Token Authentication
+
+```bash
+# Register user and get JWT token immediately
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "password": "SecurePass123!", "name": "Test User"}'
+
+# Response includes access_token:
+# {"access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...", "token_type": "Bearer", ...}
+
+# Extract and use the JWT token
+export JWT_TOKEN="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+
+# Use Bearer token for authenticated requests
+curl -H "Authorization: Bearer $JWT_TOKEN" \
+  http://localhost:8080/api/v1/protected-endpoint
+```
+
+**✅ JWT Bearer Token Flow Working:**
+- Registration returns JWT token immediately
+- Login also returns JWT token  
+- Token format: `{"access_token": "...", "token_type": "Bearer"}`
+- Standard Bearer authentication: `Authorization: Bearer $TOKEN`
+
+## 🏢 SaaS Organization User Management
+
+The platform provides comprehensive APIs for creating and managing users within SaaS organizations:
+
+### Organization User Registration
+
+Create users with organization context using email domains:
+
+```bash
+# Create organization admin
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@acme.com",
+    "password": "AdminSecure123!",
+    "name": "ACME Corporation Admin"
+  }'
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "user": {
+    "id": "ff72b88f-7709-4955-a307-0c0f8b818daa",
+    "email": "admin@acme.com",
+    "name": "ACME Corporation Admin",
+    "roles": ["user"]
+  }
+}
+```
+
+### Organization User Creation
+
+Create multiple users for the same organization:
+
+```bash
+# Create organization users
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john.doe@acme.com",
+    "password": "UserSecure123!",
+    "name": "John Doe"
+  }'
+
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane.smith@acme.com", 
+    "password": "UserSecure123!",
+    "name": "Jane Smith"
+  }'
+```
+
+### Organization User Authentication
+
+Users authenticate with their organization email:
+
+```bash
+# Login organization user
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john.doe@acme.com",
+    "password": "UserSecure123!"
+  }'
+```
+
+### Organization Authorization with JWT Context
+
+Use JWT tokens with organization context for policy decisions:
+
+```bash
+# Extract JWT token from login/registration response
+export JWT_TOKEN="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+
+# Test authorization with organization context
+curl -X POST http://localhost:8081/v1/authorize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "principal": {"type": "User", "id": "john.doe@acme.com"},
+    "action": {"type": "Action", "id": "read"},
+    "resource": {"type": "Document", "id": "org-acme-doc-001"},
+    "context": {
+      "organization_id": "acme-corp",
+      "organization_domain": "acme.com",
+      "authenticated": true,
+      "jwt_valid": true
+    }
+  }'
+```
+
+### Cross-Tenant Isolation Testing
+
+Verify organization boundaries:
+
+```bash
+# Create user from different organization
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@competitor.com",
+    "password": "CompetitorSecure123!",
+    "name": "Competitor User"
+  }'
+
+# Test cross-organization access (should be restricted by policies)
+curl -X POST http://localhost:8081/v1/authorize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "principal": {"type": "User", "id": "user@competitor.com"},
+    "action": {"type": "Action", "id": "read"},
+    "resource": {"type": "Document", "id": "org-acme-doc-001"},
+    "context": {
+      "organization_id": "competitor-org",
+      "authenticated": true
+    }
+  }'
+```
+
+### Complete SaaS Organization Test
+
+Run the comprehensive test script:
+
+```bash
+./test-saas-organization-flow.sh
+```
+
+This script validates:
+- ✅ Organization admin and user creation
+- ✅ JWT Bearer token authentication
+- ✅ Organization-scoped authorization
+- ✅ Cross-tenant isolation
+- ✅ Policy-based access control
+
+## 🏢 Complete Group Assignment Guide
+
+The platform provides **4 comprehensive methods** for assigning organization users to groups:
+
+### Method 1: Organization-Based Grouping ✅ **ACTIVE NOW**
+```bash
+# Users automatically grouped by email domain  
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "dev@acme.com", "password": "SecurePass123!", "name": "ACME Developer"}'
+
+# @acme.com users → ACME organization group
+# JWT tokens include organization context
+```
+
+### Method 2: Policy-Based Group Authorization ✅ **ACTIVE NOW**
+```bash
+# Fine-grained access control with group memberships
+curl -X POST http://localhost:8081/v1/authorize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "context": {
+      "group_memberships": ["engineering-team", "senior-developers"],
+      "organization_id": "acme-corp"
+    }
+  }'
+```
+
+### Method 3: SCIM 2.0 Group Management ⚠️ **READY TO ENABLE**
+```bash
+# Enterprise group creation (when endpoints enabled)
+curl -X POST http://localhost:8080/scim/v2/Groups \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "Engineering Team",
+    "members": ["dev1@acme.com", "dev2@acme.com"]
+  }'
+```
+
+### Method 4: Database-Level Assignment 🔧 **SCHEMA READY** 
+```sql
+-- Direct SQL group management
+INSERT INTO groups (id, display_name) VALUES ('engineering', 'Engineering Team');
+INSERT INTO group_members (group_id, user_id) VALUES ('engineering', 'user-id');
+```
+
+### Test All 4 Group Assignment Methods
+```bash
+# Run comprehensive test of all scenarios
+./test-4-group-scenarios.sh
+```
+
+**See `GROUP_ASSIGNMENT_GUIDE.md` for complete implementation details and examples.**
+
 ### API Architecture Overview
 
 ```mermaid
@@ -81,6 +350,138 @@ All API requests require authentication via JWT tokens in the Authorization head
 ```http
 Authorization: Bearer <jwt_token>
 ```
+
+## 🔐 JWT Bearer Token Authentication
+
+### Complete Bearer Token Flow
+
+The Rust Security Platform uses JWT (JSON Web Tokens) for authentication with the following tested and verified flow:
+
+#### Step 1: Register User (Returns JWT Token Immediately)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePassword123!",
+    "name": "Test User"
+  }'
+```
+
+**Response (HTTP 200):**
+```json
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "refresh_token": null,
+  "user": {
+    "id": "uuid-here",
+    "email": "user@example.com", 
+    "name": "Test User",
+    "roles": ["user"]
+  }
+}
+```
+
+#### Step 2: Login User (Also Returns JWT Token)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+**Response (HTTP 200):** Same JWT token format as registration.
+
+#### Step 3: Extract and Use JWT Token
+
+```bash
+# Extract access_token from JSON response
+export JWT_TOKEN="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+
+# Use Bearer token for authenticated requests
+curl -H "Authorization: Bearer $JWT_TOKEN" \
+  http://localhost:8080/api/v1/protected-endpoint
+```
+
+#### Step 4: Policy Authorization with JWT Context
+
+```bash
+# Test authorization with authenticated user context
+curl -X POST http://localhost:8081/v1/authorize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "principal": {"type": "User", "id": "user@example.com"},
+    "action": {"type": "Action", "id": "read"},
+    "resource": {"type": "Document", "id": "doc123"},
+    "context": {
+      "authenticated": true,
+      "jwt_valid": true,
+      "user_roles": ["user"]
+    }
+  }'
+```
+
+### JWT Token Structure
+
+The JWT tokens contain the following claims:
+
+```json
+{
+  "sub": "user-uuid",              // Subject (User ID)
+  "email": "user@example.com",     // User email
+  "name": "User Name",             // User display name  
+  "roles": ["user"],               // User roles
+  "exp": 1756504789,              // Expiration timestamp
+  "iat": 1756418389,              // Issued at timestamp
+  "iss": "rust-security-platform" // Issuer
+}
+```
+
+### Bearer Token Usage Examples
+
+#### JavaScript (Fetch API)
+```javascript
+const response = await fetch('/api/v1/endpoint', {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+#### Python (Requests)
+```python
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json'
+}
+response = requests.get('/api/v1/endpoint', headers=headers)
+```
+
+#### curl Command
+```bash
+curl -H "Authorization: Bearer $JWT_TOKEN" \
+     -H "Content-Type: application/json" \
+     http://localhost:8080/api/v1/endpoint
+```
+
+#### Postman/Insomnia
+- **Auth Type:** Bearer Token
+- **Token:** `eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...`
+
+### Token Security Notes
+
+- **Token Lifetime:** 24 hours (86400 seconds)
+- **Algorithm:** HS256 (HMAC SHA-256)
+- **Storage:** Store securely (avoid localStorage for sensitive apps)
+- **Transmission:** Always use HTTPS in production
+- **Validation:** Server validates signature, expiration, and claims
 
 ## Rate Limiting
 

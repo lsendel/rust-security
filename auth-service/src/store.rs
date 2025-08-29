@@ -414,7 +414,8 @@ impl Store for HybridStore {
                     let _: Result<(), _> = conn.expire(&key, ttl_secs as i64).await;
                 }
                 set_result
-            }; match res {
+            };
+            match res {
                 Ok(()) => {
                     // Successfully stored in Redis, also store in memory as backup
                     self.refresh_tokens

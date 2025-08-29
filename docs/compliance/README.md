@@ -68,13 +68,13 @@
 #### Control Implementation Evidence
 ```bash
 # Generate SOC 2 evidence package
-./scripts/generate_compliance_report.py --framework soc2 --period "2024-01-01,2024-12-31"
+python3 ./scripts/generate_compliance_report.py --framework soc2 --period "2024-01-01,2024-12-31"
 
-# Security controls evidence
-curl -s "http://localhost:9090/api/v1/query?query=security_controls_enabled" > evidence/security_controls.json
+# Security controls evidence (if Prometheus is running)
+curl -s "http://localhost:9090/api/v1/query?query=security_controls_enabled" > evidence/security_controls.json 2>/dev/null || echo "Prometheus not available"
 
-# Access control evidence
-elasticsearch_query '{
+# Access control evidence (if Elasticsearch is running)
+curl -X POST "localhost:9200/security-logs-*/_search" -H "Content-Type: application/json" -d '{
   "query": {
     "bool": {
       "must": [
@@ -87,7 +87,7 @@ elasticsearch_query '{
     "access_patterns": {"terms": {"field": "security.event_type"}},
     "user_activity": {"terms": {"field": "security.client_id"}}
   }
-}' > evidence/access_controls.json
+}' > evidence/access_controls.json 2>/dev/null || echo "Elasticsearch not available"
 ```
 
 #### Operating Effectiveness Testing

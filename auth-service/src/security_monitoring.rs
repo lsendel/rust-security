@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityAlert {
@@ -99,7 +99,8 @@ pub struct SecurityMonitor {
 }
 
 impl SecurityMonitor {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let default_config = MonitoringConfig {
             enabled: std::env::var("SECURITY_MONITORING_ENABLED").unwrap_or_default() == "true",
             alert_retention_days: 30,
@@ -186,7 +187,7 @@ impl SecurityMonitor {
                 {
                     // Get metrics from our security metrics collector
                     let all_metrics = SECURITY_METRICS.get_all_metrics();
-                    
+
                     // Check thresholds against our collected metrics
                     for threshold in &config_guard.thresholds {
                         if !threshold.enabled {

@@ -26,19 +26,16 @@ static TEST_MODE_USAGE_COUNT: Lazy<std::sync::atomic::AtomicU64> =
 /// Production safety check - prevents test mode in production environments
 pub fn is_test_mode() -> bool {
     // First check if we're in production
-    if is_production_environment()
-        && is_test_mode_raw() {
-            error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
-            error!(
-                "This creates serious security vulnerabilities and MUST be disabled immediately"
-            );
+    if is_production_environment() && is_test_mode_raw() {
+        error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
+        error!("This creates serious security vulnerabilities and MUST be disabled immediately");
 
-            // Log to security audit trail
-            audit_log_security_violation();
+        // Log to security audit trail
+        audit_log_security_violation();
 
-            // In production, we force disable test mode regardless of environment variable
-            return false;
-        }
+        // In production, we force disable test mode regardless of environment variable
+        return false;
+    }
 
     let enabled = TEST_MODE_ENABLED.load(Ordering::Relaxed);
     if enabled {

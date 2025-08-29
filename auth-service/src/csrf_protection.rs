@@ -92,7 +92,8 @@ pub struct CsrfToken {
 
 impl CsrfToken {
     /// Create a new CSRF token
-    #[must_use] pub fn new(lifetime: Duration, session_id: Option<String>) -> Self {
+    #[must_use]
+    pub fn new(lifetime: Duration, session_id: Option<String>) -> Self {
         let mut token_bytes = vec![0u8; 32];
         OsRng.fill_bytes(&mut token_bytes);
         let token = URL_SAFE_NO_PAD.encode(&token_bytes);
@@ -111,7 +112,8 @@ impl CsrfToken {
     }
 
     /// Check if token is expired
-    #[must_use] pub fn is_expired(&self) -> bool {
+    #[must_use]
+    pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -171,7 +173,8 @@ pub struct CsrfProtection {
 
 impl CsrfProtection {
     /// Create new CSRF protection service
-    #[must_use] pub fn new(config: CsrfConfig) -> Self {
+    #[must_use]
+    pub fn new(config: CsrfConfig) -> Self {
         Self {
             config,
             active_tokens: Arc::new(RwLock::new(HashMap::new())),
@@ -238,7 +241,8 @@ impl CsrfProtection {
     }
 
     /// Check if endpoint is exempt from CSRF protection
-    #[must_use] pub fn is_exempt_endpoint(&self, path: &str) -> bool {
+    #[must_use]
+    pub fn is_exempt_endpoint(&self, path: &str) -> bool {
         self.config
             .exempt_endpoints
             .iter()
@@ -246,7 +250,8 @@ impl CsrfProtection {
     }
 
     /// Generate cookie header for CSRF token
-    #[must_use] pub fn generate_cookie_header(&self, signed_token: &str) -> String {
+    #[must_use]
+    pub fn generate_cookie_header(&self, signed_token: &str) -> String {
         format!(
             "{}={}; Path=/; SameSite={}{}{}{}",
             self.config.cookie_name,
@@ -267,7 +272,8 @@ impl CsrfProtection {
     }
 
     /// Extract token from request headers or form data
-    #[must_use] pub fn extract_token_from_request(
+    #[must_use]
+    pub fn extract_token_from_request(
         &self,
         headers: &HashMap<String, String>,
         form_data: Option<&HashMap<String, String>>,

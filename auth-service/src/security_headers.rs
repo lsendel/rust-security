@@ -61,7 +61,8 @@ impl Default for SecurityLevel {
 
 impl SecurityLevel {
     /// Get the security headers configuration for this level
-    #[must_use] pub fn get_config(&self) -> SecurityHeadersConfig {
+    #[must_use]
+    pub fn get_config(&self) -> SecurityHeadersConfig {
         match self {
             Self::Development => SecurityHeadersConfig::development(),
             Self::Production => SecurityHeadersConfig::production(),
@@ -72,7 +73,8 @@ impl SecurityLevel {
 
 impl SecurityHeadersConfig {
     /// Enhanced development configuration with improved security
-    #[must_use] pub fn development() -> Self {
+    #[must_use]
+    pub fn development() -> Self {
         Self {
             csp: "default-src 'self'; \
                   script-src 'self' 'unsafe-inline' 'unsafe-eval'; \
@@ -107,7 +109,8 @@ impl SecurityHeadersConfig {
     }
 
     /// Production configuration with strict security
-    #[must_use] pub fn production() -> Self {
+    #[must_use]
+    pub fn production() -> Self {
         Self {
             csp: "default-src 'none'; \
                   script-src 'self' 'strict-dynamic'; \
@@ -146,7 +149,8 @@ impl SecurityHeadersConfig {
     }
 
     /// Load configuration from environment variables
-    #[must_use] pub fn from_env() -> Self {
+    #[must_use]
+    pub fn from_env() -> Self {
         let base_config = if std::env::var("ENVIRONMENT")
             .unwrap_or_default()
             .to_lowercase()

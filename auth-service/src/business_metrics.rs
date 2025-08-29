@@ -14,7 +14,8 @@ pub struct AuthMetrics {
 }
 
 impl AuthMetrics {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             login_attempts: RwLock::new(HashMap::new()),
             active_sessions: RwLock::new(0),
@@ -122,7 +123,8 @@ pub type BusinessMetricsRegistry = BusinessMetricsHelper;
 
 impl BusinessMetricsHelper {
     /// Create a new `BusinessMetricsHelper` instance
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 

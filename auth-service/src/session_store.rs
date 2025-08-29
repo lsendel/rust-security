@@ -33,7 +33,8 @@ pub struct SessionData {
 }
 
 impl SessionData {
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         user_id: String,
         client_id: String,
         ttl_seconds: u64,
@@ -61,7 +62,8 @@ impl SessionData {
         }
     }
 
-    #[must_use] pub fn is_expired(&self) -> bool {
+    #[must_use]
+    pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -311,7 +313,8 @@ impl SessionStore for RedisSessionStore {
                     let _: Result<(), _> = conn.expire(&session_key, ttl as i64).await;
                 }
                 set_result
-            }; match res {
+            };
+            match res {
                 Ok(()) => {
                     // Successfully updated in Redis, also update memory backup
                     self.memory_fallback
@@ -705,7 +708,9 @@ impl SessionStore for EnhancedRedisSessionStore {
             })
             .await;
 
-        if let Ok(Some(session)) = redis_result { Ok(Some(session)) } else {
+        if let Ok(Some(session)) = redis_result {
+            Ok(Some(session))
+        } else {
             // Check memory fallback
             let memory = self.memory_fallback.read().await;
             Ok(memory.get(session_id).cloned())

@@ -183,7 +183,8 @@ pub struct ErrorResponse {
 // Implementation
 
 impl AuthState {
-    #[must_use] pub fn new(jwt_secret: String) -> Self {
+    #[must_use]
+    pub fn new(jwt_secret: String) -> Self {
         let mut users = HashMap::new();
         let mut oauth_clients = HashMap::new();
 

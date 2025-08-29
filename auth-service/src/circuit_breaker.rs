@@ -97,11 +97,13 @@ impl CircuitBreaker {
         }
     }
 
-    #[must_use] pub fn name(&self) -> &str {
+    #[must_use]
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    #[must_use] pub fn state(&self) -> CircuitState {
+    #[must_use]
+    pub fn state(&self) -> CircuitState {
         self.state
             .state
             .lock()
@@ -112,7 +114,8 @@ impl CircuitBreaker {
             })
     }
 
-    #[must_use] pub fn stats(&self) -> CircuitBreakerStats {
+    #[must_use]
+    pub fn stats(&self) -> CircuitBreakerStats {
         CircuitBreakerStats {
             state: self.state(),
             failure_count: self.state.failure_count.load(Ordering::Relaxed),
@@ -376,7 +379,8 @@ pub struct RetryBackoff {
 }
 
 impl RetryBackoff {
-    #[must_use] pub const fn new(config: RetryConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: RetryConfig) -> Self {
         Self { config, attempt: 0 }
     }
 
@@ -415,7 +419,8 @@ impl RetryBackoff {
         Some(delay)
     }
 
-    #[must_use] pub const fn attempt(&self) -> u32 {
+    #[must_use]
+    pub const fn attempt(&self) -> u32 {
         self.attempt
     }
 }

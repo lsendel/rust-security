@@ -416,7 +416,8 @@ pub struct ErrorResponse {
 }
 
 impl ErrorResponse {
-    #[must_use] pub fn new(error: &str, description: &str) -> Self {
+    #[must_use]
+    pub fn new(error: &str, description: &str) -> Self {
         Self {
             error: error.to_string(),
             error_description: description.to_string(),
@@ -427,17 +428,20 @@ impl ErrorResponse {
         }
     }
 
-    #[must_use] pub fn with_error_id(mut self, error_id: Uuid) -> Self {
+    #[must_use]
+    pub fn with_error_id(mut self, error_id: Uuid) -> Self {
         self.error_id = Some(error_id.to_string());
         self
     }
 
-    #[must_use] pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
+    #[must_use]
+    pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
         self.correlation_id = Some(correlation_id);
         self
     }
 
-    #[must_use] pub fn with_detail(mut self, key: &str, value: serde_json::Value) -> Self {
+    #[must_use]
+    pub fn with_detail(mut self, key: &str, value: serde_json::Value) -> Self {
         if self.details.is_none() {
             self.details = Some(HashMap::new());
         }
@@ -448,7 +452,8 @@ impl ErrorResponse {
         self
     }
 
-    #[must_use] pub fn with_error_uri(mut self, uri: String) -> Self {
+    #[must_use]
+    pub fn with_error_uri(mut self, uri: String) -> Self {
         self.error_uri = Some(uri);
         self
     }
@@ -549,7 +554,8 @@ pub fn internal_error(context: &str) -> AuthError {
 }
 
 /// Create a validation error
-#[must_use] pub fn validation_error(field: &str, reason: &str) -> AuthError {
+#[must_use]
+pub fn validation_error(field: &str, reason: &str) -> AuthError {
     AuthError::ValidationError {
         field: field.to_string(),
         reason: reason.to_string(),
@@ -557,7 +563,8 @@ pub fn internal_error(context: &str) -> AuthError {
 }
 
 /// Create a token store error
-#[must_use] pub fn token_store_error(
+#[must_use]
+pub fn token_store_error(
     operation: &str,
     source: Box<dyn std::error::Error + Send + Sync>,
 ) -> AuthError {

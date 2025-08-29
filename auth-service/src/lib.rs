@@ -118,7 +118,8 @@ pub struct TokenResponse {
 pub const REFRESH_TOKEN_EXPIRY_SECONDS: u64 = 86400 * 30; // 30 days
 
 // Missing function - stub for compilation
-#[must_use] pub const fn get_token_expiry_seconds() -> u64 {
+#[must_use]
+pub const fn get_token_expiry_seconds() -> u64 {
     3600 // 1 hour
 }
 
@@ -151,11 +152,11 @@ pub mod config_endpoints;
 pub mod config_reload;
 pub mod config_static;
 mod config_tests;
-pub mod crypto_unified;
 pub mod crypto_secure;
-pub mod secure_config;
-pub mod input_sanitizer;
+pub mod crypto_unified;
 pub mod errors;
+pub mod input_sanitizer;
+pub mod secure_config;
 pub use errors::{internal_error, AuthError};
 pub mod jwks_rotation;
 pub mod policy_cache;

@@ -443,9 +443,7 @@ fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigE
     if let Some(ref secret) = config.security.request_signing_secret {
         if secret.len() < 32 {
             return Err(ConfigError::WeakSecret(
-                "REQUEST_SIGNING_SECRET must be at least 32 characters"
-                    .to_string()
-                    ,
+                "REQUEST_SIGNING_SECRET must be at least 32 characters".to_string(),
             ));
         }
     }
@@ -523,52 +521,40 @@ fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), Config
     // Validate RSA key size
     if config.security.rsa_key_size < 2048 {
         return Err(ConfigError::WeakCrypto(
-            "RSA key size must be at least 2048 bits"
-                .to_string()
-                ,
+            "RSA key size must be at least 2048 bits".to_string(),
         ));
     }
 
     // Validate TTL values
     if config.security.jwt_access_token_ttl_seconds < 300 {
         return Err(ConfigError::InvalidConfiguration(
-            "Access token TTL too short (minimum 5 minutes)"
-                .to_string()
-                ,
+            "Access token TTL too short (minimum 5 minutes)".to_string(),
         ));
     }
 
     if config.security.jwt_access_token_ttl_seconds > 86400 {
         return Err(ConfigError::InvalidConfiguration(
-            "Access token TTL too long (maximum 24 hours)"
-                .to_string()
-                ,
+            "Access token TTL too long (maximum 24 hours)".to_string(),
         ));
     }
 
     if config.security.session_ttl_seconds < 900 {
         return Err(ConfigError::InvalidConfiguration(
-            "Session TTL too short (minimum 15 minutes)"
-                .to_string()
-                ,
+            "Session TTL too short (minimum 15 minutes)".to_string(),
         ));
     }
 
     // Validate password policy
     if config.security.password_policy.min_length < 8 {
         return Err(ConfigError::WeakCrypto(
-            "Password minimum length must be at least 8"
-                .to_string()
-                ,
+            "Password minimum length must be at least 8".to_string(),
         ));
     }
 
     // Validate rate limiting
     if config.rate_limiting.requests_per_minute_per_ip > 1000 {
         return Err(ConfigError::InvalidConfiguration(
-            "Per-IP rate limit too high (maximum 1000)"
-                .to_string()
-                ,
+            "Per-IP rate limit too high (maximum 1000)".to_string(),
         ));
     }
 

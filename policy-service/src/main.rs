@@ -39,12 +39,7 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to load policies and entities")?;
     let openapi = ApiDoc::openapi();
 
-    let app = app(state)
-        .merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", openapi.clone()))
-        .route(
-            "/openapi.json",
-            axum::routing::get(move || async { axum::Json(openapi) }),
-        );
+    let app = app(state).merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", openapi.clone()));
 
     let cfg = config::AppConfig::from_env()?;
     let listener = TcpListener::bind(cfg.bind_addr).await?;

@@ -461,7 +461,9 @@ impl EnhancedObservability {
         }
 
         // Update duration statistics (simplified running average)
-        profile.avg_duration_ms = profile.avg_duration_ms.mul_add((profile.call_count - 1) as f64, duration_ms)
+        profile.avg_duration_ms = profile
+            .avg_duration_ms
+            .mul_add((profile.call_count - 1) as f64, duration_ms)
             / profile.call_count as f64;
         profile.max_duration_ms = profile.max_duration_ms.max(duration_ms);
         profile.timestamp = SystemTime::now();

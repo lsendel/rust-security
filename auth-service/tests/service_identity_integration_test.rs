@@ -9,7 +9,7 @@ use uuid::Uuid;
 use auth_service::{
     jit_token_manager::{JitConfig, JitTokenManager, TokenBindingContext},
     non_human_monitoring::{NonHumanIdentityMonitor, NonHumanMonitoringConfig},
-    security_monitoring::{SecurityAlert},
+    security_monitoring::SecurityAlert,
     service_identity::{
         BehavioralBaseline, Environment, IdentityConfig, IdentityStatus, IdentityType,
         JitAccessRequest, RequestContext, ServiceIdentity, ServiceIdentityManager,

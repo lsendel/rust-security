@@ -445,7 +445,8 @@ impl Default for InMemoryKeyStorage {
 }
 
 impl InMemoryKeyStorage {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             keys: Arc::new(RwLock::new(Vec::new())),
         }

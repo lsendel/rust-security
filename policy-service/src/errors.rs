@@ -9,34 +9,34 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum PolicyError {
     #[error("Policy not found: {id}")]
-    PolicyNotFound { id: String },
+    NotFound { id: String },
 
     #[error("Policy validation failed: {reason}")]
-    PolicyValidationFailed { reason: String },
+    ValidationFailed { reason: String },
 
     #[error("Policy compilation failed")]
-    PolicyCompilationFailed {
+    CompilationFailed {
         #[source]
         source: cedar_policy::ParseErrors,
     },
 
     #[error("Policy evaluation failed: {context}")]
-    PolicyEvaluationFailed { context: String },
+    EvaluationFailed { context: String },
 }
 
 #[derive(Error, Debug)]
 pub enum EntityError {
     #[error("Entity not found: {entity_type}:{entity_id}")]
-    EntityNotFound {
+    NotFound {
         entity_type: String,
         entity_id: String,
     },
 
     #[error("Entity validation failed: {reason}")]
-    EntityValidationFailed { reason: String },
+    ValidationFailed { reason: String },
 
     #[error("Entity parsing failed")]
-    EntityParsingFailed {
+    ParsingFailed {
         #[from]
         source: cedar_policy::EntityAttrEvaluationError,
     },
@@ -132,11 +132,12 @@ impl AppError {
         }
     }
 
-    #[must_use] pub const fn status_code(&self) -> StatusCode {
+    #[must_use]
+    pub const fn status_code(&self) -> StatusCode {
         match self {
-            Self::Policy(PolicyError::PolicyNotFound { .. }) => StatusCode::NOT_FOUND,
-            Self::Entity(EntityError::EntityNotFound { .. }) => StatusCode::NOT_FOUND,
-            Self::PolicyNotFound => StatusCode::NOT_FOUND,
+            Self::Policy(PolicyError::NotFound { .. })
+            | Self::Entity(EntityError::NotFound { .. })
+            | Self::PolicyNotFound => StatusCode::NOT_FOUND,
 
             Self::Policy(_) | Self::Entity(_) | Self::Authorization(_) | Self::InvalidInput(_) => {
                 StatusCode::BAD_REQUEST
@@ -154,7 +155,8 @@ impl AppError {
         }
     }
 
-    #[must_use] pub const fn error_type(&self) -> &'static str {
+    #[must_use]
+    pub const fn error_type(&self) -> &'static str {
         match self {
             Self::Policy(_) => "policy_error",
             Self::Entity(_) => "entity_error",

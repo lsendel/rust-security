@@ -41,18 +41,23 @@ impl ApiTestClient {
         self.auth_token = Some(token);
     }
 
-    async fn request(&self, method: &str, url: &str, body: Option<Value>) -> Result<Response, String> {
+    async fn request(
+        &self,
+        method: &str,
+        url: &str,
+        body: Option<Value>,
+    ) -> Result<Response, String> {
         let mut request = match method {
             "GET" => self.client.get(url),
             "POST" => self.client.post(url),
             "PUT" => self.client.put(url),
             "PATCH" => self.client.patch(url),
             "DELETE" => self.client.delete(url),
-            _ => return Err(format!("Unsupported method: {}", method)),
+            _ => return Err(format!("Unsupported method: {method}")),
         };
 
         if let Some(token) = &self.auth_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
+            request = request.header("Authorization", format!("Bearer {token}"));
         }
 
         if let Some(body) = body {
@@ -62,7 +67,7 @@ impl ApiTestClient {
         request
             .send()
             .await
-            .map_err(|e| format!("Request failed: {}", e))
+            .map_err(|e| format!("Request failed: {e}"))
     }
 }
 
@@ -72,7 +77,7 @@ impl ApiTestClient {
 async fn test_auth_service_health() {
     let client = ApiTestClient::new();
     let response = client
-        .request("GET", &format!("{}/health", BASE_URL), None)
+        .request("GET", &format!("{BASE_URL}/health"), None)
         .await
         .expect("Failed to send request");
 
@@ -86,7 +91,7 @@ async fn test_auth_service_health() {
 async fn test_auth_service_status() {
     let client = ApiTestClient::new();
     let response = client
-        .request("GET", &format!("{}/api/v1/status", BASE_URL), None)
+        .request("GET", &format!("{BASE_URL}/api/v1/status"), None)
         .await
         .expect("Failed to send request");
 
@@ -106,7 +111,11 @@ async fn test_user_registration() {
     });
 
     let response = client
-        .request("POST", &format!("{}/api/v1/auth/register", BASE_URL), Some(test_user))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/api/v1/auth/register"),
+            Some(test_user),
+        )
         .await
         .expect("Failed to send request");
 
@@ -119,11 +128,11 @@ async fn test_user_registration() {
 #[tokio::test]
 async fn test_user_login() {
     let mut client = ApiTestClient::new();
-    
+
     // First register a user
     let test_email = format!("test_{}@example.com", uuid::Uuid::new_v4());
     let test_password = "TestPassword123!";
-    
+
     let register_payload = json!({
         "email": &test_email,
         "password": test_password,
@@ -131,7 +140,11 @@ async fn test_user_login() {
     });
 
     client
-        .request("POST", &format!("{}/api/v1/auth/register", BASE_URL), Some(register_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/api/v1/auth/register"),
+            Some(register_payload),
+        )
         .await
         .expect("Failed to register user");
 
@@ -142,7 +155,11 @@ async fn test_user_login() {
     });
 
     let response = client
-        .request("POST", &format!("{}/api/v1/auth/login", BASE_URL), Some(login_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/api/v1/auth/login"),
+            Some(login_payload),
+        )
         .await
         .expect("Failed to send request");
 
@@ -151,19 +168,21 @@ async fn test_user_login() {
     assert!(body["access_token"].is_string());
     assert!(body["refresh_token"].is_string());
     assert_eq!(body["token_type"], "Bearer");
-    
+
     // Store token for authenticated requests
-    client.set_auth_token(body["access_token"].as_str().unwrap().to_string()).await;
+    client
+        .set_auth_token(body["access_token"].as_str().unwrap().to_string())
+        .await;
 }
 
 #[tokio::test]
 async fn test_user_info_endpoint() {
     let mut client = ApiTestClient::new();
-    
+
     // Setup: Register and login
     let test_email = format!("test_{}@example.com", uuid::Uuid::new_v4());
     let test_password = "TestPassword123!";
-    
+
     let register_payload = json!({
         "email": &test_email,
         "password": test_password,
@@ -171,7 +190,11 @@ async fn test_user_info_endpoint() {
     });
 
     client
-        .request("POST", &format!("{}/api/v1/auth/register", BASE_URL), Some(register_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/api/v1/auth/register"),
+            Some(register_payload),
+        )
         .await
         .expect("Failed to register user");
 
@@ -181,16 +204,25 @@ async fn test_user_info_endpoint() {
     });
 
     let login_response = client
-        .request("POST", &format!("{}/api/v1/auth/login", BASE_URL), Some(login_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/api/v1/auth/login"),
+            Some(login_payload),
+        )
         .await
         .expect("Failed to login");
 
-    let login_body: Value = login_response.json().await.expect("Failed to parse login response");
-    client.set_auth_token(login_body["access_token"].as_str().unwrap().to_string()).await;
+    let login_body: Value = login_response
+        .json()
+        .await
+        .expect("Failed to parse login response");
+    client
+        .set_auth_token(login_body["access_token"].as_str().unwrap().to_string())
+        .await;
 
     // Test /me endpoint
     let response = client
-        .request("GET", &format!("{}/api/v1/auth/me", BASE_URL), None)
+        .request("GET", &format!("{BASE_URL}/api/v1/auth/me"), None)
         .await
         .expect("Failed to send request");
 
@@ -202,7 +234,7 @@ async fn test_user_info_endpoint() {
 #[tokio::test]
 async fn test_oauth_authorize_endpoint() {
     let client = ApiTestClient::new();
-    
+
     let authorize_url = format!(
         "{}/oauth/authorize?client_id={}&redirect_uri={}&response_type=code&state={}",
         BASE_URL,
@@ -223,7 +255,7 @@ async fn test_oauth_authorize_endpoint() {
 #[tokio::test]
 async fn test_oauth_token_endpoint() {
     let client = ApiTestClient::new();
-    
+
     let token_payload = json!({
         "grant_type": "client_credentials",
         "client_id": "demo-client",
@@ -232,7 +264,11 @@ async fn test_oauth_token_endpoint() {
     });
 
     let response = client
-        .request("POST", &format!("{}/oauth/token", BASE_URL), Some(token_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/oauth/token"),
+            Some(token_payload),
+        )
         .await
         .expect("Failed to send request");
 
@@ -246,7 +282,7 @@ async fn test_oauth_token_endpoint() {
 #[tokio::test]
 async fn test_service_identity_registration() {
     let client = ApiTestClient::new();
-    
+
     let service_payload = json!({
         "service_name": "test-service",
         "service_type": "backend",
@@ -254,7 +290,11 @@ async fn test_service_identity_registration() {
     });
 
     let response = client
-        .request("POST", &format!("{}/service/identity/register", BASE_URL), Some(service_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/service/identity/register"),
+            Some(service_payload),
+        )
         .await
         .expect("Failed to send request");
 
@@ -268,7 +308,7 @@ async fn test_service_identity_registration() {
 #[tokio::test]
 async fn test_jit_token_request() {
     let client = ApiTestClient::new();
-    
+
     // First register a service identity
     let service_payload = json!({
         "service_name": "test-service",
@@ -277,11 +317,18 @@ async fn test_jit_token_request() {
     });
 
     let service_response = client
-        .request("POST", &format!("{}/service/identity/register", BASE_URL), Some(service_payload))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/service/identity/register"),
+            Some(service_payload),
+        )
         .await
         .expect("Failed to register service");
 
-    let service_body: Value = service_response.json().await.expect("Failed to parse service response");
+    let service_body: Value = service_response
+        .json()
+        .await
+        .expect("Failed to parse service response");
     let identity_id = service_body["identity_id"].as_str().unwrap();
 
     // Request JIT token
@@ -292,7 +339,7 @@ async fn test_jit_token_request() {
     });
 
     let response = client
-        .request("POST", &format!("{}/token/jit", BASE_URL), Some(jit_payload))
+        .request("POST", &format!("{BASE_URL}/token/jit"), Some(jit_payload))
         .await
         .expect("Failed to send request");
 
@@ -309,7 +356,7 @@ async fn test_jit_token_request() {
 async fn test_policy_service_health() {
     let client = ApiTestClient::new();
     let response = client
-        .request("GET", &format!("{}/health", POLICY_SERVICE_URL), None)
+        .request("GET", &format!("{POLICY_SERVICE_URL}/health"), None)
         .await
         .expect("Failed to send request");
 
@@ -321,7 +368,7 @@ async fn test_policy_service_health() {
 #[tokio::test]
 async fn test_policy_authorization() {
     let client = ApiTestClient::new();
-    
+
     let auth_payload = json!({
         "subject": "user:test@example.com",
         "action": "read",
@@ -333,7 +380,11 @@ async fn test_policy_authorization() {
     });
 
     let response = client
-        .request("POST", &format!("{}/v1/authorize", POLICY_SERVICE_URL), Some(auth_payload))
+        .request(
+            "POST",
+            &format!("{POLICY_SERVICE_URL}/v1/authorize"),
+            Some(auth_payload),
+        )
         .await
         .expect("Failed to send request");
 
@@ -346,7 +397,7 @@ async fn test_policy_authorization() {
 async fn test_policy_metrics() {
     let client = ApiTestClient::new();
     let response = client
-        .request("GET", &format!("{}/metrics", POLICY_SERVICE_URL), None)
+        .request("GET", &format!("{POLICY_SERVICE_URL}/metrics"), None)
         .await
         .expect("Failed to send request");
 
@@ -359,7 +410,7 @@ async fn test_policy_metrics() {
 async fn test_openapi_documentation() {
     let client = ApiTestClient::new();
     let response = client
-        .request("GET", &format!("{}/openapi.json", POLICY_SERVICE_URL), None)
+        .request("GET", &format!("{POLICY_SERVICE_URL}/openapi.json"), None)
         .await
         .expect("Failed to send request");
 
@@ -375,51 +426,52 @@ async fn test_openapi_documentation() {
 #[tokio::test]
 async fn test_all_endpoints_comprehensive() {
     let mut results = Vec::new();
-    
+
     // Define all endpoints to test
     let endpoints = vec![
         // Auth Service Endpoints
-        ("GET", format!("{}/health", BASE_URL), None),
-        ("GET", format!("{}/api/v1/status", BASE_URL), None),
-        ("POST", format!("{}/api/v1/auth/register", BASE_URL), Some(json!({
+        ("GET", format!("{BASE_URL}/health"), None),
+        ("GET", format!("{BASE_URL}/api/v1/status"), None),
+        ("POST", format!("{BASE_URL}/api/v1/auth/register"), Some(json!({
             "email": format!("test_{}@example.com", uuid::Uuid::new_v4()),
             "password": "TestPassword123!",
             "name": "Test User"
         }))),
-        ("POST", format!("{}/api/v1/auth/login", BASE_URL), Some(json!({
+        ("POST", format!("{BASE_URL}/api/v1/auth/login"), Some(json!({
             "email": "demo@example.com",
             "password": "demo123"
         }))),
-        ("GET", format!("{}/oauth/authorize?client_id=demo-client&redirect_uri=http://localhost:3000/callback&response_type=code&state=test", BASE_URL), None),
-        ("POST", format!("{}/oauth/token", BASE_URL), Some(json!({
+        ("GET", format!("{BASE_URL}/oauth/authorize?client_id=demo-client&redirect_uri=http://localhost:3000/callback&response_type=code&state=test"), None),
+        ("POST", format!("{BASE_URL}/oauth/token"), Some(json!({
             "grant_type": "client_credentials",
             "client_id": "demo-client",
             "client_secret": "demo-secret"
         }))),
-        ("POST", format!("{}/service/identity/register", BASE_URL), Some(json!({
+        ("POST", format!("{BASE_URL}/service/identity/register"), Some(json!({
             "service_name": "test-service"
         }))),
-        ("POST", format!("{}/token/jit", BASE_URL), Some(json!({
+        ("POST", format!("{BASE_URL}/token/jit"), Some(json!({
             "identity_id": "test_id"
         }))),
-        
+
         // Policy Service Endpoints  
-        ("GET", format!("{}/health", POLICY_SERVICE_URL), None),
-        ("POST", format!("{}/v1/authorize", POLICY_SERVICE_URL), Some(json!({
+        ("GET", format!("{POLICY_SERVICE_URL}/health"), None),
+        ("POST", format!("{POLICY_SERVICE_URL}/v1/authorize"), Some(json!({
             "subject": "user:test",
             "action": "read",
             "resource": "doc:1"
         }))),
-        ("GET", format!("{}/metrics", POLICY_SERVICE_URL), None),
-        ("GET", format!("{}/openapi.json", POLICY_SERVICE_URL), None),
+        ("GET", format!("{POLICY_SERVICE_URL}/metrics"), None),
+        ("GET", format!("{POLICY_SERVICE_URL}/openapi.json"), None),
     ];
 
     let client = ApiTestClient::new();
-    
+
     for (method, url, body) in endpoints {
         let start = std::time::Instant::now();
-        
-        let result = match timeout(TEST_TIMEOUT, client.request(&method, &url, body.clone())).await {
+
+        let result = match timeout(TEST_TIMEOUT, client.request(&method, &url, body.clone())).await
+        {
             Ok(Ok(response)) => {
                 let status = response.status();
                 TestResult {
@@ -448,17 +500,17 @@ async fn test_all_endpoints_comprehensive() {
                 error: Some("Request timeout".to_string()),
             },
         };
-        
+
         results.push(result);
     }
-    
+
     // Print test summary
     println!("\n=== OpenAPI Endpoints Test Summary ===\n");
-    
+
     let total = results.len();
     let successful = results.iter().filter(|r| r.success).count();
     let failed = total - successful;
-    
+
     for result in &results {
         let status_symbol = if result.success { "✅" } else { "❌" };
         println!(
@@ -471,14 +523,25 @@ async fn test_all_endpoints_comprehensive() {
             result.error.as_ref().unwrap_or(&String::new())
         );
     }
-    
+
     println!("\n=== Summary ===");
     println!("Total: {}", total);
-    println!("Successful: {} ({:.1}%)", successful, (successful as f64 / total as f64) * 100.0);
-    println!("Failed: {} ({:.1}%)", failed, (failed as f64 / total as f64) * 100.0);
-    
+    println!(
+        "Successful: {} ({:.1}%)",
+        successful,
+        (successful as f64 / total as f64) * 100.0
+    );
+    println!(
+        "Failed: {} ({:.1}%)",
+        failed,
+        (failed as f64 / total as f64) * 100.0
+    );
+
     // Assert that most endpoints work (allow for some services not running)
-    assert!(successful as f64 / total as f64 >= 0.5, "Too many endpoints failed");
+    assert!(
+        successful as f64 / total as f64 >= 0.5,
+        "Too many endpoints failed"
+    );
 }
 
 // PERFORMANCE AND LOAD TESTING
@@ -486,26 +549,26 @@ async fn test_all_endpoints_comprehensive() {
 #[tokio::test]
 async fn test_endpoint_performance() {
     use std::time::Instant;
-    
+
     let client = ApiTestClient::new();
     let mut response_times = Vec::new();
-    
+
     // Test health endpoint performance
     for _ in 0..10 {
         let start = Instant::now();
         let _ = client
-            .request("GET", &format!("{}/health", BASE_URL), None)
+            .request("GET", &format!("{BASE_URL}/health"), None)
             .await;
         response_times.push(start.elapsed().as_millis());
     }
-    
+
     let avg_time: u128 = response_times.iter().sum::<u128>() / response_times.len() as u128;
     let max_time = response_times.iter().max().unwrap();
-    
+
     println!("Health endpoint performance:");
     println!("  Average response time: {}ms", avg_time);
     println!("  Max response time: {}ms", max_time);
-    
+
     // Assert reasonable performance
     assert!(avg_time < 100, "Average response time too high");
     assert!(*max_time < 500, "Max response time too high");
@@ -514,20 +577,20 @@ async fn test_endpoint_performance() {
 #[tokio::test]
 async fn test_concurrent_requests() {
     use tokio::task::JoinSet;
-    
+
     let mut tasks = JoinSet::new();
-    
+
     // Spawn 10 concurrent requests
     for i in 0..10 {
         tasks.spawn(async move {
             let client = ApiTestClient::new();
             let response = client
-                .request("GET", &format!("{}/health", BASE_URL), None)
+                .request("GET", &format!("{BASE_URL}/health"), None)
                 .await;
             (i, response.is_ok())
         });
     }
-    
+
     let mut successes = 0;
     while let Some(result) = tasks.join_next().await {
         if let Ok((_, success)) = result {
@@ -536,7 +599,7 @@ async fn test_concurrent_requests() {
             }
         }
     }
-    
+
     println!("Concurrent requests: {}/10 successful", successes);
     assert!(successes >= 8, "Too many concurrent requests failed");
 }
@@ -547,7 +610,7 @@ async fn test_concurrent_requests() {
 async fn test_invalid_endpoint() {
     let client = ApiTestClient::new();
     let response = client
-        .request("GET", &format!("{}/invalid/endpoint", BASE_URL), None)
+        .request("GET", &format!("{BASE_URL}/invalid/endpoint"), None)
         .await
         .expect("Failed to send request");
 
@@ -557,12 +620,16 @@ async fn test_invalid_endpoint() {
 #[tokio::test]
 async fn test_malformed_request() {
     let client = ApiTestClient::new();
-    
+
     // Send invalid JSON to registration endpoint
     let response = client
-        .request("POST", &format!("{}/api/v1/auth/register", BASE_URL), Some(json!({
-            "invalid": "data"
-        })))
+        .request(
+            "POST",
+            &format!("{BASE_URL}/api/v1/auth/register"),
+            Some(json!({
+                "invalid": "data"
+            })),
+        )
         .await
         .expect("Failed to send request");
 
@@ -572,10 +639,10 @@ async fn test_malformed_request() {
 #[tokio::test]
 async fn test_unauthorized_access() {
     let client = ApiTestClient::new();
-    
+
     // Try to access protected endpoint without token
     let response = client
-        .request("GET", &format!("{}/api/v1/auth/me", BASE_URL), None)
+        .request("GET", &format!("{BASE_URL}/api/v1/auth/me"), None)
         .await
         .expect("Failed to send request");
 

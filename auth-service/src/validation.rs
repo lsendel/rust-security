@@ -776,7 +776,7 @@ impl ValidatedDto for RateLimitConfig {}
 
 /// Validation middleware for Axum extractors
 pub mod middleware {
-    use super::{ValidatedDto, Deserialize};
+    use super::{Deserialize, ValidatedDto};
     use crate::errors::{validation_error, AuthError};
     use axum::{extract::FromRequest, http::Request};
 

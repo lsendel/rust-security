@@ -28,7 +28,8 @@ pub enum TokenType {
 }
 
 /// Create secure JWT validation with strict security constraints
-#[must_use] pub fn create_secure_jwt_validation() -> Validation {
+#[must_use]
+pub fn create_secure_jwt_validation() -> Validation {
     let mut validation = Validation::new(Algorithm::RS256);
 
     // Security constraints - ONLY allow RS256

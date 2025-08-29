@@ -74,12 +74,14 @@ impl Default for LruTokenCache {
 
 impl LruTokenCache {
     /// Create a new LRU token cache with default configuration
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::with_config(TokenCacheConfig::default())
     }
 
     /// Create a new LRU token cache with custom configuration
-    #[must_use] pub fn with_config(config: TokenCacheConfig) -> Self {
+    #[must_use]
+    pub fn with_config(config: TokenCacheConfig) -> Self {
         let cache = Arc::new(RwLock::new(HashMap::new()));
         let mut instance = Self {
             cache,
@@ -110,7 +112,8 @@ impl LruTokenCache {
 
                 // If still over capacity, remove least recently used
                 if cache_guard.len() > config.max_tokens {
-                    let mut entries: Vec<_> = cache_guard.iter()
+                    let mut entries: Vec<_> = cache_guard
+                        .iter()
                         .map(|(k, v)| (k.clone(), v.last_accessed))
                         .collect();
                     entries.sort_by_key(|(_, last_accessed)| *last_accessed);

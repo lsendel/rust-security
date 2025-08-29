@@ -208,9 +208,7 @@ pub async fn admin_auth_middleware(
             // Proceed with the request
             Ok(next.run(request).await)
         }
-        Err(auth_error) => {
-            handle_auth_failure(auth_error, method, path, &client_ip, &headers)
-        }
+        Err(auth_error) => handle_auth_failure(auth_error, method, path, &client_ip, &headers),
     }
 }
 

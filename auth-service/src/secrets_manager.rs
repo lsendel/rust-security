@@ -21,9 +21,9 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 #[cfg(feature = "aws")]
-use aws_crate::config::meta::region::RegionProviderChain;
+use aws_config::meta::region::RegionProviderChain;
 #[cfg(feature = "aws")]
-use aws_crate::config::{BehaviorVersion, Region};
+use aws_config::{BehaviorVersion, Region};
 #[cfg(feature = "aws")]
 use aws_sdk_secretsmanager::{Client as SecretsManagerClient, Error as AwsError};
 
@@ -300,7 +300,10 @@ impl SecretsManager {
             region_provider.or_else(Region::new("us-east-1"))
         };
 
-        let config = aws_crate::config::defaults(BehaviorVersion::latest()).region(region_provider).load().await;
+        let config = aws_crate::config::defaults(BehaviorVersion::latest())
+            .region(region_provider)
+            .load()
+            .await;
         self.aws_client = Some(SecretsManagerClient::new(&config));
 
         info!("AWS Secrets Manager client initialized");

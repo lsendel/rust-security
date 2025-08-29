@@ -191,7 +191,9 @@ impl NonHumanIdentityMonitor {
         identity_metrics.last_activity = Utc::now();
 
         if !success {
-            identity_metrics.error_rate = identity_metrics.error_rate.mul_add(identity_metrics.total_requests as f64 - 1.0, 1.0)
+            identity_metrics.error_rate = identity_metrics
+                .error_rate
+                .mul_add(identity_metrics.total_requests as f64 - 1.0, 1.0)
                 / identity_metrics.total_requests as f64;
         }
 
@@ -584,7 +586,6 @@ impl NonHumanIdentityMonitor {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

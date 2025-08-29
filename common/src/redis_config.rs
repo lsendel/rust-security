@@ -190,6 +190,14 @@ impl UnifiedRedisConfig {
     }
 
     /// Validate the configuration
+    ///
+    /// # Errors
+    /// Returns `RedisConfigError` if:
+    /// - URL is empty
+    /// - URL doesn't start with redis:// or rediss://
+    /// - Connection pool size is 0 or too large
+    /// - Timeout values are invalid
+    /// - TLS configuration is invalid
     pub fn validate(&self) -> Result<(), RedisConfigError> {
         // Validate URL
         if self.url.is_empty() {
@@ -226,27 +234,32 @@ impl UnifiedRedisConfig {
     }
 
     /// Get connection timeout as Duration
-    #[must_use] pub const fn timeout_duration(&self) -> Duration {
+    #[must_use]
+    pub const fn timeout_duration(&self) -> Duration {
         Duration::from_millis(self.timeout_ms)
     }
 
     /// Get retry delay as Duration
-    #[must_use] pub const fn retry_delay_duration(&self) -> Duration {
+    #[must_use]
+    pub const fn retry_delay_duration(&self) -> Duration {
         Duration::from_millis(self.retry_delay_ms)
     }
 
     /// Get idle timeout as Duration
-    #[must_use] pub const fn idle_timeout_duration(&self) -> Duration {
+    #[must_use]
+    pub const fn idle_timeout_duration(&self) -> Duration {
         Duration::from_secs(self.idle_timeout_secs)
     }
 
     /// Get keep-alive as Duration
-    #[must_use] pub const fn keep_alive_duration(&self) -> Duration {
+    #[must_use]
+    pub const fn keep_alive_duration(&self) -> Duration {
         Duration::from_secs(self.keep_alive_secs)
     }
 
     /// Create a Redis client URL with database selection
-    #[must_use] pub fn client_url(&self) -> String {
+    #[must_use]
+    pub fn client_url(&self) -> String {
         if self.enable_cluster {
             self.url.clone()
         } else {

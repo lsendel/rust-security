@@ -71,7 +71,8 @@ impl Default for LoggingConfig {
 
 impl LoggingConfig {
     /// Create production logging configuration
-    #[must_use] pub fn production() -> Self {
+    #[must_use]
+    pub fn production() -> Self {
         Self {
             level: "info".to_string(),
             format: LogFormat::Json,
@@ -88,7 +89,8 @@ impl LoggingConfig {
     }
 
     /// Create development logging configuration
-    #[must_use] pub fn development() -> Self {
+    #[must_use]
+    pub fn development() -> Self {
         Self {
             level: "debug".to_string(),
             format: LogFormat::Pretty,
@@ -105,7 +107,8 @@ impl LoggingConfig {
     }
 
     /// Create testing logging configuration
-    #[must_use] pub fn testing() -> Self {
+    #[must_use]
+    pub fn testing() -> Self {
         Self {
             level: "warn".to_string(),
             format: LogFormat::Compact,
@@ -129,13 +132,12 @@ pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Invalid log level '{}': {}", config.level, e))?;
 
     // Create environment filter
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            EnvFilter::new(format!("auth_service={log_level}"))
-                .add_directive("tower_http=info".parse().unwrap())
-                .add_directive("hyper=warn".parse().unwrap())
-                .add_directive("reqwest=info".parse().unwrap())
-        });
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new(format!("auth_service={log_level}"))
+            .add_directive("tower_http=info".parse().unwrap())
+            .add_directive("hyper=warn".parse().unwrap())
+            .add_directive("reqwest=info".parse().unwrap())
+    });
 
     // Create formatter based on configuration
     let registry = tracing_subscriber::registry().with(env_filter);
@@ -157,14 +159,14 @@ pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
             if config.log_to_file && config.file_path.is_some() {
                 // File logging with rotation
                 let file_appender = tracing_appender::rolling::daily(
-                    std::path::Path::new(config.file_path.as_ref().unwrap()).parent().unwrap_or_else(|| std::path::Path::new(".")),
+                    std::path::Path::new(config.file_path.as_ref().unwrap())
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new(".")),
                     "auth-service.log",
                 );
                 let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
-                
-                registry
-                    .with(layer.with_writer(file_writer))
-                    .init();
+
+                registry.with(layer.with_writer(file_writer)).init();
             } else {
                 registry.with(layer).init();
             }
@@ -215,7 +217,7 @@ pub mod masking {
     lazy_static::lazy_static! {
         static ref SENSITIVE_PATTERNS: HashMap<&'static str, Regex> = {
             let mut patterns = HashMap::new();
-            
+
             // Common sensitive patterns
             patterns.insert("password", Regex::new(r#""password":\s*"[^"]*""#).unwrap());
             patterns.insert("secret", Regex::new(r#""secret":\s*"[^"]*""#).unwrap());
@@ -223,75 +225,84 @@ pub mod masking {
             patterns.insert("authorization", Regex::new(r#""authorization":\s*"[^"]*""#).unwrap());
             patterns.insert("api_key", Regex::new(r#""api_key":\s*"[^"]*""#).unwrap());
             patterns.insert("client_secret", Regex::new(r#""client_secret":\s*"[^"]*""#).unwrap());
-            
+
             // Credit card patterns
             patterns.insert("credit_card", Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap());
-            
+
             // SSN patterns
             patterns.insert("ssn", Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap());
-            
+
             // Email addresses (partial masking)
             patterns.insert("email", Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap());
-            
+
             patterns
         };
     }
 
     /// Mask sensitive data in a log message
-    #[must_use] pub fn mask_sensitive_data(input: &str) -> String {
+    #[must_use]
+    pub fn mask_sensitive_data(input: &str) -> String {
         let mut result = input.to_string();
 
         for (name, pattern) in SENSITIVE_PATTERNS.iter() {
             result = match *name {
                 "email" => {
                     // Partially mask emails: u***@example.com
-                    pattern.replace_all(&result, |caps: &regex::Captures| {
-                        let email = caps.get(0).unwrap().as_str();
-                        if let Some(at_pos) = email.find('@') {
-                            let username = &email[..at_pos];
-                            let domain = &email[at_pos..];
-                            if username.len() > 1 {
-                                format!("{}***{}", &username[..1], domain)
+                    pattern
+                        .replace_all(&result, |caps: &regex::Captures| {
+                            let email = caps.get(0).unwrap().as_str();
+                            if let Some(at_pos) = email.find('@') {
+                                let username = &email[..at_pos];
+                                let domain = &email[at_pos..];
+                                if username.len() > 1 {
+                                    format!("{}***{}", &username[..1], domain)
+                                } else {
+                                    format!("***{domain}")
+                                }
                             } else {
-                                format!("***{domain}")
+                                "***@***.***".to_string()
                             }
-                        } else {
-                            "***@***.***".to_string()
-                        }
-                    }).to_string()
+                        })
+                        .to_string()
                 }
                 "credit_card" => {
                     // Mask credit card: ****-****-****-1234
-                    pattern.replace_all(&result, |caps: &regex::Captures| {
-                        let card = caps.get(0).unwrap().as_str();
-                        if card.len() >= 4 {
-                            format!("****-****-****-{}", &card[card.len()-4..])
-                        } else {
-                            "****-****-****-****".to_string()
-                        }
-                    }).to_string()
+                    pattern
+                        .replace_all(&result, |caps: &regex::Captures| {
+                            let card = caps.get(0).unwrap().as_str();
+                            if card.len() >= 4 {
+                                format!("****-****-****-{}", &card[card.len() - 4..])
+                            } else {
+                                "****-****-****-****".to_string()
+                            }
+                        })
+                        .to_string()
                 }
                 "ssn" => {
                     // Mask SSN: ***-**-1234
-                    pattern.replace_all(&result, |caps: &regex::Captures| {
-                        let ssn = caps.get(0).unwrap().as_str();
-                        if ssn.len() >= 4 {
-                            format!("***-**-{}", &ssn[ssn.len()-4..])
-                        } else {
-                            "***-**-****".to_string()
-                        }
-                    }).to_string()
+                    pattern
+                        .replace_all(&result, |caps: &regex::Captures| {
+                            let ssn = caps.get(0).unwrap().as_str();
+                            if ssn.len() >= 4 {
+                                format!("***-**-{}", &ssn[ssn.len() - 4..])
+                            } else {
+                                "***-**-****".to_string()
+                            }
+                        })
+                        .to_string()
                 }
                 _ => {
                     // Complete masking for other sensitive fields
-                    pattern.replace_all(&result, |caps: &regex::Captures| {
-                        let full_match = caps.get(0).unwrap().as_str();
-                        if let Some(colon_pos) = full_match.find(':') {
-                            format!("{}:\"[REDACTED]\"", &full_match[..colon_pos])
-                        } else {
-                            "[REDACTED]".to_string()
-                        }
-                    }).to_string()
+                    pattern
+                        .replace_all(&result, |caps: &regex::Captures| {
+                            let full_match = caps.get(0).unwrap().as_str();
+                            if let Some(colon_pos) = full_match.find(':') {
+                                format!("{}:\"[REDACTED]\"", &full_match[..colon_pos])
+                            } else {
+                                "[REDACTED]".to_string()
+                            }
+                        })
+                        .to_string()
                 }
             };
         }
@@ -343,7 +354,8 @@ impl Default for RequestLoggingConfig {
 
 impl RequestLoggingConfig {
     /// Create production-safe request logging configuration
-    #[must_use] pub fn production() -> Self {
+    #[must_use]
+    pub fn production() -> Self {
         Self {
             log_headers: false, // Disabled in production for security
             log_request_body: false,
@@ -405,7 +417,7 @@ mod tests {
     fn test_sensitive_data_masking() {
         let input = r#"{"password":"secret123","email":"user@example.com","credit_card":"1234-5678-9012-3456"}"#;
         let masked = masking::mask_sensitive_data(input);
-        
+
         assert!(!masked.contains("secret123"));
         assert!(masked.contains("[REDACTED]"));
         assert!(masked.contains("u***@example.com"));
@@ -417,7 +429,9 @@ mod tests {
         let config = RequestLoggingConfig::production();
         assert!(!config.log_headers); // Disabled in production
         assert!(!config.log_request_body);
-        assert!(config.exclude_headers.contains(&"authorization".to_string()));
+        assert!(config
+            .exclude_headers
+            .contains(&"authorization".to_string()));
         assert!(config.exclude_paths.contains(&"/health".to_string()));
     }
 }

@@ -73,7 +73,8 @@ impl Default for HealthChecker {
 }
 
 impl HealthChecker {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             start_time: Instant::now(),
             components: Arc::new(RwLock::new(HashMap::new())),

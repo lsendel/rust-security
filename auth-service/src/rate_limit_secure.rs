@@ -135,7 +135,8 @@ pub enum RateLimitError {
 }
 
 impl SecureRateLimiter {
-    #[must_use] pub fn new(config: RateLimitConfig) -> Self {
+    #[must_use]
+    pub fn new(config: RateLimitConfig) -> Self {
         Self {
             ip_buckets: Arc::new(RwLock::new(HashMap::new())),
             client_buckets: Arc::new(RwLock::new(HashMap::new())),
@@ -446,7 +447,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 3));
 
         // Request with suspicious user agent
-        let result = limiter
+        let _result = limiter
             .check_rate_limit(ip, None, "/test", Some("curl/7.68.0"))
             .await;
         // May trigger suspicious activity detection

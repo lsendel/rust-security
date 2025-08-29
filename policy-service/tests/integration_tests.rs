@@ -7,6 +7,10 @@
 //! - Error handling
 //! - Performance characteristics
 
+// Suppress unused dependency warnings
+use chrono as _;
+use utoipa_swagger_ui as _;
+
 use axum::{extract::State, Json};
 use cedar_policy::{Authorizer, Entities, PolicySet};
 use policy_service::{authorize, AppState, AuthorizeRequest};

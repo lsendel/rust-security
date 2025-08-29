@@ -13,7 +13,7 @@ async fn test_client_credentials_flow_complete() {
 
     // Test successful token issuance
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=client_credentials&scope=read write")
@@ -35,10 +35,10 @@ async fn test_client_credentials_flow_complete() {
 
     // Test token introspection
     let introspect_response = fixture.client
-        .post(&format!("{}/oauth/introspect", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-        .body(format!("token={}", access_token))
+        .body(format!("token={access_token}"))
         .send()
         .await
         .unwrap();
@@ -55,10 +55,10 @@ async fn test_client_credentials_flow_complete() {
     // Test token revocation
     let refresh_token = token_response["refresh_token"].as_str().unwrap();
     let revoke_response = fixture.client
-        .post(&format!("{}/oauth/revoke", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/revoke"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-        .body(format!("token={}&token_type_hint=refresh_token", refresh_token))
+        .body(format!("token={refresh_token}&token_type_hint=refresh_token"))
         .send()
         .await
         .unwrap();
@@ -81,7 +81,7 @@ async fn test_authorization_code_flow_with_pkce() {
     );
 
     let auth_response = fixture.client
-        .get(&format!("{}/oauth/authorize?{}", fixture.base_url, auth_params))
+        .get(&format!("{}/oauth/authorize?{auth_params}"))
         .send()
         .await
         .unwrap();
@@ -106,7 +106,7 @@ async fn test_authorization_code_flow_with_pkce() {
     );
 
     let token_response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body(token_params)
         .send()
@@ -124,8 +124,8 @@ async fn test_authorization_code_flow_with_pkce() {
     // Test userinfo endpoint with the access token
     let access_token = token_data["access_token"].as_str().unwrap();
     let userinfo_response = fixture.client
-        .get(&format!("{}/oauth/userinfo", fixture.base_url))
-        .header(AUTHORIZATION, format!("Bearer {}", access_token))
+        .get(&format!("{fixture.base_url}/oauth/userinfo"))
+        .header(AUTHORIZATION, format!("Bearer {access_token}"))
         .send()
         .await
         .unwrap();
@@ -142,7 +142,7 @@ async fn test_refresh_token_flow() {
 
     // Get initial tokens
     let token_response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=client_credentials&scope=read")
@@ -155,9 +155,9 @@ async fn test_refresh_token_flow() {
 
     // Use refresh token to get new tokens
     let refresh_response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}&scope=read", refresh_token))
+        .body(format!("grant_type=refresh_token&refresh_token={refresh_token}&scope=read"))
         .send()
         .await
         .unwrap();
@@ -171,9 +171,9 @@ async fn test_refresh_token_flow() {
 
     // Old refresh token should be invalidated
     let old_refresh_response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .body(format!("grant_type=refresh_token&refresh_token={refresh_token}"))
         .send()
         .await
         .unwrap();
@@ -187,7 +187,7 @@ async fn test_refresh_token_reuse_detection() {
 
     // Get initial tokens
     let token_response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=client_credentials")
@@ -200,9 +200,9 @@ async fn test_refresh_token_reuse_detection() {
 
     // First refresh should succeed
     let first_refresh = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .body(format!("grant_type=refresh_token&refresh_token={refresh_token}"))
         .send()
         .await
         .unwrap();
@@ -211,9 +211,9 @@ async fn test_refresh_token_reuse_detection() {
 
     // Second attempt with same token should fail (reuse detection)
     let second_refresh = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("grant_type=refresh_token&refresh_token={}", refresh_token))
+        .body(format!("grant_type=refresh_token&refresh_token={refresh_token}"))
         .send()
         .await
         .unwrap();
@@ -230,10 +230,10 @@ async fn test_scope_validation() {
 
     for scope in valid_scopes {
         let response = fixture.client
-            .post(&format!("{}/oauth/token", fixture.base_url))
+            .post(&format!("{fixture.base_url}/oauth/token"))
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-            .body(format!("grant_type=client_credentials&scope={}", scope))
+            .body(format!("grant_type=client_credentials&scope={scope}"))
             .send()
             .await
             .unwrap();
@@ -249,10 +249,10 @@ async fn test_scope_validation() {
 
     for scope in invalid_scopes {
         let response = fixture.client
-            .post(&format!("{}/oauth/token", fixture.base_url))
+            .post(&format!("{fixture.base_url}/oauth/token"))
             .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
             .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-            .body(format!("grant_type=client_credentials&scope={}", scope))
+            .body(format!("grant_type=client_credentials&scope={scope}"))
             .send()
             .await
             .unwrap();
@@ -267,7 +267,7 @@ async fn test_openid_id_token_generation() {
 
     // Request token with openid scope
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=client_credentials&scope=openid profile")
@@ -298,7 +298,7 @@ async fn test_jwks_endpoint() {
     let fixture = TestFixture::new().await;
 
     let response = fixture.client
-        .get(&format!("{}/jwks.json", fixture.base_url))
+        .get(&format!("{fixture.base_url}/jwks.json"))
         .send()
         .await
         .unwrap();
@@ -326,7 +326,7 @@ async fn test_well_known_endpoints() {
 
     // Test OAuth authorization server metadata
     let oauth_response = fixture.client
-        .get(&format!("{}/.well-known/oauth-authorization-server", fixture.base_url))
+        .get(&format!("{fixture.base_url}/.well-known/oauth-authorization-server"))
         .send()
         .await
         .unwrap();
@@ -348,7 +348,7 @@ async fn test_well_known_endpoints() {
 
     // Test OpenID Connect discovery
     let oidc_response = fixture.client
-        .get(&format!("{}/.well-known/openid-configuration", fixture.base_url))
+        .get(&format!("{fixture.base_url}/.well-known/openid-configuration"))
         .send()
         .await
         .unwrap();
@@ -376,7 +376,7 @@ async fn test_invalid_authorization_requests() {
 
     // Test missing response_type
     let response = fixture.client
-        .get(&format!("{}/oauth/authorize?client_id={}", fixture.base_url, fixture.valid_client_id))
+        .get(&format!("{fixture.base_url}/oauth/authorize?client_id={fixture.valid_client_id}"))
         .send()
         .await
         .unwrap();
@@ -393,7 +393,7 @@ async fn test_invalid_authorization_requests() {
 
     // Test missing client_id
     let response = fixture.client
-        .get(&format!("{}/oauth/authorize?response_type=code&redirect_uri=https://example.com", fixture.base_url))
+        .get(&format!("{fixture.base_url}/oauth/authorize?response_type=code&redirect_uri=https://example.com"))
         .send()
         .await
         .unwrap();
@@ -420,7 +420,7 @@ async fn test_pkce_security_requirements() {
     );
 
     let response = fixture.client
-        .get(&format!("{}/oauth/authorize?{}", fixture.base_url, auth_params))
+        .get(&format!("{}/oauth/authorize?{auth_params}"))
         .send()
         .await
         .unwrap();
@@ -435,7 +435,7 @@ async fn test_pkce_security_requirements() {
     );
 
     let response = fixture.client
-        .get(&format!("{}/oauth/authorize?{}", fixture.base_url, auth_params))
+        .get(&format!("{}/oauth/authorize?{auth_params}"))
         .send()
         .await
         .unwrap();
@@ -450,7 +450,7 @@ async fn test_token_endpoint_error_responses() {
 
     // Test unsupported grant type
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=password&username=test&password=test")
@@ -464,7 +464,7 @@ async fn test_token_endpoint_error_responses() {
 
     // Test invalid client credentials
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.invalid_client_id, &fixture.invalid_client_secret))
         .body("grant_type=client_credentials")
@@ -476,7 +476,7 @@ async fn test_token_endpoint_error_responses() {
 
     // Test missing client credentials
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials")
         .send()
@@ -501,10 +501,10 @@ async fn test_concurrent_token_operations() {
 
         let handle = tokio::spawn(async move {
             let response = client
-                .post(&format!("{}/oauth/token", base_url))
+                .post(&format!("{base_url}/oauth/token"))
                 .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .header(AUTHORIZATION, auth_header)
-                .body(format!("grant_type=client_credentials&scope=read_{}", i))
+                .body(format!("grant_type=client_credentials&scope=read_{i}"))
                 .send()
                 .await
                 .unwrap();
@@ -545,10 +545,10 @@ async fn test_token_expiration_validation() {
 
     // Token should be active immediately
     let response = fixture.client
-        .post(&format!("{}/oauth/introspect", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-        .body(format!("token={}", access_token))
+        .body(format!("token={access_token}"))
         .send()
         .await
         .unwrap();
@@ -572,7 +572,7 @@ async fn test_userinfo_endpoint_security() {
 
     // Test without token
     let response = fixture.client
-        .get(&format!("{}/oauth/userinfo", fixture.base_url))
+        .get(&format!("{fixture.base_url}/oauth/userinfo"))
         .send()
         .await
         .unwrap();
@@ -580,7 +580,7 @@ async fn test_userinfo_endpoint_security() {
 
     // Test with invalid token
     let response = fixture.client
-        .get(&format!("{}/oauth/userinfo", fixture.base_url))
+        .get(&format!("{fixture.base_url}/oauth/userinfo"))
         .header(AUTHORIZATION, "Bearer invalid_token")
         .send()
         .await
@@ -590,8 +590,8 @@ async fn test_userinfo_endpoint_security() {
     // Test with token without openid scope
     let token = fixture.get_access_token_with_scope(Some("read")).await;
     let response = fixture.client
-        .get(&format!("{}/oauth/userinfo", fixture.base_url))
-        .header(AUTHORIZATION, format!("Bearer {}", token))
+        .get(&format!("{fixture.base_url}/oauth/userinfo"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
         .send()
         .await
         .unwrap();
@@ -600,8 +600,8 @@ async fn test_userinfo_endpoint_security() {
     // Test with valid openid token
     let token = fixture.get_access_token_with_scope(Some("openid profile")).await;
     let response = fixture.client
-        .get(&format!("{}/oauth/userinfo", fixture.base_url))
-        .header(AUTHORIZATION, format!("Bearer {}", token))
+        .get(&format!("{fixture.base_url}/oauth/userinfo"))
+        .header(AUTHORIZATION, format!("Bearer {token}"))
         .send()
         .await
         .unwrap();
@@ -618,7 +618,7 @@ async fn test_oauth_error_paths() {
 
     // Test invalid grant type
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=invalid_grant&scope=read")
@@ -631,7 +631,7 @@ async fn test_oauth_error_paths() {
 
     // Test invalid client credentials
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header("invalid_client", "invalid_secret"))
         .body("grant_type=client_credentials&scope=read")
@@ -644,7 +644,7 @@ async fn test_oauth_error_paths() {
 
     // Test missing client credentials
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&scope=read")
         .send()
@@ -654,7 +654,7 @@ async fn test_oauth_error_paths() {
 
     // Test invalid scope
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=client_credentials&scope=invalid_scope")
@@ -715,7 +715,7 @@ async fn test_token_introspection_error_paths() {
 
     // Test missing token
     let response = fixture.client
-        .post(&format!("{}/oauth/introspect", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .send()
@@ -725,7 +725,7 @@ async fn test_token_introspection_error_paths() {
 
     // Test invalid token
     let response = fixture.client
-        .post(&format!("{}/oauth/introspect", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("token=invalid_token")
@@ -741,20 +741,20 @@ async fn test_token_introspection_error_paths() {
 
     // Revoke the token first
     let _revoke_response = fixture.client
-        .post(&format!("{}/oauth/revoke", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/revoke"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-        .body(format!("token={}", token))
+        .body(format!("token={token}"))
         .send()
         .await
         .unwrap();
 
     // Now introspect the revoked token
     let response = fixture.client
-        .post(&format!("{}/oauth/introspect", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
-        .body(format!("token={}", token))
+        .body(format!("token={token}"))
         .send()
         .await
         .unwrap();
@@ -768,7 +768,7 @@ async fn test_jwks_endpoint_validation() {
     let fixture = TestFixture::new().await;
 
     let response = fixture.client
-        .get(&format!("{}/oauth/jwks.json", fixture.base_url))
+        .get(&format!("{fixture.base_url}/oauth/jwks.json"))
         .send()
         .await
         .unwrap();
@@ -797,7 +797,7 @@ async fn test_policy_service_timeout_handling() {
     // This test requires mocking the policy service to simulate timeout
     // For now, we'll test with a valid request and ensure it doesn't timeout
     let response = fixture.client
-        .post(&format!("{}/oauth/token", fixture.base_url))
+        .post(&format!("{fixture.base_url}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(AUTHORIZATION, fixture.basic_auth_header(&fixture.valid_client_id, &fixture.valid_client_secret))
         .body("grant_type=client_credentials&scope=read")
@@ -825,7 +825,7 @@ async fn test_concurrent_token_requests() {
 
         let handle = tokio::spawn(async move {
             client
-                .post(&format!("{}/oauth/token", base_url))
+                .post(&format!("{base_url}/oauth/token"))
                 .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
                 .header(AUTHORIZATION, auth_header)
                 .body("grant_type=client_credentials&scope=read")

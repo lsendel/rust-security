@@ -1,8 +1,8 @@
 use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
 use base64::Engine as _;
-use common::{constants, ShardedRateLimiter};
 use common::sharded_rate_limiter::RateLimitConfig as CommonRateLimitConfig;
+use common::{constants, ShardedRateLimiter};
 use once_cell::sync::Lazy;
 use ring::rand::SecureRandom;
 use std::time::Duration;
@@ -335,7 +335,8 @@ pub async fn validate_request_signature(
 }
 
 /// Extract client information for token binding
-#[must_use] pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) {
+#[must_use]
+pub fn extract_client_info(headers: &axum::http::HeaderMap) -> (String, String) {
     let client_ip = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -440,7 +441,8 @@ pub fn validate_client_credentials(
 }
 
 /// Create security middleware stack (without rate limiting for now)
-#[must_use] pub fn security_middleware() -> ServiceBuilder<
+#[must_use]
+pub fn security_middleware() -> ServiceBuilder<
     tower::layer::util::Stack<
         tower_http::limit::RequestBodyLimitLayer,
         tower::layer::util::Identity,
@@ -564,7 +566,8 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
 }
 
 /// Sanitize log output to prevent log injection
-#[must_use] pub fn sanitize_log_input(input: &str) -> String {
+#[must_use]
+pub fn sanitize_log_input(input: &str) -> String {
     input
         .replace('\n', "\\n")
         .replace('\r', "\\r")

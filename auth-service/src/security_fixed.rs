@@ -246,7 +246,8 @@ pub struct SecureRandom {
 }
 
 impl SecureRandom {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             rng: SystemRandom::new(),
         }

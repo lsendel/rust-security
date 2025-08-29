@@ -2,3 +2,12 @@
     Blocking waiting for file lock on package cache
     Blocking waiting for file lock on package cache
     Blocking waiting for file lock on build directory
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1.42s
+     Running `/Users/lsendel/IdeaProjects/rust-security/target/debug/auth-service`
+[2m2025-08-28T21:11:57.736824Z[0m [32m INFO[0m [2mauth_service[0m[2m:[0m 🚀 Starting Rust Security Platform - Auth Service v2.0
+[2m2025-08-28T21:11:57.736949Z[0m [32m INFO[0m [2mauth_service[0m[2m:[0m 🔐 Enhanced with OAuth 2.0, User Registration, and JWT Authentication
+Error: Failed to load configuration
+
+Caused by:
+    0: Failed to deserialize configuration
+    1: missing field `request_timeout`

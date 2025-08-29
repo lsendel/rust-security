@@ -1,10 +1,10 @@
-use crate::threat_user_profiler::types::*;
-use crate::threat_user_profiler::crate::config::*;
+use crate::core::security::SecurityEventType;
+use crate::threat_user_profiler::config::*;
 use crate::threat_user_profiler::features::BehavioralFeatureExtractor;
 use crate::threat_user_profiler::risk_assessment::RiskAssessmentEngine;
 use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
 use crate::threat_user_profiler::types::*;
-use crate::core::security::SecurityEventType;
+use crate::threat_user_profiler::types::*;
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 use redis::aio::ConnectionManager;
@@ -436,14 +436,18 @@ impl AdvancedUserBehaviorProfiler {
     /// Determine update priority based on events
     fn determine_update_priority(&self, events: &[UserSecurityEvent]) -> UpdatePriority {
         // Consider certain event types as high-risk
-        let high_risk_events = events.iter().filter(|e| {
-            matches!(e.event_type, 
-                SecurityEventType::ThreatDetected | 
-                SecurityEventType::AnomalyDetected | 
-                SecurityEventType::SuspiciousActivity |
-                SecurityEventType::PolicyViolation
-            )
-        }).count();
+        let high_risk_events = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e.event_type,
+                    SecurityEventType::ThreatDetected
+                        | SecurityEventType::AnomalyDetected
+                        | SecurityEventType::SuspiciousActivity
+                        | SecurityEventType::PolicyViolation
+                )
+            })
+            .count();
         let total_events = events.len();
 
         if high_risk_events > 0 && (high_risk_events as f64 / total_events as f64) > 0.5 {

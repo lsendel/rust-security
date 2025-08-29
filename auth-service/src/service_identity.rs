@@ -461,7 +461,8 @@ impl Default for PolicyEngine {
 }
 
 impl PolicyEngine {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             policies: Arc::new(RwLock::new(Vec::new())),
         }

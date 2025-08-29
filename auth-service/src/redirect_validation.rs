@@ -642,7 +642,8 @@ mod tests {
 // Additional validation for configuration loading
 impl RedirectUriValidator {
     /// Load blocked domains from environment
-    #[must_use] pub fn from_env() -> Self {
+    #[must_use]
+    pub fn from_env() -> Self {
         let enforce_https =
             std::env::var("OAUTH_ENFORCE_HTTPS").unwrap_or_else(|_| "true".to_string()) == "true";
 

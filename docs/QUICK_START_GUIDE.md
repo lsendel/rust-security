@@ -80,15 +80,20 @@ redis-cli ping     # Should return PONG (or start Redis)
 git clone https://github.com/company/rust-security.git
 cd rust-security
 
-# One-command startup with hot reload
+# One-command startup (fast development mode)
+./start-services-dev.sh --demo
+
+# Alternative: Production build (slower but optimized)
 ./start-services.sh --demo
 ```
+
+> 💡 **Tip**: Use `start-services-dev.sh` for faster startup with debug builds, or `start-services.sh` for optimized release builds.
 
 **🎉 Done!** Your platform is running at:
 - **Auth Service**: http://localhost:8080
 - **Policy Service**: http://localhost:8081  
-- **Security Dashboard**: http://localhost:8082
-- **API Documentation**: http://localhost:8080/swagger-ui
+- **Auth API Documentation**: http://localhost:8080/swagger-ui (if available)
+- **Policy API Documentation**: http://localhost:8081/swagger-ui
 
 ## Instant API Testing
 
@@ -98,17 +103,17 @@ cd rust-security
 curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "demo@company.com",
-    "password": "SecurePass123!",
+    "email": "demo@example.com",
+    "password": "demo123",
     "name": "Demo User"
   }'
 
-# Login and get access token  
+# Login and get access token (use pre-configured demo credentials)  
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "demo@company.com", 
-    "password": "SecurePass123!"
+    "email": "demo@example.com", 
+    "password": "demo123"
   }' | jq '.access_token'
 ```
 
@@ -153,15 +158,29 @@ curl -X POST http://localhost:8080/oauth/token \
 
 ### Validate Tokens & Permissions
 ```bash
-# Introspect any access token
-curl -X POST http://localhost:8080/oauth/introspect \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "token=ACCESS_TOKEN_TO_INSPECT"
-
 # Check user profile
 curl -X GET http://localhost:8080/api/v1/auth/me \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Test Policy Authorization (15 seconds)
+```bash
+# Test policy service authorization
+curl -X POST http://localhost:8081/v1/authorize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "test-123",
+    "principal": {"type": "User", "id": "demo-user"},
+    "action": "Document::read",
+    "resource": {"type": "Document", "id": "doc-1"},
+    "context": {}
+  }'
+
+# Check policy service health
+curl http://localhost:8081/health
+
+# Check policy service metrics
+curl http://localhost:8081/metrics
 ```
 
 ---

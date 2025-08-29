@@ -7,7 +7,8 @@ use rand::RngCore;
 pub struct SecureRandomGenerator;
 
 impl SecureRandomGenerator {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
@@ -157,7 +158,8 @@ pub fn generate_secure_api_key() -> Result<String, AuthError> {
 }
 
 /// Legacy function for backward compatibility - now uses secure generation
-#[must_use] pub fn generate_secure_code() -> String {
+#[must_use]
+pub fn generate_secure_code() -> String {
     generate_secure_authorization_code().unwrap_or_else(|_| format!("ac_{}", uuid::Uuid::new_v4()))
     // Fallback to UUID
 }

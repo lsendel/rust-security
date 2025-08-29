@@ -56,9 +56,7 @@ impl IntoResponse for ApiVersionError {
         let (status, error_message) = match &self {
             Self::UnsupportedVersion(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             Self::MissingVersion => (StatusCode::BAD_REQUEST, self.to_string()),
-            Self::DeprecatedVersion(_, _, _) => {
-                (StatusCode::BAD_REQUEST, self.to_string())
-            }
+            Self::DeprecatedVersion(_, _, _) => (StatusCode::BAD_REQUEST, self.to_string()),
         };
 
         let body = Json(ApiErrorResponse {
@@ -220,9 +218,10 @@ pub async fn api_version_middleware(
 
         response.headers_mut().insert(
             "link",
-            "<https://docs.example.com/api/migration>; rel=\"deprecation\"; type=\"text/html\"".to_string()
-            .parse()
-            .unwrap(),
+            "<https://docs.example.com/api/migration>; rel=\"deprecation\"; type=\"text/html\""
+                .to_string()
+                .parse()
+                .unwrap(),
         );
 
         tracing::warn!(
@@ -447,7 +446,8 @@ async fn scim_create_user_versioned(headers: HeaderMap) -> impl IntoResponse {
 }
 
 /// Get deprecation information
-#[must_use] pub fn get_deprecation_info() -> DeprecationInfo {
+#[must_use]
+pub fn get_deprecation_info() -> DeprecationInfo {
     DeprecationInfo {
         deprecated_versions: vec![DeprecatedVersion {
             version: "v1".to_string(),

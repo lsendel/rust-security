@@ -22,9 +22,10 @@ pub struct ShutdownCoordinator {
 
 impl ShutdownCoordinator {
     /// Create a new shutdown coordinator
-    #[must_use] pub fn new(graceful_timeout: Duration) -> Self {
+    #[must_use]
+    pub fn new(graceful_timeout: Duration) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
-        
+
         Self {
             shutdown_tx,
             completed: Arc::new(Notify::new()),
@@ -33,7 +34,8 @@ impl ShutdownCoordinator {
     }
 
     /// Get a shutdown signal receiver
-    #[must_use] pub fn subscribe(&self) -> broadcast::Receiver<()> {
+    #[must_use]
+    pub fn subscribe(&self) -> broadcast::Receiver<()> {
         self.shutdown_tx.subscribe()
     }
 
@@ -77,7 +79,7 @@ impl ShutdownCoordinator {
                 error!("Failed to listen for SIGINT: {}", e);
             }
         }
-        
+
         #[cfg(not(unix))]
         {
             if let Err(e) = signal::ctrl_c().await {
@@ -91,7 +93,7 @@ impl ShutdownCoordinator {
         #[cfg(unix)]
         {
             use signal::unix::{signal, SignalKind};
-            
+
             match signal(SignalKind::terminate()) {
                 Ok(mut stream) => {
                     stream.recv().await;
@@ -103,7 +105,7 @@ impl ShutdownCoordinator {
                 }
             }
         }
-        
+
         #[cfg(not(unix))]
         {
             // On non-Unix systems, just wait indefinitely
@@ -127,7 +129,8 @@ pub struct GracefulShutdownService {
 
 impl GracefulShutdownService {
     /// Create a new graceful shutdown service
-    #[must_use] pub fn new(graceful_timeout: Duration) -> Self {
+    #[must_use]
+    pub fn new(graceful_timeout: Duration) -> Self {
         Self {
             coordinator: ShutdownCoordinator::new(graceful_timeout),
             active_connections: Arc::new(tokio::sync::RwLock::new(0)),
@@ -136,7 +139,8 @@ impl GracefulShutdownService {
     }
 
     /// Get the shutdown coordinator
-    #[must_use] pub const fn coordinator(&self) -> &ShutdownCoordinator {
+    #[must_use]
+    pub const fn coordinator(&self) -> &ShutdownCoordinator {
         &self.coordinator
     }
 
@@ -144,7 +148,7 @@ impl GracefulShutdownService {
     pub async fn start_shutdown_listener(&self) {
         let coordinator = self.coordinator.clone();
         let service = self.clone();
-        
+
         tokio::spawn(async move {
             coordinator.listen_for_shutdown().await;
             service.begin_shutdown().await;
@@ -178,7 +182,7 @@ impl GracefulShutdownService {
     /// Begin the shutdown process
     async fn begin_shutdown(&self) {
         info!("Beginning graceful shutdown process");
-        
+
         // Mark as shutting down
         {
             let mut shutting_down = self.is_shutting_down.write().await;
@@ -188,15 +192,15 @@ impl GracefulShutdownService {
         // Wait for active connections to finish
         let max_wait_time = Duration::from_secs(30);
         let start_time = std::time::Instant::now();
-        
+
         loop {
             let active = self.active_connections().await;
-            
+
             if active == 0 {
                 info!("All connections completed, shutdown ready");
                 break;
             }
-            
+
             if start_time.elapsed() > max_wait_time {
                 warn!(
                     active_connections = active,
@@ -204,14 +208,17 @@ impl GracefulShutdownService {
                 );
                 break;
             }
-            
-            info!(active_connections = active, "Waiting for connections to complete");
+
+            info!(
+                active_connections = active,
+                "Waiting for connections to complete"
+            );
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
         // Perform cleanup tasks
         self.cleanup_resources().await;
-        
+
         // Notify completion
         self.coordinator.notify_completed();
     }
@@ -219,17 +226,17 @@ impl GracefulShutdownService {
     /// Perform resource cleanup
     async fn cleanup_resources(&self) {
         info!("Performing resource cleanup");
-        
+
         // In a real implementation, you would:
         // - Close database connections
         // - Flush logs
         // - Save any pending data
         // - Close file handles
         // - Cleanup temporary files
-        
+
         // Simulate cleanup work
         tokio::time::sleep(Duration::from_millis(100)).await;
-        
+
         info!("Resource cleanup completed");
     }
 }
@@ -241,7 +248,8 @@ pub struct ConnectionTracker {
 }
 
 impl ConnectionTracker {
-    #[must_use] pub const fn new(service: GracefulShutdownService) -> Self {
+    #[must_use]
+    pub const fn new(service: GracefulShutdownService) -> Self {
         Self { service }
     }
 }
@@ -260,7 +268,7 @@ impl ConnectionGuard {
         }
 
         service.connection_started().await;
-        
+
         Some(Self {
             service,
             _dropped: false,
@@ -286,7 +294,7 @@ mod tests {
     async fn test_shutdown_coordinator_creation() {
         let coordinator = ShutdownCoordinator::new(Duration::from_secs(30));
         let _receiver = coordinator.subscribe();
-        
+
         // Should be able to create multiple receivers
         let _receiver2 = coordinator.subscribe();
     }
@@ -294,15 +302,15 @@ mod tests {
     #[tokio::test]
     async fn test_graceful_shutdown_service() {
         let service = GracefulShutdownService::new(Duration::from_secs(1));
-        
+
         // Initially no connections
         assert_eq!(service.active_connections().await, 0);
         assert!(!service.is_shutting_down().await);
-        
+
         // Add connection
         service.connection_started().await;
         assert_eq!(service.active_connections().await, 1);
-        
+
         // Remove connection
         service.connection_ended().await;
         assert_eq!(service.active_connections().await, 0);
@@ -311,12 +319,12 @@ mod tests {
     #[tokio::test]
     async fn test_connection_guard() {
         let service = GracefulShutdownService::new(Duration::from_secs(1));
-        
+
         {
             let _guard = ConnectionGuard::new(service.clone()).await.unwrap();
             assert_eq!(service.active_connections().await, 1);
         } // Guard drops here
-        
+
         // Give some time for the Drop to execute
         tokio::time::sleep(Duration::from_millis(10)).await;
         assert_eq!(service.active_connections().await, 0);
@@ -325,13 +333,13 @@ mod tests {
     #[tokio::test]
     async fn test_shutdown_blocks_new_connections() {
         let service = GracefulShutdownService::new(Duration::from_secs(1));
-        
+
         // Mark as shutting down
         {
             let mut shutting_down = service.is_shutting_down.write().await;
             *shutting_down = true;
         }
-        
+
         // Should reject new connections
         let guard = ConnectionGuard::new(service.clone()).await;
         assert!(guard.is_none());

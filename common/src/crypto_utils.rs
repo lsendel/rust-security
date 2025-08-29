@@ -32,13 +32,17 @@ pub struct SecureRandom {
 
 impl SecureRandom {
     /// Create a new secure random number generator
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             rng: SystemRandom::new(),
         }
     }
 
     /// Generate secure random bytes
+    ///
+    /// # Errors
+    /// Returns `CryptoError::RandomGenerationFailed` if the underlying RNG fails
     pub fn generate_bytes(&self, len: usize) -> Result<Vec<u8>, CryptoError> {
         let mut bytes = vec![0u8; len];
         RingSecureRandom::fill(&self.rng, &mut bytes)
@@ -47,17 +51,26 @@ impl SecureRandom {
     }
 
     /// Generate secure random string (base64url encoded)
+    ///
+    /// # Errors
+    /// Returns `CryptoError::RandomGenerationFailed` if the underlying RNG fails
     pub fn generate_string(&self, byte_len: usize) -> Result<String, CryptoError> {
         let bytes = self.generate_bytes(byte_len)?;
         Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
     }
 
     /// Generate secure session ID
+    ///
+    /// # Errors
+    /// Returns `CryptoError::RandomGenerationFailed` if the underlying RNG fails
     pub fn generate_session_id(&self) -> Result<String, CryptoError> {
         self.generate_string(32) // 256 bits of entropy
     }
 
     /// Generate secure API key
+    ///
+    /// # Errors
+    /// Returns `CryptoError::RandomGenerationFailed` if the underlying RNG fails
     pub fn generate_api_key(&self) -> Result<String, CryptoError> {
         let bytes = self.generate_bytes(32)?;
         Ok(format!("sk_{}", hex::encode(bytes)))
@@ -71,40 +84,49 @@ impl Default for SecureRandom {
 }
 
 /// Hash a token using SHA-256
-#[must_use] pub fn hash_token(token: &str) -> String {
+#[must_use]
+pub fn hash_token(token: &str) -> String {
     let digest = digest::digest(&digest::SHA256, token.as_bytes());
     hex::encode(digest.as_ref())
 }
 
 /// Hash a password using SHA-256 (for backwards compatibility)
 /// Note: This should be replaced with Argon2 for new implementations
-#[must_use] pub fn hash_password_sha256(password: &str) -> String {
+#[must_use]
+pub fn hash_password_sha256(password: &str) -> String {
     let digest = digest::digest(&digest::SHA256, password.as_bytes());
     hex::encode(digest.as_ref())
 }
 
 /// Hash a secret using SHA-256
-#[must_use] pub fn hash_secret(secret: &str) -> String {
+#[must_use]
+pub fn hash_secret(secret: &str) -> String {
     let digest = digest::digest(&digest::SHA256, secret.as_bytes());
     hex::encode(digest.as_ref())
 }
 
 /// Hash a backup code using SHA-256
-#[must_use] pub fn hash_backup_code(code: &str) -> String {
+#[must_use]
+pub fn hash_backup_code(code: &str) -> String {
     hash_token(code) // Reuse the same implementation
 }
 
 /// Hash an OTP using SHA-256
-#[must_use] pub fn hash_otp(otp: &str) -> String {
+#[must_use]
+pub fn hash_otp(otp: &str) -> String {
     hash_token(otp) // Reuse the same implementation
 }
 
 /// Hash a user agent string using SHA-256
-#[must_use] pub fn hash_user_agent(user_agent: &str) -> String {
+#[must_use]
+pub fn hash_user_agent(user_agent: &str) -> String {
     hash_token(user_agent) // Reuse the same implementation
 }
 
 /// Generate HMAC-SHA256 signature
+///
+/// # Errors
+/// Returns `CryptoError::InvalidLength` if the key is too short (less than 32 bytes)
 pub fn generate_hmac_signature(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CryptoError> {
     if key.len() < crypto::HMAC_KEY_MIN_SIZE {
         return Err(CryptoError::InvalidLength {
@@ -119,6 +141,9 @@ pub fn generate_hmac_signature(key: &[u8], data: &[u8]) -> Result<Vec<u8>, Crypt
 }
 
 /// Verify HMAC-SHA256 signature
+///
+/// # Errors
+/// Returns `CryptoError::InvalidLength` if the key is too short (less than 32 bytes)
 pub fn verify_hmac_signature(
     key: &[u8],
     data: &[u8],
@@ -139,29 +164,38 @@ pub fn verify_hmac_signature(
 }
 
 /// Generate a secure salt for password hashing
+///
+/// # Errors
+/// Returns `CryptoError::RandomGenerationFailed` if the underlying RNG fails
 pub fn generate_salt() -> Result<Vec<u8>, CryptoError> {
     let rng = SecureRandom::new();
     rng.generate_bytes(crypto::DEFAULT_SALT_LENGTH)
 }
 
 /// Generate a secure salt as a hex string
+///
+/// # Errors
+/// Returns `CryptoError::RandomGenerationFailed` if the underlying RNG fails
 pub fn generate_salt_hex() -> Result<String, CryptoError> {
     let salt = generate_salt()?;
     Ok(hex::encode(salt))
 }
 
 /// Constant-time comparison of byte slices
-#[must_use] pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+#[must_use]
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     constant_time_eq::constant_time_eq(a, b)
 }
 
 /// Constant-time comparison of strings
-#[must_use] pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
+#[must_use]
+pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
     constant_time_eq(a.as_bytes(), b.as_bytes())
 }
 
 /// Hash input data with optional salt
-#[must_use] pub fn hash_with_salt(data: &[u8], salt: Option<&[u8]>) -> String {
+#[must_use]
+pub fn hash_with_salt(data: &[u8], salt: Option<&[u8]>) -> String {
     let mut hasher_input = Vec::new();
 
     if let Some(salt) = salt {
@@ -176,7 +210,8 @@ pub fn generate_salt_hex() -> Result<String, CryptoError> {
 }
 
 /// Validate hash format (hex string)
-#[must_use] pub fn is_valid_hash(hash: &str) -> bool {
+#[must_use]
+pub fn is_valid_hash(hash: &str) -> bool {
     hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
 }
 

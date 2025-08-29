@@ -6,8 +6,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{error, info, instrument, warn};
 
-
-
 use crate::errors::{internal_error, AuthError};
 
 #[derive(Clone)]

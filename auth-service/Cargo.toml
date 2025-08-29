@@ -205,10 +205,11 @@ wiremock = { workspace = true }
 # ml-enhanced = ["threat-hunting", "advanced-analytics", "petgraph"]  # Removed due to dependencies
 default = ["security-essential", "api-keys", "enhanced-session-store", "crypto"]  # Production-optimized security defaults
 # Core security features
-security-essential = ["crypto", "rate-limiting", "audit-logging"]
+security-essential = ["crypto", "rate-limiting"]
 security-enhanced = ["security-essential", "zero-trust"]  # Removed post-quantum
 rate-limiting = ["dep:dashmap"]
-audit-logging = ["tracing"]
+# Temporarily disabled due to version conflicts
+# audit-logging = ["tracing"]
 zero-trust = ["enhanced-session-store"]  # Removed threat-hunting
 
 # Development features
@@ -217,7 +218,8 @@ development = ["docs", "fast-build"]
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
-tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
+# Temporarily disabled due to version conflicts 
+# tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
 benchmarks = []  # Removed pprof2 due to security vulnerability
 simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]
@@ -233,8 +235,9 @@ threat-hunting = ["petgraph", "geo", "indexmap", "flume", "crossbeam"]
 # advanced-analytics = ["dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]  # Removed threat-hunting
 optimizations = []
 # Production feature sets
-production = ["security-enhanced", "monitoring", "secrets-vault-aws"]
-monitoring = ["tracing", "dep:prometheus"]
+production = ["security-enhanced", "secrets-vault-aws"]
+# Temporarily disabled due to version conflicts
+# monitoring = ["tracing", "dep:prometheus"]
 
 # Service features
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]

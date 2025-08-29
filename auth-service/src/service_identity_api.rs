@@ -18,9 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::AuthError,
-    jit_token_manager::{
-        JitTokenManager, TokenResponse,
-    },
+    jit_token_manager::{JitTokenManager, TokenResponse},
     non_human_monitoring::{NonHumanIdentityMonitor, NonHumanMetrics},
     service_identity::{
         Environment, IdentityConfig, IdentityType, JitAccessRequest, RequestContext,
@@ -404,9 +402,7 @@ impl IntoResponse for ApiError {
             Self::NotFound => (StatusCode::NOT_FOUND, "Identity not found"),
             Self::Forbidden => (StatusCode::FORBIDDEN, "Access denied"),
             Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Anomaly detected"),
-            Self::ValidationError(msg) => {
-                return (StatusCode::BAD_REQUEST, msg).into_response()
-            }
+            Self::ValidationError(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
             Self::InsufficientData => (
                 StatusCode::PRECONDITION_FAILED,
                 "Insufficient data for operation",

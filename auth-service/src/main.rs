@@ -161,17 +161,21 @@ async fn service_identity_register(
     axum::Json(payload): axum::Json<serde_json::Value>,
 ) -> impl axum::response::IntoResponse {
     use serde_json::json;
-    
+
     // Generate a unique identity ID
     let identity_id = format!("id_{}", uuid::Uuid::new_v4());
-    
+
     // Extract service information
-    let service_name = payload.get("service_name")
+    let service_name = payload
+        .get("service_name")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
-    
-    info!("Service identity registered: {} -> {}", service_name, identity_id);
-    
+
+    info!(
+        "Service identity registered: {} -> {}",
+        service_name, identity_id
+    );
+
     axum::Json(json!({
         "identity_id": identity_id,
         "service_name": service_name,
@@ -185,16 +189,17 @@ async fn jit_token_request(
     axum::Json(payload): axum::Json<serde_json::Value>,
 ) -> impl axum::response::IntoResponse {
     use serde_json::json;
-    
-    let identity_id = payload.get("identity_id")
+
+    let identity_id = payload
+        .get("identity_id")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
-    
+
     // Generate a JIT access token (simplified)
     let access_token = format!("jit_token_{}", uuid::Uuid::new_v4());
-    
+
     info!("JIT token generated for identity: {}", identity_id);
-    
+
     axum::Json(json!({
         "access_token": access_token,
         "token_type": "Bearer",

@@ -1,0 +1,982 @@
+openapi: 3.0.3
+info:
+  title: Rust Security Platform API
+  description: |
+    Enterprise-grade authentication and authorization platform built with Rust.
+
+    ## Overview
+    The Rust Security Platform provides comprehensive security services including:
+    - OAuth 2.0 and OpenID Connect authentication
+    - Fine-grained authorization with Cedar policy engine
+    - Multi-factor authentication (MFA)
+    - Session management and security monitoring
+    - Rate limiting and abuse protection
+    - Audit logging and compliance reporting
+
+    ## Authentication
+    All API endpoints require authentication unless otherwise specified.
+    Supported authentication methods:
+    - Bearer tokens (JWT)
+    - API keys
+    - Session cookies
+
+    ## Rate Limiting
+    API requests are subject to rate limiting based on:
+    - Client IP address
+    - User identity
+    - API key
+    - Request type
+
+    Rate limits are configurable and enforced per endpoint.
+
+    ## Error Handling
+    The API uses consistent error response formats:
+    - 4xx errors for client issues
+    - 5xx errors for server issues
+    - Detailed error messages in development
+    - Sanitized error messages in production
+  version: 1.0.0
+  contact:
+    name: Security Team
+    email: security@rust-security.com
+    url: https://github.com/rust-security-platform/support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.rust-security.com/v1
+    description: Production server
+  - url: https://staging-api.rust-security.com/v1
+    description: Staging server
+  - url: http://localhost:8080/v1
+    description: Local development server
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Check the health status of the service
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics endpoint
+      description: Expose Prometheus metrics for monitoring
+      operationId: getMetrics
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP auth_requests_total Total number of authentication requests
+                  # TYPE auth_requests_total counter
+                  auth_requests_total 1234
+
+  /oauth/authorize:
+    get:
+      summary: OAuth 2.0 authorization endpoint
+      description: |
+        Initiate OAuth 2.0 authorization code flow.
+
+        This endpoint starts the authorization process by:
+        1. Validating client credentials
+        2. Checking user authentication status
+        3. Presenting consent screen (if required)
+        4. Redirecting with authorization code
+      operationId: authorize
+      tags:
+        - OAuth
+        - Authentication
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+          description: OAuth 2.0 response type (must be 'code')
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: OAuth client identifier
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Redirect URI for authorization response
+        - name: scope
+          in: query
+          schema:
+            type: string
+          description: Requested OAuth scopes (space-separated)
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: OAuth state parameter for CSRF protection
+        - name: nonce
+          in: query
+          schema:
+            type: string
+          description: OpenID Connect nonce parameter
+      responses:
+        '302':
+          description: Redirect to login or consent page
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+              description: Redirect location
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/token:
+    post:
+      summary: OAuth 2.0 token endpoint
+      description: |
+        Exchange authorization code for access tokens.
+
+        Supports multiple OAuth 2.0 grant types:
+        - Authorization Code Grant
+        - Client Credentials Grant
+        - Refresh Token Grant
+      operationId: getToken
+      tags:
+        - OAuth
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AuthorizationCodeRequest'
+                - $ref: '#/components/schemas/ClientCredentialsRequest'
+                - $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid client credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/introspect:
+    post:
+      summary: OAuth 2.0 token introspection
+      description: Introspect an access token to get metadata
+      operationId: introspectToken
+      tags:
+        - OAuth
+        - Authentication
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IntrospectRequest'
+      responses:
+        '200':
+          description: Token introspection response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/revoke:
+    post:
+      summary: OAuth 2.0 token revocation
+      description: Revoke an access token or refresh token
+      operationId: revokeToken
+      tags:
+        - OAuth
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RevokeRequest'
+      responses:
+        '200':
+          description: Token revoked successfully
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/authorize:
+    post:
+      summary: Cedar policy authorization
+      description: |
+        Authorize a request using Cedar policy engine.
+
+        This endpoint evaluates fine-grained authorization policies
+        based on principal, action, resource, and context attributes.
+      operationId: authorizeRequest
+      tags:
+        - Authorization
+        - Cedar
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizeRequest'
+      responses:
+        '200':
+          description: Authorization decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizeResponse'
+        '400':
+          description: Invalid request format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden by policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/policies:
+    get:
+      summary: List Cedar policies
+      description: Retrieve the list of active Cedar policies
+      operationId: listPolicies
+      tags:
+        - Policies
+        - Cedar
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoliciesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/entities:
+    get:
+      summary: List Cedar entities
+      description: Retrieve the list of active Cedar entities
+      operationId: listEntities
+      tags:
+        - Entities
+        - Cedar
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of entities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitiesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: User login
+      description: Authenticate a user with username and password
+      operationId: login
+      tags:
+        - Authentication
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many login attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: User logout
+      description: Invalidate user session
+      operationId: logout
+      tags:
+        - Authentication
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/mfa/setup:
+    post:
+      summary: Setup multi-factor authentication
+      description: Initialize MFA for a user account
+      operationId: setupMFA
+      tags:
+        - Authentication
+        - MFA
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: MFA setup initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MFASetupResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/mfa/verify:
+    post:
+      summary: Verify MFA code
+      description: Complete MFA authentication with TOTP code
+      operationId: verifyMFA
+      tags:
+        - Authentication
+        - MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MFAVerifyRequest'
+      responses:
+        '200':
+          description: MFA verification successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MFAVerifyResponse'
+        '401':
+          description: Invalid MFA code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{userId}/profile:
+    get:
+      summary: Get user profile
+      description: Retrieve user profile information
+      operationId: getUserProfile
+      tags:
+        - Users
+        - Profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    # Core request/response types
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        uptime_seconds:
+          type: number
+          format: float
+          example: 3600.5
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - type
+            - message
+          properties:
+            type:
+              type: string
+              example: "invalid_request"
+            message:
+              type: string
+              example: "The request parameters are invalid"
+            status:
+              type: integer
+              example: 400
+
+    # OAuth types
+    AuthorizationCodeRequest:
+      type: object
+      required:
+        - grant_type
+        - code
+        - client_id
+        - client_secret
+        - redirect_uri
+      properties:
+        grant_type:
+          type: string
+          enum: [authorization_code]
+        code:
+          type: string
+          description: Authorization code from /oauth/authorize
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        redirect_uri:
+          type: string
+          format: uri
+
+    ClientCredentialsRequest:
+      type: object
+      required:
+        - grant_type
+        - client_id
+        - client_secret
+        - scope
+      properties:
+        grant_type:
+          type: string
+          enum: [client_credentials]
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        scope:
+          type: string
+          description: Requested scopes
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - grant_type
+        - refresh_token
+        - client_id
+        - client_secret
+      properties:
+        grant_type:
+          type: string
+          enum: [refresh_token]
+        refresh_token:
+          type: string
+        client_id:
+          type: string
+        client_secret:
+          type: string
+
+    TokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Token lifetime in seconds
+          example: 3600
+        refresh_token:
+          type: string
+          example: "refresh_token_value"
+        scope:
+          type: string
+          example: "read write"
+
+    IntrospectRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Access token to introspect
+
+    IntrospectResponse:
+      type: object
+      required:
+        - active
+      properties:
+        active:
+          type: boolean
+          description: Whether the token is active
+        client_id:
+          type: string
+        username:
+          type: string
+        scope:
+          type: string
+        token_type:
+          type: string
+        exp:
+          type: integer
+          description: Token expiration timestamp
+        iat:
+          type: integer
+          description: Token issued timestamp
+        nbf:
+          type: integer
+          description: Token not-before timestamp
+        sub:
+          type: string
+          description: Token subject
+        aud:
+          type: string
+          description: Token audience
+        iss:
+          type: string
+          description: Token issuer
+        jti:
+          type: string
+          description: Token ID
+
+    RevokeRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Token to revoke
+        token_type_hint:
+          type: string
+          enum: [access_token, refresh_token]
+
+    # Cedar authorization types
+    AuthorizeRequest:
+      type: object
+      required:
+        - principal
+        - action
+        - resource
+        - context
+        - request_id
+      properties:
+        principal:
+          type: object
+          description: Principal entity (user, service, etc.)
+          example:
+            type: "User"
+            id: "alice"
+            roles: ["developer", "admin"]
+            department: "engineering"
+        action:
+          type: string
+          description: Action being performed
+          example: "Document::read"
+        resource:
+          type: object
+          description: Resource entity being accessed
+          example:
+            type: "Document"
+            id: "confidential-doc.pdf"
+            classification: "confidential"
+            owner: "alice"
+        context:
+          type: object
+          description: Additional context for authorization
+          example:
+            time: "14:30"
+            location: "office"
+            ip_address: "192.168.1.100"
+        request_id:
+          type: string
+          description: Unique request identifier
+          example: "req-12345"
+
+    AuthorizeResponse:
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum: [Allow, Deny]
+          description: Authorization decision
+        request_id:
+          type: string
+          description: Echo of request ID
+        evaluation_time_ms:
+          type: number
+          format: float
+          description: Time taken to evaluate policy
+
+    PoliciesResponse:
+      type: object
+      required:
+        - policies
+      properties:
+        policies:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              content:
+                type: string
+                description: Cedar policy content
+              annotations:
+                type: object
+        total_count:
+          type: integer
+
+    EntitiesResponse:
+      type: object
+      required:
+        - entities
+      properties:
+        entities:
+          type: array
+          items:
+            type: object
+        total_count:
+          type: integer
+
+    # User authentication types
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "alice@example.com"
+        password:
+          type: string
+          format: password
+        remember_me:
+          type: boolean
+          default: false
+
+    LoginResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        mfa_required:
+          type: boolean
+          description: Whether MFA verification is required
+        mfa_token:
+          type: string
+          description: Temporary token for MFA verification
+
+    # MFA types
+    MFASetupResponse:
+      type: object
+      required:
+        - secret
+        - qr_code_url
+      properties:
+        secret:
+          type: string
+          description: TOTP secret (base32 encoded)
+        qr_code_url:
+          type: string
+          format: uri
+          description: URL for QR code generation
+        backup_codes:
+          type: array
+          items:
+            type: string
+          description: Backup recovery codes
+
+    MFAVerifyRequest:
+      type: object
+      required:
+        - mfa_token
+        - code
+        - method
+      properties:
+        mfa_token:
+          type: string
+          description: Token from MFA setup or login
+        code:
+          type: string
+          description: TOTP code or backup code
+        method:
+          type: string
+          enum: [totp, backup]
+          description: MFA verification method
+
+    MFAVerifyResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        recovery_codes_remaining:
+          type: integer
+          description: Number of backup codes remaining
+
+    # User profile types
+    UserProfile:
+      type: object
+      required:
+        - id
+        - username
+        - email
+        - created_at
+      properties:
+        id:
+          type: string
+          example: "user-123"
+        username:
+          type: string
+          example: "alice_smith"
+        email:
+          type: string
+          format: email
+          example: "alice@example.com"
+        first_name:
+          type: string
+          example: "Alice"
+        last_name:
+          type: string
+          example: "Smith"
+        roles:
+          type: array
+          items:
+            type: string
+          example: ["developer", "admin"]
+        department:
+          type: string
+          example: "engineering"
+        manager:
+          type: string
+          example: "user-456"
+        created_at:
+          type: string
+          format: date-time
+        last_login:
+          type: string
+          format: date-time
+        mfa_enabled:
+          type: boolean
+        account_status:
+          type: string
+          enum: [active, suspended, locked]
+          example: "active"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT Bearer token authentication.
+
+        Include the JWT token in the Authorization header:
+        `Authorization: Bearer <jwt-token>`
+
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key authentication.
+
+        Include your API key in the X-API-Key header:
+        `X-API-Key: <your-api-key>`
+
+# Webhooks (optional)
+# webhooks:
+#   user.login:
+#     post:
+#       summary: User login webhook
+#       operationId: userLoginWebhook
+#       requestBody:
+#         content:
+#           application/json:
+#             schema:
+#               type: object
+#               properties:
+#                 user_id:
+#                   type: string
+#                 login_time:
+#                   type: string
+#                   format: date-time
+#                 ip_address:
+#                   type: string
+#       responses:
+#         '200':
+#           description: Webhook received
+
+# External documentation
+externalDocs:
+  description: Complete API documentation and examples
+  url: https://docs.rust-security.com

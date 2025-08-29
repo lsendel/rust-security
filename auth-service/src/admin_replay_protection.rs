@@ -36,7 +36,8 @@ pub struct RequestSignature {
 
 impl ReplayProtection {
     /// Create a new replay protection instance
-    #[must_use] pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64) -> Self {
+    #[must_use]
+    pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64) -> Self {
         let redis_client = redis_url.and_then(|url| {
             redis::Client::open(url)
                 .map_err(|e| {
@@ -200,7 +201,8 @@ impl ReplayProtection {
     }
 
     /// Generate a secure nonce
-    #[must_use] pub fn generate_nonce() -> String {
+    #[must_use]
+    pub fn generate_nonce() -> String {
         use base64::{engine::general_purpose, Engine as _};
         use rand::RngCore;
         let mut bytes = [0u8; 32];
@@ -209,7 +211,8 @@ impl ReplayProtection {
     }
 
     /// Create HMAC signature for request
-    #[must_use] pub fn create_signature(
+    #[must_use]
+    pub fn create_signature(
         secret: &str,
         method: &str,
         path: &str,
@@ -226,7 +229,8 @@ impl ReplayProtection {
     }
 
     /// Verify HMAC signature
-    #[must_use] pub fn verify_signature(
+    #[must_use]
+    pub fn verify_signature(
         secret: &str,
         method: &str,
         path: &str,
@@ -260,7 +264,8 @@ pub struct AdminRateLimiter {
 }
 
 impl AdminRateLimiter {
-    #[must_use] pub fn new(max_requests: u32, window_seconds: u64) -> Self {
+    #[must_use]
+    pub fn new(max_requests: u32, window_seconds: u64) -> Self {
         Self {
             requests: Arc::new(DashMap::new()),
             max_requests,
@@ -278,10 +283,7 @@ impl AdminRateLimiter {
         let window_start = now - self.window_seconds;
 
         // Get or create request history
-        let mut entry = self
-            .requests
-            .entry(admin_key.to_string())
-            .or_default();
+        let mut entry = self.requests.entry(admin_key.to_string()).or_default();
 
         // Remove old entries outside the window
         entry.retain(|timestamp| *timestamp > window_start);

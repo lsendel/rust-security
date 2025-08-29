@@ -71,21 +71,28 @@ pub struct AppState {
     pub entities: Entities,
 }
 
+/// Load policies and entities from files
+///
+/// # Errors
+/// Returns an error if:
+/// - Policy file cannot be read or parsed
+/// - Entity file cannot be read or parsed
+/// - Policy compilation fails
 pub fn load_policies_and_entities() -> Result<Arc<AppState>, AppError> {
     let policies_path = concat!(env!("CARGO_MANIFEST_DIR"), "/policies.cedar");
     let policies_str = std::fs::read_to_string(policies_path)
         .map_err(|e| AppError::io("Failed to read policies file", e))?;
     let policies = policies_str
         .parse::<PolicySet>()
-        .map_err(|e| PolicyError::PolicyCompilationFailed { source: e })?;
+        .map_err(|e| AppError::Policy(PolicyError::CompilationFailed { source: e }))?;
 
     let entities_path = concat!(env!("CARGO_MANIFEST_DIR"), "/entities.json");
     let entities_str = std::fs::read_to_string(entities_path)
         .map_err(|e| AppError::io("Failed to read entities file", e))?;
     let entities = Entities::from_json_str(&entities_str, None).map_err(|e| {
-        PolicyError::PolicyValidationFailed {
+        AppError::Policy(PolicyError::ValidationFailed {
             reason: format!("Failed to parse entities: {e}"),
-        }
+        })
     })?;
 
     Ok(Arc::new(AppState {
@@ -110,6 +117,14 @@ pub fn load_policies_and_entities() -> Result<Arc<AppState>, AppError> {
         ("api_key" = [])
     )
 )]
+/// Authorize a request using Cedar policies
+///
+/// # Errors
+/// Returns an error if:
+/// - Action is invalid or empty
+/// - Principal or resource entities are malformed
+/// - Context parsing fails
+/// - Authorization request construction fails
 pub async fn authorize(
     State(state): State<Arc<AppState>>,
     Json(body): Json<AuthorizeRequest>,
@@ -165,8 +180,10 @@ pub async fn authorize(
     };
 
     // Record authorization metrics
-    let principal_type = extract_entity_type(&body.principal).unwrap_or("unknown".to_string());
-    let resource_type = extract_entity_type(&body.resource).unwrap_or("unknown".to_string());
+    let principal_type =
+        extract_entity_type(&body.principal).unwrap_or_else(|| "unknown".to_string());
+    let resource_type =
+        extract_entity_type(&body.resource).unwrap_or_else(|| "unknown".to_string());
     let action_type = extract_action_type(&body.action);
 
     PolicyMetricsHelper::record_authorization_request(
@@ -240,11 +257,9 @@ fn extract_entity_type(v: &serde_json::Value) -> Option<String> {
 /// Extract action type from action string
 fn extract_action_type(action: &str) -> String {
     // Extract the action type from action format like "Document::read" or "read"
-    if let Some(pos) = action.find("::") {
-        action[pos + 2..].to_string()
-    } else {
-        action.to_string()
-    }
+    action
+        .find("::")
+        .map_or_else(|| action.to_string(), |pos| action[pos + 2..].to_string())
 }
 
 pub fn app(state: Arc<AppState>) -> Router {

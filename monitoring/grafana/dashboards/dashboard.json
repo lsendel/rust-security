@@ -1,0 +1,331 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Rust Security Platform - Production Monitoring",
+    "tags": ["rust", "security", "authentication", "authorization"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=~\"auth-service|policy-service\"}",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "DOWN",
+                    "color": "red"
+                  },
+                  "1": {
+                    "text": "UP",
+                    "color": "green"
+                  }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "SLO Budget Status",
+        "type": "bargauge",
+        "targets": [
+          {
+            "expr": "slo_error_budget_remaining * 100",
+            "legendFormat": "Error Budget"
+          },
+          {
+            "expr": "slo_auth_latency_budget_remaining * 100",
+            "legendFormat": "Auth Latency Budget"
+          },
+          {
+            "expr": "slo_authz_latency_budget_remaining * 100",
+            "legendFormat": "Authz Latency Budget"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "unit": "percent"
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 10,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Authentication Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(auth_requests_total[5m])",
+            "legendFormat": "Total Requests"
+          },
+          {
+            "expr": "rate(auth_success_total[5m])",
+            "legendFormat": "Successful"
+          },
+          {
+            "expr": "rate(auth_failures_total[5m])",
+            "legendFormat": "Failed"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "reqps"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 4
+        }
+      },
+      {
+        "id": 4,
+        "title": "Authentication Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.5, rate(auth_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(auth_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(auth_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 4
+        }
+      },
+      {
+        "id": 5,
+        "title": "Authorization Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(authz_requests_total[5m])",
+            "legendFormat": "Total Requests"
+          },
+          {
+            "expr": "rate(authz_allow_total[5m])",
+            "legendFormat": "Allowed"
+          },
+          {
+            "expr": "rate(authz_deny_total[5m])",
+            "legendFormat": "Denied"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "reqps"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 12
+        }
+      },
+      {
+        "id": 6,
+        "title": "Authorization Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.5, rate(authz_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(authz_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(authz_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P99"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 12
+        }
+      },
+      {
+        "id": 7,
+        "title": "Rate Limiting",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rate_limit_hits[5m])",
+            "legendFormat": "Allowed"
+          },
+          {
+            "expr": "rate(rate_limit_exceeded[5m])",
+            "legendFormat": "Exceeded"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "reqps"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 20
+        }
+      },
+      {
+        "id": 8,
+        "title": "Connection Pool Metrics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "pool_connections_active",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "pool_connections_total",
+            "legendFormat": "Total Connections"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(pool_acquisition_duration_seconds_bucket[5m])) * 1000",
+            "legendFormat": "P95 Acquisition Time"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "none"
+          },
+          {
+            "unit": "ms"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 20
+        }
+      },
+      {
+        "id": 9,
+        "title": "Error Rate by Type",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "rate(errors_by_type[5m])",
+            "legendFormat": "{{error_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 28
+        }
+      },
+      {
+        "id": 10,
+        "title": "System Resources",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "memory_usage_bytes / 1024 / 1024",
+            "legendFormat": "Memory Usage (MB)"
+          },
+          {
+            "expr": "rate(process_cpu_seconds_total[5m]) * 100",
+            "legendFormat": "CPU Usage (%)"
+          },
+          {
+            "expr": "active_connections",
+            "legendFormat": "Active Connections"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 28
+        }
+      },
+      {
+        "id": 11,
+        "title": "HTTP Request Duration by Endpoint",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(request_duration_seconds_bucket[5m])",
+            "legendFormat": "{{endpoint}} {{method}} {{status}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 16,
+          "x": 0,
+          "y": 36
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}

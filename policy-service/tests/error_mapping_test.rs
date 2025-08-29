@@ -1,3 +1,24 @@
+// Suppress unused dependency warnings
+use anyhow as _;
+use cedar_policy as _;
+use cedar_policy_core as _;
+use chrono as _;
+use dotenvy as _;
+use futures as _;
+use once_cell as _;
+use prometheus as _;
+use reqwest as _;
+use serde as _;
+use serde_json as _;
+use tempfile as _;
+use thiserror as _;
+use tokio as _;
+use tower_http as _;
+use tracing as _;
+use tracing_subscriber as _;
+use utoipa as _;
+use utoipa_swagger_ui as _;
+
 use axum::http::StatusCode;
 use policy_service::errors::{AppError, AuthorizationError, ConfigError, EntityError, PolicyError};
 

@@ -112,7 +112,8 @@ impl FailureStats {
 }
 
 impl AuthFailureTracker {
-    #[must_use] pub fn new(config: AuthFailureConfig) -> Self {
+    #[must_use]
+    pub fn new(config: AuthFailureConfig) -> Self {
         Self {
             ip_failures: DashMap::new(),
             client_failures: DashMap::new(),

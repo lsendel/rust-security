@@ -4,7 +4,7 @@ msrv = "1.70.0"
 
 disallowed-methods = [
     "std::ptr::read",
-    "std::ptr::write", 
+    "std::ptr::write",
     "std::mem::transmute",
     "std::slice::get_unchecked",
     "std::str::from_utf8_unchecked",
@@ -17,3 +17,9 @@ disallowed-types = [
 
 cognitive-complexity-threshold = 30
 type-complexity-threshold = 250
+
+# Allow known dependency version conflicts that are difficult to resolve
+# without breaking changes to the ecosystem
+allow = [
+    "multiple-crate-versions",
+]

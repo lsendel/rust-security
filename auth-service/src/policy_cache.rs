@@ -93,7 +93,8 @@ pub struct PolicyCache {
 
 impl PolicyCache {
     /// Create new policy cache with configuration
-    #[must_use] pub fn new(config: PolicyCacheConfig) -> Self {
+    #[must_use]
+    pub fn new(config: PolicyCacheConfig) -> Self {
         Self {
             cache: DashMap::new(),
             config,
@@ -400,7 +401,8 @@ pub async fn start_cache_cleanup_task(cache: Arc<PolicyCache>) {
 }
 
 /// Normalize policy request for consistent caching
-#[must_use] pub fn normalize_policy_request(
+#[must_use]
+pub fn normalize_policy_request(
     principal: Value,
     action: String,
     resource: Value,

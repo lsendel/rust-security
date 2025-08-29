@@ -93,7 +93,8 @@ pub enum Environment {
 }
 
 impl Environment {
-    #[must_use] pub fn from_env() -> Self {
+    #[must_use]
+    pub fn from_env() -> Self {
         match env::var("ENVIRONMENT")
             .unwrap_or_else(|_| "development".to_string())
             .to_lowercase()
@@ -106,11 +107,13 @@ impl Environment {
         }
     }
 
-    #[must_use] pub const fn is_production(&self) -> bool {
+    #[must_use]
+    pub const fn is_production(&self) -> bool {
         matches!(self, Self::Production)
     }
 
-    #[must_use] pub const fn is_development(&self) -> bool {
+    #[must_use]
+    pub const fn is_development(&self) -> bool {
         matches!(self, Self::Development)
     }
 }
@@ -127,7 +130,8 @@ pub static CONFIG: Lazy<StaticConfig> = Lazy::new(|| {
 });
 
 /// Production configuration with hardcoded secure defaults
-#[must_use] pub fn production_config() -> StaticConfig {
+#[must_use]
+pub fn production_config() -> StaticConfig {
     StaticConfig {
         server: ServerConfig {
             bind_addr: "0.0.0.0:8080".to_string(),
@@ -187,7 +191,8 @@ pub static CONFIG: Lazy<StaticConfig> = Lazy::new(|| {
 }
 
 /// Staging configuration - similar to production but with relaxed security
-#[must_use] pub fn staging_config() -> StaticConfig {
+#[must_use]
+pub fn staging_config() -> StaticConfig {
     let mut config = production_config();
 
     // Allow HTTP for staging
@@ -211,7 +216,8 @@ pub static CONFIG: Lazy<StaticConfig> = Lazy::new(|| {
 }
 
 /// Testing configuration - optimized for automated tests
-#[must_use] pub fn testing_config() -> StaticConfig {
+#[must_use]
+pub fn testing_config() -> StaticConfig {
     StaticConfig {
         server: ServerConfig {
             bind_addr: "127.0.0.1:0".to_string(), // Random port
@@ -267,7 +273,8 @@ pub static CONFIG: Lazy<StaticConfig> = Lazy::new(|| {
 }
 
 /// Development configuration - developer-friendly settings
-#[must_use] pub fn development_config() -> StaticConfig {
+#[must_use]
+pub fn development_config() -> StaticConfig {
     StaticConfig {
         server: ServerConfig {
             bind_addr: "127.0.0.1:8080".to_string(),
@@ -545,12 +552,14 @@ impl ConfigManager {
     }
 
     /// Get client info by client ID
-    #[must_use] pub fn get_client_info(&self, client_id: &str) -> Option<&ClientInfo> {
+    #[must_use]
+    pub fn get_client_info(&self, client_id: &str) -> Option<&ClientInfo> {
         self.static_config.clients.default_clients.get(client_id)
     }
 
     /// Check if a feature is enabled
-    #[must_use] pub fn is_feature_enabled(&self, feature: &str) -> bool {
+    #[must_use]
+    pub fn is_feature_enabled(&self, feature: &str) -> bool {
         match feature {
             "oidc_google" => self.static_config.features.enable_oidc_google,
             "oidc_microsoft" => self.static_config.features.enable_oidc_microsoft,
@@ -565,7 +574,8 @@ impl ConfigManager {
     }
 
     /// Validate client credentials
-    #[must_use] pub fn validate_client_credentials(&self, client_id: &str, client_secret: &str) -> bool {
+    #[must_use]
+    pub fn validate_client_credentials(&self, client_id: &str, client_secret: &str) -> bool {
         if let Some(client_info) = self.get_client_info(client_id) {
             bcrypt::verify(client_secret, &client_info.secret_hash).unwrap_or(false)
         } else {
@@ -574,17 +584,20 @@ impl ConfigManager {
     }
 
     /// Get JWT signing key
-    #[must_use] pub fn jwt_signing_key(&self) -> &str {
+    #[must_use]
+    pub fn jwt_signing_key(&self) -> &str {
         &self.runtime_secrets.jwt_signing_key
     }
 
     /// Get database URL if configured
-    #[must_use] pub fn database_url(&self) -> Option<&str> {
+    #[must_use]
+    pub fn database_url(&self) -> Option<&str> {
         self.runtime_secrets.database_url.as_deref()
     }
 
     /// Get Redis URL if configured
-    #[must_use] pub fn redis_url(&self) -> Option<&str> {
+    #[must_use]
+    pub fn redis_url(&self) -> Option<&str> {
         self.runtime_secrets.redis_url.as_deref()
     }
 }

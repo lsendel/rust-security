@@ -15,7 +15,8 @@ pub struct App {
 
 impl App {
     /// Create a new application instance
-    #[must_use] pub fn new(config: Arc<crate::config::Config>) -> Self {
+    #[must_use]
+    pub fn new(config: Arc<crate::config::Config>) -> Self {
         let router = crate::lib::api::create_router();
 
         Self { router, config }

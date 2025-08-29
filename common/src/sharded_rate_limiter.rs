@@ -38,7 +38,8 @@ pub struct RateLimitEntry {
 
 impl RateLimitEntry {
     /// Create a new rate limit entry
-    #[must_use] pub fn new(limit: u32, window_duration: Duration) -> Self {
+    #[must_use]
+    pub fn new(limit: u32, window_duration: Duration) -> Self {
         Self {
             count: 0,
             window_start: Instant::now(),
@@ -48,7 +49,8 @@ impl RateLimitEntry {
     }
 
     /// Check if the entry is in a new window and should be reset
-    #[must_use] pub fn should_reset(&self) -> bool {
+    #[must_use]
+    pub fn should_reset(&self) -> bool {
         self.window_start.elapsed() >= self.window_duration
     }
 
@@ -59,7 +61,8 @@ impl RateLimitEntry {
     }
 
     /// Check if adding one more request would exceed the limit
-    #[must_use] pub const fn would_exceed_limit(&self) -> bool {
+    #[must_use]
+    pub const fn would_exceed_limit(&self) -> bool {
         self.count >= self.limit
     }
 
@@ -69,12 +72,14 @@ impl RateLimitEntry {
     }
 
     /// Get remaining requests in the current window
-    #[must_use] pub const fn remaining(&self) -> u32 {
+    #[must_use]
+    pub const fn remaining(&self) -> u32 {
         self.limit.saturating_sub(self.count)
     }
 
     /// Get time until window reset
-    #[must_use] pub fn time_until_reset(&self) -> Duration {
+    #[must_use]
+    pub fn time_until_reset(&self) -> Duration {
         self.window_duration
             .saturating_sub(self.window_start.elapsed())
     }
@@ -116,11 +121,27 @@ pub struct ShardedRateLimiter {
 
 impl ShardedRateLimiter {
     /// Create a new sharded rate limiter
-    #[must_use] pub fn new(config: RateLimitConfig) -> Self {
+    ///
+    /// # Panics
+    /// Panics if `config.default_limit` is 0 or if `config.window_duration` is zero
+    #[must_use]
+    pub fn new(config: RateLimitConfig) -> Self {
         // Validate configuration
-        assert!((config.default_limit != 0), "Rate limit must be greater than 0");
-        assert!(!config.window_duration.is_zero(), "Window duration must be greater than 0");
-        assert!(!(config.burst_multiplier < 1.0), "Burst multiplier must be >= 1.0");
+        assert!(
+            (config.default_limit != 0),
+            "Rate limit must be greater than 0"
+        );
+        assert!(
+            !config.window_duration.is_zero(),
+            "Window duration must be greater than 0"
+        );
+        assert!(
+            config
+                .burst_multiplier
+                .partial_cmp(&1.0)
+                .is_some_and(|cmp| cmp != std::cmp::Ordering::Less),
+            "Burst multiplier must be >= 1.0"
+        );
 
         // Create shards array
         let mut shards = Vec::with_capacity(rate_limiting::RATE_LIMITER_SHARDS);
@@ -138,24 +159,32 @@ impl ShardedRateLimiter {
     }
 
     /// Create a rate limiter with default configuration
-    #[must_use] pub fn with_default_config() -> Self {
+    #[must_use]
+    pub fn with_default_config() -> Self {
         Self::new(RateLimitConfig::default())
     }
 
     /// Get the shard index for a given key
+    #[allow(clippy::unused_self)]
     fn get_shard_index(&self, key: &str) -> usize {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
-        (hasher.finish() as usize) % rate_limiting::RATE_LIMITER_SHARDS
+        usize::try_from(hasher.finish()).unwrap_or(0) % rate_limiting::RATE_LIMITER_SHARDS
     }
 
     /// Check if a request should be allowed
+    ///
+    /// # Errors
+    /// Returns `RateLimitError::InvalidConfiguration` if the default limit is 0
     pub async fn check_rate_limit(&self, key: &str) -> Result<bool, RateLimitError> {
         self.check_rate_limit_with_limit(key, self.config.default_limit)
             .await
     }
 
     /// Check if a request should be allowed with a custom limit
+    ///
+    /// # Errors
+    /// Returns `RateLimitError::InvalidConfiguration` if the custom limit is 0
     pub async fn check_rate_limit_with_limit(
         &self,
         key: &str,
@@ -213,6 +242,10 @@ impl ShardedRateLimiter {
             let mut entry = RateLimitEntry::new(custom_limit, self.config.window_duration);
             entry.increment();
             shard_write.insert(key.to_string(), entry);
+
+            // Explicitly drop the write lock to reduce contention
+            drop(shard_write);
+
             Ok(true)
         }
     }
@@ -242,17 +275,18 @@ impl ShardedRateLimiter {
     }
 
     /// Manually reset rate limit for a key
+    ///
+    /// # Errors
+    /// This function currently doesn't return any errors but maintains the Result type for future extensibility
     pub async fn reset_rate_limit(&self, key: &str) -> Result<(), RateLimitError> {
         let shard_index = self.get_shard_index(key);
         let shard = &self.shards[shard_index];
         let mut shard_write = shard.write().await;
 
-        if let Some(entry) = shard_write.get_mut(key) {
+        shard_write.get_mut(key).map_or(Ok(()), |entry| {
             entry.reset();
             Ok(())
-        } else {
-            Ok(()) // No entry to reset
-        }
+        })
     }
 
     /// Clean up expired entries
@@ -288,10 +322,12 @@ impl ShardedRateLimiter {
     }
 
     /// Start background cleanup task
+    #[allow(clippy::unused_async)]
     pub async fn start_cleanup_task(&self) {
         let cleanup_interval = self.config.cleanup_interval;
 
         tokio::spawn({
+            #[allow(clippy::no_effect_underscore_binding)]
             let _limiter = self as *const _ as usize; // Unsafe pointer for demonstration
 
             async move {

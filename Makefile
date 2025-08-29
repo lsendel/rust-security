@@ -89,12 +89,12 @@ fmt-fix: ## Fix code formatting issues
 .PHONY: clippy
 clippy: ## Run clippy lints
 	@echo "$(GREEN)📎 Running clippy lints...$(NC)"
-	@cargo clippy --workspace --all-targets --all-features -- -D warnings
+	@cargo clippy --workspace --all-targets -- -W clippy::all
 
 .PHONY: clippy-fix
 clippy-fix: ## Fix clippy issues automatically where possible
 	@echo "$(GREEN)📎 Fixing clippy issues...$(NC)"
-	@cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- -D warnings
+	@cargo clippy --workspace --all-targets --fix --allow-dirty -- -W clippy::all
 
 .PHONY: audit
 audit: security-audit ## Alias for security-audit

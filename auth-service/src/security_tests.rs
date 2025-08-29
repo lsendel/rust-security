@@ -257,13 +257,13 @@ mod security_tests {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));
 
         // Request with suspicious user agent should trigger detection
-        let result = limiter
+        let _result = limiter
             .check_rate_limit(ip, None, "/test", Some("curl/7.68.0"))
             .await;
         // May trigger suspicious activity (depends on implementation)
 
         // Request without user agent should be suspicious
-        let result = limiter.check_rate_limit(ip, None, "/test", None).await;
+        let _result = limiter.check_rate_limit(ip, None, "/test", None).await;
         // Should be handled appropriately
     }
 

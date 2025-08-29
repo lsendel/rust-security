@@ -1,0 +1,197 @@
+groups:
+  # Authentication Service Alerts
+  - name: authentication.alerts
+    rules:
+      - alert: HighAuthenticationErrorRate
+        expr: rate(auth_failures_total[5m]) / rate(auth_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "High authentication error rate"
+          description: "Authentication error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      - alert: HighAuthenticationLatency
+        expr: histogram_quantile(0.95, rate(auth_duration_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "High authentication latency"
+          description: "95th percentile auth latency is {{ $value | humanizeDuration }}"
+
+      - alert: AuthenticationServiceDown
+        expr: up{job="auth-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "Authentication service is down"
+          description: "Authentication service has been down for more than 1 minute"
+
+  # Authorization Service Alerts
+  - name: authorization.alerts
+    rules:
+      - alert: HighAuthorizationErrorRate
+        expr: rate(authz_deny_total[5m]) / rate(authz_requests_total[5m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: policy-service
+        annotations:
+          summary: "High authorization denial rate"
+          description: "Authorization denial rate is {{ $value | humanizePercentage }}"
+
+      - alert: HighAuthorizationLatency
+        expr: histogram_quantile(0.95, rate(authz_duration_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: policy-service
+        annotations:
+          summary: "High authorization latency"
+          description: "95th percentile authz latency is {{ $value | humanizeDuration }}"
+
+      - alert: AuthorizationServiceDown
+        expr: up{job="policy-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: policy-service
+        annotations:
+          summary: "Authorization service is down"
+          description: "Authorization service has been down for more than 1 minute"
+
+  # Rate Limiting Alerts
+  - name: rate_limiting.alerts
+    rules:
+      - alert: HighRateLimitViolationRate
+        expr: rate(rate_limit_exceeded[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "High rate limit violation rate"
+          description: "Rate limit violations: {{ $value | humanize }} per minute"
+
+  # Connection Pool Alerts
+  - name: connection_pool.alerts
+    rules:
+      - alert: HighConnectionAcquisitionLatency
+        expr: histogram_quantile(0.95, rate(pool_acquisition_duration_seconds_bucket[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "High connection acquisition latency"
+          description: "95th percentile connection acquisition latency is {{ $value | humanizeDuration }}"
+
+      - alert: ConnectionPoolExhausted
+        expr: pool_connections_active / pool_connections_total > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "Connection pool nearly exhausted"
+          description: "Connection pool is {{ $value | humanizePercentage }} utilized"
+
+  # SLO Budget Alerts
+  - name: slo_budget.alerts
+    rules:
+      - alert: SLOErrorBudgetExhausted
+        expr: slo_error_budget_remaining < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SLO error budget nearly exhausted"
+          description: "Error budget remaining: {{ $value | humanizePercentage }}"
+
+      - alert: SLOAuthLatencyBudgetLow
+        expr: slo_auth_latency_budget_remaining < 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Auth latency SLO budget low"
+          description: "Auth latency budget remaining: {{ $value | humanizePercentage }}"
+
+      - alert: SLOAuthzLatencyBudgetLow
+        expr: slo_authz_latency_budget_remaining < 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Authz latency SLO budget low"
+          description: "Authz latency budget remaining: {{ $value | humanizePercentage }}"
+
+  # System Health Alerts
+  - name: system_health.alerts
+    rules:
+      - alert: HighMemoryUsage
+        expr: memory_usage_bytes / 1024 / 1024 > 512
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }} MB"
+
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+  # Security Alerts
+  - name: security.alerts
+    rules:
+      - alert: SuspiciousActivitySpike
+        expr: rate(errors_total{error_type="security"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Suspicious security activity spike"
+          description: "Security errors: {{ $value | humanize }} per minute"
+
+      - alert: FailedLoginSpike
+        expr: rate(auth_failures_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spike in failed login attempts"
+          description: "Failed logins: {{ $value | humanize }} per minute"
+
+  # Performance Regression Alerts
+  - name: performance_regression.alerts
+    rules:
+      - alert: AuthenticationLatencyRegression
+        expr: histogram_quantile(0.95, rate(auth_duration_seconds_bucket[1h])) > 1.2 * histogram_quantile(0.95, rate(auth_duration_seconds_bucket[1h] offset 24h))
+        for: 30m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "Authentication latency regression detected"
+          description: "95th percentile auth latency increased by >20% compared to 24h ago"
+
+      - alert: AuthorizationLatencyRegression
+        expr: histogram_quantile(0.95, rate(authz_duration_seconds_bucket[1h])) > 1.2 * histogram_quantile(0.95, rate(authz_duration_seconds_bucket[1h] offset 24h))
+        for: 30m
+        labels:
+          severity: warning
+          service: policy-service
+        annotations:
+          summary: "Authorization latency regression detected"
+          description: "95th percentile authz latency increased by >20% compared to 24h ago"

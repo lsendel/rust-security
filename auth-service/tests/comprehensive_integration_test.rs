@@ -70,7 +70,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -79,12 +79,12 @@ async fn test_complete_oauth_flow() {
     let client = reqwest::Client::new();
 
     // Test 1: Health check
-    let response = client.get(format!("{}/health", base)).send().await.unwrap();
+    let response = client.get(format!("{base}/health")).send().await.unwrap();
     assert_eq!(response.status(), 200);
 
     // Test 2: OAuth metadata endpoints
     let response = client
-        .get(format!("{}/.well-known/oauth-authorization-server", base))
+        .get(format!("{base}/.well-known/oauth-authorization-server"))
         .send()
         .await
         .unwrap();
@@ -94,7 +94,7 @@ async fn test_complete_oauth_flow() {
 
     // Test 3: JWKS endpoint
     let response = client
-        .get(format!("{}/jwks.json", base))
+        .get(format!("{base}/jwks.json"))
         .send()
         .await
         .unwrap();
@@ -104,7 +104,7 @@ async fn test_complete_oauth_flow() {
 
     // Test 4: Token issuance with client credentials
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=read%20write")
         .send()
@@ -128,7 +128,7 @@ async fn test_complete_oauth_flow() {
 
     // Test 5: Introspection endpoint
     let response = client
-        .post(format!("{}/oauth/introspect", base))
+        .post(format!("{base}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/json")
         .json(&IntrospectRequest {
             token: access_token.to_string(),
@@ -152,11 +152,10 @@ async fn test_complete_oauth_flow() {
 
     // Test 6: Token refresh
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body(format!(
-            "grant_type=refresh_token&refresh_token={}",
-            refresh_token
+            "grant_type=refresh_token&refresh_token={refresh_token}"
         ))
         .send()
         .await
@@ -174,9 +173,9 @@ async fn test_complete_oauth_flow() {
 
     // Test 7: Token revocation
     let response = client
-        .post(format!("{}/oauth/revoke", base))
+        .post(format!("{base}/oauth/revoke"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("token={}", access_token))
+        .body(format!("token={access_token}"))
         .send()
         .await
         .unwrap();
@@ -185,7 +184,7 @@ async fn test_complete_oauth_flow() {
 
     // Test 8: Verify token is revoked
     let response = client
-        .post(format!("{}/oauth/introspect", base))
+        .post(format!("{base}/oauth/introspect"))
         .header(CONTENT_TYPE, "application/json")
         .json(&IntrospectRequest {
             token: access_token.to_string(),
@@ -210,7 +209,7 @@ async fn test_security_features() {
 
     // Test 1: Invalid client credentials
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=invalid&client_secret=invalid")
         .send()
@@ -221,7 +220,7 @@ async fn test_security_features() {
 
     // Test 2: Missing client credentials
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials")
         .send()
@@ -232,7 +231,7 @@ async fn test_security_features() {
 
     // Test 3: Invalid scope
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=invalid_scope")
         .send()
@@ -243,7 +242,7 @@ async fn test_security_features() {
 
     // Test 4: Unsupported grant type
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=authorization_code&client_id=test_client&client_secret=test_secret_12345")
         .send()
@@ -257,9 +256,9 @@ async fn test_security_features() {
         base64::engine::general_purpose::STANDARD.encode("test_client:test_secret_12345");
 
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(AUTHORIZATION, format!("Basic {}", credentials))
+        .header(AUTHORIZATION, format!("Basic {credentials}"))
         .body("grant_type=client_credentials&scope=read")
         .send()
         .await
@@ -275,7 +274,7 @@ async fn test_rate_limiting() {
 
     // Generate a valid access token first
     let token_res = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=read")
         .send()
@@ -303,7 +302,7 @@ async fn test_rate_limiting() {
         let access_token = access_token.clone();
         handles.push(tokio::spawn(async move {
             let res = client
-                .post(format!("{}/oauth/introspect", base))
+                .post(format!("{base}/oauth/introspect"))
                 .header(CONTENT_TYPE, "application/json")
                 .header("X-Forwarded-For", "1.2.3.4")
                 .json(&IntrospectRequest {
@@ -342,7 +341,7 @@ async fn test_openid_connect_features() {
 
     // Request OpenID Connect token with openid scope
     let response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret_12345&scope=openid profile")
         .send()
@@ -368,7 +367,7 @@ async fn test_mfa_endpoints() {
 
     // Test TOTP registration
     let response = client
-        .post(format!("{}/mfa/totp/register", base))
+        .post(format!("{base}/mfa/totp/register"))
         .header(CONTENT_TYPE, "application/json")
         .json(&serde_json::json!({
             "user_id": "test_user"
@@ -390,7 +389,7 @@ async fn test_scim_endpoints() {
 
     // Test SCIM user creation with valid body
     let response = client
-        .post(format!("{}/scim/v2/Users", base))
+        .post(format!("{base}/scim/v2/Users"))
         .header(CONTENT_TYPE, "application/json")
         .json(&serde_json::json!({
             "userName": "test.user@example.com",
@@ -414,7 +413,7 @@ async fn test_security_headers() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let response = client.get(format!("{}/health", base)).send().await.unwrap();
+    let response = client.get(format!("{base}/health")).send().await.unwrap();
 
     let headers = response.headers();
 

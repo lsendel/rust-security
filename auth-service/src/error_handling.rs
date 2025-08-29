@@ -55,7 +55,8 @@ pub enum SecurityError {
 
 impl SecurityError {
     /// Get the public-facing error message that's safe to expose
-    #[must_use] pub const fn public_message(&self) -> &'static str {
+    #[must_use]
+    pub const fn public_message(&self) -> &'static str {
         match self {
             Self::AuthenticationFailed => "Authentication failed",
             Self::AuthorizationDenied => "Access denied",
@@ -73,7 +74,8 @@ impl SecurityError {
     }
 
     /// Check if this error should be logged for security monitoring
-    #[must_use] pub const fn should_log(&self) -> bool {
+    #[must_use]
+    pub const fn should_log(&self) -> bool {
         matches!(
             self,
             Self::AuthenticationFailed
@@ -85,19 +87,19 @@ impl SecurityError {
     }
 
     /// Get the severity level for logging
-    #[must_use] pub const fn severity(&self) -> ErrorSeverity {
+    #[must_use]
+    pub const fn severity(&self) -> ErrorSeverity {
         match self {
             Self::Internal | Self::CryptographicFailure => ErrorSeverity::High,
-            Self::AuthenticationFailed | Self::AuthorizationDenied => {
-                ErrorSeverity::Medium
-            }
+            Self::AuthenticationFailed | Self::AuthorizationDenied => ErrorSeverity::Medium,
             Self::RateLimitExceeded | Self::InvalidInput => ErrorSeverity::Low,
             _ => ErrorSeverity::Low,
         }
     }
 
     /// Get error code for monitoring and alerting
-    #[must_use] pub const fn error_code(&self) -> &'static str {
+    #[must_use]
+    pub const fn error_code(&self) -> &'static str {
         match self {
             Self::AuthenticationFailed => "AUTH_FAILED",
             Self::AuthorizationDenied => "ACCESS_DENIED",
@@ -115,7 +117,8 @@ impl SecurityError {
     }
 
     /// Check if the operation should be retried
-    #[must_use] pub const fn is_retryable(&self) -> bool {
+    #[must_use]
+    pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
             Self::ServiceUnavailable | Self::Timeout | Self::Internal
@@ -334,7 +337,8 @@ impl From<rustls::Error> for SecurityError {
 }
 
 impl CircuitBreaker {
-    #[must_use] pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
+    #[must_use]
+    pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
         Self {
             failure_threshold,
             recovery_timeout,
@@ -428,7 +432,8 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    #[must_use] pub const fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
+    #[must_use]
+    pub const fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
         Self {
             max_attempts,
             base_delay,
@@ -497,7 +502,7 @@ where
 
 /// Validation helpers that return `SecurityError`
 pub mod validation {
-    use super::{SecurityResult, SecurityError};
+    use super::{SecurityError, SecurityResult};
     use validator::Validate;
 
     pub fn validate_input<T: Validate>(input: &T) -> SecurityResult<()> {

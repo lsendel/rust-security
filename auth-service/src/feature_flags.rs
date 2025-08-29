@@ -120,7 +120,8 @@ impl Default for FeatureFlags {
 
 impl FeatureFlags {
     /// Load feature flags from environment variables
-    #[must_use] pub fn from_env() -> Self {
+    #[must_use]
+    pub fn from_env() -> Self {
         let mut flags = Self::default();
 
         // OIDC Provider flags
@@ -253,7 +254,8 @@ impl FeatureFlags {
     }
 
     /// Get feature flag as a map for template rendering or API responses
-    #[must_use] pub fn as_map(&self) -> HashMap<String, bool> {
+    #[must_use]
+    pub fn as_map(&self) -> HashMap<String, bool> {
         let mut map = HashMap::new();
 
         // OIDC Providers
@@ -324,17 +326,20 @@ impl FeatureFlags {
     }
 
     /// Check if any OIDC provider is enabled
-    #[must_use] pub const fn has_oidc_providers(&self) -> bool {
+    #[must_use]
+    pub const fn has_oidc_providers(&self) -> bool {
         self.google_oidc || self.microsoft_oidc || self.github_oidc
     }
 
     /// Check if MFA is enabled
-    #[must_use] pub const fn has_mfa(&self) -> bool {
+    #[must_use]
+    pub const fn has_mfa(&self) -> bool {
         self.webauthn || self.advanced_mfa || self.totp_mfa || self.sms_mfa
     }
 
     /// Check if monitoring is enabled
-    #[must_use] pub const fn has_monitoring(&self) -> bool {
+    #[must_use]
+    pub const fn has_monitoring(&self) -> bool {
         self.advanced_metrics
             || self.distributed_tracing
             || self.security_monitoring
@@ -342,7 +347,8 @@ impl FeatureFlags {
     }
 
     /// Get list of enabled features for logging
-    #[must_use] pub fn enabled_features(&self) -> Vec<&'static str> {
+    #[must_use]
+    pub fn enabled_features(&self) -> Vec<&'static str> {
         let mut features = Vec::new();
 
         if self.google_oidc {
@@ -461,7 +467,8 @@ pub struct FeatureFlagManager {
 
 impl FeatureFlagManager {
     /// Create a new feature flag manager
-    #[must_use] pub fn new(initial_flags: FeatureFlags) -> Self {
+    #[must_use]
+    pub fn new(initial_flags: FeatureFlags) -> Self {
         Self {
             flags: Arc::new(RwLock::new(initial_flags)),
             overrides: Arc::new(RwLock::new(HashMap::new())),

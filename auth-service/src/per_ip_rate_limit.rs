@@ -179,7 +179,8 @@ pub struct PerIpRateLimiter {
 }
 
 impl PerIpRateLimiter {
-    #[must_use] pub fn new(config: PerIpRateLimitConfig) -> Self {
+    #[must_use]
+    pub fn new(config: PerIpRateLimitConfig) -> Self {
         Self {
             entries: DashMap::new(),
             config,

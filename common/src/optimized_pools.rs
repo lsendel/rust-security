@@ -105,6 +105,13 @@ impl std::fmt::Debug for CachedConnection {
 
 impl OptimizedRedisPool {
     /// Create a new optimized Redis pool
+    ///
+    /// # Errors
+    /// Returns `PoolError` if:
+    /// - Configuration validation fails
+    /// - Redis client creation fails
+    /// - Initial connection test fails
+    /// - Statistics initialization fails
     pub async fn new(config: UnifiedRedisConfig) -> Result<Self, PoolError> {
         // Validate configuration
         config
@@ -148,6 +155,13 @@ impl OptimizedRedisPool {
     }
 
     /// Get a connection from the pool
+    ///
+    /// # Errors
+    /// Returns `PoolError` if:
+    /// - Pool is shutting down
+    /// - No permits available (pool exhausted)
+    /// - Connection timeout is reached
+    /// - Redis connection creation fails
     pub async fn get_connection(&self) -> Result<PooledConnection, PoolError> {
         let start_time = Instant::now();
 
@@ -157,15 +171,18 @@ impl OptimizedRedisPool {
         }
 
         // Acquire semaphore permit with timeout
-        let permit = tokio::time::timeout(self.config.timeout_duration(), self.semaphore.clone().acquire_owned())
-            .await
-            .map_err(|_| PoolError::ConnectionTimeout)?
-            .map_err(|_| PoolError::PoolExhausted)?;
+        let permit = tokio::time::timeout(
+            self.config.timeout_duration(),
+            self.semaphore.clone().acquire_owned(),
+        )
+        .await
+        .map_err(|_| PoolError::ConnectionTimeout)?
+        .map_err(|_| PoolError::PoolExhausted)?;
 
         // Try to get a cached connection first
         if let Some(connection) = self.try_get_cached_connection().await {
-            // Update stats
-            let acquisition_time = start_time.elapsed().as_millis() as f64;
+            // Update stats - use sub-second precision for better accuracy
+            let acquisition_time = start_time.elapsed().as_secs_f64() * 1000.0;
             self.update_acquisition_stats(true, acquisition_time).await;
 
             return Ok(PooledConnection {
@@ -179,7 +196,7 @@ impl OptimizedRedisPool {
         // Create new connection
         match self.create_new_connection().await {
             Ok(connection) => {
-                let acquisition_time = start_time.elapsed().as_millis() as f64;
+                let acquisition_time = start_time.elapsed().as_secs_f64() * 1000.0;
                 self.update_acquisition_stats(true, acquisition_time).await;
 
                 Ok(PooledConnection {
@@ -190,7 +207,7 @@ impl OptimizedRedisPool {
                 })
             }
             Err(e) => {
-                let acquisition_time = start_time.elapsed().as_millis() as f64;
+                let acquisition_time = start_time.elapsed().as_secs_f64() * 1000.0;
                 self.update_acquisition_stats(false, acquisition_time).await;
                 Err(e)
             }
@@ -216,6 +233,10 @@ impl OptimizedRedisPool {
                 "Reusing cached Redis connection (reuse count: {})",
                 cached.reuse_count
             );
+
+            // Explicitly drop the cache lock early to reduce contention
+            drop(cache);
+
             return Some(cached.connection);
         }
 
@@ -243,6 +264,9 @@ impl OptimizedRedisPool {
 
     /// Return a connection to the cache for reuse
     pub async fn return_connection(&self, connection: redis::aio::ConnectionManager) {
+        // Limit cache size to prevent memory bloat
+        const MAX_CACHE_SIZE: usize = 50;
+
         let cached = CachedConnection {
             connection,
             last_used: Instant::now(),
@@ -250,15 +274,19 @@ impl OptimizedRedisPool {
             reuse_count: 0,
         };
 
-        let mut cache = self.connection_cache.write().await;
+        // Update cache first, then drop lock
+        {
+            let mut cache = self.connection_cache.write().await;
 
-        // Limit cache size to prevent memory bloat
-        const MAX_CACHE_SIZE: usize = 50;
-        if cache.len() < MAX_CACHE_SIZE {
-            cache.push(cached);
-            debug!("Cached Redis connection for reuse");
-        } else {
-            debug!("Connection cache full, dropping connection");
+            if cache.len() < MAX_CACHE_SIZE {
+                cache.push(cached);
+                debug!("Cached Redis connection for reuse");
+            } else {
+                debug!("Connection cache full, dropping connection");
+            }
+
+            // Explicitly drop cache lock to reduce contention
+            drop(cache);
         }
 
         // Update active connections count
@@ -276,11 +304,18 @@ impl OptimizedRedisPool {
             stats.failed_acquisitions += 1;
         }
 
-        // Update moving average of acquisition time
+        // Update moving average of acquisition time - avoid precision loss
         let total_acquisitions = stats.successful_acquisitions + stats.failed_acquisitions;
-        stats.avg_acquisition_time_ms =
-            stats.avg_acquisition_time_ms.mul_add((total_acquisitions - 1) as f64, acquisition_time_ms)
-                / total_acquisitions as f64;
+        if total_acquisitions > 0 {
+            #[allow(clippy::cast_precision_loss)]
+            let total_acquisitions_f64 = total_acquisitions as f64;
+            #[allow(clippy::cast_precision_loss)]
+            let total_minus_one_f64 = (total_acquisitions - 1) as f64;
+            stats.avg_acquisition_time_ms = stats
+                .avg_acquisition_time_ms
+                .mul_add(total_minus_one_f64, acquisition_time_ms)
+                / total_acquisitions_f64;
+        }
     }
 
     /// Get pool statistics
@@ -317,9 +352,9 @@ impl OptimizedRedisPool {
     }
 
     /// Update health status
-    async fn update_health_status(&self, status: HealthStatus) {
+    async fn update_health_status(&self, health_status: HealthStatus) {
         let mut stats = self.stats.write().await;
-        stats.health_status = status;
+        stats.health_status = health_status;
     }
 
     /// Clean up expired connections from cache
@@ -337,6 +372,9 @@ impl OptimizedRedisPool {
             debug!("Cleaned up {} expired cached connections", removed);
         }
 
+        // Explicitly drop cache lock to reduce contention
+        drop(cache);
+
         removed
     }
 
@@ -344,9 +382,8 @@ impl OptimizedRedisPool {
     pub async fn shutdown(&self) {
         *self.shutdown.write().await = true;
 
-        // Clear connection cache
-        let mut cache = self.connection_cache.write().await;
-        cache.clear();
+        // Clear connection cache - use direct write to reduce lock contention
+        self.connection_cache.write().await.clear();
 
         info!("Redis pool shutdown complete");
     }
@@ -425,8 +462,12 @@ pub fn start_pool_maintenance(pool: Arc<OptimizedRedisPool>) {
                     stats.total_connections,
                     stats.avg_acquisition_time_ms,
                     if stats.successful_acquisitions + stats.failed_acquisitions > 0 {
-                        stats.successful_acquisitions as f64 * 100.0
-                            / (stats.successful_acquisitions + stats.failed_acquisitions) as f64
+                        let total = stats.successful_acquisitions + stats.failed_acquisitions;
+                        #[allow(clippy::cast_precision_loss)]
+                        let total_f64 = total as f64;
+                        #[allow(clippy::cast_precision_loss)]
+                        let successful_f64 = stats.successful_acquisitions as f64;
+                        (successful_f64 * 100.0) / total_f64
                     } else {
                         100.0
                     }

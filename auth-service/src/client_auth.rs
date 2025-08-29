@@ -16,7 +16,8 @@ const MIN_AUTH_DURATION_MS: u64 = 200;
 static DUMMY_HASH: Lazy<String> = Lazy::new(|| {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
-        .hash_password(b"timing_balance_dummy_secret", &salt).map_or_else(|_| String::new(), |ph| ph.to_string())
+        .hash_password(b"timing_balance_dummy_secret", &salt)
+        .map_or_else(|_| String::new(), |ph| ph.to_string())
 });
 
 /// Secure client authentication with timing attack protection
@@ -150,12 +151,14 @@ impl ClientAuthenticator {
     }
 
     /// Get client metadata
-    #[must_use] pub fn get_client_metadata(&self, client_id: &str) -> Option<&ClientMetadata> {
+    #[must_use]
+    pub fn get_client_metadata(&self, client_id: &str) -> Option<&ClientMetadata> {
         self.client_metadata.get(client_id)
     }
 
     /// Check if client exists and is active
-    #[must_use] pub fn is_client_active(&self, client_id: &str) -> bool {
+    #[must_use]
+    pub fn is_client_active(&self, client_id: &str) -> bool {
         self.client_metadata
             .get(client_id)
             .is_some_and(|m| m.is_active)

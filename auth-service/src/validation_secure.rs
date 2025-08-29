@@ -400,7 +400,8 @@ pub fn validate_password_strength(password: &str) -> Result<(), ValidationError>
 }
 
 /// Sanitize string input by removing dangerous characters
-#[must_use] pub fn sanitize_string(input: &str) -> String {
+#[must_use]
+pub fn sanitize_string(input: &str) -> String {
     input
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || " -_.@".contains(*c))

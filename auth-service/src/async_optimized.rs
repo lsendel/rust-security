@@ -93,7 +93,12 @@ impl AsyncTokenStorage {
 }
 
 /// Utility function to create token data
-#[must_use] pub const fn create_token_data(user_id: String, expires_at: u64, permissions: Vec<String>) -> TokenData {
+#[must_use]
+pub const fn create_token_data(
+    user_id: String,
+    expires_at: u64,
+    permissions: Vec<String>,
+) -> TokenData {
     TokenData {
         user_id,
         expires_at,
@@ -102,7 +107,8 @@ impl AsyncTokenStorage {
 }
 
 /// Check if token is expired
-#[must_use] pub fn is_token_expired(data: &TokenData) -> bool {
+#[must_use]
+pub fn is_token_expired(data: &TokenData) -> bool {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

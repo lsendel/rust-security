@@ -73,7 +73,8 @@ pub struct DefaultAuthService {
 }
 
 impl DefaultAuthService {
-    #[must_use] pub const fn new(config: std::sync::Arc<crate::config::Config>) -> Self {
+    #[must_use]
+    pub const fn new(config: std::sync::Arc<crate::config::Config>) -> Self {
         Self { _config: config }
     }
 }

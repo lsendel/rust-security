@@ -1,8 +1,7 @@
-use crate::threat_user_profiler::types::*;
-use crate::threat_user_profiler::crate::config::*;
+use crate::core::security::SecurityEventType;
+use crate::threat_user_profiler::config::*;
 use crate::threat_user_profiler::features::*;
 use crate::threat_user_profiler::types::*;
-use crate::core::security::SecurityEventType;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;

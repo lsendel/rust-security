@@ -64,6 +64,14 @@ impl Default for RateLimitConfig {
 
 impl PlatformConfiguration {
     /// Basic validation to ensure sane configuration; returns Err with reason when invalid
+    ///
+    /// # Errors
+    /// Returns an error message if the configuration is invalid, such as:
+    /// - Invalid environment value (must be development, staging, production, or test)
+    /// - Empty service name
+    /// - Invalid log level
+    /// - Invalid database URL format
+    /// - Invalid Redis URL format
     pub fn validate(&self) -> Result<(), String> {
         // environment should be one of known values
         let env = self.environment.to_lowercase();
@@ -88,12 +96,20 @@ impl PlatformConfiguration {
 }
 
 impl SecurityConfig {
+    /// Validate security configuration
+    ///
+    /// # Errors
+    /// Returns an error if the rate limit configuration is invalid
     pub fn validate(&self) -> Result<(), String> {
         self.rate_limit.validate()
     }
 }
 
 impl RateLimitConfig {
+    /// Validate rate limit configuration
+    ///
+    /// # Errors
+    /// Returns an error if `requests_per_minute` is 0 or greater than 1,000,000 when rate limiting is enabled
     pub fn validate(&self) -> Result<(), String> {
         if self.enabled && (self.requests_per_minute == 0 || self.requests_per_minute > 1_000_000) {
             return Err("requests_per_minute must be in 1..=1_000_000 when enabled".to_string());

@@ -51,7 +51,8 @@ pub enum SensitiveDataType {
 
 impl SensitiveDataType {
     /// Get the data classification for this sensitive data type
-    #[must_use] pub const fn classification(&self) -> DataClassification {
+    #[must_use]
+    pub const fn classification(&self) -> DataClassification {
         match self {
             // PII data
             Self::EmailAddress
@@ -83,14 +84,13 @@ impl SensitiveDataType {
             | Self::DatabaseConnectionString => DataClassification::Confidential,
 
             // Internal system data
-            Self::Url
-            | Self::FilePath
-            | Self::CustomerId => DataClassification::Internal,
+            Self::Url | Self::FilePath | Self::CustomerId => DataClassification::Internal,
         }
     }
 
     /// Get the redaction strategy for this data type
-    #[must_use] pub const fn redaction_strategy(&self) -> RedactionStrategy {
+    #[must_use]
+    pub const fn redaction_strategy(&self) -> RedactionStrategy {
         match self.classification() {
             DataClassification::Spi => RedactionStrategy::FullRedaction,
             DataClassification::Confidential => RedactionStrategy::FullRedaction,
@@ -219,7 +219,8 @@ impl Default for PiiSpiRedactor {
 
 impl PiiSpiRedactor {
     /// Create a new PII/SPI redactor
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             aggressive_mode: false,
             custom_patterns: HashMap::new(),
@@ -227,13 +228,15 @@ impl PiiSpiRedactor {
     }
 
     /// Enable aggressive redaction mode
-    #[must_use] pub const fn with_aggressive_mode(mut self, aggressive: bool) -> Self {
+    #[must_use]
+    pub const fn with_aggressive_mode(mut self, aggressive: bool) -> Self {
         self.aggressive_mode = aggressive;
         self
     }
 
     /// Add a custom pattern for organization-specific sensitive data
-    #[must_use] pub fn with_custom_pattern(mut self, name: String, pattern: Regex) -> Self {
+    #[must_use]
+    pub fn with_custom_pattern(mut self, name: String, pattern: Regex) -> Self {
         self.custom_patterns.insert(name, pattern);
         self
     }
@@ -376,19 +379,22 @@ impl PiiSpiRedactor {
     }
 
     /// Redact error messages specifically
-    #[must_use] pub fn redact_error_message(&self, error: &str) -> String {
+    #[must_use]
+    pub fn redact_error_message(&self, error: &str) -> String {
         // Apply stricter redaction for error messages (Confidential level)
         self.redact_text(error, DataClassification::Internal)
     }
 
     /// Redact log messages
-    #[must_use] pub fn redact_log_message(&self, log_message: &str) -> String {
+    #[must_use]
+    pub fn redact_log_message(&self, log_message: &str) -> String {
         // Standard redaction for logs (PII level)
         self.redact_text(log_message, DataClassification::Internal)
     }
 
     /// Redact HTTP response data
-    #[must_use] pub fn redact_response_data(&self, response: &str) -> String {
+    #[must_use]
+    pub fn redact_response_data(&self, response: &str) -> String {
         // Conservative redaction for responses (Public level max)
         self.redact_text(response, DataClassification::Public)
     }

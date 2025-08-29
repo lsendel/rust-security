@@ -1,16 +1,10 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
-  external_labels:
-    cluster: 'production'
-    environment: 'prod'
+  scrape_timeout: 10s
 
 rule_files:
-  - "security-alerts.yml"
-  - "threat-intel-rules.yml"
-  - "threat-intel-generated.yml"
-  - "sla-rules.yml"
-  - "infrastructure-rules.yml"
+  - alerts.yml
 
 alerting:
   alertmanagers:
@@ -19,49 +13,63 @@ alerting:
           - alertmanager:9093
 
 scrape_configs:
-  # Auth Service Metrics
+  # Rust Security Platform Services
   - job_name: 'auth-service'
     static_configs:
-      - targets: ['auth-service:8080']
+      - targets: ['host.docker.internal:8080']
     metrics_path: '/metrics'
     scrape_interval: 10s
     scrape_timeout: 5s
-    honor_labels: true
-    params:
-      format: ['prometheus']
 
-  # Policy Service Metrics  
   - job_name: 'policy-service'
     static_configs:
-      - targets: ['policy-service:8081']
+      - targets: ['host.docker.internal:8081']
     metrics_path: '/metrics'
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  # Infrastructure Monitoring
+  # System monitoring
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
-    scrape_interval: 30s
 
-  - job_name: 'redis-exporter'
+  - job_name: 'cadvisor'
     static_configs:
-      - targets: ['redis-exporter:9121']
+      - targets: ['cadvisor:8080']
+
+  # Redis monitoring (if available)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
     scrape_interval: 30s
 
-  # Prometheus Self-Monitoring
+  # PostgreSQL monitoring (if available)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # Alertmanager Monitoring
+  # Alertmanager
   - job_name: 'alertmanager'
     static_configs:
       - targets: ['alertmanager:9093']
 
-  # Container Runtime Metrics (if available)
-  - job_name: 'docker'
-    static_configs:
-      - targets: ['host.docker.internal:9323']
-    scrape_interval: 30s
-    honor_labels: true
+# Remote write configuration (for long-term storage)
+# remote_write:
+#   - url: "http://victoria-metrics:8428/api/v1/write"
+#     queue_config:
+#       max_samples_per_send: 10000
+#       max_shards: 30
+#       capacity: 30000
+
+# Remote read configuration
+# remote_read:
+#   - url: "http://victoria-metrics:8428/api/v1/read"
+#     read_recent: true

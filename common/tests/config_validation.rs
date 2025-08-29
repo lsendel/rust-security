@@ -1,5 +1,26 @@
 use common::config::{PlatformConfiguration, RateLimitConfig, SecurityConfig};
 
+// Suppress unused dependency warnings for test dependencies
+use anyhow as _;
+use async_trait as _;
+use base64 as _;
+use chrono as _;
+use constant_time_eq as _;
+use hex as _;
+use num_cpus as _;
+use once_cell as _;
+use rand as _;
+use redis as _;
+use regex as _;
+use ring as _;
+use serde as _;
+use serde_json as _;
+use thiserror as _;
+use tokio as _;
+use tracing as _;
+use url as _;
+use uuid as _;
+
 #[test]
 fn platform_config_validate_defaults_ok() {
     let cfg = PlatformConfiguration::default();

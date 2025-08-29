@@ -286,24 +286,28 @@ impl UnifiedHasher {
     ///
     /// ⚠️  WARNING: SHA-1 is cryptographically broken for general use.
     /// This should only be used for TOTP compatibility where required by RFC 6238.
-    #[must_use] pub fn sha1_legacy(data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn sha1_legacy(data: &[u8]) -> Vec<u8> {
         digest::digest(&SHA1_FOR_LEGACY_USE_ONLY, data)
             .as_ref()
             .to_vec()
     }
 
     /// SHA-256 hash
-    #[must_use] pub fn sha256(data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn sha256(data: &[u8]) -> Vec<u8> {
         digest::digest(&SHA256, data).as_ref().to_vec()
     }
 
     /// SHA-512 hash
-    #[must_use] pub fn sha512(data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn sha512(data: &[u8]) -> Vec<u8> {
         digest::digest(&SHA512, data).as_ref().to_vec()
     }
 
     /// SHA-256 hash of multiple inputs
-    #[must_use] pub fn sha256_multi(inputs: &[&[u8]]) -> Vec<u8> {
+    #[must_use]
+    pub fn sha256_multi(inputs: &[&[u8]]) -> Vec<u8> {
         let mut context = digest::Context::new(&SHA256);
         for input in inputs {
             context.update(input);
@@ -320,37 +324,43 @@ impl UnifiedHmac {
     ///
     /// ⚠️  WARNING: SHA-1 is cryptographically broken for general use.
     /// This should only be used for TOTP compatibility where required by RFC 6238.
-    #[must_use] pub fn hmac_sha1_legacy(key: &[u8], data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn hmac_sha1_legacy(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, key);
         hmac::sign(&key, data).as_ref().to_vec()
     }
 
     /// HMAC-SHA256
-    #[must_use] pub fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA256, key);
         hmac::sign(&key, data).as_ref().to_vec()
     }
 
     /// HMAC-SHA512
-    #[must_use] pub fn hmac_sha512(key: &[u8], data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn hmac_sha512(key: &[u8], data: &[u8]) -> Vec<u8> {
         let key = hmac::Key::new(hmac::HMAC_SHA512, key);
         hmac::sign(&key, data).as_ref().to_vec()
     }
 
     /// Verify HMAC-SHA1 in constant time (for legacy use only)
-    #[must_use] pub fn verify_hmac_sha1_legacy(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
+    #[must_use]
+    pub fn verify_hmac_sha1_legacy(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
         let key = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, key);
         hmac::verify(&key, data, expected_hmac).is_ok()
     }
 
     /// Verify HMAC-SHA256 in constant time
-    #[must_use] pub fn verify_hmac_sha256(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
+    #[must_use]
+    pub fn verify_hmac_sha256(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
         let key = hmac::Key::new(hmac::HMAC_SHA256, key);
         hmac::verify(&key, data, expected_hmac).is_ok()
     }
 
     /// Verify HMAC-SHA512 in constant time
-    #[must_use] pub fn verify_hmac_sha512(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
+    #[must_use]
+    pub fn verify_hmac_sha512(key: &[u8], data: &[u8], expected_hmac: &[u8]) -> bool {
         let key = hmac::Key::new(hmac::HMAC_SHA512, key);
         hmac::verify(&key, data, expected_hmac).is_ok()
     }

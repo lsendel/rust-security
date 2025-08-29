@@ -51,7 +51,8 @@ pub struct ConfigReloadManager {
 
 impl ConfigReloadManager {
     /// Create a new configuration reload manager
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         initial_config: Config,
         config_path: Option<String>,
     ) -> (Self, broadcast::Receiver<ConfigReloadEvent>) {
@@ -264,7 +265,11 @@ impl ConfigReloadManager {
     }
 
     /// Detect changes between configurations
-    async fn detect_changes(&self, old_config: &crate::config::Config, new_config: &crate::config::Config) -> Vec<ConfigChange> {
+    async fn detect_changes(
+        &self,
+        old_config: &crate::config::Config,
+        new_config: &crate::config::Config,
+    ) -> Vec<ConfigChange> {
         let mut changes = Vec::new();
 
         // Compare bind address

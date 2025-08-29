@@ -73,6 +73,9 @@ static SENSITIVE_FIELD_NAMES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 });
 
 /// Sanitize a string by redacting potentially sensitive information
+///
+/// # Panics
+/// Panics if a regex capture group is expected but not found (this should not happen with valid patterns)
 pub fn sanitize_for_logging(input: &str) -> String {
     let mut sanitized = input.to_string();
 
@@ -83,12 +86,13 @@ pub fn sanitize_for_logging(input: &str) -> String {
                 let full_match = caps.get(0).unwrap().as_str();
 
                 // Find the value part (after = or :)
-                if let Some(pos) = full_match.find([':', '=']) {
-                    let key_part = &full_match[..=pos];
-                    format!("{key_part}[REDACTED]")
-                } else {
-                    "[REDACTED]".to_string()
-                }
+                full_match.find([':', '=']).map_or_else(
+                    || "[REDACTED]".to_string(),
+                    |pos| {
+                        let key_part = &full_match[..=pos];
+                        format!("{key_part}[REDACTED]")
+                    },
+                )
             })
             .to_string();
     }
@@ -314,6 +318,10 @@ impl Default for SecureLoggingConfig {
 }
 
 /// Validate that a string is safe to log (for development/testing)
+///
+/// # Errors
+/// Returns a vector of validation violations if the input contains potentially sensitive information
+/// that should not be logged, such as passwords, API keys, or other secrets
 pub fn validate_safe_to_log(input: &str) -> Result<(), Vec<String>> {
     let mut violations = Vec::new();
 

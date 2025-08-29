@@ -5,18 +5,18 @@ rust-version = "1.80"
 # PRODUCTION: Simplified workspace - only essential services
 [workspace]
 members = [
-    "auth-service", 
+    "auth-service",
     "policy-service",
     "common"
 ]
 
-# PRODUCTION: Moved non-essential components to exclude for stability  
+# PRODUCTION: Moved non-essential components to exclude for stability
 exclude = [
     "red-team-exercises",
-    "user-portal", 
+    "user-portal",
     "security-platform",
     "input-validation",
-    "chaos-engineering", 
+    "chaos-engineering",
     "security-testing",
     # Moved to exclude - can be re-enabled in development
     "auth-core",           # Functionality merged into auth-service
@@ -171,7 +171,7 @@ vaultrs = "0.7"
 opentelemetry = { version = "0.22", features = ["metrics"] }
 opentelemetry-jaeger = "0.21"
 opentelemetry_sdk = { version = "0.22", features = ["metrics", "rt-tokio"] }
-tracing-opentelemetry = "0.23"
+tracing-opentelemetry = "0.24"
 tokio-metrics = "0.3"
 metrics = "0.24"
 metrics-prometheus = "0.8"
@@ -259,7 +259,7 @@ probabilistic-collections = "0.7"
 
 # Additional network/TLS dependencies
 ipnetwork = "0.20"
-opentelemetry-otlp = "0.14"
+opentelemetry-otlp = "0.15"
 x509-parser = "0.17"
 rustls = "0.23"
 webpki-roots = "0.26"
@@ -321,7 +321,7 @@ enterprise = [
 # PRODUCTION: Experimental features disabled for stability
 # experimental = [
 #     "post-quantum-crypto",
-#     "ml-threat-detection", 
+#     "ml-threat-detection",
 #     "chaos-engineering",
 #     "zero-trust-networking"
 # ]

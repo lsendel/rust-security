@@ -87,7 +87,8 @@ impl Default for PerformanceOptimizer {
 
 impl PerformanceOptimizer {
     /// Create new performance optimizer
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             metrics: Arc::new(RwLock::new(PerformanceMetrics::default())),
             config: Arc::new(RwLock::new(OptimizationConfig::default())),

@@ -1,11 +1,68 @@
 use anyhow::{Context, Result};
 use common::{constants, UnifiedRedisConfig};
 use config::{Environment, File};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::env;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
+
+// Serde helper module for Duration parsing from strings
+mod serde_duration {
+    use super::{Deserialize, Deserializer, Duration, Result};
+    use serde::de::Error;
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        parse_duration(&s).map_err(D::Error::custom)
+    }
+
+    fn parse_duration(s: &str) -> Result<Duration, String> {
+        if s.is_empty() {
+            return Err("Empty duration string".to_string());
+        }
+
+        let s = s.trim();
+
+        // Handle pure number (assume seconds)
+        if let Ok(secs) = s.parse::<u64>() {
+            return Ok(Duration::from_secs(secs));
+        }
+
+        // Handle suffixed durations
+        if s.len() < 2 {
+            return Err(format!("Invalid duration format: {s}"));
+        }
+
+        let (num_str, suffix) = s.split_at(s.len() - 1);
+        let num: u64 = num_str
+            .parse()
+            .map_err(|_| format!("Invalid number in duration: {num_str}"))?;
+
+        match suffix {
+            "s" => Ok(Duration::from_secs(num)),
+            "m" => Ok(Duration::from_secs(num * 60)),
+            "h" => Ok(Duration::from_secs(num * 3600)),
+            "d" => Ok(Duration::from_secs(num * 86400)),
+            _ => {
+                // Try multi-character suffixes
+                if let Some(num_str) = s.strip_suffix("ms") {
+                    let num: u64 = num_str
+                        .parse()
+                        .map_err(|_| format!("Invalid number in duration: {num_str}"))?;
+                    Ok(Duration::from_millis(num))
+                } else {
+                    Err(format!(
+                        "Invalid duration suffix: {suffix}. Use s, m, h, d, or ms"
+                    ))
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -32,7 +89,9 @@ pub struct ServerConfig {
     pub bind_addr: SocketAddr,
     pub workers: Option<usize>,
     pub max_connections: usize,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub request_timeout: Duration,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub shutdown_timeout: Duration,
     pub tls: Option<TlsConfig>,
 }
@@ -50,9 +109,13 @@ pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
     pub min_connections: u32,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub connect_timeout: Duration,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub acquire_timeout: Duration,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub idle_timeout: Duration,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub max_lifetime: Duration,
     pub test_before_acquire: bool,
 }
@@ -67,6 +130,7 @@ pub struct SecurityConfig {
     pub password_require_digit: bool,
     pub password_require_special: bool,
     pub max_login_attempts: u32,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub lockout_duration: Duration,
     pub secure_cookies: bool,
     pub csrf_protection: bool,
@@ -97,10 +161,14 @@ pub struct JwtConfig {
     pub secret: String,
     pub issuer: String,
     pub audience: Vec<String>,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub access_token_ttl: Duration,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub refresh_token_ttl: Duration,
     pub algorithm: String,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub key_rotation_interval: Duration,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub leeway: Duration,
 }
 
@@ -108,6 +176,7 @@ pub struct JwtConfig {
 pub struct OAuthConfig {
     pub providers: Vec<OAuthProvider>,
     pub redirect_base_url: String,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub state_ttl: Duration,
     pub pkce_required: bool,
 }
@@ -127,23 +196,29 @@ pub struct OAuthProvider {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RateLimitConfig {
     pub global_limit: u32,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub global_window: Duration,
     pub per_ip_limit: u32,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub per_ip_window: Duration,
     pub per_user_limit: u32,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub per_user_window: Duration,
     pub burst_size: u32,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub cleanup_interval: Duration,
     pub whitelist: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SessionConfig {
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub ttl: Duration,
     pub cookie_name: String,
     pub cookie_secure: bool,
     pub cookie_http_only: bool,
     pub cookie_same_site: String,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub cleanup_interval: Duration,
     pub max_sessions_per_user: u32,
 }
@@ -180,6 +255,7 @@ pub struct SoarConfig {
     pub workflow_engine: String,
     pub max_concurrent_cases: u32,
     pub auto_escalation_enabled: bool,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub integration_timeout: Duration,
 }
 
@@ -189,6 +265,7 @@ pub struct ThreatHuntingConfig {
     pub enabled: bool,
     pub ml_model_path: String,
     pub anomaly_threshold: f64,
+    #[serde(deserialize_with = "serde_duration::deserialize")]
     pub correlation_window: Duration,
     pub max_events_per_analysis: u32,
     pub behavioral_analysis_enabled: bool,
