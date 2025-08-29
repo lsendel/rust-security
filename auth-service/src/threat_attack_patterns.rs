@@ -315,6 +315,7 @@ pub struct AttackPatternDetector {
 
     // Event processing
     event_buffer: Arc<Mutex<VecDeque<SecurityEvent>>>,
+    #[allow(dead_code)]
     correlation_cache: Arc<RwLock<HashMap<String, CorrelationResult>>>,
 
     // Statistics

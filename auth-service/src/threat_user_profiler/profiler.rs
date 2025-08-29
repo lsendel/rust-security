@@ -49,6 +49,7 @@ static ACTIVE_USER_PROFILES: LazyLock<Gauge> = LazyLock::new(|| {
     ).expect("Failed to create active_user_profiles gauge")
 });
 
+#[allow(dead_code)]
 static TIME_SERIES_PREDICTIONS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_time_series_predictions_total",

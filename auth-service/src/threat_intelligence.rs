@@ -1079,6 +1079,7 @@ impl ThreatIntelligenceCorrelator {
 /// AbuseIPDB API response structure
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct AbuseIpdbResponse {
     pub ip_address: String,
     pub is_public: bool,
@@ -1113,6 +1114,7 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 impl ThreatIntelligenceCorrelator {
     /// Synchronize a threat feed by downloading and processing indicators
     async fn synchronize_threat_feed(
@@ -1418,6 +1420,7 @@ impl ThreatDetectionAdapter for ThreatIntelligenceCorrelator {
 }
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 struct FeedSyncResult {
     added: u32,
     updated: u32,
@@ -1428,8 +1431,10 @@ struct FeedSyncResult {
     duration_ms: u64,
 }
 
+#[allow(dead_code)]
 enum ProcessResult {
     Added,
     Updated,
     Skipped,
 }
+

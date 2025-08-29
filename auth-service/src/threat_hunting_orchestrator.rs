@@ -141,8 +141,11 @@ pub struct ThreatHuntingOrchestrator {
 
 /// Threat correlation engine for linking related threats
 pub struct ThreatCorrelationEngine {
+    #[allow(dead_code)]
     correlation_rules: Arc<RwLock<Vec<CorrelationRule>>>,
+    #[allow(dead_code)]
     active_correlations: Arc<RwLock<HashMap<String, ThreatCorrelation>>>,
+    #[allow(dead_code)]
     correlation_cache: Arc<RwLock<HashMap<String, CorrelationCacheEntry>>>,
 }
 

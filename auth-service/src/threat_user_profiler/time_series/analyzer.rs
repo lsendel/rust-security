@@ -70,6 +70,7 @@ impl MedianCalculation for Vec<f64> {
 /// Advanced time series analyzer for behavioral patterns
 #[derive(Clone)]
 pub struct TimeSeriesAnalyzer {
+    #[allow(dead_code)]
     window_size: usize,
     seasonality_periods: Vec<usize>,
     change_point_sensitivity: f64,

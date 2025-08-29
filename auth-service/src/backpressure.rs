@@ -120,10 +120,12 @@ impl BackpressureConfig {
 
 // Metrics (feature-gated)
 #[cfg(feature = "monitoring")]
+#[allow(dead_code)]
 static REQUESTS_TOTAL: LazyLock<IntCounter> =
     LazyLock::new(|| register_int_counter!("auth_requests_total", "Total number of requests").expect("Failed to create requests_total counter"));
 
 #[cfg(feature = "monitoring")]
+#[allow(dead_code)]
 static REQUESTS_REJECTED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     register_int_counter!(
         "auth_requests_rejected_total",
@@ -133,6 +135,7 @@ static REQUESTS_REJECTED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "monitoring")]
+#[allow(dead_code)]
 static CONCURRENT_REQUESTS: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!(
         "auth_concurrent_requests",
@@ -142,6 +145,7 @@ static CONCURRENT_REQUESTS: LazyLock<IntGauge> = LazyLock::new(|| {
 });
 
 #[cfg(feature = "monitoring")]
+#[allow(dead_code)]
 static REQUEST_BODY_SIZE: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!("auth_request_body_size_bytes", "Request body size in bytes").unwrap()
 });

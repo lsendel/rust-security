@@ -2,6 +2,7 @@ use crate::threat_user_profiler::{ActivityFeatures, UserSecurityEvent};
 
 #[derive(Clone)]
 pub struct ActivityFeatureExtractor {
+    #[allow(dead_code)]
     window_days: i64,
 }
 impl ActivityFeatureExtractor {

@@ -304,6 +304,7 @@ pub struct ThreatResponseOrchestrator {
     // Processing queues
     response_queue: Sender<ResponseRequest>,
     response_receiver: Receiver<ResponseRequest>,
+    #[allow(dead_code)]
     notification_queue: Sender<NotificationRequest>,
     notification_receiver: Receiver<NotificationRequest>,
 

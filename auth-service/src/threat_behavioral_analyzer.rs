@@ -51,6 +51,7 @@ static ACTIVE_THREATS_GAUGE: Lazy<Gauge> = Lazy::new(|| {
     ).expect("Failed to create active_threats_gauge gauge")
 });
 
+#[allow(dead_code)]
 static ML_PREDICTIONS: Lazy<Counter> = Lazy::new(|| {
     register_counter!(
         "threat_hunting_ml_predictions_total",
@@ -171,6 +172,7 @@ pub struct AdvancedBehavioralThreatDetector {
     ml_models: Arc<RwLock<HashMap<String, BehavioralMLModel>>>,
 
     // Statistics and analysis
+    #[allow(dead_code)]
     ip_reputation_cache: Arc<RwLock<HashMap<IpAddr, IPReputationInfo>>>,
     statistical_baselines: Arc<RwLock<HashMap<String, StatisticalBaseline>>>,
 
@@ -1282,24 +1284,6 @@ impl AdvancedBehavioralThreatDetector {
             .collect()
     }
 
-    /// Calculate distance between two points (simplified haversine formula)
-    fn calculate_distance(&self, lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
-        const EARTH_RADIUS_KM: f64 = 6371.0;
-
-        let lat1_rad = lat1.to_radians();
-        let lon1_rad = lon1.to_radians();
-        let lat2_rad = lat2.to_radians();
-        let lon2_rad = lon2.to_radians();
-
-        let dlat = lat2_rad - lat1_rad;
-        let dlon = lon2_rad - lon1_rad;
-
-        let a = (dlat / 2.0).sin().powi(2)
-            + lat1_rad.cos() * lat2_rad.cos() * (dlon / 2.0).sin().powi(2);
-        let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
-
-        EARTH_RADIUS_KM * c
-    }
 
     /// Get currently active threats
     pub async fn get_active_threats(&self) -> Vec<ThreatSignature> {

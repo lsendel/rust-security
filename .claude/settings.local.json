@@ -9,7 +9,9 @@
       "Bash(git remote set-url:*)",
       "Read(/Users/lsendel/.grok/**)",
       "Bash(cargo fmt:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(RUSTFLAGS=\"-W warnings\" cargo check --all-features)"
     ],
     "deny": [],
     "ask": []
