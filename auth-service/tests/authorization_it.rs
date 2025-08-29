@@ -34,7 +34,7 @@ async fn spawn_auth_app() -> String {
 
     let app = app(AppState {
         store: Arc::new(auth_service::store::HybridStore::new().await),
-        session_store: Arc::new(auth_service::session_store::RedisSessionStore::new(None).await),
+        session_store: Arc::new(auth_service::session_store::RedisSessionStore::new(None)),
         token_store: Arc::new(std::sync::RwLock::new(HashMap::<String, TokenRecord>::new())),
         client_credentials: Arc::new(std::sync::RwLock::new(HashMap::new())),
         allowed_scopes: Arc::new(std::sync::RwLock::new(std::collections::HashSet::from([

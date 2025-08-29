@@ -266,8 +266,8 @@ impl BehavioralFeatureExtractor {
     /// Apply standard scaling normalization
     async fn apply_standard_scaling(
         &self,
-        _features: &mut BehavioralFeatureVector,
-        _parameters: &HashMap<String, f64>,
+        features: &mut BehavioralFeatureVector,
+        parameters: &HashMap<String, f64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Apply z-score normalization: (x - mean) / std_dev
         if let (Some(mean), Some(std_dev)) = (parameters.get("mean"), parameters.get("std_dev")) {
@@ -287,8 +287,8 @@ impl BehavioralFeatureExtractor {
     /// Apply min-max scaling normalization
     async fn apply_minmax_scaling(
         &self,
-        _features: &mut BehavioralFeatureVector,
-        _parameters: &HashMap<String, f64>,
+        features: &mut BehavioralFeatureVector,
+        parameters: &HashMap<String, f64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Apply min-max scaling: (x - min) / (max - min)
         if let (Some(min_val), Some(max_val)) = (parameters.get("min"), parameters.get("max")) {
@@ -306,8 +306,8 @@ impl BehavioralFeatureExtractor {
     /// Apply robust scaling normalization
     async fn apply_robust_scaling(
         &self,
-        _features: &mut BehavioralFeatureVector,
-        _parameters: &HashMap<String, f64>,
+        features: &mut BehavioralFeatureVector,
+        parameters: &HashMap<String, f64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Apply robust scaling: (x - median) / IQR
         if let (Some(median), Some(iqr)) = (parameters.get("median"), parameters.get("iqr")) {
@@ -324,8 +324,8 @@ impl BehavioralFeatureExtractor {
     /// Apply quantile scaling normalization
     async fn apply_quantile_scaling(
         &self,
-        _features: &mut BehavioralFeatureVector,
-        _parameters: &HashMap<String, f64>,
+        features: &mut BehavioralFeatureVector,
+        parameters: &HashMap<String, f64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Apply quantile transformation (would need more sophisticated implementation)
         // For now, apply a simple rank-based transformation

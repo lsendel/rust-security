@@ -7,6 +7,49 @@ use chrono::{DateTime, Utc};
 use std::collections::VecDeque;
 use tracing::{debug, warn};
 
+// Statistical helper trait
+trait StatisticalMethods {
+    fn mean(&self) -> f64;
+    fn variance(&self) -> f64;
+    fn std_dev(&self) -> f64;
+}
+
+impl StatisticalMethods for [f64] {
+    fn mean(&self) -> f64 {
+        if self.is_empty() {
+            return 0.0;
+        }
+        self.iter().sum::<f64>() / self.len() as f64
+    }
+
+    fn variance(&self) -> f64 {
+        if self.len() < 2 {
+            return 0.0;
+        }
+        let mean = self.mean();
+        let sum_sq_diff: f64 = self.iter().map(|x| (x - mean).powi(2)).sum();
+        sum_sq_diff / (self.len() - 1) as f64
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+}
+
+impl StatisticalMethods for Vec<f64> {
+    fn mean(&self) -> f64 {
+        self.as_slice().mean()
+    }
+
+    fn variance(&self) -> f64 {
+        self.as_slice().variance()
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.as_slice().std_dev()
+    }
+}
+
 /// Helper trait to calculate median for Vec<f64>
 trait MedianCalculation {
     fn median(&self) -> f64;
@@ -105,11 +148,11 @@ impl TimeSeriesAnalyzer {
 
         let regression_result = self.linear_regression(&x_values, &values);
 
-        let trend_direction = match regression_operation_result.slope {
+        let trend_direction = match regression_result.slope {
             slope if slope > 0.01 => TrendDirection::Increasing,
             slope if slope < -0.01 => TrendDirection::Decreasing,
             _ => {
-                if regression_operation_result.r_squared < 0.1 {
+                if regression_result.r_squared < 0.1 {
                     TrendDirection::Volatile
                 } else {
                     TrendDirection::Stable
@@ -118,10 +161,10 @@ impl TimeSeriesAnalyzer {
         };
 
         Ok(TrendAnalysis {
-            slope: regression_operation_result.slope,
-            intercept: regression_operation_result.intercept,
-            r_squared: regression_operation_result.r_squared,
-            p_value: regression_operation_result.p_value,
+            slope: regression_result.slope,
+            intercept: regression_result.intercept,
+            r_squared: regression_result.r_squared,
+            p_value: regression_result.p_value,
             trend_direction,
         })
     }

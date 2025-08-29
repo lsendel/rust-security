@@ -124,6 +124,10 @@ pub mod sql_store;
 pub mod store;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_user_profiler;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_hunting_orchestrator;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_types;
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
 

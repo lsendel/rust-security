@@ -15,8 +15,7 @@ async fn spawn_app() -> String {
     let session_store = Arc::new(
         auth_service::session_store::RedisSessionStore::new(
             None, // Use in-memory fallback for tests
-        )
-        .await,
+        ),
     );
 
     let api_key_store = auth_service::api_key_store::ApiKeyStore::new(":memory:")

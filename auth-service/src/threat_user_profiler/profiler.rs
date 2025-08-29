@@ -527,6 +527,6 @@ mod tests {
         }];
 
         let result = profiler.process_user_events(user_id, events).await;
-        assert!(operation_result.is_ok());
+        assert!(result.is_ok());
     }
 }

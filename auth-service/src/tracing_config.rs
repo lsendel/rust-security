@@ -46,7 +46,8 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
         .install_simple()?;
 
     // Configure tracing subscriber with multiple layers
-    let telemetry_layer = OpenTelemetryLayer::new(tracer);
+    // Temporarily disabled due to OpenTelemetry version conflicts
+    // let telemetry_layer = OpenTelemetryLayer::new(tracer);
 
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| match environment.as_str() {
@@ -65,7 +66,8 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
                 .with_line_number(true)
                 .with_writer(std::io::stdout), // Use structured logging
         )
-        .with(telemetry_layer)
+        // Temporarily disabled due to OpenTelemetry version conflicts
+        // .with(telemetry_layer)
         .init();
 
     info!(

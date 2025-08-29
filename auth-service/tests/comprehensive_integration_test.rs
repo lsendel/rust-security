@@ -40,7 +40,7 @@ async fn spawn_app() -> String {
     let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
 
     let store = Arc::new(HybridStore::new().await);
-    let session_store = Arc::new(RedisSessionStore::new(None).await);
+    let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
         JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
             .await

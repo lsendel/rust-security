@@ -3,6 +3,7 @@ use crate::security_metrics::SECURITY_METRICS;
 use once_cell::sync::Lazy;
 #[cfg(feature = "monitoring")]
 use prometheus::{Encoder, TextEncoder};
+use tracing::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -166,10 +167,10 @@ impl SecurityMonitor {
     pub async fn start_monitoring(&self) {
         // Use Arc references directly instead of cloning Arc contents
         let config = Arc::clone(&self.config);
-        let _active_alerts = Arc::clone(&self.active_alerts);
+        let active_alerts = Arc::clone(&self.active_alerts);
         let alert_history = Arc::clone(&self.alert_history);
-        let _metric_snapshots = Arc::clone(&self.metric_snapshots);
-        let _client = self.client.clone();
+        let metric_snapshots = Arc::clone(&self.metric_snapshots);
+        let client = self.client.clone();
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));

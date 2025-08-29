@@ -44,7 +44,7 @@ impl ObservabilitySystem {
         info!("Initializing comprehensive observability system");
 
         // Initialize business metrics
-        let business_metrics = Arc::new(BusinessMetricsRegistry);
+        let business_metrics = Arc::new(BusinessMetricsRegistry::new());
 
         // Load configuration from environment
         let observability_config = Self::load_observability_config();
