@@ -6,6 +6,7 @@ use async_trait as _;
 use base64 as _;
 use chrono as _;
 use constant_time_eq as _;
+use deadpool_redis as _;
 use hex as _;
 use num_cpus as _;
 use once_cell as _;
@@ -29,26 +30,48 @@ fn platform_config_validate_defaults_ok() {
 
 #[test]
 fn platform_config_validate_invalid_env() {
-    let mut cfg = PlatformConfiguration::default();
-    cfg.environment = "weird".into();
+    let cfg = PlatformConfiguration {
+        environment: "weird".into(),
+        ..Default::default()
+    };
     assert!(cfg.validate().is_err());
 }
 
 #[test]
 fn rate_limit_validate_bounds() {
-    let mut cfg = PlatformConfiguration::default();
-    cfg.security = SecurityConfig {
-        enable_security_headers: true,
-        rate_limit: RateLimitConfig {
-            enabled: true,
-            requests_per_minute: 0,
+    let cfg = PlatformConfiguration {
+        security: SecurityConfig {
+            enable_security_headers: true,
+            rate_limit: RateLimitConfig {
+                enabled: true,
+                requests_per_minute: 0,
+            },
         },
+        ..Default::default()
     };
     assert!(cfg.validate().is_err());
 
-    cfg.security.rate_limit.requests_per_minute = 1_000_001;
+    let cfg = PlatformConfiguration {
+        security: SecurityConfig {
+            rate_limit: RateLimitConfig {
+                requests_per_minute: 1_000_001,
+                ..cfg.security.rate_limit
+            },
+            ..cfg.security
+        },
+        ..cfg
+    };
     assert!(cfg.validate().is_err());
 
-    cfg.security.rate_limit.requests_per_minute = 1000;
+    let cfg = PlatformConfiguration {
+        security: SecurityConfig {
+            rate_limit: RateLimitConfig {
+                requests_per_minute: 1000,
+                ..cfg.security.rate_limit
+            },
+            ..cfg.security
+        },
+        ..cfg
+    };
     assert!(cfg.validate().is_ok());
 }

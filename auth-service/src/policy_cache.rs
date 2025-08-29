@@ -186,6 +186,10 @@ impl PolicyCache {
     }
 
     /// Store policy decision in cache
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if cache storage fails or serialization fails
     #[instrument(skip(self))]
     pub async fn put(
         &self,
@@ -476,7 +480,7 @@ mod tests {
         // Fill cache to capacity
         for i in 0..3 {
             let request = PolicyRequest {
-                principal: serde_json::json!({"id": format!("user{}", i)}),
+                principal: serde_json::json!({"id": format!("user{i}")}),
                 action: "read".to_string(),
                 resource: serde_json::json!({"type": "document"}),
                 context: serde_json::json!({}),

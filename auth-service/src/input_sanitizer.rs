@@ -3,7 +3,6 @@
 //! This module provides defense against injection attacks, XSS, and other
 //! input-based vulnerabilities with comprehensive validation and sanitization.
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
 use thiserror::Error;

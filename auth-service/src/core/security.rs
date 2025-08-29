@@ -4,6 +4,7 @@
 //! security context management, and security policy enforcement.
 
 use crate::core::{auth::AuthContext, crypto::CryptoProvider};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -514,7 +515,7 @@ pub enum ViolationSeverity {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityEvent {
     /// Event timestamp
-    pub timestamp: SystemTime,
+    pub timestamp: DateTime<Utc>,
     /// Event type
     pub event_type: SecurityEventType,
     /// Associated security context
@@ -525,10 +526,28 @@ pub struct SecurityEvent {
     pub details: HashMap<String, String>,
     /// Event severity
     pub severity: ViolationSeverity,
+    /// User ID associated with the event
+    pub user_id: Option<String>,
+    /// Session ID associated with the event
+    pub session_id: Option<String>,
+    /// IP address of the request
+    pub ip_address: Option<std::net::IpAddr>,
+    /// Geographic location
+    pub location: Option<String>,
+    /// Device fingerprint
+    pub device_fingerprint: Option<String>,
+    /// Risk score (0-100)
+    pub risk_score: Option<u8>,
+    /// Event outcome
+    pub outcome: Option<String>,
+    /// Whether MFA was used
+    pub mfa_used: bool,
+    /// User agent string
+    pub user_agent: Option<String>,
 }
 
 /// Types of security events
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecurityEventType {
     AuthenticationFailure,
     AuthenticationSuccess,
@@ -545,6 +564,22 @@ pub enum SecurityEventType {
     MfaChallenge,
     PasswordChange,
     DataAccess,
+}
+
+impl SecurityEvent {
+    /// Check if this event represents a security failure
+    pub fn is_security_failure(&self) -> bool {
+        matches!(
+            self.event_type,
+            SecurityEventType::AuthenticationFailure
+                | SecurityEventType::AuthorizationDenied
+                | SecurityEventType::SuspiciousActivity
+                | SecurityEventType::RateLimitExceeded
+                | SecurityEventType::PolicyViolation
+                | SecurityEventType::ThreatDetected
+                | SecurityEventType::MfaFailure
+        )
+    }
 }
 
 #[cfg(test)]

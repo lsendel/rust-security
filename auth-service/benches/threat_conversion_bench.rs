@@ -5,7 +5,6 @@ use auth_service::core::security::{SecurityEvent, SecurityEventType, SecurityCon
 use auth_service::core::auth::AuthContext;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::Arc;
 use std::time::SystemTime;
 
 #[cfg(feature = "threat-hunting")]

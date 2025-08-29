@@ -3,7 +3,6 @@ use base64::{Engine as _, engine::general_purpose};
 use deadpool_redis::{Config as RedisConfig, Pool as RedisPool, Runtime};
 #[cfg(feature = "enhanced-session-store")]
 use bb8_redis::RedisConnectionManager;
-use once_cell::sync::Lazy;
 use sha2::Digest;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

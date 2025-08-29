@@ -6,6 +6,7 @@
 use super::types::*;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -103,12 +104,9 @@ impl IntegrationFramework {
         let integration = self
             .active_integrations
             .get(integration_id)
-            .ok_or_else(|| IntegrationError {
-                code: "INTEGRATION_NOT_FOUND".to_string(),
-                message: format!("Integration not found: {}", integration_id),
-                details: None,
-                retryable: false,
-            })?;
+            .ok_or_else(|| IntegrationError::Configuration(
+                format!("Integration not found: {}", integration_id),
+            ))?;
 
         // Execute action
         let result = integration.execute_action(action, context).await;
@@ -188,18 +186,10 @@ impl IntegrationFramework {
                     Err(error) => {
                         let health_info = IntegrationHealthInfo {
                             integration_id: integration_id.clone(),
-                            status: IntegrationHealth {
-                                integration_name: integration_id.clone(),
-                                status: super::types::IntegrationHealth::Unhealthy,
-                                last_check: Utc::now(),
-                                response_time_ms: 0,
-                                error_message: Some(error.message.clone()),
-                                metrics: HashMap::new(),
-                            },
-                            status_message: error.message,
-                            response_time_ms: None,
+                            status: IntegrationHealth::Unhealthy,
                             last_check: Utc::now(),
-                            consecutive_failures: 1,
+                            response_time_ms: 0,
+                            error_message: Some(format!("{:?}", error)),
                             metadata: HashMap::new(),
                         };
 
@@ -353,12 +343,9 @@ impl Integration for SiemIntegration {
 
                 Ok(results)
             }
-            _ => Err(IntegrationError {
-                code: "UNSUPPORTED_ACTION".to_string(),
-                message: format!("SIEM integration does not support action: {:?}", action),
-                details: None,
-                retryable: false,
-            }),
+            _ => Err(IntegrationError::Request(
+                format!("SIEM integration does not support action: {:?}", action),
+            )),
         }
     }
 
@@ -372,14 +359,11 @@ impl Integration for SiemIntegration {
 
         Ok(IntegrationHealthInfo {
             integration_id: self.config.id.clone(),
-            status: IntegrationHealth {
-                integration_name: self.get_integration_name(),
-                status: super::types::IntegrationHealth::Healthy,
-                last_check: Utc::now(),
-                response_time_ms: response_time,
-                error_message: None,
-                metrics: HashMap::new(),
-            },
+            status: IntegrationHealth::Healthy,
+            last_check: Utc::now(),
+            response_time_ms: response_time,
+            error_message: None,
+            metadata: HashMap::new(),
             status_message: "SIEM integration healthy".to_string(),
             response_time_ms: Some(response_time),
             last_check: Utc::now(),
@@ -445,12 +429,9 @@ impl Integration for EdrIntegration {
 
                 Ok(results)
             }
-            _ => Err(IntegrationError {
-                code: "UNSUPPORTED_ACTION".to_string(),
-                message: format!("EDR integration does not support action: {:?}", action),
-                details: None,
-                retryable: false,
-            }),
+            _ => Err(IntegrationError::Request(
+                format!("EDR integration does not support action: {:?}", action),
+            )),
         }
     }
 
@@ -464,14 +445,11 @@ impl Integration for EdrIntegration {
 
         Ok(IntegrationHealthInfo {
             integration_id: self.config.id.clone(),
-            status: IntegrationHealth {
-                integration_name: self.get_integration_name(),
-                status: super::types::IntegrationHealth::Healthy,
-                last_check: Utc::now(),
-                response_time_ms: response_time,
-                error_message: None,
-                metrics: HashMap::new(),
-            },
+            status: IntegrationHealth::Healthy,
+            last_check: Utc::now(),
+            response_time_ms: response_time,
+            error_message: None,
+            metadata: HashMap::new(),
             status_message: "EDR integration healthy".to_string(),
             response_time_ms: Some(response_time),
             last_check: Utc::now(),
@@ -533,12 +511,9 @@ impl Integration for FirewallIntegration {
 
                 Ok(results)
             }
-            _ => Err(IntegrationError {
-                code: "UNSUPPORTED_ACTION".to_string(),
-                message: format!("Firewall integration does not support action: {:?}", action),
-                details: None,
-                retryable: false,
-            }),
+            _ => Err(IntegrationError::Request(
+                format!("Firewall integration does not support action: {:?}", action),
+            )),
         }
     }
 
@@ -552,14 +527,11 @@ impl Integration for FirewallIntegration {
 
         Ok(IntegrationHealthInfo {
             integration_id: self.config.id.clone(),
-            status: IntegrationHealth {
-                integration_name: self.get_integration_name(),
-                status: super::types::IntegrationHealth::Healthy,
-                last_check: Utc::now(),
-                response_time_ms: response_time,
-                error_message: None,
-                metrics: HashMap::new(),
-            },
+            status: IntegrationHealth::Healthy,
+            last_check: Utc::now(),
+            response_time_ms: response_time,
+            error_message: None,
+            metadata: HashMap::new(),
             status_message: "Firewall integration healthy".to_string(),
             response_time_ms: Some(response_time),
             last_check: Utc::now(),

@@ -70,7 +70,7 @@ permit(
 )
 when {
     resource is Document &&
-    (resource.department == "public" || 
+    (resource.department == "public" ||
      resource.department == principal.department)
 };
 
@@ -81,9 +81,9 @@ permit(
     resource
 )
 when {
-    resource has sensitive && 
+    resource has sensitive &&
     resource.sensitive == true &&
-    principal has clearance && 
+    principal has clearance &&
     principal.clearance == "top-secret"
 };
 
@@ -107,7 +107,7 @@ permit(
     resource
 )
 when {
-    context has department && 
+    context has department &&
     context.department == principal.department &&
     context has request_type &&
     context.request_type == "document_creation"
@@ -155,10 +155,10 @@ when {
     .to_string()
 }
 
-/// Create test entities for authorization scenarios
-fn create_test_entities() -> String {
-    json!([
-        {
+/// Create test users for authorization scenarios
+fn create_test_users() -> Vec<serde_json::Value> {
+    vec![
+        json!({
             "uid": {"type": "User", "id": "alice"},
             "attrs": {
                 "name": "Alice Smith",
@@ -169,8 +169,8 @@ fn create_test_entities() -> String {
                 {"type": "Group", "id": "employees"},
                 {"type": "Role", "id": "developer"}
             ]
-        },
-        {
+        }),
+        json!({
             "uid": {"type": "User", "id": "bob"},
             "attrs": {
                 "name": "Bob Johnson",
@@ -182,8 +182,8 @@ fn create_test_entities() -> String {
                 {"type": "Group", "id": "employees"},
                 {"type": "Role", "id": "admin"}
             ]
-        },
-        {
+        }),
+        json!({
             "uid": {"type": "User", "id": "charlie"},
             "attrs": {
                 "name": "Charlie Brown",
@@ -193,105 +193,120 @@ fn create_test_entities() -> String {
             "parents": [
                 {"type": "Group", "id": "employees"}
             ]
+        }),
+    ]
+}
+
+/// Create test groups for authorization scenarios
+fn create_test_groups() -> Vec<serde_json::Value> {
+    vec![json!({
+        "uid": {"type": "Group", "id": "employees"},
+        "attrs": {
+            "description": "All company employees"
         },
-        {
-            "uid": {"type": "Group", "id": "employees"},
-            "attrs": {
-                "description": "All company employees"
-            },
-            "parents": []
-        },
-        {
+        "parents": []
+    })]
+}
+
+/// Create test roles for authorization scenarios
+fn create_test_roles() -> Vec<serde_json::Value> {
+    vec![
+        json!({
             "uid": {"type": "Role", "id": "admin"},
             "attrs": {
                 "description": "Administrative role"
             },
             "parents": []
-        },
-        {
+        }),
+        json!({
             "uid": {"type": "Role", "id": "developer"},
             "attrs": {
-                "description": "Software developer role"
+                "description": "Developer role"
             },
             "parents": []
-        },
-        {
-            "uid": {"type": "Profile", "id": "alice"},
+        }),
+        json!({
+            "uid": {"type": "Role", "id": "analyst"},
             "attrs": {
-                "owner": "alice",
-                "visibility": "private"
+                "description": "Analyst role"
             },
             "parents": []
-        },
-        {
-            "uid": {"type": "Profile", "id": "bob"},
+        }),
+    ]
+}
+
+/// Create test resources for authorization scenarios
+fn create_test_resources() -> Vec<serde_json::Value> {
+    vec![
+        json!({
+            "uid": {"type": "Resource", "id": "report1"},
             "attrs": {
-                "owner": "bob",
-                "visibility": "public"
+                "type": "financial",
+                "classification": "confidential",
+                "owner": "charlie"
             },
             "parents": []
-        },
-        {
-            "uid": {"type": "Document", "id": "doc1"},
+        }),
+        json!({
+            "uid": {"type": "Resource", "id": "report2"},
             "attrs": {
-                "title": "Public Engineering Guide",
-                "department": "engineering",
-                "sensitive": false
+                "type": "engineering",
+                "classification": "internal",
+                "owner": "alice"
             },
             "parents": []
-        },
-        {
-            "uid": {"type": "Document", "id": "doc2"},
+        }),
+        json!({
+            "uid": {"type": "Resource", "id": "admin_panel"},
             "attrs": {
-                "title": "HR Policies",
-                "department": "hr",
-                "sensitive": false
+                "type": "administrative",
+                "classification": "restricted"
             },
             "parents": []
-        },
-        {
-            "uid": {"type": "Document", "id": "doc3"},
-            "attrs": {
-                "title": "Financial Records",
-                "department": "finance",
-                "sensitive": true
-            },
-            "parents": []
-        },
-        {
-            "uid": {"type": "Document", "id": "doc4"},
-            "attrs": {
-                "title": "Public Company Info",
-                "department": "public",
-                "sensitive": false
-            },
-            "parents": []
-        },
-        {
+        }),
+    ]
+}
+
+/// Create test actions for authorization scenarios
+fn create_test_actions() -> Vec<serde_json::Value> {
+    vec![
+        json!({
             "uid": {"type": "Action", "id": "read"},
             "attrs": {},
             "parents": []
-        },
-        {
+        }),
+        json!({
             "uid": {"type": "Action", "id": "write"},
             "attrs": {},
             "parents": []
-        },
-        {
+        }),
+        json!({
             "uid": {"type": "Action", "id": "create"},
             "attrs": {},
             "parents": []
-        },
-        {
+        }),
+        json!({
             "uid": {"type": "Action", "id": "delete"},
             "attrs": {},
             "parents": []
-        }
-    ])
-    .to_string()
+        }),
+    ]
 }
 
-/// Create a test AppState with policies and entities
+/// Create test entities for authorization scenarios
+fn create_test_entities() -> String {
+    let mut entities = Vec::new();
+
+    entities.extend(create_test_users());
+    entities.extend(create_test_groups());
+    entities.extend(create_test_roles());
+    entities.extend(create_test_resources());
+    entities.extend(create_test_actions());
+
+    json!(entities).to_string()
+}
+
+/// Create a test `AppState` with policies and entities
 fn setup_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
     let policies_str = create_test_policies();
     let policies = policies_str.parse::<PolicySet>()?;
@@ -299,11 +314,13 @@ fn setup_test_app_state() -> Result<Arc<AppState>, Box<dyn std::error::Error>> {
     let entities_str = create_test_entities();
     let entities = Entities::from_json_str(&entities_str, None)?;
 
-    Ok(Arc::new(AppState {
+    let app_state = AppState {
         authorizer: Authorizer::new(),
         policies,
         entities,
-    }))
+    };
+
+    Ok(Arc::new(app_state))
 }
 
 #[tokio::test]
@@ -546,7 +563,7 @@ async fn test_invalid_action_error() {
     let request = AuthorizeRequest {
         request_id: "test-15".to_string(),
         principal: json!({"type": "User", "id": "alice"}),
-        action: "".to_string(), // Empty action
+        action: String::new(), // Empty action
         resource: json!({"type": "Profile", "id": "alice"}),
         context: json!({}),
     };
@@ -580,7 +597,7 @@ async fn test_performance_multiple_requests() {
 
     for i in 0..num_requests {
         let request = AuthorizeRequest {
-            request_id: format!("perf-test-{}", i),
+            request_id: format!("perf-test-{i}"),
             principal: json!({"type": "User", "id": "alice"}),
             action: "read".to_string(),
             resource: json!({"type": "Profile", "id": "alice"}),
@@ -599,14 +616,10 @@ async fn test_performance_multiple_requests() {
     // Each request should take less than 10ms on average
     assert!(
         avg_duration.as_millis() < 10,
-        "Authorization took too long: {:?} avg",
-        avg_duration
+        "Authorization took too long: {avg_duration:?} avg"
     );
 
-    println!(
-        "Performance test: {} requests in {:?} (avg: {:?})",
-        num_requests, duration, avg_duration
-    );
+    println!("Performance test: {num_requests} requests in {duration:?} (avg: {avg_duration:?})");
 }
 
 #[tokio::test]
@@ -620,7 +633,7 @@ async fn test_concurrent_authorization_requests() {
         let state_clone = state.clone();
         let handle = tokio::spawn(async move {
             let request = AuthorizeRequest {
-                request_id: format!("concurrent-test-{}", i),
+                request_id: format!("concurrent-test-{i}"),
                 principal: json!({"type": "User", "id": "alice"}),
                 action: "read".to_string(),
                 resource: json!({"type": "Profile", "id": "alice"}),
@@ -646,14 +659,10 @@ async fn test_concurrent_authorization_requests() {
     // Total time should be reasonable even with concurrent requests
     assert!(
         duration.as_millis() < 1000,
-        "Concurrent requests took too long: {:?}",
-        duration
+        "Concurrent requests took too long: {duration:?}"
     );
 
-    println!(
-        "Concurrent test: {} requests in {:?}",
-        num_concurrent, duration
-    );
+    println!("Concurrent test: {num_concurrent} requests in {duration:?}");
 }
 
 #[tokio::test]

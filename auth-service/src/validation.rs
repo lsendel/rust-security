@@ -750,6 +750,10 @@ pub trait ValidatedDto: Validate + Sized {
     }
 
     /// Validate and return the DTO or an error
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ValidationResult` containing validation errors if the DTO fails validation
     fn validate_and_return(self) -> Result<Self, ValidationResult> {
         let result = self.validate_dto();
         if result.valid {
@@ -805,7 +809,9 @@ pub mod middleware {
                     let field_errors = validation_result.errors.unwrap_or_default();
                     let error_msg = field_errors
                         .iter()
-                        .map(|(field, errors)| format!("{}: {}", field, errors.join(", ")))
+                        .map(|(field, errors)| {
+                            format!("{field}: {joined}", joined = errors.join(", "))
+                        })
                         .collect::<Vec<_>>()
                         .join("; ");
 
@@ -840,7 +846,9 @@ pub mod middleware {
                     let field_errors = validation_result.errors.unwrap_or_default();
                     let error_msg = field_errors
                         .iter()
-                        .map(|(field, errors)| format!("{}: {}", field, errors.join(", ")))
+                        .map(|(field, errors)| {
+                            format!("{field}: {joined}", joined = errors.join(", "))
+                        })
                         .collect::<Vec<_>>()
                         .join("; ");
 

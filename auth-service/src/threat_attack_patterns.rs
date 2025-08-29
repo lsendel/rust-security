@@ -1,15 +1,12 @@
-use crate::core::security::{SecurityEvent, SecurityEventType};
+use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
 use crate::threat_types::*;
 use chrono::{DateTime, Duration, Utc};
-use petgraph::{
-    graph::NodeIndex,
-    Directed, Graph,
-};
+use petgraph::{graph::NodeIndex, Directed, Graph};
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
@@ -357,7 +354,7 @@ pub enum CorrelationType {
 }
 
 /// Detection statistics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DetectionStatistics {
     pub patterns_detected: u64,
     pub sequences_analyzed: u64,
@@ -615,7 +612,7 @@ impl AttackPatternDetector {
 
         // User node
         if let Some(user_id) = &event.user_id {
-            let node_id = format!("user:{}", user_id);
+            let node_id = format!("user:{user_id}");
             let node_index = self.get_or_create_node(
                 &mut graph,
                 &mut node_indices,
@@ -629,7 +626,7 @@ impl AttackPatternDetector {
 
         // IP address node
         if let Some(ip) = event.ip_address {
-            let node_id = format!("ip:{}", ip);
+            let node_id = format!("ip:{ip}");
             let node_index = self.get_or_create_node(
                 &mut graph,
                 &mut node_indices,
@@ -643,7 +640,7 @@ impl AttackPatternDetector {
 
         // Device node
         if let Some(device) = &event.device_fingerprint {
-            let node_id = format!("device:{}", device);
+            let node_id = format!("device:{device}");
             let node_index = self.get_or_create_node(
                 &mut graph,
                 &mut node_indices,
@@ -657,7 +654,7 @@ impl AttackPatternDetector {
 
         // Session node
         if let Some(session) = &event.session_id {
-            let node_id = format!("session:{}", session);
+            let node_id = format!("session:{session}");
             let node_index = self.get_or_create_node(
                 &mut graph,
                 &mut node_indices,
@@ -672,8 +669,8 @@ impl AttackPatternDetector {
         // Create edges between related nodes
         for i in 0..event_nodes.len() {
             for j in (i + 1)..event_nodes.len() {
-                let (node1, type1) = event_nodes[i];
-                let (node2, type2) = event_nodes[j];
+                let (node1, type1) = &event_nodes[i];
+                let (node2, type2) = &event_nodes[j];
 
                 let edge_type = self.determine_edge_type(&type1, &type2);
                 let edge = AttackGraphEdge {
@@ -694,7 +691,7 @@ impl AttackPatternDetector {
                     attributes: HashMap::new(),
                 };
 
-                graph.add_edge(node1, node2, edge);
+                graph.add_edge(*node1, *node2, edge);
             }
         }
 
@@ -842,7 +839,7 @@ impl AttackPatternDetector {
             last_observed: matched_events.last()?.timestamp,
             event_sequence: matched_events
                 .iter()
-                .map(|e| e.event_type.clone())
+                .map(|e| e.event_type.clone().into())
                 .collect(),
             timing_constraints: rule.timing_constraints.clone(),
             entity_relationships: Vec::new(), // Would be populated with actual relationships
@@ -935,14 +932,28 @@ impl AttackPatternDetector {
 
         // Check outcome filter
         if let Some(required_outcome) = &matcher.outcome_filter {
-            if &event.outcome != required_outcome {
+            let outcome_str = match required_outcome {
+                EventOutcome::Success => "success",
+                EventOutcome::Failure => "failure",
+                EventOutcome::Blocked => "blocked",
+                EventOutcome::Suspicious => "suspicious",
+                EventOutcome::Timeout => "timeout",
+                EventOutcome::Error => "error",
+            };
+            if event.outcome.as_deref() != Some(outcome_str) {
                 return false;
             }
         }
 
         // Check severity filter
         if let Some(required_severity) = &matcher.severity_filter {
-            if &event.severity != required_severity {
+            let event_threat_severity = match event.severity {
+                ViolationSeverity::Low => ThreatSeverity::Low,
+                ViolationSeverity::Medium => ThreatSeverity::Medium,
+                ViolationSeverity::High => ThreatSeverity::High,
+                ViolationSeverity::Critical => ThreatSeverity::Critical,
+            };
+            if &event_threat_severity != required_severity {
                 return false;
             }
         }
@@ -1160,7 +1171,7 @@ impl AttackPatternDetector {
     fn generate_attack_prediction(
         &self,
         events: &[SecurityEvent],
-        rule: &SequenceDetectionRule,
+        _rule: &SequenceDetectionRule,
     ) -> AttackPrediction {
         // Simplified prediction logic
         let mut next_phases = Vec::new();
@@ -1329,7 +1340,7 @@ impl AttackPatternDetector {
                 interval.tick().await;
 
                 let mut windows = temporal_windows.write().await;
-                let config_guard = config.read().await;
+                let _config_guard = config.read().await;
 
                 // Analyze completed windows
                 for window in windows.iter_mut() {
@@ -1359,7 +1370,7 @@ impl AttackPatternDetector {
     /// Get detection statistics
     pub async fn get_statistics(&self) -> DetectionStatistics {
         let stats = self.detection_statistics.lock().await;
-        stats.clone()
+        (*stats).clone()
     }
 
     /// Shutdown the detector

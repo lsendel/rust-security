@@ -6,7 +6,10 @@
       "Bash(python:*)",
       "Bash(cargo check:*)",
       "Bash(cargo run:*)",
-      "Bash(git remote set-url:*)"
+      "Bash(git remote set-url:*)",
+      "Read(/Users/lsendel/.grok/**)",
+      "Bash(cargo fmt:*)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []

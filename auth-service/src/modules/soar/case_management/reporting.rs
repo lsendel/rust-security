@@ -106,7 +106,7 @@ pub struct SlaCompliance {
 impl CaseReportingService {
     /// Create a new reporting service
     #[must_use]
-    pub fn new(repository: CaseRepository) -> Self {
+    pub const fn new(repository: CaseRepository) -> Self {
         Self { repository }
     }
 
@@ -120,7 +120,7 @@ impl CaseReportingService {
         title: Option<String>,
         description: Option<String>,
     ) -> SoarResult<CaseReport> {
-        let (start_date, end_date) = self.get_period_dates(&period);
+        let (start_date, end_date) = Self::get_period_dates(&period);
 
         info!(
             "Generating case report for period: {:?} to {:?}",
@@ -140,7 +140,7 @@ impl CaseReportingService {
             .collect();
 
         // Generate summary
-        let summary = self.generate_summary(&filtered_cases)?;
+        let summary = Self::generate_summary(&filtered_cases);
 
         // Generate metrics
         let metrics = self.generate_metrics(&filtered_cases).await?;
@@ -149,8 +149,8 @@ impl CaseReportingService {
         let sla_compliance = self.generate_sla_compliance(&filtered_cases).await?;
 
         // Generate distributions
-        let priority_distribution = self.generate_priority_distribution(&filtered_cases);
-        let status_distribution = self.generate_status_distribution(&filtered_cases);
+        let priority_distribution = Self::generate_priority_distribution(&filtered_cases);
+        let status_distribution = Self::generate_status_distribution(&filtered_cases);
 
         let report = CaseReport {
             title: title.unwrap_or_else(|| format!("Case Report - {period:?}")),
@@ -175,7 +175,7 @@ impl CaseReportingService {
     }
 
     /// Generate case summary
-    fn generate_summary(&self, cases: &[SecurityCase]) -> SoarResult<CaseSummary> {
+    fn generate_summary(cases: &[SecurityCase]) -> CaseSummary {
         let total_cases = cases.len();
         let open_cases = cases
             .iter()
@@ -215,14 +215,14 @@ impl CaseReportingService {
             Some(sorted[mid])
         };
 
-        Ok(CaseSummary {
+        CaseSummary {
             total_cases,
             open_cases,
             resolved_cases,
             escalated_cases,
             avg_resolution_hours,
             median_resolution_hours,
-        })
+        }
     }
 
     /// Generate case metrics
@@ -350,12 +350,12 @@ impl CaseReportingService {
             }
         }
 
-        let response_time_compliance = (response_compliant as f64 / total_cases as f64) * 100.0;
+        let response_time_compliance = (f64::from(response_compliant) / total_cases as f64) * 100.0;
         let resolution_time_compliance = if cases
             .iter()
             .any(|c| c.status == CaseStatus::Resolved || c.status == CaseStatus::Closed)
         {
-            (resolution_compliant as f64
+            (f64::from(resolution_compliant)
                 / cases
                     .iter()
                     .filter(|c| c.status == CaseStatus::Resolved || c.status == CaseStatus::Closed)
@@ -377,7 +377,7 @@ impl CaseReportingService {
     }
 
     /// Generate priority distribution
-    fn generate_priority_distribution(&self, cases: &[SecurityCase]) -> HashMap<String, usize> {
+    fn generate_priority_distribution(cases: &[SecurityCase]) -> HashMap<String, usize> {
         let mut distribution = HashMap::new();
         for case in cases {
             *distribution
@@ -388,7 +388,7 @@ impl CaseReportingService {
     }
 
     /// Generate status distribution
-    fn generate_status_distribution(&self, cases: &[SecurityCase]) -> HashMap<String, usize> {
+    fn generate_status_distribution(cases: &[SecurityCase]) -> HashMap<String, usize> {
         let mut distribution = HashMap::new();
         for case in cases {
             *distribution
@@ -399,7 +399,7 @@ impl CaseReportingService {
     }
 
     /// Get period start and end dates
-    fn get_period_dates(&self, period: &ReportPeriod) -> (DateTime<Utc>, DateTime<Utc>) {
+    fn get_period_dates(period: &ReportPeriod) -> (DateTime<Utc>, DateTime<Utc>) {
         match period {
             ReportPeriod::Daily(date) => {
                 let start = date

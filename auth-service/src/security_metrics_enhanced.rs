@@ -10,7 +10,6 @@ use prometheus::{
     IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
 };
 
-use once_cell::sync::Lazy;
 
 /// Service Identity Management Metrics
 #[cfg(feature = "monitoring")]

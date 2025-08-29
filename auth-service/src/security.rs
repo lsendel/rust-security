@@ -3,7 +3,6 @@ use axum::{extract::Request, middleware::Next, response::Response};
 use base64::Engine as _;
 use common::sharded_rate_limiter::RateLimitConfig as CommonRateLimitConfig;
 use common::{constants, ShardedRateLimiter};
-use once_cell::sync::Lazy;
 use ring::rand::SecureRandom;
 use std::time::Duration;
 use tower::ServiceBuilder;
@@ -66,6 +65,10 @@ pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
 }
 
 /// Validate token binding to ensure token is used from the same client
+///
+/// # Errors
+///
+/// Returns an error if the stored binding is invalid or corrupted
 pub fn validate_token_binding(
     stored_binding: &str,
     client_ip: &str,
@@ -112,6 +115,10 @@ pub fn validate_token_binding(
 
 /// PKCE (Proof Key for Code Exchange) support
 /// Generate a cryptographically secure code verifier for PKCE
+///
+/// # Errors
+///
+/// Returns an error if the cryptographically secure random number generation fails
 pub fn generate_code_verifier() -> Result<String, &'static str> {
     use ring::rand::{SecureRandom, SystemRandom};
 
@@ -139,6 +146,10 @@ pub fn generate_code_verifier() -> Result<String, &'static str> {
 }
 
 /// Generate a code challenge from a code verifier using SHA256
+///
+/// # Errors
+///
+/// Returns an error if the code verifier length is invalid (must be 43-128 characters)
 pub fn generate_code_challenge(code_verifier: &str) -> Result<String, &'static str> {
     use ring::digest;
 
@@ -151,6 +162,10 @@ pub fn generate_code_challenge(code_verifier: &str) -> Result<String, &'static s
 }
 
 /// Verify a code verifier against a code challenge with timing attack protection
+///
+/// # Errors
+///
+/// Returns an error if the code verifier length is invalid
 pub fn verify_code_challenge(
     code_verifier: &str,
     code_challenge: &str,
@@ -191,6 +206,10 @@ impl std::str::FromStr for CodeChallengeMethod {
 }
 
 /// Validate PKCE parameters - Only S256 method is supported
+///
+/// # Errors
+///
+/// Returns an error if PKCE validation fails or parameters are invalid
 pub fn validate_pkce_params(
     code_verifier: &str,
     code_challenge: &str,
@@ -203,6 +222,10 @@ pub fn validate_pkce_params(
 
 /// Request signing for critical operations
 /// Generate a request signature using HMAC-SHA256
+///
+/// # Errors
+///
+/// Returns an error if the HMAC key is invalid or signature generation fails
 pub fn generate_request_signature(
     method: &str,
     path: &str,
@@ -225,6 +248,10 @@ pub fn generate_request_signature(
 }
 
 /// Verify request signature with timing attack protection and replay prevention
+///
+/// # Errors
+///
+/// Returns an error if the HMAC key is invalid or signature verification fails
 pub fn verify_request_signature(
     method: &str,
     path: &str,
@@ -260,6 +287,10 @@ pub fn verify_request_signature(
 }
 
 /// Middleware for request signature validation
+///
+/// # Errors
+///
+/// Returns an error if request signature validation fails or required headers are missing
 pub async fn validate_request_signature(
     request: Request,
     next: Next,
@@ -390,6 +421,10 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
 }
 
 /// Input validation for common security issues
+///
+/// # Errors
+///
+/// Returns an error if the token is empty, too long, or contains invalid characters
 pub fn validate_token_input(token: &str) -> Result<(), &'static str> {
     if token.is_empty() {
         return Err("Token cannot be empty");
@@ -416,6 +451,10 @@ pub fn validate_token_input(token: &str) -> Result<(), &'static str> {
 }
 
 /// Validate client credentials format
+///
+/// # Errors
+///
+/// Returns an error if client credentials are empty, too long, or contain invalid characters
 pub fn validate_client_credentials(
     client_id: &str,
     client_secret: &str,
@@ -451,7 +490,7 @@ pub fn security_middleware() -> ServiceBuilder<
 }
 
 /// Global sharded rate limiter instance
-static RATE_LIMITER: Lazy<ShardedRateLimiter> = Lazy::new(|| {
+static RATE_LIMITER: std::sync::LazyLock<ShardedRateLimiter> = std::sync::LazyLock::new(|| {
     let rate_limit = std::env::var("RATE_LIMIT_REQUESTS_PER_MINUTE")
         .ok()
         .and_then(|s| s.parse::<u32>().ok())

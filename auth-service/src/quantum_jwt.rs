@@ -170,6 +170,10 @@ impl Default for QuantumJwtConfig {
 
 impl QuantumJwtManager {
     /// Create a new quantum JWT manager
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the quantum JWT manager initialization fails
     pub fn new(config: QuantumJwtConfig) -> Result<Self> {
         let manager = Self {
             key_store: Arc::new(RwLock::new(HashMap::new())),
@@ -182,6 +186,13 @@ impl QuantumJwtManager {
     }
 
     /// Initialize with a new quantum key pair
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Quantum key pair generation fails
+    /// - Key ID generation fails
+    /// - Key storage fails
     pub async fn initialize(&self) -> Result<()> {
         let key_pair = self
             .generate_quantum_keypair(self.config.default_security_level)
@@ -320,6 +331,10 @@ impl QuantumJwtManager {
     }
 
     /// Generate a unique key ID
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if random number generation fails
     fn generate_key_id(&self) -> Result<String> {
         let mut bytes = [0u8; 16];
         self.rng
@@ -329,6 +344,13 @@ impl QuantumJwtManager {
     }
 
     /// Create a quantum-safe JWT token
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Current key pair is not found
+    /// - Token signing fails
+    /// - Serialization of header or payload fails
     pub async fn create_token(&self, payload: QuantumJwtPayload) -> Result<String> {
         let current_key_id = {
             let key_id = self.current_key_id.read().await;
@@ -359,7 +381,7 @@ impl QuantumJwtManager {
         let header_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(header_json);
         let payload_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload_json);
 
-        let signing_input = format!("{}.{}", header_b64, payload_b64);
+        let signing_input = format!("{header_b64}.{payload_b64}");
 
         // Create hybrid signature
         let signature = self
@@ -368,7 +390,7 @@ impl QuantumJwtManager {
         let signature_json = serde_json::to_string(&signature)?;
         let signature_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature_json);
 
-        Ok(format!("{}.{}.{}", header_b64, payload_b64, signature_b64))
+        Ok(format!("{header_b64}.{payload_b64}.{signature_b64}"))
     }
 
     /// Create hybrid signature combining classical and post-quantum
@@ -401,6 +423,10 @@ impl QuantumJwtManager {
     }
 
     /// Sign data with classical algorithm
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if signing operation fails
     async fn sign_classical(&self, data: &[u8], _key_pair: &ClassicalKeyPair) -> Result<String> {
         // Simulate ECDSA signing (would use actual crypto library)
         let signature_data = format!("classical_sig_{}", hex::encode(data));
@@ -421,6 +447,14 @@ impl QuantumJwtManager {
     }
 
     /// Verify quantum-safe JWT token
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Token format is invalid
+    /// - Token signature verification fails
+    /// - Token has expired or is not yet valid
+    /// - Key used to sign token is not found
     pub async fn verify_token(&self, token: &str) -> Result<QuantumJwtPayload> {
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
@@ -455,7 +489,7 @@ impl QuantumJwtManager {
         };
 
         // Verify signature
-        let signing_input = format!("{}.{}", parts[0], parts[1]);
+        let signing_input = format!("{header}.{payload}", header = parts[0], payload = parts[1]);
         self.verify_hybrid_signature(&signing_input, &signature, &key_pair)
             .await?;
 

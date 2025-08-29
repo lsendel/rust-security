@@ -506,7 +506,7 @@ mod integration_tests {
         // Test invalid security level
         let invalid_registration = TotpRegistrationRequest {
             user_id: "invalid_user".to_string(),
-            display_name: "".to_string(), // Empty display name
+            display_name: String::new(), // Empty display name
             security_level: Some(SecurityLevel::Standard),
         };
 

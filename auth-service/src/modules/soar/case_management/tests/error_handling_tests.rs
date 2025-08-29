@@ -46,8 +46,8 @@ mod error_propagation_tests {
     async fn test_error_handling_in_case_creation_failure() {
         // Test case creation with invalid data
         let case = SecurityCase::new(
-            "".to_string(), // Invalid: empty title
-            "".to_string(), // Invalid: empty description
+            String::new(), // Invalid: empty title
+            String::new(), // Invalid: empty description
             CasePriority::Medium,
         );
 
@@ -627,8 +627,8 @@ mod error_message_security_tests {
     fn test_case_data_validation_in_error_scenarios() {
         // Create cases with potentially problematic data
         let test_cases = vec![
-            SecurityCase::new("".to_string(), "Valid description".to_string(), CasePriority::Low),
-            SecurityCase::new("Valid title".to_string(), "".to_string(), CasePriority::Medium),
+            SecurityCase::new(String::new(), "Valid description".to_string(), CasePriority::Low),
+            SecurityCase::new("Valid title".to_string(), String::new(), CasePriority::Medium),
             SecurityCase::new("Title with <script>".to_string(), "Description".to_string(), CasePriority::High),
             SecurityCase::new("Normal title".to_string(), "Normal description".to_string(), CasePriority::Critical),
         ];

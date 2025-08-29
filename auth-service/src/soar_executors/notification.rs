@@ -6,9 +6,7 @@
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::soar_core::{StepAction, StepError, StepExecutor, WorkflowStep};
 use async_trait::async_trait;
-use lettre::{
-    transport::smtp::authentication::Credentials, SmtpTransport, Transport, Message,
-};
+use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport};
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -47,7 +45,7 @@ impl EmailNotificationExecutor {
                 smtp_host: "localhost".to_string(),
                 smtp_port: 587,
                 username: "noreply".to_string(),
-                password: "".to_string(),
+                password: String::new(),
                 from_address: "noreply@example.com".to_string(),
                 use_tls: true,
             }),

@@ -30,7 +30,6 @@ use validator::Validate;
 pub struct AuthState {
     pub jwt_secret: String,
     pub users: Arc<tokio::sync::RwLock<HashMap<String, User>>>,
-    pub sessions: Arc<tokio::sync::RwLock<HashMap<String, Session>>>,
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
 }
@@ -128,7 +127,6 @@ pub struct LoginRequest {
 /// `OAuth` authorization request
 #[derive(Debug, Deserialize, Validate)]
 pub struct AuthorizeRequest {
-    pub response_type: String,
     pub client_id: String,
     pub redirect_uri: String,
     pub scope: Option<String>,
@@ -140,7 +138,6 @@ pub struct AuthorizeRequest {
 pub struct TokenRequest {
     pub grant_type: String,
     pub code: Option<String>,
-    pub redirect_uri: Option<String>,
     pub client_id: String,
     pub client_secret: String,
 }
@@ -217,7 +214,6 @@ impl AuthState {
         Self {
             jwt_secret,
             users: Arc::new(tokio::sync::RwLock::new(users)),
-            sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             oauth_clients: Arc::new(tokio::sync::RwLock::new(oauth_clients)),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
@@ -292,7 +288,9 @@ pub async fn register(
         ));
     }
 
-    let user_exists = state.users.read().await.contains_key(&request.email);
+    let user_exists = {
+        state.users.read().await.contains_key(&request.email)
+    };
 
     // Check if user already exists
     if user_exists {
@@ -375,7 +373,9 @@ pub async fn login(
         ));
     }
 
-    let user = state.users.read().await.get(&request.email).cloned();
+    let user = {
+        state.users.read().await.get(&request.email).cloned()
+    };
 
     // Find user
     if let Some(mut user) = user {
@@ -464,12 +464,14 @@ pub async fn authorize(
         ));
     }
 
-    let client = state
-        .oauth_clients
-        .read()
-        .await
-        .get(&request.client_id)
-        .cloned();
+    let client = {
+        state
+            .oauth_clients
+            .read()
+            .await
+            .get(&request.client_id)
+            .cloned()
+    };
 
     // Validate client
     if let Some(client) = client {
@@ -486,19 +488,21 @@ pub async fn authorize(
 
         // For demo purposes, auto-approve with demo user
         let code = generate_token();
-        state.authorization_codes.write().await.insert(
-            code.clone(),
-            AuthorizationCode {
-                code: code.clone(),
-                client_id: request.client_id,
-                user_id: "demo-user-123".to_string(),
-                redirect_uri: request.redirect_uri.clone(),
-                scope: request.scope.unwrap_or_else(|| "read".to_string()),
-                created_at: Utc::now(),
-                expires_at: Utc::now() + Duration::minutes(10),
-                used: false,
-            },
-        );
+        {
+            state.authorization_codes.write().await.insert(
+                code.clone(),
+                AuthorizationCode {
+                    code: code.clone(),
+                    client_id: request.client_id,
+                    user_id: "demo-user-123".to_string(),
+                    redirect_uri: request.redirect_uri.clone(),
+                    scope: request.scope.unwrap_or_else(|| "read".to_string()),
+                    created_at: Utc::now(),
+                    expires_at: Utc::now() + Duration::minutes(10),
+                    used: false,
+                },
+            );
+        }
 
         let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
         if let Some(state_param) = request.state {
@@ -550,28 +554,31 @@ pub async fn token(
         ));
     }
 
-    let oauth_clients = state.oauth_clients.read().await;
-
     // Validate client credentials
-    let client = oauth_clients.get(&request.client_id).ok_or_else(|| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "invalid_client".to_string(),
-                error_description: "Invalid client credentials".to_string(),
-            }),
-        )
-    })?;
+    let _client = {
+        let oauth_clients = state.oauth_clients.read().await;
+        let client = oauth_clients.get(&request.client_id).ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_client".to_string(),
+                    error_description: "Invalid client credentials".to_string(),
+                }),
+            )
+        })?;
 
-    if client.client_secret != request.client_secret {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "invalid_client".to_string(),
-                error_description: "Invalid client credentials".to_string(),
-            }),
-        ));
-    }
+        if client.client_secret != request.client_secret {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_client".to_string(),
+                    error_description: "Invalid client credentials".to_string(),
+                }),
+            ));
+        }
+        
+        client.clone()
+    };
 
     match request.grant_type.as_str() {
         "authorization_code" => {
@@ -585,48 +592,55 @@ pub async fn token(
                 )
             })?;
 
-            let mut authorization_codes = state.authorization_codes.write().await;
-            let auth_code = authorization_codes.get_mut(&code).ok_or_else(|| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        error: "invalid_grant".to_string(),
-                        error_description: "Invalid authorization code".to_string(),
-                    }),
-                )
-            })?;
-
-            // Check if code is expired or used
-            if auth_code.used || Utc::now() > auth_code.expires_at {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        error: "invalid_grant".to_string(),
-                        error_description: "Authorization code expired or already used".to_string(),
-                    }),
-                ));
-            }
-
-            // Mark code as used
-            auth_code.used = true;
-
-            // Get user
-            let users = state.users.read().await;
-            let user = users
-                .values()
-                .find(|u| u.id == auth_code.user_id)
-                .ok_or_else(|| {
+            // Get and validate auth code, then extract user ID and scope
+            let (user_id, scope) = {
+                let mut authorization_codes = state.authorization_codes.write().await;
+                let auth_code = authorization_codes.get_mut(&code).ok_or_else(|| {
                     (
-                        StatusCode::INTERNAL_SERVER_ERROR,
+                        StatusCode::BAD_REQUEST,
                         Json(ErrorResponse {
-                            error: "server_error".to_string(),
-                            error_description: "User not found".to_string(),
+                            error: "invalid_grant".to_string(),
+                            error_description: "Invalid authorization code".to_string(),
                         }),
                     )
                 })?;
 
+                // Check if code is expired or used
+                if auth_code.used || Utc::now() > auth_code.expires_at {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            error: "invalid_grant".to_string(),
+                            error_description: "Authorization code expired or already used".to_string(),
+                        }),
+                    ));
+                }
+
+                // Mark code as used and extract needed data
+                auth_code.used = true;
+                (auth_code.user_id.clone(), auth_code.scope.clone())
+            };
+
+            // Get user with the extracted user_id
+            let user = {
+                let users = state.users.read().await;
+                users
+                    .values()
+                    .find(|u| u.id == user_id)
+                    .cloned()
+                    .ok_or_else(|| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                error: "server_error".to_string(),
+                                error_description: "User not found".to_string(),
+                            }),
+                        )
+                    })?
+            };
+
             // Generate access token
-            let access_token = create_jwt_token(user, &state.jwt_secret).map_err(|_| {
+            let access_token = create_jwt_token(&user, &state.jwt_secret).map_err(|_| {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -643,7 +657,7 @@ pub async fn token(
                 token_type: "Bearer".to_string(),
                 expires_in: 3600, // 1 hour
                 refresh_token: None,
-                scope: Some(auth_code.scope.clone()),
+                scope: Some(scope),
             }))
         }
         _ => Err((

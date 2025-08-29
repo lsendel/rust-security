@@ -11,23 +11,32 @@ pub struct AuthServiceWithThreatProcessing {
 
 impl AuthServiceWithThreatProcessing {
     /// Create a new auth service with threat processing
+    #[must_use]
     pub fn new(threat_processor: Arc<ThreatProcessor>) -> Self {
         Self { threat_processor }
     }
 
     /// Process a security event through the threat detection pipeline
-    pub async fn process_security_event(&self, event: SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if threat processing fails
+    pub async fn process_security_event(
+        &self,
+        event: SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Process the event through threat detection
         self.threat_processor.process_event(&event).await?;
-        
+
         // Continue with normal auth service processing
         // (This would integrate with existing auth service logic)
-        
+
         Ok(())
     }
 
     /// Get the threat processor for direct access
-    pub fn threat_processor(&self) -> &Arc<ThreatProcessor> {
+    #[must_use]
+    pub const fn threat_processor(&self) -> &Arc<ThreatProcessor> {
         &self.threat_processor
     }
 }
@@ -35,10 +44,12 @@ impl AuthServiceWithThreatProcessing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::security::{SecurityContext, SecurityLevel, ViolationSeverity, SecurityEventType};
+    use crate::core::security::{
+        SecurityContext, SecurityEventType, SecurityLevel, ViolationSeverity,
+    };
+    use chrono::Utc;
     use std::collections::HashMap;
     use std::net::IpAddr;
-    use std::time::SystemTime;
 
     #[tokio::test]
     async fn test_auth_service_integration() {
@@ -46,7 +57,7 @@ mod tests {
         let auth_service = AuthServiceWithThreatProcessing::new(threat_processor);
 
         let event = SecurityEvent {
-            timestamp: SystemTime::now(),
+            timestamp: Utc::now(),
             event_type: SecurityEventType::AuthenticationFailure,
             security_context: SecurityContext {
                 client_ip: "127.0.0.1".parse::<IpAddr>().unwrap(),
@@ -61,6 +72,15 @@ mod tests {
             auth_context: None,
             details: HashMap::new(),
             severity: ViolationSeverity::High,
+            user_id: None,
+            session_id: None,
+            ip_address: Some("127.0.0.1".parse::<IpAddr>().unwrap()),
+            location: None,
+            device_fingerprint: Some("test".to_string()),
+            risk_score: Some(80),
+            outcome: Some("failure".to_string()),
+            mfa_used: false,
+            user_agent: Some("test".to_string()),
         };
 
         let result = auth_service.process_security_event(event).await;

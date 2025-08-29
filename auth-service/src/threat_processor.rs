@@ -5,11 +5,13 @@ use crate::core::security::SecurityEvent;
 use crate::threat_adapter::ThreatDetectionAdapter;
 #[cfg(feature = "threat-hunting")]
 use crate::{
-    threat_behavioral_analyzer::BehavioralAnalyzer,
-    threat_intelligence::ThreatIntelligenceEngine,
+    threat_behavioral_analyzer::AdvancedBehavioralThreatDetector as BehavioralAnalyzer, 
+    threat_intelligence::ThreatIntelligenceCorrelator as ThreatIntelligenceEngine,
     threat_response_orchestrator::ThreatResponseOrchestrator,
 };
+#[cfg(feature = "threat-hunting")]
 use std::sync::Arc;
+#[cfg(feature = "threat-hunting")]
 use tokio::sync::RwLock;
 
 /// Unified threat processing service
@@ -38,7 +40,10 @@ impl ThreatProcessor {
     }
 
     /// Process a security event through all threat detection modules
-    pub async fn process_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn process_event(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if !*self.enabled.read().await {
             return Ok(());
         }
@@ -54,7 +59,11 @@ impl ThreatProcessor {
         }
 
         // Process through response orchestrator
-        if let Err(e) = self.response_orchestrator.process_security_event(event).await {
+        if let Err(e) = self
+            .response_orchestrator
+            .process_security_event(event)
+            .await
+        {
             tracing::warn!("Response orchestration failed: {}", e);
         }
 
@@ -62,7 +71,10 @@ impl ThreatProcessor {
     }
 
     /// Process multiple events in batch
-    pub async fn process_events(&self, events: &[SecurityEvent]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn process_events(
+        &self,
+        events: &[SecurityEvent],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if !*self.enabled.read().await {
             return Ok(());
         }
@@ -90,15 +102,32 @@ pub struct ThreatProcessor;
 
 #[cfg(not(feature = "threat-hunting"))]
 impl ThreatProcessor {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 
-    pub async fn process_event(&self, _event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// Process a security event (no-op implementation for when threat-hunting is disabled)
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error
+    pub async fn process_event(
+        &self,
+        _event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
 
-    pub async fn process_events(&self, _events: &[SecurityEvent]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// Process multiple security events (no-op implementation for when threat-hunting is disabled)
+    ///
+    /// # Errors
+    ///
+    /// This implementation never returns an error
+    pub async fn process_events(
+        &self,
+        _events: &[SecurityEvent],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
 

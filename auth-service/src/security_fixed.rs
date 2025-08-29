@@ -1,12 +1,11 @@
 use base64::Engine as _;
-use once_cell::sync::Lazy;
 use ring::{
     digest, hmac,
     rand::{SecureRandom as RingSecureRandom, SystemRandom},
 };
 
 /// Secure token binding salt - loaded from environment or generated
-static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
+static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
         // Generate a cryptographically secure salt
         let mut salt = [0u8; 32];

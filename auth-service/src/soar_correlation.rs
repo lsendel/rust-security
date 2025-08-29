@@ -7,7 +7,6 @@
 //! - ML-enhanced correlation (when features are enabled)
 //! - Alert deduplication and grouping
 
-use async_trait::async_trait;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use crate::soar_core::*;

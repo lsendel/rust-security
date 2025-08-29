@@ -117,7 +117,7 @@ impl UnifiedCryptoManager {
     ///
     /// # Errors
     ///
-    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if key generation fails.
+    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if AES key generation fails.
     /// See [`Self::new`] for detailed error conditions.
     ///
     /// # Panics
@@ -149,9 +149,6 @@ impl UnifiedCryptoManager {
     /// - `UNIFIED_ENCRYPTION_KEY` environment variable contains invalid hex
     /// - Key length doesn't match the required length for the algorithm
     /// - Key creation with the ring library fails
-    ///
-    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if:
-    /// - Environment variable is not set and fallback key generation fails
     ///
     /// # Panics
     ///
@@ -315,29 +312,31 @@ impl UnifiedCryptoManager {
     ///
     /// This function does not panic under normal operation.
     pub async fn rotate_key(&self) -> Result<(), UnifiedCryptoError> {
-        let new_version;
-        let new_key = {
+        let (new_version, new_key) = {
             let current_key = self.current_key.read().await;
-            new_version = current_key.version + 1;
-            Self::generate_key(current_key.algorithm, new_version)?
+            let new_version = current_key.version + 1;
+            let new_key = Self::generate_key(current_key.algorithm, new_version)?;
+            (new_version, new_key)
         };
 
-        let mut current_key = self.current_key.write().await;
-        let mut old_keys = self.old_keys.write().await;
+        {
+            let mut current_key = self.current_key.write().await;
+            let mut old_keys = self.old_keys.write().await;
 
-        // Move current key to old keys
-        let old_key = current_key.clone();
-        old_keys.insert(old_key.version, old_key);
+            // Move current key to old keys
+            let old_key = current_key.clone();
+            old_keys.insert(old_key.version, old_key);
 
-        // Generate new key with same algorithm
-        *current_key = new_key;
+            // Generate new key with same algorithm
+            *current_key = new_key;
 
-        tracing::info!(
-            "Rotated encryption key from version {} to {} using {:?}",
-            new_version - 1,
-            new_version,
-            current_key.algorithm
-        );
+            tracing::info!(
+                "Rotated encryption key from version {} to {} using {:?}",
+                new_version - 1,
+                new_version,
+                current_key.algorithm
+            );
+        }
 
         Ok(())
     }

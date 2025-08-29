@@ -4,11 +4,12 @@
 //! security operations, automation, and response activities.
 
 use super::types::*;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use handlebars::Handlebars;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};

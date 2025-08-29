@@ -1,8 +1,7 @@
-use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{error, info, warn};
 
-static TEST_MODE_ENABLED: Lazy<AtomicBool> = Lazy::new(|| {
+static TEST_MODE_ENABLED: std::sync::LazyLock<AtomicBool> = std::sync::LazyLock::new(|| {
     let enabled = is_test_mode_raw();
     if enabled {
         warn!("TEST_MODE is enabled - this should NEVER happen in production");
@@ -20,8 +19,8 @@ static TEST_MODE_ENABLED: Lazy<AtomicBool> = Lazy::new(|| {
 });
 
 /// Counter for test mode usage tracking
-static TEST_MODE_USAGE_COUNT: Lazy<std::sync::atomic::AtomicU64> =
-    Lazy::new(|| std::sync::atomic::AtomicU64::new(0));
+static TEST_MODE_USAGE_COUNT: std::sync::LazyLock<std::sync::atomic::AtomicU64> =
+    std::sync::LazyLock::new(|| std::sync::atomic::AtomicU64::new(0));
 
 /// Production safety check - prevents test mode in production environments
 pub fn is_test_mode() -> bool {
@@ -103,6 +102,10 @@ pub fn emergency_disable_test_mode() {
 }
 
 /// Validate test mode is appropriate for current environment
+///
+/// # Errors
+///
+/// Returns a list of security issues found when test mode is inappropriately enabled
 pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
     let mut issues = Vec::new();
 

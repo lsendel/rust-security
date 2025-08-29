@@ -2,7 +2,6 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine as _;
 use dashmap::DashMap;
-use once_cell::sync::Lazy;
 use ring::rand::SecureRandom;
 use ring::{aead, digest, hmac, rand, signature};
 use std::sync::Arc;
@@ -251,6 +250,10 @@ impl CryptoOptimized {
     }
 
     /// Hardware random number generation for secure tokens
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if hardware random number generation fails
     pub fn generate_secure_token(&self, prefix: &str) -> Result<String, ring::error::Unspecified> {
         let mut random_bytes = [0u8; 32];
         self.rng.fill(&mut random_bytes)?;

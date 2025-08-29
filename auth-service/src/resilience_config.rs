@@ -216,6 +216,15 @@ impl ResilienceConfig {
         config
     }
 
+    /// Validate the resilience configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error string if:
+    /// - Redis circuit breaker failure threshold is 0
+    /// - Redis request timeout is zero
+    /// - OIDC provider configurations are invalid
+    /// - Circuit breaker or timeout values are out of valid ranges
     pub fn validate(&self) -> Result<(), String> {
         // Validate Redis configuration
         if self.redis.circuit_breaker.failure_threshold == 0 {

@@ -325,6 +325,13 @@ impl SecureSessionManager {
     }
 
     /// Complete MFA for session
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if:
+    /// - Session is not found
+    /// - Session doesn't require MFA
+    /// - Session is in an invalid state
     pub async fn complete_mfa(&self, session_id: &str) -> Result<(), SessionError> {
         let mut sessions = self.sessions.write().await;
 
@@ -350,6 +357,11 @@ impl SecureSessionManager {
     }
 
     /// Invalidate session
+    ///
+    /// # Errors
+    ///
+    /// This function currently never returns an error but uses Result for consistency
+    /// with other session operations
     pub async fn invalidate_session(&self, session_id: &str) -> Result<(), SessionError> {
         let mut sessions = self.sessions.write().await;
 
@@ -368,6 +380,11 @@ impl SecureSessionManager {
     }
 
     /// Invalidate all sessions for a user
+    ///
+    /// # Errors
+    ///
+    /// This function currently never returns an error but uses Result for consistency
+    /// with other session operations
     pub async fn invalidate_user_sessions(&self, user_id: &str) -> Result<u32, SessionError> {
         let mut sessions = self.sessions.write().await;
         let mut user_sessions = self.user_sessions.write().await;

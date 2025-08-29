@@ -117,6 +117,14 @@ impl ResilientRedisClient {
         .await
     }
 
+    /// Set a value in Redis with retry logic
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Redis connection fails after all retries
+    /// - Set operation fails due to Redis server error
+    /// - Serialization of key or value fails
     pub async fn set<K, V>(&self, key: K, value: V) -> Result<(), AuthError>
     where
         K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
@@ -133,6 +141,14 @@ impl ResilientRedisClient {
         .await
     }
 
+    /// Set a value with expiration time in Redis
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Redis connection fails after all retries
+    /// - Set operation with expiration fails
+    /// - Serialization of key or value fails
     pub async fn set_ex<K, V>(&self, key: K, value: V, seconds: u64) -> Result<(), AuthError>
     where
         K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
@@ -149,6 +165,13 @@ impl ResilientRedisClient {
         .await
     }
 
+    /// Delete a key from Redis
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Redis connection fails after all retries
+    /// - Delete operation fails due to Redis server error
     pub async fn del<K>(&self, key: K) -> Result<u64, AuthError>
     where
         K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
@@ -160,6 +183,13 @@ impl ResilientRedisClient {
         .await
     }
 
+    /// Check if a key exists in Redis
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Redis connection fails after all retries
+    /// - Exists check operation fails
     pub async fn exists<K>(&self, key: K) -> Result<bool, AuthError>
     where
         K: redis::ToRedisArgs + Send + Sync + Clone + 'static,
@@ -174,6 +204,13 @@ impl ResilientRedisClient {
         .await
     }
 
+    /// Set expiration time for a key in Redis
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Redis connection fails after all retries
+    /// - Expire operation fails due to Redis server error
     pub async fn expire<K>(&self, key: K, seconds: u64) -> Result<bool, AuthError>
     where
         K: redis::ToRedisArgs + Send + Sync + Clone + 'static,

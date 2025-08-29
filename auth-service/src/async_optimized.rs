@@ -29,12 +29,23 @@ pub struct AsyncTokenStorage {
 
 impl AsyncTokenStorage {
     /// Create a new async token storage with simple Redis connection
+    ///
+    /// # Errors
+    ///
+    /// Returns `TokenError` if Redis client creation fails
     pub fn new(redis_url: &str) -> Result<Self, TokenError> {
         let client = Client::open(redis_url)?;
         Ok(Self { client })
     }
 
     /// Store a token with associated data
+    ///
+    /// # Errors
+    ///
+    /// Returns `TokenError` if:
+    /// - Redis connection fails
+    /// - Token data serialization fails
+    /// - Store operation fails
     pub async fn store_token(&self, token: &str, data: &TokenData) -> Result<(), TokenError> {
         let mut conn = self.get_connection().await?;
 
@@ -53,6 +64,13 @@ impl AsyncTokenStorage {
     }
 
     /// Get token data
+    ///
+    /// # Errors
+    ///
+    /// Returns `TokenError` if:
+    /// - Redis connection fails
+    /// - Token data deserialization fails
+    /// - Get operation fails
     pub async fn get_token(&self, token: &str) -> Result<Option<TokenData>, TokenError> {
         let mut conn = self.get_connection().await?;
 
@@ -72,6 +90,12 @@ impl AsyncTokenStorage {
     }
 
     /// Delete a token
+    ///
+    /// # Errors
+    ///
+    /// Returns `TokenError` if:
+    /// - Redis connection fails
+    /// - Delete operation fails
     pub async fn delete_token(&self, token: &str) -> Result<bool, TokenError> {
         let mut conn = self.get_connection().await?;
 

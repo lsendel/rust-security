@@ -1,5 +1,6 @@
 //! Threat detection adapter interface for bridging core security and threat modules
 
+#[cfg(feature = "threat-hunting")]
 use crate::core::security::SecurityEvent;
 #[cfg(feature = "threat-hunting")]
 use crate::event_conversion::convert_security_events;
@@ -8,12 +9,19 @@ use crate::threat_types::ThreatSecurityEvent;
 
 /// Adapter trait for threat detection modules
 #[cfg(feature = "threat-hunting")]
+#[async_trait::async_trait]
 pub trait ThreatDetectionAdapter {
     /// Process a security event through threat detection
-    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn process_security_event(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     /// Process multiple security events in batch
-    async fn process_security_events(&self, events: &[SecurityEvent]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_security_events(
+        &self,
+        events: &[SecurityEvent],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         for event in events {
             self.process_security_event(event).await?;
         }
@@ -51,18 +59,24 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "threat-hunting")]
     use super::*;
-    use crate::core::security::{SecurityContext, SecurityLevel, ViolationSeverity};
+    #[cfg(feature = "threat-hunting")]
     use crate::core::auth::AuthContext;
+    #[cfg(feature = "threat-hunting")]
+    use crate::core::security::{SecurityContext, SecurityLevel, ViolationSeverity};
+    #[cfg(feature = "threat-hunting")]
+    use chrono::{DateTime, Utc};
+    #[cfg(feature = "threat-hunting")]
     use std::collections::HashMap;
+    #[cfg(feature = "threat-hunting")]
     use std::net::IpAddr;
-    use std::time::SystemTime;
 
     #[cfg(feature = "threat-hunting")]
     #[tokio::test]
     async fn test_process_with_conversion() {
         let event = SecurityEvent {
-            timestamp: SystemTime::now(),
+            timestamp: Utc::now(),
             event_type: crate::core::security::SecurityEventType::AuthenticationFailure,
             security_context: SecurityContext {
                 client_ip: "127.0.0.1".parse::<IpAddr>().unwrap(),
@@ -77,12 +91,17 @@ mod tests {
             auth_context: None,
             details: HashMap::new(),
             severity: ViolationSeverity::High,
+            user_id: Some("test_user".to_string()),
         };
 
         let result = process_with_conversion(&event, |threat_event| async move {
-            assert_eq!(threat_event.severity, crate::threat_types::ThreatSeverity::High);
+            assert_eq!(
+                threat_event.severity,
+                crate::threat_types::ThreatSeverity::High
+            );
             Ok(())
-        }).await;
+        })
+        .await;
 
         assert!(result.is_ok());
     }

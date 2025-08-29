@@ -2,7 +2,6 @@ use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity
 use axum::http::StatusCode;
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;
-use once_cell::sync::Lazy;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -364,7 +363,7 @@ pub struct OverallStats {
 }
 
 /// Global per-IP rate limiter instance (lock-free on hot path)
-static PER_IP_RATE_LIMITER: Lazy<PerIpRateLimiter> = Lazy::new(|| {
+static PER_IP_RATE_LIMITER: std::sync::LazyLock<PerIpRateLimiter> = std::sync::LazyLock::new(|| {
     let config = PerIpRateLimitConfig::default();
     PerIpRateLimiter::new(config)
 });

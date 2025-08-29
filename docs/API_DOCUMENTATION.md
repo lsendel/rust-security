@@ -1,21 +1,111 @@
-# Rust Security Platform - Comprehensive API Documentation
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Authentication & Security](#authentication--security)
-3. [Auth Service API](#auth-service-api)
-4. [Policy Service API](#policy-service-api)
-5. [SOAR & Threat Detection API](#soar--threat-detection-api)
-6. [SDK Integration Guides](#sdk-integration-guides)
-7. [OpenAPI Specifications](#openapi-specifications)
-8. [Error Handling](#error-handling)
-9. [Rate Limiting & Pagination](#rate-limiting--pagination)
-10. [Troubleshooting Guide](#troubleshooting-guide)
+# API Integration Guide
 
 ## Overview
 
-The Rust Security Platform provides a comprehensive suite of security APIs including authentication, authorization, security orchestration, and threat detection. All services are designed for enterprise-scale deployments with high availability and security.
+This guide documents the comprehensive API architecture and integration patterns for the Rust Security Platform. The API system uses a microservices approach to provide scalable authentication, authorization, and security monitoring capabilities.
+
+## Architecture
+
+### Phase 1: Core API Services ✅
+- REST API endpoints with OpenAPI 3.0 specification
+- JWT-based authentication and authorization
+- Rate limiting and request validation
+- Comprehensive error handling and logging
+
+### Phase 2: Security Integration ✅  
+- **File**: `auth-service/src/auth_api.rs`
+- **Purpose**: Core authentication API endpoints
+- **Key Features**:
+  - OAuth 2.0 token introspection
+  - Multi-factor authentication flows
+  - Session management and refresh tokens
+  - Security event logging
+
+### Phase 3: Advanced APIs ✅
+- **File**: `auth-service/src/threat_adapter.rs` 
+- **Purpose**: Threat detection API integration
+- **Key Components**:
+  - Real-time threat analysis endpoints
+  - Security orchestration workflows
+  - Incident response automation
+  - Compliance reporting APIs
+
+## Key Components
+
+### 1. Authentication API (`/auth/*`)
+```http
+POST /auth/token
+Content-Type: application/json
+
+{
+  "grant_type": "client_credentials",
+  "client_id": "your-client-id",
+  "client_secret": "your-client-secret",
+  "scope": "read:users write:users"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "read:users write:users"
+}
+```
+
+### 2. Token Introspection (`/auth/introspect`)
+```http
+POST /auth/introspect
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/x-www-form-urlencoded
+
+token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...&token_type_hint=access_token
+```
+
+**Response:**
+```json
+{
+  "active": true,
+  "scope": "read:users write:users",
+  "client_id": "your-client-id",
+  "exp": 1640995200,
+  "iat": 1640991600
+}
+```
+
+### 3. Policy Authorization (`/policy/authorize`)
+```http
+POST /policy/authorize
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+Content-Type: application/json
+
+{
+  "principal": "user:alice",
+  "action": "read",
+  "resource": "document:confidential.pdf",
+  "context": {
+    "ip_address": "192.168.1.100",
+    "time_of_day": "business_hours"
+  }
+}
+```
+
+## Feature Flags
+
+The API system supports feature-based endpoint availability:
+
+```toml
+# Core API features
+[features]
+api-keys = []
+rate-limiting = []
+security-monitoring = []
+threat-hunting = []
+```
+
+When features are disabled, related endpoints return `404 Not Found`.
 
 **Base URLs:**
 - **Auth Service**: `http://localhost:8001` (development) | `https://api.rust-security.com/auth` (production)

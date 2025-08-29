@@ -5,7 +5,6 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;
-use once_cell::sync::Lazy;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};

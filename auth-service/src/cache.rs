@@ -72,6 +72,13 @@ pub struct Cache {
 
 impl Cache {
     /// Create a new cache instance
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Redis connection fails when Redis is enabled
+    /// - Cache configuration is invalid
+    /// - Memory allocation fails
     pub async fn new(config: CacheConfig) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let redis_client = if config.use_redis && config.redis_url.is_some() {
             match Client::open(config.redis_url.as_ref().unwrap().as_str()) {
@@ -165,6 +172,13 @@ impl Cache {
     }
 
     /// Set an item in cache
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Value serialization fails
+    /// - Memory allocation fails
+    /// - Cache operation fails
     pub async fn set<T>(&self, key: &str, value: &T, ttl: Option<Duration>) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     where
         T: Serialize,
@@ -198,6 +212,10 @@ impl Cache {
     }
 
     /// Delete an item from cache
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if cache deletion operation fails
     pub async fn delete(&self, key: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
@@ -216,6 +234,10 @@ impl Cache {
     }
 
     /// Clear all cached items
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if cache clear operation fails
     pub async fn clear(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Clear Redis if available
         if let Some(ref _client) = self.redis_client {

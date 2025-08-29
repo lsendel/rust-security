@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Timelike, Utc};
+use chrono::{DateTime, Utc, Timelike, Datelike};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -187,7 +187,63 @@ pub enum IndicatorType {
     Other,
 }
 
-/// Available mitigation actions
+impl ThreatIndicator {
+    pub fn new(
+        id: String,
+        indicator_type: IndicatorType,
+        value: String,
+        confidence: f64,
+        severity: ThreatSeverity,
+        source: String,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            id,
+            indicator_type,
+            value,
+            confidence,
+            first_seen: now,
+            last_seen: now,
+            source,
+            tags: HashSet::new(),
+            severity,
+            description: None,
+            created_at: now,
+            updated_at: now,
+            expires_at: None,
+            metadata: HashMap::new(),
+        }
+    }
+}
+
+impl ThreatContext {
+    pub fn new(
+        threat_id: String,
+        threat_type: String,
+        severity: ThreatSeverity,
+        source: String,
+        timestamp: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            attack_vector: None,
+            targeted_assets: HashSet::new(),
+            business_impact: BusinessImpact::Low,
+            regulatory_implications: Vec::new(),
+            related_cves: Vec::new(),
+            threat_actor_profile: None,
+            tactics_techniques_procedures: Vec::new(),
+            threat_id,
+            threat_type,
+            severity,
+            source,
+            timestamp,
+            affected_entities: Vec::new(),
+            indicators: Vec::new(),
+            metadata: HashMap::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MitigationAction {
     BlockIp { duration_hours: u32 },
@@ -234,6 +290,15 @@ pub struct ThreatContext {
     pub related_cves: Vec<String>,
     pub threat_actor_profile: Option<ThreatActorProfile>,
     pub tactics_techniques_procedures: Vec<String>,
+    // Additional fields for compatibility
+    pub threat_id: String,
+    pub threat_type: String,
+    pub severity: ThreatSeverity,
+    pub source: String,
+    pub timestamp: DateTime<Utc>,
+    pub affected_entities: Vec<String>,
+    pub indicators: Vec<String>,
+    pub metadata: HashMap<String, serde_json::Value>,
 }
 
 /// Business impact assessment
@@ -742,6 +807,14 @@ impl ThreatSignature {
                 related_cves: Vec::new(),
                 threat_actor_profile: None,
                 tactics_techniques_procedures: Vec::new(),
+                threat_id: uuid::Uuid::new_v4().to_string(),
+                threat_type: "unknown".to_string(),
+                severity: ThreatSeverity::Low,
+                source: "system".to_string(),
+                timestamp: Utc::now(),
+                affected_entities: Vec::new(),
+                indicators: Vec::new(),
+                metadata: std::collections::HashMap::new(),
             },
         }
     }

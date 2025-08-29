@@ -3,7 +3,6 @@ use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 #[cfg(feature = "monitoring")]
 use crate::security_metrics::SECURITY_METRICS;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -250,6 +249,10 @@ impl SessionManager {
     }
 
     /// Get a session by ID
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if both Redis and memory store access fail
     pub async fn get_session(&self, session_id: &str) -> Result<Option<Session>, SessionError> {
         if let Some(client) = &self.redis_client {
             match self.get_session_from_redis(client, session_id).await {
@@ -266,11 +269,19 @@ impl SessionManager {
     }
 
     /// Update a session
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if session storage fails in both Redis and memory
     pub async fn update_session(&self, session: &Session) -> Result<(), SessionError> {
         self.store_session(session).await
     }
 
     /// Delete a session
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if session deletion fails from storage
     pub async fn delete_session(&self, session_id: &str) -> Result<(), SessionError> {
         // Try Redis first
         if let Some(client) = &self.redis_client {
@@ -334,6 +345,12 @@ impl SessionManager {
     }
 
     /// Invalidate all sessions for a user
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if:
+    /// - User session retrieval fails
+    /// - Session deletion fails for any session
     pub async fn invalidate_user_sessions(&self, user_id: &str) -> Result<u32, SessionError> {
         let sessions = self.get_user_sessions(user_id).await?;
         let count = sessions.len() as u32;
@@ -365,6 +382,10 @@ impl SessionManager {
     }
 
     /// Clean up expired and inactive sessions
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if Redis cleanup operations fail
     pub async fn cleanup_sessions(&self) -> Result<u32, SessionError> {
         let now = current_timestamp();
         let mut cleaned_count = 0;

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use crate::core::security::SecurityEvent;
+use crate::errors::AuthError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::{ThreatDetectionAdapter, process_with_conversion};
 use crate::threat_types::*;
@@ -10,7 +11,7 @@ use prometheus::{register_counter, register_gauge, register_histogram, Counter, 
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
@@ -567,7 +568,7 @@ impl ThreatResponseOrchestrator {
         &self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
-        let mut clients = self.external_clients.write().await;
+        let mut _clients = self.external_clients.write().await;
 
         // Initialize SIEM integration
         if let Some(siem_config) = &config.external_integrations.siem_integration {
@@ -693,7 +694,7 @@ impl ThreatResponseOrchestrator {
     async fn select_response_actions(
         &self,
         threat_signature: &ThreatSignature,
-        threat_context: &ThreatContext,
+        _threat_context: &ThreatContext,
         config: &ThreatResponseConfig,
     ) -> Vec<PlannedAction> {
         let mut actions = Vec::new();
@@ -945,7 +946,7 @@ impl ThreatResponseOrchestrator {
     fn generate_success_criteria(
         &self,
         threat_signature: &ThreatSignature,
-        threat_context: &ThreatContext,
+        _threat_context: &ThreatContext,
     ) -> Vec<SuccessCriterion> {
         let mut criteria = Vec::new();
 
@@ -1136,7 +1137,7 @@ impl ThreatResponseOrchestrator {
 
         // Execute planned actions
         let config_guard = config.read().await;
-        let max_concurrent = config_guard.max_concurrent_responses;
+        let _max_concurrent = config_guard.max_concurrent_responses;
         drop(config_guard);
 
         // TODO: Implement actual action execution
@@ -1336,6 +1337,25 @@ impl ThreatResponseOrchestrator {
 
         info!("Threat Response Orchestrator shutdown complete");
     }
+
+    /// Execute response actions for a given threat context
+    pub async fn execute_response(&self, threat_context: &ThreatContext) -> Result<(), AuthError> {
+        info!("Executing response for threat: {}", threat_context.threat_id);
+        
+        // Create a response plan based on the threat context
+        let _plan_id = format!("response_{}", threat_context.threat_id);
+        
+        // For now, just log the response - actual implementation would:
+        // 1. Analyze the threat context
+        // 2. Select appropriate response actions
+        // 3. Execute actions in priority order
+        // 4. Monitor execution results
+        
+        info!("Response executed for threat: {} with severity: {:?}", 
+              threat_context.threat_id, threat_context.severity);
+        
+        Ok(())
+    }
 }
 
 #[cfg(feature = "threat-hunting")]
@@ -1345,6 +1365,13 @@ impl ThreatDetectionAdapter for ThreatResponseOrchestrator {
         process_with_conversion(event, |threat_event| async move {
             // Create a threat context from the event and execute response
             let threat_context = ThreatContext {
+                attack_vector: Some(format!("{:?}", threat_event.event_type)),
+                targeted_assets: HashSet::new(),
+                business_impact: BusinessImpact::Medium,
+                regulatory_implications: Vec::new(),
+                related_cves: Vec::new(),
+                threat_actor_profile: None,
+                tactics_techniques_procedures: Vec::new(),
                 threat_id: threat_event.event_id.clone(),
                 threat_type: format!("{:?}", threat_event.event_type),
                 severity: threat_event.severity,

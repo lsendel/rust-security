@@ -1,7 +1,6 @@
 use crate::{AppState, mint_local_tokens_for_subject};
 use axum::extract::State;
 use axum::{extract::Query, response::IntoResponse, Json};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

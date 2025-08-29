@@ -2,7 +2,6 @@
 //!
 //! This module defines domain-specific error types for SOAR case management operations.
 
-
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -134,7 +133,7 @@ impl SoarError {
     }
 
     /// Get the error category for logging and monitoring
-    pub fn category(&self) -> ErrorCategory {
+    pub const fn category(&self) -> ErrorCategory {
         match self {
             Self::CaseNotFound { .. } | Self::CaseAlreadyExists { .. } => ErrorCategory::NotFound,
             Self::InvalidInput { .. } | Self::InvalidStatusTransition { .. } => {
@@ -157,7 +156,7 @@ impl SoarError {
     }
 
     /// Check if this is a retryable error
-    pub fn is_retryable(&self) -> bool {
+    pub const fn is_retryable(&self) -> bool {
         match self {
             Self::DatabaseError { source, .. } => {
                 // Check if it's a transient database error

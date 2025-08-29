@@ -153,6 +153,10 @@ pub struct CorrelationMetrics {
     pub avg_processing_time_ms: f64,
     /// Rule effectiveness metrics
     pub rule_metrics: HashMap<String, RuleMetrics>,
+    /// Total alerts processed
+    pub total_alerts_processed: u64,
+    /// Correlations found
+    pub correlations_found: u64,
 }
 
 /// Metrics for individual correlation rules
@@ -166,6 +170,80 @@ pub struct RuleMetrics {
     pub false_positive_rate: f64,
     /// Average confidence score
     pub avg_confidence: f64,
+}
+
+/// Workflow execution metrics
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct WorkflowMetrics {
+    /// Workflow ID
+    pub workflow_id: String,
+    /// Total executions
+    pub total_executions: u64,
+    /// Successful executions
+    pub successful_executions: u64,
+    /// Failed executions
+    pub failed_executions: u64,
+    /// Average execution time in milliseconds
+    pub avg_execution_time_ms: f64,
+    /// Last execution timestamp
+    pub last_execution: Option<DateTime<Utc>>,
+    /// Last success timestamp
+    pub last_success: Option<DateTime<Utc>>,
+    /// Last failure timestamp
+    pub last_failure: Option<DateTime<Utc>>,
+}
+
+/// Case management metrics
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CaseMetrics {
+    /// Total cases created
+    pub total_cases: u64,
+    /// Open cases count
+    pub open_cases: u64,
+    /// Closed cases count
+    pub closed_cases: u64,
+    /// Average resolution time in hours
+    pub avg_resolution_time_hours: f64,
+    /// SLA compliance rate
+    pub sla_compliance_rate: f64,
+    /// Cases by severity
+    pub cases_by_severity: HashMap<AlertSeverity, u64>,
+}
+
+/// System performance metrics
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct SystemMetrics {
+    /// System uptime in seconds
+    pub uptime_seconds: u64,
+    /// Memory usage percentage
+    pub memory_usage_percent: f64,
+    /// CPU usage percentage
+    pub cpu_usage_percent: f64,
+    /// Active connections count
+    pub active_connections: u64,
+    /// Total requests processed
+    pub total_requests: u64,
+    /// Requests per second
+    pub requests_per_second: f64,
+    /// Error rate percentage
+    pub error_rate_percent: f64,
+}
+
+/// Case status enumeration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum CaseStatus {
+    /// Case is newly created
+    New,
+    /// Case is being investigated
+    InProgress,
+    /// Case is pending external input
+    Pending,
+    /// Case is resolved
+    Resolved,
+    /// Case is closed
+    Closed,
+    /// Case has been escalated
+    Escalated,
 }
 
 /// Correlation error types
@@ -309,6 +387,175 @@ pub struct HealthCheckConfig {
     pub interval_minutes: u32,
     pub timeout_seconds: u64,
     pub failure_threshold: u32,
+}
+
+/// Integration health status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum IntegrationHealth {
+    /// Integration is healthy and operational
+    Healthy,
+    /// Integration has degraded performance
+    Degraded,
+    /// Integration is unhealthy or unavailable
+    Unhealthy,
+    /// Integration health status is unknown
+    Unknown,
+}
+
+/// Integration health information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrationHealthInfo {
+    /// Integration ID
+    pub integration_id: String,
+    /// Current health status
+    pub status: IntegrationHealth,
+    /// Last health check timestamp
+    pub last_check: DateTime<Utc>,
+    /// Health check response time in milliseconds
+    pub response_time_ms: u64,
+    /// Error message if unhealthy
+    pub error_message: Option<String>,
+    /// Additional metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// Integration metrics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrationMetrics {
+    /// Integration name/id
+    pub integration_name: String,
+    /// Total requests made
+    pub total_requests: u64,
+    /// Successful requests
+    pub successful_requests: u64,
+    /// Failed requests
+    pub failed_requests: u64,
+    /// Average response time in milliseconds
+    pub avg_response_time_ms: f64,
+    /// Last request timestamp
+    pub last_request: Option<DateTime<Utc>>,
+    /// Error rate (0.0 to 1.0)
+    pub error_rate: f64,
+    /// Last success timestamp
+    pub last_success: Option<DateTime<Utc>>,
+    /// Last failure timestamp
+    pub last_failure: Option<DateTime<Utc>>,
+    /// Health status
+    pub health_status: IntegrationHealth,
+}
+
+/// Integration error types
+#[derive(Debug, thiserror::Error)]
+pub enum IntegrationError {
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+    #[error("Connection error: {0}")]
+    Connection(String),
+    #[error("Authentication error: {0}")]
+    Authentication(String),
+    #[error("Request error: {0}")]
+    Request(String),
+    #[error("Response error: {0}")]
+    Response(String),
+    #[error("Timeout error: {0}")]
+    Timeout(String),
+    #[error("Health check error: {0}")]
+    HealthCheck(String),
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
+/// Correlation condition for rule matching
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrelationCondition {
+    /// Field to check
+    pub field: String,
+    /// Operator for comparison
+    pub operator: CorrelationOperator,
+    /// Value to compare against
+    pub value: serde_json::Value,
+}
+
+/// Correlation operators
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CorrelationOperator {
+    Equals,
+    NotEquals,
+    GreaterThan,
+    LessThan,
+    Contains,
+    StartsWith,
+    EndsWith,
+    Regex,
+}
+
+/// Types of correlation patterns
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CorrelationType {
+    /// Time-based correlation
+    Temporal,
+    /// IP address based correlation
+    IpBased,
+    /// User based correlation
+    UserBased,
+    /// Asset based correlation
+    AssetBased,
+    /// Pattern based correlation
+    PatternBased,
+    /// Custom correlation type
+    Custom(String),
+}
+
+/// SOAR system events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoarEvent {
+    /// Event ID
+    pub id: String,
+    /// Event type
+    pub event_type: SoarEventType,
+    /// Event timestamp
+    pub timestamp: DateTime<Utc>,
+    /// Event data payload
+    pub data: serde_json::Value,
+    /// Event source
+    pub source: String,
+    /// Event metadata
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+/// Types of SOAR events
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SoarEventType {
+    /// Alert received from external system
+    AlertReceived,
+    /// Workflow started
+    WorkflowStarted,
+    /// Workflow completed successfully
+    WorkflowCompleted,
+    /// Workflow failed
+    WorkflowFailed,
+    /// Workflow paused for approval
+    WorkflowPaused,
+    /// Approval required for workflow step
+    ApprovalRequired,
+    /// Approval granted
+    ApprovalGranted,
+    /// Approval denied
+    ApprovalDenied,
+    /// Escalation triggered
+    EscalationTriggered,
+    /// Case created
+    CaseCreated,
+    /// Case updated
+    CaseUpdated,
+    /// Case closed
+    CaseClosed,
+    /// Integration health changed
+    IntegrationHealthChanged,
+    /// Configuration updated
+    ConfigurationUpdated,
+    /// Custom event type
+    Custom(String),
 }
 
 /// Case management configuration

@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -115,93 +114,94 @@ pub enum RedactionStrategy {
 }
 
 /// Pattern definitions for sensitive data detection
-static SENSITIVE_PATTERNS: Lazy<HashMap<SensitiveDataType, Regex>> = Lazy::new(|| {
-    let mut patterns = HashMap::new();
+static SENSITIVE_PATTERNS: std::sync::LazyLock<HashMap<SensitiveDataType, Regex>> =
+    std::sync::LazyLock::new(|| {
+        let mut patterns = HashMap::new();
 
-    // Email addresses
-    patterns.insert(
-        SensitiveDataType::EmailAddress,
-        Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
-    );
+        // Email addresses
+        patterns.insert(
+            SensitiveDataType::EmailAddress,
+            Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
+        );
 
-    // Phone numbers (various formats) - matches US phone numbers
-    patterns.insert(
-        SensitiveDataType::PhoneNumber,
-        Regex::new(r"(?:\+?1[-.\s]?)?\(?[2-9][0-9]{2}\)?[-.\s]?[2-9][0-9]{2}[-.\s]?[0-9]{4}")
+        // Phone numbers (various formats) - matches US phone numbers
+        patterns.insert(
+            SensitiveDataType::PhoneNumber,
+            Regex::new(r"(?:\+?1[-.\s]?)?\(?[2-9][0-9]{2}\)?[-.\s]?[2-9][0-9]{2}[-.\s]?[0-9]{4}")
+                .unwrap(),
+        );
+
+        // Social Security Numbers - more restrictive to avoid false positives
+        patterns.insert(
+            SensitiveDataType::SocialSecurityNumber,
+            Regex::new(r"\b[0-9]{3}-[0-9]{2}-[0-9]{4}\b").unwrap(),
+        );
+
+        // Credit Card Numbers (basic pattern)
+        patterns.insert(
+            SensitiveDataType::CreditCardNumber,
+            Regex::new(r"\b(?:\d{4}[-\s]?){3}\d{4}\b").unwrap(),
+        );
+
+        // IPv4 addresses
+        patterns.insert(
+            SensitiveDataType::IpAddress,
+            Regex::new(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b").unwrap(),
+        );
+
+        // MAC addresses
+        patterns.insert(
+            SensitiveDataType::MacAddress,
+            Regex::new(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b").unwrap(),
+        );
+
+        // UUIDs
+        patterns.insert(
+            SensitiveDataType::Uuid,
+            Regex::new(
+                r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+            )
             .unwrap(),
-    );
+        );
 
-    // Social Security Numbers - more restrictive to avoid false positives
-    patterns.insert(
-        SensitiveDataType::SocialSecurityNumber,
-        Regex::new(r"\b[0-9]{3}-[0-9]{2}-[0-9]{4}\b").unwrap(),
-    );
+        // JWT tokens (header.payload.signature)
+        patterns.insert(
+            SensitiveDataType::JwtToken,
+            Regex::new(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b").unwrap(),
+        );
 
-    // Credit Card Numbers (basic pattern)
-    patterns.insert(
-        SensitiveDataType::CreditCardNumber,
-        Regex::new(r"\b(?:\d{4}[-\s]?){3}\d{4}\b").unwrap(),
-    );
+        // API keys (specific patterns for common API key formats)
+        patterns.insert(
+            SensitiveDataType::ApiKey,
+            Regex::new(r"\b(?:sk_|pk_)[a-zA-Z0-9]{20,}\b").unwrap(),
+        );
 
-    // IPv4 addresses
-    patterns.insert(
-        SensitiveDataType::IpAddress,
-        Regex::new(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b").unwrap(),
-    );
+        // Passwords in logs (password=value patterns)
+        patterns.insert(
+            SensitiveDataType::Password,
+            Regex::new(r"(?i)(?:password|pwd|pass)[:=]\s*[^\s&]+").unwrap(),
+        );
 
-    // MAC addresses
-    patterns.insert(
-        SensitiveDataType::MacAddress,
-        Regex::new(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b").unwrap(),
-    );
+        // Database connection strings
+        patterns.insert(
+            SensitiveDataType::DatabaseConnectionString,
+            Regex::new(r"(?i)(?:mongodb|mysql|postgres|redis)://[^\s]+").unwrap(),
+        );
 
-    // UUIDs
-    patterns.insert(
-        SensitiveDataType::Uuid,
-        Regex::new(
-            r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
-        )
-        .unwrap(),
-    );
+        // File paths with sensitive indicators
+        patterns.insert(
+            SensitiveDataType::FilePath,
+            Regex::new(r"(?i)(?:/[^/\s]*(?:secret|key|password|token|private)[^/\s]*)+").unwrap(),
+        );
 
-    // JWT tokens (header.payload.signature)
-    patterns.insert(
-        SensitiveDataType::JwtToken,
-        Regex::new(r"\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b").unwrap(),
-    );
+        // Authorization codes and tokens (more specific pattern to avoid false positives)
+        patterns.insert(
+            SensitiveDataType::AuthorizationCode,
+            Regex::new(r"\b[A-Za-z0-9_-]{40,}\b").unwrap(),
+        );
 
-    // API keys (specific patterns for common API key formats)
-    patterns.insert(
-        SensitiveDataType::ApiKey,
-        Regex::new(r"\b(?:sk_|pk_)[a-zA-Z0-9]{20,}\b").unwrap(),
-    );
-
-    // Passwords in logs (password=value patterns)
-    patterns.insert(
-        SensitiveDataType::Password,
-        Regex::new(r"(?i)(?:password|pwd|pass)[:=]\s*[^\s&]+").unwrap(),
-    );
-
-    // Database connection strings
-    patterns.insert(
-        SensitiveDataType::DatabaseConnectionString,
-        Regex::new(r"(?i)(?:mongodb|mysql|postgres|redis)://[^\s]+").unwrap(),
-    );
-
-    // File paths with sensitive indicators
-    patterns.insert(
-        SensitiveDataType::FilePath,
-        Regex::new(r"(?i)(?:/[^/\s]*(?:secret|key|password|token|private)[^/\s]*)+").unwrap(),
-    );
-
-    // Authorization codes and tokens (more specific pattern to avoid false positives)
-    patterns.insert(
-        SensitiveDataType::AuthorizationCode,
-        Regex::new(r"\b[A-Za-z0-9_-]{40,}\b").unwrap(),
-    );
-
-    patterns
-});
+        patterns
+    });
 
 /// Comprehensive PII/SPI redaction utility
 pub struct PiiSpiRedactor {
@@ -279,7 +279,7 @@ impl PiiSpiRedactor {
 
         // Final length check and truncation
         if redacted.len() > 1000 {
-            redacted = format!("{}...[TRUNCATED]", &redacted[0..997]);
+            redacted = format!("{prefix}...[TRUNCATED]", prefix = &redacted[0..997]);
         }
 
         redacted
@@ -428,7 +428,7 @@ impl PiiSpiRedactor {
 }
 
 /// Global PII/SPI redactor instance
-static GLOBAL_REDACTOR: Lazy<PiiSpiRedactor> = Lazy::new(|| {
+static GLOBAL_REDACTOR: std::sync::LazyLock<PiiSpiRedactor> = std::sync::LazyLock::new(|| {
     PiiSpiRedactor::new()
         .with_aggressive_mode(std::env::var("PII_AGGRESSIVE_MODE").is_ok_and(|v| v == "true"))
 });

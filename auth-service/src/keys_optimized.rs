@@ -1,7 +1,6 @@
 // Optimized key management implementation using ring for security
 // This provides non-blocking RSA key generation and better caching
 
-use once_cell::sync::Lazy;
 use ring::{
     rand::SystemRandom,
     signature::{Ed25519KeyPair, KeyPair},

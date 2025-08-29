@@ -2,23 +2,23 @@
 //! Comprehensive property testing for security-critical components
 
 use proptest::prelude::*;
-use proptest::strategy::{Strategy, Just};
+use proptest::strategy::{Just, Strategy};
 use proptest::test_runner::TestRunner;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 #[cfg(test)]
 mod property_tests {
     use proptest::prelude::*;
     use proptest::test_runner::{Config, TestRunner};
+    use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
     use std::time::Duration;
-    use serde::{Deserialize, Serialize};
-    use tracing::{info, warn, error};
+    use tracing::{error, info, warn};
 
     /// Property-based testing configuration for security components
     #[derive(Debug, Clone)]
@@ -75,7 +75,10 @@ pub struct PropertyTestResult {
     pub passed: bool,
     pub cases_tested: u32,
     pub failures: Vec<PropertyTestFailure>,
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(
+        serialize_with = "serialize_duration",
+        deserialize_with = "deserialize_duration"
+    )]
     pub duration: Duration,
     pub coverage_info: Option<CoverageInfo>,
 }
@@ -137,9 +140,8 @@ impl SecurityStrategies {
             prop::string::string_regex(r"[A-Za-z0-9_-]+").unwrap(),
             prop::string::string_regex(r"[A-Za-z0-9_-]+").unwrap(),
             prop::string::string_regex(r"[A-Za-z0-9_-]+").unwrap(),
-        ).prop_map(|(header, payload, signature)| {
-            format!("{}.{}.{}", header, payload, signature)
-        })
+        )
+            .prop_map(|(header, payload, signature)| format!("{header}.{payload}.{signature}"))
     }
 
     /// Generate malformed JWT tokens
@@ -148,13 +150,18 @@ impl SecurityStrategies {
             // Missing parts
             Just("header.payload".to_string()),
             Just("header".to_string()),
-            Just("".to_string()),
+            Just(String::new()),
             // Too many parts
             Just("a.b.c.d.e".to_string()),
             // Invalid base64
             Just("invalid!.invalid!.invalid!".to_string()),
             // Extremely long tokens
-            Just(format!("{}.{}.{}", "A".repeat(10000), "B".repeat(10000), "C".repeat(10000))),
+            Just(format!(
+                "{a}.{b}.{c}",
+                a = "A".repeat(10000),
+                b = "B".repeat(10000),
+                c = "C".repeat(10000)
+            )),
         ]
     }
 
@@ -190,9 +197,12 @@ impl SecurityStrategies {
             Just("emails[type eq \"work\"].value".to_string()),
             Just("name.familyName co \"O'Malley\"".to_string()),
             // Complex filters
-            Just("userName eq \"john\" and emails[type eq \"work\" and value co \"@example.com\"]".to_string()),
+            Just(
+                "userName eq \"john\" and emails[type eq \"work\" and value co \"@example.com\"]"
+                    .to_string()
+            ),
             // Edge cases
-            Just("".to_string()),
+            Just(String::new()),
             Just("userName".to_string()),
             Just("userName eq".to_string()),
         ]
@@ -209,7 +219,10 @@ impl SecurityStrategies {
             // NoSQL injection
             Just("userName eq \"{$ne: null}\"".to_string()),
             // Extremely long filters
-            Just(format!("userName eq \"{}\"", "A".repeat(100_000))),
+            Just(format!(
+                "userName eq \"{repeated}\"",
+                repeated = "A".repeat(100_000)
+            )),
             // Nested injection
             Just("emails[value eq \"test@example.com'; DROP TABLE emails; --\"].type".to_string()),
         ]
@@ -220,7 +233,7 @@ impl SecurityStrategies {
         prop::collection::hash_map(
             prop::string::string_regex(r"[A-Za-z-]{1,50}").unwrap(),
             prop::string::string_regex(r"[^\r\n]{0,1000}").unwrap(),
-            0..20
+            0..20,
         )
     }
 
@@ -241,7 +254,7 @@ impl SecurityStrategies {
         prop::collection::hash_map(
             prop::string::string_regex(r"[A-Za-z-]{1,50}").unwrap(),
             malicious_values,
-            1..5
+            1..5,
         )
     }
 }
@@ -257,21 +270,21 @@ impl InputValidationProperties {
         let start_time = std::time::Instant::now();
 
         let strategy = SecurityStrategies::oauth_client_id();
-        
+
         for case_num in 0..1000 {
             match runner.run(&strategy, |client_id| {
                 // Test the actual validation function
                 if !is_valid_client_id(&client_id) {
-                    return Err(proptest::test_runner::TestCaseError::fail(
-                        format!("Valid client ID rejected: {}", client_id)
-                    ));
+                    return Err(proptest::test_runner::TestCaseError::fail(format!(
+                        "Valid client ID rejected: {client_id}"
+                    )));
                 }
                 Ok(())
             }) {
                 Err(e) => {
                     failures.push(PropertyTestFailure {
                         case_number: case_num,
-                        input: format!("Case {}", case_num),
+                        input: format!("Case {case_num}"),
                         error: e.to_string(),
                         shrunk_input: None,
                     });
@@ -297,21 +310,21 @@ impl InputValidationProperties {
         let start_time = std::time::Instant::now();
 
         let strategy = SecurityStrategies::malicious_client_id();
-        
+
         for case_num in 0..1000 {
             match runner.run(&strategy, |malicious_input| {
                 // Test that malicious input is rejected
                 if is_valid_client_id(&malicious_input) {
-                    return Err(proptest::test_runner::TestCaseError::fail(
-                        format!("Malicious input accepted: {}", malicious_input)
-                    ));
+                    return Err(proptest::test_runner::TestCaseError::fail(format!(
+                        "Malicious input accepted: {malicious_input}"
+                    )));
                 }
                 Ok(())
             }) {
                 Err(e) => {
                     failures.push(PropertyTestFailure {
                         case_number: case_num,
-                        input: format!("Case {}", case_num),
+                        input: format!("Case {case_num}"),
                         error: e.to_string(),
                         shrunk_input: None,
                     });
@@ -340,28 +353,28 @@ impl InputValidationProperties {
             SecurityStrategies::jwt_token(),
             SecurityStrategies::malformed_jwt_token(),
         ];
-        
+
         for case_num in 0..1000 {
             match runner.run(&strategy, |token| {
                 let validation_result = validate_jwt_token(&token);
-                
+
                 // Property: validation should never panic
                 // Property: validation should complete within reasonable time
                 let validation_start = std::time::Instant::now();
                 let _ = validate_jwt_token(&token);
                 let validation_time = validation_start.elapsed();
-                
+
                 if validation_time > Duration::from_millis(100) {
-                    return Err(proptest::test_runner::TestCaseError::fail(
-                        format!("JWT validation took too long: {:?}", validation_time)
-                    ));
+                    return Err(proptest::test_runner::TestCaseError::fail(format!(
+                        "JWT validation took too long: {validation_time:?}"
+                    )));
                 }
 
                 // Property: result should be consistent
                 let second_result = validate_jwt_token(&token);
                 if validation_result != second_result {
                     return Err(proptest::test_runner::TestCaseError::fail(
-                        "JWT validation results inconsistent".to_string()
+                        "JWT validation results inconsistent".to_string(),
                     ));
                 }
 
@@ -370,7 +383,7 @@ impl InputValidationProperties {
                 Err(e) => {
                     failures.push(PropertyTestFailure {
                         case_number: case_num,
-                        input: format!("Case {}", case_num),
+                        input: format!("Case {case_num}"),
                         error: e.to_string(),
                         shrunk_input: None,
                     });
@@ -399,17 +412,15 @@ impl InputValidationProperties {
             SecurityStrategies::scim_filter(),
             SecurityStrategies::malicious_scim_filter(),
         ];
-        
+
         for case_num in 0..1000 {
             match runner.run(&strategy, |filter| {
                 // Property: parsing should never panic
-                let parse_result = std::panic::catch_unwind(|| {
-                    parse_scim_filter(&filter)
-                });
+                let parse_result = std::panic::catch_unwind(|| parse_scim_filter(&filter));
 
                 if parse_operation_result.is_err() {
                     return Err(proptest::test_runner::TestCaseError::fail(
-                        "SCIM filter parsing panicked".to_string()
+                        "SCIM filter parsing panicked".to_string(),
                     ));
                 }
 
@@ -417,9 +428,9 @@ impl InputValidationProperties {
                 if filter.contains("DROP TABLE") || filter.contains("'; --") {
                     match parse_scim_filter(&filter) {
                         Ok(_) => {
-                            return Err(proptest::test_runner::TestCaseError::fail(
-                                format!("Malicious SCIM filter accepted: {}", filter)
-                            ));
+                            return Err(proptest::test_runner::TestCaseError::fail(format!(
+                                "Malicious SCIM filter accepted: {filter}"
+                            )));
                         }
                         Err(_) => {} // Expected
                     }
@@ -430,7 +441,7 @@ impl InputValidationProperties {
                 Err(e) => {
                     failures.push(PropertyTestFailure {
                         case_number: case_num,
-                        input: format!("Case {}", case_num),
+                        input: format!("Case {case_num}"),
                         error: e.to_string(),
                         shrunk_input: None,
                     });
@@ -465,22 +476,22 @@ impl RateLimitingProperties {
             1u32..1000u32, // Request count
             1u64..3600u64, // Time window in seconds
         );
-        
+
         for case_num in 0..500 {
             match runner.run(&strategy, |(ip, request_count, time_window)| {
                 // Property: rate limiter should never allow more requests than configured
                 let rate_limit = 100; // requests per minute
                 let time_window_duration = Duration::from_secs(time_window);
-                
+
                 // Simulate requests
                 let allowed_requests = simulate_rate_limiting(ip, request_count, time_window_duration, rate_limit);
-                
+
                 // Calculate expected maximum
                 let expected_max = (rate_limit as f64 * time_window as f64 / 60.0).ceil() as u32;
-                
+
                 if allowed_requests > expected_max {
                     return Err(proptest::test_runner::TestCaseError::fail(
-                        format!("Rate limiter allowed {} requests, expected max {}", allowed_requests, expected_max)
+                        format!("Rate limiter allowed {allowed_requests} requests, expected max {expected_max}")
                     ));
                 }
 
@@ -489,7 +500,7 @@ impl RateLimitingProperties {
                 Err(e) => {
                     failures.push(PropertyTestFailure {
                         case_number: case_num,
-                        input: format!("Case {}", case_num),
+                        input: format!("Case {case_num}"),
                         error: e.to_string(),
                         shrunk_input: None,
                     });
@@ -521,20 +532,20 @@ impl SessionManagementProperties {
 
         let strategy = (
             prop::string::string_regex(r"[a-zA-Z0-9]{32}").unwrap(), // Session ID
-            1u64..86400u64, // TTL in seconds
+            1u64..86400u64,                                          // TTL in seconds
         );
-        
+
         for case_num in 0..1000 {
             match runner.run(&strategy, |(session_id, ttl)| {
                 // Property: session IDs should be unique
                 let session1 = create_session(&session_id, Duration::from_secs(ttl));
                 let session2 = create_session(&session_id, Duration::from_secs(ttl));
-                
+
                 // Property: sessions should expire after TTL
                 let expired = is_session_expired(&session1, Duration::from_secs(ttl + 1));
                 if !expired {
                     return Err(proptest::test_runner::TestCaseError::fail(
-                        "Session did not expire after TTL".to_string()
+                        "Session did not expire after TTL".to_string(),
                     ));
                 }
 
@@ -542,7 +553,7 @@ impl SessionManagementProperties {
                 let not_expired = is_session_expired(&session1, Duration::from_secs(ttl / 2));
                 if not_expired {
                     return Err(proptest::test_runner::TestCaseError::fail(
-                        "Session expired before TTL".to_string()
+                        "Session expired before TTL".to_string(),
                     ));
                 }
 
@@ -551,7 +562,7 @@ impl SessionManagementProperties {
                 Err(e) => {
                     failures.push(PropertyTestFailure {
                         case_number: case_num,
-                        input: format!("Case {}", case_num),
+                        input: format!("Case {case_num}"),
                         error: e.to_string(),
                         shrunk_input: None,
                     });
@@ -591,16 +602,22 @@ impl PropertyTestRunner {
         let start_time = std::time::Instant::now();
 
         // Input validation tests
-        self.results.push(InputValidationProperties::test_valid_inputs_accepted());
-        self.results.push(InputValidationProperties::test_malicious_inputs_rejected());
-        self.results.push(InputValidationProperties::test_jwt_validation_properties());
-        self.results.push(InputValidationProperties::test_scim_filter_properties());
+        self.results
+            .push(InputValidationProperties::test_valid_inputs_accepted());
+        self.results
+            .push(InputValidationProperties::test_malicious_inputs_rejected());
+        self.results
+            .push(InputValidationProperties::test_jwt_validation_properties());
+        self.results
+            .push(InputValidationProperties::test_scim_filter_properties());
 
         // Rate limiting tests
-        self.results.push(RateLimitingProperties::test_rate_limiting_invariants());
+        self.results
+            .push(RateLimitingProperties::test_rate_limiting_invariants());
 
         // Session management tests
-        self.results.push(SessionManagementProperties::test_session_security_properties());
+        self.results
+            .push(SessionManagementProperties::test_session_security_properties());
 
         let total_duration = start_time.elapsed();
         let passed_tests = self.results.iter().filter(|r| r.passed).count();
@@ -620,7 +637,10 @@ impl PropertyTestRunner {
         };
 
         if summary.failed_tests > 0 {
-            error!("Property testing completed with {} failures", summary.failed_tests);
+            error!(
+                "Property testing completed with {} failures",
+                summary.failed_tests
+            );
         } else {
             info!("All property tests passed successfully");
         }
@@ -632,23 +652,42 @@ impl PropertyTestRunner {
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
         report.push_str("# Property Testing Report\n\n");
-        
+
         for result in &self.results {
             report.push_str(&format!("## Test: {}\n", operation_result.test_name));
-            report.push_str(&format!("- **Status**: {}\n", if operation_result.passed { "✅ PASSED" } else { "❌ FAILED" }));
-            report.push_str(&format!("- **Cases Tested**: {}\n", operation_result.cases_tested));
-            report.push_str(&format!("- **Duration**: {:?}\n", operation_result.duration));
-            
+            report.push_str(&format!(
+                "- **Status**: {}\n",
+                if operation_result.passed {
+                    "✅ PASSED"
+                } else {
+                    "❌ FAILED"
+                }
+            ));
+            report.push_str(&format!(
+                "- **Cases Tested**: {}\n",
+                operation_result.cases_tested
+            ));
+            report.push_str(&format!(
+                "- **Duration**: {:?}\n",
+                operation_result.duration
+            ));
+
             if !operation_result.failures.is_empty() {
-                report.push_str(&format!("- **Failures**: {}\n", operation_result.failures.len()));
+                report.push_str(&format!(
+                    "- **Failures**: {}\n",
+                    operation_result.failures.len()
+                ));
                 for failure in &operation_result.failures {
-                    report.push_str(&format!("  - Case {}: {}\n", failure.case_number, failure.error));
+                    report.push_str(&format!(
+                        "  - Case {}: {}\n",
+                        failure.case_number, failure.error
+                    ));
                 }
             }
-            
+
             report.push_str("\n");
         }
-        
+
         report
     }
 }
@@ -661,7 +700,10 @@ pub struct PropertyTestSummary {
     pub failed_tests: usize,
     pub total_cases: u32,
     pub total_failures: usize,
-    #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
+    #[serde(
+        serialize_with = "serialize_duration",
+        deserialize_with = "deserialize_duration"
+    )]
     pub total_duration: Duration,
     pub success_rate: f64,
     pub results: Vec<PropertyTestResult>,
@@ -669,8 +711,11 @@ pub struct PropertyTestSummary {
 
 // Mock functions for testing (replace with actual implementations)
 fn is_valid_client_id(client_id: &str) -> bool {
-    client_id.len() >= 8 && client_id.len() <= 64 && 
-    client_id.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    client_id.len() >= 8
+        && client_id.len() <= 64
+        && client_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
 }
 
 fn validate_jwt_token(token: &str) -> Result<bool, String> {
@@ -688,7 +733,12 @@ fn parse_scim_filter(filter: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn simulate_rate_limiting(ip: IpAddr, request_count: u32, time_window: Duration, rate_limit: u32) -> u32 {
+fn simulate_rate_limiting(
+    ip: IpAddr,
+    request_count: u32,
+    time_window: Duration,
+    rate_limit: u32,
+) -> u32 {
     // Mock implementation
     std::cmp::min(request_count, rate_limit)
 }
@@ -727,9 +777,9 @@ mod tests {
     async fn test_property_test_runner() {
         let config = PropertyTestConfig::default();
         let mut runner = PropertyTestRunner::new(config);
-        
+
         let summary = runner.run_all_tests().await;
-        
+
         assert!(summary.total_tests > 0);
         assert!(summary.success_rate >= 0.0 && summary.success_rate <= 1.0);
     }
@@ -737,12 +787,12 @@ mod tests {
     #[test]
     fn test_security_strategies() {
         let mut runner = TestRunner::default();
-        
+
         // Test OAuth client ID generation
         let client_id_strategy = SecurityStrategies::oauth_client_id();
         let client_id = client_id_strategy.new_tree(&mut runner).unwrap().current();
         assert!(client_id.len() >= 8 && client_id.len() <= 64);
-        
+
         // Test malicious input generation
         let malicious_strategy = SecurityStrategies::malicious_client_id();
         let malicious_input = malicious_strategy.new_tree(&mut runner).unwrap().current();

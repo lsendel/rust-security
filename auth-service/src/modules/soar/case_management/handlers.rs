@@ -102,7 +102,7 @@ pub struct SlaViolation {
 }
 
 /// SLA violation types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum SlaViolationType {
     /// Response time violation
     ResponseTime,
@@ -167,7 +167,7 @@ impl CaseManagementSystem {
 
         // Set due date based on SLA
         case.due_date = Some(
-            Utc::now() + chrono::Duration::hours(self.calculate_sla_duration(priority).num_hours()),
+            Utc::now() + chrono::Duration::hours(Self::calculate_sla_duration(priority).num_hours()),
         );
 
         // Save to repository
@@ -274,26 +274,25 @@ impl CaseManagementSystem {
 
     /// Apply a case template
     async fn apply_template(&self, case: &mut SecurityCase, template_id: &str) -> SoarResult<()> {
-        let templates = self.case_templates.read().await;
-        let template =
-            templates
-                .get(template_id)
-                .ok_or_else(|| SoarError::TemplateProcessingFailed {
-                    template_id: template_id.to_string(),
-                    reason: "Template not found".to_string(),
-                })?;
+        let template = self.case_templates.read().await
+            .get(template_id)
+            .cloned()
+            .ok_or_else(|| SoarError::TemplateProcessingFailed {
+                template_id: template_id.to_string(),
+                reason: "Template not found".to_string(),
+            })?;
 
         case.add_tags(template.default_tags.clone());
         case.priority = template.default_priority;
         case.due_date = Some(
-            Utc::now() + chrono::Duration::hours(template.sla_config.resolution_time_hours as i64),
+            Utc::now() + chrono::Duration::hours(i64::from(template.sla_config.resolution_time_hours)),
         );
 
         Ok(())
     }
 
     /// Calculate SLA duration based on priority
-    fn calculate_sla_duration(&self, priority: CasePriority) -> Duration {
+    const fn calculate_sla_duration(priority: CasePriority) -> Duration {
         match priority {
             CasePriority::Critical => Duration::hours(4),
             CasePriority::High => Duration::hours(12),
@@ -331,7 +330,7 @@ impl CaseManagementSystem {
                 {
                     let _ = self.sla_tracker.record_violation(
                         &case.id,
-                        SlaViolationType::ResolutionTime,
+                        &SlaViolationType::ResolutionTime,
                         due_date,
                         now,
                     );
@@ -343,8 +342,15 @@ impl CaseManagementSystem {
     }
 }
 
+impl Default for SlaTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SlaTracker {
     /// Create a new SLA tracker
+    #[must_use]
     pub fn new() -> Self {
         Self {
             violations: Arc::new(DashMap::new()),
@@ -352,16 +358,20 @@ impl SlaTracker {
     }
 
     /// Record an SLA violation
+    /// Record an SLA violation for a case
+    /// 
+    /// # Errors
+    /// Returns `SoarError` if the violation cannot be recorded
     pub fn record_violation(
         &self,
         case_id: &str,
-        violation_type: SlaViolationType,
+        violation_type: &SlaViolationType,
         expected_time: DateTime<Utc>,
         actual_time: DateTime<Utc>,
     ) -> SoarResult<()> {
         let violation = SlaViolation {
             case_id: case_id.to_string(),
-            violation_type: violation_type.clone(),
+            violation_type: *violation_type,
             expected_time,
             actual_time,
             severity: "HIGH".to_string(),
@@ -371,15 +381,22 @@ impl SlaTracker {
 
         warn!(
             "SLA violation recorded for case {}: {:?}",
-            case_id, &violation_type
+            case_id, violation_type
         );
 
         Ok(())
     }
 }
 
+impl Default for EvidenceManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EvidenceManager {
     /// Create a new evidence manager
+    #[must_use]
     pub fn new() -> Self {
         Self {
             storage_path: "/var/lib/security/evidence".to_string(),

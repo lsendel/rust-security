@@ -66,23 +66,39 @@ impl SecureRandomGenerator {
     }
 
     /// Generate secure session ID
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_session_id(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("sess_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
 
     /// Generate secure CSRF token
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_csrf_token(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("csrf_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
 
     /// Generate secure TOTP secret (160 bits as per RFC 6238)
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_totp_secret(&self) -> Result<Vec<u8>, AuthError> {
         self.generate_bytes(20) // 160 bits
     }
 
     /// Generate secure backup codes for MFA
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_backup_codes(&self, count: usize) -> Result<Vec<String>, AuthError> {
         let mut codes = Vec::with_capacity(count);
         for _ in 0..count {
@@ -95,6 +111,10 @@ impl SecureRandomGenerator {
     }
 
     /// Generate secure PKCE code verifier (RFC 7636)
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_pkce_verifier(&self) -> Result<String, AuthError> {
         // PKCE code verifier: 43-128 characters, we'll use 128 for maximum security
         let bytes = self.generate_bytes(96)?; // 96 bytes = 128 base64url chars
@@ -102,23 +122,39 @@ impl SecureRandomGenerator {
     }
 
     /// Generate secure state parameter for `OAuth2`
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_oauth_state(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
 
     /// Generate secure nonce for `OpenID` Connect
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_oidc_nonce(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
 
     /// Generate secure salt for password hashing
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_salt(&self) -> Result<Vec<u8>, AuthError> {
         self.generate_bytes(32) // 256 bits
     }
 
     /// Generate secure API key
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_api_key(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("ak_{}", BASE64URL_NOPAD.encode(&bytes)))
@@ -126,8 +162,8 @@ impl SecureRandomGenerator {
 }
 
 /// Global secure random generator instance
-static SECURE_RNG: once_cell::sync::Lazy<SecureRandomGenerator> =
-    once_cell::sync::Lazy::new(SecureRandomGenerator::new);
+static SECURE_RNG: std::sync::LazyLock<SecureRandomGenerator> =
+    std::sync::LazyLock::new(SecureRandomGenerator::new);
 
 /// Convenience functions using the global secure RNG
 /// 
@@ -174,10 +210,20 @@ pub fn generate_secure_csrf_token() -> Result<String, AuthError> {
     SECURE_RNG.generate_csrf_token()
 }
 
+/// Generate secure TOTP secret (160 bits as per RFC 6238)
+///
+/// # Errors
+///
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_totp_secret() -> Result<Vec<u8>, AuthError> {
     SECURE_RNG.generate_totp_secret()
 }
 
+/// Generate secure backup codes for MFA
+///
+/// # Errors
+///
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_backup_codes(count: usize) -> Result<Vec<String>, AuthError> {
     SECURE_RNG.generate_backup_codes(count)
 }

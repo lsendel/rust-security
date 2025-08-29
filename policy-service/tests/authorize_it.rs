@@ -27,22 +27,22 @@ async fn stub_authorize_denies() {
     let app = app(state);
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
-    let req = AuthorizeRequest {
+    let authorize_request = AuthorizeRequest {
         request_id: "r1".into(),
         principal: serde_json::json!({"type": "User", "id": "u1"}),
         action: "orders:read".into(),
         resource: serde_json::json!({"type": "Order", "id": "o1"}),
         context: serde_json::json!({}),
     };
-    let res = reqwest::Client::new()
-        .post(format!("http://{}/v1/authorize", addr))
-        .json(&req)
+    let http_response = reqwest::Client::new()
+        .post(format!("http://{addr}/v1/authorize"))
+        .json(&authorize_request)
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
-    let body: AuthorizeResponse = res.json().await.unwrap();
-    assert_eq!(body.decision, "Allow");
+    assert!(http_response.status().is_success());
+    let authorize_response: AuthorizeResponse = http_response.json().await.unwrap();
+    assert_eq!(authorize_response.decision, "Allow");
 }
 
 #[tokio::test]
@@ -54,22 +54,22 @@ async fn authorize_denies_cross_brand() {
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
     // u1 belongs to t1 and does not have brandZ; o2 is brandZ in t1
-    let req = AuthorizeRequest {
+    let cross_brand_request = AuthorizeRequest {
         request_id: "r2".into(),
         principal: serde_json::json!({"type": "User", "id": "u1"}),
         action: "orders:read".into(),
         resource: serde_json::json!({"type": "Order", "id": "o2"}),
         context: serde_json::json!({}),
     };
-    let res = reqwest::Client::new()
-        .post(format!("http://{}/v1/authorize", addr))
-        .json(&req)
+    let cross_brand_response = reqwest::Client::new()
+        .post(format!("http://{addr}/v1/authorize"))
+        .json(&cross_brand_request)
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
-    let body: AuthorizeResponse = res.json().await.unwrap();
-    assert_eq!(body.decision, "Deny");
+    assert!(cross_brand_response.status().is_success());
+    let cross_brand_result: AuthorizeResponse = cross_brand_response.json().await.unwrap();
+    assert_eq!(cross_brand_result.decision, "Deny");
 }
 
 #[tokio::test]
@@ -81,20 +81,20 @@ async fn authorize_allows_tenant_brand_location_match() {
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
     // u2 belongs to t2 with brandC@loc-la; o3 is brandC@loc-la in t2
-    let req = AuthorizeRequest {
+    let tenant_match_request = AuthorizeRequest {
         request_id: "r3".into(),
         principal: serde_json::json!({"type": "User", "id": "u2"}),
         action: "orders:read".into(),
         resource: serde_json::json!({"type": "Order", "id": "o3"}),
         context: serde_json::json!({}),
     };
-    let res = reqwest::Client::new()
-        .post(format!("http://{}/v1/authorize", addr))
-        .json(&req)
+    let tenant_match_response = reqwest::Client::new()
+        .post(format!("http://{addr}/v1/authorize"))
+        .json(&tenant_match_request)
         .send()
         .await
         .unwrap();
-    assert!(res.status().is_success());
-    let body: AuthorizeResponse = res.json().await.unwrap();
-    assert_eq!(body.decision, "Allow");
+    assert!(tenant_match_response.status().is_success());
+    let tenant_match_result: AuthorizeResponse = tenant_match_response.json().await.unwrap();
+    assert_eq!(tenant_match_result.decision, "Allow");
 }

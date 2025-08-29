@@ -102,6 +102,10 @@ pub trait KeyStorage: Send + Sync {
 
 impl JwksManager {
     /// Create a new JWKS manager
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key loading or initialization fails
     pub async fn new(
         config: KeyRotationConfig,
         storage: Arc<dyn KeyStorage>,
@@ -142,7 +146,7 @@ impl JwksManager {
 
     /// Get the current active signing key
     pub async fn get_active_key(&self) -> Option<CryptoKey> {
-        let active_kid = self.active_kid.read().await;
+        let active_kid = { self.active_kid.read().await.clone() };
         if let Some(kid) = active_kid.as_ref() {
             let keys = self.keys.read().await;
             keys.get(kid).cloned()
@@ -153,13 +157,19 @@ impl JwksManager {
 
     /// Get a key by kid for validation
     pub async fn get_key(&self, kid: &str) -> Option<CryptoKey> {
-        let keys = self.keys.read().await;
-        keys.get(kid)
+        self.keys
+            .read()
+            .await
+            .get(kid)
             .filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid)
             .cloned()
     }
 
     /// Rotate keys - generate new key and mark old as rotating
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key generation, storage, or rotation fails
     pub async fn rotate_keys(&self) -> Result<(), AuthError> {
         info!("Starting key rotation");
 
@@ -296,25 +306,29 @@ impl JwksManager {
 
     /// Get JWKS for public endpoint
     pub async fn get_jwks(&self) -> JwksResponse {
-        let keys = self.keys.read().await;
-
-        let jwks_keys: Vec<JwkKey> = keys
-            .values()
-            .filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid)
-            .map(|k| JwkKey {
-                kid: k.kid.clone(),
-                kty: k.kty.clone(),
-                alg: k.alg.clone(),
-                use_: k.use_.clone(),
-                n: extract_modulus(&k.public_key),
-                e: extract_exponent(&k.public_key),
-            })
-            .collect();
+        let jwks_keys: Vec<JwkKey> = {
+            let keys = self.keys.read().await;
+            keys.values()
+                .filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid)
+                .map(|k| JwkKey {
+                    kid: k.kid.clone(),
+                    kty: k.kty.clone(),
+                    alg: k.alg.clone(),
+                    use_: k.use_.clone(),
+                    n: extract_modulus(&k.public_key),
+                    e: extract_exponent(&k.public_key),
+                })
+                .collect()
+        };
 
         JwksResponse { keys: jwks_keys }
     }
 
     /// Create JWT header with current kid
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no active key is available
     pub async fn create_jwt_header(&self) -> Result<Header, AuthError> {
         let active_key = self
             .get_active_key()
@@ -330,6 +344,13 @@ impl JwksManager {
     }
 
     /// Get encoding key for signing
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - No active signing key is available
+    /// - Private key is missing from the active key
+    /// - Private key is invalid or corrupted
     pub async fn get_encoding_key(&self) -> Result<EncodingKey, AuthError> {
         let active_key = self
             .get_active_key()
@@ -353,6 +374,13 @@ impl JwksManager {
     }
 
     /// Get decoding key for validation
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - The key ID (kid) is unknown or not found
+    /// - The key is expired or revoked
+    /// - Public key is invalid or corrupted
     pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, AuthError> {
         let key = self
             .get_key(kid)
@@ -377,25 +405,36 @@ impl JwksManager {
     }
 
     /// Revoke a key immediately
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Storage update fails when marking key as revoked
+    /// - Key rotation fails when revoking the active key
+    /// - Database or Redis connection issues occur
     pub async fn revoke_key(&self, kid: &str) -> Result<(), AuthError> {
-        let mut keys = self.keys.write().await;
+        let should_rotate = {
+            let mut keys = self.keys.write().await;
+            if let Some(key) = keys.get_mut(kid) {
+                key.status = KeyStatus::Revoked;
+                key.is_active = false;
+                self.storage
+                    .update_key_status(kid, KeyStatus::Revoked)
+                    .await?;
 
-        if let Some(key) = keys.get_mut(kid) {
-            key.status = KeyStatus::Revoked;
-            key.is_active = false;
-            self.storage
-                .update_key_status(kid, KeyStatus::Revoked)
-                .await?;
+                warn!("Key revoked: {}", kid);
 
-            warn!("Key revoked: {}", kid);
-
-            // If this was the active key, rotate immediately
-            let active_kid = self.active_kid.read().await;
-            if active_kid.as_ref() == Some(&kid.to_string()) {
-                drop(active_kid);
-                drop(keys);
-                self.rotate_keys().await?;
+                // Check if this was the active key
+                let active_kid = self.active_kid.read().await;
+                active_kid.as_ref() == Some(&kid.to_string())
+            } else {
+                false
             }
+        };
+
+        // Rotate immediately if this was the active key
+        if should_rotate {
+            self.rotate_keys().await?;
         }
 
         Ok(())
@@ -456,25 +495,21 @@ impl InMemoryKeyStorage {
 #[async_trait::async_trait]
 impl KeyStorage for InMemoryKeyStorage {
     async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError> {
-        let mut keys = self.keys.write().await;
-        keys.push(key.clone());
+        self.keys.write().await.push(key.clone());
         Ok(())
     }
 
     async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError> {
-        let keys = self.keys.read().await;
-        Ok(keys.clone())
+        Ok(self.keys.read().await.clone())
     }
 
     async fn delete_key(&self, kid: &str) -> Result<(), AuthError> {
-        let mut keys = self.keys.write().await;
-        keys.retain(|k| k.kid != kid);
+        self.keys.write().await.retain(|k| k.kid != kid);
         Ok(())
     }
 
     async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError> {
-        let mut keys = self.keys.write().await;
-        if let Some(key) = keys.iter_mut().find(|k| k.kid == kid) {
+        if let Some(key) = self.keys.write().await.iter_mut().find(|k| k.kid == kid) {
             key.status = status;
         }
         Ok(())
@@ -488,6 +523,11 @@ pub struct RedisKeyStorage {
 }
 
 impl RedisKeyStorage {
+    /// Create a new Redis key storage instance
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Redis client creation fails
     pub fn new(redis_url: &str) -> Result<Self, AuthError> {
         let client = redis::Client::open(redis_url).map_err(|e| AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
@@ -668,8 +708,10 @@ mod tests {
         assert_eq!(active_key.status, KeyStatus::Active);
 
         // Old key should still be available for validation
-        let keys = manager.keys.read().await;
-        assert!(keys.len() >= 2);
+        {
+            let keys = manager.keys.read().await;
+            assert!(keys.len() >= 2);
+        }
     }
 
     #[tokio::test]

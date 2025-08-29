@@ -3,7 +3,6 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{extract::State, Json};
 use data_encoding::BASE32;
 use hmac::{Hmac, Mac};
-use once_cell::sync::Lazy;
 use rand::RngCore;
 use redis;
 use serde::{Deserialize, Serialize};

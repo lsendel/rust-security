@@ -64,6 +64,19 @@ pub fn create_secure_jwt_validation() -> Validation {
 }
 
 /// Comprehensive JWT validation with security checks
+///
+/// # Errors
+///
+/// Returns `AuthError` if:
+/// - JWT header is malformed or invalid
+/// - Algorithm is not RS256 (prevents algorithm confusion attacks)
+/// - Key ID (kid) is missing from header
+/// - JWT signature verification fails
+/// - Token type doesn't match expected type
+/// - Token is expired, not yet valid, or too old
+/// - Required claims are missing or invalid
+/// - Issuer or audience doesn't match expected values
+/// - Scope contains dangerous patterns or is too long
 pub fn validate_jwt_secure(
     token: &str,
     decoding_key: &DecodingKey,

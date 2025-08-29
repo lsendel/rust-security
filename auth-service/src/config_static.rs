@@ -1,5 +1,4 @@
 use anyhow::Result;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
@@ -466,6 +465,14 @@ pub struct RuntimeSecrets {
 }
 
 impl RuntimeSecrets {
+    /// Load runtime secrets from environment variables
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - JWT_SIGNING_KEY is missing in production environment
+    /// - JWT key validation fails in production
+    /// - Required environment variables are malformed
     pub fn from_env() -> Result<Self> {
         let env = Environment::from_env();
 
@@ -496,6 +503,12 @@ impl RuntimeSecrets {
 }
 
 /// Validate JWT key strength for production
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Key is shorter than 32 characters
+/// - Key contains weak patterns like 'test', 'dev', etc.
 fn validate_jwt_key_strength(key: &str) -> Result<()> {
     if key.len() < 32 {
         return Err(anyhow::anyhow!(
@@ -537,6 +550,11 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
+    /// Create a new configuration manager
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if runtime secrets loading fails
     pub fn new() -> Result<Self> {
         let environment = Environment::from_env();
         let runtime_secrets = RuntimeSecrets::from_env()?;

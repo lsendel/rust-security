@@ -14,7 +14,7 @@ use flume::{unbounded, Receiver, Sender};
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
@@ -498,7 +498,7 @@ impl ThreatHuntingOrchestrator {
 
         // Perform immediate analysis
         let mut operation_result = ThreatHuntingResult {
-            event_id: event.security_context.request_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            event_id: uuid::Uuid::new_v4().to_string(),
             processing_time_ms: 0,
             threats_detected: Vec::new(),
             correlations_found: Vec::new(),
@@ -576,15 +576,13 @@ impl ThreatHuntingOrchestrator {
                     .response_orchestrator
                     .create_response_plan(
                         threat.clone(),
-                        ThreatContext {
-                            attack_vector: Some("authentication".to_string()),
-                            targeted_assets: HashSet::new(),
-                            business_impact: BusinessImpact::Medium,
-                            regulatory_implications: Vec::new(),
-                            related_cves: Vec::new(),
-                            threat_actor_profile: None,
-                            tactics_techniques_procedures: Vec::new(),
-                        },
+                        ThreatContext::new(
+                            uuid::Uuid::new_v4().to_string(),
+                            "authentication_threat".to_string(),
+                            ThreatSeverity::Medium,
+                            "threat_hunting".to_string(),
+                            Utc::now(),
+                        ),
                     )
                     .await
                 {
@@ -632,7 +630,8 @@ impl ThreatHuntingOrchestrator {
         crate::threat_user_profiler::BehavioralAnalysisResult,
         Box<dyn std::error::Error + Send + Sync>,
     > {
-        if let Some(user_id) = &event.auth_context.user_id {
+        if let Some(auth_context) = &event.auth_context {
+            let user_id = &auth_context.user_id;
             // Convert string user_id to Uuid
             let user_uuid = uuid::Uuid::parse_str(user_id)
                 .map_err(|e| format!("Invalid user ID format: {}", e))?;
@@ -650,7 +649,7 @@ impl ThreatHuntingOrchestrator {
                 recommendations: vec![],
             })
         } else {
-            Err("No user ID in event".into())
+            Err("No auth context in event".into())
         }
     }
 
@@ -818,7 +817,7 @@ impl ThreatHuntingOrchestrator {
         self.behavioral_analyzer.shutdown().await;
         self.threat_intelligence.shutdown().await;
         self.attack_pattern_detector.shutdown().await;
-        self.user_profiler.shutdown().await;
+        let _ = self.user_profiler.shutdown().await;
         self.response_orchestrator.shutdown().await;
 
         // Close Redis connection

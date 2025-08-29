@@ -76,14 +76,14 @@ use common::constants;
 use std::sync::Arc;
 
 // Core modules - fundamental functionality
+pub mod auth_service_integration;
 pub mod core;
 pub mod errors;
-pub mod auth_service_integration;
-pub mod threat_processor;
-pub mod threat_adapter;
 pub mod event_conversion;
 pub mod graceful_shutdown;
 pub mod production_logging;
+pub mod threat_adapter;
+pub mod threat_processor;
 
 // Essential modules for backward compatibility
 pub mod app;
@@ -127,19 +127,19 @@ pub mod sql_store;
 #[cfg(feature = "enhanced-session-store")]
 pub mod store;
 #[cfg(feature = "threat-hunting")]
-pub mod threat_user_profiler;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_hunting_orchestrator;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_types;
-#[cfg(feature = "threat-hunting")]
 pub mod threat_attack_patterns;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_behavioral_analyzer;
 #[cfg(feature = "threat-hunting")]
+pub mod threat_hunting_orchestrator;
+#[cfg(feature = "threat-hunting")]
 pub mod threat_intelligence;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_response_orchestrator;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_types;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_user_profiler;
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
 
@@ -295,14 +295,40 @@ pub use app::app;
 // Re-export error types and functions
 pub use errors::{internal_error, AuthError};
 
-// Core modules organized by functionality
-pub mod modules {
-    pub mod soar {
-        pub mod case_management;
-    }
-}
+// Core modules organized by functionality - SOAR disabled due to complexity
+// pub mod modules {
+//     pub mod soar {
+//         pub mod case_management;
+//     }
+// }
 
-// Re-export new modular SOAR case management system
-pub mod soar_case_management {
-    pub use crate::modules::soar::case_management::*;
-}
+// Re-export SOAR modules - DISABLED due to extensive missing types and circular dependencies
+// pub mod soar_core {
+//     pub mod correlation;
+//     pub mod engine;
+//     pub mod integration;
+//     pub mod metrics;
+//     pub mod response;
+//     pub mod types;
+//     pub mod workflow;
+//
+//     // Re-export main types and interfaces
+//     pub use crate::soar_core::engine::{HealthStatus, SoarCore, SoarError, SoarHealthStatus};
+//     pub use crate::soar_core::types::*;
+// }
+// Temporarily disabled SOAR modules to restore compilation
+// These had circular import issues that need to be resolved separately
+// pub mod soar_correlation {
+//     pub use crate::soar_correlation::*;
+// }
+// pub mod soar_executors {
+//     pub use crate::soar_executors::*;
+// }
+// pub mod soar_workflow {
+//     pub use crate::soar_workflow::*;
+// }
+
+// Re-export new modular SOAR case management system - DISABLED
+// pub mod soar_case_management {
+//     pub use crate::modules::soar::case_management::*;
+// }

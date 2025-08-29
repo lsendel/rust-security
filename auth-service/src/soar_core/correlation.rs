@@ -80,7 +80,7 @@ impl AlertCorrelationEngine {
         {
             let mut metrics = self.metrics.lock().await;
             metrics.total_alerts_processed += 1;
-            if correlation_operation_result.is_some() {
+            if correlation_result.is_some() {
                 metrics.correlations_found += 1;
             }
         }

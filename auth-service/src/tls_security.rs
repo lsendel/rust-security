@@ -20,6 +20,10 @@ impl Default for TlsSecurityConfig {
 }
 
 /// Create basic TLS client configuration with safe defaults
+///
+/// # Errors
+///
+/// Returns an error if TLS configuration creation fails or root certificates cannot be loaded
 pub fn create_secure_client_config(
     _config: &TlsSecurityConfig,
 ) -> SecurityResult<Arc<ClientConfig>> {
@@ -38,6 +42,10 @@ pub fn create_secure_client_config(
 }
 
 /// Create basic TLS server configuration (stub for MVP)
+///
+/// # Errors
+///
+/// Always returns an error as TLS server configuration is not implemented in MVP
 pub fn create_secure_server_config() -> SecurityResult<Arc<ServerConfig>> {
     info!("TLS server configuration not implemented in MVP");
     Err(SecurityError::Configuration)

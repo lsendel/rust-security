@@ -635,7 +635,7 @@ impl Store for SqlStore {
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // ttl_secs is used to calculate exp, which is already in the record.
         let token_hash = hash_token(token);
-        let token_display = format!("{}...", &token[..4]); // For non-sensitive logging
+        let token_display = format!("{prefix}...", prefix = &token[..4]); // For non-sensitive logging
 
         sqlx::query(
             "INSERT INTO tokens (token_hash, token_display, active, scope, client_id, exp, iat, sub, token_binding, mfa_verified)

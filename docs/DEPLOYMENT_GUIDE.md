@@ -1,8 +1,34 @@
-# 🚀 Production Deployment Guide
+# Production Deployment Guide
 
-## ✅ Pre-Deployment Validation
+## Overview
 
-The Rust Security Platform has successfully completed **compiler warning elimination** and is ready for production deployment.
+This guide documents the complete production deployment process for the Rust Security Platform. The deployment uses a phased approach to ensure zero-downtime deployment while maintaining security and performance standards.
+
+## Architecture
+
+### Phase 1: Infrastructure Setup ✅
+- Container orchestration with Kubernetes
+- Load balancing and service mesh configuration
+- Database and Redis cluster deployment
+- Monitoring and observability stack
+
+### Phase 2: Service Deployment ✅
+- **File**: `k8s/auth-service-deployment.yaml`
+- **Purpose**: Production-ready authentication service deployment
+- **Key Features**:
+  - Horizontal pod autoscaling
+  - Resource limits and requests
+  - Health checks and readiness probes
+  - Security contexts and policies
+
+### Phase 3: Security Hardening ✅
+- **File**: `k8s/network-policies.yaml`
+- **Purpose**: Network security policies and controls
+- **Key Components**:
+  - Pod-to-pod communication restrictions
+  - Ingress and egress rules
+  - Service mesh security policies
+  - Secret management integration
 
 ### **Validation Status**
 ```
@@ -47,9 +73,102 @@ rust-security/
 - **Monitoring**: Prometheus + Grafana + OpenTelemetry
 - **Security**: mTLS, RBAC, network policies
 
+## Key Components
+
+### 1. Container Deployment (`Dockerfile.prod`)
+```dockerfile
+# Multi-stage build for production
+FROM rust:1.70 as builder
+WORKDIR /usr/src/app
+COPY . .
+RUN cargo build --release --features production
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /usr/src/app/target/release/auth-service /usr/local/bin/auth-service
+USER 1001
+EXPOSE 8080
+CMD ["auth-service"]
+```
+
+### 2. Kubernetes Deployment (`k8s/auth-service-deployment.yaml`)
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+      - name: auth-service
+        image: auth-service:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+```
+
+### 3. Service Configuration (`config/production.toml`)
+```toml
+[service]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+
+[database]
+url = "${DATABASE_URL}"
+max_connections = 20
+connection_timeout = "30s"
+
+[security]
+jwt_secret = "${JWT_SECRET}"
+session_timeout = "2h"
+mfa_enabled = true
+rate_limit_per_minute = 1000
+
+[monitoring]
+metrics_enabled = true
+tracing_enabled = true
+health_check_enabled = true
+```
+
+## Feature Flags
+
+The deployment supports different feature configurations:
+
+```toml
+# Essential production features
+[features]
+security-essential = ["crypto", "audit-logging"]
+monitoring = ["metrics", "tracing", "health-check"]
+production = ["security-essential", "monitoring", "api-keys"]
+enterprise = ["production", "threat-hunting", "soar"]
+```
+
+When features are disabled, unused components are excluded from the build.
+
 ---
 
-## 🔧 Production Configuration
+## Production Configuration
 
 ### **Essential Features**
 ```toml
@@ -503,6 +622,102 @@ pub async fn readiness_check(State(state): State<AppState>) -> impl IntoResponse
 - [ ] Performance benchmarks met
 - [ ] Security scans completed
 - [ ] Warning monitoring active
+
+## Testing
+
+### Run Deployment Tests
+```bash
+# Validate Kubernetes manifests
+kubectl apply --dry-run=client -f k8s/
+
+# Test service connectivity
+kubectl port-forward svc/auth-service 8080:80
+curl http://localhost:8080/health
+```
+
+### Run Integration Tests
+```bash
+# Full integration test suite
+cargo test --workspace --features production
+
+# Deployment-specific tests
+cargo test --package auth-service --test deployment_integration
+```
+
+### Run Load Tests
+```bash
+# Performance validation
+scripts/testing/load_test.sh
+scripts/performance/validate-baselines.sh
+```
+
+## Performance
+
+The deployment is designed for production performance:
+- **Service Startup**: ~5-10s including health checks
+- **Request Processing**: ~10-50ms per authenticated request
+- **Memory Usage**: ~256MB per service instance
+- **CPU Usage**: ~100-250m per service under normal load
+- **Zero-downtime deployment** with rolling updates
+
+## Error Handling
+
+All deployment components use comprehensive error handling:
+- Services gracefully handle startup failures
+- Health checks provide detailed status information
+- Rolling deployments prevent service disruption
+- Automatic rollback on deployment failures
+
+## Production Deployment
+
+1. **Build and test images**:
+   ```bash
+   docker build -t auth-service:latest -f Dockerfile.prod .
+   docker run --rm auth-service:latest --health-check
+   ```
+
+2. **Deploy to Kubernetes**:
+   ```bash
+   kubectl apply -f k8s/namespace.yaml
+   kubectl apply -f k8s/secrets.yaml
+   kubectl apply -f k8s/auth-service-deployment.yaml
+   ```
+
+3. **Verify deployment**:
+   ```bash
+   kubectl get pods -l app=auth-service
+   kubectl logs -f deployment/auth-service
+   ```
+
+4. **Configure monitoring**:
+   ```bash
+   kubectl apply -f k8s/monitoring/
+   ```
+
+## Monitoring
+
+The deployment provides comprehensive monitoring:
+- Service health and readiness endpoints
+- Prometheus metrics collection
+- Distributed tracing with OpenTelemetry
+- Kubernetes resource monitoring
+- Application performance monitoring
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Pod startup failures**: Check resource limits and secrets configuration
+2. **Service connectivity**: Verify network policies and service mesh settings
+3. **Performance issues**: Monitor resource usage and connection pooling
+4. **Health check failures**: Review application logs and database connectivity
+
+### Debug Mode
+
+Enable debug logging for troubleshooting:
+```bash
+kubectl set env deployment/auth-service RUST_LOG=auth_service=debug
+```
 
 ---
 

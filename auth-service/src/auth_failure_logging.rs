@@ -396,8 +396,8 @@ pub struct FailureStatsSummary {
 }
 
 /// Global authentication failure tracker
-static AUTH_FAILURE_TRACKER: once_cell::sync::Lazy<AuthFailureTracker> =
-    once_cell::sync::Lazy::new(|| AuthFailureTracker::new(AuthFailureConfig::default()));
+static AUTH_FAILURE_TRACKER: std::sync::LazyLock<AuthFailureTracker> =
+    std::sync::LazyLock::new(|| AuthFailureTracker::new(AuthFailureConfig::default()));
 
 /// Convenience function to log authentication failures
 pub fn log_auth_failure(

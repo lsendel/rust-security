@@ -165,6 +165,14 @@ impl ClientAuthenticator {
     }
 
     /// Validate client secret strength
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Secret is shorter than 32 characters
+    /// - Secret contains only digits or only letters
+    /// - Secret has too many repeated characters
+    /// - Secret matches common weak patterns
     fn validate_client_secret_strength(&self, secret: &str) -> Result<(), AuthError> {
         // Minimum length requirement
         if secret.len() < 32 {
@@ -247,6 +255,13 @@ impl ClientAuthenticator {
     }
 
     /// Load clients from environment variables (for backward compatibility)
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Client secret validation fails
+    /// - Environment variable parsing fails
+    /// - Client registration fails
     pub fn load_from_env(&mut self) -> Result<(), AuthError> {
         if let Ok(client_creds) = std::env::var("CLIENT_CREDENTIALS") {
             for entry in client_creds.split(';') {

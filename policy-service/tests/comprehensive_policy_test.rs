@@ -35,7 +35,7 @@ async fn spawn_app() -> String {
         app.merge(utoipa_swagger_ui::SwaggerUi::new("/swagger-ui").url("/openapi.json", openapi));
 
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -53,7 +53,7 @@ async fn test_policy_authorization_allow() {
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()
@@ -81,7 +81,7 @@ async fn test_policy_authorization_deny() {
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()
@@ -109,7 +109,7 @@ async fn test_multi_tenant_isolation() {
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()
@@ -137,7 +137,7 @@ async fn test_attribute_based_access_control() {
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()
@@ -165,7 +165,7 @@ async fn test_invalid_principal_format() {
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()
@@ -184,13 +184,13 @@ async fn test_invalid_action_format() {
     let request = AuthorizeRequest {
         request_id: "test_req_6".to_string(),
         principal: json!({"type": "User", "id": "u1"}),
-        action: "".to_string(),
+        action: String::new(),
         resource: json!({"type": "Order", "id": "o1"}),
         context: json!({}),
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()
@@ -205,7 +205,7 @@ async fn test_health_endpoint() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let response = client.get(format!("{}/health", base)).send().await.unwrap();
+    let response = client.get(format!("{base}/health")).send().await.unwrap();
 
     assert_eq!(response.status(), 200);
 
@@ -222,7 +222,7 @@ async fn test_openapi_endpoint() {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(format!("{}/openapi.json", base))
+        .get(format!("{base}/openapi.json"))
         .send()
         .await
         .unwrap();
@@ -252,7 +252,7 @@ async fn test_context_based_authorization() {
     };
 
     let response = client
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .header(CONTENT_TYPE, "application/json")
         .json(&request)
         .send()

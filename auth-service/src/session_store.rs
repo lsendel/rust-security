@@ -320,7 +320,7 @@ impl SessionStore for RedisSessionStore {
         }
 
         // Fallback to in-memory storage
-        if let Some(mut session) = self.memory_fallback.read().await.get(session_id).cloned() {
+        if let Some(mut session) = { self.memory_fallback.read().await.get(session_id).cloned() } {
             if session.is_expired() {
                 // Clean up expired session
                 let _: Result<(), _> = self.delete_session(session_id).await;
@@ -402,7 +402,9 @@ impl SessionStore for RedisSessionStore {
         }
 
         // Remove from memory fallback
-        self.memory_fallback.write().await.remove(session_id);
+        {
+            self.memory_fallback.write().await.remove(session_id);
+        }
 
         // Update user sessions index
         if let Some(session_data) = session {
@@ -550,6 +552,11 @@ pub struct BasicConnectionPoolManager {
 
 #[cfg(feature = "enhanced-session-store")]
 impl BasicConnectionPoolManager {
+    /// Create a new Redis connection pool manager
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Redis configuration is invalid or connection pool creation fails
     pub async fn new(
         redis_url: &str,
         config: BasicConnectionPoolConfig,
@@ -563,6 +570,11 @@ impl BasicConnectionPoolManager {
         })
     }
 
+    /// Get a Redis connection from the pool
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no Redis pool is configured or if acquiring a connection fails
     pub async fn get_connection(
         &self,
     ) -> Result<deadpool_redis::Connection, Box<dyn StdError + Send + Sync>> {
@@ -611,6 +623,10 @@ impl Default for RetryConfig {
 #[cfg(feature = "enhanced-session-store")]
 impl EnhancedRedisSessionStore {
     /// Create a new enhanced Redis session store with optimized connection pooling
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Redis connection fails or configuration is invalid
     pub async fn new(redis_url: Option<String>) -> Result<Self, Box<dyn StdError + Send + Sync>> {
         let pool_manager = if let Some(url) = redis_url {
             let config = BasicConnectionPoolConfig::default();
@@ -965,8 +981,8 @@ mod chaos_tests {
             let store_clone = store.clone();
             let handle = tokio::spawn(async move {
                 let session = SessionData::new(
-                    format!("user{}", i),
-                    format!("client{}", i),
+                    format!("user{i}"),
+                    format!("client{i}"),
                     3600,
                     Some("127.0.0.1".to_string()),
                     Some("ConcurrentTestAgent/1.0".to_string()),
@@ -1009,7 +1025,7 @@ mod chaos_tests {
             .map(|i| {
                 let session = SessionData::new(
                     user_id.to_string(),
-                    format!("client_{}", i),
+                    format!("client_{i}"),
                     3600,
                     Some("127.0.0.1".to_string()),
                     Some("ResilienceTestAgent/1.0".to_string()),

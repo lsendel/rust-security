@@ -304,6 +304,13 @@ pub async fn jwks_document() -> Value {
 }
 
 /// Get current signing key with proper error handling
+///
+/// # Errors
+///
+/// Returns `AuthError` if:
+/// - No active signing key is available
+/// - Key management system is not initialized
+/// - Key loading or decoding fails
 pub async fn current_signing_key() -> Result<(String, EncodingKey), AuthError> {
     KEY_MANAGER.get_signing_key().await
 }
@@ -314,6 +321,10 @@ pub async fn get_current_jwks() -> Value {
 }
 
 /// Ensure a key is available (for backward compatibility)
+///
+/// # Errors
+///
+/// Returns `AuthError` if key initialization or availability check fails
 pub async fn ensure_key_available() -> Result<(), AuthError> {
     KEY_MANAGER.ensure_key_available().await
 }
@@ -324,11 +335,19 @@ pub async fn get_current_kid() -> Option<String> {
 }
 
 /// Rotate keys if needed (for backward compatibility)
+///
+/// # Errors
+///
+/// Returns `AuthError` if key rotation or availability check fails
 pub async fn maybe_rotate() -> Result<(), AuthError> {
     KEY_MANAGER.ensure_key_available().await
 }
 
 /// Initialize keys on startup with proper synchronization and retries
+///
+/// # Errors
+///
+/// Returns an error if key initialization fails due to cryptographic errors or storage issues
 #[instrument]
 pub async fn initialize_keys() -> Result<(), AuthError> {
     KEY_MANAGER.initialize().await

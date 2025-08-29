@@ -121,11 +121,10 @@ impl TokenInfo {
         self.audience.contains(&aud.to_string())
     }
 
-    /// Get remaining lifetime
     /// Get the remaining lifetime of the authentication context
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Token(TokenError::Expired)` if the authentication has expired
     pub fn remaining_lifetime(&self) -> Result<Duration, CoreError> {
         self.expires_at

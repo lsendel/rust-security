@@ -1,5 +1,4 @@
 use crate::AuthError;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
 use url::Url;
@@ -24,7 +23,7 @@ pub struct RedirectUriValidator {
 }
 
 // Suspicious patterns to detect in URIs
-static SUSPICIOUS_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
+static SUSPICIOUS_PATTERNS: std::sync::LazyLock<Vec<Regex>> = std::sync::LazyLock::new(|| {
     vec![
         Regex::new(r"\.\.[\\/]").unwrap(),         // Path traversal
         Regex::new(r#"[<>"']"#).unwrap(),          // HTML/JS injection chars
@@ -37,7 +36,7 @@ static SUSPICIOUS_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     ]
 });
 
-static COMMON_TLDS: Lazy<HashSet<String>> = Lazy::new(|| {
+static COMMON_TLDS: std::sync::LazyLock<HashSet<String>> = std::sync::LazyLock::new(|| {
     [
         "com", "org", "net", "edu", "gov", "mil", "int", "io", "co", "uk", "de", "fr", "jp", "cn",
         "au", "ca", "br", "ru", "in", "mx", "es", "it", "nl", "se", "no", "dk", "fi", "pl", "be",

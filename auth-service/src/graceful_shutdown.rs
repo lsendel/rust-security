@@ -43,25 +43,33 @@ impl ShutdownCoordinator {
     pub async fn listen_for_shutdown(&self) {
         info!("Setting up graceful shutdown handlers");
 
+        let signal_type = self.wait_for_any_shutdown_signal().await;
+        info!("Received {}, initiating graceful shutdown", signal_type);
+        self.initiate_shutdown().await;
+    }
+
+    /// Wait for any shutdown signal and return the signal type
+    async fn wait_for_any_shutdown_signal(&self) -> &'static str {
         tokio::select! {
-            () = self.wait_for_sigint() => {
-                info!("Received SIGINT, initiating graceful shutdown");
-                self.initiate_shutdown().await;
-            }
-            () = self.wait_for_sigterm() => {
-                info!("Received SIGTERM, initiating graceful shutdown");
-                self.initiate_shutdown().await;
-            }
+            () = self.wait_for_sigint() => "SIGINT",
+            () = self.wait_for_sigterm() => "SIGTERM",
         }
     }
 
     async fn initiate_shutdown(&self) {
-        // Broadcast shutdown signal to all components
+        self.broadcast_shutdown_signal();
+        self.wait_for_shutdown_completion().await;
+    }
+
+    /// Broadcast shutdown signal to all components
+    fn broadcast_shutdown_signal(&self) {
         if let Err(e) = self.shutdown_tx.send(()) {
             warn!("Failed to send shutdown signal: {}", e);
         }
+    }
 
-        // Wait for graceful shutdown completion or timeout
+    /// Wait for graceful shutdown completion or timeout
+    async fn wait_for_shutdown_completion(&self) {
         tokio::select! {
             () = self.completed.notified() => {
                 info!("Graceful shutdown completed successfully");
@@ -204,31 +212,46 @@ impl GracefulShutdownService {
     }
 
     async fn wait_for_connections_to_finish(&self) {
-        let max_wait_time = Duration::from_secs(30);
+        const MAX_WAIT_TIME: Duration = Duration::from_secs(30);
+        const CHECK_INTERVAL: Duration = Duration::from_secs(1);
+        
         let start_time = std::time::Instant::now();
-
-        loop {
+        
+        while !self.should_stop_waiting(start_time, MAX_WAIT_TIME).await {
             let active = self.active_connections().await;
-
+            
             if active == 0 {
                 info!("All connections completed, shutdown ready");
-                break;
+                return;
             }
-
-            if start_time.elapsed() > max_wait_time {
-                warn!(
-                    active_connections = active,
-                    "Shutdown timeout reached with active connections"
-                );
-                break;
-            }
-
-            info!(
-                active_connections = active,
-                "Waiting for connections to complete"
-            );
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            
+            self.log_waiting_status(active);
+            tokio::time::sleep(CHECK_INTERVAL).await;
         }
+        
+        self.handle_shutdown_timeout().await;
+    }
+
+    /// Check if we should stop waiting for connections
+    async fn should_stop_waiting(&self, start_time: std::time::Instant, max_wait: Duration) -> bool {
+        start_time.elapsed() > max_wait
+    }
+
+    /// Log current waiting status
+    fn log_waiting_status(&self, active_connections: u32) {
+        info!(
+            active_connections = active_connections,
+            "Waiting for connections to complete"
+        );
+    }
+
+    /// Handle shutdown timeout scenario
+    async fn handle_shutdown_timeout(&self) {
+        let active = self.active_connections().await;
+        warn!(
+            active_connections = active,
+            "Shutdown timeout reached with active connections"
+        );
     }
 
     /// Perform resource cleanup

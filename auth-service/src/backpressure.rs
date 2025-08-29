@@ -245,6 +245,14 @@ impl BackpressureState {
         }
     }
 
+    /// Determine if a request should be admitted based on backpressure policies
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError` if:
+    /// - Server is at maximum concurrent request capacity
+    /// - Client IP has exceeded per-IP rate limits
+    /// - Request should be rejected due to backpressure
     pub fn should_admit_request(&self, client_ip: &str) -> Result<(), AuthError> {
         // Check global concurrent request limit
         let current_concurrent = self.concurrent_requests.load(Ordering::Relaxed);

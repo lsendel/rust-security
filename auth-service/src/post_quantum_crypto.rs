@@ -28,7 +28,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
 use base64::Engine as _;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};

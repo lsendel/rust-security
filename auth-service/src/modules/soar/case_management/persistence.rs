@@ -21,7 +21,7 @@ pub struct CaseRepository {
 impl CaseRepository {
     /// Create a new case repository
     #[must_use]
-    pub fn new(pool: Arc<Pool<Postgres>>) -> Self {
+    pub const fn new(pool: Arc<Pool<Postgres>>) -> Self {
         Self { pool }
     }
 
@@ -62,12 +62,12 @@ impl CaseRepository {
             .bind(&case.id)
             .bind(&case.title)
             .bind(&case.description)
-            .bind(&case.status)
-            .bind(&case.priority)
+            .bind(case.status)
+            .bind(case.priority)
             .bind(case.assigned_to.as_ref())
-            .bind(&case.created_at)
-            .bind(&case.updated_at)
-            .bind(&case.due_date)
+            .bind(case.created_at)
+            .bind(case.updated_at)
+            .bind(case.due_date)
             .bind(&alerts_json)
             .bind(&evidence_json)
             .bind(&tags_json)

@@ -1,18 +1,27 @@
 //! Event conversion utilities for bridging core security and threat detection systems
 
+
 #[cfg(feature = "threat-hunting")]
-use crate::threat_types::{ThreatSecurityEvent, ThreatSecurityEventType, ThreatSeverity, EventOutcome};
-use chrono::{DateTime, Utc};
-use std::time::SystemTime;
+use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
+#[cfg(feature = "threat-hunting")]
+use crate::threat_types::{
+    EventOutcome, ThreatSecurityEvent, ThreatSecurityEventType, ThreatSeverity,
+};
 
 /// Convert SecurityEventType to ThreatSecurityEventType
 #[cfg(feature = "threat-hunting")]
 impl From<SecurityEventType> for ThreatSecurityEventType {
     fn from(event_type: SecurityEventType) -> Self {
         match event_type {
-            SecurityEventType::AuthenticationFailure => ThreatSecurityEventType::AuthenticationFailure,
-            SecurityEventType::AuthenticationSuccess => ThreatSecurityEventType::AuthenticationSuccess,
-            SecurityEventType::AuthenticationAttempt => ThreatSecurityEventType::AuthenticationAttempt,
+            SecurityEventType::AuthenticationFailure => {
+                ThreatSecurityEventType::AuthenticationFailure
+            }
+            SecurityEventType::AuthenticationSuccess => {
+                ThreatSecurityEventType::AuthenticationSuccess
+            }
+            SecurityEventType::AuthenticationAttempt => {
+                ThreatSecurityEventType::AuthenticationAttempt
+            }
             SecurityEventType::Login => ThreatSecurityEventType::AuthenticationSuccess,
             SecurityEventType::AuthorizationDenied => ThreatSecurityEventType::AuthorizationDenied,
             SecurityEventType::SuspiciousActivity => ThreatSecurityEventType::SuspiciousActivity,
@@ -20,7 +29,9 @@ impl From<SecurityEventType> for ThreatSecurityEventType {
             SecurityEventType::PolicyViolation => ThreatSecurityEventType::PolicyViolation,
             SecurityEventType::ThreatDetected => ThreatSecurityEventType::ThreatDetected,
             SecurityEventType::AnomalyDetected => ThreatSecurityEventType::AnomalyDetected,
-            SecurityEventType::SecurityScanTriggered => ThreatSecurityEventType::SecurityScanTriggered,
+            SecurityEventType::SecurityScanTriggered => {
+                ThreatSecurityEventType::SecurityScanTriggered
+            }
             SecurityEventType::MfaFailure => ThreatSecurityEventType::MfaFailure,
             SecurityEventType::MfaChallenge => ThreatSecurityEventType::MfaChallenge,
             SecurityEventType::PasswordChange => ThreatSecurityEventType::PasswordChange,
@@ -43,37 +54,40 @@ impl From<ViolationSeverity> for ThreatSeverity {
 }
 
 /// Convert SystemTime to DateTime<Utc>
-fn system_time_to_datetime(time: SystemTime) -> DateTime<Utc> {
-    DateTime::from(time)
-}
 
 /// Convert SecurityEvent to ThreatSecurityEvent
 #[cfg(feature = "threat-hunting")]
 impl From<&SecurityEvent> for ThreatSecurityEvent {
     fn from(event: &SecurityEvent) -> Self {
-        let timestamp = system_time_to_datetime(event.timestamp);
-        
         ThreatSecurityEvent {
             event_id: uuid::Uuid::new_v4().to_string(),
-            timestamp,
+            timestamp: event.timestamp,
             event_type: event.event_type.clone().into(),
             severity: event.severity.into(),
             source: "auth-service".to_string(),
-            client_id: None, // AuthContext doesn't have client_id
-            user_id: event.auth_context.as_ref().map(|ctx| ctx.user_id.clone()),
-            ip_address: Some(event.security_context.client_ip),
-            user_agent: Some(event.security_context.user_agent.clone()),
-            request_id: None, // SecurityContext doesn't have request_id
-            session_id: event.auth_context.as_ref().map(|ctx| ctx.session_id.clone()),
+            client_id: None,
+            user_id: event.user_id.clone(),
+            ip_address: event.ip_address,
+            user_agent: event.user_agent.clone(),
+            request_id: None,
+            session_id: event.session_id.clone(),
             description: format!("{:?} event", event.event_type),
-            details: event.details.iter().map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect(),
-            outcome: EventOutcome::Success,
+            details: event
+                .details
+                .iter()
+                .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+                .collect(),
+            outcome: if event.outcome.is_some() {
+                EventOutcome::Success
+            } else {
+                EventOutcome::Success
+            },
             resource: None,
             action: None,
-            risk_score: Some((event.security_context.risk_score * 100.0) as u8),
-            location: None,
-            device_fingerprint: Some(event.security_context.fingerprint.clone()),
-            mfa_used: false,
+            risk_score: event.risk_score,
+            location: None, // Will be converted separately
+            device_fingerprint: event.device_fingerprint.clone(),
+            mfa_used: event.mfa_used,
             token_binding_info: None,
         }
     }
@@ -87,9 +101,13 @@ pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEv
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "threat-hunting")]
     use super::*;
-    use crate::core::security::{SecurityContext, SecurityLevel};
+    #[cfg(feature = "threat-hunting")]
     use crate::core::auth::AuthContext;
+    #[cfg(feature = "threat-hunting")]
+    use crate::core::security::{SecurityContext, SecurityLevel};
+    #[cfg(feature = "threat-hunting")]
     use std::net::IpAddr;
 
     #[cfg(feature = "threat-hunting")]
@@ -139,8 +157,11 @@ mod tests {
         };
 
         let threat_event: ThreatSecurityEvent = (&security_event).into();
-        
-        assert_eq!(threat_event.event_type, ThreatSecurityEventType::AuthenticationFailure);
+
+        assert_eq!(
+            threat_event.event_type,
+            ThreatSecurityEventType::AuthenticationFailure
+        );
         assert_eq!(threat_event.severity, ThreatSeverity::High);
         assert_eq!(threat_event.user_id, Some("user-123".to_string()));
     }

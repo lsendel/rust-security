@@ -304,7 +304,7 @@ mod edge_case_tests {
     #[test]
     fn test_empty_case_title() {
         let case = SecurityCase::new(
-            "".to_string(),
+            String::new(),
             "Valid description".to_string(),
             CasePriority::Medium,
         );

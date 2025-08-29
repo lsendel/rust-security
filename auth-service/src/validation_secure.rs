@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
 use validator::ValidationError;
@@ -10,19 +9,19 @@ use crate::validation::{
 };
 
 // Compile security-focused regexes once for performance
-static SAFE_STRING_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[a-zA-Z0-9\-_\.\s@]+$").unwrap());
+static SAFE_STRING_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9\-_\.\s@]+$").unwrap());
 
-static EMAIL_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap());
+static EMAIL_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap());
 
-// static URL_SAFE_REGEX: Lazy<Regex> =
-//     Lazy::new(|| Regex::new(r"^[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$").unwrap());
+// static URL_SAFE_REGEX: std::sync::LazyLock<Regex> =
+//     std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$").unwrap());
 
-static ALPHANUMERIC_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-zA-Z0-9]+$").unwrap());
+static ALPHANUMERIC_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9]+$").unwrap());
 
 // Dangerous patterns that could indicate injection attacks
-static DANGEROUS_PATTERNS: Lazy<Vec<&'static str>> = Lazy::new(|| {
+static DANGEROUS_PATTERNS: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| {
     vec![
         // JavaScript injection
         "javascript:",
@@ -96,6 +95,23 @@ static DANGEROUS_PATTERNS: Lazy<Vec<&'static str>> = Lazy::new(|| {
 });
 
 /// Enhanced scope validation with comprehensive security checks
+///
+/// # Arguments
+///
+/// * `scope` - The scope string to validate
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the scope is valid
+///
+/// # Errors
+///
+/// This function will return a `ValidationError` in the following cases:
+/// * If the scope is empty
+/// * If the scope exceeds the maximum allowed length
+/// * If the scope contains dangerous patterns or characters
+/// * If the scope contains SQL injection patterns
+/// * If the scope contains script injection patterns
 pub fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     if scope.is_empty() {
         return Err(ValidationError::new("Scope cannot be empty"));
@@ -139,6 +155,24 @@ pub fn validate_scope(scope: &str) -> Result<(), ValidationError> {
 }
 
 /// Enhanced redirect URI validation with comprehensive security checks
+///
+/// # Arguments
+///
+/// * `uri` - The redirect URI string to validate
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the redirect URI is valid and safe
+///
+/// # Errors
+///
+/// This function will return a `ValidationError` in the following cases:
+/// * If the URI is empty
+/// * If the URI exceeds the maximum allowed length
+/// * If the URI contains dangerous schemes (javascript, data, vbscript)
+/// * If the URI contains localhost or 127.0.0.1 with non-standard ports
+/// * If the URI contains path traversal sequences
+/// * If the URI contains suspicious patterns
 pub fn validate_redirect_uri(uri: &str) -> Result<(), ValidationError> {
     if uri.is_empty() {
         return Err(ValidationError::new("Redirect URI cannot be empty"));
@@ -225,6 +259,23 @@ pub fn validate_redirect_uri(uri: &str) -> Result<(), ValidationError> {
 }
 
 /// Validate client ID with security constraints
+///
+/// # Arguments
+///
+/// * `client_id` - The client ID string to validate
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the client ID is valid
+///
+/// # Errors
+///
+/// This function will return a `ValidationError` in the following cases:
+/// * If the client ID is empty
+/// * If the client ID exceeds the maximum allowed length
+/// * If the client ID contains invalid characters
+/// * If the client ID contains dangerous patterns
+/// * If the client ID contains path traversal sequences
 pub fn validate_client_id(client_id: &str) -> Result<(), ValidationError> {
     if client_id.is_empty() {
         return Err(ValidationError::new("Client ID cannot be empty"));

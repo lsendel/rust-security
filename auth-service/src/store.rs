@@ -155,7 +155,9 @@ impl Store for HybridStore {
         &self,
         id: &str,
     ) -> Result<Option<ScimUser>, Box<dyn StdError + Send + Sync>> {
-        Ok(self.users.read().await.get(id).cloned())
+        Ok({
+            self.users.read().await.get(id).cloned()
+        })
     }
 
     async fn create_user(
@@ -166,7 +168,9 @@ impl Store for HybridStore {
         if u.id.is_empty() {
             u.id = uuid::Uuid::new_v4().to_string();
         }
-        self.users.write().await.insert(u.id.clone(), u.clone());
+        {
+            self.users.write().await.insert(u.id.clone(), u.clone());
+        }
         Ok(u)
     }
 
@@ -176,7 +180,9 @@ impl Store for HybridStore {
     ) -> Result<Vec<ScimUser>, Box<dyn StdError + Send + Sync>> {
         // Note: The original filter logic was complex and tied to the handler.
         // For this refactoring, we'll return all users and expect filtering to happen at a higher level.
-        Ok(self.users.read().await.values().cloned().collect())
+        Ok({
+            self.users.read().await.values().cloned().collect()
+        })
     }
 
     async fn update_user(
@@ -200,7 +206,9 @@ impl Store for HybridStore {
         &self,
         id: &str,
     ) -> Result<Option<ScimGroup>, Box<dyn StdError + Send + Sync>> {
-        Ok(self.groups.read().await.get(id).cloned())
+        Ok({
+            self.groups.read().await.get(id).cloned()
+        })
     }
 
     async fn create_group(
@@ -211,7 +219,9 @@ impl Store for HybridStore {
         if g.id.is_empty() {
             g.id = uuid::Uuid::new_v4().to_string();
         }
-        self.groups.write().await.insert(g.id.clone(), g.clone());
+        {
+            self.groups.write().await.insert(g.id.clone(), g.clone());
+        }
         Ok(g)
     }
 
@@ -219,7 +229,9 @@ impl Store for HybridStore {
         &self,
         _filter: Option<&str>,
     ) -> Result<Vec<ScimGroup>, Box<dyn StdError + Send + Sync>> {
-        Ok(self.groups.read().await.values().cloned().collect())
+        Ok({
+            self.groups.read().await.values().cloned().collect()
+        })
     }
 
     async fn update_group(
@@ -337,7 +349,9 @@ impl Store for HybridStore {
         }
 
         // Fallback to in-memory
-        Ok(self.tokens.read().await.get(token).cloned())
+        Ok({
+            self.tokens.read().await.get(token).cloned()
+        })
     }
 
     async fn set_token_record(

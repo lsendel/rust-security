@@ -7,6 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
+use tracing::warn;
 use uuid::Uuid;
 
 /// Result type alias for authentication operations
@@ -149,6 +150,16 @@ pub enum AuthError {
     ApprovalRequired,
     #[error("Identity not found")]
     IdentityNotFound,
+    #[error("Security violation: {violation_type}")]
+    SecurityViolation { violation_type: String },
+    #[error("Policy violation detected")]
+    PolicyViolation { details: String },
+    #[error("Threat detected: {threat_type}")]
+    ThreatDetected { threat_type: String },
+    #[error("Suspicious activity detected")]
+    SuspiciousActivity { activity_type: String },
+    #[error("Security scan triggered")]
+    SecurityScanTriggered { scan_type: String },
     #[error("Token generation failed: {0}")]
     TokenGenerationFailed(String),
     #[error("Token revoked")]
@@ -161,6 +172,8 @@ pub enum AuthError {
     InsufficientDataForBaseline,
     #[error("Identity suspended")]
     IdentitySuspended,
+    #[error("External service error: {0}")]
+    ExternalService(String),
 
     // Generic errors (use sparingly)
     #[error("Internal server error")]
@@ -224,6 +237,36 @@ impl IntoResponse for AuthError {
 impl AuthError {
     fn get_error_details(&self) -> (StatusCode, &'static str, &'static str, bool) {
         match self {
+            // Authentication and authorization errors
+            AuthError::InvalidClientCredentials
+            | AuthError::InvalidRefreshToken
+            | AuthError::InvalidToken { .. }
+            | AuthError::UnauthorizedClient { .. }
+            | AuthError::Forbidden { .. } => self.handle_auth_error(self),
+
+            // Rate limiting errors
+            error if Self::is_rate_limit_error(error) => Self::handle_rate_limit_error(error),
+
+            // Internal system errors
+            error if Self::is_internal_error(error) => Self::handle_internal_error(error),
+
+            // Security and policy errors
+            error if self.is_security_error(error) => self.handle_security_error(error),
+
+            // Token related errors
+            error if self.is_token_error(error) => self.handle_token_error(error),
+
+            // Default case for any other errors
+            _ => self.handle_default_error(),
+        }
+    }
+
+    /// Handle authentication errors
+    fn handle_auth_error(
+        &self,
+        error: &AuthError,
+    ) -> (StatusCode, &'static str, &'static str, bool) {
+        match error {
             Self::InvalidClientCredentials => (
                 StatusCode::UNAUTHORIZED,
                 "invalid_client",
@@ -234,31 +277,6 @@ impl AuthError {
                 StatusCode::UNAUTHORIZED,
                 "invalid_token",
                 "Token validation failed",
-                false,
-            ),
-            Self::RateLimitExceeded => (
-                StatusCode::TOO_MANY_REQUESTS,
-                "rate_limit_exceeded",
-                "Too many requests",
-                false,
-            ),
-            Self::IpRateLimitExceeded { ip } => {
-                // Log security event but don't expose IP to client
-                tracing::warn!(
-                    ip = %ip,
-                    "Rate limit exceeded for IP"
-                );
-                (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    "rate_limit_exceeded",
-                    "Too many requests",
-                    false,
-                )
-            }
-            Self::ValidationError { .. } => (
-                StatusCode::BAD_REQUEST,
-                "invalid_request",
-                "Request validation failed",
                 false,
             ),
             Self::SessionExpired => (
@@ -273,16 +291,92 @@ impl AuthError {
                 "Multi-factor authentication required",
                 false,
             ),
-            // Internal errors - don't leak details to client
-            Self::InternalError { error_id, context } => {
-                // Log full details internally with error ID for tracking
-                tracing::error!(
-                    error_id = %error_id,
-                    context = %context,
-                    error = %self,
-                    "Internal server error occurred"
-                );
+            Self::ValidationError { .. } => (
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "Request validation failed",
+                false,
+            ),
+            _ => unreachable!("Non-auth error passed to handle_auth_error"),
+        }
+    }
 
+    /// Check if error is rate limiting related
+    fn is_rate_limit_error(error: &AuthError) -> bool {
+        matches!(
+            error,
+            AuthError::RateLimitExceeded
+                | AuthError::IpRateLimitExceeded { .. }
+                | AuthError::ClientRateLimitExceeded { .. }
+                | AuthError::TokenUsageLimitExceeded
+        )
+    }
+
+    /// Handle rate limiting errors
+    fn handle_rate_limit_error(
+        error: &AuthError,
+    ) -> (StatusCode, &'static str, &'static str, bool) {
+        match error {
+            AuthError::RateLimitExceeded => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limit_exceeded",
+                "Too many requests",
+                false,
+            ),
+            AuthError::IpRateLimitExceeded { ip } => {
+                // Log security event but don't expose IP to client
+                warn!("IP rate limit exceeded for {ip}");
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "rate_limit_exceeded",
+                    "Too many requests",
+                    false,
+                )
+            }
+            AuthError::ClientRateLimitExceeded { client_id } => {
+                warn!("Client rate limit exceeded for {client_id}");
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "rate_limit_exceeded",
+                    "Too many requests",
+                    false,
+                )
+            }
+            AuthError::TokenUsageLimitExceeded => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "token_usage_limit_exceeded",
+                "Token usage limit exceeded",
+                false,
+            ),
+            _ => unreachable!("Non-rate-limit error passed to handle_rate_limit_error"),
+        }
+    }
+
+    /// Check if error is internal system error
+    fn is_internal_error(error: &AuthError) -> bool {
+        matches!(
+            error,
+            AuthError::InternalError { .. }
+                | AuthError::TokenStoreError { .. }
+                | AuthError::ConfigurationError { .. }
+                | AuthError::TokenGenerationFailed(_)
+        ) || {
+            #[cfg(feature = "enhanced-session-store")]
+            {
+                matches!(error, AuthError::RedisConnectionError { .. })
+            }
+            #[cfg(not(feature = "enhanced-session-store"))]
+            {
+                false
+            }
+        }
+    }
+
+    /// Handle internal system errors
+    fn handle_internal_error(error: &AuthError) -> (StatusCode, &'static str, &'static str, bool) {
+        match error {
+            AuthError::InternalError { error_id, context } => {
+                Self::log_internal_error(error_id, context, error);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "internal_error",
@@ -295,10 +389,9 @@ impl AuthError {
                 tracing::error!(
                     error_id = %error_id,
                     operation = %operation,
-                    error = %self,
+                    error = %error,
                     "Token store operation failed"
                 );
-
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "internal_error",
@@ -311,10 +404,9 @@ impl AuthError {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
                     error_id = %error_id,
-                    error = %self,
+                    error = %error,
                     "Redis connection failed"
                 );
-
                 (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "service_unavailable",
@@ -327,10 +419,9 @@ impl AuthError {
                 tracing::error!(
                     error_id = %error_id,
                     field = %field,
-                    error = %self,
+                    error = %error,
                     "Configuration error"
                 );
-
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "internal_error",
@@ -338,83 +429,98 @@ impl AuthError {
                     true,
                 )
             }
-            Self::AnomalyDetected => (
-                StatusCode::FORBIDDEN,
-                "anomaly_detected",
-                "Access denied due to security anomaly",
-                false,
-            ),
-            Self::PolicyDenied => (
-                StatusCode::FORBIDDEN,
-                "access_denied",
-                "Access denied by policy",
-                false,
-            ),
-            Self::ApprovalRequired => (
-                StatusCode::ACCEPTED,
-                "approval_required",
-                "Request requires approval",
-                false,
-            ),
-            Self::IdentityNotFound => (
-                StatusCode::NOT_FOUND,
-                "identity_not_found",
-                "Identity not found",
-                false,
-            ),
             Self::TokenGenerationFailed(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "token_generation_failed",
                 "Token generation failed",
                 true,
             ),
-            Self::TokenRevoked => (
+            _ => unreachable!("Non-internal error passed to handle_internal_error"),
+        }
+    }
+
+    /// Check if error is security/policy related
+    fn is_security_error(&self, error: &AuthError) -> bool {
+        matches!(
+            error,
+            AuthError::SecurityViolation { .. }
+                | AuthError::PolicyViolation { .. }
+                | AuthError::ThreatDetected { .. }
+                | AuthError::AnomalyDetected { .. }
+                | AuthError::SuspiciousActivity { .. }
+                | AuthError::SecurityScanTriggered { .. }
+        )
+    }
+
+    /// Handle security/policy errors
+    fn handle_security_error(
+        &self,
+        error: &AuthError,
+    ) -> (StatusCode, &'static str, &'static str, bool) {
+        match error {
+            AuthError::SecurityViolation { violation_type, .. } => {
+                warn!("Security violation detected: {:?}", violation_type);
+                (
+                    StatusCode::FORBIDDEN,
+                    "security_violation",
+                    "Security violation detected",
+                    true, // Log security event
+                )
+            }
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "security_error",
+                "Security error occurred",
+                true,
+            ),
+        }
+    }
+
+    /// Check if error is token related
+    fn is_token_error(&self, error: &AuthError) -> bool {
+        matches!(error, AuthError::TokenRevoked)
+    }
+
+    /// Handle token specific errors
+    fn handle_token_error(
+        &self,
+        error: &AuthError,
+    ) -> (StatusCode, &'static str, &'static str, bool) {
+        match error {
+            AuthError::TokenRevoked => (
                 StatusCode::UNAUTHORIZED,
                 "token_revoked",
                 "Token has been revoked",
                 false,
             ),
-            Self::TokenBindingViolation => (
-                StatusCode::FORBIDDEN,
-                "token_binding_violation",
-                "Token binding violation",
-                false,
-            ),
-            Self::TokenUsageLimitExceeded => (
-                StatusCode::TOO_MANY_REQUESTS,
-                "token_usage_limit_exceeded",
-                "Token usage limit exceeded",
-                false,
-            ),
-            Self::InsufficientDataForBaseline => (
-                StatusCode::PRECONDITION_FAILED,
-                "insufficient_data",
-                "Insufficient data for baseline",
-                false,
-            ),
-            Self::IdentitySuspended => (
-                StatusCode::FORBIDDEN,
-                "identity_suspended",
-                "Identity suspended",
-                false,
-            ),
-            // Default case for any other errors
-            _ => {
-                let error_id = uuid::Uuid::new_v4();
-                tracing::error!(
-                    error_id = %error_id,
-                    error = %self,
-                    "Unhandled error occurred"
-                );
-
-                (
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request",
-                    "Request could not be processed",
-                    true,
-                )
-            }
+            _ => unreachable!("Non-token error passed to handle_token_error"),
         }
+    }
+
+    /// Handle default/unhandled errors
+    fn handle_default_error(&self) -> (StatusCode, &'static str, &'static str, bool) {
+        let error_id = uuid::Uuid::new_v4();
+        tracing::error!(
+            error_id = %error_id,
+            error = %self,
+            "Unhandled error occurred"
+        );
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "Request could not be processed",
+            true,
+        )
+    }
+
+    /// Helper method to log internal errors with consistent format
+    fn log_internal_error(error_id: &Uuid, context: &str, error: &AuthError) {
+        tracing::error!(
+            error_id = %error_id,
+            context = %context,
+            error = %error,
+            "Internal server error occurred"
+        );
     }
 }
 

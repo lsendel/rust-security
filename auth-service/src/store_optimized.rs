@@ -60,6 +60,13 @@ impl CachedTokenRecord {
 }
 
 impl OptimizedRedisStore {
+    /// Create a new optimized Redis store
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Redis connection cannot be established
+    /// - Connection pool initialization fails
     pub async fn new(redis_url: &str) -> Result<Self> {
         let store = Self {
             connection_pool: Arc::new(OnceCell::new()),
@@ -90,12 +97,23 @@ impl OptimizedTokenStore {
     }
 
     /// Create a new optimized Redis token store
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Redis store creation fails
     pub async fn new_redis(redis_url: &str) -> Result<Self> {
         let store = OptimizedRedisStore::new(redis_url).await?;
         Ok(Self::Redis(store))
     }
 
     /// Get token record with optimized single operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Token is not found in storage
+    /// - Redis connection fails
+    /// - Deserialization of token data fails
     pub async fn get_record(&self, token: &str) -> Result<IntrospectionRecord> {
         match self {
             Self::InMemory(map) => {
@@ -281,6 +299,12 @@ impl OptimizedTokenStore {
     }
 
     /// Optimized revoke operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Redis connection fails
+    /// - Token update operation fails
     pub async fn revoke_token(&self, token: &str) -> Result<()> {
         match self {
             Self::InMemory(map) => {
@@ -307,6 +331,12 @@ impl OptimizedTokenStore {
     }
 
     /// Batch revoke operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Redis connection fails
+    /// - Batch token update operation fails
     pub async fn revoke_tokens_batch(&self, tokens: &[String]) -> Result<()> {
         match self {
             Self::InMemory(map) => {
@@ -333,6 +363,10 @@ impl OptimizedTokenStore {
     }
 
     /// Cleanup expired tokens (for in-memory store)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if cleanup operation fails (Redis errors are ignored)
     pub async fn cleanup_expired(&self) -> Result<usize> {
         match self {
             Self::InMemory(map) => {
@@ -361,6 +395,12 @@ impl OptimizedTokenStore {
     }
 
     /// Get store statistics
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Redis connection fails
+    /// - Statistics gathering operation fails
     pub async fn get_stats(&self) -> Result<TokenStoreStats> {
         match self {
             Self::InMemory(map) => {

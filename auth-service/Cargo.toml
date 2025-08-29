@@ -197,8 +197,7 @@ urlencoding = { workspace = true }
 proptest = { workspace = true }
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }
-# Performance testing
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+# Performance testing (using workspace version)
 tokio-test = { workspace = true }
 # Security testing
 regex = { workspace = true }
