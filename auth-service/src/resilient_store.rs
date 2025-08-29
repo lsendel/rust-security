@@ -53,6 +53,18 @@ pub struct ResilientRedisClient {
 }
 
 impl ResilientRedisClient {
+    /// Create a new resilient Redis client with circuit breaker and retry logic
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError::ServiceUnavailable` if:
+    /// - Redis client creation fails due to invalid URL
+    /// - Connection manager creation times out
+    /// - Initial connection to Redis server fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn new(redis_url: &str, config: ResilientRedisConfig) -> Result<Self, AuthError> {
         let client = redis::Client::open(redis_url).map_err(|e| AuthError::ServiceUnavailable {
             reason: format!("Failed to create Redis client: {}", e),
@@ -79,6 +91,19 @@ impl ResilientRedisClient {
         })
     }
 
+    /// Get a value from Redis with circuit breaker protection
+    ///
+    /// # Errors
+    ///
+    /// Returns `AuthError::CircuitBreakerOpen` if the circuit breaker is open.
+    /// Returns `AuthError::ServiceUnavailable` if:
+    /// - Redis connection fails
+    /// - Operation times out
+    /// - Deserialization fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn get<K, V>(&self, key: K) -> Result<Option<V>, AuthError>
     where
         K: redis::ToRedisArgs + Send + Sync + Clone + 'static,

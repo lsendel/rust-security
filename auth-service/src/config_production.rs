@@ -115,6 +115,7 @@ pub struct ObservabilityConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct FeatureFlags {
     /// Enable multi-factor authentication
     pub mfa_enabled: bool,
@@ -243,6 +244,7 @@ impl ConfigLoader {
     }
 
     /// Load configuration from environment variables
+    #[allow(clippy::too_many_lines)]
     fn load_from_env(config: &mut ProductionConfig) -> Result<()> {
         // Server configuration
         if let Ok(host) = env::var("SERVER_HOST") {

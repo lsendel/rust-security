@@ -20,7 +20,7 @@ pub const MAX_STATE_LENGTH: usize = 128;
 pub const MAX_NONCE_LENGTH: usize = 128;
 pub const MAX_CODE_CHALLENGE_LENGTH: usize = 128;
 
-/// OAuth 2.0 Token Request DTO
+/// `OAuth` 2.0 Token Request DTO
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 pub struct TokenRequest {
     #[validate(length(min = 1, max = 50))]
@@ -57,7 +57,7 @@ pub struct TokenRequest {
     pub password: Option<String>,
 }
 
-/// OAuth 2.0 Authorization Request DTO
+/// `OAuth` 2.0 Authorization Request DTO
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 pub struct AuthorizationRequest {
     #[validate(length(min = 1, max = 50))]
@@ -477,7 +477,7 @@ pub struct RateLimitConfig {
 
 // Custom validation functions
 
-/// Validate OAuth 2.0 scope parameter
+/// Validate `OAuth` 2.0 scope parameter
 fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     // Check for valid scope format (space-separated tokens)
     if scope.is_empty() {

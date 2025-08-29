@@ -1,3 +1,5 @@
+use crate::threat_user_profiler::{NetworkFeatures, UserSecurityEvent};
+
 #[derive(Clone)]
 pub struct NetworkFeatureExtractor;
 impl NetworkFeatureExtractor {

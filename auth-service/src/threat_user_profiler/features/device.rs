@@ -1,3 +1,5 @@
+use crate::threat_user_profiler::{DeviceFeatures, UserSecurityEvent};
+
 #[derive(Clone)]
 pub struct DeviceFeatureExtractor {
     sensitivity: f64,

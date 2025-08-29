@@ -1,0 +1,124 @@
+//! Unified threat processing service that coordinates all threat detection modules
+
+use crate::core::security::SecurityEvent;
+#[cfg(feature = "threat-hunting")]
+use crate::threat_adapter::ThreatDetectionAdapter;
+#[cfg(feature = "threat-hunting")]
+use crate::{
+    threat_behavioral_analyzer::BehavioralAnalyzer,
+    threat_intelligence::ThreatIntelligenceEngine,
+    threat_response_orchestrator::ThreatResponseOrchestrator,
+};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Unified threat processing service
+#[cfg(feature = "threat-hunting")]
+pub struct ThreatProcessor {
+    behavioral_analyzer: Arc<BehavioralAnalyzer>,
+    intelligence_engine: Arc<ThreatIntelligenceEngine>,
+    response_orchestrator: Arc<ThreatResponseOrchestrator>,
+    enabled: Arc<RwLock<bool>>,
+}
+
+#[cfg(feature = "threat-hunting")]
+impl ThreatProcessor {
+    /// Create a new threat processor
+    pub fn new(
+        behavioral_analyzer: Arc<BehavioralAnalyzer>,
+        intelligence_engine: Arc<ThreatIntelligenceEngine>,
+        response_orchestrator: Arc<ThreatResponseOrchestrator>,
+    ) -> Self {
+        Self {
+            behavioral_analyzer,
+            intelligence_engine,
+            response_orchestrator,
+            enabled: Arc::new(RwLock::new(true)),
+        }
+    }
+
+    /// Process a security event through all threat detection modules
+    pub async fn process_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !*self.enabled.read().await {
+            return Ok(());
+        }
+
+        // Process through behavioral analyzer
+        if let Err(e) = self.behavioral_analyzer.process_security_event(event).await {
+            tracing::warn!("Behavioral analysis failed: {}", e);
+        }
+
+        // Process through intelligence engine
+        if let Err(e) = self.intelligence_engine.process_security_event(event).await {
+            tracing::warn!("Intelligence correlation failed: {}", e);
+        }
+
+        // Process through response orchestrator
+        if let Err(e) = self.response_orchestrator.process_security_event(event).await {
+            tracing::warn!("Response orchestration failed: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// Process multiple events in batch
+    pub async fn process_events(&self, events: &[SecurityEvent]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !*self.enabled.read().await {
+            return Ok(());
+        }
+
+        for event in events {
+            self.process_event(event).await?;
+        }
+        Ok(())
+    }
+
+    /// Enable or disable threat processing
+    pub async fn set_enabled(&self, enabled: bool) {
+        *self.enabled.write().await = enabled;
+    }
+
+    /// Check if threat processing is enabled
+    pub async fn is_enabled(&self) -> bool {
+        *self.enabled.read().await
+    }
+}
+
+/// No-op implementation when threat-hunting feature is disabled
+#[cfg(not(feature = "threat-hunting"))]
+pub struct ThreatProcessor;
+
+#[cfg(not(feature = "threat-hunting"))]
+impl ThreatProcessor {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub async fn process_event(&self, _event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+
+    pub async fn process_events(&self, _events: &[SecurityEvent]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+
+    pub async fn set_enabled(&self, _enabled: bool) {}
+
+    pub async fn is_enabled(&self) -> bool {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_threat_processor_disabled_feature() {
+        #[cfg(not(feature = "threat-hunting"))]
+        {
+            let processor = ThreatProcessor::new();
+            assert!(!processor.is_enabled().await);
+        }
+    }
+}

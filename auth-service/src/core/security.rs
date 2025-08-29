@@ -32,7 +32,8 @@ pub struct SecurityContext {
 
 impl SecurityContext {
     /// Create a new security context
-    #[must_use] pub fn new(client_ip: IpAddr, user_agent: String) -> Self {
+    #[must_use]
+    pub fn new(client_ip: IpAddr, user_agent: String) -> Self {
         let crypto = CryptoProvider::new();
         let fingerprint = Self::generate_fingerprint(&client_ip, &user_agent, &crypto);
 
@@ -49,7 +50,11 @@ impl SecurityContext {
     }
 
     /// Generate a unique fingerprint for the request
-    fn generate_fingerprint(client_ip: &IpAddr, user_agent: &str, crypto: &CryptoProvider) -> String {
+    fn generate_fingerprint(
+        client_ip: &IpAddr,
+        user_agent: &str,
+        crypto: &CryptoProvider,
+    ) -> String {
         let combined = format!("{client_ip}:{user_agent}");
         let hash = crypto.hash_sha256(combined.as_bytes());
         hex::encode(&hash[..16]) // First 16 bytes as hex
@@ -63,11 +68,12 @@ impl SecurityContext {
 
     /// Update risk score based on threat indicators
     fn recalculate_risk_score(&mut self) {
-        let base_score = self.threat_indicators
+        let base_score = self
+            .threat_indicators
             .iter()
             .map(ThreatIndicator::severity_score)
             .fold(0.0, |acc, score| acc + score);
-        
+
         self.risk_score = (base_score / 10.0).min(1.0); // Normalize to 0.0-1.0
 
         // Update security level based on risk score
@@ -80,7 +86,8 @@ impl SecurityContext {
     }
 
     /// Check if the security context indicates a high-risk situation
-    #[must_use] pub fn is_high_risk(&self) -> bool {
+    #[must_use]
+    pub fn is_high_risk(&self) -> bool {
         self.risk_score > 0.7 || matches!(self.security_level, SecurityLevel::Critical)
     }
 
@@ -101,7 +108,8 @@ pub enum SecurityLevel {
 
 impl SecurityLevel {
     /// Get the minimum required authentication strength for this security level
-    #[must_use] pub const fn required_auth_strength(&self) -> AuthenticationStrength {
+    #[must_use]
+    pub const fn required_auth_strength(&self) -> AuthenticationStrength {
         match self {
             Self::Low => AuthenticationStrength::Basic,
             Self::Standard => AuthenticationStrength::Standard,
@@ -124,20 +132,11 @@ pub enum AuthenticationStrength {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ThreatIndicator {
     /// Suspicious IP address
-    SuspiciousIp {
-        ip: IpAddr,
-        reason: String,
-    },
+    SuspiciousIp { ip: IpAddr, reason: String },
     /// Rate limiting violation
-    RateLimitViolation {
-        limit: u32,
-        current: u32,
-    },
+    RateLimitViolation { limit: u32, current: u32 },
     /// Anomalous user agent
-    AnomalousUserAgent {
-        user_agent: String,
-        reason: String,
-    },
+    AnomalousUserAgent { user_agent: String, reason: String },
     /// Geolocation anomaly
     GeolocationAnomaly {
         current_location: String,
@@ -162,7 +161,8 @@ pub enum ThreatIndicator {
 
 impl ThreatIndicator {
     /// Get the severity score for this threat indicator (0.0 - 10.0)
-    #[must_use] pub fn severity_score(&self) -> f64 {
+    #[must_use]
+    pub fn severity_score(&self) -> f64 {
         match self {
             Self::SuspiciousIp { .. } => 6.0,
             Self::RateLimitViolation { limit, current } => {
@@ -178,7 +178,8 @@ impl ThreatIndicator {
     }
 
     /// Get the threat category
-    #[must_use] pub const fn category(&self) -> &'static str {
+    #[must_use]
+    pub const fn category(&self) -> &'static str {
         match self {
             Self::SuspiciousIp { .. } => "network",
             Self::RateLimitViolation { .. } => "rate_limit",
@@ -192,35 +193,111 @@ impl ThreatIndicator {
 }
 
 /// Security flags for different security states
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VerificationRequirement {
+    None,
+    Basic,
+    Enhanced,
+}
+
+impl Default for VerificationRequirement {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ActivityStatus {
+    Normal,
+    Suspicious,
+}
+
+impl Default for ActivityStatus {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BotStatus {
+    Human,
+    KnownBot,
+    Suspicious,
+}
+
+impl Default for BotStatus {
+    fn default() -> Self {
+        Self::Human
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NetworkType {
+    Direct,
+    Vpn,
+    Tor,
+    Proxy,
+}
+
+impl Default for NetworkType {
+    fn default() -> Self {
+        Self::Direct
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlockingStatus {
+    Allowed,
+    RateLimited,
+    GeoBlocked,
+    CaptchaRequired,
+}
+
+impl Default for BlockingStatus {
+    fn default() -> Self {
+        Self::Allowed
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SecurityFlags {
-    /// Requires additional verification
-    pub requires_verification: bool,
-    /// Suspicious activity detected
-    pub suspicious_activity: bool,
-    /// Rate limited
-    pub rate_limited: bool,
-    /// Geo-blocked
-    pub geo_blocked: bool,
-    /// Known bot/crawler
-    pub known_bot: bool,
-    /// VPN/Proxy detected
-    pub vpn_detected: bool,
-    /// Tor network detected
-    pub tor_detected: bool,
-    /// Requires CAPTCHA verification
-    pub requires_captcha: bool,
+    /// Verification requirement level
+    pub verification_level: VerificationRequirement,
+    /// Activity classification
+    pub activity_status: ActivityStatus,
+    /// Bot detection result
+    pub bot_status: BotStatus,
+    /// Network classification
+    pub network_type: NetworkType,
+    /// Current blocking status
+    pub blocking_status: BlockingStatus,
 }
 
 impl SecurityFlags {
     /// Check if any blocking flags are set
-    #[must_use] pub const fn has_blocking_flags(&self) -> bool {
-        self.rate_limited || self.geo_blocked
+    #[must_use]
+    pub const fn has_blocking_flags(&self) -> bool {
+        !matches!(self.blocking_status, BlockingStatus::Allowed)
     }
 
     /// Check if any suspicious flags are set
-    #[must_use] pub const fn has_suspicious_flags(&self) -> bool {
-        self.suspicious_activity || self.vpn_detected || self.tor_detected
+    #[must_use]
+    pub const fn has_suspicious_flags(&self) -> bool {
+        matches!(self.activity_status, ActivityStatus::Suspicious)
+            || !matches!(self.bot_status, BotStatus::Human)
+            || !matches!(self.network_type, NetworkType::Direct)
+    }
+
+    /// Check if enhanced verification is required
+    #[must_use]
+    pub const fn requires_enhanced_verification(&self) -> bool {
+        matches!(self.verification_level, VerificationRequirement::Enhanced)
+    }
+
+    /// Check if CAPTCHA is required
+    #[must_use]
+    pub const fn requires_captcha(&self) -> bool {
+        matches!(self.blocking_status, BlockingStatus::CaptchaRequired)
     }
 }
 
@@ -247,7 +324,8 @@ pub struct SecurityPolicy {
 
 impl SecurityPolicy {
     /// Evaluate a security context against this policy
-    #[must_use] pub fn evaluate(&self, context: &SecurityContext) -> PolicyEvaluationResult {
+    #[must_use]
+    pub fn evaluate(&self, context: &SecurityContext) -> PolicyEvaluationResult {
         let mut violations = Vec::new();
         let mut warnings = Vec::new();
 
@@ -264,7 +342,7 @@ impl SecurityPolicy {
         }
 
         // Check IP restrictions
-        if self.is_ip_blocked(&context.client_ip) {
+        if Self::is_ip_blocked(&context.client_ip) {
             violations.push(PolicyViolation {
                 rule: "ip_blocked".to_string(),
                 message: format!("IP {} is blocked", context.client_ip),
@@ -313,7 +391,10 @@ impl SecurityPolicy {
 
         let decision = if violations.is_empty() {
             PolicyDecision::Allow
-        } else if violations.iter().any(|v| v.severity == ViolationSeverity::Critical) {
+        } else if violations
+            .iter()
+            .any(|v| v.severity == ViolationSeverity::Critical)
+        {
             PolicyDecision::Block
         } else {
             PolicyDecision::Deny
@@ -328,7 +409,7 @@ impl SecurityPolicy {
     }
 
     /// Check if an IP address is blocked by this policy
-    const fn is_ip_blocked(&self, _ip: &IpAddr) -> bool {
+    const fn is_ip_blocked(_ip: &IpAddr) -> bool {
         // Simplified implementation - in reality would check CIDR ranges
         false
     }
@@ -369,7 +450,8 @@ pub struct SecurityRule {
 
 impl SecurityRule {
     /// Evaluate this rule against a security context
-    #[must_use] pub const fn evaluate(&self, _context: &SecurityContext) -> RuleResult {
+    #[must_use]
+    pub const fn evaluate(&self, _context: &SecurityContext) -> RuleResult {
         // Simplified implementation - in reality would evaluate conditions
         RuleResult::Allow
     }
@@ -446,10 +528,11 @@ pub struct SecurityEvent {
 }
 
 /// Types of security events
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SecurityEventType {
     AuthenticationFailure,
     AuthenticationSuccess,
+    AuthenticationAttempt,
     Login,
     AuthorizationDenied,
     SuspiciousActivity,
@@ -458,6 +541,10 @@ pub enum SecurityEventType {
     ThreatDetected,
     AnomalyDetected,
     SecurityScanTriggered,
+    MfaFailure,
+    MfaChallenge,
+    PasswordChange,
+    DataAccess,
 }
 
 #[cfg(test)]
@@ -506,10 +593,10 @@ mod tests {
         assert!(!flags.has_blocking_flags());
         assert!(!flags.has_suspicious_flags());
 
-        flags.rate_limited = true;
+        flags.blocking_status = BlockingStatus::RateLimited;
         assert!(flags.has_blocking_flags());
 
-        flags.suspicious_activity = true;
+        flags.activity_status = ActivityStatus::Suspicious;
         assert!(flags.has_suspicious_flags());
     }
 

@@ -188,12 +188,12 @@ impl CaseManagementConfig {
     pub fn from_file(path: &str) -> SoarResult<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| SoarError::InvalidInput {
             field: "config_file".to_string(),
-            reason: format!("Failed to read config file: {}", e),
+            reason: format!("Failed to read config file: {e}"),
         })?;
 
         toml::from_str(&content).map_err(|e| SoarError::InvalidInput {
             field: "config_content".to_string(),
-            reason: format!("Failed to parse config: {}", e),
+            reason: format!("Failed to parse config: {e}"),
         })
     }
 

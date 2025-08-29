@@ -1,7 +1,7 @@
 //! Service Account and Non-Human Identity Management
 //!
 //! Implements secure management for service accounts, API keys, and AI agents
-//! to prevent OAuth token compromise attacks like the Salesloft breach.
+//! to prevent `OAuth` token compromise attacks like the Salesloft breach.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};

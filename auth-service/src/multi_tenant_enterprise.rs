@@ -316,6 +316,7 @@ impl MultiTenantManager {
     }
 
     /// Get tenant by domain
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn get_tenant_by_domain(&self, domain: &str) -> Option<Tenant> {
         let lookup = self.tenant_lookup.read().await;
         if let Some(tenant_id) = lookup.get(domain).copied() {

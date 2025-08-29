@@ -19,6 +19,7 @@ use crate::service_identity::{BehavioralBaseline, IdentityType, RequestContext, 
 
 /// Monitoring configuration for non-human identities
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct NonHumanMonitoringConfig {
     /// Enable baseline establishment period
     pub enable_baseline_learning: bool,

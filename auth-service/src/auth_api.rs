@@ -13,10 +13,11 @@ use axum::{
     response::Redirect,
     Json,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
 use common::hash_password_sha256;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use rand::{distributions::Alphanumeric, Rng};
+use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,7 +30,7 @@ use validator::Validate;
 pub struct AuthState {
     pub jwt_secret: String,
     pub users: Arc<tokio::sync::RwLock<HashMap<String, User>>>,
-    pub _sessions: Arc<tokio::sync::RwLock<HashMap<String, Session>>>,
+    pub sessions: Arc<tokio::sync::RwLock<HashMap<String, Session>>>,
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
 }
@@ -58,7 +59,7 @@ pub struct Session {
     pub user_agent: Option<String>,
 }
 
-/// OAuth Client model
+/// `OAuth` Client model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuthClient {
     pub client_id: String,
@@ -124,22 +125,22 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-/// OAuth authorization request
+/// `OAuth` authorization request
 #[derive(Debug, Deserialize, Validate)]
 pub struct AuthorizeRequest {
-    pub _response_type: String,
+    pub response_type: String,
     pub client_id: String,
     pub redirect_uri: String,
     pub scope: Option<String>,
     pub state: Option<String>,
 }
 
-/// OAuth token request
+/// `OAuth` token request
 #[derive(Debug, Deserialize, Validate)]
 pub struct TokenRequest {
     pub grant_type: String,
     pub code: Option<String>,
-    pub _redirect_uri: Option<String>,
+    pub redirect_uri: Option<String>,
     pub client_id: String,
     pub client_secret: String,
 }
@@ -163,7 +164,7 @@ pub struct UserInfo {
     pub roles: Vec<String>,
 }
 
-/// OAuth token response
+/// `OAuth` token response
 #[derive(Debug, Serialize)]
 pub struct TokenResponse {
     pub access_token: String,
@@ -216,7 +217,7 @@ impl AuthState {
         Self {
             jwt_secret,
             users: Arc::new(tokio::sync::RwLock::new(users)),
-            _sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             oauth_clients: Arc::new(tokio::sync::RwLock::new(oauth_clients)),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
@@ -230,21 +231,28 @@ fn verify_password(password: &str, hash: &str) -> bool {
 }
 
 fn generate_token() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect()
+    let rng = SystemRandom::new();
+    let mut dest = [0; 32];
+    rng.fill(&mut dest).unwrap();
+    URL_SAFE_NO_PAD.encode(&dest)
 }
 
+/// Create a JWT token for the given user
+///
+/// # Errors
+///
+/// Returns `jsonwebtoken::errors::Error` if:
+/// - JWT encoding fails due to invalid key
+/// - Claims serialization fails
+/// - Header creation fails
 fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = Claims {
         sub: user.id.clone(),
         email: user.email.clone(),
         name: user.name.clone(),
         roles: user.roles.clone(),
-        exp: (Utc::now() + Duration::hours(24)).timestamp() as usize,
-        iat: Utc::now().timestamp() as usize,
+        exp: usize::try_from((Utc::now() + Duration::hours(24)).timestamp()).unwrap_or(0),
+        iat: usize::try_from(Utc::now().timestamp()).unwrap_or(0),
         iss: "rust-security-platform".to_string(),
     };
 
@@ -258,6 +266,17 @@ fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoke
 // API Endpoints
 
 /// User registration endpoint
+///
+/// # Errors
+///
+/// Returns `(StatusCode, Json<ErrorResponse>)` if:
+/// - Request validation fails (`BAD_REQUEST`)
+/// - User with email already exists (CONFLICT)
+/// - JWT token generation fails (`INTERNAL_SERVER_ERROR`)
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 pub async fn register(
     State(state): State<AuthState>,
     Json(request): Json<RegisterRequest>,
@@ -273,10 +292,10 @@ pub async fn register(
         ));
     }
 
-    let mut users = state.users.write().await;
+    let user_exists = state.users.read().await.contains_key(&request.email);
 
     // Check if user already exists
-    if users.contains_key(&request.email) {
+    if user_exists {
         return Err((
             StatusCode::CONFLICT,
             Json(ErrorResponse {
@@ -316,7 +335,7 @@ pub async fn register(
         roles: user.roles.clone(),
     };
 
-    users.insert(request.email, user);
+    state.users.write().await.insert(request.email, user);
 
     info!("User registered successfully: {}", user_info.email);
 
@@ -330,6 +349,17 @@ pub async fn register(
 }
 
 /// User login endpoint
+///
+/// # Errors
+///
+/// Returns `(StatusCode, Json<ErrorResponse>)` if:
+/// - Request validation fails (`BAD_REQUEST`)
+/// - User not found or password incorrect (UNAUTHORIZED)
+/// - JWT token generation fails (`INTERNAL_SERVER_ERROR`)
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 pub async fn login(
     State(state): State<AuthState>,
     Json(request): Json<LoginRequest>,
@@ -345,63 +375,80 @@ pub async fn login(
         ));
     }
 
-    let mut users = state.users.write().await;
+    let user = state.users.read().await.get(&request.email).cloned();
 
     // Find user
-    let user = users.get_mut(&request.email).ok_or_else(|| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "invalid_credentials".to_string(),
-                error_description: "Invalid email or password".to_string(),
-            }),
-        )
-    })?;
+    if let Some(mut user) = user {
+        // Verify password
+        if !verify_password(&request.password, &user.password_hash) {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "invalid_credentials".to_string(),
+                    error_description: "Invalid email or password".to_string(),
+                }),
+            ));
+        }
 
-    // Verify password
-    if !verify_password(&request.password, &user.password_hash) {
-        return Err((
+        // Update last login
+        user.last_login = Some(Utc::now());
+        state
+            .users
+            .write()
+            .await
+            .insert(request.email.clone(), user.clone());
+
+        // Generate JWT token
+        let token = create_jwt_token(&user, &state.jwt_secret).map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "token_generation_failed".to_string(),
+                    error_description: "Failed to generate access token".to_string(),
+                }),
+            )
+        })?;
+
+        let user_info = UserInfo {
+            id: user.id.clone(),
+            email: user.email.clone(),
+            name: user.name.clone(),
+            roles: user.roles.clone(),
+        };
+
+        info!("User logged in successfully: {}", user.email);
+
+        Ok(Json(AuthResponse {
+            access_token: token,
+            token_type: "Bearer".to_string(),
+            expires_in: 86400, // 24 hours
+            refresh_token: None,
+            user: user_info,
+        }))
+    } else {
+        Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
                 error: "invalid_credentials".to_string(),
                 error_description: "Invalid email or password".to_string(),
             }),
-        ));
+        ))
     }
-
-    // Update last login
-    user.last_login = Some(Utc::now());
-
-    // Generate JWT token
-    let token = create_jwt_token(user, &state.jwt_secret).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "token_generation_failed".to_string(),
-                error_description: "Failed to generate access token".to_string(),
-            }),
-        )
-    })?;
-
-    let user_info = UserInfo {
-        id: user.id.clone(),
-        email: user.email.clone(),
-        name: user.name.clone(),
-        roles: user.roles.clone(),
-    };
-
-    info!("User logged in successfully: {}", user.email);
-
-    Ok(Json(AuthResponse {
-        access_token: token,
-        token_type: "Bearer".to_string(),
-        expires_in: 86400, // 24 hours
-        refresh_token: None,
-        user: user_info,
-    }))
 }
 
-/// OAuth authorization endpoint
+/// `OAuth` authorization endpoint
+///
+/// # Errors
+///
+/// Returns `(StatusCode, Json<ErrorResponse>)` if:
+/// - Request validation fails (`BAD_REQUEST`)
+/// - Invalid `client_id` provided (`BAD_REQUEST`)
+/// - Invalid `redirect_uri` provided (`BAD_REQUEST`)
+///
+/// # Panics
+///
+/// Panics if the redirect URL formatting fails during string writing.
+/// This should never happen under normal operation as the format string is static.
 pub async fn authorize(
     State(state): State<AuthState>,
     Query(request): Query<AuthorizeRequest>,
@@ -417,59 +464,77 @@ pub async fn authorize(
         ));
     }
 
-    let oauth_clients = state.oauth_clients.read().await;
+    let client = state
+        .oauth_clients
+        .read()
+        .await
+        .get(&request.client_id)
+        .cloned();
 
     // Validate client
-    let client = oauth_clients.get(&request.client_id).ok_or_else(|| {
-        (
+    if let Some(client) = client {
+        // Validate redirect URI
+        if !client.redirect_uris.contains(&request.redirect_uri) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "invalid_redirect_uri".to_string(),
+                    error_description: "Invalid redirect_uri".to_string(),
+                }),
+            ));
+        }
+
+        // For demo purposes, auto-approve with demo user
+        let code = generate_token();
+        state.authorization_codes.write().await.insert(
+            code.clone(),
+            AuthorizationCode {
+                code: code.clone(),
+                client_id: request.client_id,
+                user_id: "demo-user-123".to_string(),
+                redirect_uri: request.redirect_uri.clone(),
+                scope: request.scope.unwrap_or_else(|| "read".to_string()),
+                created_at: Utc::now(),
+                expires_at: Utc::now() + Duration::minutes(10),
+                used: false,
+            },
+        );
+
+        let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
+        if let Some(state_param) = request.state {
+            use std::fmt::Write;
+            write!(redirect_url, "&state={state_param}").unwrap();
+        }
+
+        info!("Authorization code generated for client: {}", client.name);
+
+        Ok(Redirect::to(&redirect_url))
+    } else {
+        Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "invalid_client".to_string(),
                 error_description: "Invalid client_id".to_string(),
             }),
-        )
-    })?;
-
-    // Validate redirect URI
-    if !client.redirect_uris.contains(&request.redirect_uri) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid_redirect_uri".to_string(),
-                error_description: "Invalid redirect_uri".to_string(),
-            }),
-        ));
+        ))
     }
-
-    // For demo purposes, auto-approve with demo user
-    let code = generate_token();
-    let mut authorization_codes = state.authorization_codes.write().await;
-
-    authorization_codes.insert(
-        code.clone(),
-        AuthorizationCode {
-            code: code.clone(),
-            client_id: request.client_id,
-            user_id: "demo-user-123".to_string(),
-            redirect_uri: request.redirect_uri.clone(),
-            scope: request.scope.unwrap_or_else(|| "read".to_string()),
-            created_at: Utc::now(),
-            expires_at: Utc::now() + Duration::minutes(10),
-            used: false,
-        },
-    );
-
-    let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
-    if let Some(state_param) = request.state {
-        redirect_url.push_str(&format!("&state={state_param}"));
-    }
-
-    info!("Authorization code generated for client: {}", client.name);
-
-    Ok(Redirect::to(&redirect_url))
 }
 
-/// OAuth token endpoint
+/// `OAuth` token endpoint
+///
+/// # Errors
+///
+/// Returns `(StatusCode, Json<ErrorResponse>)` if:
+/// - Request validation fails (`BAD_REQUEST`)
+/// - Invalid client credentials (UNAUTHORIZED)
+/// - Authorization code missing, invalid, expired, or already used (`BAD_REQUEST`)
+/// - User associated with code not found (`INTERNAL_SERVER_ERROR`)
+/// - JWT token generation fails (`INTERNAL_SERVER_ERROR`)
+/// - Unsupported grant type (`BAD_REQUEST`)
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 pub async fn token(
     State(state): State<AuthState>,
     Json(request): Json<TokenRequest>,
@@ -592,6 +657,18 @@ pub async fn token(
 }
 
 /// Get current user info
+///
+/// # Errors
+///
+/// Returns `(StatusCode, Json<ErrorResponse>)` if:
+/// - Authorization header missing (UNAUTHORIZED)
+/// - Authorization header contains invalid UTF-8 (UNAUTHORIZED)
+/// - Bearer token prefix missing (UNAUTHORIZED)
+/// - JWT token invalid, expired, or malformed (UNAUTHORIZED)
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 #[allow(clippy::unused_async)]
 pub async fn me(
     State(state): State<AuthState>,

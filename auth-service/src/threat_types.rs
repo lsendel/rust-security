@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -69,11 +69,17 @@ pub enum ThreatSecurityEventType {
     AccountLocked,
     SuspiciousActivity,
     RateLimitHit,
+    RateLimitExceeded,
     InputValidationFailure,
     UnauthorizedAccess,
+    AuthorizationDenied,
     DataAccess,
     ConfigurationChange,
     SecurityPolicyViolation,
+    PolicyViolation,
+    ThreatDetected,
+    AnomalyDetected,
+    SecurityScanTriggered,
 }
 
 /// Possible outcomes of security events
@@ -596,31 +602,7 @@ pub struct RollbackPlan {
     pub emergency_contacts: Vec<String>,
 }
 
-/// Security event for threat detection and response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ThreatSecurityEvent {
-    pub event_id: String,
-    pub timestamp: chrono::DateTime<chrono::Utc>,
-    pub event_type: ThreatSecurityEventType,
-    pub severity: ThreatSeverity,
-    pub source: String,
-    pub client_id: Option<String>,
-    pub user_id: Option<String>,
-    pub ip_address: Option<String>,
-    pub user_agent: Option<String>,
-    pub request_id: Option<String>,
-    pub session_id: Option<String>,
-    pub description: String,
-    pub details: std::collections::HashMap<String, serde_json::Value>,
-    pub outcome: EventOutcome,
-    pub resource: Option<String>,
-    pub action: Option<String>,
-    pub risk_score: Option<f64>,
-    pub location: Option<String>,
-    pub device_fingerprint: Option<String>,
-    pub mfa_used: bool,
-    pub token_binding_info: Option<String>,
-}
+
 
 impl ThreatSecurityEvent {
     /// Create a new security event with minimal required fields

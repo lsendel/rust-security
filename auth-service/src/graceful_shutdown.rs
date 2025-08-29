@@ -46,12 +46,16 @@ impl ShutdownCoordinator {
         tokio::select! {
             () = self.wait_for_sigint() => {
                 info!("Received SIGINT, initiating graceful shutdown");
+                self.initiate_shutdown().await;
             }
             () = self.wait_for_sigterm() => {
                 info!("Received SIGTERM, initiating graceful shutdown");
+                self.initiate_shutdown().await;
             }
         }
+    }
 
+    async fn initiate_shutdown(&self) {
         // Broadcast shutdown signal to all components
         if let Err(e) = self.shutdown_tx.send(()) {
             warn!("Failed to send shutdown signal: {}", e);
@@ -190,6 +194,16 @@ impl GracefulShutdownService {
         }
 
         // Wait for active connections to finish
+        self.wait_for_connections_to_finish().await;
+
+        // Perform cleanup tasks
+        self.cleanup_resources().await;
+
+        // Notify completion
+        self.coordinator.notify_completed();
+    }
+
+    async fn wait_for_connections_to_finish(&self) {
         let max_wait_time = Duration::from_secs(30);
         let start_time = std::time::Instant::now();
 
@@ -215,12 +229,6 @@ impl GracefulShutdownService {
             );
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-
-        // Perform cleanup tasks
-        self.cleanup_resources().await;
-
-        // Notify completion
-        self.coordinator.notify_completed();
     }
 
     /// Perform resource cleanup

@@ -1,3 +1,5 @@
+use crate::threat_user_profiler::{LocationFeatures, UserSecurityEvent};
+
 #[derive(Clone)]
 pub struct LocationFeatureExtractor {
     clustering_radius: f64,

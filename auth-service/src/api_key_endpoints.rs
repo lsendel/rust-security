@@ -31,6 +31,16 @@ pub fn router() -> Router<AppState> {
         .route("/:prefix", get(get_api_key).delete(revoke_api_key))
 }
 
+/// Revoke an API key by its prefix
+///
+/// # Errors
+///
+/// Returns `AuthError::NotFound` if the API key with the given prefix does not exist.
+/// Returns `AuthError::InternalError` if the revocation operation fails.
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 async fn revoke_api_key(
     State(state): State<AppState>,
     Path(prefix): Path<String>,
@@ -49,6 +59,18 @@ async fn revoke_api_key(
     Ok(())
 }
 
+/// List all API keys
+///
+/// # Errors
+///
+/// Returns `AuthError::InternalError` if the list operation fails due to:
+/// - Database connection issues
+/// - Serialization failures
+/// - Storage backend errors
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 async fn list_api_keys(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ApiKeyDetails>>, AuthError> {
@@ -61,6 +83,16 @@ async fn list_api_keys(
     Ok(Json(keys))
 }
 
+/// Get details of a specific API key by its prefix
+///
+/// # Errors
+///
+/// Returns `AuthError::NotFound` if the API key with the given prefix does not exist.
+/// Returns `AuthError::InternalError` if the get operation fails due to storage backend errors.
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 async fn get_api_key(
     State(state): State<AppState>,
     Path(prefix): Path<String>,
@@ -87,6 +119,19 @@ async fn get_api_key(
     Ok(Json(details))
 }
 
+/// Create a new API key
+///
+/// # Errors
+///
+/// Returns `AuthError::InternalError` if:
+/// - Random key generation fails
+/// - Password hashing with Argon2 fails
+/// - API key storage operation fails
+/// - Database constraints are violated
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 async fn create_api_key(
     State(state): State<AppState>,
     Json(payload): Json<CreateApiKeyRequest>,

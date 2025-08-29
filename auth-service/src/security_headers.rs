@@ -15,6 +15,7 @@ pub enum SecurityLevel {
 
 /// Configuration for security headers
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecurityHeadersConfig {
     /// Content Security Policy directive
     pub csp: String,
@@ -74,6 +75,7 @@ impl SecurityLevel {
 impl SecurityHeadersConfig {
     /// Enhanced development configuration with improved security
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn development() -> Self {
         Self {
             csp: "default-src 'self'; \
@@ -110,6 +112,7 @@ impl SecurityHeadersConfig {
 
     /// Production configuration with strict security
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn production() -> Self {
         Self {
             csp: "default-src 'none'; \

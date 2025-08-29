@@ -315,6 +315,17 @@ impl ScalingSecurityController {
     }
 
     /// Force an immediate update of security controls
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn std::error::Error>` if:
+    /// - Metric collection fails
+    /// - Security control updates fail
+    /// - Configuration validation fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn force_update(&self) -> Result<(), Box<dyn std::error::Error>> {
         self.update_security_controls().await
     }

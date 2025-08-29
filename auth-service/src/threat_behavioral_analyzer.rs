@@ -1,27 +1,23 @@
+use crate::core::security::{SecurityEvent, SecurityEventType};
+#[cfg(feature = "threat-hunting")]
+use crate::threat_adapter::{ThreatDetectionAdapter, process_with_conversion};
 use crate::threat_types::*;
 use chrono::{DateTime, Duration, Utc};
 use flume::{unbounded, Receiver, Sender};
-use indexmap::IndexMap;
-use nalgebra::{DMatrix, DVector};
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde_json;
 use smartcore::ensemble::random_forest_classifier::RandomForestClassifier;
 use smartcore::linalg::basic::matrix::DenseMatrix;
-use smartcore::linalg::basic::arrays::Array2;
-use smartcore::model_selection::train_test_split;
+use smartcore::linalg::basic::arrays::{Array2, Array1};
 use smartcore::preprocessing::numerical::StandardScaler;
-use smartcore::tree::decision_tree_classifier::SplitCriterion;
-use statrs::distribution::{ContinuousCDF, Normal};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
+use tracing::{error, info, warn};
 
 /// Prometheus metrics for behavioral analysis
 use once_cell::sync::Lazy;
@@ -143,7 +139,7 @@ pub struct BehavioralAnomalyThresholds {
 /// Machine learning model for behavioral analysis
 #[derive(Debug)]
 pub struct BehavioralMLModel {
-    pub classifier: Option<RandomForestClassifier<f64, i32, DenseMatrix<f64>, DenseVector<i32>>>,
+    pub classifier: Option<RandomForestClassifier<f64, i32, DenseMatrix<f64>, Array1<i32>>>,
     pub scaler: Option<StandardScaler<f64, DenseMatrix<f64>>>,
     pub feature_names: Vec<String>,
     pub model_version: String,
@@ -221,7 +217,7 @@ pub struct StatisticalBaseline {
 }
 
 /// Analysis performance metrics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AnalysisMetrics {
     pub events_processed: u64,
     pub threats_detected: u64,
@@ -1328,5 +1324,16 @@ impl AdvancedBehavioralThreatDetector {
         *redis_client = None;
 
         info!("Advanced Behavioral Threat Detector shutdown complete");
+    }
+}
+
+#[cfg(feature = "threat-hunting")]
+#[async_trait::async_trait]
+impl ThreatDetectionAdapter for BehavioralAnalyzer {
+    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        process_with_conversion(event, |threat_event| async move {
+            // Use the existing analyze_event method with converted event
+            self.analyze_event(&threat_event).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        }).await
     }
 }

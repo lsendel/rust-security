@@ -241,7 +241,7 @@ pub trait ApiTransform {
     fn transform_response_v2_to_v1(&self, response: serde_json::Value) -> serde_json::Value;
 }
 
-/// OAuth token response versioning
+/// `OAuth` token response versioning
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenResponseV1 {
     pub access_token: String,

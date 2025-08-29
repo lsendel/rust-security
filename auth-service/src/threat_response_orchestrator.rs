@@ -1,21 +1,22 @@
-use async_trait::async_trait;use crate::threat_types::*;
-use chrono::{DateTime, Duration, Utc};
+use async_trait::async_trait;
+use crate::core::security::SecurityEvent;
+#[cfg(feature = "threat-hunting")]
+use crate::threat_adapter::{ThreatDetectionAdapter, process_with_conversion};
+use crate::threat_types::*;
+use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
-use indexmap::IndexMap;
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
-use tokio::time::{interval, timeout, Duration as TokioDuration};
+use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-/// Prometheus metrics for threat response
 lazy_static::lazy_static! {
     static ref RESPONSE_PLANS_CREATED: Counter = register_counter!(
         "threat_hunting_response_plans_created_total",
@@ -371,7 +372,7 @@ pub trait ExternalIntegration: Send + Sync {
 }
 
 /// Orchestration system statistics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct OrchestrationStatistics {
     pub plans_created: u64,
     pub plans_executed: u64,
@@ -1334,5 +1335,27 @@ impl ThreatResponseOrchestrator {
         *redis_client = None;
 
         info!("Threat Response Orchestrator shutdown complete");
+    }
+}
+
+#[cfg(feature = "threat-hunting")]
+#[async_trait::async_trait]
+impl ThreatDetectionAdapter for ThreatResponseOrchestrator {
+    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        process_with_conversion(event, |threat_event| async move {
+            // Create a threat context from the event and execute response
+            let threat_context = ThreatContext {
+                threat_id: threat_event.event_id.clone(),
+                threat_type: format!("{:?}", threat_event.event_type),
+                severity: threat_event.severity,
+                source: threat_event.source.clone(),
+                timestamp: threat_event.timestamp,
+                affected_entities: threat_event.user_id.into_iter().collect(),
+                indicators: vec![],
+                metadata: threat_event.details,
+            };
+            
+            self.execute_response(&threat_context).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        }).await
     }
 }

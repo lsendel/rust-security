@@ -177,8 +177,53 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
 }
 
 impl IntoResponse for AuthError {
+    /// Convert `AuthError` into an HTTP response
+    ///
+    /// # Panics
+    ///
+    /// Panics if hardcoded security header values fail to parse, which should never happen
+    /// as all header values are statically validated strings.
     fn into_response(self) -> Response {
-        let (status, error_code, user_message, log_details) = match &self {
+        let (status, error_code, user_message, log_details) = self.get_error_details();
+
+        // Create sanitized error response
+        let mut error_response = ErrorResponse {
+            error: error_code.to_string(),
+            error_description: user_message.to_string(),
+            error_uri: None,
+            error_id: None,
+            correlation_id: None,
+            details: None,
+        };
+
+        // Only include error_id for internal errors to help with debugging
+        if log_details {
+            if let Self::InternalError { error_id, .. } = &self {
+                error_response.error_id = Some(error_id.to_string());
+            }
+        }
+
+        // Add security headers
+        let response_tuple = (status, Json(error_response));
+        let mut response = response_tuple.into_response();
+
+        // Add security headers to error responses
+        let headers = response.headers_mut();
+        headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
+        headers.insert("X-Frame-Options", "DENY".parse().unwrap());
+        headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
+        headers.insert(
+            "Referrer-Policy",
+            "strict-origin-when-cross-origin".parse().unwrap(),
+        );
+
+        response
+    }
+}
+
+impl AuthError {
+    fn get_error_details(&self) -> (StatusCode, &'static str, &'static str, bool) {
+        match self {
             Self::InvalidClientCredentials => (
                 StatusCode::UNAUTHORIZED,
                 "invalid_client",
@@ -369,42 +414,10 @@ impl IntoResponse for AuthError {
                     true,
                 )
             }
-        };
-
-        // Create sanitized error response
-        let mut error_response = ErrorResponse {
-            error: error_code.to_string(),
-            error_description: user_message.to_string(),
-            error_uri: None,
-            error_id: None,
-            correlation_id: None,
-            details: None,
-        };
-
-        // Only include error_id for internal errors to help with debugging
-        if log_details {
-            if let Self::InternalError { error_id, .. } = &self {
-                error_response.error_id = Some(error_id.to_string());
-            }
         }
-
-        // Add security headers
-        let response_tuple = (status, Json(error_response));
-        let mut response = response_tuple.into_response();
-
-        // Add security headers to error responses
-        let headers = response.headers_mut();
-        headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
-        headers.insert("X-Frame-Options", "DENY".parse().unwrap());
-        headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
-        headers.insert(
-            "Referrer-Policy",
-            "strict-origin-when-cross-origin".parse().unwrap(),
-        );
-
-        response
     }
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub error: String,
@@ -440,6 +453,12 @@ impl ErrorResponse {
         self
     }
 
+    /// Add a detail field to the error response
+    ///
+    /// # Panics
+    ///
+    /// Panics if the details `HashMap` is None after being initialized, which should never happen
+    /// as it's initialized in the previous line if None.
     #[must_use]
     pub fn with_detail(mut self, key: &str, value: serde_json::Value) -> Self {
         if self.details.is_none() {

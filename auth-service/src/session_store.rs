@@ -84,27 +84,93 @@ impl SessionData {
     }
 }
 
+/// Trait for session storage backends with comprehensive session management capabilities
 #[async_trait]
 pub trait SessionStore: Send + Sync {
+    /// Create a new session in the store
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Session serialization fails
+    /// - Storage backend is unavailable
+    /// - Session already exists with the same ID
+    /// - Write operation fails
     async fn create_session(
         &self,
         session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>>;
+    /// Retrieve a session by its ID
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Storage backend connection fails
+    /// - Session deserialization fails
+    /// - Read operation fails
+    ///
+    /// Returns `Ok(None)` if the session does not exist or has expired.
     async fn get_session(
         &self,
         session_id: &str,
     ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>>;
+    /// Update an existing session in the store
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Session serialization fails
+    /// - Storage backend is unavailable
+    /// - Session does not exist
+    /// - Write operation fails
     async fn update_session(
         &self,
         session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>>;
+    /// Delete a session from the store
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Storage backend connection fails
+    /// - Delete operation fails
+    ///
+    /// Does not error if the session does not exist.
     async fn delete_session(&self, session_id: &str)
         -> Result<(), Box<dyn StdError + Send + Sync>>;
+    /// Get all sessions for a specific user
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Storage backend connection fails
+    /// - Session deserialization fails for any session
+    /// - Index lookup operation fails
     async fn get_user_sessions(
         &self,
         user_id: &str,
     ) -> Result<Vec<SessionData>, Box<dyn StdError + Send + Sync>>;
+    /// Remove expired sessions from the store
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Storage backend connection fails
+    /// - Cleanup operation fails
+    /// - Session deserialization fails during cleanup
+    ///
+    /// Returns the number of sessions that were cleaned up.
     async fn cleanup_expired_sessions(&self) -> Result<u64, Box<dyn StdError + Send + Sync>>;
+    /// Revoke all sessions for a specific user
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn StdError + Send + Sync>` if:
+    /// - Storage backend connection fails
+    /// - Session lookup or deletion fails
+    /// - Index update fails
+    ///
+    /// Returns the number of sessions that were revoked.
     async fn revoke_all_user_sessions(
         &self,
         user_id: &str,

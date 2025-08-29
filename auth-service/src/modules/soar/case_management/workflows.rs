@@ -207,7 +207,7 @@ impl Workflow for DefaultCaseWorkflow {
             }
             CaseStatus::Investigating => {
                 // Check if investigation is complete
-                if case.evidence.len() > 0 {
+                if !case.evidence.is_empty() {
                     case.update_status(CaseStatus::Resolving);
                     info!("Case {} moved to resolution phase", case.id);
                 }

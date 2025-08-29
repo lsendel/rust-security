@@ -38,6 +38,7 @@ pub struct SecureAppConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureSecurityConfig {
     // JWT settings with secure defaults
     #[validate(range(min = 300, max = 3600))] // 5 minutes to 1 hour
@@ -80,6 +81,7 @@ pub struct SecureSecurityConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecurityHeaders {
     pub hsts_max_age: u32,
     pub content_type_options: bool,
@@ -109,6 +111,7 @@ pub enum ReferrerPolicy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct TlsConfig {
     pub min_version: String, // "1.2" or "1.3"
     pub cipher_suites: Vec<String>,
@@ -118,6 +121,7 @@ pub struct TlsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PasswordPolicy {
     #[validate(range(min = 8, max = 128))]
     pub min_length: u32,
@@ -130,6 +134,7 @@ pub struct PasswordPolicy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureRateLimitConfig {
     #[validate(range(min = 1, max = 10000))]
     pub requests_per_minute_global: u32,
@@ -161,6 +166,7 @@ pub struct SecureRateLimitConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureMonitoringConfig {
     pub prometheus_metrics_enabled: bool,
     pub opentelemetry_enabled: bool,
@@ -179,6 +185,7 @@ pub struct SecureMonitoringConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureFeatureFlags {
     pub mfa_enabled: bool,
     pub webauthn_enabled: bool,
@@ -189,6 +196,7 @@ pub struct SecureFeatureFlags {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureOAuthConfig {
     #[validate(range(min = 300, max = 3600))] // 5 minutes to 1 hour
     pub authorization_code_ttl_seconds: u64,
@@ -427,6 +435,7 @@ pub fn load_secure_config() -> Result<SecureAppConfig, ConfigError> {
     Ok(config)
 }
 
+#[allow(clippy::too_many_lines)]
 fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
     // Production security hardening
     config.security.jwt_access_token_ttl_seconds = 600; // 10 minutes
@@ -513,6 +522,7 @@ fn apply_development_security(config: &mut SecureAppConfig) {
     config.rate_limiting.oauth_requests_per_minute = 30;
 }
 
+#[allow(clippy::too_many_lines)]
 fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), ConfigError> {
     // Validate RSA key size
     if config.security.rsa_key_size < 2048 {

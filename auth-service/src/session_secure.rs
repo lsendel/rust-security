@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 
 /// Secure session data with comprehensive security controls
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureSessionData {
     pub user_id: String,
     pub client_id: Option<String>,
@@ -27,6 +28,7 @@ pub struct SecureSessionData {
 
 /// Session configuration with security defaults
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct SecureSessionConfig {
     pub ttl_seconds: u64,
     pub rotation_interval_seconds: u64,

@@ -215,11 +215,11 @@ impl CaseRepository {
 
         for row in rows {
             let alerts: Vec<String> = serde_json::from_value(row.get("alerts"))
-                .map_err(|e| format!("Failed to deserialize alerts: {}", e))?;
+                .map_err(|e| format!("Failed to deserialize alerts: {e}"))?;
             let evidence: Vec<Evidence> = serde_json::from_value(row.get("evidence"))
-                .map_err(|e| format!("Failed to deserialize evidence: {}", e))?;
+                .map_err(|e| format!("Failed to deserialize evidence: {e}"))?;
             let tags: Vec<String> = serde_json::from_value(row.get("tags"))
-                .map_err(|e| format!("Failed to deserialize tags: {}", e))?;
+                .map_err(|e| format!("Failed to deserialize tags: {e}"))?;
             let metadata: serde_json::Value = row.get("metadata");
 
             let case = SecurityCase {

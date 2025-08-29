@@ -1,3 +1,7 @@
+[[bench]]
+name = "threat_conversion_bench"
+harness = false
+
 [package]
 name = "auth-service"
 version = "0.1.0"
@@ -63,7 +67,7 @@ sha2 = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
-once_cell = { workspace = true }
+once_cell.workspace = true
 base64 = { workspace = true }
 constant_time_eq = { workspace = true }
 # Configuration file parsing
@@ -175,6 +179,9 @@ der = { workspace = true, optional = true }
 vaultrs = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-secretsmanager = { workspace = true, optional = true }
+smartcore = "0.4.2"
+statrs = "0.18.0"
+nalgebra = "0.34.0"
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -191,6 +198,7 @@ proptest = { workspace = true }
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }
 # Performance testing
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 tokio-test = { workspace = true }
 # Security testing
 regex = { workspace = true }

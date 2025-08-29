@@ -299,7 +299,7 @@ impl CoreError {
                 AuthenticationError::Timeout => StatusCode::REQUEST_TIMEOUT,
                 AuthenticationError::MethodNotSupported => StatusCode::METHOD_NOT_ALLOWED,
             },
-            Self::Authorization(_) => StatusCode::FORBIDDEN,
+            Self::Authorization(_) | Self::Security(_) => StatusCode::FORBIDDEN,
             Self::Token(token_err) => match token_err {
                 TokenError::Expired | TokenError::Revoked => StatusCode::UNAUTHORIZED,
                 TokenError::NotFound => StatusCode::NOT_FOUND,
@@ -319,7 +319,6 @@ impl CoreError {
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
             },
             Self::RateLimit(_) => StatusCode::TOO_MANY_REQUESTS,
-            Self::Security(_) => StatusCode::FORBIDDEN,
             Self::Cache(_) | Self::Cryptographic(_) | Self::Internal { .. } => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }

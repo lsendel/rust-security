@@ -1,3 +1,5 @@
+use crate::threat_user_profiler::{TemporalFeatures, UserSecurityEvent};
+
 #[derive(Clone)]
 pub struct TemporalFeatureExtractor {
     window_hours: i64,

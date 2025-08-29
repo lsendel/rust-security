@@ -1,7 +1,7 @@
 //! SOAR Case Management Module
 //!
 //! This module provides comprehensive case management capabilities.
-//! It has been refactored from the monolithic soar_case_management.rs
+//! It has been refactored from the monolithic `soar_case_management.rs`
 //! into smaller, focused modules for better maintainability.
 
 pub mod config;

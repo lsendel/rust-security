@@ -1,20 +1,21 @@
+use crate::core::security::SecurityEvent;
+#[cfg(feature = "threat-hunting")]
+use crate::threat_adapter::{ThreatDetectionAdapter, process_with_conversion};
 use crate::errors::AuthError;
 use crate::threat_types::*;
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
+use once_cell::sync::Lazy;
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
+use tracing::{error, info, warn};
 
 /// Prometheus metrics for threat intelligence
 use std::sync::LazyLock;
@@ -195,6 +196,7 @@ pub enum SyncStatus {
     Pending,
     InProgress,
     Completed,
+    Success,
     Failed,
     Disabled,
 }
@@ -261,7 +263,7 @@ pub enum QueryPriority {
 }
 
 /// Intelligence correlation statistics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct IntelligenceStatistics {
     pub queries_total: u64,
     pub matches_total: u64,
@@ -355,6 +357,19 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Initialize the threat intelligence correlator
+    ///
+    /// # Errors
+    ///
+    /// Returns `Box<dyn std::error::Error + Send + Sync>` if:
+    /// - Loading cached indicators fails due to filesystem or deserialization errors
+    /// - Background task initialization fails
+    /// - Feed synchronization setup fails
+    ///
+    /// Note: Redis connection failures are logged as warnings but do not cause initialization to fail.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing Threat Intelligence Correlator");
 
@@ -555,11 +570,11 @@ impl ThreatIntelligenceCorrelator {
         if let Some(cached_result) = cache.get(&cache_key) {
             let now = Utc::now();
             let age = now
-                .signed_duration_since(cached_operation_result.cached_at)
+                .signed_duration_since(cached_result.cached_at)
                 .num_seconds() as u64;
 
-            if age < cached_operation_result.ttl_seconds {
-                return cached_operation_result.operation_result.clone();
+            if age < cached_result.ttl_seconds {
+                return cached_result.operation_result.clone();
             }
         }
 
@@ -690,12 +705,12 @@ impl ThreatIntelligenceCorrelator {
                 .await;
 
                 // Cache the result
-                Self::cache_query_result(&query, operation_result.clone(), &indicator_cache, &config).await;
+                Self::cache_query_result(&query, result.clone(), &indicator_cache, &config).await;
 
                 // Update statistics
                 let mut stats = statistics.lock().await;
                 stats.queries_total += 1;
-                if operation_result.is_some() {
+                if result.is_some() {
                     stats.matches_total += 1;
                 }
 
@@ -876,15 +891,15 @@ impl ThreatIntelligenceCorrelator {
         if response.status().is_success() {
             let abuse_result: AbuseIpdbResponse = response.json().await?;
 
-            if abuse_operation_result.abuse_confidence_percentage > 0 {
+            if abuse_result.abuse_confidence_percentage > 0 {
                 let threat_indicator = ThreatIntelligenceIndicator {
                     indicator: indicator.to_string(),
                     indicator_type: IndicatorType::IpAddress,
                     threat_types: vec![ThreatType::MaliciousBot], // Simplified
-                    confidence: abuse_operation_result.abuse_confidence_percentage as f64 / 100.0,
-                    severity: if abuse_operation_result.abuse_confidence_percentage > 75 {
+                    confidence: abuse_result.abuse_confidence_percentage as f64 / 100.0,
+                    severity: if abuse_result.abuse_confidence_percentage > 75 {
                         ThreatSeverity::High
-                    } else if abuse_operation_result.abuse_confidence_percentage > 50 {
+                    } else if abuse_result.abuse_confidence_percentage > 50 {
                         ThreatSeverity::Medium
                     } else {
                         ThreatSeverity::Low
@@ -893,30 +908,30 @@ impl ThreatIntelligenceCorrelator {
                     last_seen: Utc::now(),
                     source: "AbuseIPDB".to_string(),
                     feed_name: feed.name.clone(),
-                    tags: abuse_operation_result.usage_type.into_iter().collect(),
+                    tags: abuse_result.usage_type.into_iter().collect(),
                     attributes: [
                         (
                             "country_code".to_string(),
                             serde_json::Value::String(
-                                abuse_operation_result.country_code.unwrap_or_default(),
+                                abuse_result.country_code.unwrap_or_default(),
                             ),
                         ),
                         (
                             "isp".to_string(),
-                            serde_json::Value::String(abuse_operation_result.isp.unwrap_or_default()),
+                            serde_json::Value::String(abuse_result.isp.unwrap_or_default()),
                         ),
                         (
                             "is_whitelisted".to_string(),
-                            serde_json::Value::Bool(abuse_operation_result.is_whitelisted),
+                            serde_json::Value::Bool(abuse_result.is_whitelisted),
                         ),
                     ]
                     .into_iter()
                     .collect(),
                     false_positive_rate: 0.1,
-                    reputation_score: abuse_operation_result.abuse_confidence_percentage as f64 / 100.0,
+                    reputation_score: abuse_result.abuse_confidence_percentage as f64 / 100.0,
                     malware_families: Vec::new(),
                     threat_actor_groups: Vec::new(),
-                    geographic_regions: vec![abuse_operation_result.country_code.unwrap_or_default()],
+                    geographic_regions: vec![abuse_result.country_code.unwrap_or_default()],
                     kill_chain_phases: vec![AttackPhase::InitialAccess],
                 };
 
@@ -1007,26 +1022,21 @@ impl ThreatIntelligenceCorrelator {
                                 );
 
                                 // Update feed metadata
-                                if let Some(ref mut metadata) = feed_metadata.get_mut(&feed.name) {
-                                    metadata.last_updated = Some(Utc::now());
-                                    metadata.total_indicators = Some(sync_result.total_indicators);
-                                    metadata.error_count = 0;
+                                {
+                                    let mut status_guard = feed_status.write().await;
+                                    if let Some(ref mut status) = status_guard.get_mut(&feed.name) {
+                                        status.last_sync = Some(Utc::now());
+                                        status.sync_status = SyncStatus::Success;
+                                    }
                                 }
                             }
                             Err(e) => {
                                 error!("Failed to synchronize feed {}: {}", feed.name, e);
 
-                                if let Some(ref mut metadata) = feed_metadata.get_mut(&feed.name) {
-                                    metadata.error_count += 1;
-                                    metadata.last_error = Some(e.to_string());
-
-                                    // Disable feed after too many failures
-                                    if metadata.error_count >= 3 {
-                                        warn!(
-                                            "Disabling feed {} after {} failures",
-                                            feed.name, metadata.error_count
-                                        );
-                                        metadata.enabled = false;
+                                {
+                                    let mut status_guard = feed_status.write().await;
+                                    if let Some(ref mut status) = status_guard.get_mut(&feed.name) {
+                                        status.sync_status = SyncStatus::Failed;
                                     }
                                 }
                             }
@@ -1052,9 +1062,9 @@ impl ThreatIntelligenceCorrelator {
 
                 cache.retain(|_, cached_result| {
                     let age = now
-                        .signed_duration_since(cached_operation_result.cached_at)
+                        .signed_duration_since(cached_result.cached_at)
                         .num_seconds() as u64;
-                    age < cached_operation_result.ttl_seconds
+                    age < cached_result.ttl_seconds
                 });
 
                 debug!("Cache cleanup completed, {} entries remaining", cache.len());
@@ -1141,7 +1151,7 @@ fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
     }
 }
 
-impl ThreatIntelligenceService {
+impl ThreatIntelligenceCorrelator {
     /// Synchronize a threat feed by downloading and processing indicators
     async fn synchronize_threat_feed(
         &self,
@@ -1423,6 +1433,17 @@ impl ThreatIntelligenceService {
     ) -> Result<u32, AuthError> {
         // In a real implementation, this would remove indicators not in the current feed
         Ok(0)
+    }
+}
+
+#[cfg(feature = "threat-hunting")]
+#[async_trait::async_trait]
+impl ThreatDetectionAdapter for ThreatIntelligenceEngine {
+    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        process_with_conversion(event, |threat_event| async move {
+            // Use the existing correlate_event method with converted event
+            self.correlate_event(&threat_event).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        }).await
     }
 }
 

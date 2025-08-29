@@ -6,6 +6,7 @@ use tokio::sync::RwLock;
 
 /// Feature flag system for controlling optional modules and functionality
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct FeatureFlags {
     // OIDC Provider Features
     pub google_oidc: bool,
@@ -121,6 +122,7 @@ impl Default for FeatureFlags {
 impl FeatureFlags {
     /// Load feature flags from environment variables
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn from_env() -> Self {
         let mut flags = Self::default();
 
@@ -348,6 +350,7 @@ impl FeatureFlags {
 
     /// Get list of enabled features for logging
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn enabled_features(&self) -> Vec<&'static str> {
         let mut features = Vec::new();
 

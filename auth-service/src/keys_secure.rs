@@ -302,6 +302,18 @@ pub async fn get_current_jwks() -> Value {
     jwks_document().await
 }
 
+/// Ensure that at least one valid signing key is available
+///
+/// # Errors
+///
+/// Returns `Box<dyn std::error::Error + Send + Sync>` if:
+/// - Key generation fails due to cryptographic errors
+/// - Key storage operations fail
+/// - Key validation fails
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 pub async fn ensure_key_available() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     KEY_MANAGER.ensure_key_available().await
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
@@ -312,10 +324,30 @@ pub async fn get_current_kid() -> Option<String> {
     keys.first().map(|k| k.kid.clone())
 }
 
+/// Rotate keys if needed based on rotation policy
+///
+/// # Errors
+///
+/// Returns `Box<dyn std::error::Error + Send + Sync>` if key availability check fails.
+/// See [`ensure_key_available`] for detailed error conditions.
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 pub async fn maybe_rotate() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ensure_key_available().await
 }
 
+/// Initialize the secure key management system
+///
+/// # Errors
+///
+/// Returns `Box<dyn std::error::Error + Send + Sync>` if key availability check fails.
+/// See [`ensure_key_available`] for detailed error conditions.
+///
+/// # Panics
+///
+/// This function does not panic under normal operation.
 pub async fn initialize_keys() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!("Initializing secure key management");
     ensure_key_available().await

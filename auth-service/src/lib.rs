@@ -78,6 +78,10 @@ use std::sync::Arc;
 // Core modules - fundamental functionality
 pub mod core;
 pub mod errors;
+pub mod auth_service_integration;
+pub mod threat_processor;
+pub mod threat_adapter;
+pub mod event_conversion;
 pub mod graceful_shutdown;
 pub mod production_logging;
 

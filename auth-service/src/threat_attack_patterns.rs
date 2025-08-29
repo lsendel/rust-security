@@ -1,23 +1,21 @@
+use crate::core::security::{SecurityEvent, SecurityEventType};
 use crate::threat_types::*;
 use chrono::{DateTime, Duration, Utc};
-use indexmap::IndexMap;
 use petgraph::{
-    algo::{connected_components, dijkstra},
     graph::NodeIndex,
     Directed, Graph,
 };
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
 
-/// Prometheus metrics for attack pattern detection
 lazy_static::lazy_static! {
     static ref ATTACK_PATTERNS_DETECTED: Counter = register_counter!(
         "threat_hunting_attack_patterns_detected_total",
@@ -1239,7 +1237,7 @@ impl AttackPatternDetector {
     async fn start_graph_analyzer(&self) {
         let attack_graph = self.attack_graph.clone();
         let config = self.config.clone();
-        let active_sequences = self.active_sequences.clone();
+        let _active_sequences = self.active_sequences.clone();
 
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(300)); // 5 minutes
@@ -1248,7 +1246,7 @@ impl AttackPatternDetector {
                 interval.tick().await;
 
                 let graph = attack_graph.lock().await;
-                let config_guard = config.read().await;
+                let _config_guard = config.read().await;
 
                 if graph.node_count() > 0 {
                     // Perform graph analysis
@@ -1294,7 +1292,7 @@ impl AttackPatternDetector {
 
     /// Start behavioral clustering background task
     async fn start_behavioral_clustering(&self) {
-        let behavioral_clusters = self.behavioral_clusters.clone();
+        let _behavioral_clusters = self.behavioral_clusters.clone();
         let event_buffer = self.event_buffer.clone();
         let config = self.config.clone();
 

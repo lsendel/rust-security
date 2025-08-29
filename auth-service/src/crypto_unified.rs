@@ -45,21 +45,19 @@ pub enum SymmetricAlgorithm {
 }
 
 impl SymmetricAlgorithm {
-    const fn key_length(&self) -> usize {
+    const fn key_length(self) -> usize {
         match self {
-            Self::Aes256Gcm => 32,        // 256 bits
-            Self::ChaCha20Poly1305 => 32, // 256 bits
+            Self::Aes256Gcm | Self::ChaCha20Poly1305 => 32, // 256 bits
         }
     }
 
-    const fn nonce_length(&self) -> usize {
+    const fn nonce_length(self) -> usize {
         match self {
-            Self::Aes256Gcm => 12,        // 96 bits
-            Self::ChaCha20Poly1305 => 12, // 96 bits
+            Self::Aes256Gcm | Self::ChaCha20Poly1305 => 12, // 96 bits
         }
     }
 
-    fn algorithm(&self) -> &'static aead::Algorithm {
+    fn algorithm(self) -> &'static aead::Algorithm {
         match self {
             Self::Aes256Gcm => &AES_256_GCM,
             Self::ChaCha20Poly1305 => &CHACHA20_POLY1305,
@@ -94,6 +92,16 @@ pub struct UnifiedCryptoManager {
 
 impl UnifiedCryptoManager {
     /// Create a new crypto manager with the specified algorithm
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if:
+    /// - Random number generation fails
+    /// - Key creation with the specified algorithm fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn new(algorithm: SymmetricAlgorithm) -> Result<Self, UnifiedCryptoError> {
         let key = Self::generate_key(algorithm, 1)?;
         Ok(Self {
@@ -106,16 +114,48 @@ impl UnifiedCryptoManager {
     }
 
     /// Create a new crypto manager with AES-256-GCM (hardware accelerated)
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if key generation fails.
+    /// See [`Self::new`] for detailed error conditions.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn new_aes() -> Result<Self, UnifiedCryptoError> {
         Self::new(SymmetricAlgorithm::Aes256Gcm)
     }
 
     /// Create a new crypto manager with ChaCha20-Poly1305 (software only)
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if key generation fails.
+    /// See [`Self::new`] for detailed error conditions.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn new_chacha() -> Result<Self, UnifiedCryptoError> {
         Self::new(SymmetricAlgorithm::ChaCha20Poly1305)
     }
 
     /// Create manager from environment variable key
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::InvalidKeyFormat` if:
+    /// - `UNIFIED_ENCRYPTION_KEY` environment variable contains invalid hex
+    /// - Key length doesn't match the required length for the algorithm
+    /// - Key creation with the ring library fails
+    ///
+    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if:
+    /// - Environment variable is not set and fallback key generation fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn from_env(algorithm: SymmetricAlgorithm) -> Result<Self, UnifiedCryptoError> {
         if let Ok(key_hex) = std::env::var("UNIFIED_ENCRYPTION_KEY") {
             let key_bytes =
@@ -170,6 +210,19 @@ impl UnifiedCryptoManager {
     }
 
     /// Encrypt data using the current key
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::RandomGenerationFailed` if:
+    /// - Nonce generation fails due to system entropy issues
+    ///
+    /// Returns `UnifiedCryptoError::EncryptionFailed` if:
+    /// - Nonce creation fails
+    /// - Ring encryption operation fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn encrypt(&self, plaintext: &[u8]) -> Result<EncryptedData, UnifiedCryptoError> {
         let current_key = self.current_key.read().await;
         let algorithm = current_key.algorithm;
@@ -202,16 +255,32 @@ impl UnifiedCryptoManager {
     }
 
     /// Decrypt data using the appropriate key version
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::KeyNotFound` if:
+    /// - The key version specified in encrypted data is not found
+    ///
+    /// Returns `UnifiedCryptoError::DecryptionFailed` if:
+    /// - Nonce is invalid for the key
+    /// - Ring decryption operation fails (wrong key, corrupted data, etc.)
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn decrypt(&self, encrypted: &EncryptedData) -> Result<Vec<u8>, UnifiedCryptoError> {
-        let key = if encrypted.key_version == self.current_key.read().await.version {
-            self.current_key.read().await.key.clone()
-        } else {
-            let old_keys = self.old_keys.read().await;
-            old_keys
-                .get(&encrypted.key_version)
-                .ok_or(UnifiedCryptoError::KeyNotFound(encrypted.key_version))?
-                .key
-                .clone()
+        let key = {
+            let current_key = self.current_key.read().await;
+            if encrypted.key_version == current_key.version {
+                current_key.key.clone()
+            } else {
+                let old_keys = self.old_keys.read().await;
+                old_keys
+                    .get(&encrypted.key_version)
+                    .ok_or(UnifiedCryptoError::KeyNotFound(encrypted.key_version))?
+                    .key
+                    .clone()
+            }
         };
 
         let nonce = Nonce::try_assume_unique_for_key(&encrypted.nonce)
@@ -235,7 +304,24 @@ impl UnifiedCryptoManager {
     }
 
     /// Rotate to a new encryption key
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::KeyGenerationFailed` if:
+    /// - Random number generation fails
+    /// - New key creation with ring library fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub async fn rotate_key(&self) -> Result<(), UnifiedCryptoError> {
+        let new_version;
+        let new_key = {
+            let current_key = self.current_key.read().await;
+            new_version = current_key.version + 1;
+            Self::generate_key(current_key.algorithm, new_version)?
+        };
+
         let mut current_key = self.current_key.write().await;
         let mut old_keys = self.old_keys.write().await;
 
@@ -244,8 +330,7 @@ impl UnifiedCryptoManager {
         old_keys.insert(old_key.version, old_key);
 
         // Generate new key with same algorithm
-        let new_version = current_key.version + 1;
-        *current_key = Self::generate_key(current_key.algorithm, new_version)?;
+        *current_key = new_key;
 
         tracing::info!(
             "Rotated encryption key from version {} to {} using {:?}",
@@ -259,9 +344,12 @@ impl UnifiedCryptoManager {
 
     /// Check if key should be rotated based on age
     pub async fn should_rotate_key(&self) -> bool {
-        let current_key = self.current_key.read().await;
-        let age = chrono::Utc::now() - current_key.created_at;
-        age > self.key_rotation_interval
+        let (created_at, rotation_interval) = {
+            let current_key = self.current_key.read().await;
+            (current_key.created_at, self.key_rotation_interval)
+        };
+        let age = chrono::Utc::now() - created_at;
+        age > rotation_interval
     }
 
     /// Clean up old keys beyond the specified age
@@ -269,12 +357,17 @@ impl UnifiedCryptoManager {
         let mut old_keys = self.old_keys.write().await;
         let cutoff = chrono::Utc::now() - max_age;
 
+        let initial_len = old_keys.len();
         old_keys.retain(|_, key| key.created_at > cutoff);
+        let final_len = old_keys.len();
 
-        tracing::info!(
-            "Cleaned up old encryption keys, {} keys remain",
-            old_keys.len()
-        );
+        if initial_len != final_len {
+            tracing::info!(
+                "Cleaned up {} old encryption keys, {} keys remain",
+                initial_len - final_len,
+                final_len
+            );
+        }
     }
 }
 
@@ -371,6 +464,16 @@ pub struct UnifiedRandom;
 
 impl UnifiedRandom {
     /// Generate cryptographically secure random bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::RandomGenerationFailed` if:
+    /// - System entropy is insufficient
+    /// - Random number generator initialization fails
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn generate_bytes(length: usize) -> Result<Vec<u8>, UnifiedCryptoError> {
         let rng = SystemRandom::new();
         let mut bytes = vec![0u8; length];
@@ -380,17 +483,41 @@ impl UnifiedRandom {
     }
 
     /// Generate a random 256-bit key
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::RandomGenerationFailed` if random byte generation fails.
+    /// See [`Self::generate_bytes`] for detailed error conditions.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn generate_key() -> Result<Vec<u8>, UnifiedCryptoError> {
         Self::generate_bytes(32)
     }
 
     /// Generate a random nonce of specified length
+    ///
+    /// # Errors
+    ///
+    /// Returns `UnifiedCryptoError::RandomGenerationFailed` if random byte generation fails.
+    /// See [`Self::generate_bytes`] for detailed error conditions.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal operation.
     pub fn generate_nonce(length: usize) -> Result<Vec<u8>, UnifiedCryptoError> {
         Self::generate_bytes(length)
     }
 }
 
 impl Default for UnifiedCryptoManager {
+    /// Create a default crypto manager with AES-256-GCM
+    ///
+    /// # Panics
+    ///
+    /// Panics if AES-256-GCM crypto manager creation fails, which should never happen
+    /// under normal operation unless the system lacks sufficient entropy for key generation.
     fn default() -> Self {
         Self::new_aes().expect("Failed to create default UnifiedCryptoManager")
     }

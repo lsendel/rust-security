@@ -1,5 +1,5 @@
 //! Production logging configuration for the authentication service
-//!
+//! 
 //! This module provides structured logging configuration optimized for production
 //! environments with proper log levels, formatting, and security considerations.
 
@@ -21,14 +21,24 @@ pub struct LoggingConfig {
     pub level: String,
     /// Log format (json, compact, pretty)
     pub format: LogFormat,
-    /// Whether to log to file
-    pub log_to_file: bool,
-    /// Log file path (if logging to file)
-    pub file_path: Option<String>,
+    /// File logging configuration
+    pub file: Option<FileLoggingConfig>,
+    /// Logging flags
+    pub flags: LoggingFlags,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileLoggingConfig {
+    /// Log file path
+    pub path: String,
     /// Maximum log file size in MB
-    pub max_file_size_mb: u64,
+    pub max_size_mb: u64,
     /// Number of log files to retain
     pub max_files: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingFlags {
     /// Enable structured logging for production
     pub structured: bool,
     /// Enable request/response logging
@@ -56,15 +66,14 @@ impl Default for LoggingConfig {
         Self {
             level: "info".to_string(),
             format: LogFormat::Json,
-            log_to_file: false,
-            file_path: Some("/var/log/auth-service/auth-service.log".to_string()),
-            max_file_size_mb: 100,
-            max_files: 10,
-            structured: true,
-            log_requests: true,
-            mask_sensitive_data: true,
-            include_location: false,
-            enable_tracing: true,
+            file: None,
+            flags: LoggingFlags {
+                structured: true,
+                log_requests: true,
+                mask_sensitive_data: true,
+                include_location: false,
+                enable_tracing: true,
+            },
         }
     }
 }
@@ -76,15 +85,18 @@ impl LoggingConfig {
         Self {
             level: "info".to_string(),
             format: LogFormat::Json,
-            log_to_file: true,
-            file_path: Some("/var/log/auth-service/auth-service.log".to_string()),
-            max_file_size_mb: 100,
-            max_files: 10,
-            structured: true,
-            log_requests: true,
-            mask_sensitive_data: true,
-            include_location: false,
-            enable_tracing: true,
+            file: Some(FileLoggingConfig {
+                path: "/var/log/auth-service/auth-service.log".to_string(),
+                max_size_mb: 100,
+                max_files: 10,
+            }),
+            flags: LoggingFlags {
+                structured: true,
+                log_requests: true,
+                mask_sensitive_data: true,
+                include_location: false,
+                enable_tracing: true,
+            },
         }
     }
 
@@ -94,15 +106,14 @@ impl LoggingConfig {
         Self {
             level: "debug".to_string(),
             format: LogFormat::Pretty,
-            log_to_file: false,
-            file_path: None,
-            max_file_size_mb: 50,
-            max_files: 5,
-            structured: false,
-            log_requests: true,
-            mask_sensitive_data: false,
-            include_location: true,
-            enable_tracing: false,
+            file: None,
+            flags: LoggingFlags {
+                structured: false,
+                log_requests: true,
+                mask_sensitive_data: false,
+                include_location: true,
+                enable_tracing: false,
+            },
         }
     }
 
@@ -112,20 +123,35 @@ impl LoggingConfig {
         Self {
             level: "warn".to_string(),
             format: LogFormat::Compact,
-            log_to_file: false,
-            file_path: None,
-            max_file_size_mb: 10,
-            max_files: 2,
-            structured: false,
-            log_requests: false,
-            mask_sensitive_data: true,
-            include_location: false,
-            enable_tracing: false,
+            file: None,
+            flags: LoggingFlags {
+                structured: false,
+                log_requests: false,
+                mask_sensitive_data: true,
+                include_location: false,
+                enable_tracing: false,
+            },
         }
     }
 }
 
 /// Initialize logging based on configuration
+///
+/// # Errors
+///
+/// Returns `anyhow::Error` if:
+/// - Log level parsing fails due to invalid level string
+/// - Tracing subscriber initialization fails
+/// - File appender creation fails (when file logging is enabled)
+/// - Directory creation fails for log files
+///
+/// # Panics
+///
+/// Panics if:
+/// - Log file parent directory path cannot be determined (should not happen with valid paths)
+/// - Environment filter directive parsing fails for hardcoded values
+/// - Header value parsing fails for hardcoded header values
+#[allow(clippy::cognitive_complexity)]
 pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
     // Parse log level
     let log_level = Level::from_str(&config.level)
@@ -146,20 +172,20 @@ pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
         LogFormat::Json => {
             let layer = fmt::layer()
                 .json()
-                .with_span_events(if config.log_requests {
+                .with_span_events(if config.flags.log_requests {
                     FmtSpan::NEW | FmtSpan::CLOSE
                 } else {
                     FmtSpan::NONE
                 })
-                .with_current_span(config.include_location)
+                .with_current_span(config.flags.include_location)
                 .with_target(true)
                 .with_thread_ids(true)
                 .with_thread_names(true);
 
-            if config.log_to_file && config.file_path.is_some() {
+            if let Some(file_config) = &config.file {
                 // File logging with rotation
                 let file_appender = tracing_appender::rolling::daily(
-                    std::path::Path::new(config.file_path.as_ref().unwrap())
+                    std::path::Path::new(&file_config.path)
                         .parent()
                         .unwrap_or_else(|| std::path::Path::new(".")),
                     "auth-service.log",
@@ -174,26 +200,26 @@ pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
         LogFormat::Compact => {
             let layer = fmt::layer()
                 .compact()
-                .with_span_events(if config.log_requests {
+                .with_span_events(if config.flags.log_requests {
                     FmtSpan::NEW | FmtSpan::CLOSE
                 } else {
                     FmtSpan::NONE
                 })
-                .with_target(config.include_location);
+                .with_target(config.flags.include_location);
 
             registry.with(layer).init();
         }
         LogFormat::Pretty => {
             let layer = fmt::layer()
                 .pretty()
-                .with_span_events(if config.log_requests {
+                .with_span_events(if config.flags.log_requests {
                     FmtSpan::NEW | FmtSpan::CLOSE
                 } else {
                     FmtSpan::NONE
                 })
-                .with_target(config.include_location)
-                .with_file(config.include_location)
-                .with_line_number(config.include_location);
+                .with_target(config.flags.include_location)
+                .with_file(config.flags.include_location)
+                .with_line_number(config.flags.include_location);
 
             registry.with(layer).init();
         }
@@ -202,7 +228,7 @@ pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
     info!(
         level = %config.level,
         format = ?config.format,
-        log_to_file = config.log_to_file,
+        log_to_file = config.file.is_some(),
         "Logging initialized"
     );
 
@@ -214,32 +240,34 @@ pub mod masking {
     use regex::Regex;
     use std::collections::HashMap;
 
-    lazy_static::lazy_static! {
-        static ref SENSITIVE_PATTERNS: HashMap<&'static str, Regex> = {
-            let mut patterns = HashMap::new();
+    static SENSITIVE_PATTERNS: std::sync::LazyLock<HashMap<&'static str, Regex>> = std::sync::LazyLock::new(|| {
+        let mut patterns = HashMap::new();
 
-            // Common sensitive patterns
-            patterns.insert("password", Regex::new(r#""password":\s*"[^"]*""#).unwrap());
-            patterns.insert("secret", Regex::new(r#""secret":\s*"[^"]*""#).unwrap());
-            patterns.insert("token", Regex::new(r#""token":\s*"[^"]*""#).unwrap());
-            patterns.insert("authorization", Regex::new(r#""authorization":\s*"[^"]*""#).unwrap());
-            patterns.insert("api_key", Regex::new(r#""api_key":\s*"[^"]*""#).unwrap());
-            patterns.insert("client_secret", Regex::new(r#""client_secret":\s*"[^"]*""#).unwrap());
+        // Common sensitive patterns
+        patterns.insert("password", Regex::new(r#"password":\s*"[^"]*"#).unwrap());
+        patterns.insert("secret", Regex::new(r#"secret":\s*"[^"]*"#).unwrap());
+        patterns.insert("token", Regex::new(r#"token":\s*"[^"]*"#).unwrap());
+        patterns.insert("authorization", Regex::new(r#"authorization":\s*"[^"]*"#).unwrap());
+        patterns.insert("api_key", Regex::new(r#"api_key":\s*"[^"]*"#).unwrap());
+        patterns.insert("client_secret", Regex::new(r#"client_secret":\s*"[^"]*"#).unwrap());
 
-            // Credit card patterns
-            patterns.insert("credit_card", Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap());
+        // Credit card patterns
+        patterns.insert("credit_card", Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap());
 
-            // SSN patterns
-            patterns.insert("ssn", Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap());
+        // SSN patterns
+        patterns.insert("ssn", Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap());
 
-            // Email addresses (partial masking)
-            patterns.insert("email", Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap());
+        // Email addresses (partial masking)
+        patterns.insert("email", Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap());
 
-            patterns
-        };
-    }
+        patterns
+    });
 
     /// Mask sensitive data in a log message
+    ///
+    /// # Panics
+    ///
+    /// Panics if the regex capture fails, which should never happen with the given patterns.
     #[must_use]
     pub fn mask_sensitive_data(input: &str) -> String {
         let mut result = input.to_string();
@@ -251,7 +279,7 @@ pub mod masking {
                     pattern
                         .replace_all(&result, |caps: &regex::Captures| {
                             let email = caps.get(0).unwrap().as_str();
-                            if let Some(at_pos) = email.find('@') {
+                            email.find('@').map_or_else(|| "***@***.***".to_string(), |at_pos| {
                                 let username = &email[..at_pos];
                                 let domain = &email[at_pos..];
                                 if username.len() > 1 {
@@ -259,9 +287,7 @@ pub mod masking {
                                 } else {
                                     format!("***{domain}")
                                 }
-                            } else {
-                                "***@***.***".to_string()
-                            }
+                            })
                         })
                         .to_string()
                 }
@@ -296,11 +322,7 @@ pub mod masking {
                     pattern
                         .replace_all(&result, |caps: &regex::Captures| {
                             let full_match = caps.get(0).unwrap().as_str();
-                            if let Some(colon_pos) = full_match.find(':') {
-                                format!("{}:\"[REDACTED]\"", &full_match[..colon_pos])
-                            } else {
-                                "[REDACTED]".to_string()
-                            }
+                            full_match.find(':').map_or_else(|| "[REDACTED]".to_string(), |colon_pos| format!("{}:\"[REDACTED]\"", &full_match[..colon_pos]))
                         })
                         .to_string()
                 }
@@ -390,7 +412,7 @@ mod tests {
         let config = LoggingConfig::default();
         assert_eq!(config.level, "info");
         assert!(matches!(config.format, LogFormat::Json));
-        assert!(config.mask_sensitive_data);
+        assert!(config.flags.mask_sensitive_data);
     }
 
     #[test]
@@ -398,9 +420,9 @@ mod tests {
         let config = LoggingConfig::production();
         assert_eq!(config.level, "info");
         assert!(matches!(config.format, LogFormat::Json));
-        assert!(config.log_to_file);
-        assert!(config.mask_sensitive_data);
-        assert!(!config.include_location); // No source location in production
+        assert!(config.file.is_some());
+        assert!(config.flags.mask_sensitive_data);
+        assert!(!config.flags.include_location); // No source location in production
     }
 
     #[test]
@@ -408,9 +430,9 @@ mod tests {
         let config = LoggingConfig::development();
         assert_eq!(config.level, "debug");
         assert!(matches!(config.format, LogFormat::Pretty));
-        assert!(!config.log_to_file);
-        assert!(!config.mask_sensitive_data); // Allow sensitive data in dev
-        assert!(config.include_location);
+        assert!(config.file.is_none());
+        assert!(!config.flags.mask_sensitive_data); // Allow sensitive data in dev
+        assert!(config.flags.include_location);
     }
 
     #[test]

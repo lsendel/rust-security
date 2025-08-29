@@ -6,8 +6,7 @@
 use crate::core::errors::{CoreError, CryptographicError};
 use base64::prelude::*;
 use ring::{
-    digest,
-    hmac,
+    digest, hmac,
     rand::{SecureRandom, SystemRandom},
     signature::{self, Ed25519KeyPair},
 };
@@ -53,36 +52,38 @@ impl Drop for SecureKey {
 
 impl SecureKey {
     /// Create a new secure key
-    #[must_use] pub const fn new(data: Vec<u8>, key_type: KeyType, id: String) -> Self {
-        Self {
-            data,
-            key_type,
-            id,
-        }
+    #[must_use]
+    pub const fn new(data: Vec<u8>, key_type: KeyType, id: String) -> Self {
+        Self { data, key_type, id }
     }
 
     /// Get the key type
-    #[must_use] pub const fn key_type(&self) -> KeyType {
+    #[must_use]
+    pub const fn key_type(&self) -> KeyType {
         self.key_type
     }
 
     /// Get the key ID
-    #[must_use] pub fn key_id(&self) -> &str {
+    #[must_use]
+    pub fn key_id(&self) -> &str {
         &self.id
     }
 
     /// Get the key data (use with caution)
-    #[must_use] pub fn key_data(&self) -> &[u8] {
+    #[must_use]
+    pub fn key_data(&self) -> &[u8] {
         &self.data
     }
 
     /// Get the key length
-    #[must_use] pub fn len(&self) -> usize {
+    #[must_use]
+    pub fn len(&self) -> usize {
         self.data.len()
     }
 
     /// Check if key is empty
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 }
@@ -104,7 +105,8 @@ pub struct CryptoProvider {
 
 impl CryptoProvider {
     /// Create a new crypto provider
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             rng: SystemRandom::new(),
         }
@@ -112,9 +114,9 @@ impl CryptoProvider {
 
     /// Generate a secure random key
     /// Generate a new cryptographic key
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Crypto` if key generation fails
     pub fn generate_key(&self, key_type: KeyType, id: String) -> Result<SecureKey, CoreError> {
         let key_size = match key_type {
@@ -130,9 +132,9 @@ impl CryptoProvider {
     }
 
     /// Generate secure random bytes
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Crypto` if random generation fails
     pub fn generate_random(&self, length: usize) -> Result<Vec<u8>, CoreError> {
         let mut random_data = vec![0u8; length];
@@ -143,23 +145,24 @@ impl CryptoProvider {
     }
 
     /// Generate a secure salt for password hashing
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Crypto` if salt generation fails
     pub fn generate_salt(&self) -> Result<Vec<u8>, CoreError> {
         self.generate_random(32) // 256-bit salt
     }
 
     /// Hash data using SHA-256
-    #[must_use] pub fn hash_sha256(&self, data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn hash_sha256(&self, data: &[u8]) -> Vec<u8> {
         digest::digest(&digest::SHA256, data).as_ref().to_vec()
     }
 
     /// Compute HMAC-SHA256
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Crypto` if the key type is not HMAC-SHA256
     pub fn hmac_sha256(&self, key: &SecureKey, data: &[u8]) -> Result<Vec<u8>, CoreError> {
         if key.key_type() != KeyType::HmacSha256 {
@@ -174,9 +177,9 @@ impl CryptoProvider {
     }
 
     /// Verify HMAC-SHA256
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Crypto` if the key type is not HMAC-SHA256
     pub fn verify_hmac_sha256(
         &self,
@@ -198,9 +201,9 @@ impl CryptoProvider {
     }
 
     /// Create Ed25519 key pair for signing
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Cryptographic` if random seed generation fails or key pair creation fails
     pub fn create_ed25519_keypair(&self, _key_id: String) -> Result<Ed25519KeyPair, CoreError> {
         let seed = self.generate_random(32)?;
@@ -209,14 +212,15 @@ impl CryptoProvider {
     }
 
     /// Sign data with Ed25519
-    #[must_use] pub fn sign_ed25519(&self, keypair: &Ed25519KeyPair, data: &[u8]) -> Vec<u8> {
+    #[must_use]
+    pub fn sign_ed25519(&self, keypair: &Ed25519KeyPair, data: &[u8]) -> Vec<u8> {
         keypair.sign(data).as_ref().to_vec()
     }
 
     /// Verify Ed25519 signature
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This function never returns an error - it returns `Ok(false)` for invalid signatures
     /// instead of propagating verification errors
     pub fn verify_ed25519_signature(
@@ -233,9 +237,9 @@ impl CryptoProvider {
     }
 
     /// Derive key using PBKDF2
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Cryptographic` if the iteration count is zero or key derivation fails
     pub fn derive_key_pbkdf2(
         &self,
@@ -245,26 +249,28 @@ impl CryptoProvider {
         length: usize,
     ) -> Result<Vec<u8>, CoreError> {
         use ring::pbkdf2;
-        
+
         let mut derived_key = vec![0u8; length];
         pbkdf2::derive(
             pbkdf2::PBKDF2_HMAC_SHA256,
-            std::num::NonZeroU32::new(iterations)
-                .ok_or(CoreError::Cryptographic(CryptographicError::KeyDerivationFailed))?,
+            std::num::NonZeroU32::new(iterations).ok_or(CoreError::Cryptographic(
+                CryptographicError::KeyDerivationFailed,
+            ))?,
             salt,
             password.as_bytes(),
             &mut derived_key,
         );
-        
+
         Ok(derived_key)
     }
 
     /// Constant-time comparison of byte arrays
-    #[must_use] pub fn constant_time_eq(&self, a: &[u8], b: &[u8]) -> bool {
+    #[must_use]
+    pub fn constant_time_eq(&self, a: &[u8], b: &[u8]) -> bool {
         if a.len() != b.len() {
             return false;
         }
-        
+
         let mut result = 0u8;
         for (byte_a, byte_b) in a.iter().zip(b.iter()) {
             result |= byte_a ^ byte_b;
@@ -284,14 +290,15 @@ pub struct CryptoUtils;
 
 impl CryptoUtils {
     /// Encode bytes to base64url (no padding)
-    #[must_use] pub fn encode_base64url(data: &[u8]) -> String {
+    #[must_use]
+    pub fn encode_base64url(data: &[u8]) -> String {
         BASE64_URL_SAFE_NO_PAD.encode(data)
     }
 
     /// Decode base64url (no padding)
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Cryptographic` if the input contains invalid base64url characters
     pub fn decode_base64url(data: &str) -> Result<Vec<u8>, CoreError> {
         BASE64_URL_SAFE_NO_PAD
@@ -300,14 +307,15 @@ impl CryptoUtils {
     }
 
     /// Encode bytes to base64 (standard)
-    #[must_use] pub fn encode_base64(data: &[u8]) -> String {
+    #[must_use]
+    pub fn encode_base64(data: &[u8]) -> String {
         BASE64_STANDARD.encode(data)
     }
 
     /// Decode base64 (standard)
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Cryptographic` if the input contains invalid base64 characters
     pub fn decode_base64(data: &str) -> Result<Vec<u8>, CoreError> {
         BASE64_STANDARD
@@ -316,9 +324,9 @@ impl CryptoUtils {
     }
 
     /// Convert hex string to bytes
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `CoreError::Cryptographic` if the input contains invalid hexadecimal characters
     /// or has an odd number of characters
     pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, CoreError> {
@@ -332,8 +340,13 @@ impl CryptoUtils {
     }
 
     /// Convert bytes to hex string
-    #[must_use] pub fn bytes_to_hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    #[must_use]
+    pub fn bytes_to_hex(bytes: &[u8]) -> String {
+        bytes.iter().fold(String::new(), |mut acc, b| {
+            use std::fmt::Write;
+            write!(acc, "{b:02x}").unwrap();
+            acc
+        })
     }
 }
 
@@ -351,22 +364,26 @@ impl Drop for SecureString {
 
 impl SecureString {
     /// Create a new secure string
-    #[must_use] pub const fn new(data: String) -> Self {
+    #[must_use]
+    pub const fn new(data: String) -> Self {
         Self { data }
     }
 
     /// Get the string content (use with caution)
-    #[must_use] pub fn expose_secret(&self) -> &str {
+    #[must_use]
+    pub fn expose_secret(&self) -> &str {
         &self.data
     }
 
     /// Get the length
-    #[must_use] pub fn len(&self) -> usize {
+    #[must_use]
+    pub fn len(&self) -> usize {
         self.data.len()
     }
 
     /// Check if empty
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 }

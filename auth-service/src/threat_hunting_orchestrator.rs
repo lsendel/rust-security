@@ -601,7 +601,7 @@ impl ThreatHuntingOrchestrator {
 
         // Calculate overall confidence
         if !operation_result.threats_detected.is_empty() {
-            operation_result.confidence_score = result
+            operation_result.confidence_score = operation_result
                 .threats_detected
                 .iter()
                 .map(|t| t.confidence)
@@ -621,7 +621,7 @@ impl ThreatHuntingOrchestrator {
         }
 
         drop(timer);
-        Ok(result)
+        Ok(operation_result)
     }
 
     /// Analyze user behavior for the event
