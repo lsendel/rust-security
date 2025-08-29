@@ -355,7 +355,7 @@ fn bench_cache_operations(c: &mut Criterion) {
                 let cache_read = cache.read().await;
                 let key = format!("key_{}", rand::random::<usize>() % 1000);
                 // Clone the value to avoid lifetime issues with the lock guard
-                let _result = cache_read.get(&key).cloned();
+                let result = cache_read.get(&key).cloned();
                 black_box(result)
             })
         })

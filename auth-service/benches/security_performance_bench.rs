@@ -101,7 +101,7 @@ fn bench_rate_limiting(c: &mut Criterion) {
 
     group.bench_function("rate_limit_check", |b| {
         let config = RateLimitConfig::default();
-        let _limiter = SecureRateLimiter::new(config);
+        let limiter = SecureRateLimiter::new(config);
         let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
 
         b.iter(|| {
@@ -238,7 +238,7 @@ fn bench_security_validation_pipeline(c: &mut Criterion) {
 
     group.bench_function("full_security_validation", |b| {
         let config = RateLimitConfig::default();
-        let _limiter = SecureRateLimiter::new(config);
+        let limiter = SecureRateLimiter::new(config);
         let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
         let secret = "test-secret-key-that-is-long-enough-for-security";
 

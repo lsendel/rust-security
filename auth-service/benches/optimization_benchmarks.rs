@@ -36,7 +36,7 @@ fn bench_token_validation(c: &mut Criterion) {
 
     group.bench_function("validate_token_binding_optimized", |b| {
         b.iter(|| {
-            let _result = validate_token_binding(
+            let result = validate_token_binding(
                 black_box(client_ip),
                 black_box(user_agent),
                 black_box(&binding),
@@ -86,7 +86,7 @@ fn bench_cache_performance(c: &mut Criterion) {
     group.bench_function("lru_cache_get", |b| {
         b.iter(|| {
             rt.block_on(async {
-                let _result = lru_cache.get(black_box("token_500")).await;
+                let result = lru_cache.get(black_box("token_500")).await;
                 black_box(result)
             })
         });
@@ -125,7 +125,7 @@ fn bench_cache_performance(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let cache = hashmap_cache.read().await;
-                let _result = cache.get(black_box("token_500")).cloned();
+                let result = cache.get(black_box("token_500")).cloned();
                 black_box(result)
             })
         });
