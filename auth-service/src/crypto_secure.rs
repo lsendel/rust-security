@@ -82,6 +82,10 @@ pub struct SecureCryptoManager {
 
 impl SecureCryptoManager {
     /// Create new crypto manager with secure key generation
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CryptoError::KeyGenerationFailed` if secure key generation fails
     pub fn new() -> Result<Self, CryptoError> {
         let key_id = Self::generate_key_id()?;
         let key = Self::generate_secure_key(key_id)?;
@@ -95,6 +99,11 @@ impl SecureCryptoManager {
     }
 
     /// Create from environment variable with validation
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CryptoError::KeyGenerationFailed` if the MASTER_ENCRYPTION_KEY environment variable
+    /// is invalid or contains non-hexadecimal characters
     pub fn from_env() -> Result<Self, CryptoError> {
         if let Ok(key_hex) = std::env::var("MASTER_ENCRYPTION_KEY") {
             let key_material =
@@ -325,6 +334,10 @@ pub struct SecureRandom;
 
 impl SecureRandom {
     /// Generate cryptographically secure random bytes
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CryptoError::RandomGenerationFailed` if the system random number generator fails
     pub fn generate_bytes(length: usize) -> Result<Vec<u8>, CryptoError> {
         let rng = SystemRandom::new();
         let mut bytes = vec![0u8; length];
@@ -336,12 +349,20 @@ impl SecureRandom {
     }
 
     /// Generate secure token
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CryptoError::RandomGenerationFailed` if random byte generation fails
     pub fn generate_token(length: usize) -> Result<String, CryptoError> {
         let bytes = Self::generate_bytes(length)?;
         Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
     }
 
     /// Generate secure hex string
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CryptoError::RandomGenerationFailed` if random byte generation fails
     pub fn generate_hex(length: usize) -> Result<String, CryptoError> {
         let bytes = Self::generate_bytes(length)?;
         Ok(hex::encode(bytes))

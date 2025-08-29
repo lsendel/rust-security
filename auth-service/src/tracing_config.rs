@@ -14,6 +14,12 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 use uuid::Uuid;
 
 /// Initialize distributed tracing with OpenTelemetry and Jaeger
+///
+/// # Errors
+/// Returns an error if:
+/// - OpenTelemetry tracer pipeline fails to initialize  
+/// - Jaeger agent connection fails
+/// - Tracing subscriber configuration is invalid
 pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Get configuration from environment
     let jaeger_endpoint = env::var("JAEGER_ENDPOINT")

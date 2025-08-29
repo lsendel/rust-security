@@ -39,24 +39,25 @@ impl fmt::Display for KeyType {
 /// Secure key material with automatic zeroization
 #[derive(Clone)]
 pub struct SecureKey {
-    key_data: Vec<u8>,
+    data: Vec<u8>,
+    #[allow(dead_code)]
     key_type: KeyType,
-    key_id: String,
+    id: String,
 }
 
 impl Drop for SecureKey {
     fn drop(&mut self) {
-        self.key_data.zeroize();
+        self.data.zeroize();
     }
 }
 
 impl SecureKey {
     /// Create a new secure key
-    #[must_use] pub const fn new(key_data: Vec<u8>, key_type: KeyType, key_id: String) -> Self {
+    #[must_use] pub const fn new(data: Vec<u8>, key_type: KeyType, id: String) -> Self {
         Self {
-            key_data,
+            data,
             key_type,
-            key_id,
+            id,
         }
     }
 
@@ -67,22 +68,22 @@ impl SecureKey {
 
     /// Get the key ID
     #[must_use] pub fn key_id(&self) -> &str {
-        &self.key_id
+        &self.id
     }
 
     /// Get the key data (use with caution)
     #[must_use] pub fn key_data(&self) -> &[u8] {
-        &self.key_data
+        &self.data
     }
 
     /// Get the key length
     #[must_use] pub fn len(&self) -> usize {
-        self.key_data.len()
+        self.data.len()
     }
 
     /// Check if key is empty
     #[must_use] pub fn is_empty(&self) -> bool {
-        self.key_data.is_empty()
+        self.data.is_empty()
     }
 }
 
@@ -90,8 +91,8 @@ impl fmt::Debug for SecureKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SecureKey")
             .field("key_type", &self.key_type)
-            .field("key_id", &self.key_id)
-            .field("key_length", &self.key_data.len())
+            .field("key_id", &self.id)
+            .field("key_length", &self.data.len())
             .finish()
     }
 }
@@ -110,22 +111,29 @@ impl CryptoProvider {
     }
 
     /// Generate a secure random key
-    pub fn generate_key(&self, key_type: KeyType, key_id: String) -> Result<SecureKey, CoreError> {
+    /// Generate a new cryptographic key
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Crypto` if key generation fails
+    pub fn generate_key(&self, key_type: KeyType, id: String) -> Result<SecureKey, CoreError> {
         let key_size = match key_type {
-            KeyType::HmacSha256 => 32, // 256 bits
-            KeyType::Ed25519 => 32,    // 256 bits seed
-            KeyType::Aes256 => 32,     // 256 bits
+            KeyType::HmacSha256 | KeyType::Ed25519 | KeyType::Aes256 => 32, // 256 bits
         };
 
-        let mut key_data = vec![0u8; key_size];
+        let mut data = vec![0u8; key_size];
         self.rng
-            .fill(&mut key_data)
+            .fill(&mut data)
             .map_err(|_| CoreError::Cryptographic(CryptographicError::KeyGenerationFailed))?;
 
-        Ok(SecureKey::new(key_data, key_type, key_id))
+        Ok(SecureKey::new(data, key_type, id))
     }
 
     /// Generate secure random bytes
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Crypto` if random generation fails
     pub fn generate_random(&self, length: usize) -> Result<Vec<u8>, CoreError> {
         let mut random_data = vec![0u8; length];
         self.rng
@@ -135,6 +143,10 @@ impl CryptoProvider {
     }
 
     /// Generate a secure salt for password hashing
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Crypto` if salt generation fails
     pub fn generate_salt(&self) -> Result<Vec<u8>, CoreError> {
         self.generate_random(32) // 256-bit salt
     }
@@ -145,6 +157,10 @@ impl CryptoProvider {
     }
 
     /// Compute HMAC-SHA256
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Crypto` if the key type is not HMAC-SHA256
     pub fn hmac_sha256(&self, key: &SecureKey, data: &[u8]) -> Result<Vec<u8>, CoreError> {
         if key.key_type() != KeyType::HmacSha256 {
             return Err(CoreError::Cryptographic(
@@ -158,6 +174,10 @@ impl CryptoProvider {
     }
 
     /// Verify HMAC-SHA256
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Crypto` if the key type is not HMAC-SHA256
     pub fn verify_hmac_sha256(
         &self,
         key: &SecureKey,
@@ -178,6 +198,10 @@ impl CryptoProvider {
     }
 
     /// Create Ed25519 key pair for signing
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Cryptographic` if random seed generation fails or key pair creation fails
     pub fn create_ed25519_keypair(&self, _key_id: String) -> Result<Ed25519KeyPair, CoreError> {
         let seed = self.generate_random(32)?;
         Ed25519KeyPair::from_seed_unchecked(&seed)
@@ -190,6 +214,11 @@ impl CryptoProvider {
     }
 
     /// Verify Ed25519 signature
+    /// 
+    /// # Errors
+    /// 
+    /// This function never returns an error - it returns `Ok(false)` for invalid signatures
+    /// instead of propagating verification errors
     pub fn verify_ed25519_signature(
         &self,
         public_key: &[u8],
@@ -204,6 +233,10 @@ impl CryptoProvider {
     }
 
     /// Derive key using PBKDF2
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Cryptographic` if the iteration count is zero or key derivation fails
     pub fn derive_key_pbkdf2(
         &self,
         password: &str,
@@ -256,6 +289,10 @@ impl CryptoUtils {
     }
 
     /// Decode base64url (no padding)
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Cryptographic` if the input contains invalid base64url characters
     pub fn decode_base64url(data: &str) -> Result<Vec<u8>, CoreError> {
         BASE64_URL_SAFE_NO_PAD
             .decode(data)
@@ -268,6 +305,10 @@ impl CryptoUtils {
     }
 
     /// Decode base64 (standard)
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Cryptographic` if the input contains invalid base64 characters
     pub fn decode_base64(data: &str) -> Result<Vec<u8>, CoreError> {
         BASE64_STANDARD
             .decode(data)
@@ -275,6 +316,11 @@ impl CryptoUtils {
     }
 
     /// Convert hex string to bytes
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Cryptographic` if the input contains invalid hexadecimal characters
+    /// or has an odd number of characters
     pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, CoreError> {
         (0..hex.len())
             .step_by(2)

@@ -7,24 +7,24 @@
 //! This service is organized into the following functional areas:
 //!
 //! ### Core Authentication
-//! - JWT handling and validation
+//! - `JWT` handling and validation
 //! - Session management
-//! - OAuth flows
+//! - `OAuth` flows
 //! - Token management
 //!
 //! ### User Management
 //! - User registration and profiles
-//! - API key management
+//! - `API` key management
 //! - Service identity handling
 //!
 //! ### Security
-//! - Rate limiting and DDoS protection
+//! - Rate limiting and `DDoS` protection
 //! - Input validation and sanitization
 //! - Security headers and monitoring
-//! - PII protection
+//! - `PII` protection
 //!
 //! ### API & Middleware
-//! - HTTP handlers and routing
+//! - `HTTP` handlers and routing
 //! - Authentication middleware
 //! - Request/response processing
 //!

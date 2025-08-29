@@ -122,6 +122,10 @@ impl CsrfToken {
     }
 
     /// Generate HMAC signature for the token
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CsrfError::InvalidSecretKey` if the secret key is invalid for HMAC
     pub fn sign(&self, secret_key: &[u8]) -> Result<String, CsrfError> {
         let mut mac =
             HmacSha256::new_from_slice(secret_key).map_err(|_| CsrfError::InvalidSecretKey)?;
@@ -139,6 +143,10 @@ impl CsrfToken {
     }
 
     /// Verify HMAC signature
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CsrfError::InvalidSecretKey` if the secret key is invalid for HMAC
     pub fn verify(&self, signature: &str, secret_key: &[u8]) -> Result<bool, CsrfError> {
         let expected_signature = self.sign(secret_key)?;
         Ok(constant_time_eq(

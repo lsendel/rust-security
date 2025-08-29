@@ -16,35 +16,45 @@ use uuid::Uuid;
 
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
+#[cfg(feature = "monitoring")]
+use std::sync::LazyLock;
 
 /// Prometheus metrics for user profiling
 #[cfg(feature = "monitoring")]
-lazy_static::lazy_static! {
-    static ref USER_PROFILES_ANALYZED: Counter = register_counter!(
+static USER_PROFILES_ANALYZED: LazyLock<Counter> = LazyLock::new(|| {
+    register_counter!(
         "threat_hunting_user_profiles_analyzed_total",
         "Total user profiles analyzed"
-    ).unwrap();
+    ).expect("Failed to create user_profiles_analyzed counter")
+});
 
-    static ref BEHAVIORAL_ANOMALIES_FOUND: Counter = register_counter!(
+static BEHAVIORAL_ANOMALIES_FOUND: LazyLock<Counter> = LazyLock::new(|| {
+    register_counter!(
         "threat_hunting_behavioral_anomalies_found_total",
         "Total behavioral anomalies found in user profiles"
-    ).unwrap();
+    ).expect("Failed to create behavioral_anomalies_found counter")
+});
 
-    static ref PROFILE_ANALYSIS_DURATION: Histogram = register_histogram!(
+static PROFILE_ANALYSIS_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram!(
         "threat_hunting_profile_analysis_duration_seconds",
         "Duration of user profile analysis operations"
-    ).unwrap();
+    ).expect("Failed to create profile_analysis_duration histogram")
+});
 
-    static ref ACTIVE_USER_PROFILES: Gauge = register_gauge!(
+static ACTIVE_USER_PROFILES: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!(
         "threat_hunting_active_user_profiles",
         "Number of active user profiles being tracked"
-    ).unwrap();
+    ).expect("Failed to create active_user_profiles gauge")
+});
 
-    static ref TIME_SERIES_PREDICTIONS: Counter = register_counter!(
+static TIME_SERIES_PREDICTIONS: LazyLock<Counter> = LazyLock::new(|| {
+    register_counter!(
         "threat_hunting_time_series_predictions_total",
         "Total time series predictions made"
-    ).unwrap();
-}
+    ).expect("Failed to create time_series_predictions counter")
+});
 
 /// Advanced user behavior profiler that orchestrates all profiling components
 pub struct AdvancedUserBehaviorProfiler {

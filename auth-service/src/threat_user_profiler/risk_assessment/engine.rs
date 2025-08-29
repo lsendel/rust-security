@@ -30,6 +30,12 @@ impl RiskAssessmentEngine {
     }
 
     /// Perform comprehensive risk assessment for a user
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Risk calculation fails
+    /// - Peer comparison analysis fails
+    /// - Risk factor aggregation fails
     pub async fn assess_risk(
         &self,
         user_id: Uuid,

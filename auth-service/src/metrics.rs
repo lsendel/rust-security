@@ -20,7 +20,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 #[cfg(feature = "monitoring")]
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
@@ -470,6 +470,11 @@ impl MetricsRegistry {
     }
 
     /// Generate Prometheus metrics output
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Metric encoding fails
+    /// - UTF-8 conversion of metrics buffer fails
     pub fn gather_metrics(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let encoder = TextEncoder::new();
         let metric_families = self.registry.gather();
@@ -486,7 +491,7 @@ impl Default for MetricsRegistry {
 }
 
 /// Global metrics registry instance
-pub static METRICS: Lazy<MetricsRegistry> = Lazy::new(MetricsRegistry::new);
+pub static METRICS: LazyLock<MetricsRegistry> = LazyLock::new(MetricsRegistry::new);
 
 /// Advanced metrics middleware with high-cardinality protection
 pub async fn metrics_middleware(req: Request, next: Next) -> Response {

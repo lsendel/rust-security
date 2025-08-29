@@ -13,6 +13,11 @@ impl SecureRandomGenerator {
     }
 
     /// Generate cryptographically secure random bytes
+    /// 
+    /// # Errors
+    /// 
+    /// This function currently never returns an error but uses Result for future compatibility
+    /// with potential OS random number generator failures
     pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, AuthError> {
         use rand::rngs::OsRng;
         let mut bytes = vec![0u8; length];
@@ -21,24 +26,40 @@ impl SecureRandomGenerator {
     }
 
     /// Generate secure random string with specified length (base64url encoded)
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_string(&self, byte_length: usize) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(byte_length)?;
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
 
     /// Generate secure authorization code (`OAuth2`)
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_authorization_code(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("ac_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
 
     /// Generate secure access token
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_access_token(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("tk_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
 
     /// Generate secure refresh token
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AuthError` if random byte generation fails
     pub fn generate_refresh_token(&self) -> Result<String, AuthError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("rt_{}", BASE64URL_NOPAD.encode(&bytes)))
@@ -109,22 +130,46 @@ static SECURE_RNG: once_cell::sync::Lazy<SecureRandomGenerator> =
     once_cell::sync::Lazy::new(SecureRandomGenerator::new);
 
 /// Convenience functions using the global secure RNG
+/// 
+/// # Errors
+/// 
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_authorization_code() -> Result<String, AuthError> {
     SECURE_RNG.generate_authorization_code()
 }
 
+/// Generate secure access token
+/// 
+/// # Errors
+/// 
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_access_token() -> Result<String, AuthError> {
     SECURE_RNG.generate_access_token()
 }
 
+/// Generate secure refresh token
+/// 
+/// # Errors
+/// 
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_refresh_token() -> Result<String, AuthError> {
     SECURE_RNG.generate_refresh_token()
 }
 
+/// Generate secure session ID
+/// 
+/// # Errors
+/// 
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_session_id() -> Result<String, AuthError> {
     SECURE_RNG.generate_session_id()
 }
 
+/// Generate secure CSRF token
+/// 
+/// # Errors
+/// 
+/// Returns `AuthError` if random byte generation fails
 pub fn generate_secure_csrf_token() -> Result<String, AuthError> {
     SECURE_RNG.generate_csrf_token()
 }

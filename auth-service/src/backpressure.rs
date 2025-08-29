@@ -1,7 +1,7 @@
 use crate::errors::AuthError;
 use axum::{extract::Request, middleware::Next, response::Response};
 #[cfg(feature = "monitoring")]
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 #[cfg(feature = "monitoring")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
@@ -120,11 +120,11 @@ impl BackpressureConfig {
 
 // Metrics (feature-gated)
 #[cfg(feature = "monitoring")]
-static REQUESTS_TOTAL: Lazy<IntCounter> =
-    Lazy::new(|| register_int_counter!("auth_requests_total", "Total number of requests").unwrap());
+static REQUESTS_TOTAL: LazyLock<IntCounter> =
+    LazyLock::new(|| register_int_counter!("auth_requests_total", "Total number of requests").expect("Failed to create requests_total counter"));
 
 #[cfg(feature = "monitoring")]
-static REQUESTS_REJECTED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
+static REQUESTS_REJECTED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     register_int_counter!(
         "auth_requests_rejected_total",
         "Total number of rejected requests"
@@ -133,7 +133,7 @@ static REQUESTS_REJECTED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
 });
 
 #[cfg(feature = "monitoring")]
-static CONCURRENT_REQUESTS: Lazy<IntGauge> = Lazy::new(|| {
+static CONCURRENT_REQUESTS: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!(
         "auth_concurrent_requests",
         "Current number of concurrent requests"
@@ -142,12 +142,12 @@ static CONCURRENT_REQUESTS: Lazy<IntGauge> = Lazy::new(|| {
 });
 
 #[cfg(feature = "monitoring")]
-static REQUEST_BODY_SIZE: Lazy<Histogram> = Lazy::new(|| {
+static REQUEST_BODY_SIZE: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!("auth_request_body_size_bytes", "Request body size in bytes").unwrap()
 });
 
 #[cfg(feature = "monitoring")]
-static REQUEST_DURATION: Lazy<Histogram> = Lazy::new(|| {
+static REQUEST_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "auth_request_duration_seconds",
         "Request duration in seconds"
@@ -157,7 +157,7 @@ static REQUEST_DURATION: Lazy<Histogram> = Lazy::new(|| {
 
 #[cfg(feature = "monitoring")]
 #[allow(dead_code)]
-static QUEUE_DEPTH: Lazy<IntGauge> = Lazy::new(|| {
+static QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!("auth_request_queue_depth", "Current request queue depth").unwrap()
 });
 

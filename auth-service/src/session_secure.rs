@@ -14,7 +14,7 @@ pub struct SecureSessionData {
     pub created_at: DateTime<Utc>,
     pub last_accessed: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
-    pub client_ip: String,
+    pub ip_address: String,
     pub user_agent_hash: String, // Store hash instead of full user agent
     pub is_authenticated: bool,
     pub requires_mfa: bool,
@@ -93,6 +93,10 @@ impl SecureSessionManager {
     }
 
     /// Generate cryptographically secure session ID
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `SessionError::RandomGenerationFailed` if the system random number generator fails
     pub fn generate_session_id(&self) -> Result<String, SessionError> {
         let mut bytes = [0u8; 32]; // 256 bits of entropy
         self.rng
@@ -104,6 +108,10 @@ impl SecureSessionManager {
     }
 
     /// Generate secure CSRF token
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `SessionError::RandomGenerationFailed` if the system random number generator fails
     pub fn generate_csrf_token(&self) -> Result<String, SessionError> {
         let mut bytes = [0u8; 24]; // 192 bits of entropy
         self.rng
@@ -125,7 +133,7 @@ impl SecureSessionManager {
         &self,
         user_id: String,
         client_id: Option<String>,
-        client_ip: String,
+        ip_address: String,
         user_agent: String,
         requires_mfa: bool,
     ) -> Result<String, SessionError> {
@@ -149,7 +157,7 @@ impl SecureSessionManager {
             created_at: now,
             last_accessed: now,
             expires_at: now + Duration::seconds(self.config.ttl_seconds as i64),
-            client_ip,
+            ip_address,
             user_agent_hash: self.hash_user_agent(&user_agent),
             is_authenticated: !requires_mfa, // Not authenticated until MFA complete
             requires_mfa,
@@ -189,7 +197,7 @@ impl SecureSessionManager {
     pub async fn validate_session(
         &self,
         session_id: &str,
-        client_ip: &str,
+        ip_address: &str,
         user_agent: &str,
     ) -> Result<SecureSessionData, SessionError> {
         let mut sessions = self.sessions.write().await;
@@ -218,11 +226,11 @@ impl SecureSessionManager {
         }
 
         // Validate client binding (prevent session hijacking)
-        if self.config.require_ip_binding && session.client_ip != client_ip {
+        if self.config.require_ip_binding && session.ip_address != ip_address {
             tracing::warn!(
                 session_id = %session_id,
-                original_ip = %session.client_ip,
-                current_ip = %client_ip,
+                original_ip = %session.ip_address,
+                current_ip = %ip_address,
                 user_id = %session.user_id,
                 "Session IP mismatch detected - possible hijacking attempt"
             );

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 /// Core threat security event structure representing all authentication and security-related events
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ThreatThreatSecurityEvent {
+pub struct ThreatSecurityEvent {
     pub event_id: String,
     pub timestamp: DateTime<Utc>,
     pub event_type: ThreatSecurityEventType,
@@ -170,7 +170,7 @@ pub enum IndicatorType {
     Url,
     FileHash,
     EmailAddress,
-    Email, // Alias for EmailAddress
+    // Note: Email is deprecated, use EmailAddress
     UserAgent,
     JwtToken,
     SessionId,

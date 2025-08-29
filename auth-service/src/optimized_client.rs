@@ -68,7 +68,10 @@ impl AuthServiceClient {
         let cache = Arc::new(RwLock::new(HashMap::new()));
         let semaphore = Arc::new(Semaphore::new(max_concurrent_requests));
         let metrics = Arc::new(ClientMetrics::new(registry)?);
-        let batch_processor = Arc::new(RwLock::new(BatchProcessor::new(50, Duration::from_millis(10))));
+        let batch_processor = Arc::new(RwLock::new(BatchProcessor::new(
+            50,
+            Duration::from_millis(10),
+        )));
 
         Ok(Self {
             policy_client,
@@ -83,7 +86,10 @@ impl AuthServiceClient {
 
     /// High-performance policy evaluation with intelligent caching
     #[instrument(skip(self), fields(request_id = %Uuid::new_v4()))]
-    pub async fn evaluate_policy(&self, request: PolicyRequest) -> Result<PolicyResponse, ClientError> {
+    pub async fn evaluate_policy(
+        &self,
+        request: PolicyRequest,
+    ) -> Result<PolicyResponse, ClientError> {
         let start = Instant::now();
         
         // Check L1 cache first (in-memory)
@@ -117,7 +123,10 @@ impl AuthServiceClient {
 
     /// Batch multiple policy evaluations for maximum efficiency
     #[instrument(skip(self))]
-    pub async fn evaluate_policies_batch(&self, requests: Vec<PolicyRequest>) -> Result<Vec<PolicyResponse>, ClientError> {
+    pub async fn evaluate_policies_batch(
+        &self,
+        requests: Vec<PolicyRequest>,
+    ) -> Result<Vec<PolicyResponse>, ClientError> {
         let start = Instant::now();
         let batch_id = Uuid::new_v4();
         
@@ -174,7 +183,10 @@ impl AuthServiceClient {
         Ok(responses)
     }
 
-    async fn execute_batch_policy_requests(&self, requests: Vec<PolicyRequest>) -> Result<Vec<PolicyResponse>, ClientError> {
+    async fn execute_batch_policy_requests(
+        &self,
+        requests: Vec<PolicyRequest>,
+    ) -> Result<Vec<PolicyResponse>, ClientError> {
         // Acquire semaphore for rate limiting
         let _permit = self.semaphore.acquire().await.map_err(|_| ClientError::RateLimited)?;
 
@@ -300,7 +312,10 @@ impl BatchProcessor {
         }
     }
 
-    pub async fn add_request(&mut self, request: PolicyRequest) -> Result<PolicyResponse, ClientError> {
+    pub async fn add_request(
+        &mut self,
+        request: PolicyRequest,
+    ) -> Result<PolicyResponse, ClientError> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.pending_requests.push((request, tx));
 
@@ -464,8 +479,11 @@ impl ClientMetrics {
         )?;
 
         let request_duration = Histogram::with_opts(
-            HistogramOpts::new("auth_client_request_duration_seconds", "Auth client request duration")
-                .buckets(vec![0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1])  // Optimized for sub-5ms targets
+            HistogramOpts::new(
+                "auth_client_request_duration_seconds",
+                "Auth client request duration",
+            )
+            .buckets(vec![0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1]) // Optimized for sub-5ms targets
         )?;
 
         let cache_hits = Counter::with_opts(
@@ -485,7 +503,10 @@ impl ClientMetrics {
         )?;
 
         let batch_efficiency = Histogram::with_opts(
-            HistogramOpts::new("auth_client_batch_efficiency", "Batch processing efficiency (req/s)")
+            HistogramOpts::new(
+                "auth_client_batch_efficiency",
+                "Batch processing efficiency (req/s)",
+            )
                 .buckets(vec![10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0])
         )?;
 

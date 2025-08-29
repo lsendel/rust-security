@@ -54,6 +54,12 @@ pub struct ResilientHttpClient {
 }
 
 impl ResilientHttpClient {
+    /// Create a new resilient HTTP client with circuit breaker protection
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `AuthError::ServiceUnavailable` if HTTP client creation fails due to 
+    /// invalid configuration or TLS setup issues
     pub fn new(name: impl Into<String>, config: ResilientHttpConfig) -> Result<Self, AuthError> {
         let client = Client::builder()
             .timeout(config.timeouts.request_timeout)

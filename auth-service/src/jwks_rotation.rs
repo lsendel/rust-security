@@ -164,7 +164,7 @@ impl JwksManager {
         info!("Starting key rotation");
 
         // Generate new key
-        let new_key = self.generate_new_key().await?;
+        let new_key = self.generate_new_key()?;
         let new_kid = new_key.kid.clone();
 
         // Store new key
@@ -197,7 +197,7 @@ impl JwksManager {
     }
 
     /// Generate a new cryptographic key
-    async fn generate_new_key(&self) -> Result<CryptoKey, AuthError> {
+    fn generate_new_key(&self) -> Result<CryptoKey, AuthError> {
         let now = Utc::now();
         let kid = format!("key_{}", uuid::Uuid::new_v4());
 

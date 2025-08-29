@@ -1,12 +1,13 @@
 #[cfg(feature = "monitoring")]
 use crate::security_metrics::SECURITY_METRICS;
-use once_cell::sync::Lazy;
-use tracing::error;
+use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
+#[cfg(feature = "monitoring")]
+use tracing::error;
 use tracing::{info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,10 +166,19 @@ impl SecurityMonitor {
     pub async fn start_monitoring(&self) {
         // Use Arc references directly instead of cloning Arc contents
         let config = Arc::clone(&self.config);
-        let active_alerts = Arc::clone(&self.active_alerts);
         let alert_history = Arc::clone(&self.alert_history);
+        #[cfg(feature = "monitoring")]
         let metric_snapshots = Arc::clone(&self.metric_snapshots);
+        #[cfg(feature = "monitoring")]
+        let active_alerts = Arc::clone(&self.active_alerts);
+        #[cfg(feature = "monitoring")]
         let client = self.client.clone();
+        #[cfg(not(feature = "monitoring"))]
+        let _metric_snapshots = Arc::clone(&self.metric_snapshots);
+        #[cfg(not(feature = "monitoring"))]
+        let _active_alerts = Arc::clone(&self.active_alerts);
+        #[cfg(not(feature = "monitoring"))]
+        let _client = self.client.clone();
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
@@ -492,7 +502,7 @@ impl Default for SecurityMonitor {
 }
 
 /// Global security monitor instance
-pub static SECURITY_MONITOR: Lazy<SecurityMonitor> = Lazy::new(SecurityMonitor::new);
+pub static SECURITY_MONITOR: LazyLock<SecurityMonitor> = LazyLock::new(SecurityMonitor::new);
 
 /// Initialize security monitoring
 pub async fn init_security_monitoring() {

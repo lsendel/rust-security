@@ -122,11 +122,15 @@ impl TokenInfo {
     }
 
     /// Get remaining lifetime
+    /// Get the remaining lifetime of the authentication context
+    /// 
+    /// # Errors
+    /// 
+    /// Returns `CoreError::Token(TokenError::Expired)` if the authentication has expired
     pub fn remaining_lifetime(&self) -> Result<Duration, CoreError> {
-        match self.expires_at.duration_since(SystemTime::now()) {
-            Ok(duration) => Ok(duration),
-            Err(_) => Err(CoreError::Token(TokenError::Expired)),
-        }
+        self.expires_at
+            .duration_since(SystemTime::now())
+            .map_err(|_| CoreError::Token(TokenError::Expired))
     }
 }
 

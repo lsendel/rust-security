@@ -21,39 +21,50 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
+use std::sync::LazyLock;
 
 /// Prometheus metrics for threat hunting orchestration
-lazy_static::lazy_static! {
-    static ref THREAT_HUNTING_EVENTS_PROCESSED: Counter = register_counter!(
+static THREAT_HUNTING_EVENTS_PROCESSED: LazyLock<Counter> = LazyLock::new(|| {
+    register_counter!(
         "threat_hunting_events_processed_total",
         "Total security events processed by threat hunting system"
-    ).unwrap();
+    ).expect("Failed to create threat_hunting_events_processed counter")
+});
 
-    static ref THREAT_HUNTING_THREATS_DETECTED: Counter = register_counter!(
+static THREAT_HUNTING_THREATS_DETECTED: LazyLock<Counter> = LazyLock::new(|| {
+    register_counter!(
         "threat_hunting_threats_detected_total",
         "Total threats detected by threat hunting system"
-    ).unwrap();
+    ).expect("Failed to create threat_hunting_threats_detected counter")
+});
 
-    static ref THREAT_HUNTING_RESPONSE_PLANS_EXECUTED: Counter = register_counter!(
+static THREAT_HUNTING_RESPONSE_PLANS_EXECUTED: LazyLock<Counter> = LazyLock::new(|| {
+    register_counter!(
         "threat_hunting_response_plans_executed_total",
         "Total response plans executed"
-    ).unwrap();
+    ).expect("Failed to create threat_hunting_response_plans_executed counter")
+});
 
-    static ref THREAT_HUNTING_PROCESSING_TIME: Histogram = register_histogram!(
+static THREAT_HUNTING_PROCESSING_TIME: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram!(
         "threat_hunting_processing_time_seconds",
         "Time taken to process security events"
-    ).unwrap();
+    ).expect("Failed to create threat_hunting_processing_time histogram")
+});
 
-    static ref THREAT_HUNTING_SYSTEM_HEALTH: Gauge = register_gauge!(
+static THREAT_HUNTING_SYSTEM_HEALTH: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!(
         "threat_hunting_system_health",
         "Overall health status of threat hunting system (1=healthy, 0=unhealthy)"
-    ).unwrap();
+    ).expect("Failed to create threat_hunting_system_health gauge")
+});
 
-    static ref THREAT_HUNTING_ACTIVE_CORRELATIONS: Gauge = register_gauge!(
+static THREAT_HUNTING_ACTIVE_CORRELATIONS: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge!(
         "threat_hunting_active_correlations",
         "Number of active threat correlations"
-    ).unwrap();
-}
+    ).expect("Failed to create threat_hunting_active_correlations gauge")
+});
 
 /// Comprehensive configuration for the threat hunting system
 #[derive(Debug, Clone)]
@@ -413,6 +424,12 @@ impl ThreatHuntingOrchestrator {
     }
 
     /// Initialize the threat hunting orchestrator
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Redis connection initialization fails
+    /// - Threat detection modules fail to start
+    /// - Event processing channels fail to initialize
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing Threat Hunting Orchestrator");
 

@@ -1,6 +1,6 @@
 use base64::Engine as _;
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use once_cell::sync::Lazy;
+
 use serde_json::Value;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, OnceCell, RwLock};
@@ -293,7 +293,8 @@ impl KeyManager {
 }
 
 /// Global key manager instance
-static KEY_MANAGER: Lazy<KeyManager> = Lazy::new(|| KeyManager::new(KeyConfig::default()));
+static KEY_MANAGER: std::sync::LazyLock<KeyManager> =
+    std::sync::LazyLock::new(|| KeyManager::new(KeyConfig::default()));
 
 // Public API functions for compatibility with existing code
 

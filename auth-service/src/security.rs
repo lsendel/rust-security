@@ -13,7 +13,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
 
 /// Secure token binding salt - loaded from environment or generated
-static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
+static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
         // Generate a cryptographically secure salt with proper error handling
         let mut salt = [0u8; 32];

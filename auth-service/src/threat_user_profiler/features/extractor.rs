@@ -32,6 +32,12 @@ impl BehavioralFeatureExtractor {
     }
 
     /// Extract comprehensive behavioral features for a user
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Feature extraction from any dimension fails
+    /// - Feature normalization fails
+    /// - Feature vector construction fails
     pub async fn extract_features(
         &self,
         user_id: Uuid,
@@ -101,6 +107,12 @@ impl BehavioralFeatureExtractor {
     }
 
     /// Extract features incrementally for real-time processing
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Incremental feature extraction fails
+    /// - Feature aggregation fails
+    /// - Feature normalization fails
     pub async fn extract_incremental_features(
         &self,
         user_id: Uuid,

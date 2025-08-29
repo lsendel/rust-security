@@ -510,12 +510,12 @@ mod tests {
 // This is a test function
 fn test_function() {
     if true {
-        println!("Hello");
+        tracing::debug!("Hello");
     }
     for i in 0..5 {
         match i {
-            0 => println!("Zero"),
-            _ => println!("Other"),
+            0 => tracing::debug!("Zero"),
+            _ => tracing::debug!("Other"),
         }
     }
 }

@@ -17,37 +17,37 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Prometheus metrics for threat intelligence
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
-static THREAT_INTEL_QUERIES: Lazy<Counter> = Lazy::new(|| {
+static THREAT_INTEL_QUERIES: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_queries_total",
         "Total threat intelligence queries made"
     ).expect("Failed to create threat_intel_queries counter")
 });
 
-static THREAT_INTEL_MATCHES: Lazy<Counter> = Lazy::new(|| {
+static THREAT_INTEL_MATCHES: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_matches_total",
         "Total threat intelligence matches found"
     ).expect("Failed to create threat_intel_matches counter")
 });
 
-static THREAT_INTEL_ERRORS: Lazy<Counter> = Lazy::new(|| {
+static THREAT_INTEL_ERRORS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_errors_total",
         "Total threat intelligence query errors"
     ).expect("Failed to create threat_intel_errors counter")
 });
 
-static THREAT_INTEL_CACHE_HITS: Lazy<Counter> = Lazy::new(|| {
+static THREAT_INTEL_CACHE_HITS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_cache_hits_total",
         "Total threat intelligence cache hits"
     ).expect("Failed to create threat_intel_cache_hits counter")
 });
 
-static THREAT_INTEL_RESPONSE_TIME: Lazy<Histogram> = Lazy::new(|| {
+static THREAT_INTEL_RESPONSE_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_intel_response_time_seconds",
         "Response time for threat intelligence queries"
@@ -1004,13 +1004,12 @@ impl ThreatIntelligenceCorrelator {
                                     sync_result.added,
                                     sync_result.updated,
                                     sync_result.removed
-                                    sync_operation_result.removed
                                 );
 
                                 // Update feed metadata
                                 if let Some(ref mut metadata) = feed_metadata.get_mut(&feed.name) {
                                     metadata.last_updated = Some(Utc::now());
-                                    metadata.total_indicators = Some(sync_operation_result.total_indicators);
+                                    metadata.total_indicators = Some(sync_result.total_indicators);
                                     metadata.error_count = 0;
                                 }
                             }

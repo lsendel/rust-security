@@ -2,12 +2,12 @@
 //!
 //! Provides security-related metrics collection and reporting functionality.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
 /// Global security metrics instance
-pub static SECURITY_METRICS: Lazy<SecurityMetrics> = Lazy::new(|| SecurityMetrics::new());
+pub static SECURITY_METRICS: LazyLock<SecurityMetrics> = LazyLock::new(|| SecurityMetrics::new());
 
 /// Security metrics collector
 pub struct SecurityMetrics {

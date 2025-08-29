@@ -10,10 +10,25 @@ pub struct MLModelManager {
 
 /// Trait for ML models used in behavioral analysis
 pub trait MLModel {
+    /// Predict anomaly score for given behavioral features
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Feature vector is invalid or incomplete
+    /// - Model prediction fails
+    /// - Model is not properly trained
     fn predict(
         &self,
         features: &BehavioralFeatureVector,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>>;
+    
+    /// Train the model with behavioral feature data
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Training data is insufficient or invalid
+    /// - Model training algorithm fails
+    /// - Feature normalization fails
     fn train(
         &mut self,
         training_data: &[BehavioralFeatureVector],
@@ -33,6 +48,12 @@ impl MLModelManager {
         models.insert(name, model);
     }
 
+    /// Make a prediction using the specified model
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Model with the specified name is not found
+    /// - Model prediction fails
     pub async fn predict(
         &self,
         model_name: &str,

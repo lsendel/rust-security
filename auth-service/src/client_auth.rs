@@ -2,7 +2,7 @@ use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity
 use crate::{internal_error, AuthError};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -13,7 +13,7 @@ const MIN_AUTH_DURATION_MS: u64 = 120;
 const MIN_AUTH_DURATION_MS: u64 = 200;
 
 // Precomputed dummy hash used to equalize timing for unknown clients
-static DUMMY_HASH: Lazy<String> = Lazy::new(|| {
+static DUMMY_HASH: LazyLock<String> = LazyLock::new(|| {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
         .hash_password(b"timing_balance_dummy_secret", &salt)
@@ -42,8 +42,8 @@ pub struct ClientMetadata {
 }
 
 // Global CLIENT_AUTHENTICATOR instance
-static CLIENT_AUTHENTICATOR: Lazy<Mutex<ClientAuthenticator>> =
-    Lazy::new(|| Mutex::new(ClientAuthenticator::new()));
+static CLIENT_AUTHENTICATOR: LazyLock<Mutex<ClientAuthenticator>> =
+    LazyLock::new(|| Mutex::new(ClientAuthenticator::new()));
 
 impl ClientAuthenticator {
     pub fn new() -> Self {

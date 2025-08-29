@@ -2,7 +2,7 @@
 //!
 //! Comprehensive authentication endpoints including:
 //! - User registration and login
-//! - OAuth 2.0 authorization flows
+//! - `OAuth` 2.0 authorization flows
 //! - JWT token management
 //! - Multi-factor authentication
 //! - Session management
