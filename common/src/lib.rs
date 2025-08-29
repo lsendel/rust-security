@@ -34,3 +34,6 @@ pub use types::{
     ScimGroup, ScimUser, SecurityAlert, ServiceStatus, StoreMetrics, TokenRecord, ValidationResult,
 };
 pub use utils::{current_timestamp, format_duration, generate_correlation_id, validate_url};
+
+// Import once_cell to satisfy unused dependency warning
+use once_cell as _;

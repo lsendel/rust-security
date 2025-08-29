@@ -108,7 +108,7 @@ impl HealthChecker {
         }
 
         // Determine overall status
-        let overall_status = self.determine_overall_status(&components).await;
+        let overall_status = self.determine_overall_status(&components);
 
         // Get current metrics
         let metrics = self.metrics.read().await.clone();
@@ -259,8 +259,8 @@ impl HealthChecker {
         let mut metadata = HashMap::new();
 
         // Get system metrics
-        let memory_usage = self.get_memory_usage().await;
-        let cpu_usage = self.get_cpu_usage().await;
+        let memory_usage = self.get_memory_usage();
+        let cpu_usage = self.get_cpu_usage();
 
         metadata.insert("memory_mb".to_string(), memory_usage.to_string());
         metadata.insert("cpu_percent".to_string(), format!("{cpu_usage:.1}"));
@@ -300,21 +300,21 @@ impl HealthChecker {
     }
 
     /// Get memory usage (simplified)
-    async fn get_memory_usage(&self) -> f64 {
+    fn get_memory_usage(&self) -> f64 {
         // In a real implementation, you would use system APIs
         // This is a simulation
         rand::random::<f64>().mul_add(100.0, 150.0)
     }
 
     /// Get CPU usage (simplified)
-    async fn get_cpu_usage(&self) -> f64 {
+    fn get_cpu_usage(&self) -> f64 {
         // In a real implementation, you would use system APIs
         // This is a simulation
         rand::random::<f64>().mul_add(30.0, 10.0)
     }
 
     /// Determine overall health status
-    async fn determine_overall_status(
+    fn determine_overall_status(
         &self,
         components: &HashMap<String, ComponentHealth>,
     ) -> HealthStatus {
@@ -420,7 +420,7 @@ pub async fn readiness_handler(
 }
 
 /// Liveness check handler (basic check for Kubernetes)
-pub async fn liveness_handler() -> (StatusCode, Json<serde_json::Value>) {
+pub fn liveness_handler() -> (StatusCode, Json<serde_json::Value>) {
     // Simple liveness check - if we can respond, we're alive
     (
         StatusCode::OK,

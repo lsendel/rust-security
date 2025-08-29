@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = app(state).merge(SwaggerUi::new("/swagger-ui").url("/openapi.json", openapi.clone()));
 
-    let cfg = config::AppConfig::from_env()?;
+    let cfg = config::AppConfig::from_env();
     let listener = TcpListener::bind(cfg.bind_addr).await?;
     tracing::info!("policy-service listening on {}", cfg.bind_addr);
     axum::serve(listener, app).await?;

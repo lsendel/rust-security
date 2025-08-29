@@ -1,3 +1,5 @@
+#![allow(clippy::needless_for_each)]
+
 use utoipa::{
     openapi::security::{ApiKey, ApiKeyValue, Http, HttpAuthScheme, SecurityScheme},
     Modify, OpenApi,

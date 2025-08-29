@@ -237,7 +237,7 @@ async fn security_headers(request: Request, next: Next) -> Response {
     );
     headers.insert(
         "Strict-Transport-Security",
-        "max-age=31536000; includeSubDomains"
+        "max-age=31_536_000; includeSubDomains"
             .parse()
             .expect("Failed to parse Strict-Transport-Security header"),
     );

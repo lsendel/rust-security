@@ -113,7 +113,7 @@ impl KeyManager {
     /// Generate and store a new key with atomic operations
     #[instrument(skip(self))]
     async fn generate_and_store_key(&self, is_initialization: bool) -> Result<String, AuthError> {
-        let key_material = Self::generate_secure_key_material().await?;
+        let key_material = Self::generate_secure_key_material()?;
         let kid = key_material.kid.clone();
 
         // Atomic update of key storage
@@ -233,7 +233,7 @@ impl KeyManager {
     }
 
     /// Generate secure key material with proper error handling
-    async fn generate_secure_key_material() -> Result<SecureKeyMaterial, AuthError> {
+    fn generate_secure_key_material() -> Result<SecureKeyMaterial, AuthError> {
         // SECURITY: Load RSA key from secure environment variable or external key management
         // This prevents hardcoded keys and supports key rotation
         let private_key_pem = std::env::var("JWT_RSA_PRIVATE_KEY")
@@ -340,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_key_generation() {
-        let key = KeyManager::generate_secure_key_material().await.unwrap();
+        let key = KeyManager::generate_secure_key_material().unwrap();
         assert!(!key.kid.is_empty());
         assert!(key.public_jwk.get("kty").unwrap() == "RSA");
         assert!(key.public_jwk.get("alg").unwrap() == "RS256");

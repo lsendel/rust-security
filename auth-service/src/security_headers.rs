@@ -127,7 +127,7 @@ impl SecurityHeadersConfig {
                   frame-ancestors 'none'; \
                   upgrade-insecure-requests"
                 .to_string(),
-            hsts_max_age: 31536000, // 1 year
+            hsts_max_age: 31_536_000, // 1 year
             hsts_include_subdomains: true,
             hsts_preload: true,
             frame_options: "DENY".to_string(),

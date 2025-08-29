@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 #[derive(Debug, Clone)]
@@ -7,7 +6,7 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub fn from_env() -> Result<Self> {
+    pub fn from_env() -> Self {
         let _ = dotenvy::dotenv();
 
         let port: u16 = std::env::var("PORT")
@@ -29,8 +28,8 @@ impl AppConfig {
 
         tracing::info!("Configuration loaded: {}:{}", host, port);
 
-        Ok(Self {
+        Self {
             bind_addr: SocketAddr::new(host, port),
-        })
+        }
     }
 }

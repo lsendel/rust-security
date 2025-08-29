@@ -137,11 +137,11 @@ pub fn validate_email(email: &str) -> bool {
 /// Generate a secure random string
 #[must_use]
 pub fn generate_secure_random_string(length: usize) -> String {
-    use rand::Rng;
+    use rand::{rngs::OsRng, Rng};
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                             abcdefghijklmnopqrstuvwxyz\
                             0123456789";
-    let mut rng = rand::thread_rng();
+    let mut rng = OsRng;
 
     (0..length)
         .map(|_| {

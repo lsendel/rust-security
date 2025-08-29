@@ -143,15 +143,15 @@ impl CircuitBreaker {
 
         match result {
             Ok(Ok(response)) => {
-                self.on_success().await;
+                self.on_success();
                 Ok(response)
             }
             Ok(Err(e)) => {
-                self.on_failure().await;
+                self.on_failure();
                 Err(CircuitBreakerError::OperationFailed(e.to_string()))
             }
             Err(_) => {
-                self.on_failure().await;
+                self.on_failure();
                 Err(CircuitBreakerError::Timeout {
                     timeout: self.config.request_timeout,
                 })
@@ -195,7 +195,7 @@ impl CircuitBreaker {
         }
     }
 
-    async fn on_success(&self) {
+    fn on_success(&self) {
         let current_state = self.state();
 
         match current_state {
@@ -230,7 +230,7 @@ impl CircuitBreaker {
         );
     }
 
-    async fn on_failure(&self) {
+    fn on_failure(&self) {
         let current_state = self.state();
 
         match current_state {

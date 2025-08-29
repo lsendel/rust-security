@@ -145,7 +145,7 @@ impl GracefulShutdownService {
     }
 
     /// Start the graceful shutdown listener
-    pub async fn start_shutdown_listener(&self) {
+    pub fn start_shutdown_listener(&self) {
         let coordinator = self.coordinator.clone();
         let service = self.clone();
 

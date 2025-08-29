@@ -46,7 +46,7 @@ static TOKEN_BINDING_SALT: Lazy<String> = Lazy::new(|| {
 });
 
 /// Generate a token binding value from client information using secure practices
-pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<String, &'static str> {
+pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
     use ring::hmac;
 
     let salt = TOKEN_BINDING_SALT.as_bytes();
@@ -62,7 +62,7 @@ pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<Strin
     ctx.update(&chrono::Utc::now().timestamp().to_be_bytes()); // Add timestamp
 
     let tag = ctx.sign();
-    Ok(base64::engine::general_purpose::STANDARD.encode(tag.as_ref()))
+    base64::engine::general_purpose::STANDARD.encode(tag.as_ref())
 }
 
 /// Validate token binding to ensure token is used from the same client
@@ -202,7 +202,6 @@ pub fn validate_pkce_params(
 }
 
 /// Request signing for critical operations
-
 /// Generate a request signature using HMAC-SHA256
 pub fn generate_request_signature(
     method: &str,

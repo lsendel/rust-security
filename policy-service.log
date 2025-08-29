@@ -1,9 +1,0 @@
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on package cache
-    Finished `dev` profile [optimized + debuginfo] target(s) in 1.03s
-     Running `/Users/lsendel/IdeaProjects/rust-security/target/debug/policy-service`
-
-thread 'main' panicked at /Users/lsendel/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/axum-0.7.9/src/routing/path_router.rs:70:22:
-Overlapping method route. Handler for `GET /openapi.json` already exists
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

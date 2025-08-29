@@ -1,0 +1,93 @@
+name: Fast PR Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+  RUST_LOG: info
+
+jobs:
+  # Ultra-fast checks for immediate feedback
+  pr-fast:
+    name: Fast PR Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-pr-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-pr-
+
+      - name: Fast compilation check
+        run: cargo check --workspace --profile dev-fast
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy check
+        run: cargo clippy --workspace --all-targets -- -D warnings --allow clippy::too_many_arguments
+
+      - name: Security audit (fast)
+        run: |
+          cargo install cargo-audit --version 0.18
+          cargo audit --format json | jq -e '.vulnerabilities.found == false' || (echo "Security vulnerabilities found" && exit 1)
+
+      - name: Run unit tests only
+        run: cargo test --workspace --lib --profile dev-fast
+
+  # Comprehensive checks for PRs (only if fast checks pass)
+  pr-comprehensive:
+    name: Comprehensive PR Checks
+    runs-on: ubuntu-latest
+    needs: pr-fast
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/debug
+          key: ${{ runner.os }}-cargo-pr-comp-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-pr-comp-
+
+      - name: Run integration tests
+        run: cargo test --workspace --test '*' --profile test
+
+      - name: Build with all features
+        run: cargo build --workspace --all-features --profile release
+
+      - name: Check documentation
+        run: cargo doc --workspace --all-features --no-deps --document-private-items

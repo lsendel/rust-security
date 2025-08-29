@@ -120,20 +120,52 @@ pub struct DatabaseConfig {
     pub test_before_acquire: bool,
 }
 
+/// Password character requirements
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum PasswordCharacterRequirement {
+    /// Require at least one uppercase letter
+    Uppercase,
+    /// Require at least one lowercase letter
+    Lowercase,
+    /// Require at least one digit
+    Digit,
+    /// Require at least one special character
+    Special,
+}
+
+/// Password requirements configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PasswordRequirements {
+    pub min_length: usize,
+    pub character_requirements: Vec<PasswordCharacterRequirement>,
+}
+
+/// Security feature flags
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum SecurityFeature {
+    /// Use secure HTTP-only cookies
+    SecureCookies,
+    /// Enable CSRF protection
+    CsrfProtection,
+    /// Enable audit logging
+    AuditLogging,
+    /// Enable enhanced security headers
+    EnhancedSecurityHeaders,
+    /// Enable rate limiting
+    RateLimiting,
+    /// Enable multi-factor authentication
+    MultiFactorAuth,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SecurityConfig {
     pub bcrypt_cost: u32,
     pub argon2_params: Argon2Config,
-    pub password_min_length: usize,
-    pub password_require_uppercase: bool,
-    pub password_require_lowercase: bool,
-    pub password_require_digit: bool,
-    pub password_require_special: bool,
+    pub password_requirements: PasswordRequirements,
     pub max_login_attempts: u32,
     #[serde(deserialize_with = "serde_duration::deserialize")]
     pub lockout_duration: Duration,
-    pub secure_cookies: bool,
-    pub csrf_protection: bool,
+    pub enabled_features: Vec<SecurityFeature>,
     pub cors: CorsConfig,
 }
 
@@ -235,16 +267,40 @@ pub struct MonitoringConfig {
     pub log_format: String,
 }
 
+/// Authentication features
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub enum AuthFeature {
+    /// Multi-factor authentication
+    MultiFactorAuth,
+    /// WebAuthn/FIDO2 support
+    WebAuthn,
+    /// API key authentication
+    ApiKeys,
+    /// `OAuth2` support
+    OAuth2,
+    /// SCIM user provisioning
+    Scim,
+}
+
+/// Security features
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum SecurityFeatureLevel {
+    /// Basic security features
+    Basic,
+    /// Enhanced security with additional protections
+    Enhanced,
+    /// Enterprise-grade security
+    Enterprise,
+    /// Post-quantum cryptography support
+    PostQuantum,
+}
+
+/// Feature flags configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FeatureFlags {
-    pub mfa_enabled: bool,
-    pub webauthn_enabled: bool,
-    pub api_keys_enabled: bool,
-    pub oauth_enabled: bool,
-    pub scim_enabled: bool,
+    pub enabled_auth_features: Vec<AuthFeature>,
+    pub security_level: SecurityFeatureLevel,
     pub audit_logging_enabled: bool,
-    pub enhanced_security: bool,
-    pub post_quantum_crypto: bool,
 }
 
 #[cfg(feature = "soar")]
@@ -323,7 +379,7 @@ impl Config {
             anyhow::bail!("BCrypt cost must be at least 10 for security");
         }
 
-        if self.security.password_min_length < 8 {
+        if self.security.password_requirements.min_length < 8 {
             anyhow::bail!("Password minimum length must be at least 8");
         }
 
@@ -381,17 +437,27 @@ impl Default for Config {
                     salt_length: constants::crypto::DEFAULT_SALT_LENGTH,
                     hash_length: 32,
                 },
-                password_min_length: constants::security::MIN_PASSWORD_LENGTH,
-                password_require_uppercase: true,
-                password_require_lowercase: true,
-                password_require_digit: true,
-                password_require_special: true,
+                password_requirements: PasswordRequirements {
+                    min_length: constants::security::MIN_PASSWORD_LENGTH,
+                    character_requirements: vec![
+                        PasswordCharacterRequirement::Uppercase,
+                        PasswordCharacterRequirement::Lowercase,
+                        PasswordCharacterRequirement::Digit,
+                        PasswordCharacterRequirement::Special,
+                    ],
+                },
                 max_login_attempts: constants::security::MAX_LOGIN_ATTEMPTS,
                 lockout_duration: Duration::from_secs(
                     constants::security::ACCOUNT_LOCKOUT_DURATION,
                 ),
-                secure_cookies: true,
-                csrf_protection: true,
+                enabled_features: vec![
+                    SecurityFeature::SecureCookies,
+                    SecurityFeature::CsrfProtection,
+                    SecurityFeature::AuditLogging,
+                    SecurityFeature::EnhancedSecurityHeaders,
+                    SecurityFeature::RateLimiting,
+                    SecurityFeature::MultiFactorAuth,
+                ],
                 cors: CorsConfig {
                     allowed_origins: vec!["http://localhost:3000".to_string()],
                     allowed_methods: vec!["GET".to_string(), "POST".to_string()],
@@ -450,14 +516,13 @@ impl Default for Config {
                 log_format: "json".to_string(),
             },
             features: FeatureFlags {
-                mfa_enabled: true,
-                webauthn_enabled: false,
-                api_keys_enabled: true,
-                oauth_enabled: true,
-                scim_enabled: false,
+                enabled_auth_features: vec![
+                    AuthFeature::MultiFactorAuth,
+                    AuthFeature::ApiKeys,
+                    AuthFeature::OAuth2,
+                ],
+                security_level: SecurityFeatureLevel::Enhanced,
                 audit_logging_enabled: true,
-                enhanced_security: true,
-                post_quantum_crypto: false,
             },
             #[cfg(feature = "soar")]
             soar: None,

@@ -3,11 +3,11 @@ use policy_service::errors::{AppError, AuthorizationError, ConfigError, EntityEr
 
 #[test]
 fn not_found_variants_map_to_404() {
-    let e1 = AppError::from(PolicyError::NotFound { id: "p1".into() });
-    let e2 = AppError::from(EntityError::NotFound {
+    let e1 = AppError::from(Box::new(PolicyError::NotFound { id: "p1".into() }));
+    let e2 = AppError::from(Box::new(EntityError::NotFound {
         entity_type: "User".into(),
         entity_id: "u1".into(),
-    });
+    }));
     let e3 = AppError::PolicyNotFound;
     assert_eq!(e1.status_code(), StatusCode::NOT_FOUND);
     assert_eq!(e2.status_code(), StatusCode::NOT_FOUND);
@@ -16,8 +16,12 @@ fn not_found_variants_map_to_404() {
 
 #[test]
 fn bad_request_group_maps_to_400() {
-    let e1 = AppError::from(PolicyError::ValidationFailed { reason: "x".into() });
-    let e2 = AppError::from(EntityError::ValidationFailed { reason: "y".into() });
+    let e1 = AppError::from(Box::new(PolicyError::ValidationFailed {
+        reason: "x".into(),
+    }));
+    let e2 = AppError::from(Box::new(EntityError::ValidationFailed {
+        reason: "y".into(),
+    }));
     let e3 = AppError::from(AuthorizationError::InvalidAction {
         action: "read".into(),
     });

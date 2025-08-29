@@ -16,10 +16,13 @@ use tracing_subscriber as _;
 use utoipa as _;
 use utoipa_swagger_ui as _;
 
-use policy_service::{app, load_policies_and_entities, AuthorizeRequest, AuthorizeResponse};
+use policy_service::{
+    app, load_policies_and_entities, ApiDoc, AuthorizeRequest, AuthorizeResponse,
+};
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
+use utoipa::OpenApi;
 
 async fn spawn_app() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -27,6 +30,9 @@ async fn spawn_app() -> String {
 
     let state = load_policies_and_entities().unwrap();
     let app = app(state);
+    let openapi = ApiDoc::openapi();
+    let app =
+        app.merge(utoipa_swagger_ui::SwaggerUi::new("/swagger-ui").url("/openapi.json", openapi));
 
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{}", addr)
@@ -166,7 +172,7 @@ async fn test_invalid_principal_format() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 500); // Should return error for invalid format
+    assert_eq!(response.status(), 400); // Should return error for invalid format
 }
 
 #[tokio::test]
@@ -191,7 +197,7 @@ async fn test_invalid_action_format() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 500); // Should return error for invalid action
+    assert_eq!(response.status(), 400); // Should return error for invalid action
 }
 
 #[tokio::test]

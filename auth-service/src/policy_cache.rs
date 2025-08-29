@@ -155,19 +155,19 @@ impl PolicyCache {
                     .observe(_duration.as_secs_f64());
 
                 return Some(entry.response.clone());
-            } else {
-                // Entry expired, remove it
-                drop(entry);
-                self.cache.remove(&key);
-
-                let mut stats = self.stats.write().await;
-                stats.evictions += 1;
-
-                warn!(
-                    cache_key = %key,
-                    "Policy cache entry expired and removed"
-                );
             }
+
+            // Entry expired, remove it
+            drop(entry);
+            self.cache.remove(&key);
+
+            let mut stats = self.stats.write().await;
+            stats.evictions += 1;
+
+            warn!(
+                cache_key = %key,
+                "Policy cache entry expired and removed"
+            );
         }
 
         // Cache miss
@@ -181,11 +181,6 @@ impl PolicyCache {
             .policy_cache_operations
             .with_label_values(&["get", "miss", _policy_type])
             .inc();
-        #[cfg(feature = "monitoring")]
-        METRICS
-            .cache_operation_duration
-            .with_label_values(&["policy", "get"])
-            .observe(_duration.as_secs_f64());
 
         None
     }

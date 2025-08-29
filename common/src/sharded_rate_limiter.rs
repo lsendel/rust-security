@@ -328,7 +328,7 @@ impl ShardedRateLimiter {
 
         tokio::spawn({
             #[allow(clippy::no_effect_underscore_binding)]
-            let _limiter = self as *const _ as usize; // Unsafe pointer for demonstration
+            let _limiter = std::ptr::from_ref(self) as usize; // Unsafe pointer for demonstration
 
             async move {
                 loop {

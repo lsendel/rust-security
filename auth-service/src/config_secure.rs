@@ -66,7 +66,7 @@ pub struct SecureSecurityConfig {
     pub allowed_origins: Vec<String>,
 
     // Content security
-    #[validate(range(min = 1024, max = 10485760))] // 1KB to 10MB
+    #[validate(range(min = 1_024, max = 10_485_760))] // 1KB to 10MB
     pub max_request_body_size: usize,
 
     // Security headers
@@ -279,7 +279,7 @@ impl Default for SecureSecurityConfig {
 
             // Security headers with secure defaults
             security_headers: SecurityHeaders {
-                hsts_max_age: 31536000, // 1 year
+                hsts_max_age: 31_536_000, // 1 year
                 content_type_options: true,
                 frame_options: FrameOptions::Deny,
                 xss_protection: true,
@@ -409,10 +409,10 @@ pub fn load_secure_config() -> Result<SecureAppConfig, ConfigError> {
             apply_production_security(&mut config)?;
         }
         "staging" => {
-            apply_staging_security(&mut config)?;
+            apply_staging_security(&mut config);
         }
         _ => {
-            apply_development_security(&mut config)?;
+            apply_development_security(&mut config);
         }
     }
 
@@ -479,7 +479,7 @@ fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigE
     Ok(())
 }
 
-fn apply_staging_security(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
+fn apply_staging_security(config: &mut SecureAppConfig) {
     // Staging security (slightly relaxed but still secure)
     config.security.jwt_access_token_ttl_seconds = 1800; // 30 minutes
     config.security.session_ttl_seconds = 3600; // 1 hour
@@ -492,11 +492,9 @@ fn apply_staging_security(config: &mut SecureAppConfig) -> Result<(), ConfigErro
 
     // Disable experimental features in staging
     config.features.experimental_features_enabled = false;
-
-    Ok(())
 }
 
-fn apply_development_security(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
+fn apply_development_security(config: &mut SecureAppConfig) {
     // Development (relaxed for testing but still reasonably secure)
     config.security.jwt_access_token_ttl_seconds = 3600; // 1 hour
     config.security.session_ttl_seconds = 7200; // 2 hours
@@ -513,8 +511,6 @@ fn apply_development_security(config: &mut SecureAppConfig) -> Result<(), Config
     // More relaxed rate limiting for development
     config.rate_limiting.requests_per_minute_per_ip = 120;
     config.rate_limiting.oauth_requests_per_minute = 30;
-
-    Ok(())
 }
 
 fn validate_security_requirements(config: &SecureAppConfig) -> Result<(), ConfigError> {

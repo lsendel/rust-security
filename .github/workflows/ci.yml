@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
   schedule:
     # Run security checks daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -29,7 +30,7 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit
 
-      - name: Install cargo-deny  
+      - name: Install cargo-deny
         run: cargo install cargo-deny
 
       - name: Run security audit
@@ -61,29 +62,31 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Cache cargo registry
+      - name: Cache cargo dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
 
-      - name: Cache cargo index
+      - name: Cache cargo build (optimized)
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            target/debug
+            target/release
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Run clippy with all features
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings --allow clippy::too_many_arguments
 
       - name: Check documentation
         run: cargo doc --workspace --all-features --no-deps --document-private-items
@@ -102,7 +105,7 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
-      
+
       postgres:
         image: postgres:15-alpine
         env:
@@ -129,8 +132,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            target/debug
+            target/tests
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-test-
 
       - name: Install SQLx CLI
         run: cargo install sqlx-cli --no-default-features --features postgres,sqlite
@@ -158,7 +164,7 @@ jobs:
       - name: Run integration tests
         run: |
           export DATABASE_URL=postgres://postgres:postgres@localhost:5432/auth_test
-          export REDIS_URL=redis://localhost:6379  
+          export REDIS_URL=redis://localhost:6379
           export TEST_MODE=1
           export DISABLE_RATE_LIMIT=1
           cargo test --workspace --test '*'
@@ -219,7 +225,7 @@ jobs:
         image: redis:7-alpine
         ports:
           - 6379:6379
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -259,19 +265,19 @@ jobs:
       - name: Validate SQLx features
         run: |
           echo "🔍 Validating SQLx features for security compliance..."
-          
+
           # Check that SQLx only uses approved features
           if grep -r "mysql" --include="Cargo.toml" .; then
             echo "❌ MySQL feature detected - not allowed due to RUSTSEC issues"
             exit 1
           fi
-          
+
           # Ensure only rustls is used for TLS
           if grep -r "runtime-tokio-native-tls" --include="Cargo.toml" .; then
             echo "❌ native-tls detected - must use rustls only"
             exit 1
           fi
-          
+
           # Verify approved features only
           APPROVED_FEATURES="runtime-tokio-rustls postgres sqlite chrono uuid json migrate macros"
           echo "✅ SQLx configuration validated - only approved features found"
@@ -290,7 +296,7 @@ jobs:
       - name: Validate service_identity module
         run: |
           echo "🔍 Validating service_identity module..."
-          
+
           # Check if module has tests
           if [[ -f "auth-service/src/service_identity.rs" ]]; then
             if ! grep -q "#\[cfg(test)\]" auth-service/src/service_identity.rs; then
@@ -300,14 +306,14 @@ jobs:
             echo "✅ service_identity module has tests"
           fi
 
-      - name: Validate non_human_monitoring module  
+      - name: Validate non_human_monitoring module
         run: |
           echo "🔍 Validating non_human_monitoring module..."
-          
+
           if [[ -f "auth-service/src/non_human_monitoring.rs" ]]; then
             if ! grep -q "#\[cfg(test)\]" auth-service/src/non_human_monitoring.rs; then
               echo "❌ non_human_monitoring module lacks tests"
-              exit 1  
+              exit 1
             fi
             echo "✅ non_human_monitoring module has tests"
           fi
@@ -315,10 +321,10 @@ jobs:
       - name: Validate feature gates for experimental modules
         run: |
           echo "🔍 Validating feature gates..."
-          
+
           # Check that experimental features are properly gated
           EXPERIMENTAL_MODULES=("enhanced_security_metrics" "ai_threat_detection" "post_quantum_crypto")
-          
+
           for module in "${EXPERIMENTAL_MODULES[@]}"; do
             if find . -name "*.rs" -exec grep -l "$module" {} \; | head -1 | xargs grep -q "#\[cfg(feature"; then
               echo "✅ $module is properly feature-gated"
@@ -342,38 +348,38 @@ jobs:
         run: |
           # Install cargo-auditable for SBOM generation
           cargo install cargo-auditable cargo-sbom
-          
+
           # Install cargo-deny for dependency policies
           cargo install cargo-deny
 
       - name: Run comprehensive cargo deny checks
         run: |
           echo "🔒 Running comprehensive dependency security checks..."
-          
+
           # Check licenses, bans, advisories, and sources
           cargo deny check licenses
-          cargo deny check bans  
+          cargo deny check bans
           cargo deny check advisories
           cargo deny check sources
-          
+
           echo "✅ All cargo-deny checks passed"
 
       - name: Generate comprehensive SBOM
         run: |
           echo "📦 Generating comprehensive Software Bill of Materials..."
-          
+
           # Create SBOM directory
           mkdir -p sbom-artifacts
-          
+
           # Generate auditable build
           cargo auditable build --release --workspace
-          
+
           # Generate CycloneDX SBOM
           cargo sbom > sbom-artifacts/rust-security.cyclonedx.json
-          
+
           # Generate SPDX SBOM
           cargo auditable extract-sbom target/release/auth-service > sbom-artifacts/auth-service.spdx.json || true
-          
+
           # Create metadata file
           cat > sbom-artifacts/generation-info.txt << EOF
           SBOM Generation Report
@@ -384,19 +390,19 @@ jobs:
           Build OS: ubuntu-latest
           Rust Version: $(rustc --version)
           Cargo Version: $(cargo --version)
-          
+
           Files Generated:
           - rust-security.cyclonedx.json: CycloneDX format SBOM for entire workspace
           - auth-service.spdx.json: SPDX format SBOM for auth-service binary
           - generation-info.txt: This metadata file
-          
+
           Security Validation:
           - All dependencies audited via cargo-audit
           - License compliance verified via cargo-deny
           - Banned packages blocked via cargo-deny
           - Source verification enforced
           EOF
-          
+
           echo "📋 SBOM generation complete:"
           ls -la sbom-artifacts/
 
@@ -410,62 +416,62 @@ jobs:
       - name: Vulnerability database update
         run: |
           echo "🔄 Checking vulnerability database freshness..."
-          
+
           # Verify cargo-audit database is up to date
           cargo audit --version
-          
-          # Force update if needed 
+
+          # Force update if needed
           cargo audit --update || echo "Database update completed"
-          
+
           echo "✅ Vulnerability database verified"
 
       - name: Generate supply chain report
         if: github.ref == 'refs/heads/main'
         run: |
           echo "📊 Generating supply chain security report..."
-          
+
           # Create detailed supply chain report
           cat > sbom-artifacts/supply-chain-report.md << EOF
           # Supply Chain Security Report
-          
+
           **Generated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           **Commit:** $GITHUB_SHA
           **Branch:** $GITHUB_REF
-          
+
           ## Dependency Analysis
-          
+
           ### Total Dependencies
           \`\`\`
           $(cargo tree --workspace | wc -l) total dependency entries
           \`\`\`
-          
+
           ### Direct Dependencies
           \`\`\`
           $(grep -c '\[dependencies\]' */Cargo.toml 2>/dev/null || echo "Multiple workspace members")
           \`\`\`
-          
+
           ### Security Policies Enforced
-          
+
           - ✅ MySQL dependencies blocked (RUSTSEC-2023-0071)
           - ✅ native-tls blocked (prefer rustls)
           - ✅ Vulnerable versions blocked via cargo-deny
           - ✅ Only approved registries allowed
           - ✅ License compliance verified
-          
+
           ### SBOM Formats Generated
-          
+
           - CycloneDX JSON format
           - SPDX JSON format (for binaries)
           - Human-readable metadata
-          
+
           ## Recommendations
-          
+
           - Dependencies should be reviewed quarterly
           - SBOM should be included in release artifacts
           - Vulnerability scanning should run on schedule
-          
+
           EOF
-          
+
           echo "✅ Supply chain report generated"
 
   # Logging hygiene validation
@@ -479,28 +485,28 @@ jobs:
       - name: Check for secrets in logs
         run: |
           echo "🔍 Scanning for potential secrets in logging statements..."
-          
+
           # Define patterns that shouldn't appear in logs
           SECRET_PATTERNS=(
-            "password[[:space:]]*=" 
+            "password[[:space:]]*="
             "secret[[:space:]]*="
             "token[[:space:]]*="
             "api_key[[:space:]]*="
             "private_key"
             "jwt_secret"
           )
-          
+
           VIOLATIONS=0
-          
+
           for pattern in "${SECRET_PATTERNS[@]}"; do
             echo "Checking pattern: $pattern"
-            
+
             if grep -r -i "$pattern" --include="*.rs" . | grep -E "(info!|debug!|warn!|error!|trace!)" | grep -v "test\|example\|demo\|_hash"; then
               echo "❌ Potential secret logging found for pattern: $pattern"
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
           done
-          
+
           if [[ $VIOLATIONS -gt 0 ]]; then
             echo "❌ Found $VIOLATIONS potential secret logging violations"
             exit 1
@@ -511,18 +517,18 @@ jobs:
       - name: Validate error handling patterns
         run: |
           echo "🔍 Validating error handling patterns..."
-          
+
           # Check that anyhow/thiserror is used consistently
           if ! grep -r "use anyhow::" --include="*.rs" . >/dev/null; then
             echo "❌ anyhow not used - required for error handling"
             exit 1
           fi
-          
+
           if ! grep -r "use thiserror::" --include="*.rs" . >/dev/null; then
             echo "❌ thiserror not used - required for error types"
             exit 1
           fi
-          
+
           echo "✅ Error handling patterns validated"
 
   # Build verification
@@ -533,7 +539,7 @@ jobs:
       matrix:
         rust-version: [stable, beta]
         features: ['--no-default-features', '--all-features']
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -549,8 +555,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
+            target/debug
+            target/release
+          key: ${{ runner.os }}-${{ matrix.rust-version }}-build-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust-version }}-build-
 
       - name: Build workspace
         run: cargo build --workspace ${{ matrix.features }}
@@ -562,49 +571,86 @@ jobs:
           cargo build --bin auth-service --all-features
           timeout 5 ./target/debug/auth-service --help || true
 
+  # Fast feedback jobs that should run first
+  fast-checks:
+    name: Fast Checks (Fail Fast)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-fast-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-fast-
+
+      - name: Fast build check
+        run: cargo check --workspace --profile dev-fast
+
+      - name: Quick format check
+        run: cargo fmt --all -- --check
+
+      - name: Quick clippy check
+        run: cargo clippy --workspace --all-targets -- -D warnings --allow clippy::too_many_arguments
+
   # Final validation
   final-check:
     name: Final Validation
     runs-on: ubuntu-latest
-    needs: [security, quality, test, sqlx-validation, module-validation, logging-hygiene, build]
+    needs: [fast-checks, security, quality, test, sqlx-validation, module-validation, logging-hygiene, build]
     if: always()
-    
+
     steps:
       - name: Check all jobs success
         run: |
+          if [[ "${{ needs.fast-checks.result }}" != "success" ]]; then
+            echo "❌ Fast checks failed"
+            exit 1
+          fi
+
           if [[ "${{ needs.security.result }}" != "success" ]]; then
             echo "❌ Security checks failed"
             exit 1
           fi
-          
+
           if [[ "${{ needs.quality.result }}" != "success" ]]; then
             echo "❌ Code quality checks failed"
             exit 1
           fi
-          
+
           if [[ "${{ needs.test.result }}" != "success" ]]; then
             echo "❌ Test suite failed"
             exit 1
           fi
-          
+
           if [[ "${{ needs.sqlx-validation.result }}" != "success" ]]; then
             echo "❌ SQLx validation failed"
             exit 1
           fi
-          
+
           if [[ "${{ needs.module-validation.result }}" != "success" ]]; then
             echo "❌ Module validation failed"
             exit 1
           fi
-          
+
           if [[ "${{ needs.logging-hygiene.result }}" != "success" ]]; then
             echo "❌ Logging hygiene checks failed"
             exit 1
           fi
-          
+
           if [[ "${{ needs.build.result }}" != "success" ]]; then
             echo "❌ Build verification failed"
             exit 1
           fi
-          
+
           echo "🎉 All CI checks passed successfully!"

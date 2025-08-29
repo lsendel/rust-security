@@ -218,8 +218,7 @@ development = ["docs", "fast-build"]
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
-# Temporarily disabled due to version conflicts 
-# tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
+tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
 benchmarks = []  # Removed pprof2 due to security vulnerability
 simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]
@@ -236,8 +235,7 @@ threat-hunting = ["petgraph", "geo", "indexmap", "flume", "crossbeam"]
 optimizations = []
 # Production feature sets
 production = ["security-enhanced", "secrets-vault-aws"]
-# Temporarily disabled due to version conflicts
-# monitoring = ["tracing", "dep:prometheus"]
+monitoring = ["tracing", "dep:prometheus"]
 
 # Service features
 soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:tera", "dep:handlebars", "dep:walkdir"]

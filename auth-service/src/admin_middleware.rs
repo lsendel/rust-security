@@ -57,7 +57,7 @@ impl Default for AdminAuthConfig {
 
 /// Initialize replay protection and rate limiter
 #[cfg(feature = "rate-limiting")]
-async fn init_security_components(config: &AdminAuthConfig) {
+fn init_security_components(config: &AdminAuthConfig) {
     // Initialize replay protection
     let replay_protection = Arc::new(ReplayProtection::new(
         config.redis_url.as_deref(),
@@ -91,7 +91,7 @@ pub async fn admin_auth_middleware(
     let method = request.method().as_str();
 
     // Initialize security components if not already done
-    init_security_components(&config).await;
+    init_security_components(&config);
 
     // Extract client IP for audit logging
     let client_ip = extract_client_ip(&headers);
@@ -411,7 +411,7 @@ async fn validate_request_with_replay_protection(
 
 /// Legacy validate request signature function (now deprecated)
 #[allow(dead_code)]
-async fn validate_request_signature(
+fn validate_request_signature(
     headers: &HeaderMap,
     config: &AdminAuthConfig,
     method: &str,
@@ -751,6 +751,14 @@ mod tests {
             replay_time_window: 300,
             redis_url: None,
         };
+
+        // Initialize replay protection for testing
+        let replay_protection = Arc::new(ReplayProtection::new(
+            None,
+            config.replay_time_window,
+            config.max_timestamp_skew,
+        ));
+        let _ = REPLAY_PROTECTION.set(replay_protection);
 
         let mut headers = HeaderMap::new();
         let nonce = ReplayProtection::generate_nonce();

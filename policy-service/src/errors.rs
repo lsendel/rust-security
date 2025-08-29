@@ -38,7 +38,7 @@ pub enum EntityError {
     #[error("Entity parsing failed")]
     ParsingFailed {
         #[from]
-        source: cedar_policy::EntityAttrEvaluationError,
+        source: Box<cedar_policy::EntityAttrEvaluationError>,
     },
 }
 
@@ -75,10 +75,10 @@ pub enum ConfigError {
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error(transparent)]
-    Policy(#[from] PolicyError),
+    Policy(#[from] Box<PolicyError>),
 
     #[error(transparent)]
-    Entity(#[from] EntityError),
+    Entity(#[from] Box<EntityError>),
 
     #[error(transparent)]
     Authorization(#[from] AuthorizationError),
@@ -135,9 +135,15 @@ impl AppError {
     #[must_use]
     pub const fn status_code(&self) -> StatusCode {
         match self {
-            Self::Policy(PolicyError::NotFound { .. })
-            | Self::Entity(EntityError::NotFound { .. })
-            | Self::PolicyNotFound => StatusCode::NOT_FOUND,
+            Self::Policy(boxed_err) if matches!(**boxed_err, PolicyError::NotFound { .. }) => {
+                StatusCode::NOT_FOUND
+            }
+            Self::PolicyNotFound => {
+                StatusCode::NOT_FOUND
+            }
+            Self::Entity(boxed_err) if matches!(**boxed_err, EntityError::NotFound { .. }) => {
+                StatusCode::NOT_FOUND
+            }
 
             Self::Policy(_) | Self::Entity(_) | Self::Authorization(_) | Self::InvalidInput(_) => {
                 StatusCode::BAD_REQUEST

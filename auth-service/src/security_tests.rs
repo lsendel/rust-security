@@ -15,12 +15,12 @@ mod security_tests {
     #[test]
     fn test_token_binding_uses_secure_salt() {
         // Test that token binding doesn't use hardcoded salt
-        let binding1 = generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap();
+        let binding1 = generate_token_binding("192.168.1.1", "Mozilla/5.0");
 
         // Add small delay to ensure different timestamp
         std::thread::sleep(std::time::Duration::from_secs(1));
 
-        let binding2 = generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap();
+        let binding2 = generate_token_binding("192.168.1.1", "Mozilla/5.0");
 
         // Should be different due to timestamp
         assert_ne!(

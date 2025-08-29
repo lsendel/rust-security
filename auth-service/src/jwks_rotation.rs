@@ -569,7 +569,6 @@ impl KeyStorage for RedisKeyStorage {
                     Ok(key) => keys.push(key),
                     Err(e) => {
                         warn!("Failed to deserialize key {}: {}", key_name, e);
-                        continue;
                     }
                 }
             }

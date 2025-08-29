@@ -592,6 +592,7 @@ pub async fn token(
 }
 
 /// Get current user info
+#[allow(clippy::unused_async)]
 pub async fn me(
     State(state): State<AuthState>,
     headers: HeaderMap,

@@ -91,7 +91,7 @@ pub struct SecurityConfig {
     #[validate(range(min = 300, max = 86400))] // 5 minutes to 24 hours
     pub jwt_access_token_ttl_seconds: u64,
 
-    #[validate(range(min = 3600, max = 2592000))] // 1 hour to 30 days
+    #[validate(range(min = 3_600, max = 2_592_000))] // 1 hour to 30 days
     pub jwt_refresh_token_ttl_seconds: u64,
 
     #[validate(range(min = 2048, max = 8192))] // RSA key size
@@ -111,7 +111,7 @@ pub struct SecurityConfig {
     pub allowed_origins: Vec<String>,
 
     // Content security
-    #[validate(range(min = 1024, max = 104857600))] // 1KB to 100MB
+    #[validate(range(min = 1_024, max = 104_857_600))] // 1KB to 100MB
     pub max_request_body_size: usize,
 }
 

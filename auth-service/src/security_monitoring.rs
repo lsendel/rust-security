@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SecurityAlert {
@@ -342,9 +342,9 @@ impl SecurityMonitor {
                     "title": "Security Alert Details",
                     "description": alert.description,
                     "color": match alert.severity {
-                        AlertSeverity::Critical => 16711680, // Red
-                        AlertSeverity::High => 16753920,    // Orange
-                        AlertSeverity::Medium => 16776960,  // Yellow
+                        AlertSeverity::Critical => 16_711_680, // Red
+                        AlertSeverity::High => 16_753_920,    // Orange
+                        AlertSeverity::Medium => 16_776_960,  // Yellow
                         AlertSeverity::Low => 65280,        // Green
                     },
                     "fields": [

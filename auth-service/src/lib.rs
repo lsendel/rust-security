@@ -1,26 +1,165 @@
 //! Auth Service Library
 //!
 //! Enterprise-grade authentication service with comprehensive security features.
+//!
+//! ## Architecture
+//!
+//! This service is organized into the following functional areas:
+//!
+//! ### Core Authentication
+//! - JWT handling and validation
+//! - Session management
+//! - OAuth flows
+//! - Token management
+//!
+//! ### User Management
+//! - User registration and profiles
+//! - API key management
+//! - Service identity handling
+//!
+//! ### Security
+//! - Rate limiting and DDoS protection
+//! - Input validation and sanitization
+//! - Security headers and monitoring
+//! - PII protection
+//!
+//! ### API & Middleware
+//! - HTTP handlers and routing
+//! - Authentication middleware
+//! - Request/response processing
+//!
+//! ## Test Configuration
+//!
+//! All tests include automatic timeouts to prevent hanging:
+//! - Unit tests: 60 second timeout
+//! - Integration tests: 120 second timeout
+//! - Benchmarks: 300 second timeout
+//!
+//! Tests can be run with custom timeouts using:
+//! ```bash
+//! RUST_TEST_TIMEOUT=30 cargo test  # 30 second timeout
+//! ```
+//!
+//! ## Test Utilities
+//!
+//! The service provides test utilities for proper timeout handling:
+//!
+//! ```rust
+//! use tokio::time::{timeout, Duration};
+//!
+//! #[tokio::test]
+//! async fn example_test_with_timeout() {
+//!     let test_future = async {
+//!         // Your test logic here
+//!         tokio::time::sleep(Duration::from_secs(1)).await;
+//!         assert!(true);
+//!     };
+//!
+//!     // Timeout after 30 seconds to prevent hanging
+//!     timeout(Duration::from_secs(30), test_future)
+//!         .await
+//!         .expect("Test timed out");
+//! }
+//! ```
+//!
+//! ### Data Layer
+//! - Redis and SQL storage
+//! - Caching mechanisms
+//! - Session persistence
+//!
+//! ### Observability
+//! - Metrics and monitoring
+//! - Logging and tracing
+//! - Health checks
 
 use common::constants;
 use std::sync::Arc;
 
-// Core modules providing fundamental functionality
+// Core modules - fundamental functionality
 pub mod core;
+pub mod errors;
 pub mod graceful_shutdown;
 pub mod production_logging;
 
-// Suppress warnings for unused extern crate dependencies
-#[allow(unused_extern_crates)]
-extern crate http;
-#[allow(unused_extern_crates)]
-extern crate opentelemetry_otlp;
-#[allow(unused_extern_crates)]
-extern crate rayon;
-#[allow(unused_extern_crates)]
-extern crate zeroize;
+// Essential modules for backward compatibility
+pub mod app;
+pub mod auth_api;
+pub mod crypto_unified;
+pub mod jwks_rotation;
+pub mod jwt_secure;
+pub mod keys;
+pub mod policy_cache;
+pub mod security;
+pub mod session_store;
+pub mod token_cache;
+pub mod validation;
+pub mod validation_secure;
+
+// Feature-gated modules
+#[cfg(feature = "rate-limiting")]
+pub mod admin_replay_protection;
+#[cfg(feature = "api-keys")]
+pub mod api_key_endpoints;
+#[cfg(feature = "api-keys")]
+pub mod api_key_store;
+#[cfg(feature = "rate-limiting")]
+pub mod async_optimized;
+#[cfg(feature = "rate-limiting")]
+pub mod auth_failure_logging;
+#[cfg(feature = "tracing")]
+pub mod enhanced_observability;
+#[cfg(feature = "monitoring")]
+pub mod metrics;
+#[cfg(feature = "tracing")]
+pub mod observability;
+#[cfg(feature = "tracing")]
+pub mod observability_init;
+#[cfg(feature = "rate-limiting")]
+pub mod per_ip_rate_limit;
+#[cfg(feature = "monitoring")]
+pub mod security_metrics;
+#[cfg(feature = "api-keys")]
+pub mod sql_store;
 #[cfg(feature = "enhanced-session-store")]
-use crate::store::HybridStore;
+pub mod store;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_user_profiler;
+#[cfg(feature = "tracing")]
+pub mod tracing_config;
+
+// Core functionality modules
+pub mod admin_middleware;
+pub mod api_versioning;
+pub mod backpressure;
+pub mod business_metrics;
+pub mod circuit_breaker;
+pub mod client_auth;
+pub mod config_production;
+pub mod config_secure;
+pub mod csrf_protection;
+pub mod error_handling;
+pub mod feature_flags;
+pub mod health_check;
+pub mod performance_optimizer;
+pub mod pii_protection;
+pub mod rate_limit_secure;
+pub mod redirect_validation;
+pub mod scim_filter;
+pub mod secure_random;
+pub mod security_fixed;
+pub mod security_headers;
+pub mod security_logging;
+pub mod security_monitoring;
+pub mod security_tests;
+pub mod session_secure;
+pub mod test_mode_security;
+pub mod tls_security;
+
+// Service-specific modules
+pub mod jit_token_manager;
+pub mod non_human_monitoring;
+pub mod service_identity;
+pub mod service_identity_api;
 
 /// Maximum request body size - use centralized constant
 pub const MAX_REQUEST_BODY_SIZE: usize = constants::security::MAX_REQUEST_BODY_SIZE;
@@ -29,10 +168,9 @@ pub const MAX_REQUEST_BODY_SIZE: usize = constants::security::MAX_REQUEST_BODY_S
 #[derive(Clone)]
 pub struct AppState {
     #[cfg(feature = "enhanced-session-store")]
-    pub store: Arc<HybridStore>,
+    pub store: Arc<crate::store::HybridStore>,
     #[cfg(feature = "api-keys")]
     pub api_key_store: Arc<crate::api_key_store::ApiKeyStore>,
-    // Additional fields for test compatibility
     pub session_store: Arc<crate::session_store::RedisSessionStore>,
     pub token_store: Arc<std::sync::RwLock<std::collections::HashMap<String, common::TokenRecord>>>,
     pub client_credentials: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
@@ -135,251 +273,20 @@ pub struct JwtClaims {
     pub token_binding: Option<String>,
 }
 
-// Re-export core functionality
-pub use lib::core::*;
+// Re-export main application function
+pub use app::app;
 
-// Module declarations - organized by functionality
-pub mod lib {
-    pub mod api;
-    pub mod app;
-    pub mod core;
+// Re-export error types and functions
+pub use errors::{internal_error, AuthError};
+
+// Core modules organized by functionality
+pub mod modules {
+    pub mod soar {
+        pub mod case_management;
+    }
 }
 
-// All existing module declarations preserved for backward compatibility
-pub mod config;
-pub mod config_endpoints;
-
-pub mod config_reload;
-pub mod config_static;
-mod config_tests;
-pub mod crypto_secure;
-pub mod crypto_unified;
-pub mod errors;
-pub mod input_sanitizer;
-pub mod secure_config;
-pub use errors::{internal_error, AuthError};
-pub mod jwks_rotation;
-pub mod policy_cache;
-pub mod rate_limit_secure;
-pub mod secrets_manager;
-pub mod session_store;
-#[cfg(feature = "api-keys")]
-pub mod sql_store;
-#[cfg(feature = "enhanced-session-store")]
-pub mod store;
-pub mod token_cache;
-
-// Removed all advanced AI/ML and enterprise security modules for MVP
-
-// Existing working modules
-pub mod admin_middleware;
-#[cfg(feature = "rate-limiting")]
-pub mod admin_replay_protection;
-// Removed advanced rate limiting for MVP
-// #[cfg(feature = "rate-limiting")]
-// pub mod advanced_rate_limit;
-// Removed AI threat detection for MVP
-// pub mod ai_threat_detection;
-// pub mod ai_threat_detection_advanced;
-#[cfg(feature = "api-keys")]
-pub mod api_key_endpoints;
-#[cfg(feature = "api-keys")]
-pub mod api_key_store;
-pub mod api_versioning;
-#[cfg(feature = "rate-limiting")]
-pub mod async_optimized;
-#[cfg(feature = "rate-limiting")]
-pub mod auth_failure_logging;
-pub mod backpressure;
-pub mod business_metrics;
-pub mod circuit_breaker;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod cache;
-// pub mod circuit_breaker;
-pub mod client_auth;
-pub mod config_production;
-pub mod config_secure;
-// Removed connection pool optimizations for MVP
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod connection_pool_optimized;
-pub mod csrf_protection;
-// Removed crypto optimizations for MVP
-// #[cfg(feature = "rate-limiting")]
-// pub mod crypto_optimized;
-// Removed database optimizations and enhanced JWT for MVP
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod database_optimized;
-// pub mod enhanced_jwt_validation;
-#[cfg(feature = "tracing")]
-pub mod enhanced_observability;
-pub mod error_handling;
-pub mod feature_flags;
-// Removed for MVP - pub mod fraud_detection;
-pub mod health_check;
-// Removed intelligent cache and JWKS features for MVP
-// pub mod intelligent_cache;
-// pub mod jwks_handler;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod jwks_rate_limiter;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod jwks_rotation;
-pub mod jwt_secure;
-// Removed advanced key management for MVP - keep basic keys only
-// pub mod key_management;
-// pub mod key_rotation;
-pub mod keys;
-// pub mod keys_optimized;
-// pub mod keys_ring; // Temporarily disabled - uses removed RSA dependency
-// pub mod keys_secure;
-// pub mod main; // Removed - main.rs should not be a module in lib.rs
-#[cfg(feature = "monitoring")]
-pub mod metrics;
-// Removed MFA for MVP
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod mfa;
-// Removed advanced features for MVP
-// #[cfg(feature = "monitoring")]
-// pub mod monitoring_dashboard;
-// pub mod multi_tenant_enterprise;
-// Removed OAuth client management for MVP
-// #[cfg(feature = "api-keys")]
-// pub mod oauth_client_registration;
-// #[cfg(feature = "api-keys")]
-// pub mod oauth_client_registration_policies;
-// #[cfg(feature = "api-keys")]
-// pub mod oauth_client_secret_rotation;
-#[cfg(feature = "tracing")]
-pub mod observability;
-// Disabled due to OpenTelemetry version compatibility issues
-// #[cfg(feature = "tracing")]
-// pub mod observability_advanced;
-#[cfg(feature = "tracing")]
-pub mod observability_init;
-// Removed OIDC providers and OTP for MVP
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod oidc_github;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod oidc_google;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod oidc_microsoft;
-// pub mod otp_provider;
-#[cfg(feature = "rate-limiting")]
-pub mod per_ip_rate_limit;
-// Removed performance monitoring for MVP
-// pub mod performance_monitor;  // Temporarily disabled - requires prometheus feature
-// pub mod performance_monitoring; // Temporarily disabled - requires prometheus feature
-pub mod performance_optimizer;
-// Removed PII protection and policy cache for MVP
-// pub mod pii_audit_tests;
-pub mod pii_protection;
-// #[cfg(feature = "rate-limiting")]
-// pub mod policy_cache;
-// Removed post-quantum cryptography for MVP
-// #[cfg(feature = "post-quantum")]
-// pub mod post_quantum_crypto;
-// #[cfg(feature = "post-quantum")]
-// pub mod pq_integration;
-// #[cfg(feature = "post-quantum")]
-// pub mod pq_jwt;
-// #[cfg(feature = "post-quantum")]
-// pub mod pq_key_management;
-// #[cfg(feature = "post-quantum")]
-// pub mod pq_migration;
-// Removed property testing framework for MVP
-// #[cfg(test)]
-// pub mod property_testing_framework;
-// Removed for MVP
-// #[cfg(feature = "post-quantum")]
-// pub mod quantum_jwt;
-// Removed enhanced rate limiting for MVP - keep basic only
-// pub mod rate_limit_enhanced;
-// #[cfg(feature = "rate-limiting")]
-// pub mod rate_limit_optimized;
-// pub mod rate_limit_secure;
-pub mod redirect_validation;
-// Removed resilience features for MVP
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod resilience_config;
-// pub mod resilient_http;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod resilient_store;
-// Removed SCIM features for MVP
-// pub mod scim;
-pub mod scim_filter;
-// pub mod scim_rbac;
-pub mod secure_random;
-pub mod security;
-// Removed advanced security features for MVP - keep basic security only
-// pub mod security_analyzer;
-pub mod security_fixed;
-pub mod security_headers;
-pub mod security_logging;
-// pub mod security_logging_enhanced;
-#[cfg(feature = "monitoring")]
-pub mod security_metrics;
-// Removed security monitoring for MVP
-// #[cfg(feature = "threat-hunting")]
-pub mod security_monitoring;
-pub mod security_tests;
-// Removed advanced session management for MVP - keep basic only
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod session_cleanup;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod session_manager;
-pub mod session_secure;
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod session_store;
-// Removed SOAR (Security Orchestration, Automation and Response) for MVP
-// #[cfg(feature = "soar")]
-// pub mod soar_case_management;
-// #[cfg(feature = "soar")]
-// pub mod soar_config_loader;
-// #[cfg(feature = "soar")]
-// pub mod soar_correlation;
-// #[cfg(feature = "soar")]
-// pub mod soar_workflow;
-// Removed store optimizations for MVP
-// #[cfg(feature = "enhanced-session-store")]
-// pub mod store_optimized;
-pub mod test_mode_security;
-// Removed threat hunting modules for MVP
-// #[cfg(feature = "threat-hunting")]
-// pub mod threat_attack_patterns;
-// #[cfg(feature = "threat-hunting")]
-// pub mod threat_behavioral_analyzer;
-// #[cfg(feature = "threat-hunting")]
-// pub mod threat_hunting_orchestrator;
-// #[cfg(feature = "threat-hunting")]
-// pub mod threat_intelligence;
-// #[cfg(feature = "threat-hunting")]
-// pub mod threat_response_orchestrator;
-// #[cfg(feature = "threat-hunting")]
-// pub mod threat_types;
-#[cfg(feature = "threat-hunting")]
-pub mod threat_user_profiler;
-pub mod tls_security;
-#[cfg(feature = "tracing")]
-pub mod tracing_config;
-// Disabled due to OpenTelemetry compatibility issues
-// #[cfg(feature = "tracing")]
-// pub mod tracing_instrumentation;
-pub mod app;
-pub mod validation;
-pub mod validation_secure;
-pub use app::app;
-pub mod auth_api;
-pub mod jit_token_manager;
-pub mod non_human_monitoring;
-pub mod service_identity;
-pub mod service_identity_api;
-// Removed WebAuthn and Zero Trust for MVP
-// pub mod webauthn;
-// pub mod zero_trust_auth;
-
-// Removed all SOAR module directories for MVP
-// #[cfg(feature = "soar")]
-// pub mod soar_core;
-// #[cfg(feature = "soar")]
-// pub mod soar_executors;
-// #[cfg(feature = "soar")]
-// pub mod soar;
+// Re-export new modular SOAR case management system
+pub mod soar_case_management {
+    pub use crate::modules::soar::case_management::*;
+}

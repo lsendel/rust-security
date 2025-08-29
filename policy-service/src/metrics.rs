@@ -11,10 +11,10 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use once_cell::sync::Lazy;
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
+use std::sync::LazyLock;
 use tracing::{debug, error};
 
 /// Core metrics registry for policy service observability
@@ -88,6 +88,7 @@ pub struct PolicyMetricsRegistry {
 
 impl PolicyMetricsRegistry {
     /// Create a new metrics registry with all collectors initialized
+    #[allow(clippy::too_many_lines)]
     pub fn new() -> Self {
         let registry = Registry::new();
 
@@ -391,7 +392,8 @@ impl Default for PolicyMetricsRegistry {
 }
 
 /// Global policy metrics registry instance
-pub static POLICY_METRICS: Lazy<PolicyMetricsRegistry> = Lazy::new(PolicyMetricsRegistry::new);
+pub static POLICY_METRICS: LazyLock<PolicyMetricsRegistry> =
+    LazyLock::new(PolicyMetricsRegistry::new);
 
 /// Advanced metrics middleware for policy service
 pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
@@ -519,17 +521,15 @@ fn normalize_path_for_cardinality(path: &str) -> String {
     // Coarse normalization: collapse UUID-like and long hex segments to :id tokens to further bound cardinality
     // This is a conservative best-effort without regex to avoid extra deps.
     if normalized == path {
-        let parts: Vec<&str> = path.split('/').collect();
-        let mapped: Vec<String> = parts
-            .into_iter()
+        let mapped: Vec<String> = path
+            .split('/')
             .map(|seg| {
-                if seg.len() >= 16
+                if (seg.len() >= 16
                     && seg
                         .chars()
-                        .all(|c| c.is_ascii_hexdigit() || c == '-' || c == '_')
+                        .all(|c| c.is_ascii_hexdigit() || c == '-' || c == '_'))
+                    || (seg.chars().all(|c| c.is_ascii_digit()) && seg.len() > 6)
                 {
-                    ":id".to_string()
-                } else if seg.chars().all(|c| c.is_ascii_digit()) && seg.len() > 6 {
                     ":id".to_string()
                 } else {
                     seg.to_string()

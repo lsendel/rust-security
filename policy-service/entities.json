@@ -1,1 +1,62 @@
-[]
+[
+  {
+    "uid": {
+      "type": "User",
+      "id": "u1"
+    },
+    "attrs": {
+      "tenant": "t1",
+      "brand": "brandA",
+      "location": "loc-sf"
+    },
+    "parents": []
+  },
+  {
+    "uid": {
+      "type": "User",
+      "id": "u2"
+    },
+    "attrs": {
+      "tenant": "t2",
+      "brand": "brandC",
+      "location": "loc-la"
+    },
+    "parents": []
+  },
+  {
+    "uid": {
+      "type": "Order",
+      "id": "o1"
+    },
+    "attrs": {
+      "tenant": "t1",
+      "brand": "brandA",
+      "location": "loc-sf"
+    },
+    "parents": []
+  },
+  {
+    "uid": {
+      "type": "Order",
+      "id": "o2"
+    },
+    "attrs": {
+      "tenant": "t1",
+      "brand": "brandZ",
+      "location": "loc-la"
+    },
+    "parents": []
+  },
+  {
+    "uid": {
+      "type": "Order",
+      "id": "o3"
+    },
+    "attrs": {
+      "tenant": "t2",
+      "brand": "brandC",
+      "location": "loc-la"
+    },
+    "parents": []
+  }
+]

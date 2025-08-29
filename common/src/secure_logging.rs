@@ -3,13 +3,13 @@
 //! This module provides logging utilities that automatically sanitize
 //! sensitive information and prevent secret leakage in logs.
 
-use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::collections::HashSet;
+use std::sync::LazyLock;
 use tracing::{info, warn};
 
 /// Patterns that indicate potentially sensitive information
-static SECRET_PATTERNS: Lazy<Vec<regex::Regex>> = Lazy::new(|| {
+static SECRET_PATTERNS: LazyLock<Vec<regex::Regex>> = LazyLock::new(|| {
     let patterns = vec![
         // Common secret field names
         r"(?i)(password|passwd|pwd)[\s]*[:=][\s]*[^\s,}]+",
@@ -38,7 +38,7 @@ static SECRET_PATTERNS: Lazy<Vec<regex::Regex>> = Lazy::new(|| {
 });
 
 /// Fields that should always be redacted in logs
-static SENSITIVE_FIELD_NAMES: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+static SENSITIVE_FIELD_NAMES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "password",
         "passwd",
@@ -404,7 +404,7 @@ mod tests {
     fn test_sanitized_value_wrapper() {
         let secret = "password=secret123";
         let sanitized = SanitizedValue::new(secret);
-        let output = format!("{}", sanitized);
+        let output = format!("{sanitized}");
 
         assert!(output.contains("[REDACTED]"));
         assert!(!output.contains("secret123"));

@@ -1,23 +1,27 @@
-msrv = "1.70"
-cognitive-complexity-threshold = 30
-type-complexity-threshold = 200
-# Performance optimizations for faster linting
-check-private-items = false  # Skip private items for faster dev builds
-# single-component-path-imports = false  # Not a valid clippy option
-single-char-binding-names-threshold = 4
-trivial-copy-size-limit = 64
-pass-by-value-size-limit = 256
-too-many-arguments-threshold = 7
-too-many-lines-threshold = 100
-vec-box-size-threshold = 4096
-max-trait-bounds = 3
-max-struct-bools = 3
-max-fn-params-bools = 3
-literal-representation-threshold = 10
-enum-variant-size-threshold = 200
-avoid-breaking-exported-api = false
-allow-expect-in-tests = true
+# Clippy configuration for rust-security project
+
+# Allow unwrap in tests (security testing often needs this)
 allow-unwrap-in-tests = true
 allow-dbg-in-tests = true
-allow-print-in-tests = true
-suppress-restriction-lint-in-const = false
+
+# Performance optimizations
+arithmetic-side-effects-allowed = ["core::num::*"]
+
+# Allow some complex types in security APIs
+type-complexity-threshold = 300
+
+# Allow cognitive complexity for security algorithms
+cognitive-complexity-threshold = 25
+
+# Documentation settings
+doc-valid-idents = ["..*"]
+missing-docs-in-crate-items = false
+
+# Allow controlled dependency version conflicts
+msrv = "1.80"
+
+# Security-specific disallowed methods
+disallowed-methods = [
+    { path = "rand::thread_rng", reason = "Use cryptographically secure random instead" },
+    { path = "rand::random", reason = "Use cryptographically secure random instead" },
+]

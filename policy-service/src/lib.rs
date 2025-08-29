@@ -84,15 +84,15 @@ pub fn load_policies_and_entities() -> Result<Arc<AppState>, AppError> {
         .map_err(|e| AppError::io("Failed to read policies file", e))?;
     let policies = policies_str
         .parse::<PolicySet>()
-        .map_err(|e| AppError::Policy(PolicyError::CompilationFailed { source: e }))?;
+        .map_err(|e| AppError::Policy(Box::new(PolicyError::CompilationFailed { source: e })))?;
 
     let entities_path = concat!(env!("CARGO_MANIFEST_DIR"), "/entities.json");
     let entities_str = std::fs::read_to_string(entities_path)
         .map_err(|e| AppError::io("Failed to read entities file", e))?;
     let entities = Entities::from_json_str(&entities_str, None).map_err(|e| {
-        AppError::Policy(PolicyError::ValidationFailed {
+        AppError::Policy(Box::new(PolicyError::ValidationFailed {
             reason: format!("Failed to parse entities: {e}"),
-        })
+        }))
     })?;
 
     Ok(Arc::new(AppState {

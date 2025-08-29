@@ -29,6 +29,11 @@ exclude = [
 
 resolver = "2"
 
+# ===== DEPENDENCY PATCHING FOR SECURITY =====
+[patch.crates-io]
+# Security patches for known vulnerabilities
+# Add patches here as needed for security fixes
+
 [workspace.lints]
 rust.unused_crate_dependencies = "warn"
 rust.unused_imports = "warn"
@@ -40,103 +45,167 @@ clippy.cargo = "warn"
 clippy.nursery = "warn"
 
 [workspace.dependencies]
-# Core async runtime
+# ===== CORE ASYNC RUNTIME =====
 tokio = { version = "1.37", features = ["full"] }
 axum = { version = "0.7.4", features = ["macros"] }
 tower = { version = "0.4.13", features = ["util"] }
 hyper = { version = "1.2.0" }
+tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 
-# Serialization
+# ===== SERIALIZATION =====
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
+rmp-serde = "1.3"
+bincode = "1.3"
+toml = "0.8"
+serde_yaml = "0.9"
 
-# Error handling
+# ===== ERROR HANDLING =====
 anyhow = "1.0.82"
-thiserror = "2.0"
+thiserror = "1.0"
 
-# Cryptography
+# ===== CRYPTOGRAPHY & SECURITY =====
 jsonwebtoken = "9.3"
 rand = "0.8"
 sha2 = "0.10"
 sha1 = "0.10"
 aes = "0.8"
 aes-gcm = "0.10"
-
-# Database - MySQL excluded to avoid RSA vulnerability (RUSTSEC-2023-0071)
-sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros", "runtime-tokio-rustls"], default-features = false }
-deadpool = "0.12"
-
-# Redis
-redis = { version = "0.27", features = ["aio", "connection-manager", "tokio-comp"] }
-deadpool-redis = "0.18"
-
-# Monitoring
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-prometheus = "0.14"
-
-# UUID
-uuid = { version = "1.11", features = ["v4", "serde"] }
-
-# Time handling
-chrono = { version = "0.4", features = ["serde"] }
-
-# HTTP client
-reqwest = { version = "0.12", features = ["json"] }
-
-# Configuration
-config = "0.14"
-
-# Validation - Updated to fix idna vulnerability
-validator = { version = "0.20", features = ["derive"] }
-
-# CLI
-clap = { version = "4.5", features = ["derive"] }
-
-# Additional common dependencies
-async-trait = "0.1"
-headers = "0.4"
-base64 = "0.21"
-bytes = "1.8"
-constant_time_eq = "0.3"
-dashmap = "6.1"
-data-encoding = "2.6"
-dotenvy = "0.15"
-envy = "0.4"
-futures = "0.3"
-hex = "0.4"
-hmac = "0.12"
-once_cell = "1.20"
-secrecy = "0.10"
-subtle = "2.6"
-zeroize = "1.8"
-
-# Web/HTTP additional
-http = "1.1"
-http-body-util = "0.1"
-tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
-urlencoding = "2.1"
-url = "2.5.4"
-idna = "1.0.3"  # Force newer version to fix RUSTSEC-2024-0421
-
-# Policy engine
-cedar-policy = "4.2"
-
-# API documentation
-utoipa = { version = "5.1", features = ["axum_extras", "chrono"] }
-
-# Crypto additional
 argon2 = "0.5"
 bcrypt = "0.16"
 chacha20poly1305 = "0.10"
 ring = "0.17"
+hmac = "0.12"
+secrecy = "0.10"
+subtle = "2.6"
+zeroize = "1.8"
+constant_time_eq = "0.3"
+
+# ===== DATABASE =====
+# MySQL excluded to avoid RSA vulnerability (RUSTSEC-2023-0071)
+sqlx = { version = "0.8", features = ["postgres", "sqlite", "chrono", "uuid", "migrate", "macros", "runtime-tokio-rustls"], default-features = false }
+deadpool = "0.12"
+bb8 = "0.8"
+
+# ===== CACHING & REDIS =====
+redis = { version = "0.27", features = ["aio", "connection-manager", "tokio-comp"] }
+deadpool-redis = "0.18"
+bb8-redis = "0.16"
+
+# ===== MONITORING & TELEMETRY =====
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.24"
+opentelemetry = { version = "0.22", features = ["metrics"] }
+opentelemetry-jaeger = "0.21"
+opentelemetry_sdk = { version = "0.22", features = ["metrics", "rt-tokio"] }
+opentelemetry-otlp = "0.15"
+prometheus = "0.14"
+tokio-metrics = "0.3"
+metrics = "0.24"
+metrics-prometheus = "0.8"
+
+# ===== HTTP & NETWORKING =====
+reqwest = { version = "0.12", features = ["json"] }
+http = "1.1"
+http-body-util = "0.1"
+urlencoding = "2.1"
+url = "2.5.4"
+idna = "1.0.3"  # Force newer version to fix RUSTSEC-2024-0421
+rustls = "0.23"
+webpki-roots = "0.26"
 rustls-pemfile = "2.2"
+ipnet = "2.10"
+ipnetwork = "0.20"
+geo = "0.28"
+geoutils = "0.5"
+hickory-resolver = "0.24"
+
+# ===== UTILITY & COMMON =====
+uuid = { version = "1.11", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+async-trait = "0.1"
+headers = "0.4"
+base64 = "0.21"
+bytes = "1.8"
+hex = "0.4"
+once_cell = "1.20"
+lazy_static = "1.5"
+futures = "0.3"
+fastrand = "2.2"
+getrandom = { version = "0.2", features = ["std"] }
+num_cpus = "1.16"
+data-encoding = "2.6"
+
+# ===== DATA STRUCTURES =====
+# Pin versions to avoid conflicts
+indexmap = "2.11"
+dashmap = "6.1"
+bloomfilter = "1.0"
+petgraph = "0.6"
+probabilistic-collections = "0.7"
+
+# ===== ASYNC & CONCURRENCY =====
+flume = "0.11"
+crossbeam = "0.8"
+rayon = "1.10"
+
+# ===== CONFIGURATION =====
+config = "0.14"
+dotenvy = "0.15"
+envy = "0.4"
+
+# ===== VALIDATION =====
+validator = { version = "0.20", features = ["derive"] }
+
+# ===== CLI =====
+clap = { version = "4.5", features = ["derive"] }
+
+# ===== POLICY ENGINE =====
+cedar-policy = "4.2"
+cedar-policy-core = "4.2"
+
+# ===== API DOCUMENTATION =====
+utoipa = { version = "5.1", features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { version = "8.1", features = ["axum"] }
+schemars = "1.0"  # Pin to avoid version conflicts
+
+# ===== CRYPTOGRAPHIC KEYS & CERTIFICATES =====
 ed25519-dalek = "2.1"
 x25519-dalek = "2.0"
 p256 = "0.13"
 p384 = "0.13"
+x509-cert = "0.2"
+pkcs8 = "0.10"
+der = "0.7"
+rcgen = "0.13"
+x509-parser = "0.17"
 
-# Development/Testing - Updated to avoid unmaintained dependencies
+# ===== TEMPLATING =====
+handlebars = "6.2"
+tera = "1.20"
+
+# ===== EMAIL =====
+lettre = "0.11"
+
+# ===== PERFORMANCE =====
+mimalloc = "0.1"
+lz4_flex = "0.11"
+memmap2 = "0.9"
+
+# ===== FILESYSTEM =====
+walkdir = "2.5"
+
+# ===== SEARCH & REGEX =====
+# Pin regex ecosystem versions to avoid conflicts
+aho-corasick = "1.1"
+regex = "1.11"
+regex-automata = "0.4.10"  # Pin to avoid version conflicts
+regex-syntax = "0.8.6"    # Pin to avoid version conflicts
+fancy-regex = "0.13"
+
+# ===== DEVELOPMENT & TESTING =====
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.5"
 quickcheck = "1.0"
@@ -147,131 +216,22 @@ tokio-test = "0.4"
 wiremock = "0.6"
 arbitrary = "1.4"
 
-# Storage/DB additional
-bb8 = "0.8"
-bb8-redis = "0.16"
-rmp-serde = "1.3"
-bincode = "1.3"
-
-# ML/Advanced features - Removed due to unmaintained paste dependency
-# smartcore = "0.3"
-# ndarray = "0.16"
-# nalgebra = "0.33"
-
-# Post-quantum crypto - Removed due to unmaintained paste dependency
-# pqcrypto-mlkem = "0.1"
-# pqcrypto-mldsa = "0.1"
-
-# Cloud integrations - compatible with Rust 1.89.0
+# ===== CLOUD INTEGRATIONS =====
 aws-config = "1.1"
 aws-sdk-secretsmanager = "1.10"
 vaultrs = "0.7"
 
-# Monitoring/telemetry
-opentelemetry = { version = "0.22", features = ["metrics"] }
-opentelemetry-jaeger = "0.21"
-opentelemetry_sdk = { version = "0.22", features = ["metrics", "rt-tokio"] }
-tracing-opentelemetry = "0.24"
-tokio-metrics = "0.3"
-metrics = "0.24"
-metrics-prometheus = "0.8"
-
-# Templating
-handlebars = "6.2"
-tera = "1.20"
-
-# Email
-lettre = "0.11"
-
-# Performance
-mimalloc = "0.1"
-rayon = "1.10"
-
-# Compression
-lz4_flex = "0.11"
-
-# Filesystem/memory mapping
-memmap2 = "0.9"
-walkdir = "2.5"
-
-# Search/pattern matching
-aho-corasick = "1.1"
-regex = "1.11"
-fancy-regex = "0.13"
-
-# Networking/geo
-ipnet = "2.10"
-geo = "0.28"
-geoutils = "0.5"
-
-# Data structures
-indexmap = "2.6"
-bloomfilter = "1.0"
-petgraph = "0.6"
-
-# Async/concurrency
-flume = "0.11"
-crossbeam = "0.8"
-
-# Statistics - Removed due to unmaintained paste dependency
-# statrs = "0.17"
-
-# Time handling
-time = "0.3"
-
-# Certificates/PKI
-x509-cert = "0.2"
-pkcs8 = "0.10"
-der = "0.7"
-rcgen = "0.13"
-
-# Config formats
-toml = "0.8"
-serde_yaml = "0.9"
-
-# Documentation
-utoipa-swagger-ui = { version = "8.1", features = ["axum"] }
-
-# Web server
+# ===== WEB SERVER =====
 axum-server = "0.7"
-
-# Policy engine core
-cedar-policy-core = "4.2"
-
-# Random number generation
-fastrand = "2.2"
-getrandom = { version = "0.2", features = ["std"] }
-
-# Lazy initialization
-lazy_static = "1.5"
-
-# System info
-num_cpus = "1.16"
-
-# Probabilistic data structures
-probabilistic-collections = "0.7"
-
-# Profiling - Removed due to RUSTSEC-2024-0408 memory safety vulnerability
-# pprof2 = "0.14.0"  # Use alternative profiling tools like flamegraph or perf
-
-# TypeScript (placeholder, not a real crate - commenting out)
-# tsc = "0.1"
-
-# Additional network/TLS dependencies
-ipnetwork = "0.20"
-opentelemetry-otlp = "0.15"
-x509-parser = "0.17"
-rustls = "0.23"
-webpki-roots = "0.26"
-
-# DNS resolution - security-focused replacement for trust-dns
-hickory-resolver = "0.24"
 
 [profile.dev]
 opt-level = 1
 debug = true
 incremental = true
 split-debuginfo = "unpacked"
+overflow-checks = true
+# Faster builds in development
+codegen-units = 16
 
 [profile.release]
 opt-level = 3
@@ -281,15 +241,41 @@ codegen-units = 1
 panic = "abort"
 strip = true
 overflow-checks = true
+# Additional optimizations for production
+rpath = false
 
 [profile.test]
 opt-level = 1
 debug = true
+incremental = true
+# Faster test compilation
+codegen-units = 8
+overflow-checks = true
 
 [profile.bench]
 opt-level = 3
 debug = false
 lto = true
+codegen-units = 1
+# Benchmark-specific optimizations
+rpath = false
+strip = true
+
+# ===== DEVELOPMENT PROFILE WITH FASTER BUILDS =====
+[profile.dev-fast]
+inherits = "dev"
+# Even faster development builds
+opt-level = 0
+incremental = true
+codegen-units = 32
+debug = "line-tables-only"
+
+# ===== SECURITY-HARDENED RELEASE PROFILE =====
+[profile.release-hardened]
+inherits = "release"
+# Additional security hardening
+overflow-checks = true
+panic = "abort"
 
 # Feature organization
 [workspace.metadata.features]

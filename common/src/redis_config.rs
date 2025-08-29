@@ -269,8 +269,9 @@ impl UnifiedRedisConfig {
 
     /// Get Redis connection configuration for deadpool
     #[cfg(feature = "deadpool-redis")]
+    #[must_use]
     pub fn to_deadpool_config(&self) -> deadpool_redis::Config {
-        let mut config = deadpool_redis::Config::from_url(&self.client_url());
+        let mut config = deadpool_redis::Config::from_url(self.client_url());
 
         if let Some(ref mut pool_config) = config.pool {
             pool_config.max_size = self.max_connections as usize;

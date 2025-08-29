@@ -1,397 +1,91 @@
 openapi: 3.0.3
 info:
   title: Rust Security Platform API
-  description: |
-    Enterprise-grade authentication and authorization platform built with Rust.
-
-    ## Overview
-    The Rust Security Platform provides comprehensive security services including:
-    - OAuth 2.0 and OpenID Connect authentication
-    - Fine-grained authorization with Cedar policy engine
-    - Multi-factor authentication (MFA)
-    - Session management and security monitoring
-    - Rate limiting and abuse protection
-    - Audit logging and compliance reporting
-
-    ## Authentication
-    All API endpoints require authentication unless otherwise specified.
-    Supported authentication methods:
-    - Bearer tokens (JWT)
-    - API keys
-    - Session cookies
-
-    ## Rate Limiting
-    API requests are subject to rate limiting based on:
-    - Client IP address
-    - User identity
-    - API key
-    - Request type
-
-    Rate limits are configurable and enforced per endpoint.
-
-    ## Error Handling
-    The API uses consistent error response formats:
-    - 4xx errors for client issues
-    - 5xx errors for server issues
-    - Detailed error messages in development
-    - Sanitized error messages in production
-  version: 1.0.0
+  description: Enterprise-grade security platform providing authentication, authorization, audit, and monitoring services
+  version: 1.4.0
   contact:
-    name: Security Team
-    email: security@rust-security.com
-    url: https://github.com/rust-security-platform/support
+    name: Rust Security Platform Team
+    email: support@rust-security.org
+    url: https://rust-security.org
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: https://api.rust-security.com/v1
+  - url: https://api.rust-security.org/v1
     description: Production server
-  - url: https://staging-api.rust-security.com/v1
-    description: Staging server
   - url: http://localhost:8080/v1
     description: Local development server
 
 security:
-  - bearerAuth: []
-  - apiKeyAuth: []
+  - BearerAuth: []
+  - ApiKeyAuth: []
 
 paths:
-  /health:
-    get:
-      summary: Health check endpoint
-      description: Check the health status of the service
-      operationId: getHealth
-      tags:
-        - Health
-      responses:
-        '200':
-          description: Service is healthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HealthResponse'
-        '503':
-          description: Service is unhealthy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /metrics:
-    get:
-      summary: Prometheus metrics endpoint
-      description: Expose Prometheus metrics for monitoring
-      operationId: getMetrics
-      tags:
-        - Monitoring
-      responses:
-        '200':
-          description: Metrics data
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: |
-                  # HELP auth_requests_total Total number of authentication requests
-                  # TYPE auth_requests_total counter
-                  auth_requests_total 1234
-
-  /oauth/authorize:
-    get:
-      summary: OAuth 2.0 authorization endpoint
-      description: |
-        Initiate OAuth 2.0 authorization code flow.
-
-        This endpoint starts the authorization process by:
-        1. Validating client credentials
-        2. Checking user authentication status
-        3. Presenting consent screen (if required)
-        4. Redirecting with authorization code
-      operationId: authorize
-      tags:
-        - OAuth
-        - Authentication
-      parameters:
-        - name: response_type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [code]
-          description: OAuth 2.0 response type (must be 'code')
-        - name: client_id
-          in: query
-          required: true
-          schema:
-            type: string
-          description: OAuth client identifier
-        - name: redirect_uri
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uri
-          description: Redirect URI for authorization response
-        - name: scope
-          in: query
-          schema:
-            type: string
-          description: Requested OAuth scopes (space-separated)
-        - name: state
-          in: query
-          schema:
-            type: string
-          description: OAuth state parameter for CSRF protection
-        - name: nonce
-          in: query
-          schema:
-            type: string
-          description: OpenID Connect nonce parameter
-      responses:
-        '302':
-          description: Redirect to login or consent page
-          headers:
-            Location:
-              schema:
-                type: string
-                format: uri
-              description: Redirect location
-        '400':
-          description: Invalid request parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Unauthorized client
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /oauth/token:
-    post:
-      summary: OAuth 2.0 token endpoint
-      description: |
-        Exchange authorization code for access tokens.
-
-        Supports multiple OAuth 2.0 grant types:
-        - Authorization Code Grant
-        - Client Credentials Grant
-        - Refresh Token Grant
-      operationId: getToken
-      tags:
-        - OAuth
-        - Authentication
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              oneOf:
-                - $ref: '#/components/schemas/AuthorizationCodeRequest'
-                - $ref: '#/components/schemas/ClientCredentialsRequest'
-                - $ref: '#/components/schemas/RefreshTokenRequest'
-      responses:
-        '200':
-          description: Token response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenResponse'
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Invalid client credentials
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /oauth/introspect:
-    post:
-      summary: OAuth 2.0 token introspection
-      description: Introspect an access token to get metadata
-      operationId: introspectToken
-      tags:
-        - OAuth
-        - Authentication
-      security:
-        - bearerAuth: []
-        - apiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/IntrospectRequest'
-      responses:
-        '200':
-          description: Token introspection response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/IntrospectResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /oauth/revoke:
-    post:
-      summary: OAuth 2.0 token revocation
-      description: Revoke an access token or refresh token
-      operationId: revokeToken
-      tags:
-        - OAuth
-        - Authentication
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RevokeRequest'
-      responses:
-        '200':
-          description: Token revoked successfully
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /v1/authorize:
-    post:
-      summary: Cedar policy authorization
-      description: |
-        Authorize a request using Cedar policy engine.
-
-        This endpoint evaluates fine-grained authorization policies
-        based on principal, action, resource, and context attributes.
-      operationId: authorizeRequest
-      tags:
-        - Authorization
-        - Cedar
-      security:
-        - bearerAuth: []
-        - apiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AuthorizeRequest'
-      responses:
-        '200':
-          description: Authorization decision
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthorizeResponse'
-        '400':
-          description: Invalid request format
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden by policy
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /v1/policies:
-    get:
-      summary: List Cedar policies
-      description: Retrieve the list of active Cedar policies
-      operationId: listPolicies
-      tags:
-        - Policies
-        - Cedar
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: List of policies
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PoliciesResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /v1/entities:
-    get:
-      summary: List Cedar entities
-      description: Retrieve the list of active Cedar entities
-      operationId: listEntities
-      tags:
-        - Entities
-        - Cedar
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: List of entities
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EntitiesResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
+  # Authentication Endpoints
   /auth/login:
     post:
-      summary: User login
-      description: Authenticate a user with username and password
-      operationId: login
-      tags:
-        - Authentication
-        - Users
+      summary: Authenticate user
+      description: Authenticate a user with username/password and optional MFA code
+      tags: [Authentication]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: "admin@example.com"
+              password: "secure_password"
+              mfa_code: "123456"
       responses:
         '200':
-          description: Login successful
+          description: Authentication successful
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
+              example:
+                success: true
+                token:
+                  access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  refresh_token: "refresh_token_here"
+                  expires_in: 3600
+                  token_type: "Bearer"
+                  scope: ["read", "write"]
         '401':
-          description: Invalid credentials
+          description: Authentication failed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: Too many login attempts
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      description: Generate new access token using refresh token
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid refresh token
           content:
             application/json:
               schema:
@@ -399,17 +93,18 @@ paths:
 
   /auth/logout:
     post:
-      summary: User logout
-      description: Invalidate user session
-      operationId: logout
-      tags:
-        - Authentication
-        - Users
+      summary: Logout user
+      description: Invalidate user session and tokens
+      tags: [Authentication]
       security:
-        - bearerAuth: []
+        - BearerAuth: []
       responses:
         '200':
           description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
         '401':
           description: Unauthorized
           content:
@@ -419,23 +114,26 @@ paths:
 
   /auth/mfa/setup:
     post:
-      summary: Setup multi-factor authentication
-      description: Initialize MFA for a user account
-      operationId: setupMFA
-      tags:
-        - Authentication
-        - MFA
+      summary: Setup MFA
+      description: Setup multi-factor authentication for user
+      tags: [Authentication]
       security:
-        - bearerAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaSetupRequest'
       responses:
         '200':
-          description: MFA setup initiated
+          description: MFA setup successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MFASetupResponse'
-        '401':
-          description: Unauthorized
+                $ref: '#/components/schemas/MfaSetupResponse'
+        '400':
+          description: Invalid request
           content:
             application/json:
               schema:
@@ -444,24 +142,21 @@ paths:
   /auth/mfa/verify:
     post:
       summary: Verify MFA code
-      description: Complete MFA authentication with TOTP code
-      operationId: verifyMFA
-      tags:
-        - Authentication
-        - MFA
+      description: Verify multi-factor authentication code
+      tags: [Authentication]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MFAVerifyRequest'
+              $ref: '#/components/schemas/MfaVerifyRequest'
       responses:
         '200':
           description: MFA verification successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MFAVerifyResponse'
+                $ref: '#/components/schemas/SuccessResponse'
         '401':
           description: Invalid MFA code
           content:
@@ -469,38 +164,102 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /users/{userId}/profile:
+  # Authorization Endpoints
+  /auth/permissions:
     get:
-      summary: Get user profile
-      description: Retrieve user profile information
-      operationId: getUserProfile
-      tags:
-        - Users
-        - Profile
+      summary: Get user permissions
+      description: Retrieve current user's permissions and roles
+      tags: [Authorization]
       security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: User identifier
+        - BearerAuth: []
       responses:
         '200':
-          description: User profile
+          description: Permissions retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserProfile'
+                $ref: '#/components/schemas/PermissionsResponse'
+              example:
+                permissions: ["read:users", "write:users", "delete:users"]
+                roles: ["admin", "user"]
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden
+
+  /auth/check:
+    post:
+      summary: Check permission
+      description: Check if user has specific permission for resource
+      tags: [Authorization]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCheckRequest'
+      responses:
+        '200':
+          description: Permission check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionCheckResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/roles:
+    get:
+      summary: List available roles
+      description: Get all available roles in the system
+      tags: [Authorization]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Roles retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolesResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/roles/{user_id}:
+    get:
+      summary: Get user roles
+      description: Get roles assigned to specific user
+      tags: [Authorization]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ID
+      responses:
+        '200':
+          description: User roles retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRolesResponse'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -512,288 +271,355 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # Audit Endpoints
+  /audit/events:
+    get:
+      summary: Get audit events
+      description: Retrieve audit events with filtering and pagination
+      tags: [Audit]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+          description: Filter by user ID
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Filter by action type
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for filtering
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date for filtering
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum number of results
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Pagination offset
+      responses:
+        '200':
+          description: Audit events retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audit/events/{event_id}:
+    get:
+      summary: Get audit event details
+      description: Get detailed information about specific audit event
+      tags: [Audit]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Audit event ID
+      responses:
+        '200':
+          description: Audit event details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventDetailResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Security Monitoring Endpoints
+  /security/threats:
+    get:
+      summary: Get security threats
+      description: Retrieve detected security threats and alerts
+      tags: [Security]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+          description: Filter by threat severity
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for filtering
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, resolved, dismissed]
+          description: Filter by threat status
+      responses:
+        '200':
+          description: Security threats retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreatsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /security/threats/{threat_id}/resolve:
+    post:
+      summary: Resolve security threat
+      description: Mark a security threat as resolved
+      tags: [Security]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: threat_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Threat ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveThreatRequest'
+      responses:
+        '200':
+          description: Threat resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Threat not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Performance Monitoring Endpoints
+  /performance/metrics:
+    get:
+      summary: Get performance metrics
+      description: Retrieve current performance metrics and statistics
+      tags: [Performance]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: metric_type
+          in: query
+          schema:
+            type: string
+            enum: [response_time, throughput, memory, cpu, cache, database]
+          description: Type of metrics to retrieve
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 24h]
+            default: 15m
+          description: Timeframe for metrics
+      responses:
+        '200':
+          description: Performance metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceMetricsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /performance/bottlenecks:
+    get:
+      summary: Get performance bottlenecks
+      description: Identify current performance bottlenecks and issues
+      tags: [Performance]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Performance bottlenecks retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BottlenecksResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Quality Gates Endpoints
+  /quality/gates/status:
+    get:
+      summary: Get quality gate status
+      description: Get current status of all quality gates
+      tags: [Quality]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Quality gate status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityGateStatusResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /quality/gates/run:
+    post:
+      summary: Run quality gates
+      description: Execute all configured quality gates manually
+      tags: [Quality]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Quality gates executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityGateResultResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Health Check Endpoints
+  /health:
+    get:
+      summary: System health check
+      description: Check overall system health status
+      tags: [Health]
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                timestamp: "2024-01-15T10:30:00Z"
+                services:
+                  auth: "healthy"
+                  database: "healthy"
+                  redis: "healthy"
+                  security: "healthy"
+        '503':
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/auth:
+    get:
+      summary: Authentication service health
+      description: Check authentication service health
+      tags: [Health]
+      responses:
+        '200':
+          description: Authentication service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceHealthResponse'
+        '503':
+          description: Authentication service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceHealthResponse'
+
+  # Metrics Endpoints
+  /metrics:
+    get:
+      summary: Get system metrics
+      description: Retrieve comprehensive system metrics in Prometheus format
+      tags: [Metrics]
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP rust_security_auth_requests_total Total authentication requests
+                # TYPE rust_security_auth_requests_total counter
+                rust_security_auth_requests_total{method="login",status="success"} 12543
+                rust_security_auth_requests_total{method="login",status="failure"} 234
+                # HELP rust_security_response_time Response time in milliseconds
+                # TYPE rust_security_response_time histogram
+                rust_security_response_time_bucket{le="10"} 12543
+                rust_security_response_time_bucket{le="50"} 12843
+                rust_security_response_time_bucket{le="100"} 12943
+
 components:
   schemas:
-    # Core request/response types
-    HealthResponse:
-      type: object
-      required:
-        - status
-        - version
-        - timestamp
-      properties:
-        status:
-          type: string
-          example: "healthy"
-        version:
-          type: string
-          example: "1.0.0"
-        timestamp:
-          type: string
-          format: date-time
-          example: "2024-01-15T10:30:00Z"
-        uptime_seconds:
-          type: number
-          format: float
-          example: 3600.5
-
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: object
-          required:
-            - type
-            - message
-          properties:
-            type:
-              type: string
-              example: "invalid_request"
-            message:
-              type: string
-              example: "The request parameters are invalid"
-            status:
-              type: integer
-              example: 400
-
-    # OAuth types
-    AuthorizationCodeRequest:
-      type: object
-      required:
-        - grant_type
-        - code
-        - client_id
-        - client_secret
-        - redirect_uri
-      properties:
-        grant_type:
-          type: string
-          enum: [authorization_code]
-        code:
-          type: string
-          description: Authorization code from /oauth/authorize
-        client_id:
-          type: string
-        client_secret:
-          type: string
-        redirect_uri:
-          type: string
-          format: uri
-
-    ClientCredentialsRequest:
-      type: object
-      required:
-        - grant_type
-        - client_id
-        - client_secret
-        - scope
-      properties:
-        grant_type:
-          type: string
-          enum: [client_credentials]
-        client_id:
-          type: string
-        client_secret:
-          type: string
-        scope:
-          type: string
-          description: Requested scopes
-
-    RefreshTokenRequest:
-      type: object
-      required:
-        - grant_type
-        - refresh_token
-        - client_id
-        - client_secret
-      properties:
-        grant_type:
-          type: string
-          enum: [refresh_token]
-        refresh_token:
-          type: string
-        client_id:
-          type: string
-        client_secret:
-          type: string
-
-    TokenResponse:
-      type: object
-      required:
-        - access_token
-        - token_type
-        - expires_in
-      properties:
-        access_token:
-          type: string
-          example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
-        token_type:
-          type: string
-          enum: [Bearer]
-        expires_in:
-          type: integer
-          description: Token lifetime in seconds
-          example: 3600
-        refresh_token:
-          type: string
-          example: "refresh_token_value"
-        scope:
-          type: string
-          example: "read write"
-
-    IntrospectRequest:
-      type: object
-      required:
-        - token
-      properties:
-        token:
-          type: string
-          description: Access token to introspect
-
-    IntrospectResponse:
-      type: object
-      required:
-        - active
-      properties:
-        active:
-          type: boolean
-          description: Whether the token is active
-        client_id:
-          type: string
-        username:
-          type: string
-        scope:
-          type: string
-        token_type:
-          type: string
-        exp:
-          type: integer
-          description: Token expiration timestamp
-        iat:
-          type: integer
-          description: Token issued timestamp
-        nbf:
-          type: integer
-          description: Token not-before timestamp
-        sub:
-          type: string
-          description: Token subject
-        aud:
-          type: string
-          description: Token audience
-        iss:
-          type: string
-          description: Token issuer
-        jti:
-          type: string
-          description: Token ID
-
-    RevokeRequest:
-      type: object
-      required:
-        - token
-      properties:
-        token:
-          type: string
-          description: Token to revoke
-        token_type_hint:
-          type: string
-          enum: [access_token, refresh_token]
-
-    # Cedar authorization types
-    AuthorizeRequest:
-      type: object
-      required:
-        - principal
-        - action
-        - resource
-        - context
-        - request_id
-      properties:
-        principal:
-          type: object
-          description: Principal entity (user, service, etc.)
-          example:
-            type: "User"
-            id: "alice"
-            roles: ["developer", "admin"]
-            department: "engineering"
-        action:
-          type: string
-          description: Action being performed
-          example: "Document::read"
-        resource:
-          type: object
-          description: Resource entity being accessed
-          example:
-            type: "Document"
-            id: "confidential-doc.pdf"
-            classification: "confidential"
-            owner: "alice"
-        context:
-          type: object
-          description: Additional context for authorization
-          example:
-            time: "14:30"
-            location: "office"
-            ip_address: "192.168.1.100"
-        request_id:
-          type: string
-          description: Unique request identifier
-          example: "req-12345"
-
-    AuthorizeResponse:
-      type: object
-      required:
-        - decision
-      properties:
-        decision:
-          type: string
-          enum: [Allow, Deny]
-          description: Authorization decision
-        request_id:
-          type: string
-          description: Echo of request ID
-        evaluation_time_ms:
-          type: number
-          format: float
-          description: Time taken to evaluate policy
-
-    PoliciesResponse:
-      type: object
-      required:
-        - policies
-      properties:
-        policies:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              content:
-                type: string
-                description: Cedar policy content
-              annotations:
-                type: object
-        total_count:
-          type: integer
-
-    EntitiesResponse:
-      type: object
-      required:
-        - entities
-      properties:
-        entities:
-          type: array
-          items:
-            type: object
-        total_count:
-          type: integer
-
-    # User authentication types
+    # Authentication Schemas
     LoginRequest:
       type: object
       required:
@@ -802,181 +628,541 @@ components:
       properties:
         username:
           type: string
-          example: "alice@example.com"
+          format: email
+          description: User email address
         password:
           type: string
-          format: password
-        remember_me:
-          type: boolean
-          default: false
+          minLength: 8
+          description: User password
+        mfa_code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: Multi-factor authentication code
 
     LoginResponse:
       type: object
-      required:
-        - success
       properties:
         success:
           type: boolean
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        user:
-          $ref: '#/components/schemas/UserProfile'
-        mfa_required:
+        token:
+          $ref: '#/components/schemas/TokenResponse'
+        requires_mfa:
           type: boolean
-          description: Whether MFA verification is required
         mfa_token:
           type: string
-          description: Temporary token for MFA verification
 
-    # MFA types
-    MFASetupResponse:
+    RefreshRequest:
       type: object
       required:
-        - secret
-        - qr_code_url
+        - refresh_token
       properties:
+        refresh_token:
+          type: string
+          description: Refresh token obtained during login
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+        refresh_token:
+          type: string
+          description: JWT refresh token
+        expires_in:
+          type: integer
+          description: Token expiration time in seconds
+        token_type:
+          type: string
+          enum: [Bearer, JWT]
+        scope:
+          type: array
+          items:
+            type: string
+          description: Token scope/permissions
+
+    MfaSetupRequest:
+      type: object
+      required:
+        - method
+      properties:
+        method:
+          type: string
+          enum: [totp, sms, email]
+          description: MFA method to setup
+
+    MfaSetupResponse:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        method:
+          type: string
         secret:
           type: string
           description: TOTP secret (base32 encoded)
         qr_code_url:
           type: string
-          format: uri
-          description: URL for QR code generation
+          description: QR code URL for TOTP setup
         backup_codes:
           type: array
           items:
             type: string
           description: Backup recovery codes
 
-    MFAVerifyRequest:
+    MfaVerifyRequest:
       type: object
       required:
-        - mfa_token
         - code
-        - method
+        - mfa_token
       properties:
-        mfa_token:
-          type: string
-          description: Token from MFA setup or login
         code:
           type: string
-          description: TOTP code or backup code
-        method:
+          description: MFA verification code
+        mfa_token:
           type: string
-          enum: [totp, backup]
-          description: MFA verification method
+          description: MFA token from setup/previous step
 
-    MFAVerifyResponse:
+    # Authorization Schemas
+    PermissionsResponse:
       type: object
-      required:
-        - success
       properties:
-        success:
-          type: boolean
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        recovery_codes_remaining:
-          type: integer
-          description: Number of backup codes remaining
-
-    # User profile types
-    UserProfile:
-      type: object
-      required:
-        - id
-        - username
-        - email
-        - created_at
-      properties:
-        id:
-          type: string
-          example: "user-123"
-        username:
-          type: string
-          example: "alice_smith"
-        email:
-          type: string
-          format: email
-          example: "alice@example.com"
-        first_name:
-          type: string
-          example: "Alice"
-        last_name:
-          type: string
-          example: "Smith"
+        permissions:
+          type: array
+          items:
+            type: string
+          description: User permissions
         roles:
           type: array
           items:
             type: string
-          example: ["developer", "admin"]
-        department:
+          description: User roles
+
+    PermissionCheckRequest:
+      type: object
+      required:
+        - permission
+        - resource
+      properties:
+        permission:
           type: string
-          example: "engineering"
-        manager:
+          description: Permission to check
+        resource:
           type: string
-          example: "user-456"
-        created_at:
-          type: string
-          format: date-time
-        last_login:
-          type: string
-          format: date-time
-        mfa_enabled:
+          description: Resource identifier
+
+    PermissionCheckResponse:
+      type: object
+      properties:
+        allowed:
           type: boolean
-        account_status:
+          description: Whether permission is granted
+        reason:
           type: string
-          enum: [active, suspended, locked]
-          example: "active"
+          description: Reason for denial (if applicable)
+
+    RolesResponse:
+      type: object
+      properties:
+        roles:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+              permissions:
+                type: array
+                items:
+                  type: string
+
+    UserRolesResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        effective_permissions:
+          type: array
+          items:
+            type: string
+
+    # Audit Schemas
+    AuditEventsResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        total:
+          type: integer
+          description: Total number of events
+        limit:
+          type: integer
+          description: Requested limit
+        offset:
+          type: integer
+          description: Requested offset
+
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Event unique identifier
+        timestamp:
+          type: string
+          format: date-time
+          description: Event timestamp
+        user_id:
+          type: string
+          description: User who performed the action
+        action:
+          type: string
+          description: Action performed
+        resource:
+          type: string
+          description: Resource affected
+        success:
+          type: boolean
+          description: Whether action was successful
+        details:
+          type: object
+          description: Additional event details
+        ip_address:
+          type: string
+          description: Client IP address
+        user_agent:
+          type: string
+          description: Client user agent
+
+    AuditEventDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/AuditEvent'
+        - type: object
+          properties:
+            stack_trace:
+              type: string
+              description: Stack trace (if error occurred)
+            session_id:
+              type: string
+              description: User session ID
+            metadata:
+              type: object
+              description: Additional metadata
+
+    # Security Schemas
+    ThreatsResponse:
+      type: object
+      properties:
+        threats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Threat'
+        total:
+          type: integer
+        active_count:
+          type: integer
+
+    Threat:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        status:
+          type: string
+          enum: [active, investigating, resolved, dismissed]
+        detected_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          description: Detection source
+        indicators:
+          type: array
+          items:
+            type: string
+          description: Threat indicators
+
+    ResolveThreatRequest:
+      type: object
+      required:
+        - resolution
+      properties:
+        resolution:
+          type: string
+          enum: [resolved, dismissed, false_positive]
+        notes:
+          type: string
+          description: Resolution notes
+
+    # Performance Schemas
+    PerformanceMetricsResponse:
+      type: object
+      properties:
+        metrics:
+          type: object
+          properties:
+            response_time:
+              $ref: '#/components/schemas/PerformanceMetric'
+            throughput:
+              $ref: '#/components/schemas/PerformanceMetric'
+            memory_usage:
+              $ref: '#/components/schemas/PerformanceMetric'
+            cpu_usage:
+              $ref: '#/components/schemas/PerformanceMetric'
+            error_rate:
+              $ref: '#/components/schemas/PerformanceMetric'
+            cache_hit_rate:
+              $ref: '#/components/schemas/PerformanceMetric'
+        timeframe:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    PerformanceMetric:
+      type: object
+      properties:
+        current:
+          type: number
+        average:
+          type: number
+        min:
+          type: number
+        max:
+          type: number
+        p95:
+          type: number
+          description: 95th percentile
+        p99:
+          type: number
+          description: 99th percentile
+
+    BottlenecksResponse:
+      type: object
+      properties:
+        bottlenecks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bottleneck'
+        total_impact:
+          type: number
+
+    Bottleneck:
+      type: object
+      properties:
+        component:
+          type: string
+        issue_type:
+          type: string
+          enum: [response_time, throughput, memory, cpu, database, cache]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        impact_score:
+          type: number
+          description: Impact score (0-100)
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    # Quality Schemas
+    QualityGateStatusResponse:
+      type: object
+      properties:
+        overall_status:
+          type: string
+          enum: [passed, failed, warning]
+        gates:
+          type: array
+          items:
+            $ref: '#/components/schemas/QualityGate'
+        last_run:
+          type: string
+          format: date-time
+
+    QualityGate:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [passed, failed, warning, skipped]
+        score:
+          type: number
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                type: string
+              message:
+                type: string
+              file:
+                type: string
+              line:
+                type: integer
+
+    QualityGateResultResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [passed, failed, warning]
+        execution_time_ms:
+          type: integer
+        total_issues:
+          type: integer
+        gates_executed:
+          type: integer
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    # Health Schemas
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        uptime_seconds:
+          type: integer
+        services:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [healthy, degraded, unhealthy]
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthCheck'
+
+    HealthCheck:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        response_time_ms:
+          type: integer
+        message:
+          type: string
+
+    ServiceHealthResponse:
+      type: object
+      properties:
+        service:
+          type: string
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        uptime_seconds:
+          type: integer
+        metrics:
+          type: object
+          additionalProperties:
+            type: number
+
+    # Common Schemas
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "AUTHENTICATION_FAILED"
+            message:
+              type: string
+              example: "Invalid username or password"
+            details:
+              type: object
+              additionalProperties:
+                type: string
+            timestamp:
+              type: string
+              format: date-time
+            request_id:
+              type: string
 
   securitySchemes:
-    bearerAuth:
+    BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: |
-        JWT Bearer token authentication.
+      description: JWT Bearer token authentication
 
-        Include the JWT token in the Authorization header:
-        `Authorization: Bearer <jwt-token>`
-
-    apiKeyAuth:
+    ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
-      description: |
-        API key authentication.
+      description: API key authentication
 
-        Include your API key in the X-API-Key header:
-        `X-API-Key: <your-api-key>`
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Authorization
+    description: Permission and access control
+  - name: Audit
+    description: Security audit trails and compliance
+  - name: Security
+    description: Security monitoring and threat detection
+  - name: Performance
+    description: Performance monitoring and optimization
+  - name: Quality
+    description: Code quality gates and validation
+  - name: Health
+    description: System health checks and monitoring
+  - name: Metrics
+    description: System metrics and telemetry
 
-# Webhooks (optional)
-# webhooks:
-#   user.login:
-#     post:
-#       summary: User login webhook
-#       operationId: userLoginWebhook
-#       requestBody:
-#         content:
-#           application/json:
-#             schema:
-#               type: object
-#               properties:
-#                 user_id:
-#                   type: string
-#                 login_time:
-#                   type: string
-#                   format: date-time
-#                 ip_address:
-#                   type: string
-#       responses:
-#         '200':
-#           description: Webhook received
-
-# External documentation
 externalDocs:
-  description: Complete API documentation and examples
-  url: https://docs.rust-security.com
+  description: Complete API Documentation
+  url: https://docs.rust-security.org/api
