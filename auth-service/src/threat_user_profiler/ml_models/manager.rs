@@ -2,7 +2,6 @@ use crate::threat_user_profiler::types::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// ML model manager for behavioral analysis
 pub struct MLModelManager {

@@ -146,6 +146,7 @@ pub enum ThreatType {
 /// Specific threat indicators
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreatIndicator {
+    pub id: String,
     pub indicator_type: IndicatorType,
     pub value: String,
     pub confidence: f64,
@@ -153,6 +154,12 @@ pub struct ThreatIndicator {
     pub last_seen: DateTime<Utc>,
     pub source: String,
     pub tags: HashSet<String>,
+    pub severity: ThreatSeverity,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub metadata: std::collections::HashMap<String, serde_json::Value>,
 }
 
 /// Types of threat indicators
@@ -163,6 +170,7 @@ pub enum IndicatorType {
     Url,
     FileHash,
     EmailAddress,
+    Email, // Alias for EmailAddress
     UserAgent,
     JwtToken,
     SessionId,
@@ -170,6 +178,7 @@ pub enum IndicatorType {
     BehaviorPattern,
     NetworkPattern,
     TimePattern,
+    Other,
 }
 
 /// Available mitigation actions
@@ -192,7 +201,7 @@ pub enum MitigationAction {
 }
 
 /// Attack kill chain phases
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AttackPhase {
     Reconnaissance,
     InitialAccess,
@@ -246,7 +255,7 @@ pub struct ThreatActorProfile {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ActorType {
     Unknown,
-    Script_kiddie,
+    ScriptKiddie,
     Cybercriminal,
     Insider,
     StateSponsored,
@@ -587,6 +596,32 @@ pub struct RollbackPlan {
     pub emergency_contacts: Vec<String>,
 }
 
+/// Security event for threat detection and response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreatSecurityEvent {
+    pub event_id: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub event_type: ThreatSecurityEventType,
+    pub severity: ThreatSeverity,
+    pub source: String,
+    pub client_id: Option<String>,
+    pub user_id: Option<String>,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub request_id: Option<String>,
+    pub session_id: Option<String>,
+    pub description: String,
+    pub details: std::collections::HashMap<String, serde_json::Value>,
+    pub outcome: EventOutcome,
+    pub resource: Option<String>,
+    pub action: Option<String>,
+    pub risk_score: Option<f64>,
+    pub location: Option<String>,
+    pub device_fingerprint: Option<String>,
+    pub mfa_used: bool,
+    pub token_binding_info: Option<String>,
+}
+
 impl ThreatSecurityEvent {
     /// Create a new security event with minimal required fields
     pub fn new(
@@ -840,7 +875,7 @@ impl UserBehaviorProfile {
         // Update MFA usage rate
         if event.mfa_used {
             let current_rate = self.mfa_usage_rate;
-            let events_with_mfa = (self.security_events_count as f64 * current_rate + 1.0);
+            let events_with_mfa = self.security_events_count as f64 * current_rate + 1.0;
             self.mfa_usage_rate = events_with_mfa / self.security_events_count as f64;
         }
     }

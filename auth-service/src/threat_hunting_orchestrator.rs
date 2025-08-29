@@ -6,14 +6,14 @@ use crate::threat_intelligence::{ThreatIntelligenceConfig, ThreatIntelligenceCor
 use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOrchestrator};
 use crate::threat_types::*;
 use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingConfig};
+use crate::core::security::SecurityEvent;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
-use indexmap::IndexMap;
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -480,8 +480,8 @@ impl ThreatHuntingOrchestrator {
         }
 
         // Perform immediate analysis
-        let mut result = ThreatHuntingResult {
-            event_id: event.event_id.clone(),
+        let mut operation_result = ThreatHuntingResult {
+            event_id: event.security_context.request_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             processing_time_ms: 0,
             threats_detected: Vec::new(),
             correlations_found: Vec::new(),
@@ -529,9 +529,9 @@ impl ThreatHuntingOrchestrator {
         // Analyze user behavior
         if let Ok(user_result) = user_analysis {
             operation_result.user_risk_assessment = Some(UserRiskAssessment {
-                user_id: user_operation_result.user_id,
-                risk_score: user_operation_result.risk_score,
-                risk_level: self.convert_risk_score_to_level(user_operation_result.risk_score),
+                user_id: user_result.user_id.clone(),
+                risk_score: user_result.risk_score,
+                risk_level: self.convert_risk_score_to_level(user_result.risk_score),
                 risk_factors: vec!["placeholder".to_string()],
                 behavioral_anomalies: user_result
                     .anomalies_detected
@@ -539,7 +539,7 @@ impl ThreatHuntingOrchestrator {
                     .map(|a| a.description.clone())
                     .collect(),
                 peer_comparison_percentile: 0.5, // Placeholder
-                recommended_actions: user_operation_result.recommendations,
+                recommended_actions: user_result.recommendations.clone(),
             });
         }
 
@@ -600,7 +600,7 @@ impl ThreatHuntingOrchestrator {
         // Update metrics
         THREAT_HUNTING_EVENTS_PROCESSED.inc();
         if !operation_result.threats_detected.is_empty() {
-            THREAT_HUNTING_THREATS_DETECTED.inc_by(operation_result.threats_detected.len() as u64);
+            THREAT_HUNTING_THREATS_DETECTED.inc_by(operation_result.threats_detected.len() as f64);
         }
 
         drop(timer);
@@ -615,10 +615,23 @@ impl ThreatHuntingOrchestrator {
         crate::threat_user_profiler::BehavioralAnalysisResult,
         Box<dyn std::error::Error + Send + Sync>,
     > {
-        if let Some(user_id) = &event.user_id {
-            self.user_profiler
-                .analyze_user_behavior(user_id, event.clone())
-                .await
+        if let Some(user_id) = &event.auth_context.user_id {
+            // Convert string user_id to Uuid
+            let user_uuid = uuid::Uuid::parse_str(user_id)
+                .map_err(|e| format!("Invalid user ID format: {}", e))?;
+            
+            // Use the existing assess_user_risk method as a substitute
+            let risk_assessment = self.user_profiler
+                .assess_user_risk(user_uuid)
+                .await?;
+            
+            // Create a stub BehavioralAnalysisResult
+            Ok(crate::threat_user_profiler::BehavioralAnalysisResult {
+                user_id: user_id.to_string(),
+                risk_score: risk_assessment.overall_risk_score,
+                anomalies_detected: vec![],
+                recommendations: vec![],
+            })
         } else {
             Err("No user ID in event".into())
         }

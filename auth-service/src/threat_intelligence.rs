@@ -1,18 +1,18 @@
+use crate::errors::AuthError;
 use crate::threat_types::*;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
-use indexmap::IndexMap;
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
-use tokio::time::{interval, timeout, Duration as TokioDuration};
+use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -491,9 +491,9 @@ impl ThreatIntelligenceCorrelator {
             }
         }
 
-        THREAT_INTEL_QUERIES.inc_by(matches.len() as u64);
+        THREAT_INTEL_QUERIES.inc_by(matches.len() as f64);
         if !matches.is_empty() {
-            THREAT_INTEL_MATCHES.inc_by(matches.len() as u64);
+            THREAT_INTEL_MATCHES.inc_by(matches.len() as f64);
         }
 
         Ok(matches)
@@ -1001,8 +1001,9 @@ impl ThreatIntelligenceCorrelator {
                                 info!(
                                     "Feed sync completed: {} - Added: {}, Updated: {}, Removed: {}",
                                     feed.name,
-                                    sync_operation_result.added,
-                                    sync_operation_result.updated,
+                                    sync_result.added,
+                                    sync_result.updated,
+                                    sync_result.removed
                                     sync_operation_result.removed
                                 );
 
@@ -1090,7 +1091,7 @@ impl ThreatIntelligenceCorrelator {
     /// Get current statistics
     pub async fn get_statistics(&self) -> IntelligenceStatistics {
         let stats = self.statistics.lock().await;
-        stats.clone()
+        (*stats).clone()
     }
 
     /// Shutdown the correlator
@@ -1145,7 +1146,7 @@ impl ThreatIntelligenceService {
     /// Synchronize a threat feed by downloading and processing indicators
     async fn synchronize_threat_feed(
         &self,
-        feed: &ThreatFeed,
+        feed: &ThreatFeedConfig,
     ) -> Result<FeedSyncResult, AuthError> {
         let start_time = std::time::Instant::now();
         let mut sync_result = FeedSyncResult::default();
@@ -1185,12 +1186,12 @@ impl ThreatIntelligenceService {
                 .process_feed_indicator(&indicator, &feed.name, &existing_indicators)
                 .await
             {
-                Ok(ProcessResult::Added) => sync_operation_result.added += 1,
-                Ok(ProcessResult::Updated) => sync_operation_result.updated += 1,
-                Ok(ProcessResult::Skipped) => sync_operation_result.skipped += 1,
+                Ok(ProcessResult::Added) => sync_result.added += 1,
+                Ok(ProcessResult::Updated) => sync_result.updated += 1,
+                Ok(ProcessResult::Skipped) => sync_result.skipped += 1,
                 Err(e) => {
                     error!("Failed to process indicator {}: {}", indicator.value, e);
-                    sync_operation_result.errors += 1;
+                    sync_result.errors += 1;
                 }
             }
         }
@@ -1199,22 +1200,22 @@ impl ThreatIntelligenceService {
         let removed = self
             .cleanup_stale_indicators(&feed.name, &existing_indicators)
             .await?;
-        sync_operation_result.removed = removed;
+        sync_result.removed = removed;
 
-        sync_operation_result.total_indicators =
-            sync_operation_result.added + sync_operation_result.updated + sync_operation_result.skipped;
-        sync_operation_result.duration_ms = start_time.elapsed().as_millis() as u64;
+        sync_result.total_indicators =
+            sync_result.added + sync_result.updated + sync_result.skipped;
+        sync_result.duration_ms = start_time.elapsed().as_millis() as u64;
 
         info!(
             "Feed synchronization completed: {} in {}ms - Added: {}, Updated: {}, Removed: {}, Skipped: {}, Errors: {}",
-            feed.name, sync_operation_result.duration_ms, sync_operation_result.added, sync_operation_result.updated,
-            sync_operation_result.removed, sync_operation_result.skipped, sync_operation_result.errors
+            feed.name, sync_result.duration_ms, sync_result.added, sync_result.updated,
+            sync_result.removed, sync_result.skipped, sync_result.errors
         );
 
         Ok(sync_result)
     }
 
-    async fn download_feed_data(&self, feed: &ThreatFeed) -> Result<String, reqwest::Error> {
+    async fn download_feed_data(&self, feed: &ThreatFeedConfig) -> Result<String, reqwest::Error> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .user_agent("ThreatIntelligence/1.0")
@@ -1354,7 +1355,7 @@ impl ThreatIntelligenceService {
 
     fn detect_indicator_type(&self, value: &str) -> IndicatorType {
         // IP address detection
-        if std::net::IpAddr::from_str(value).is_ok() {
+        if value.parse::<std::net::IpAddr>().is_ok() {
             return IndicatorType::IpAddress;
         }
 

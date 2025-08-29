@@ -4,7 +4,6 @@ use crate::threat_user_profiler::features::BehavioralFeatureExtractor;
 use crate::threat_user_profiler::risk_assessment::RiskAssessmentEngine;
 use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
 use crate::threat_user_profiler::types::*;
-use crate::threat_user_profiler::types::*;
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 use redis::aio::ConnectionManager;

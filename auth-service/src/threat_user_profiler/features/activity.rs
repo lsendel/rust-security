@@ -1,5 +1,3 @@
-use crate::threat_user_profiler::types::*;
-use crate::threat_user_profiler::types::*;
 #[derive(Clone)]
 pub struct ActivityFeatureExtractor {
     window_days: i64,

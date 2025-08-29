@@ -1,5 +1,4 @@
 use crate::threat_user_profiler::types::*;
-use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

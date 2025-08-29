@@ -236,6 +236,7 @@ dependencies = [
  "lettre",
  "lz4_flex",
  "memmap2",
+ "num_cpus",
  "once_cell",
  "opentelemetry 0.22.0",
  "opentelemetry-jaeger",

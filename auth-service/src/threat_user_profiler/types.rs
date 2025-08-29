@@ -453,3 +453,21 @@ impl Default for ActivityFeatures {
         }
     }
 }
+
+/// Result of behavioral analysis for threat hunting
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BehavioralAnalysisResult {
+    pub user_id: String,
+    pub risk_score: f64,
+    pub anomalies_detected: Vec<BehavioralAnomaly>,
+    pub recommendations: Vec<String>,
+}
+
+/// Behavioral anomaly detected during analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BehavioralAnomaly {
+    pub anomaly_type: String,
+    pub description: String,
+    pub severity: f64,
+    pub confidence: f64,
+}

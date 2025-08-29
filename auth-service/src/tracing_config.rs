@@ -10,7 +10,6 @@ use rand::RngCore;
 use std::collections::HashMap;
 use std::env;
 use tracing::{info, Instrument, Span};
-use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use uuid::Uuid;
 
@@ -25,7 +24,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
 
     // Configure OpenTelemetry tracer
     #[allow(deprecated)]
-    let tracer = new_agent_pipeline()
+    let _tracer = new_agent_pipeline()
         .with_service_name(service_name)
         .with_endpoint(&jaeger_endpoint)
         .with_trace_config(

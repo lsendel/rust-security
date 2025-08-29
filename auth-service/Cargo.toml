@@ -88,7 +88,7 @@ reqwest = { workspace = true }
 regex = { workspace = true }
 # High-performance rate limiting
 dashmap = { workspace = true, optional = true }
-# num_cpus = { workspace = true }  # Unused - removed
+num_cpus = { workspace = true }
 # OpenTelemetry for distributed tracing
 opentelemetry = { workspace = true, features = ["metrics"], optional = true }
 opentelemetry-jaeger = { workspace = true, optional = true }

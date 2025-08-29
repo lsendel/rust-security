@@ -128,6 +128,14 @@ pub mod threat_user_profiler;
 pub mod threat_hunting_orchestrator;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_types;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_attack_patterns;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_behavioral_analyzer;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_intelligence;
+#[cfg(feature = "threat-hunting")]
+pub mod threat_response_orchestrator;
 #[cfg(feature = "tracing")]
 pub mod tracing_config;
 

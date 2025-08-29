@@ -2,11 +2,11 @@ use crate::threat_user_profiler::config::*;
 use crate::threat_user_profiler::risk_assessment::peer_analysis::PeerComparisonAnalyzer;
 use crate::threat_user_profiler::risk_assessment::scoring::RiskScoringAlgorithm;
 use crate::threat_user_profiler::types::*;
-use chrono::{DateTime, Duration, Utc};
+use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// Advanced risk assessment engine for behavioral analysis

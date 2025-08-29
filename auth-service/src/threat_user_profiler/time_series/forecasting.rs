@@ -1,5 +1,3 @@
-use crate::threat_user_profiler::types::*;
-
 pub struct BehavioralForecaster;
 pub struct ForecastEngine;
 

@@ -1,8 +1,6 @@
-use crate::core::security::SecurityEventType;
 use crate::threat_user_profiler::config::*;
 use crate::threat_user_profiler::features::*;
 use crate::threat_user_profiler::types::*;
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -42,7 +40,7 @@ impl BehavioralFeatureExtractor {
     ) -> Result<BehavioralFeatureVector, Box<dyn std::error::Error + Send + Sync>> {
         info!("Extracting behavioral features for user {}", user_id);
 
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
 
         // Extract features from different dimensions
         let temporal_features = self
@@ -324,8 +322,8 @@ impl BehavioralFeatureExtractor {
     /// Apply quantile scaling normalization
     async fn apply_quantile_scaling(
         &self,
-        features: &mut BehavioralFeatureVector,
-        parameters: &HashMap<String, f64>,
+        _features: &mut BehavioralFeatureVector,
+        _parameters: &HashMap<String, f64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Apply quantile transformation (would need more sophisticated implementation)
         // For now, apply a simple rank-based transformation

@@ -1,11 +1,9 @@
 use crate::threat_user_profiler::types::*;
-use chrono::{DateTime, Utc};
 // Commented out missing dependencies for now
 // use nalgebra::{DMatrix, DVector};
 // use statrs::distribution::{ChiSquared, ContinuousCDF, Normal};
 // use statrs::statistics::Statistics;
-use std::collections::VecDeque;
-use tracing::{debug, warn};
+use tracing::debug;
 
 // Statistical helper trait
 trait StatisticalMethods {
