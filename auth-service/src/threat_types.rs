@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc, Timelike, Datelike};
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -188,7 +188,8 @@ pub enum IndicatorType {
 }
 
 impl ThreatIndicator {
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         id: String,
         indicator_type: IndicatorType,
         value: String,
@@ -217,7 +218,8 @@ impl ThreatIndicator {
 }
 
 impl ThreatContext {
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         threat_id: String,
         threat_type: String,
         severity: ThreatSeverity,
@@ -667,11 +669,10 @@ pub struct RollbackPlan {
     pub emergency_contacts: Vec<String>,
 }
 
-
-
 impl ThreatSecurityEvent {
     /// Create a new security event with minimal required fields
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         event_type: ThreatSecurityEventType,
         severity: ThreatSeverity,
         source: String,
@@ -730,7 +731,10 @@ impl ThreatSecurityEvent {
         // Outcome impact
         let outcome_modifier = match self.outcome {
             EventOutcome::Success => {
-                if matches!(self.event_type, ThreatSecurityEventType::AuthenticationSuccess) {
+                if matches!(
+                    self.event_type,
+                    ThreatSecurityEventType::AuthenticationSuccess
+                ) {
                     -10
                 } else {
                     0
@@ -754,7 +758,8 @@ impl ThreatSecurityEvent {
     }
 
     /// Check if event represents a security failure
-    #[must_use] pub const fn is_security_failure(&self) -> bool {
+    #[must_use]
+    pub const fn is_security_failure(&self) -> bool {
         matches!(
             self.event_type,
             ThreatSecurityEventType::AuthenticationFailure
@@ -769,7 +774,8 @@ impl ThreatSecurityEvent {
     }
 
     /// Get time window for threat correlation (in minutes)
-    #[must_use] pub const fn get_correlation_window(&self) -> u64 {
+    #[must_use]
+    pub const fn get_correlation_window(&self) -> u64 {
         match self.event_type {
             ThreatSecurityEventType::AuthenticationFailure => 15,
             ThreatSecurityEventType::MfaFailure => 10,
@@ -782,7 +788,8 @@ impl ThreatSecurityEvent {
 
 impl ThreatSignature {
     /// Create a new threat signature
-    #[must_use] pub fn new(threat_type: ThreatType, severity: ThreatSeverity, confidence: f64) -> Self {
+    #[must_use]
+    pub fn new(threat_type: ThreatType, severity: ThreatSeverity, confidence: f64) -> Self {
         Self {
             threat_id: Uuid::new_v4().to_string(),
             threat_type,
@@ -840,13 +847,15 @@ impl ThreatSignature {
     }
 
     /// Check if threat is still active (seen within last hour)
-    #[must_use] pub fn is_active(&self) -> bool {
+    #[must_use]
+    pub fn is_active(&self) -> bool {
         let now = Utc::now();
         now.signed_duration_since(self.last_seen).num_hours() < 1
     }
 
     /// Get threat age in hours
-    #[must_use] pub fn age_hours(&self) -> i64 {
+    #[must_use]
+    pub fn age_hours(&self) -> i64 {
         Utc::now()
             .signed_duration_since(self.first_seen)
             .num_hours()
@@ -855,7 +864,8 @@ impl ThreatSignature {
 
 impl UserBehaviorProfile {
     /// Create a new user behavior profile
-    #[must_use] pub fn new(user_id: String) -> Self {
+    #[must_use]
+    pub fn new(user_id: String) -> Self {
         Self {
             user_id,
             created_at: Utc::now(),
@@ -961,14 +971,16 @@ impl UserBehaviorProfile {
     }
 
     /// Check if behavior is suspicious based on entropy and patterns
-    #[must_use] pub fn is_behavior_suspicious(&self) -> bool {
+    #[must_use]
+    pub fn is_behavior_suspicious(&self) -> bool {
         self.behavior_entropy > 0.8
             || self.failed_login_baseline > 5.0
             || self.threat_exposure_score > 0.7
     }
 
     /// Get profile age in days
-    #[must_use] pub fn age_days(&self) -> i64 {
+    #[must_use]
+    pub fn age_days(&self) -> i64 {
         Utc::now().signed_duration_since(self.created_at).num_days()
     }
 }
@@ -976,7 +988,8 @@ impl UserBehaviorProfile {
 // Helper functions for threat analysis
 impl ThreatType {
     /// Get default severity for threat type
-    #[must_use] pub const fn default_severity(&self) -> ThreatSeverity {
+    #[must_use]
+    pub const fn default_severity(&self) -> ThreatSeverity {
         match self {
             Self::CredentialStuffing => ThreatSeverity::High,
             Self::AccountTakeover => ThreatSeverity::Critical,
@@ -991,7 +1004,8 @@ impl ThreatType {
     }
 
     /// Get typical indicators for threat type
-    #[must_use] pub fn typical_indicators(&self) -> Vec<IndicatorType> {
+    #[must_use]
+    pub fn typical_indicators(&self) -> Vec<IndicatorType> {
         match self {
             Self::CredentialStuffing => vec![
                 IndicatorType::IpAddress,

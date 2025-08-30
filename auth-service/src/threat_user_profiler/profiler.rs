@@ -3,7 +3,10 @@ use crate::threat_user_profiler::config::UserProfilingConfig;
 use crate::threat_user_profiler::features::BehavioralFeatureExtractor;
 use crate::threat_user_profiler::risk_assessment::RiskAssessmentEngine;
 use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
-use crate::threat_user_profiler::types::{EnhancedUserBehaviorProfile, BehavioralTimeSeries, ProfilingStatistics, UserSecurityEvent, RiskAssessment, TemporalFeatures, PeerComparisons, TimeSeriesPoint};
+use crate::threat_user_profiler::types::{
+    BehavioralTimeSeries, EnhancedUserBehaviorProfile, PeerComparisons, ProfilingStatistics,
+    RiskAssessment, TemporalFeatures, TimeSeriesPoint, UserSecurityEvent,
+};
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 use redis::aio::ConnectionManager;
@@ -25,28 +28,32 @@ static USER_PROFILES_ANALYZED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_user_profiles_analyzed_total",
         "Total user profiles analyzed"
-    ).expect("Failed to create user_profiles_analyzed counter")
+    )
+    .expect("Failed to create user_profiles_analyzed counter")
 });
 
 static BEHAVIORAL_ANOMALIES_FOUND: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_behavioral_anomalies_found_total",
         "Total behavioral anomalies found in user profiles"
-    ).expect("Failed to create behavioral_anomalies_found counter")
+    )
+    .expect("Failed to create behavioral_anomalies_found counter")
 });
 
 static PROFILE_ANALYSIS_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_profile_analysis_duration_seconds",
         "Duration of user profile analysis operations"
-    ).expect("Failed to create profile_analysis_duration histogram")
+    )
+    .expect("Failed to create profile_analysis_duration histogram")
 });
 
 static ACTIVE_USER_PROFILES: LazyLock<Gauge> = LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_user_profiles",
         "Number of active user profiles being tracked"
-    ).expect("Failed to create active_user_profiles gauge")
+    )
+    .expect("Failed to create active_user_profiles gauge")
 });
 
 #[allow(dead_code)]
@@ -54,7 +61,8 @@ static TIME_SERIES_PREDICTIONS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_time_series_predictions_total",
         "Total time series predictions made"
-    ).expect("Failed to create time_series_predictions counter")
+    )
+    .expect("Failed to create time_series_predictions counter")
 });
 
 /// Advanced user behavior profiler that orchestrates all profiling components
@@ -95,7 +103,8 @@ pub enum UpdatePriority {
 
 impl AdvancedUserBehaviorProfiler {
     /// Create a new advanced user behavior profiler
-    #[must_use] pub fn new(config: UserProfilingConfig) -> Self {
+    #[must_use]
+    pub fn new(config: UserProfilingConfig) -> Self {
         let (profile_update_sender, profile_update_receiver) = unbounded();
 
         // Initialize component engines with their respective configurations

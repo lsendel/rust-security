@@ -5,7 +5,7 @@ use crate::core::security::SecurityEvent;
 use crate::threat_adapter::ThreatDetectionAdapter;
 #[cfg(feature = "threat-hunting")]
 use crate::{
-    threat_behavioral_analyzer::AdvancedBehavioralThreatDetector as BehavioralAnalyzer, 
+    threat_behavioral_analyzer::AdvancedBehavioralThreatDetector as BehavioralAnalyzer,
     threat_intelligence::ThreatIntelligenceCorrelator as ThreatIntelligenceEngine,
     threat_response_orchestrator::ThreatResponseOrchestrator,
 };
@@ -26,7 +26,8 @@ pub struct ThreatProcessor {
 #[cfg(feature = "threat-hunting")]
 impl ThreatProcessor {
     /// Create a new threat processor
-    #[must_use] pub fn new(
+    #[must_use]
+    pub fn new(
         behavioral_analyzer: Arc<BehavioralAnalyzer>,
         intelligence_engine: Arc<ThreatIntelligenceEngine>,
         response_orchestrator: Arc<ThreatResponseOrchestrator>,

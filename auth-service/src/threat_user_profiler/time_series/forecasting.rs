@@ -8,7 +8,8 @@ impl Default for BehavioralForecaster {
 }
 
 impl BehavioralForecaster {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -20,7 +21,8 @@ impl Default for ForecastEngine {
 }
 
 impl ForecastEngine {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }

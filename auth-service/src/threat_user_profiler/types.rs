@@ -191,8 +191,7 @@ pub struct EnhancedUserBehaviorProfile {
 }
 
 /// Comprehensive behavioral feature vector
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BehavioralFeatureVector {
     pub temporal_features: TemporalFeatures,
     pub location_features: LocationFeatures,
@@ -317,7 +316,6 @@ pub struct FeatureNormalization {
     pub method: NormalizationMethod,
     pub parameters: HashMap<String, f64>,
 }
-
 
 impl Default for RiskAssessment {
     fn default() -> Self {

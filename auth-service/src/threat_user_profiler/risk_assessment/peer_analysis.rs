@@ -8,7 +8,8 @@ impl Default for PeerComparisonAnalyzer {
 }
 
 impl PeerComparisonAnalyzer {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
     pub async fn assess_peer_risks(

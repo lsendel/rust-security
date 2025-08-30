@@ -6,7 +6,8 @@ pub struct ActivityFeatureExtractor {
     window_days: i64,
 }
 impl ActivityFeatureExtractor {
-    #[must_use] pub const fn new(window_days: i64) -> Self {
+    #[must_use]
+    pub const fn new(window_days: i64) -> Self {
         Self { window_days }
     }
     pub async fn extract_activity_features(

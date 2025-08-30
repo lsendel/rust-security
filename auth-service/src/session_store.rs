@@ -185,7 +185,8 @@ pub struct RedisSessionStore {
 }
 
 impl RedisSessionStore {
-    #[must_use] pub fn new(redis_url: Option<String>) -> Self {
+    #[must_use]
+    pub fn new(redis_url: Option<String>) -> Self {
         let redis_pool = if let Some(_url) = redis_url {
             // Note: In a real implementation, this would need to be handled differently
             // since we can't use await in a non-async function

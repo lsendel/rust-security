@@ -2,8 +2,8 @@
 //!
 //! Provides security-related metrics collection and reporting functionality.
 
-use std::sync::LazyLock;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::sync::RwLock;
 
 /// Global security metrics instance
@@ -18,7 +18,8 @@ pub struct SecurityMetrics {
 
 impl SecurityMetrics {
     /// Create a new `SecurityMetrics` instance
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             failed_logins: RwLock::new(HashMap::new()),
             blocked_ips: RwLock::new(HashMap::new()),

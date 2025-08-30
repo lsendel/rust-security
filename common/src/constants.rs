@@ -204,14 +204,14 @@ mod tests {
         let max_pass = security::MAX_PASSWORD_LENGTH;
 
         // Prevent unused variable warnings
-                    let _ = (
-                max_body,
-                session_ttl,
-                jwt_expiry,
-                refresh_expiry,
-                min_pass,
-                max_pass,
-            );
+        let _ = (
+            max_body,
+            session_ttl,
+            jwt_expiry,
+            refresh_expiry,
+            min_pass,
+            max_pass,
+        );
     }
 
     #[test]

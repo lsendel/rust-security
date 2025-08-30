@@ -7,7 +7,8 @@ impl Default for StatisticalAnalyzer {
 }
 
 impl StatisticalAnalyzer {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }

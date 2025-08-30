@@ -1,4 +1,7 @@
-use crate::threat_user_profiler::types::{BehavioralTimeSeries, SeriesStatistics, TrendAnalysis, TrendDirection, ChangePoint, SeasonalityAnalysis, SeasonalPeriod, LinearRegressionResult, ChangeType};
+use crate::threat_user_profiler::types::{
+    BehavioralTimeSeries, ChangePoint, ChangeType, LinearRegressionResult, SeasonalPeriod,
+    SeasonalityAnalysis, SeriesStatistics, TrendAnalysis, TrendDirection,
+};
 // Commented out missing dependencies for now
 // use nalgebra::{DMatrix, DVector};
 // use statrs::distribution::{ChiSquared, ContinuousCDF, Normal};
@@ -78,7 +81,8 @@ pub struct TimeSeriesAnalyzer {
 
 impl TimeSeriesAnalyzer {
     /// Create a new time series analyzer
-    #[must_use] pub const fn new(
+    #[must_use]
+    pub const fn new(
         window_size: usize,
         seasonality_periods: Vec<usize>,
         change_point_sensitivity: f64,
@@ -339,7 +343,8 @@ impl TimeSeriesAnalyzer {
         let sum_x_squared: f64 = x_values.iter().map(|x| x * x).sum();
         let _sum_y_squared: f64 = y_values.iter().map(|y| y * y).sum();
 
-        let slope = n.mul_add(sum_xy, -(sum_x * sum_y)) / n.mul_add(sum_x_squared, -(sum_x * sum_x));
+        let slope =
+            n.mul_add(sum_xy, -(sum_x * sum_y)) / n.mul_add(sum_x_squared, -(sum_x * sum_x));
         let intercept = slope.mul_add(-sum_x, sum_y) / n;
 
         // Calculate R-squared

@@ -6,7 +6,8 @@ impl Default for UserClusteringModel {
 }
 
 impl UserClusteringModel {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }

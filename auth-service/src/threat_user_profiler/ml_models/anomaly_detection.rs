@@ -6,7 +6,8 @@ impl Default for AnomalyDetectionModel {
 }
 
 impl AnomalyDetectionModel {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }

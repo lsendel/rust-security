@@ -158,12 +158,14 @@ impl Default for ProfilingRedisConfig {
 
 impl UserProfilingConfig {
     /// Create a new configuration with custom settings
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
     /// Configure for high-security environments
-    #[must_use] pub fn high_security() -> Self {
+    #[must_use]
+    pub fn high_security() -> Self {
         let mut config = Self::default();
         config.anomaly_detection_threshold = 0.99;
         config.risk_scoring.anomaly_score_multiplier = 3.0;
@@ -174,7 +176,8 @@ impl UserProfilingConfig {
     }
 
     /// Configure for performance-optimized environments
-    #[must_use] pub fn performance_optimized() -> Self {
+    #[must_use]
+    pub fn performance_optimized() -> Self {
         let mut config = Self::default();
         config.temporal_analysis.time_series_window_size = 500;
         config.temporal_analysis.enable_real_time_analysis = false;
@@ -185,7 +188,8 @@ impl UserProfilingConfig {
     }
 
     /// Configure for development/testing environments
-    #[must_use] pub fn development() -> Self {
+    #[must_use]
+    pub fn development() -> Self {
         let mut config = Self::default();
         config.profile_retention_days = 7;
         config.redis_config.profile_ttl_seconds = 604_800; // 7 days
@@ -260,7 +264,8 @@ impl UserProfilingConfig {
     }
 
     /// Get effective configuration for a specific tenant
-    #[must_use] pub fn for_tenant(&self, tenant_id: &str) -> Self {
+    #[must_use]
+    pub fn for_tenant(&self, tenant_id: &str) -> Self {
         // In a real implementation, this would load tenant-specific overrides
         // For now, return the base configuration
         let mut config = self.clone();

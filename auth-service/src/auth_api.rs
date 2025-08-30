@@ -288,9 +288,7 @@ pub async fn register(
         ));
     }
 
-    let user_exists = {
-        state.users.read().await.contains_key(&request.email)
-    };
+    let user_exists = { state.users.read().await.contains_key(&request.email) };
 
     // Check if user already exists
     if user_exists {
@@ -373,9 +371,7 @@ pub async fn login(
         ));
     }
 
-    let user = {
-        state.users.read().await.get(&request.email).cloned()
-    };
+    let user = { state.users.read().await.get(&request.email).cloned() };
 
     // Find user
     if let Some(mut user) = user {
@@ -576,7 +572,7 @@ pub async fn token(
                 }),
             ));
         }
-        
+
         client.clone()
     };
 
@@ -611,7 +607,8 @@ pub async fn token(
                         StatusCode::BAD_REQUEST,
                         Json(ErrorResponse {
                             error: "invalid_grant".to_string(),
-                            error_description: "Authorization code expired or already used".to_string(),
+                            error_description: "Authorization code expired or already used"
+                                .to_string(),
                         }),
                     ));
                 }

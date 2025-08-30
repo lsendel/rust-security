@@ -1,12 +1,12 @@
 use crate::errors::AuthError;
 use axum::{extract::Request, middleware::Next, response::Response};
 #[cfg(feature = "monitoring")]
-use std::sync::LazyLock;
-#[cfg(feature = "monitoring")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
 };
 use std::collections::HashMap;
+#[cfg(feature = "monitoring")]
+use std::sync::LazyLock;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
@@ -121,8 +121,10 @@ impl BackpressureConfig {
 // Metrics (feature-gated)
 #[cfg(feature = "monitoring")]
 #[allow(dead_code)]
-static REQUESTS_TOTAL: LazyLock<IntCounter> =
-    LazyLock::new(|| register_int_counter!("auth_requests_total", "Total number of requests").expect("Failed to create requests_total counter"));
+static REQUESTS_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
+    register_int_counter!("auth_requests_total", "Total number of requests")
+        .expect("Failed to create requests_total counter")
+});
 
 #[cfg(feature = "monitoring")]
 #[allow(dead_code)]

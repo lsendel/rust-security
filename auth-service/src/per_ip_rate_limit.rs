@@ -363,10 +363,11 @@ pub struct OverallStats {
 }
 
 /// Global per-IP rate limiter instance (lock-free on hot path)
-static PER_IP_RATE_LIMITER: std::sync::LazyLock<PerIpRateLimiter> = std::sync::LazyLock::new(|| {
-    let config = PerIpRateLimitConfig::default();
-    PerIpRateLimiter::new(config)
-});
+static PER_IP_RATE_LIMITER: std::sync::LazyLock<PerIpRateLimiter> =
+    std::sync::LazyLock::new(|| {
+        let config = PerIpRateLimitConfig::default();
+        PerIpRateLimiter::new(config)
+    });
 
 /// Extract IP address from request headers
 fn extract_ip_address(request: &Request) -> Option<IpAddr> {

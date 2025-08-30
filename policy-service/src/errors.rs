@@ -138,9 +138,7 @@ impl AppError {
             Self::Policy(boxed_err) if matches!(**boxed_err, PolicyError::NotFound { .. }) => {
                 StatusCode::NOT_FOUND
             }
-            Self::PolicyNotFound => {
-                StatusCode::NOT_FOUND
-            }
+            Self::PolicyNotFound => StatusCode::NOT_FOUND,
             Self::Entity(boxed_err) if matches!(**boxed_err, EntityError::NotFound { .. }) => {
                 StatusCode::NOT_FOUND
             }

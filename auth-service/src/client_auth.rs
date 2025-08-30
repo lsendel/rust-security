@@ -2,8 +2,8 @@ use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity
 use crate::{internal_error, AuthError};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use std::sync::LazyLock;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Instant;
 

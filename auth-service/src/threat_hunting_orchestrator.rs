@@ -1,12 +1,14 @@
+use crate::core::security::SecurityEvent;
 use crate::threat_attack_patterns::{AttackPatternConfig, AttackPatternDetector};
 use crate::threat_behavioral_analyzer::{
     AdvancedBehavioralThreatDetector, BehavioralAnalysisConfig,
 };
 use crate::threat_intelligence::{ThreatIntelligenceConfig, ThreatIntelligenceCorrelator};
 use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOrchestrator};
-use crate::threat_types::{ThreatType, AttackPhase, ThreatSeverity, ThreatSignature, ThreatContext, BusinessImpact};
+use crate::threat_types::{
+    AttackPhase, BusinessImpact, ThreatContext, ThreatSeverity, ThreatSignature, ThreatType,
+};
 use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingConfig};
-use crate::core::security::SecurityEvent;
 
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
@@ -16,54 +18,60 @@ use redis::aio::ConnectionManager;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
-use std::sync::LazyLock;
 
 /// Prometheus metrics for threat hunting orchestration
 static THREAT_HUNTING_EVENTS_PROCESSED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_events_processed_total",
         "Total security events processed by threat hunting system"
-    ).expect("Failed to create threat_hunting_events_processed counter")
+    )
+    .expect("Failed to create threat_hunting_events_processed counter")
 });
 
 static THREAT_HUNTING_THREATS_DETECTED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_threats_detected_total",
         "Total threats detected by threat hunting system"
-    ).expect("Failed to create threat_hunting_threats_detected counter")
+    )
+    .expect("Failed to create threat_hunting_threats_detected counter")
 });
 
 static THREAT_HUNTING_RESPONSE_PLANS_EXECUTED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_response_plans_executed_total",
         "Total response plans executed"
-    ).expect("Failed to create threat_hunting_response_plans_executed counter")
+    )
+    .expect("Failed to create threat_hunting_response_plans_executed counter")
 });
 
 static THREAT_HUNTING_PROCESSING_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_processing_time_seconds",
         "Time taken to process security events"
-    ).expect("Failed to create threat_hunting_processing_time histogram")
+    )
+    .expect("Failed to create threat_hunting_processing_time histogram")
 });
 
 static THREAT_HUNTING_SYSTEM_HEALTH: LazyLock<Gauge> = LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_system_health",
         "Overall health status of threat hunting system (1=healthy, 0=unhealthy)"
-    ).expect("Failed to create threat_hunting_system_health gauge")
+    )
+    .expect("Failed to create threat_hunting_system_health gauge")
 });
 
 static THREAT_HUNTING_ACTIVE_CORRELATIONS: LazyLock<Gauge> = LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_correlations",
         "Number of active threat correlations"
-    ).expect("Failed to create threat_hunting_active_correlations gauge")
+    )
+    .expect("Failed to create threat_hunting_active_correlations gauge")
 });
 
 /// Comprehensive configuration for the threat hunting system
@@ -386,7 +394,8 @@ impl Default for ThreatHuntingConfig {
 
 impl ThreatHuntingOrchestrator {
     /// Create a new threat hunting orchestrator
-    #[must_use] pub fn new(config: ThreatHuntingConfig) -> Self {
+    #[must_use]
+    pub fn new(config: ThreatHuntingConfig) -> Self {
         let (event_sender, event_receiver) = unbounded();
 
         // Initialize subsystems with their configurations
@@ -638,12 +647,10 @@ impl ThreatHuntingOrchestrator {
             // Convert string user_id to Uuid
             let user_uuid = uuid::Uuid::parse_str(user_id)
                 .map_err(|e| format!("Invalid user ID format: {e}"))?;
-            
+
             // Use the existing assess_user_risk method as a substitute
-            let risk_assessment = self.user_profiler
-                .assess_user_risk(user_uuid)
-                .await?;
-            
+            let risk_assessment = self.user_profiler.assess_user_risk(user_uuid).await?;
+
             // Create a stub BehavioralAnalysisResult
             Ok(crate::threat_user_profiler::BehavioralAnalysisResult {
                 user_id: user_id.to_string(),
@@ -886,7 +893,8 @@ impl Default for ThreatCorrelationEngine {
 }
 
 impl ThreatCorrelationEngine {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             correlation_rules: Arc::new(RwLock::new(Self::default_correlation_rules())),
             active_correlations: Arc::new(RwLock::new(HashMap::new())),

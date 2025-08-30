@@ -1,19 +1,21 @@
 //! Integration tests for threat detection system
 
-use auth_service::core::security::{SecurityEvent, SecurityEventType, SecurityContext, SecurityLevel, ViolationSeverity};
 use auth_service::core::auth::AuthContext;
+use auth_service::core::security::{
+    SecurityContext, SecurityEvent, SecurityEventType, SecurityLevel, ViolationSeverity,
+};
 #[cfg(feature = "threat-hunting")]
 use auth_service::{
-    event_conversion::convert_security_events,
-    threat_adapter::{ThreatDetectionAdapter, process_with_conversion},
-    threat_processor::ThreatProcessor,
     auth_service_integration::AuthServiceWithThreatProcessing,
+    event_conversion::convert_security_events,
+    threat_adapter::{process_with_conversion, ThreatDetectionAdapter},
+    threat_processor::ThreatProcessor,
 };
+use chrono::Utc;
 use std::collections::HashMap;
 use std::net::IpAddr;
 #[cfg(feature = "threat-hunting")]
 use std::sync::Arc;
-use chrono::Utc;
 
 fn create_test_security_event() -> SecurityEvent {
     SecurityEvent {
@@ -60,19 +62,23 @@ fn create_test_security_event() -> SecurityEvent {
 #[tokio::test]
 async fn test_event_conversion_integration() {
     let security_event = create_test_security_event();
-    
+
     // Test single event conversion
     let result = process_with_conversion(&security_event, |threat_event| async move {
         // Verify conversion worked correctly
-        assert_eq!(threat_event.severity, auth_service::threat_types::ThreatSeverity::High);
+        assert_eq!(
+            threat_event.severity,
+            auth_service::threat_types::ThreatSeverity::High
+        );
         assert_eq!(threat_event.source, "auth-service");
         assert_eq!(threat_event.user_id, Some("test-user-456".to_string()));
         assert!(threat_event.ip_address.is_some());
         assert!(threat_event.user_agent.is_some());
         assert!(threat_event.risk_score.is_some());
         Ok(())
-    }).await;
-    
+    })
+    .await;
+
     assert!(result.is_ok());
 }
 
@@ -84,12 +90,15 @@ async fn test_batch_conversion() {
         create_test_security_event(),
         create_test_security_event(),
     ];
-    
+
     let threat_events = convert_security_events(&events);
     assert_eq!(threat_events.len(), 3);
-    
+
     for threat_event in threat_events {
-        assert_eq!(threat_event.severity, auth_service::threat_types::ThreatSeverity::High);
+        assert_eq!(
+            threat_event.severity,
+            auth_service::threat_types::ThreatSeverity::High
+        );
         assert_eq!(threat_event.source, "auth-service");
     }
 }
@@ -110,10 +119,10 @@ async fn test_threat_processor_no_feature() {
 async fn test_auth_service_integration() {
     let threat_processor = Arc::new(ThreatProcessor::new());
     let auth_service = AuthServiceWithThreatProcessing::new(threat_processor.clone());
-    
+
     let event = create_test_security_event();
     let result = auth_service.process_security_event(event).await;
-    
+
     assert!(result.is_ok());
     assert!(!threat_processor.is_enabled().await); // No-op implementation
 }
@@ -127,11 +136,11 @@ async fn test_multiple_event_types() {
         SecurityEventType::SuspiciousActivity,
         SecurityEventType::RateLimitExceeded,
     ];
-    
+
     for event_type in &event_types {
         let mut event = create_test_security_event();
         event.event_type = event_type.clone();
-        
+
         #[cfg(feature = "threat-hunting")]
         {
             let result = process_with_conversion(&event, |threat_event| async move {
@@ -139,10 +148,11 @@ async fn test_multiple_event_types() {
                 assert!(!threat_event.event_id.is_empty());
                 assert_eq!(threat_event.source, "auth-service");
                 Ok(())
-            }).await;
+            })
+            .await;
             assert!(result.is_ok());
         }
-        
+
         #[cfg(not(feature = "threat-hunting"))]
         {
             // Just verify the event can be created
@@ -154,16 +164,17 @@ async fn test_multiple_event_types() {
 #[tokio::test]
 async fn test_error_handling() {
     let event = create_test_security_event();
-    
+
     #[cfg(feature = "threat-hunting")]
     {
         let result = process_with_conversion(&event, |_threat_event| async move {
             Err("Simulated processing error".into())
-        }).await;
-        
+        })
+        .await;
+
         assert!(result.is_err());
     }
-    
+
     #[cfg(not(feature = "threat-hunting"))]
     {
         // No-op test for non-threat-hunting builds

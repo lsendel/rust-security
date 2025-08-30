@@ -1,5 +1,5 @@
 //! Production logging configuration for the authentication service
-//! 
+//!
 //! This module provides structured logging configuration optimized for production
 //! environments with proper log levels, formatting, and security considerations.
 
@@ -240,28 +240,41 @@ pub mod masking {
     use regex::Regex;
     use std::collections::HashMap;
 
-    static SENSITIVE_PATTERNS: std::sync::LazyLock<HashMap<&'static str, Regex>> = std::sync::LazyLock::new(|| {
-        let mut patterns = HashMap::new();
+    static SENSITIVE_PATTERNS: std::sync::LazyLock<HashMap<&'static str, Regex>> =
+        std::sync::LazyLock::new(|| {
+            let mut patterns = HashMap::new();
 
-        // Common sensitive patterns
-        patterns.insert("password", Regex::new(r#"password":\s*"[^"]*"#).unwrap());
-        patterns.insert("secret", Regex::new(r#"secret":\s*"[^"]*"#).unwrap());
-        patterns.insert("token", Regex::new(r#"token":\s*"[^"]*"#).unwrap());
-        patterns.insert("authorization", Regex::new(r#"authorization":\s*"[^"]*"#).unwrap());
-        patterns.insert("api_key", Regex::new(r#"api_key":\s*"[^"]*"#).unwrap());
-        patterns.insert("client_secret", Regex::new(r#"client_secret":\s*"[^"]*"#).unwrap());
+            // Common sensitive patterns
+            patterns.insert("password", Regex::new(r#"password":\s*"[^"]*"#).unwrap());
+            patterns.insert("secret", Regex::new(r#"secret":\s*"[^"]*"#).unwrap());
+            patterns.insert("token", Regex::new(r#"token":\s*"[^"]*"#).unwrap());
+            patterns.insert(
+                "authorization",
+                Regex::new(r#"authorization":\s*"[^"]*"#).unwrap(),
+            );
+            patterns.insert("api_key", Regex::new(r#"api_key":\s*"[^"]*"#).unwrap());
+            patterns.insert(
+                "client_secret",
+                Regex::new(r#"client_secret":\s*"[^"]*"#).unwrap(),
+            );
 
-        // Credit card patterns
-        patterns.insert("credit_card", Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap());
+            // Credit card patterns
+            patterns.insert(
+                "credit_card",
+                Regex::new(r"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b").unwrap(),
+            );
 
-        // SSN patterns
-        patterns.insert("ssn", Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap());
+            // SSN patterns
+            patterns.insert("ssn", Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap());
 
-        // Email addresses (partial masking)
-        patterns.insert("email", Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap());
+            // Email addresses (partial masking)
+            patterns.insert(
+                "email",
+                Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap(),
+            );
 
-        patterns
-    });
+            patterns
+        });
 
     /// Mask sensitive data in a log message
     ///
@@ -279,15 +292,18 @@ pub mod masking {
                     pattern
                         .replace_all(&result, |caps: &regex::Captures| {
                             let email = caps.get(0).unwrap().as_str();
-                            email.find('@').map_or_else(|| "***@***.***".to_string(), |at_pos| {
-                                let username = &email[..at_pos];
-                                let domain = &email[at_pos..];
-                                if username.len() > 1 {
-                                    format!("{}***{}", &username[..1], domain)
-                                } else {
-                                    format!("***{domain}")
-                                }
-                            })
+                            email.find('@').map_or_else(
+                                || "***@***.***".to_string(),
+                                |at_pos| {
+                                    let username = &email[..at_pos];
+                                    let domain = &email[at_pos..];
+                                    if username.len() > 1 {
+                                        format!("{}***{}", &username[..1], domain)
+                                    } else {
+                                        format!("***{domain}")
+                                    }
+                                },
+                            )
                         })
                         .to_string()
                 }
@@ -322,7 +338,10 @@ pub mod masking {
                     pattern
                         .replace_all(&result, |caps: &regex::Captures| {
                             let full_match = caps.get(0).unwrap().as_str();
-                            full_match.find(':').map_or_else(|| "[REDACTED]".to_string(), |colon_pos| format!("{}:\"[REDACTED]\"", &full_match[..colon_pos]))
+                            full_match.find(':').map_or_else(
+                                || "[REDACTED]".to_string(),
+                                |colon_pos| format!("{}:\"[REDACTED]\"", &full_match[..colon_pos]),
+                            )
                         })
                         .to_string()
                 }

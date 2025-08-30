@@ -1,9 +1,14 @@
-use async_trait::async_trait;
 use crate::core::security::SecurityEvent;
 use crate::errors::AuthError;
 #[cfg(feature = "threat-hunting")]
-use crate::threat_adapter::{ThreatDetectionAdapter, process_with_conversion};
-use crate::threat_types::{ThreatSeverity, EscalationRule, MitigationAction, ThreatContext, ActionResult, ThreatResponsePlan, ThreatSignature, EscalationTrigger, EscalationAction, ResponseStatus, PlannedAction, ThreatType, SuccessCriterion, SuccessCriterionType, VerificationMethod, RollbackPlan, BusinessImpact};
+use crate::threat_adapter::{process_with_conversion, ThreatDetectionAdapter};
+use crate::threat_types::{
+    ActionResult, BusinessImpact, EscalationAction, EscalationRule, EscalationTrigger,
+    MitigationAction, PlannedAction, ResponseStatus, RollbackPlan, SuccessCriterion,
+    SuccessCriterionType, ThreatContext, ThreatResponsePlan, ThreatSeverity, ThreatSignature,
+    ThreatType, VerificationMethod,
+};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 #[cfg(feature = "monitoring")]
@@ -501,7 +506,8 @@ impl ThreatResponseConfig {
 
 impl ThreatResponseOrchestrator {
     /// Create a new threat response orchestrator
-    #[must_use] pub fn new(config: ThreatResponseConfig) -> Self {
+    #[must_use]
+    pub fn new(config: ThreatResponseConfig) -> Self {
         let (response_sender, response_receiver) = unbounded();
         let (notification_sender, notification_receiver) = unbounded();
 
@@ -1341,20 +1347,25 @@ impl ThreatResponseOrchestrator {
 
     /// Execute response actions for a given threat context
     pub async fn execute_response(&self, threat_context: &ThreatContext) -> Result<(), AuthError> {
-        info!("Executing response for threat: {}", threat_context.threat_id);
-        
+        info!(
+            "Executing response for threat: {}",
+            threat_context.threat_id
+        );
+
         // Create a response plan based on the threat context
         let _plan_id = format!("response_{}", threat_context.threat_id);
-        
+
         // For now, just log the response - actual implementation would:
         // 1. Analyze the threat context
         // 2. Select appropriate response actions
         // 3. Execute actions in priority order
         // 4. Monitor execution results
-        
-        info!("Response executed for threat: {} with severity: {:?}", 
-              threat_context.threat_id, threat_context.severity);
-        
+
+        info!(
+            "Response executed for threat: {} with severity: {:?}",
+            threat_context.threat_id, threat_context.severity
+        );
+
         Ok(())
     }
 }
@@ -1362,7 +1373,10 @@ impl ThreatResponseOrchestrator {
 #[cfg(feature = "threat-hunting")]
 #[async_trait::async_trait]
 impl ThreatDetectionAdapter for ThreatResponseOrchestrator {
-    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_security_event(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         process_with_conversion(event, |threat_event| async move {
             // Create a threat context from the event and execute response
             let threat_context = ThreatContext {
@@ -1382,8 +1396,11 @@ impl ThreatDetectionAdapter for ThreatResponseOrchestrator {
                 indicators: vec![],
                 metadata: threat_event.details,
             };
-            
-            self.execute_response(&threat_context).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-        }).await
+
+            self.execute_response(&threat_context)
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        })
+        .await
     }
 }

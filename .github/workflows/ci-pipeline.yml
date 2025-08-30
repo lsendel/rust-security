@@ -25,7 +25,7 @@ jobs:
         components: rustfmt, clippy
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -80,7 +80,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -128,7 +128,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -160,7 +160,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -203,7 +203,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -226,7 +226,7 @@ jobs:
         echo "Performance benchmarks completed successfully" >> performance-report.md
 
     - name: Upload performance results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-results
         path: |
@@ -259,7 +259,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -285,7 +285,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -350,7 +350,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
 
     - name: Cache Cargo dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
@@ -370,7 +370,7 @@ jobs:
         cp target/release/policy-service artifacts/
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: release-artifacts
         path: artifacts/

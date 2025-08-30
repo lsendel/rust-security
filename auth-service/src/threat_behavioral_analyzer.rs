@@ -1,8 +1,11 @@
 use crate::core::security::{SecurityEvent, SecurityEventType};
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
-use crate::threat_types::{UserBehaviorProfile, ThreatSignature, GeoLocation, ThreatType, ThreatSeverity, ThreatIndicator, IndicatorType, MitigationAction, BusinessImpact, AttackPhase};
-use chrono::{DateTime, Duration, Utc, Timelike, Datelike};
+use crate::threat_types::{
+    AttackPhase, BusinessImpact, GeoLocation, IndicatorType, MitigationAction, ThreatIndicator,
+    ThreatSeverity, ThreatSignature, ThreatType, UserBehaviorProfile,
+};
+use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use flume::{unbounded, Receiver, Sender};
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
@@ -26,28 +29,33 @@ static THREAT_PATTERNS_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyL
     register_counter!(
         "threat_hunting_patterns_detected_total",
         "Total threat patterns detected by behavioral analyzer"
-    ).expect("Failed to create threat_patterns_detected counter")
+    )
+    .expect("Failed to create threat_patterns_detected counter")
 });
 
-static BEHAVIORAL_ANOMALIES_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
-    register_counter!(
-        "threat_hunting_behavioral_anomalies_total",
-        "Total behavioral anomalies detected"
-    ).expect("Failed to create behavioral_anomalies_detected counter")
-});
+static BEHAVIORAL_ANOMALIES_DETECTED: std::sync::LazyLock<Counter> =
+    std::sync::LazyLock::new(|| {
+        register_counter!(
+            "threat_hunting_behavioral_anomalies_total",
+            "Total behavioral anomalies detected"
+        )
+        .expect("Failed to create behavioral_anomalies_detected counter")
+    });
 
 static ANALYSIS_DURATION: std::sync::LazyLock<Histogram> = std::sync::LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_analysis_duration_seconds",
         "Duration of behavioral analysis operations"
-    ).expect("Failed to create analysis_duration histogram")
+    )
+    .expect("Failed to create analysis_duration histogram")
 });
 
 static ACTIVE_THREATS_GAUGE: std::sync::LazyLock<Gauge> = std::sync::LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_threats",
         "Number of currently active threats"
-    ).expect("Failed to create active_threats_gauge gauge")
+    )
+    .expect("Failed to create active_threats_gauge gauge")
 });
 
 #[allow(dead_code)]
@@ -55,14 +63,16 @@ static ML_PREDICTIONS: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|
     register_counter!(
         "threat_hunting_ml_predictions_total",
         "Total ML model predictions made"
-    ).expect("Failed to create ml_predictions counter")
+    )
+    .expect("Failed to create ml_predictions counter")
 });
 
 static USER_PROFILES_UPDATED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_user_profiles_updated_total",
         "Total user profiles updated"
-    ).expect("Failed to create user_profiles_updated counter")
+    )
+    .expect("Failed to create user_profiles_updated counter")
 });
 
 /// Configuration for behavioral analysis
@@ -289,7 +299,8 @@ impl Default for ThreatDetectionThresholds {
 
 impl AdvancedBehavioralThreatDetector {
     /// Create a new behavioral threat detector
-    #[must_use] pub fn new(config: BehavioralAnalysisConfig) -> Self {
+    #[must_use]
+    pub fn new(config: BehavioralAnalysisConfig) -> Self {
         let (event_sender, event_receiver) = unbounded();
 
         Self {
@@ -579,8 +590,7 @@ impl AdvancedBehavioralThreatDetector {
             for session in recent_sessions {
                 if session.location.is_some() {
                     // Any location change is flagged as anomalous for now
-                    anomaly_indicators
-                        .push("Location change detected".to_string());
+                    anomaly_indicators.push("Location change detected".to_string());
                     confidence += 0.3;
                     break;
                 }
@@ -615,9 +625,7 @@ impl AdvancedBehavioralThreatDetector {
         if recent_failures
             > (profile.failed_login_baseline * thresholds.behavior_deviation_threshold) as u32
         {
-            anomaly_indicators.push(format!(
-                "Elevated failure rate: {recent_failures} attempts"
-            ));
+            anomaly_indicators.push(format!("Elevated failure rate: {recent_failures} attempts"));
             confidence += 0.2;
         }
 
@@ -720,8 +728,8 @@ impl AdvancedBehavioralThreatDetector {
                 ThreatSeverity::Medium,
                 "behavioral_analyzer".to_string(),
             );
-            indicator.first_seen = event.timestamp
-                - Duration::minutes(thresholds.time_window_minutes as i64);
+            indicator.first_seen =
+                event.timestamp - Duration::minutes(thresholds.time_window_minutes as i64);
             indicator.last_seen = event.timestamp;
             indicator.tags = ["brute_force", "high_volume"]
                 .iter()
@@ -794,9 +802,8 @@ impl AdvancedBehavioralThreatDetector {
                             .num_minutes();
 
                         if time_diff < thresholds.time_threshold_minutes as i64 {
-                            anomaly_indicators.push(format!(
-                                "Rapid location change in {time_diff} minutes"
-                            ));
+                            anomaly_indicators
+                                .push(format!("Rapid location change in {time_diff} minutes"));
                             confidence += 0.5;
                         }
                     }
@@ -1281,7 +1288,6 @@ impl AdvancedBehavioralThreatDetector {
             .collect()
     }
 
-
     /// Get currently active threats
     pub async fn get_active_threats(&self) -> Vec<ThreatSignature> {
         let threats = self.active_threats.read().await;
@@ -1310,9 +1316,11 @@ impl AdvancedBehavioralThreatDetector {
 #[cfg(feature = "threat-hunting")]
 #[async_trait::async_trait]
 impl ThreatDetectionAdapter for AdvancedBehavioralThreatDetector {
-    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_security_event(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Use the existing analyze_event method directly
-        self.analyze_event(event.clone()).await
-            .map(|_| ()) // Discard the Vec<ThreatSignature> result
+        self.analyze_event(event.clone()).await.map(|_| ()) // Discard the Vec<ThreatSignature> result
     }
 }

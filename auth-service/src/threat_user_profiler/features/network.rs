@@ -9,7 +9,8 @@ impl Default for NetworkFeatureExtractor {
 }
 
 impl NetworkFeatureExtractor {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
     pub async fn extract_network_features(

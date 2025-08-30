@@ -262,10 +262,7 @@ impl AuthError {
     }
 
     /// Handle authentication errors
-    fn handle_auth_error(
-        &self,
-        error: &Self,
-    ) -> (StatusCode, &'static str, &'static str, bool) {
+    fn handle_auth_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
             Self::InvalidClientCredentials => (
                 StatusCode::UNAUTHORIZED,
@@ -313,9 +310,7 @@ impl AuthError {
     }
 
     /// Handle rate limiting errors
-    fn handle_rate_limit_error(
-        error: &Self,
-    ) -> (StatusCode, &'static str, &'static str, bool) {
+    fn handle_rate_limit_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
             Self::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -440,7 +435,7 @@ impl AuthError {
     }
 
     /// Check if error is security/policy related
-    const fn is_security_error(&self, error: &Self) -> bool {
+    const fn is_security_error(error: &Self) -> bool {
         matches!(
             error,
             Self::SecurityViolation { .. }
@@ -453,10 +448,7 @@ impl AuthError {
     }
 
     /// Handle security/policy errors
-    fn handle_security_error(
-        &self,
-        error: &Self,
-    ) -> (StatusCode, &'static str, &'static str, bool) {
+    fn handle_security_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
             Self::SecurityViolation { violation_type, .. } => {
                 warn!("Security violation detected: {:?}", violation_type);
@@ -477,15 +469,12 @@ impl AuthError {
     }
 
     /// Check if error is token related
-    const fn is_token_error(&self, error: &Self) -> bool {
+    const fn is_token_error(error: &Self) -> bool {
         matches!(error, Self::TokenRevoked)
     }
 
     /// Handle token specific errors
-    fn handle_token_error(
-        &self,
-        error: &Self,
-    ) -> (StatusCode, &'static str, &'static str, bool) {
+    fn handle_token_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
             Self::TokenRevoked => (
                 StatusCode::UNAUTHORIZED,

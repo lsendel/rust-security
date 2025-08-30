@@ -214,31 +214,35 @@ impl GracefulShutdownService {
     async fn wait_for_connections_to_finish(&self) {
         const MAX_WAIT_TIME: Duration = Duration::from_secs(30);
         const CHECK_INTERVAL: Duration = Duration::from_secs(1);
-        
+
         let start_time = std::time::Instant::now();
-        
+
         while !self.should_stop_waiting(start_time, MAX_WAIT_TIME).await {
             let active = self.active_connections().await;
-            
+
             if active == 0 {
                 info!("All connections completed, shutdown ready");
                 return;
             }
-            
+
             self.log_waiting_status(active);
             tokio::time::sleep(CHECK_INTERVAL).await;
         }
-        
+
         self.handle_shutdown_timeout().await;
     }
 
     /// Check if we should stop waiting for connections
-    async fn should_stop_waiting(&self, start_time: std::time::Instant, max_wait: Duration) -> bool {
+    async fn should_stop_waiting(
+        &self,
+        start_time: std::time::Instant,
+        max_wait: Duration,
+    ) -> bool {
         start_time.elapsed() > max_wait
     }
 
     /// Log current waiting status
-    fn log_waiting_status(&self, active_connections: u32) {
+    fn log_waiting_status(active_connections: u32) {
         info!(
             active_connections = active_connections,
             "Waiting for connections to complete"

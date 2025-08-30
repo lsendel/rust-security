@@ -39,10 +39,12 @@ rust.unused_crate_dependencies = "warn"
 rust.unused_imports = "warn"
 rust.dead_code = "warn"
 rust.unsafe_code = "forbid"
-clippy.all = "warn"
-clippy.pedantic = "warn"
-clippy.cargo = "warn"
-clippy.nursery = "warn"
+clippy.all = { level = "warn", priority = -1 }
+clippy.pedantic = { level = "warn", priority = -1 }
+clippy.cargo = { level = "warn", priority = -1 }
+clippy.nursery = { level = "warn", priority = -1 }
+# Allow multiple versions of dependencies (often unavoidable with transitive deps)
+clippy.multiple_crate_versions = "allow"
 
 [workspace.dependencies]
 # ===== CORE ASYNC RUNTIME =====

@@ -1,6 +1,5 @@
 //! Event conversion utilities for bridging core security and threat detection systems
 
-
 #[cfg(feature = "threat-hunting")]
 use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
 #[cfg(feature = "threat-hunting")]
@@ -13,15 +12,9 @@ use crate::threat_types::{
 impl From<SecurityEventType> for ThreatSecurityEventType {
     fn from(event_type: SecurityEventType) -> Self {
         match event_type {
-            SecurityEventType::AuthenticationFailure => {
-                Self::AuthenticationFailure
-            }
-            SecurityEventType::AuthenticationSuccess => {
-                Self::AuthenticationSuccess
-            }
-            SecurityEventType::AuthenticationAttempt => {
-                Self::AuthenticationAttempt
-            }
+            SecurityEventType::AuthenticationFailure => Self::AuthenticationFailure,
+            SecurityEventType::AuthenticationSuccess => Self::AuthenticationSuccess,
+            SecurityEventType::AuthenticationAttempt => Self::AuthenticationAttempt,
             SecurityEventType::Login => Self::AuthenticationSuccess,
             SecurityEventType::AuthorizationDenied => Self::AuthorizationDenied,
             SecurityEventType::SuspiciousActivity => Self::SuspiciousActivity,
@@ -29,9 +22,7 @@ impl From<SecurityEventType> for ThreatSecurityEventType {
             SecurityEventType::PolicyViolation => Self::PolicyViolation,
             SecurityEventType::ThreatDetected => Self::ThreatDetected,
             SecurityEventType::AnomalyDetected => Self::AnomalyDetected,
-            SecurityEventType::SecurityScanTriggered => {
-                Self::SecurityScanTriggered
-            }
+            SecurityEventType::SecurityScanTriggered => Self::SecurityScanTriggered,
             SecurityEventType::MfaFailure => Self::MfaFailure,
             SecurityEventType::MfaChallenge => Self::MfaChallenge,
             SecurityEventType::PasswordChange => Self::PasswordChange,
@@ -93,7 +84,8 @@ impl From<&SecurityEvent> for ThreatSecurityEvent {
 
 /// Conversion helper for batch operations
 #[cfg(feature = "threat-hunting")]
-#[must_use] pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEvent> {
+#[must_use]
+pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEvent> {
     events.iter().map(std::convert::Into::into).collect()
 }
 

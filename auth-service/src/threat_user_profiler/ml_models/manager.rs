@@ -21,7 +21,7 @@ pub trait MLModel {
         &self,
         features: &BehavioralFeatureVector,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>>;
-    
+
     /// Train the model with behavioral feature data
     ///
     /// # Errors
@@ -43,7 +43,8 @@ impl Default for MLModelManager {
 }
 
 impl MLModelManager {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             models: Arc::new(RwLock::new(HashMap::new())),
         }

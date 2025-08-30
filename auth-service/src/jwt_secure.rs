@@ -243,9 +243,9 @@ fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
 }
 
 /// Create OAuth-specific access token validator
-/// 
+///
 /// # Errors
-/// 
+///
 /// This function currently never returns an error but uses Result for future compatibility
 /// with potential configuration loading failures
 pub fn create_oauth_access_token_validator() -> Result<Validation, AuthError> {
@@ -261,9 +261,9 @@ pub fn create_oauth_access_token_validator() -> Result<Validation, AuthError> {
 }
 
 /// Create ID token validator with OIDC requirements
-/// 
+///
 /// # Errors
-/// 
+///
 /// This function currently never returns an error but uses Result for future compatibility
 /// with potential configuration loading failures
 pub fn create_id_token_validator() -> Result<Validation, AuthError> {

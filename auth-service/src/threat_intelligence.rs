@@ -1,9 +1,10 @@
 use crate::core::security::{SecurityEvent, ViolationSeverity};
-use tracing::debug;
+use crate::errors::AuthError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
-use crate::errors::AuthError;
-use crate::threat_types::{IndicatorType, ThreatType, ThreatSeverity, AttackPhase, MitigationAction, ThreatIndicator};
+use crate::threat_types::{
+    AttackPhase, IndicatorType, MitigationAction, ThreatIndicator, ThreatSeverity, ThreatType,
+};
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 #[cfg(feature = "monitoring")]
@@ -16,6 +17,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
+use tracing::debug;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -26,42 +28,48 @@ static THREAT_INTEL_QUERIES: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_queries_total",
         "Total threat intelligence queries made"
-    ).expect("Failed to create threat_intel_queries counter")
+    )
+    .expect("Failed to create threat_intel_queries counter")
 });
 
 static THREAT_INTEL_MATCHES: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_matches_total",
         "Total threat intelligence matches found"
-    ).expect("Failed to create threat_intel_matches counter")
+    )
+    .expect("Failed to create threat_intel_matches counter")
 });
 
 static THREAT_INTEL_ERRORS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_errors_total",
         "Total threat intelligence query errors"
-    ).expect("Failed to create threat_intel_errors counter")
+    )
+    .expect("Failed to create threat_intel_errors counter")
 });
 
 static THREAT_INTEL_CACHE_HITS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_cache_hits_total",
         "Total threat intelligence cache hits"
-    ).expect("Failed to create threat_intel_cache_hits counter")
+    )
+    .expect("Failed to create threat_intel_cache_hits counter")
 });
 
 static THREAT_INTEL_RESPONSE_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_intel_response_time_seconds",
         "Response time for threat intelligence queries"
-    ).expect("Failed to create threat_intel_response_time histogram")
+    )
+    .expect("Failed to create threat_intel_response_time histogram")
 });
 
 static ACTIVE_INDICATORS: std::sync::LazyLock<Gauge> = std::sync::LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_indicators",
         "Number of active threat indicators"
-    ).expect("Failed to create active_indicators gauge")
+    )
+    .expect("Failed to create active_indicators gauge")
 });
 
 /// Configuration for threat intelligence correlation
@@ -90,7 +98,7 @@ pub struct ThreatFeedConfig {
     pub query_interval_seconds: u64,
     pub confidence_threshold: f64,
     pub supported_indicators: Vec<IndicatorType>,
-    pub url: String, // Alias for api_url for backward compatibility
+    pub url: String,    // Alias for api_url for backward compatibility
     pub format: String, // Feed format (json, xml, csv, etc.)
 }
 
@@ -342,7 +350,8 @@ impl Default for ThreatIntelligenceConfig {
 
 impl ThreatIntelligenceCorrelator {
     /// Create a new threat intelligence correlator
-    #[must_use] pub fn new(config: ThreatIntelligenceConfig) -> Self {
+    #[must_use]
+    pub fn new(config: ThreatIntelligenceConfig) -> Self {
         let (query_sender, query_receiver) = unbounded();
 
         let http_client = ClientBuilder::new()
@@ -792,11 +801,11 @@ impl ThreatIntelligenceCorrelator {
 
                     return Some(threat_match);
                 }
-                Ok(None) => continue,
+                Ok(None) => {}
                 Err(e) => {
                     error!("Failed to query feed {}: {}", feed.name, e);
                     THREAT_INTEL_ERRORS.inc();
-                    continue;
+                    {}
                 }
             }
         }
@@ -996,7 +1005,7 @@ impl ThreatIntelligenceCorrelator {
 
         // Start background synchronization (simplified for now)
         info!("Threat feed synchronizer started");
-        
+
         // Log configured feeds
         let config_guard = config.read().await;
         for feed in &config_guard.feeds {
@@ -1005,7 +1014,6 @@ impl ThreatIntelligenceCorrelator {
             }
         }
     }
-
 
     /// Start cache cleaner background task
     async fn start_cache_cleaner(&self) {
@@ -1408,10 +1416,12 @@ impl ThreatIntelligenceCorrelator {
 #[cfg(feature = "threat-hunting")]
 #[async_trait::async_trait]
 impl ThreatDetectionAdapter for ThreatIntelligenceCorrelator {
-    async fn process_security_event(&self, event: &SecurityEvent) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn process_security_event(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Use check_indicators directly with the security event
-        self.check_indicators(event).await
-            .map(|_| ()) // Discard the result
+        self.check_indicators(event).await.map(|_| ()) // Discard the result
     }
 }
 
@@ -1433,4 +1443,3 @@ enum ProcessResult {
     Updated,
     Skipped,
 }
-

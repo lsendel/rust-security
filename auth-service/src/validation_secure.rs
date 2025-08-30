@@ -12,87 +12,90 @@ use crate::validation::{
 static SAFE_STRING_REGEX: std::sync::LazyLock<Regex> =
     std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9\-_\.\s@]+$").unwrap());
 
-static EMAIL_REGEX: std::sync::LazyLock<Regex> =
-    std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap());
+static EMAIL_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
+});
 
 // static URL_SAFE_REGEX: std::sync::LazyLock<Regex> =
 //     std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$").unwrap());
 
-static ALPHANUMERIC_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9]+$").unwrap());
+static ALPHANUMERIC_REGEX: std::sync::LazyLock<Regex> =
+    std::sync::LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9]+$").unwrap());
 
 // Dangerous patterns that could indicate injection attacks
-static DANGEROUS_PATTERNS: std::sync::LazyLock<Vec<&'static str>> = std::sync::LazyLock::new(|| {
-    vec![
-        // JavaScript injection
-        "javascript:",
-        "data:",
-        "vbscript:",
-        "<script",
-        "</script>",
-        "eval(",
-        "expression(",
-        "import(",
-        "require(",
-        "setTimeout",
-        "setInterval",
-        "Function(",
-        // SQL injection
-        "union select",
-        "drop table",
-        "delete from",
-        "insert into",
-        "update set",
-        "alter table",
-        "create table",
-        "exec(",
-        "xp_",
-        "sp_",
-        "@@",
-        "char(",
-        "cast(",
-        // Command injection
-        "system(",
-        "exec(",
-        "shell_exec",
-        "passthru",
-        "$(",
-        "`",
-        "&&",
-        "||",
-        ";",
-        "|",
-        // Path traversal
-        "../",
-        "..\\",
-        "%2e%2e",
-        "%252e%252e",
-        // LDAP injection
-        "*(",
-        "*)",
-        "|(",
-        "|)",
-        "&(",
-        "&)",
-        // XPath injection
-        "or 1=1",
-        "and 1=1",
-        "' or '",
-        "\" or \"",
-        // Template injection
-        "{{",
-        "}}",
-        "${",
-        "<%",
-        "%>",
-        "#{",
-        // Protocol handlers
-        "file:",
-        "ftp:",
-        "gopher:",
-        "ldap:",
-        "dict:",
-    ]
-});
+static DANGEROUS_PATTERNS: std::sync::LazyLock<Vec<&'static str>> =
+    std::sync::LazyLock::new(|| {
+        vec![
+            // JavaScript injection
+            "javascript:",
+            "data:",
+            "vbscript:",
+            "<script",
+            "</script>",
+            "eval(",
+            "expression(",
+            "import(",
+            "require(",
+            "setTimeout",
+            "setInterval",
+            "Function(",
+            // SQL injection
+            "union select",
+            "drop table",
+            "delete from",
+            "insert into",
+            "update set",
+            "alter table",
+            "create table",
+            "exec(",
+            "xp_",
+            "sp_",
+            "@@",
+            "char(",
+            "cast(",
+            // Command injection
+            "system(",
+            "exec(",
+            "shell_exec",
+            "passthru",
+            "$(",
+            "`",
+            "&&",
+            "||",
+            ";",
+            "|",
+            // Path traversal
+            "../",
+            "..\\",
+            "%2e%2e",
+            "%252e%252e",
+            // LDAP injection
+            "*(",
+            "*)",
+            "|(",
+            "|)",
+            "&(",
+            "&)",
+            // XPath injection
+            "or 1=1",
+            "and 1=1",
+            "' or '",
+            "\" or \"",
+            // Template injection
+            "{{",
+            "}}",
+            "${",
+            "<%",
+            "%>",
+            "#{",
+            // Protocol handlers
+            "file:",
+            "ftp:",
+            "gopher:",
+            "ldap:",
+            "dict:",
+        ]
+    });
 
 /// Enhanced scope validation with comprehensive security checks
 ///

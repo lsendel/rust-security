@@ -253,6 +253,8 @@ impl JwksManager {
         use base64::Engine;
         let engine = base64::engine::general_purpose::STANDARD;
 
+        // NOTE: This is a PEM format template - not a hardcoded secret
+        // The actual key content is dynamically generated and base64 encoded
         let private_pem = format!(
             "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----",
             engine.encode(signing_key.to_bytes())

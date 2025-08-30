@@ -95,9 +95,9 @@ impl SecureSessionManager {
     }
 
     /// Generate cryptographically secure session ID
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `SessionError::RandomGenerationFailed` if the system random number generator fails
     pub fn generate_session_id(&self) -> Result<String, SessionError> {
         let mut bytes = [0u8; 32]; // 256 bits of entropy
@@ -110,9 +110,9 @@ impl SecureSessionManager {
     }
 
     /// Generate secure CSRF token
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `SessionError::RandomGenerationFailed` if the system random number generator fails
     pub fn generate_csrf_token(&self) -> Result<String, SessionError> {
         let mut bytes = [0u8; 24]; // 192 bits of entropy

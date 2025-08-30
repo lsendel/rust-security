@@ -1,16 +1,17 @@
 //! Performance benchmarks for threat detection conversion
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use auth_service::core::security::{SecurityEvent, SecurityEventType, SecurityContext, SecurityLevel, ViolationSeverity};
 use auth_service::core::auth::AuthContext;
+use auth_service::core::security::{
+    SecurityContext, SecurityEvent, SecurityEventType, SecurityLevel, ViolationSeverity,
+};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::SystemTime;
 
 #[cfg(feature = "threat-hunting")]
 use auth_service::{
-    event_conversion::convert_security_events,
-    threat_adapter::process_with_conversion,
+    event_conversion::convert_security_events, threat_adapter::process_with_conversion,
 };
 
 fn create_benchmark_event() -> SecurityEvent {
@@ -43,10 +44,11 @@ fn create_benchmark_event() -> SecurityEvent {
 #[cfg(feature = "threat-hunting")]
 fn bench_single_conversion(c: &mut Criterion) {
     let event = create_benchmark_event();
-    
+
     c.bench_function("single_event_conversion", |b| {
         b.iter(|| {
-            let threat_event: auth_service::threat_types::ThreatSecurityEvent = black_box(&event).into();
+            let threat_event: auth_service::threat_types::ThreatSecurityEvent =
+                black_box(&event).into();
             black_box(threat_event);
         })
     });
@@ -55,7 +57,7 @@ fn bench_single_conversion(c: &mut Criterion) {
 #[cfg(feature = "threat-hunting")]
 fn bench_batch_conversion(c: &mut Criterion) {
     let events: Vec<SecurityEvent> = (0..100).map(|_| create_benchmark_event()).collect();
-    
+
     c.bench_function("batch_conversion_100", |b| {
         b.iter(|| {
             let threat_events = convert_security_events(black_box(&events));
@@ -68,13 +70,14 @@ fn bench_batch_conversion(c: &mut Criterion) {
 fn bench_process_with_conversion(c: &mut Criterion) {
     let event = create_benchmark_event();
     let rt = tokio::runtime::Runtime::new().unwrap();
-    
+
     c.bench_function("process_with_conversion", |b| {
         b.to_async(&rt).iter(|| async {
             let result = process_with_conversion(black_box(&event), |threat_event| async move {
                 black_box(threat_event);
                 Ok(())
-            }).await;
+            })
+            .await;
             black_box(result);
         })
     });
@@ -83,7 +86,7 @@ fn bench_process_with_conversion(c: &mut Criterion) {
 #[cfg(not(feature = "threat-hunting"))]
 fn bench_no_feature(c: &mut Criterion) {
     let event = create_benchmark_event();
-    
+
     c.bench_function("no_feature_baseline", |b| {
         b.iter(|| {
             black_box(&event);

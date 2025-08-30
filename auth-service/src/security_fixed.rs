@@ -76,9 +76,9 @@ pub fn validate_token_binding(
 
 /// PKCE (Proof Key for Code Exchange) support with secure implementation
 /// Generate a cryptographically secure code verifier for PKCE
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns `SecurityError::RandomGenerationFailed` if the system random number generator fails
 pub fn generate_code_verifier() -> Result<String, SecurityError> {
     // Use cryptographically secure random generator
@@ -105,9 +105,9 @@ pub fn generate_code_verifier() -> Result<String, SecurityError> {
 }
 
 /// Generate a code challenge from a code verifier using SHA256
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns `SecurityError::InvalidCodeVerifier` if the code verifier length is not between 43 and 128 characters
 pub fn generate_code_challenge(code_verifier: &str) -> Result<String, SecurityError> {
     if code_verifier.len() < 43 || code_verifier.len() > 128 {
@@ -261,9 +261,9 @@ impl SecureRandom {
     }
 
     /// Generate secure random bytes
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `SecurityError::RandomGenerationFailed` if the system random number generator fails
     pub fn generate_bytes(&self, len: usize) -> Result<Vec<u8>, SecurityError> {
         let mut bytes = vec![0u8; len];
@@ -274,9 +274,9 @@ impl SecureRandom {
     }
 
     /// Generate secure random string (base64url encoded)
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `SecurityError::RandomGenerationFailed` if random byte generation fails
     pub fn generate_string(&self, byte_len: usize) -> Result<String, SecurityError> {
         let bytes = self.generate_bytes(byte_len)?;
@@ -284,18 +284,18 @@ impl SecureRandom {
     }
 
     /// Generate secure session ID
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `SecurityError::RandomGenerationFailed` if random byte generation fails
     pub fn generate_session_id(&self) -> Result<String, SecurityError> {
         self.generate_string(32) // 256 bits of entropy
     }
 
     /// Generate secure API key
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns `SecurityError::RandomGenerationFailed` if random byte generation fails
     pub fn generate_api_key(&self) -> Result<String, SecurityError> {
         let bytes = self.generate_bytes(32)?;

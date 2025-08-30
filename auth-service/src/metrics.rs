@@ -20,11 +20,11 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use std::sync::LazyLock;
 #[cfg(feature = "monitoring")]
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
+use std::sync::LazyLock;
 use tracing::{debug, error};
 
 /// Core metrics registry and collectors for comprehensive observability
@@ -109,7 +109,8 @@ pub struct MetricsRegistry {
 
 impl MetricsRegistry {
     /// Create a new metrics registry with all collectors initialized
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let registry = Registry::new();
 
         // === Token Operation Metrics ===
@@ -500,7 +501,9 @@ pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     let path = req
         .extensions()
         .get::<MatchedPath>()
-        .map_or("unknown".to_string(), |p| normalize_path_for_cardinality(p.as_str()));
+        .map_or("unknown".to_string(), |p| {
+            normalize_path_for_cardinality(p.as_str())
+        });
 
     // Extract client ID with cardinality protection
     let client_id = extract_client_id_with_protection(&req);
@@ -673,11 +676,7 @@ impl MetricsHelper {
         let result = operation();
         let duration = start.elapsed();
 
-        let result_label = if result.is_ok() {
-            "success"
-        } else {
-            "error"
-        };
+        let result_label = if result.is_ok() { "success" } else { "error" };
 
         METRICS
             .token_operation_duration

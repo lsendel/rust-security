@@ -7,7 +7,8 @@ pub struct DeviceFeatureExtractor {
 }
 
 impl DeviceFeatureExtractor {
-    #[must_use] pub const fn new(sensitivity: f64) -> Self {
+    #[must_use]
+    pub const fn new(sensitivity: f64) -> Self {
         Self { sensitivity }
     }
 
