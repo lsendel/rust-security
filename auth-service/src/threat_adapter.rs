@@ -30,6 +30,10 @@ pub trait ThreatDetectionAdapter {
 }
 
 /// Helper function to convert and process security events
+///
+/// # Errors
+///
+/// Returns an error if the processor function fails to process the converted threat event.
 #[cfg(feature = "threat-hunting")]
 pub async fn process_with_conversion<F, Fut>(
     event: &SecurityEvent,
@@ -44,6 +48,10 @@ where
 }
 
 /// Batch processing helper
+///
+/// # Errors
+///
+/// Returns an error if the processor function fails to process the converted threat events.
 #[cfg(feature = "threat-hunting")]
 pub async fn process_batch_with_conversion<F, Fut>(
     events: &[SecurityEvent],

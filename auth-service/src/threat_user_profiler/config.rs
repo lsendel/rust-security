@@ -148,8 +148,8 @@ impl Default for ProfilingRedisConfig {
         Self {
             connection_url: "redis://localhost:6379".to_string(),
             key_prefix: "user_profiling:".to_string(),
-            profile_ttl_seconds: 7776000,     // 90 days
-            time_series_ttl_seconds: 2592000, // 30 days
+            profile_ttl_seconds: 7_776_000,     // 90 days
+            time_series_ttl_seconds: 2_592_000, // 30 days
             enable_compression: true,
             max_connections: 10,
         }
@@ -193,7 +193,7 @@ impl UserProfilingConfig {
         let mut config = Self::default();
         config.profile_retention_days = 7;
         config.redis_config.profile_ttl_seconds = 604_800; // 7 days
-        config.redis_config.time_series_ttl_seconds = 259200; // 3 days
+        config.redis_config.time_series_ttl_seconds = 259_200; // 3 days
         config.min_data_points_for_analysis = 3;
         config
     }

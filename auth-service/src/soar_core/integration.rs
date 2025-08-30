@@ -104,9 +104,12 @@ impl IntegrationFramework {
         let integration = self
             .active_integrations
             .get(integration_id)
-            .ok_or_else(|| IntegrationError::Configuration(
-                format!("Integration not found: {}", integration_id),
-            ))?;
+            .ok_or_else(|| {
+                IntegrationError::Configuration(format!(
+                    "Integration not found: {}",
+                    integration_id
+                ))
+            })?;
 
         // Execute action
         let result = integration.execute_action(action, context).await;
@@ -343,9 +346,10 @@ impl Integration for SiemIntegration {
 
                 Ok(results)
             }
-            _ => Err(IntegrationError::Request(
-                format!("SIEM integration does not support action: {:?}", action),
-            )),
+            _ => Err(IntegrationError::Request(format!(
+                "SIEM integration does not support action: {:?}",
+                action
+            ))),
         }
     }
 
@@ -365,10 +369,7 @@ impl Integration for SiemIntegration {
             error_message: None,
             metadata: HashMap::new(),
             status_message: "SIEM integration healthy".to_string(),
-            response_time_ms: Some(response_time),
-            last_check: Utc::now(),
             consecutive_failures: 0,
-            metadata: HashMap::new(),
         })
     }
 
@@ -429,9 +430,10 @@ impl Integration for EdrIntegration {
 
                 Ok(results)
             }
-            _ => Err(IntegrationError::Request(
-                format!("EDR integration does not support action: {:?}", action),
-            )),
+            _ => Err(IntegrationError::Request(format!(
+                "EDR integration does not support action: {:?}",
+                action
+            ))),
         }
     }
 
@@ -451,10 +453,7 @@ impl Integration for EdrIntegration {
             error_message: None,
             metadata: HashMap::new(),
             status_message: "EDR integration healthy".to_string(),
-            response_time_ms: Some(response_time),
-            last_check: Utc::now(),
             consecutive_failures: 0,
-            metadata: HashMap::new(),
         })
     }
 
@@ -511,9 +510,10 @@ impl Integration for FirewallIntegration {
 
                 Ok(results)
             }
-            _ => Err(IntegrationError::Request(
-                format!("Firewall integration does not support action: {:?}", action),
-            )),
+            _ => Err(IntegrationError::Request(format!(
+                "Firewall integration does not support action: {:?}",
+                action
+            ))),
         }
     }
 
@@ -533,10 +533,7 @@ impl Integration for FirewallIntegration {
             error_message: None,
             metadata: HashMap::new(),
             status_message: "Firewall integration healthy".to_string(),
-            response_time_ms: Some(response_time),
-            last_check: Utc::now(),
             consecutive_failures: 0,
-            metadata: HashMap::new(),
         })
     }
 
@@ -568,10 +565,4 @@ pub struct HealthMetrics {
     pub last_check: DateTime<Utc>,
 }
 
-// Missing type definitions
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum IntegrationHealth {
-    Healthy,
-    Unhealthy,
-    Unknown,
-}
+// IntegrationHealth enum is imported from types.rs

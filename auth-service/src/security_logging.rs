@@ -42,6 +42,8 @@ pub enum SecurityEventType {
     InputValidationFailure,
     ValidationFailure,
     RequestSignatureFailure,
+    WorkflowTriggered,
+    WorkflowCompleted,
 }
 
 /// Simple security event structure
@@ -330,7 +332,7 @@ impl Default for SecurityLogger {
     }
 }
 
-/// Global function for logging security events (backwards compatibility)  
+/// Global function for logging security events (backwards compatibility)
 pub fn log_event(event: &SecurityEvent) {
     SecurityLogger::log_event_static(event);
 }

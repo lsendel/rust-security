@@ -14,9 +14,12 @@ const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
 /// Secure token binding salt - loaded from environment or generated
 static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
+        use ring::rand::SystemRandom;
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
         // Generate a cryptographically secure salt with proper error handling
         let mut salt = [0u8; 32];
-        use ring::rand::SystemRandom;
 
         // Try multiple times with fallback to ensure we get entropy
         for attempt in 0..3 {
@@ -31,8 +34,6 @@ static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::ne
 
         // Final fallback: use a deterministic but still secure approach
         tracing::error!("Failed to generate random salt after 3 attempts, using fallback");
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         std::process::id().hash(&mut hasher);
         std::time::SystemTime::now()

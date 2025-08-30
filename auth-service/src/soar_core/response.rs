@@ -248,20 +248,24 @@ impl ResponseAutomationEngine {
     }
 
     /// Get field value from alert
-    fn get_alert_field_value(&self, alert: &SecurityAlert, field: &str) -> Option<&str> {
+    fn get_alert_field_value(&self, alert: &SecurityAlert, field: &str) -> Option<String> {
         match field {
-            "id" => Some(&alert.id),
-            "title" => Some(&alert.title),
-            "description" => Some(&alert.description),
-            "severity" => Some(&format!("{:?}", alert.severity)),
-            "alert_type" => Some(&format!("{:?}", alert.alert_type)),
-            "source_ip" => alert.source_ip.as_deref(),
-            "destination_ip" => alert.destination_ip.as_deref(),
-            "user_id" => alert.user_id.as_deref(),
-            "source" => Some(&alert.source),
+            "id" => Some(alert.id.clone()),
+            "title" => Some(alert.title.clone()),
+            "description" => Some(alert.description.clone()),
+            "severity" => Some(format!("{:?}", alert.severity)),
+            "alert_type" => Some(format!("{:?}", alert.alert_type)),
+            "source_ip" => alert.source_ip.clone(),
+            "destination_ip" => alert.destination_ip.clone(),
+            "user_id" => alert.user_id.clone(),
+            "source" => Some(alert.source.clone()),
             _ => {
                 // Check metadata for custom fields
-                alert.metadata.get(field).and_then(|v| v.as_str())
+                alert
+                    .metadata
+                    .get(field)
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
             }
         }
     }
@@ -526,8 +530,13 @@ pub trait ResponseAction {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ExecutionResult {
     Pending,
-    Success { outputs: std::collections::HashMap<String, serde_json::Value> },
-    Failure { error: String, details: Option<String> },
+    Success {
+        outputs: std::collections::HashMap<String, serde_json::Value>,
+    },
+    Failure {
+        error: String,
+        details: Option<String>,
+    },
     Timeout,
     Cancelled,
 }

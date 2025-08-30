@@ -242,7 +242,7 @@ impl AuthError {
             | Self::InvalidRefreshToken
             | Self::InvalidToken { .. }
             | Self::UnauthorizedClient { .. }
-            | Self::Forbidden { .. } => self.handle_auth_error(self),
+            | Self::Forbidden { .. } => Self::handle_auth_error(self),
 
             // Rate limiting errors
             error if Self::is_rate_limit_error(error) => Self::handle_rate_limit_error(error),
@@ -251,10 +251,10 @@ impl AuthError {
             error if Self::is_internal_error(error) => Self::handle_internal_error(error),
 
             // Security and policy errors
-            error if self.is_security_error(error) => self.handle_security_error(error),
+            error if Self::is_security_error(error) => Self::handle_security_error(error),
 
             // Token related errors
-            error if self.is_token_error(error) => self.handle_token_error(error),
+            error if Self::is_token_error(error) => Self::handle_token_error(error),
 
             // Default case for any other errors
             _ => self.handle_default_error(),

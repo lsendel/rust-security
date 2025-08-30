@@ -20,7 +20,7 @@ pub struct SecureJwtClaims {
 }
 
 /// Token types for validation
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     AccessToken,
     IdToken,

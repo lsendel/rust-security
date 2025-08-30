@@ -1292,7 +1292,7 @@ impl ThreatResponseOrchestrator {
         &self,
         request_id: &str,
         approved: bool,
-        approver: &str,
+        reviewer: &str,
         notes: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut approvals = self.pending_approvals.write().await;
@@ -1303,7 +1303,7 @@ impl ThreatResponseOrchestrator {
             } else {
                 ApprovalStatus::Denied
             };
-            approval_request.approved_by = Some(approver.to_string());
+            approval_request.approved_by = Some(reviewer.to_string());
             approval_request.approval_notes = notes;
 
             info!(

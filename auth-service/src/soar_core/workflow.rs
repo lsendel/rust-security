@@ -7,6 +7,7 @@ use super::types::*;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+#[cfg(feature = "soar")]
 use handlebars::Handlebars;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -38,8 +39,18 @@ pub struct WorkflowEngine {
 impl WorkflowEngine {
     /// Create a new workflow engine
     pub async fn new() -> Result<Self, WorkflowError> {
-        let mut template_engine = Handlebars::new();
-        template_engine.set_strict_mode(true);
+        let template_engine = {
+            #[cfg(feature = "soar")]
+            {
+                let mut engine = Handlebars::new();
+                engine.set_strict_mode(true);
+                engine
+            }
+            #[cfg(not(feature = "soar"))]
+            {
+                Handlebars::new()
+            }
+        };
 
         let security_logger = Arc::new(SecurityLogger::new().await.map_err(|e| WorkflowError {
             code: "LOGGER_INIT_ERROR".to_string(),
@@ -146,16 +157,14 @@ impl WorkflowEngine {
         // Log workflow start
         self.security_logger
             .log_event(SecurityEvent {
-                id: Uuid::new_v4().to_string(),
+                event_id: Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
                 event_type: SecurityEventType::WorkflowTriggered,
                 severity: SecuritySeverity::Info,
                 source: "workflow_engine".to_string(),
-                message: format!("Workflow execution started: {}", instance_id),
-                metadata: Some(serde_json::json!({
-                    "instance_id": instance_id,
-                    "playbook_id": playbook.id
-                })),
+                description: format!("Workflow execution started: {}", instance_id),
+                details: HashMap::new(),
+                metadata: HashMap::new(),
             })
             .await
             .map_err(|e| WorkflowError {
@@ -334,17 +343,14 @@ impl WorkflowEngine {
         // Log completion
         self.security_logger
             .log_event(SecurityEvent {
-                id: Uuid::new_v4().to_string(),
+                event_id: Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
                 event_type: SecurityEventType::WorkflowCompleted,
                 severity: SecuritySeverity::Info,
                 source: "workflow_engine".to_string(),
-                message: format!("Workflow completed: {}", instance_id),
-                metadata: Some(serde_json::json!({
-                    "instance_id": instance_id,
-                    "duration_ms": duration.as_millis(),
-                    "status": "completed"
-                })),
+                description: format!("Workflow completed: {}", instance_id),
+                details: HashMap::new(),
+                metadata: HashMap::new(),
             })
             .await
             .map_err(|e| WorkflowError {

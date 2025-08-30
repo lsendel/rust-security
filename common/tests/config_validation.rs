@@ -6,6 +6,7 @@ use async_trait as _;
 use base64 as _;
 use chrono as _;
 use constant_time_eq as _;
+#[cfg(feature = "deadpool-redis")]
 use deadpool_redis as _;
 use hex as _;
 use num_cpus as _;

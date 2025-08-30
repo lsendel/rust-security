@@ -156,6 +156,7 @@ pub mod csrf_protection;
 pub mod error_handling;
 pub mod feature_flags;
 pub mod health_check;
+pub mod oauth_policies;
 pub mod performance_optimizer;
 pub mod pii_protection;
 pub mod rate_limit_secure;
@@ -197,17 +198,83 @@ pub struct AppState {
     pub jwks_manager: Arc<crate::jwks_rotation::JwksManager>,
 }
 
-// Missing function implementation - stub for compilation
+/// Mint access and refresh tokens for a subject with proper JWT implementation
 pub async fn mint_local_tokens_for_subject(
-    _state: &AppState,
-    _subject: String,
-    _scope: Option<String>,
+    state: &AppState,
+    subject: String,
+    scope: Option<String>,
 ) -> Result<serde_json::Value, crate::errors::AuthError> {
-    // TODO: Implement proper token minting logic
+    use chrono::{Duration, Utc};
+    use uuid::Uuid;
+
+    let now = Utc::now();
+    let expires_at = now + Duration::hours(1);
+    let refresh_expires_at = now + Duration::days(30);
+
+    // Get the current signing key
+    let key_manager = &state.jwks_manager;
+    let signing_key =
+        key_manager
+            .get_encoding_key()
+            .await
+            .map_err(|e| AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to get signing key: {}", e),
+            })?;
+
+    // Create JWT claims
+    let claims = crate::jwt_secure::SecureJwtClaims {
+        sub: subject.clone(),
+        iss: "rust-security-auth-service".to_string(),
+        aud: "rust-security-platform".to_string(),
+        exp: expires_at.timestamp(),
+        iat: now.timestamp(),
+        nbf: Some(now.timestamp()),
+        jti: Some(Uuid::new_v4().to_string()),
+        token_type: Some("Bearer".to_string()),
+        scope: scope.clone(),
+        nonce: None,
+        client_id: None,
+    };
+
+    // Create JWT token
+    let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    let token = jsonwebtoken::encode(&header, &claims, &signing_key).map_err(|e| {
+        AuthError::InternalError {
+            error_id: uuid::Uuid::new_v4(),
+            context: format!("Failed to encode JWT: {}", e),
+        }
+    })?;
+
+    // Create refresh token
+    let refresh_claims = crate::jwt_secure::SecureJwtClaims {
+        sub: subject,
+        iss: "rust-security-auth-service".to_string(),
+        aud: "rust-security-platform".to_string(),
+        exp: refresh_expires_at.timestamp(),
+        iat: now.timestamp(),
+        nbf: Some(now.timestamp()),
+        jti: Some(Uuid::new_v4().to_string()),
+        token_type: Some("Refresh".to_string()),
+        scope,
+        nonce: None,
+        client_id: None,
+    };
+
+    let refresh_token =
+        jsonwebtoken::encode(&header, &refresh_claims, &signing_key).map_err(|e| {
+            AuthError::InternalError {
+                error_id: uuid::Uuid::new_v4(),
+                context: format!("Failed to encode refresh JWT: {}", e),
+            }
+        })?;
+
     Ok(serde_json::json!({
-        "access_token": "stub_token",
+        "access_token": token,
         "token_type": "Bearer",
-        "expires_in": 3600
+        "expires_in": 3600,
+        "refresh_token": refresh_token,
+        "scope": claims.scope
     }))
 }
 
@@ -302,7 +369,9 @@ pub use errors::{internal_error, AuthError};
 //     }
 // }
 
-// Re-export SOAR modules - DISABLED due to extensive missing types and circular dependencies
+// Re-export SOAR modules - DISABLED due to module resolution issues
+// TODO: Fix SOAR module imports and re-enable in Week 2
+// #[cfg(feature = "soar")]
 // pub mod soar_core {
 //     pub mod correlation;
 //     pub mod engine;

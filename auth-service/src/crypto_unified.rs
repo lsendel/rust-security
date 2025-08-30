@@ -311,6 +311,7 @@ impl UnifiedCryptoManager {
     /// # Panics
     ///
     /// This function does not panic under normal operation.
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn rotate_key(&self) -> Result<(), UnifiedCryptoError> {
         let (new_version, new_key) = {
             let current_key = self.current_key.read().await;
@@ -352,6 +353,7 @@ impl UnifiedCryptoManager {
     }
 
     /// Clean up old keys beyond the specified age
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn cleanup_old_keys(&self, max_age: chrono::Duration) {
         let mut old_keys = self.old_keys.write().await;
         let cutoff = chrono::Utc::now() - max_age;

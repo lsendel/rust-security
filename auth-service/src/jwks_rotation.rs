@@ -129,6 +129,7 @@ impl JwksManager {
     }
 
     /// Load keys from storage
+    #[allow(clippy::significant_drop_tightening)]
     async fn load_keys_from_storage(&self) -> Result<(), AuthError> {
         let stored_keys = self.storage.load_keys().await?;
         let mut keys = self.keys.write().await;
@@ -170,11 +171,12 @@ impl JwksManager {
     /// # Errors
     ///
     /// Returns an error if key generation, storage, or rotation fails
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn rotate_keys(&self) -> Result<(), AuthError> {
         info!("Starting key rotation");
 
         // Generate new key
-        let new_key = self.generate_new_key()?;
+        let new_key = self.generate_new_key();
         let new_kid = new_key.kid.clone();
 
         // Store new key
@@ -207,18 +209,17 @@ impl JwksManager {
     }
 
     /// Generate a new cryptographic key
-    fn generate_new_key(&self) -> Result<CryptoKey, AuthError> {
+    fn generate_new_key(&self) -> CryptoKey {
         let now = Utc::now();
         let kid = format!("key_{}", uuid::Uuid::new_v4());
 
         // Generate RSA key pair (simplified - in production use proper crypto library)
-        let (public_key, private_key) = self.generate_key_pair()?;
+        let (public_key, private_key) = Self::generate_key_pair();
 
-        Ok(CryptoKey {
+        CryptoKey {
             kid,
             kty: "RSA".to_string(),
             alg: match self.config.algorithm {
-                Algorithm::RS256 => "RS256".to_string(),
                 Algorithm::RS384 => "RS384".to_string(),
                 Algorithm::RS512 => "RS512".to_string(),
                 Algorithm::ES256 => "ES256".to_string(),
@@ -233,24 +234,23 @@ impl JwksManager {
             public_key,
             private_key: Some(private_key),
             status: KeyStatus::Active,
-        })
+        }
     }
 
     /// Generate `EdDSA` key pair (Ed25519 - more secure than RSA)
-    fn generate_key_pair(&self) -> Result<(String, String), AuthError> {
+    fn generate_key_pair() -> (String, String) {
         use ed25519_dalek::SigningKey;
+        use rand::RngCore;
+        use base64::Engine;
 
-        let mut rng = rand::thread_rng();
-
-        // Generate random 32 bytes for Ed25519 private key
+        // Generate random 32 bytes for Ed25519 private key using secure random
         let mut key_bytes = [0u8; 32];
-        rand::Rng::fill(&mut rng, &mut key_bytes);
+        rand::rngs::OsRng.fill_bytes(&mut key_bytes);
 
         let signing_key = SigningKey::from_bytes(&key_bytes);
         let verifying_key = signing_key.verifying_key();
 
         // Convert to PEM format using base64 engine
-        use base64::Engine;
         let engine = base64::engine::general_purpose::STANDARD;
 
         // NOTE: This is a PEM format template - not a hardcoded secret
@@ -265,10 +265,11 @@ impl JwksManager {
             engine.encode(verifying_key.to_bytes())
         );
 
-        Ok((private_pem, public_pem))
+        (private_pem, public_pem)
     }
 
     /// Clean up expired keys
+    #[allow(clippy::significant_drop_tightening)]
     async fn cleanup_expired_keys(&self) -> Result<(), AuthError> {
         let now = Utc::now();
         let mut keys = self.keys.write().await;

@@ -535,6 +535,8 @@ pub async fn authorize(
 /// # Panics
 ///
 /// This function does not panic under normal operation.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::significant_drop_tightening)]
 pub async fn token(
     State(state): State<AuthState>,
     Json(request): Json<TokenRequest>,

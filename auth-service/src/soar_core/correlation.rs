@@ -259,7 +259,7 @@ impl AlertCorrelationEngine {
                 let val2 = self.get_alert_field_value(alert2, &condition.field);
 
                 if let (Some(v1), Some(v2)) = (val1, val2) {
-                    self.calculate_similarity(v1, v2) >= condition.threshold.unwrap_or(0.8)
+                    self.calculate_similarity(&v1, &v2) >= condition.threshold.unwrap_or(0.8)
                 } else {
                     false
                 }
@@ -286,16 +286,20 @@ impl AlertCorrelationEngine {
     }
 
     /// Get field value from alert
-    fn get_alert_field_value(&self, alert: &SecurityAlert, field: &str) -> Option<&str> {
+    fn get_alert_field_value(&self, alert: &SecurityAlert, field: &str) -> Option<String> {
         match field {
-            "source_ip" => alert.source_ip.as_deref(),
-            "destination_ip" => alert.destination_ip.as_deref(),
-            "user_id" => alert.user_id.as_deref(),
-            "alert_type" => Some(&format!("{:?}", alert.alert_type)),
-            "severity" => Some(&format!("{:?}", alert.severity)),
+            "source_ip" => alert.source_ip.clone(),
+            "destination_ip" => alert.destination_ip.clone(),
+            "user_id" => alert.user_id.clone(),
+            "alert_type" => Some(format!("{:?}", alert.alert_type)),
+            "severity" => Some(format!("{:?}", alert.severity)),
             _ => {
                 // Check metadata for custom fields
-                alert.metadata.get(field).and_then(|v| v.as_str())
+                alert
+                    .metadata
+                    .get(field)
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
             }
         }
     }

@@ -1,3 +1,5 @@
+#![allow(clippy::significant_drop_tightening)]
+
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -103,7 +105,7 @@ impl PolicyCache {
     }
 
     /// Generate cache key from policy request
-    fn generate_cache_key(&self, request: &PolicyRequest) -> String {
+    fn generate_cache_key(request: &PolicyRequest) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
@@ -121,8 +123,8 @@ impl PolicyCache {
             return None;
         }
 
-        let key = self.generate_cache_key(request);
-        let _policy_type = &request.action;
+        let key = Self::generate_cache_key(request);
+        let policy_type = &request.action; // Used in metrics collection
 
         if let Some(mut entry) = self.cache.get_mut(&key) {
             // Check if entry is still valid
@@ -141,17 +143,17 @@ impl PolicyCache {
                 );
 
                 // Record cache hit metrics
-                let _duration = start_time.elapsed();
+                let duration = start_time.elapsed();
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .policy_cache_operations
-                    .with_label_values(&["get", "hit", _policy_type])
+                    .with_label_values(&["get", "hit", policy_type])
                     .inc();
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .cache_operation_duration
                     .with_label_values(&["policy", "get"])
-                    .observe(_duration.as_secs_f64());
+                    .observe(duration.as_secs_f64());
 
                 return Some(entry.response.clone());
             }
@@ -174,11 +176,11 @@ impl PolicyCache {
         stats.misses += 1;
 
         // Record cache miss metrics
-        let _duration = start_time.elapsed();
+        let duration = start_time.elapsed();
         #[cfg(feature = "monitoring")]
         METRICS
             .policy_cache_operations
-            .with_label_values(&["get", "miss", _policy_type])
+            .with_label_values(&["get", "miss", policy_type])
             .inc();
 
         None
@@ -204,7 +206,7 @@ impl PolicyCache {
             self.evict_lru().await;
         }
 
-        let key = self.generate_cache_key(request);
+        let key = Self::generate_cache_key(request);
 
         // Determine TTL based on decision type
         let ttl = match response.decision.as_str() {
@@ -255,7 +257,7 @@ impl PolicyCache {
         if removed > 0 {
             let mut stats = self.stats.write().await;
             stats.entries = self.cache.len();
-            stats.evictions += removed as u64;
+            stats.evictions += u64::try_from(removed).unwrap_or(0);
 
             info!(
                 pattern = %pattern,
@@ -306,7 +308,7 @@ impl PolicyCache {
         }
 
         let mut stats = self.stats.write().await;
-        stats.evictions += removed as u64;
+        stats.evictions += u64::try_from(removed).unwrap_or(0);
         stats.entries = self.cache.len();
 
         warn!(
@@ -334,7 +336,7 @@ impl PolicyCache {
         if removed > 0 {
             let mut stats = self.stats.write().await;
             stats.entries = self.cache.len();
-            stats.evictions += removed as u64;
+            stats.evictions += u64::try_from(removed).unwrap_or(0);
 
             info!(
                 removed = removed,

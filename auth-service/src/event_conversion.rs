@@ -13,9 +13,8 @@ impl From<SecurityEventType> for ThreatSecurityEventType {
     fn from(event_type: SecurityEventType) -> Self {
         match event_type {
             SecurityEventType::AuthenticationFailure => Self::AuthenticationFailure,
-            SecurityEventType::AuthenticationSuccess => Self::AuthenticationSuccess,
+            SecurityEventType::AuthenticationSuccess | SecurityEventType::Login => Self::AuthenticationSuccess,
             SecurityEventType::AuthenticationAttempt => Self::AuthenticationAttempt,
-            SecurityEventType::Login => Self::AuthenticationSuccess,
             SecurityEventType::AuthorizationDenied => Self::AuthorizationDenied,
             SecurityEventType::SuspiciousActivity => Self::SuspiciousActivity,
             SecurityEventType::RateLimitExceeded => Self::RateLimitExceeded,
@@ -66,11 +65,7 @@ impl From<&SecurityEvent> for ThreatSecurityEvent {
                 .iter()
                 .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
                 .collect(),
-            outcome: if event.outcome.is_some() {
-                EventOutcome::Success
-            } else {
-                EventOutcome::Success
-            },
+            outcome: EventOutcome::Success,
             resource: None,
             action: None,
             risk_score: event.risk_score,

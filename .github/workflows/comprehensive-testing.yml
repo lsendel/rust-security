@@ -332,20 +332,14 @@ jobs:
           echo "📊 Analyzing performance results..."
 
           if [ -f "benchmark-results.json" ]; then
-            # Basic performance analysis
-            python3 -c "
-import json, sys
-try:
-    with open('benchmark-results.json') as f:
-        data = json.load(f)
-    print('Performance Summary:')
-    for test in data.get('results', []):
-        name = test.get('id', 'Unknown')
-        mean = test.get('mean', {}).get('estimate', 0)
-        print(f'  {name}: {mean:.2f} ns')
-except Exception as e:
-    print(f'Could not parse benchmark results: {e}')
-"
+            # Basic performance analysis using jq if available, otherwise simple output
+            if command -v jq >/dev/null 2>&1; then
+              echo "Performance Summary:"
+              jq -r '.results[]? | "\(.id // "Unknown"): \(.mean.estimate // 0) ns"' benchmark-results.json 2>/dev/null || echo "Could not parse benchmark results"
+            else
+              echo "Performance results available in benchmark-results.json"
+              head -20 benchmark-results.json 2>/dev/null || echo "Could not read benchmark results"
+            fi
           fi
 
       - name: Upload performance results
@@ -406,22 +400,15 @@ except Exception as e:
 
           # Summarize results
           if [ -f "unsafe-analysis.json" ]; then
-            python3 -c "
-import json
-try:
-    with open('unsafe-analysis.json') as f:
-        data = json.load(f)
-    print('Unsafe Code Analysis:')
-    total_unsafe = 0
-    for package in data.get('packages', []):
-        unsafe_count = package.get('unsafetyStats', {}).get('unsafe', 0)
-        if unsafe_count > 0:
-            print(f'  {package.get(\"name\", \"Unknown\")}: {unsafe_count} unsafe blocks')
-            total_unsafe += unsafe_count
-    print(f'Total unsafe blocks: {total_unsafe}')
-except Exception as e:
-    print(f'Could not parse geiger results: {e}')
-"
+            echo "Unsafe Code Analysis:"
+            if command -v jq >/dev/null 2>&1; then
+              jq -r '.packages[]? | select(.unsafetyStats.unsafe > 0) | "\(.name // "Unknown"): \(.unsafetyStats.unsafe) unsafe blocks"' unsafe-analysis.json 2>/dev/null || echo "Could not parse unsafe analysis results"
+              total_unsafe=$(jq '[.packages[]?.unsafetyStats.unsafe] | add // 0' unsafe-analysis.json 2>/dev/null || echo 0)
+              echo "Total unsafe blocks: $total_unsafe"
+            else
+              echo "Unsafe analysis results available in unsafe-analysis.json"
+              head -20 unsafe-analysis.json 2>/dev/null || echo "Could not read unsafe analysis results"
+            fi
           fi
 
       - name: Run security-focused tests

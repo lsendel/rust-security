@@ -8,6 +8,7 @@ use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, 
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+#[cfg(feature = "soar")]
 use handlebars::Handlebars;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
@@ -145,13 +146,14 @@ impl SoarCore {
         // Log the alert
         self.security_logger
             .log_event(SecurityEvent {
-                id: Uuid::new_v4().to_string(),
+                event_id: Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
                 event_type: SecurityEventType::AlertReceived,
                 severity: SecuritySeverity::from(alert.severity.clone()),
                 source: "soar_core".to_string(),
-                message: format!("Alert received: {}", alert.title),
-                metadata: Some(serde_json::to_value(&alert)?),
+                description: format!("Alert received: {}", alert.title),
+                details: HashMap::new(),
+                metadata: HashMap::new(),
             })
             .await?;
 
@@ -223,17 +225,14 @@ impl SoarCore {
         // Log workflow trigger
         self.security_logger
             .log_event(SecurityEvent {
-                id: Uuid::new_v4().to_string(),
+                event_id: Uuid::new_v4().to_string(),
                 timestamp: Utc::now(),
                 event_type: SecurityEventType::WorkflowTriggered,
                 severity: SecuritySeverity::Info,
                 source: "soar_core".to_string(),
-                message: format!("Playbook triggered: {}", playbook_id),
-                metadata: Some(serde_json::json!({
-                    "playbook_id": playbook_id,
-                    "instance_id": instance_id,
-                    "inputs": inputs
-                })),
+                description: format!("Playbook triggered: {}", playbook_id),
+                details: HashMap::new(),
+                metadata: HashMap::new(),
             })
             .await?;
 
@@ -508,6 +507,49 @@ pub enum SoarError {
 
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("Correlation error: {0}")]
+    CorrelationError(#[from] correlation::CorrelationError),
+
+    #[error("Metrics error: {0}")]
+    MetricsError(String),
+
+    #[error("Response error: {0}")]
+    ResponseError(String),
+
+    #[error("Workflow execution error: {0}")]
+    WorkflowError(String),
+}
+
+// From trait implementations for error conversion
+impl From<correlation::CorrelationError> for SoarError {
+    fn from(err: correlation::CorrelationError) -> Self {
+        SoarError::CorrelationError(err)
+    }
+}
+
+impl From<metrics::MetricsError> for SoarError {
+    fn from(err: metrics::MetricsError) -> Self {
+        SoarError::MetricsError(err.to_string())
+    }
+}
+
+impl From<types::IntegrationError> for SoarError {
+    fn from(err: types::IntegrationError) -> Self {
+        SoarError::IntegrationError(err.to_string())
+    }
+}
+
+impl From<response::ResponseError> for SoarError {
+    fn from(err: response::ResponseError) -> Self {
+        SoarError::ResponseError(err.to_string())
+    }
+}
+
+impl From<types::playbook::WorkflowError> for SoarError {
+    fn from(err: types::playbook::WorkflowError) -> Self {
+        SoarError::WorkflowError(format!("{}: {}", err.code, err.message))
+    }
 }
 
 /// Case manager implementation (simplified for this module)

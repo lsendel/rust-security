@@ -38,6 +38,7 @@ pub struct FileLoggingConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct LoggingFlags {
     /// Enable structured logging for production
     pub structured: bool,

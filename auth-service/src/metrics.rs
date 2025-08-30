@@ -265,7 +265,14 @@ impl MetricsRegistry {
         let http_request_size_bytes = HistogramVec::new(
             HistogramOpts::new("auth_http_request_size_bytes", "HTTP request size in bytes")
                 .buckets(vec![
-                    64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0,
+                    64.0,
+                    256.0,
+                    1024.0,
+                    4096.0,
+                    16384.0,
+                    65_536.0,
+                    262_144.0,
+                    1_048_576.0,
                 ]),
             &["method", "endpoint"],
         )
@@ -277,7 +284,14 @@ impl MetricsRegistry {
                 "HTTP response size in bytes",
             )
             .buckets(vec![
-                64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0, 262144.0, 1048576.0,
+                64.0,
+                256.0,
+                1024.0,
+                4096.0,
+                16384.0,
+                65_536.0,
+                262_144.0,
+                1_048_576.0,
             ]),
             &["method", "endpoint", "status_code"],
         )

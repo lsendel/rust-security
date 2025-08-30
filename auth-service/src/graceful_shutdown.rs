@@ -225,7 +225,7 @@ impl GracefulShutdownService {
                 return;
             }
 
-            self.log_waiting_status(active);
+            Self::log_waiting_status(active);
             tokio::time::sleep(CHECK_INTERVAL).await;
         }
 

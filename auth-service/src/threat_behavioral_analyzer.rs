@@ -24,7 +24,6 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{error, info, warn};
 
 /// Prometheus metrics for behavioral analysis
-
 static THREAT_PATTERNS_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_patterns_detected_total",

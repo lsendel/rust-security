@@ -41,6 +41,12 @@ impl ThreatProcessor {
     }
 
     /// Process a security event through all threat detection modules
+    ///
+    /// # Errors
+    ///
+    /// Currently returns Ok(()) even if individual modules fail, as errors are logged
+    /// rather than propagated. This may change in future versions.
+    #[allow(clippy::cognitive_complexity)]
     pub async fn process_event(
         &self,
         event: &SecurityEvent,
@@ -72,6 +78,11 @@ impl ThreatProcessor {
     }
 
     /// Process multiple events in batch
+    ///
+    /// # Errors
+    ///
+    /// Currently returns Ok(()) even if individual modules fail, as errors are logged
+    /// rather than propagated. This may change in future versions.
     pub async fn process_events(
         &self,
         events: &[SecurityEvent],

@@ -10,6 +10,7 @@ use crate::soar_core::*;
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use futures::future::join_all;
+#[cfg(feature = "soar")]
 use handlebars::Handlebars;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -988,6 +989,7 @@ impl WorkflowOrchestrator {
 
         let mut step_results = HashMap::new();
         let mut workflow_error = None;
+        let start_time = std::time::Instant::now();
 
         // Execute steps in order
         for (step_index, step) in playbook.steps.iter().enumerate() {
@@ -1182,7 +1184,7 @@ impl WorkflowOrchestrator {
                 instance_id: instance_id.clone(),
                 status: final_status,
                 outputs: execution_context.clone(),
-                duration_ms: 0, // TODO: Calculate actual duration
+                duration_ms: start_time.elapsed().as_millis() as u64,
                 step_results,
             })
         };
@@ -1364,7 +1366,17 @@ impl WorkflowOrchestrator {
             workflow_instance_id: instance_id.to_string(),
             step_id: step.id.clone(),
             approval_type: ApprovalType::Manual,
-            required_approvers: vec!["security-team".to_string()], // TODO: Extract from step config
+            required_approvers: step
+                .inputs
+                .get("approvers")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_else(|| vec!["security-team".to_string()]),
             required_approvals: 1,
             current_approvals: Vec::new(),
             requested_at: Utc::now(),

@@ -28,7 +28,7 @@ pub struct SecurityAlert {
     pub resolution_notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
 pub enum SecurityAlertType {
     AuthenticationFailure,
     RateLimitExceeded,
@@ -40,6 +40,10 @@ pub enum SecurityAlertType {
     AnomalousPattern,
     DataExfiltration,
     SystemIntegrity,
+    SuspiciousLogin,
+    MalwareDetected,
+    WorkflowTriggered,
+    WorkflowCompleted,
 }
 
 #[derive(
@@ -456,6 +460,7 @@ impl SecurityMonitor {
     }
 
     /// Create a custom alert
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_alert(
         &self,
         alert_type: SecurityAlertType,
@@ -510,6 +515,7 @@ pub async fn init_security_monitoring() {
 }
 
 /// Convenience function to create security alerts
+#[allow(clippy::too_many_arguments)]
 pub async fn create_security_alert(
     alert_type: SecurityAlertType,
     severity: AlertSeverity,

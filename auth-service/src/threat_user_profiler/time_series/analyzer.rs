@@ -335,7 +335,7 @@ impl TimeSeriesAnalyzer {
         let n = x_values.len() as f64;
         let sum_x: f64 = x_values.iter().sum();
         let sum_y: f64 = y_values.iter().sum();
-        let sum_xy: f64 = x_values
+        let sum_products: f64 = x_values
             .iter()
             .zip(y_values.iter())
             .map(|(x, y)| x * y)
@@ -344,7 +344,7 @@ impl TimeSeriesAnalyzer {
         let _sum_y_squared: f64 = y_values.iter().map(|y| y * y).sum();
 
         let slope =
-            n.mul_add(sum_xy, -(sum_x * sum_y)) / n.mul_add(sum_x_squared, -(sum_x * sum_x));
+            n.mul_add(sum_products, -(sum_x * sum_y)) / n.mul_add(sum_x_squared, -(sum_x * sum_x));
         let intercept = slope.mul_add(-sum_x, sum_y) / n;
 
         // Calculate R-squared

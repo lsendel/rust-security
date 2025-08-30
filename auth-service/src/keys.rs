@@ -207,16 +207,16 @@ impl KeyManager {
         self.ensure_key_available().await?;
 
         let keys = self.keys.read().await;
-        if let Some(key_material) = keys.last() {
-            Ok((key_material.kid.clone(), key_material.encoding_key.clone()))
-        } else {
-            Err(internal_error(
+        keys.last().map_or_else(
+            || Err(internal_error(
                 "No signing key available after initialization",
-            ))
-        }
+            )),
+            |key_material| Ok((key_material.kid.clone(), key_material.encoding_key.clone()))
+        )
     }
 
     /// Get JWKS document
+    #[allow(clippy::significant_drop_tightening)]
     async fn get_jwks(&self) -> Value {
         let keys = self.keys.read().await;
         let jwk_keys: Vec<Value> = keys.iter().map(|k| k.public_jwk.clone()).collect();
