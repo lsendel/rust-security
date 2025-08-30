@@ -1,6 +1,5 @@
 //! Event conversion utilities for bridging core security and threat detection systems
 
-
 #[cfg(feature = "threat-hunting")]
 use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
 #[cfg(feature = "threat-hunting")]
@@ -97,6 +96,8 @@ mod tests {
     use crate::core::security::{SecurityContext, SecurityLevel};
     #[cfg(feature = "threat-hunting")]
     use std::net::IpAddr;
+    #[cfg(feature = "threat-hunting")]
+    use std::time::SystemTime;
 
     #[cfg(feature = "threat-hunting")]
     #[test]

@@ -239,9 +239,9 @@ impl JwksManager {
 
     /// Generate `EdDSA` key pair (Ed25519 - more secure than RSA)
     fn generate_key_pair() -> (String, String) {
+        use base64::Engine;
         use ed25519_dalek::SigningKey;
         use rand::RngCore;
-        use base64::Engine;
 
         // Generate random 32 bytes for Ed25519 private key using secure random
         let mut key_bytes = [0u8; 32];

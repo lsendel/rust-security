@@ -1,9 +1,10 @@
 // Secure session management with Redis backend and security features
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecurityLoggerConfig, SecuritySeverity};
+use crate::security_logging::{
+    SecurityEvent, SecurityEventType, SecurityLogger, SecurityLoggerConfig, SecuritySeverity,
+};
 #[cfg(feature = "monitoring")]
 use crate::security_metrics::SECURITY_METRICS;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -93,6 +94,7 @@ pub struct Session {
 }
 
 impl Session {
+    #[must_use]
     pub fn new(
         user_id: String,
         client_id: Option<String>,
@@ -234,8 +236,14 @@ impl SessionManager {
         .with_user_id(user_id)
         .with_ip_address(ip_address)
         .with_session_id(session.id.clone())
-        .with_detail("duration_seconds".to_string(), serde_json::Value::Number(duration.into()))
-        .with_detail("has_user_agent".to_string(), serde_json::Value::Bool(user_agent.is_some()));
+        .with_detail(
+            "duration_seconds".to_string(),
+            serde_json::Value::Number(duration.into()),
+        )
+        .with_detail(
+            "has_user_agent".to_string(),
+            serde_json::Value::Bool(user_agent.is_some()),
+        );
 
         if let Some(client_id) = &client_id {
             event = event.with_client_id(client_id.clone());
@@ -289,7 +297,7 @@ impl SessionManager {
         // Try Redis first
         if let Some(client) = &self.redis_client {
             match self.delete_session_from_redis(client, session_id).await {
-                Ok(_) => {
+                Ok(()) => {
                     #[cfg(feature = "monitoring")]
                     SECURITY_METRICS.record_security_event("session_destroyed");
                     return Ok(());
@@ -339,7 +347,10 @@ impl SessionManager {
                 .with_session_id(session.id.clone())
                 .with_user_id(session.user_id.clone())
                 .with_ip_address(session.ip_address.clone())
-                .with_detail("new_expires_at".to_string(), serde_json::Value::Number(session.expires_at.into())),
+                .with_detail(
+                    "new_expires_at".to_string(),
+                    serde_json::Value::Number(session.expires_at.into()),
+                ),
             );
 
             Ok(Some(session))
@@ -379,7 +390,10 @@ impl SessionManager {
                 .with_session_id(session.id.clone())
                 .with_user_id(session.user_id.clone())
                 .with_ip_address(session.ip_address.clone())
-                .with_detail("reason".to_string(), serde_json::Value::String("user_session_invalidation".to_string())),
+                .with_detail(
+                    "reason".to_string(),
+                    serde_json::Value::String("user_session_invalidation".to_string()),
+                ),
             );
         }
 
@@ -427,7 +441,7 @@ impl SessionManager {
         // Try Redis first
         if let Some(client) = &self.redis_client {
             match self.store_session_to_redis(client, session).await {
-                Ok(_) => return Ok(()),
+                Ok(()) => return Ok(()),
                 Err(e) => {
                     warn!(error = %redact_log(&e.to_string()), session_id = %redact_log(&session.id), "Failed to store session to Redis, falling back to memory");
                 }
@@ -446,7 +460,7 @@ impl SessionManager {
         session_id: &str,
     ) -> Result<Option<Session>, redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
-        let key = format!("session:{}", session_id);
+        let key = format!("session:{session_id}");
         let session_data: Option<String> =
             redis::cmd("GET").arg(&key).query_async(&mut conn).await?;
 
@@ -523,7 +537,7 @@ impl SessionManager {
                 .await?;
         }
 
-        let key = format!("session:{}", session_id);
+        let key = format!("session:{session_id}");
         redis::cmd("DEL")
             .arg(&key)
             .query_async::<()>(&mut conn)
@@ -562,7 +576,7 @@ impl SessionManager {
         user_id: &str,
     ) -> Result<Vec<Session>, redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
-        let user_key = format!("user_sessions:{}", user_id);
+        let user_key = format!("user_sessions:{user_id}");
 
         let session_ids: Vec<String> = redis::cmd("SMEMBERS")
             .arg(&user_key)
@@ -609,7 +623,10 @@ impl SessionManager {
                     .with_session_id(session.id.clone())
                     .with_user_id(session.user_id.clone())
                     .with_ip_address(session.ip_address.clone())
-                    .with_detail("reason".to_string(), serde_json::Value::String("concurrent_session_limit".to_string())),
+                    .with_detail(
+                        "reason".to_string(),
+                        serde_json::Value::String("concurrent_session_limit".to_string()),
+                    ),
                 );
             }
         }
@@ -634,7 +651,7 @@ pub enum SessionError {
 }
 
 /// Global session manager instance
-pub static SESSION_MANAGER: Lazy<SessionManager> = Lazy::new(|| {
+pub static SESSION_MANAGER: std::sync::LazyLock<SessionManager> = std::sync::LazyLock::new(|| {
     let config = SessionConfig::default();
     SessionManager::new(config)
 });

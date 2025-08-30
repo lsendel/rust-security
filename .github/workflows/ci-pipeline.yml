@@ -386,9 +386,9 @@ jobs:
     steps:
     - name: Send Slack notification
       uses: 8398a7/action-slack@v3
-      if: always()
+      if: always() && vars.SLACK_WEBHOOK_URL != ''
       with:
         status: ${{ job.status }}
         fields: repo,message,commit,author,action,eventName,ref,workflow
       env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}

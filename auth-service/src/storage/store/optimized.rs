@@ -14,7 +14,7 @@ use tokio::sync::OnceCell;
 /// Optimized token store with improved performance characteristics
 #[derive(Clone)]
 pub enum OptimizedTokenStore {
-    /// Optimized in-memory store using DashMap for better concurrency
+    /// Optimized in-memory store using `DashMap` for better concurrency
     InMemory(Arc<DashMap<String, CachedTokenRecord>>),
     /// Optimized Redis store with hash-based storage and connection pooling
     Redis(OptimizedRedisStore),
@@ -34,12 +34,14 @@ pub struct OptimizedRedisStore {
 }
 
 impl CachedTokenRecord {
+    #[must_use]
     pub fn new(record: IntrospectionRecord, ttl_seconds: Option<u64>) -> Self {
         let expires_at = if let Some(ttl) = ttl_seconds {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_secs() + ttl
+                .as_secs()
+                + ttl
         } else {
             u64::MAX // Never expires
         };
@@ -47,6 +49,7 @@ impl CachedTokenRecord {
         Self { record, expires_at }
     }
 
+    #[must_use]
     pub fn is_expired(&self) -> bool {
         if self.expires_at == u64::MAX {
             return false;
@@ -55,7 +58,8 @@ impl CachedTokenRecord {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() > self.expires_at
+            .as_secs()
+            > self.expires_at
     }
 }
 
@@ -78,10 +82,13 @@ impl OptimizedRedisStore {
     }
 
     async fn get_connection(&self) -> Result<MultiplexedConnection> {
-        let conn = self.connection_pool
+        let conn = self
+            .connection_pool
             .get_or_try_init(|| async {
-                let client = redis::Client::open(std::env::var("REDIS_URL")
-                    .unwrap_or_else(|_| "redis://localhost:6379".to_string()))?;
+                let client = redis::Client::open(
+                    std::env::var("REDIS_URL")
+                        .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
+                )?;
                 client.get_multiplexed_async_connection().await
             })
             .await?;
@@ -92,6 +99,7 @@ impl OptimizedRedisStore {
 
 impl OptimizedTokenStore {
     /// Create a new optimized in-memory token store
+    #[must_use]
     pub fn new_in_memory() -> Self {
         Self::InMemory(Arc::new(DashMap::new()))
     }
@@ -146,7 +154,7 @@ impl OptimizedTokenStore {
             }
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
-                let key = format!("token:{}", token);
+                let key = format!("token:{token}");
 
                 // Single HGETALL operation instead of multiple GETs
                 let fields: HashMap<String, String> = redis::cmd("HGETALL")
@@ -176,7 +184,7 @@ impl OptimizedTokenStore {
 
                 Ok(IntrospectionRecord {
                     token: token.to_string(),
-                    active: fields.get("active").map(|v| v == "1").unwrap_or(false),
+                    active: fields.get("active").is_some_and(|v| v == "1"),
                     scope: fields.get("scope").cloned(),
                     client_id: fields.get("client_id").cloned(),
                     username: fields.get("username").cloned(),
@@ -187,7 +195,7 @@ impl OptimizedTokenStore {
                     aud: fields.get("aud").cloned(),
                     iss: fields.get("iss").cloned(),
                     jti: fields.get("jti").cloned(),
-                    mfa_verified: fields.get("mfa_verified").map(|v| v == "1").unwrap_or(false),
+                    mfa_verified: fields.get("mfa_verified").is_some_and(|v| v == "1"),
                     token_type: fields.get("token_type").cloned(),
                     token_binding: fields.get("token_binding").cloned(),
                 })
@@ -210,7 +218,7 @@ impl OptimizedTokenStore {
             }
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
-                let key = format!("token:{}", token);
+                let key = format!("token:{token}");
 
                 // Single HMSET operation with all fields
                 let mut pipe = redis::pipe();
@@ -263,7 +271,7 @@ impl OptimizedTokenStore {
                 let mut pipe = redis::pipe();
 
                 for (token, record, ttl) in tokens {
-                    let key = format!("token:{}", token);
+                    let key = format!("token:{token}");
 
                     pipe.hset(&key, "active", if record.active { "1" } else { "0" });
 
@@ -314,7 +322,7 @@ impl OptimizedTokenStore {
             }
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
-                let key = format!("token:{}", token);
+                let key = format!("token:{token}");
 
                 // Just set active to false instead of deleting
                 redis::cmd("HSET")
@@ -351,7 +359,7 @@ impl OptimizedTokenStore {
                 let mut pipe = redis::pipe();
 
                 for token in tokens {
-                    let key = format!("token:{}", token);
+                    let key = format!("token:{token}");
                     pipe.hset(&key, "active", "0");
                 }
 
@@ -510,7 +518,10 @@ mod tests {
         };
 
         // Test single storage
-        store.store_token_data("test_token", &record, Some(3600)).await.unwrap();
+        store
+            .store_token_data("test_token", &record, Some(3600))
+            .await
+            .unwrap();
 
         // Test retrieval
         let retrieved = store.get_record("test_token").await.unwrap();
@@ -525,7 +536,10 @@ mod tests {
         store.store_tokens_batch(&batch).await.unwrap();
 
         // Test batch revoke
-        store.revoke_tokens_batch(&["batch_token_1".to_string()]).await.unwrap();
+        store
+            .revoke_tokens_batch(&["batch_token_1".to_string()])
+            .await
+            .unwrap();
         let revoked = store.get_record("batch_token_1").await.unwrap();
         assert_eq!(revoked.active, false);
 

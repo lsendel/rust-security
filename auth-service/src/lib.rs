@@ -216,7 +216,7 @@ pub async fn mint_local_tokens_for_subject(
             .await
             .map_err(|e| AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to get signing key: {}", e),
+                context: format!("Failed to get signing key: {e}"),
             })?;
 
     // Create JWT claims
@@ -239,7 +239,7 @@ pub async fn mint_local_tokens_for_subject(
     let token = jsonwebtoken::encode(&header, &claims, &signing_key).map_err(|e| {
         AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
-            context: format!("Failed to encode JWT: {}", e),
+            context: format!("Failed to encode JWT: {e}"),
         }
     })?;
 
@@ -262,7 +262,7 @@ pub async fn mint_local_tokens_for_subject(
         jsonwebtoken::encode(&header, &refresh_claims, &signing_key).map_err(|e| {
             AuthError::InternalError {
                 error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to encode refresh JWT: {}", e),
+                context: format!("Failed to encode refresh JWT: {e}"),
             }
         })?;
 

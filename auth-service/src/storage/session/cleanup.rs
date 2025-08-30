@@ -116,6 +116,7 @@ pub struct SessionCleanupScheduler {
 }
 
 impl SessionCleanupScheduler {
+    #[must_use]
     pub fn new(config: SessionCleanupConfig, session_manager: Arc<SessionManager>) -> Self {
         Self {
             config,
@@ -162,7 +163,9 @@ impl SessionCleanupScheduler {
             serde_json::Value::Number(self.config.batch_size.into()),
         );
 
-        let logger = crate::security_logging::SecurityLogger::new(crate::security_logging::SecurityLoggerConfig::default());
+        let logger = crate::security_logging::SecurityLogger::new(
+            crate::security_logging::SecurityLoggerConfig::default(),
+        );
         logger.log_event(event);
 
         let mut cleanup_interval = self.create_jittered_interval();
@@ -230,7 +233,9 @@ impl SessionCleanupScheduler {
             serde_json::Value::Number(stats.total_sessions_cleaned.into()),
         );
 
-        let logger = crate::security_logging::SecurityLogger::new(crate::security_logging::SecurityLoggerConfig::default());
+        let logger = crate::security_logging::SecurityLogger::new(
+            crate::security_logging::SecurityLoggerConfig::default(),
+        );
         logger.log_event(shutdown_event);
 
         Ok(())
@@ -316,26 +321,23 @@ impl SessionCleanupScheduler {
             let cleanup_future = self.execute_cleanup_with_retries(&mut cleanup_result);
             let timeout_duration = Duration::from_secs(self.config.max_cleanup_time_secs);
 
-            match tokio::time::timeout(timeout_duration, cleanup_future).await {
-                Ok(result) => {
-                    match result {
-                        Ok(_) => {
-                            self.update_successful_cleanup_stats(cleanup_result, start_time.elapsed()).await;
-                            debug!(operation_id = operation_id, "Cleanup cycle completed successfully");
-                        }
-                        Err(e) => {
-                            error!(operation_id = operation_id, error = %e, "Cleanup cycle failed");
-                            self.increment_failed_runs().await;
-                            return Err(e);
-                        }
+            if let Ok(result) = tokio::time::timeout(timeout_duration, cleanup_future).await {
+                match result {
+                    Ok(()) => {
+                        self.update_successful_cleanup_stats(cleanup_result, start_time.elapsed()).await;
+                        debug!(operation_id = operation_id, "Cleanup cycle completed successfully");
+                    }
+                    Err(e) => {
+                        error!(operation_id = operation_id, error = %e, "Cleanup cycle failed");
+                        self.increment_failed_runs().await;
+                        return Err(e);
                     }
                 }
-                Err(_) => {
-                    let timeout_error = CleanupError::TimeoutExceeded(self.config.max_cleanup_time_secs);
-                    error!(operation_id = operation_id, error = %timeout_error, "Cleanup cycle timed out");
-                    self.increment_failed_runs().await;
-                    return Err(timeout_error);
-                }
+            } else {
+                let timeout_error = CleanupError::TimeoutExceeded(self.config.max_cleanup_time_secs);
+                error!(operation_id = operation_id, error = %timeout_error, "Cleanup cycle timed out");
+                self.increment_failed_runs().await;
+                return Err(timeout_error);
             }
 
             // Update metrics if enabled
@@ -358,7 +360,7 @@ impl SessionCleanupScheduler {
 
         for attempt in 1..=self.config.retry_attempts {
             match self.execute_single_cleanup(result).await {
-                Ok(_) => {
+                Ok(()) => {
                     if attempt > 1 {
                         info!(
                             operation_id = result.operation_id,
@@ -369,7 +371,7 @@ impl SessionCleanupScheduler {
                     return Ok(());
                 }
                 Err(e) => {
-                    _last_error = Some(format!("{}", e));
+                    _last_error = Some(format!("{e}"));
                     warn!(
                         operation_id = result.operation_id,
                         attempt = attempt,
@@ -412,7 +414,7 @@ impl SessionCleanupScheduler {
                         .session_manager
                         .cleanup_sessions()
                         .await
-                        .map_err(|e| CleanupError::SessionManager(e))?;
+                        .map_err(CleanupError::SessionManager)?;
                     result.expired_sessions_cleaned += count;
 
                     debug!(
@@ -445,7 +447,10 @@ impl SessionCleanupScheduler {
                 "auth-service".to_string(),
                 "Session cleanup completed".to_string(),
             )
-            .with_detail("operation_id".to_string(), serde_json::Value::String(result.operation_id.to_string()))
+            .with_detail(
+                "operation_id".to_string(),
+                serde_json::Value::String(result.operation_id.to_string()),
+            )
             .with_detail(
                 "expired_cleaned".to_string(),
                 serde_json::Value::Number(result.expired_sessions_cleaned.into()),
@@ -467,11 +472,11 @@ impl SessionCleanupScheduler {
 
         stats.total_runs += 1;
         stats.successful_runs += 1;
-        stats.total_sessions_cleaned += result.total_cleaned() as u64;
-        stats.expired_sessions_cleaned += result.expired_sessions_cleaned as u64;
-        stats.inactive_sessions_cleaned += result.inactive_sessions_cleaned as u64;
-        stats.revoked_sessions_cleaned += result.revoked_sessions_cleaned as u64;
-        stats.orphaned_sessions_cleaned += result.orphaned_sessions_cleaned as u64;
+        stats.total_sessions_cleaned += u64::from(result.total_cleaned());
+        stats.expired_sessions_cleaned += u64::from(result.expired_sessions_cleaned);
+        stats.inactive_sessions_cleaned += u64::from(result.inactive_sessions_cleaned);
+        stats.revoked_sessions_cleaned += u64::from(result.revoked_sessions_cleaned);
+        stats.orphaned_sessions_cleaned += u64::from(result.orphaned_sessions_cleaned);
         stats.last_cleanup_time = Some(current_timestamp());
 
         // Update average cleanup time using exponential moving average
@@ -479,7 +484,7 @@ impl SessionCleanupScheduler {
         if stats.avg_cleanup_time_ms == 0.0 {
             stats.avg_cleanup_time_ms = elapsed_ms;
         } else {
-            stats.avg_cleanup_time_ms = 0.9 * stats.avg_cleanup_time_ms + 0.1 * elapsed_ms;
+            stats.avg_cleanup_time_ms = 0.9f64.mul_add(stats.avg_cleanup_time_ms, 0.1 * elapsed_ms);
         }
     }
 
@@ -534,7 +539,7 @@ struct CleanupCycleResult {
 }
 
 impl CleanupCycleResult {
-    fn new(operation_id: u64) -> Self {
+    const fn new(operation_id: u64) -> Self {
         Self {
             operation_id,
             expired_sessions_cleaned: 0,
@@ -544,7 +549,7 @@ impl CleanupCycleResult {
         }
     }
 
-    fn total_cleaned(&self) -> u32 {
+    const fn total_cleaned(&self) -> u32 {
         self.expired_sessions_cleaned
             + self.inactive_sessions_cleaned
             + self.revoked_sessions_cleaned
@@ -601,7 +606,7 @@ pub async fn create_and_start_session_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::session_manager::SessionConfig;
+    use crate::storage::session::manager::SessionConfig;
 
     #[tokio::test]
     async fn test_jittered_interval_calculation() {

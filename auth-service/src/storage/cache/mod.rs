@@ -11,14 +11,16 @@
 //! - **Performance**: Optimized for high-throughput scenarios
 
 pub mod basic_cache;
-pub mod token_cache;
-pub mod policy_cache;
 pub mod intelligent_cache;
+pub mod policy_cache;
+pub mod token_cache;
 
 // Re-export main cache types
-pub use token_cache::{LruTokenCache, TokenCacheConfig};
+pub use intelligent_cache::{
+    CacheConfig as IntelligentCacheConfig, CacheError as IntelligentCacheError, IntelligentCache,
+};
 pub use policy_cache::{PolicyCache, PolicyCacheConfig};
-pub use intelligent_cache::{IntelligentCache, CacheConfig as IntelligentCacheConfig, CacheError as IntelligentCacheError};
+pub use token_cache::{LruTokenCache, TokenCacheConfig};
 
 // Common cache traits
 use async_trait::async_trait;

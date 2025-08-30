@@ -208,10 +208,12 @@ impl KeyManager {
 
         let keys = self.keys.read().await;
         keys.last().map_or_else(
-            || Err(internal_error(
-                "No signing key available after initialization",
-            )),
-            |key_material| Ok((key_material.kid.clone(), key_material.encoding_key.clone()))
+            || {
+                Err(internal_error(
+                    "No signing key available after initialization",
+                ))
+            },
+            |key_material| Ok((key_material.kid.clone(), key_material.encoding_key.clone())),
         )
     }
 

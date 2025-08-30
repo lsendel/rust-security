@@ -5,7 +5,7 @@
 //!
 //! ## Features
 //!
-//! - **SQL Storage**: PostgreSQL and SQLite storage implementations
+//! - **SQL Storage**: `PostgreSQL` and `SQLite` storage implementations
 //! - **Optimized Storage**: Performance-optimized storage solutions
 //! - **Hybrid Storage**: Combined storage strategies
 //! - **Store Interface**: Generic storage trait for extensibility

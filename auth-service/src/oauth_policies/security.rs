@@ -1,13 +1,13 @@
-//! OAuth Client Registration Security Policies
+//! `OAuth` Client Registration Security Policies
 //!
-//! Security-focused policies for OAuth 2.0 dynamic client registration
+//! Security-focused policies for `OAuth` 2.0 dynamic client registration
 //! including cryptographic requirements, network security, and geolocation controls.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Security policy set for OAuth client registration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Security policy set for `OAuth` client registration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityPolicySet {
     /// URI validation policy
     pub uri_policy: UriValidationPolicy,
@@ -140,7 +140,7 @@ pub struct NetworkSecurityPolicy {
     /// Maximum concurrent connections per IP
     pub max_concurrent_connections: usize,
 
-    /// Require DDoS protection
+    /// Require `DDoS` protection
     pub require_ddos_protection: bool,
 
     /// Trusted proxy headers
@@ -199,18 +199,6 @@ pub enum ValidationAction {
 
     /// Require additional verification
     RequireVerification,
-}
-
-impl Default for SecurityPolicySet {
-    fn default() -> Self {
-        Self {
-            uri_policy: UriValidationPolicy::default(),
-            content_policy: ContentValidationPolicy::default(),
-            crypto_policy: CryptographicPolicy::default(),
-            network_policy: NetworkSecurityPolicy::default(),
-            geolocation_policy: GeolocationPolicy::default(),
-        }
-    }
 }
 
 impl Default for UriValidationPolicy {

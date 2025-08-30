@@ -229,6 +229,7 @@ where
     V: Clone + Send + Sync + 'static,
 {
     /// Create new intelligent cache
+    #[must_use]
     pub fn new(config: CacheConfig) -> Self {
         Self {
             storage: Arc::new(RwLock::new(CacheStorage::new())),
@@ -489,7 +490,7 @@ where
             if let Some(predictions) = prefetcher.models.get("markov") {
                 let predictions_clone = predictions.predictions.clone();
                 // predictions immutable ref ends here
-                drop(predictions);
+                let _ = predictions;
 
                 for (key, probability) in predictions_clone {
                     if probability > config.prefetch_threshold {
@@ -513,10 +514,20 @@ pub enum CacheError {
     ConfigurationError(String),
 }
 
+impl<K> Default for AccessPatternAnalyzer<K>
+where
+    K: Clone + Eq + Hash,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K> AccessPatternAnalyzer<K>
 where
     K: Clone + Eq + Hash,
 {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             access_history: VecDeque::new(),
@@ -542,11 +553,17 @@ where
         // Update temporal patterns
         if let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) {
             let hour = (duration.as_secs() / 3600 % 24) as u8;
-            self.temporal_patterns
-                .entry(hour)
-                .or_insert_with(Vec::new)
-                .push(key);
+            self.temporal_patterns.entry(hour).or_default().push(key);
         }
+    }
+}
+
+impl<K> Default for PredictivePrefetcher<K>
+where
+    K: Clone + Eq + Hash,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -554,6 +571,7 @@ impl<K> PredictivePrefetcher<K>
 where
     K: Clone + Eq + Hash,
 {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             models: HashMap::new(),
@@ -563,11 +581,22 @@ where
     }
 }
 
+impl<K, V> Default for CacheStorage<K, V>
+where
+    K: Clone + Eq + Hash,
+    V: Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, V> CacheStorage<K, V>
 where
     K: Clone + Eq + Hash,
     V: Clone,
 {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),

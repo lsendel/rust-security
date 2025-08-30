@@ -17,7 +17,7 @@ static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::ne
         use ring::rand::SystemRandom;
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         // Generate a cryptographically secure salt with proper error handling
         let mut salt = [0u8; 32];
 

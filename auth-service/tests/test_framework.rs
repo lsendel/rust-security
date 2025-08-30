@@ -63,7 +63,11 @@ impl TestSuiteRunner {
         }
     }
 
-    pub async fn run_test<F, Fut>(&self, test_name: impl Into<String>, test_fn: F) -> Result<(), String>
+    pub async fn run_test<F, Fut>(
+        &self,
+        test_name: impl Into<String>,
+        test_fn: F,
+    ) -> Result<(), String>
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<(), String>>,
@@ -77,11 +81,17 @@ impl TestSuiteRunner {
             Ok(Ok(())) => {
                 let duration = test_start.elapsed();
                 info!("Test passed: {} ({}ms)", test_name, duration.as_millis());
-                TestResult::new(&test_name).with_metadata("duration_ms", duration.as_millis().to_string())
+                TestResult::new(&test_name)
+                    .with_metadata("duration_ms", duration.as_millis().to_string())
             }
             Ok(Err(error)) => {
                 let duration = test_start.elapsed();
-                warn!("Test failed: {} ({}ms) - {}", test_name, duration.as_millis(), error);
+                warn!(
+                    "Test failed: {} ({}ms) - {}",
+                    test_name,
+                    duration.as_millis(),
+                    error
+                );
                 TestResult::new(&test_name)
                     .with_error(error)
                     .with_metadata("duration_ms", duration.as_millis().to_string())
@@ -106,7 +116,10 @@ impl TestSuiteRunner {
 
         let passed = results.iter().filter(|r| r.success).count();
         let failed = results.len() - passed;
-        let timed_out = results.iter().filter(|r| r.metadata.get("timed_out").is_some()).count();
+        let timed_out = results
+            .iter()
+            .filter(|r| r.metadata.get("timed_out").is_some())
+            .count();
 
         TestReport {
             suite_name: self.suite_name.clone(),
@@ -157,8 +170,14 @@ impl TestReport {
             println!("\n=== Failures ===");
             for result in &self.results {
                 if !result.success {
-                    println!("❌ {}: {}", result.test_name,
-                             result.error_message.as_ref().unwrap_or(&"Unknown error".to_string()));
+                    println!(
+                        "❌ {}: {}",
+                        result.test_name,
+                        result
+                            .error_message
+                            .as_ref()
+                            .unwrap_or(&"Unknown error".to_string())
+                    );
                 }
             }
         } else {
@@ -219,11 +238,14 @@ pub mod test_utils {
         let mut session = HashMap::new();
         session.insert("user_id".to_string(), user_id.to_string());
         session.insert("session_id".to_string(), session_id.to_string());
-        session.insert("created_at".to_string(), std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            .to_string());
+        session.insert(
+            "created_at".to_string(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .to_string(),
+        );
         session
     }
 
@@ -232,10 +254,16 @@ pub mod test_utils {
         actual: T,
         min: T,
         max: T,
-        description: &str
+        description: &str,
     ) {
-        assert!(actual >= min && actual <= max,
-                "{}: value {:?} not within bounds [{:?}, {:?}]", description, actual, min, max);
+        assert!(
+            actual >= min && actual <= max,
+            "{}: value {:?} not within bounds [{:?}, {:?}]",
+            description,
+            actual,
+            min,
+            max
+        );
     }
 
     /// Measure execution time of a function
@@ -403,7 +431,10 @@ pub mod security {
         timings
             .iter()
             .map(|operation_timings| {
-                let mean = operation_timings.iter().map(|d| d.as_nanos() as f64).sum::<f64>()
+                let mean = operation_timings
+                    .iter()
+                    .map(|d| d.as_nanos() as f64)
+                    .sum::<f64>()
                     / operation_timings.len() as f64;
                 let variance = operation_timings
                     .iter()
@@ -424,12 +455,12 @@ pub mod security {
     /// Generate security test vectors
     pub fn generate_security_test_vectors() -> Vec<String> {
         vec![
-            "".to_string(), // Empty string
-            "a".repeat(10000), // Very long string
-            "🚀🔒🛡️".to_string(), // Unicode
+            "".to_string(),                              // Empty string
+            "a".repeat(10000),                           // Very long string
+            "🚀🔒🛡️".to_string(),                        // Unicode
             "<script>alert('xss')</script>".to_string(), // XSS attempt
-            "../../../etc/passwd".to_string(), // Path traversal
-            "null".to_string(), // Null values
+            "../../../etc/passwd".to_string(),           // Path traversal
+            "null".to_string(),                          // Null values
             "undefined".to_string(),
             "0".to_string(),
             "-1".to_string(),
@@ -453,10 +484,14 @@ mod tests {
         let runner = TestSuiteRunner::new("test_suite");
 
         // Run a successful test
-        let _ = runner.run_test("successful_test", || async { Ok(()) }).await;
+        let _ = runner
+            .run_test("successful_test", || async { Ok(()) })
+            .await;
 
         // Run a failing test
-        let _ = runner.run_test("failing_test", || async { Err("Test failed".to_string()) }).await;
+        let _ = runner
+            .run_test("failing_test", || async { Err("Test failed".to_string()) })
+            .await;
 
         let report = runner.generate_report().await;
 
@@ -472,10 +507,12 @@ mod tests {
         use load_test::*;
 
         let results = generate_concurrent_load(
-            2, // concurrency
-            5, // iterations per task
+            2,                   // concurrency
+            5,                   // iterations per task
             || async { Ok(()) }, // successful operation
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         assert_eq!(results.total_operations, 10);
         assert_eq!(results.successful_operations, 10);

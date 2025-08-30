@@ -20,7 +20,6 @@ static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::ne
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
     let timestamp = chrono::Utc::now().timestamp();
     let salt = TOKEN_BINDING_SALT.as_bytes();
-    
 
     // Use HMAC-SHA256 for secure binding
     let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
@@ -50,7 +49,6 @@ pub fn validate_token_binding(
 
     // For validation, we need to check against recent timestamps
     let now = chrono::Utc::now().timestamp();
-    
 
     // Check multiple recent timestamps to account for clock skew
     // Check both backwards and forwards to handle generation/validation timing differences
@@ -68,7 +66,6 @@ pub fn validate_token_binding(
         ctx.update(&test_timestamp.to_be_bytes());
 
         let expected_tag = ctx.sign();
-
 
         // Use constant-time comparison to prevent timing attacks
         if hmac::verify(&key, &stored_bytes, expected_tag.as_ref()).is_ok() {
@@ -336,10 +333,10 @@ mod tests {
         let challenge = generate_code_challenge(&verifier).unwrap();
 
         assert!(verify_code_challenge(&verifier, &challenge).unwrap());
-        
+
         // Test with an invalid verifier (too short) - should return an error
         assert!(verify_code_challenge("wrong_verifier", &challenge).is_err());
-        
+
         // Test with a valid length but wrong verifier
         let wrong_verifier = generate_code_verifier().unwrap();
         assert!(!verify_code_challenge(&wrong_verifier, &challenge).unwrap());

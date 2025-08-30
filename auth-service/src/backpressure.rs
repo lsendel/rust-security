@@ -1,10 +1,10 @@
 use crate::errors::AuthError;
 use axum::{extract::Request, middleware::Next, response::Response};
-use rand::RngCore;
 #[cfg(feature = "monitoring")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
 };
+use rand::RngCore;
 use std::collections::HashMap;
 #[cfg(feature = "monitoring")]
 use std::sync::LazyLock;

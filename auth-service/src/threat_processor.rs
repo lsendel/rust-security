@@ -113,10 +113,17 @@ impl ThreatProcessor {
 pub struct ThreatProcessor;
 
 #[cfg(not(feature = "threat-hunting"))]
+impl Default for ThreatProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(not(feature = "threat-hunting"))]
 impl ThreatProcessor {
     #[must_use]
     pub const fn new() -> Self {
-        Self
+        Self {}
     }
 
     /// Process a security event (no-op implementation for when threat-hunting is disabled)

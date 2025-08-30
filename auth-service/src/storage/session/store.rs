@@ -235,8 +235,8 @@ impl SessionStore for RedisSessionStore {
 
         // Store in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = RedisSessionStore::session_key(&session.session_id);
-            let user_sessions_key = RedisSessionStore::user_sessions_key(&session.user_id);
+            let session_key = Self::session_key(&session.session_id);
+            let user_sessions_key = Self::user_sessions_key(&session.user_id);
 
             // Store session data with TTL
             let result1: Result<(), _> = {
@@ -297,7 +297,7 @@ impl SessionStore for RedisSessionStore {
     ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = RedisSessionStore::session_key(session_id);
+            let session_key = Self::session_key(session_id);
             match conn.get::<_, Option<String>>(&session_key).await {
                 Ok(Some(json)) => {
                     let mut session: SessionData = serde_json::from_str(&json)?;
@@ -325,13 +325,13 @@ impl SessionStore for RedisSessionStore {
             let memory_store = self.memory_fallback.read().await;
             if let Some(mut session) = memory_store.get(session_id).cloned() {
                 drop(memory_store); // Release read lock before operations
-                
+
                 if session.is_expired() {
                     // Clean up expired session
                     let _: Result<(), _> = self.delete_session(session_id).await;
                     return Ok(None);
                 }
-                
+
                 // Update last accessed time and persist atomically
                 session.update_last_accessed();
                 let _: Result<(), _> = self.update_session(&session).await;
@@ -355,7 +355,7 @@ impl SessionStore for RedisSessionStore {
 
         // Update in Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = RedisSessionStore::session_key(&session.session_id);
+            let session_key = Self::session_key(&session.session_id);
             let res = {
                 let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
                 if set_result.is_ok() {
@@ -395,10 +395,10 @@ impl SessionStore for RedisSessionStore {
 
         // Delete from Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = RedisSessionStore::session_key(session_id);
+            let session_key = Self::session_key(session_id);
 
             if let Some(session_data) = &session {
-                let user_sessions_key = RedisSessionStore::user_sessions_key(&session_data.user_id);
+                let user_sessions_key = Self::user_sessions_key(&session_data.user_id);
 
                 // Delete session and remove from user sessions set
                 let _: Result<(), _> = conn.del(&session_key).await;
@@ -435,7 +435,7 @@ impl SessionStore for RedisSessionStore {
 
         // Try Redis first (primary storage)
         if let Some(mut conn) = self.get_redis_connection().await {
-            let user_sessions_key = RedisSessionStore::user_sessions_key(user_id);
+            let user_sessions_key = Self::user_sessions_key(user_id);
             match conn.smembers::<_, Vec<String>>(&user_sessions_key).await {
                 Ok(session_ids) => {
                     for session_id in &session_ids {

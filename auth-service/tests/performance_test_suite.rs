@@ -78,7 +78,9 @@ impl PerformanceTestSuite {
         // Pre-populate cache
         for i in 0..1000 {
             let token = test_utils::create_test_token(&format!("user_{}", i), Some("read write"));
-            cache.insert(format!("token_{}", i), token).await
+            cache
+                .insert(format!("token_{}", i), token)
+                .await
                 .map_err(|e| format!("Failed to pre-populate cache: {}", e))?;
         }
 
@@ -99,9 +101,11 @@ impl PerformanceTestSuite {
                         // Write operation
                         let token = test_utils::create_test_token(
                             &format!("user_{}_{}", user_id, op),
-                            Some("read write")
+                            Some("read write"),
                         );
-                        let _ = cache.insert(format!("token_{}_{}", user_id, op), token).await;
+                        let _ = cache
+                            .insert(format!("token_{}_{}", user_id, op), token)
+                            .await;
                     } else {
                         // Read operation
                         let _ = cache.get(&format!("token_{}", op % 1000)).await;
@@ -137,15 +141,27 @@ impl PerformanceTestSuite {
             name: name.to_string(),
             operations_per_second: total_operations as f64 / total_duration.as_secs_f64(),
             average_latency: total_duration / total_operations as u32,
-            p50_latency: all_latencies.get(p50_idx).copied().unwrap_or(Duration::default()),
-            p95_latency: all_latencies.get(p95_idx).copied().unwrap_or(Duration::default()),
-            p99_latency: all_latencies.get(p99_idx).copied().unwrap_or(Duration::default()),
+            p50_latency: all_latencies
+                .get(p50_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
+            p95_latency: all_latencies
+                .get(p95_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
+            p99_latency: all_latencies
+                .get(p99_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
             total_operations,
             total_duration,
             memory_usage: None, // Would require external monitoring
             metadata: HashMap::from([
                 ("concurrent_users".to_string(), concurrent_users.to_string()),
-                ("operations_per_user".to_string(), operations_per_user.to_string()),
+                (
+                    "operations_per_user".to_string(),
+                    operations_per_user.to_string(),
+                ),
                 ("cache_config".to_string(), format!("{:?}", config)),
             ]),
         };
@@ -172,45 +188,47 @@ impl PerformanceTestSuite {
         let mut all_latencies = Vec::new();
 
         // Simulate concurrent session operations
-        let handles: Vec<_> = (0..concurrent_sessions).map(|session_id| {
-            tokio::spawn(async move {
-                let mut latencies = Vec::new();
+        let handles: Vec<_> = (0..concurrent_sessions)
+            .map(|session_id| {
+                tokio::spawn(async move {
+                    let mut latencies = Vec::new();
 
-                for op in 0..operations_per_session {
-                    let start = Instant::now();
+                    for op in 0..operations_per_session {
+                        let start = Instant::now();
 
-                    // Simulate session operation (create, read, update, delete)
-                    match op % 4 {
-                        0 => {
-                            // Create session
-                            let session_data = test_utils::create_test_session(
-                                &format!("user_{}", session_id),
-                                &format!("session_{}_{}", session_id, op)
-                            );
-                            // Simulate storage operation
-                            tokio::time::sleep(Duration::from_micros(50)).await;
+                        // Simulate session operation (create, read, update, delete)
+                        match op % 4 {
+                            0 => {
+                                // Create session
+                                let session_data = test_utils::create_test_session(
+                                    &format!("user_{}", session_id),
+                                    &format!("session_{}_{}", session_id, op),
+                                );
+                                // Simulate storage operation
+                                tokio::time::sleep(Duration::from_micros(50)).await;
+                            }
+                            1 => {
+                                // Read session
+                                tokio::time::sleep(Duration::from_micros(30)).await;
+                            }
+                            2 => {
+                                // Update session
+                                tokio::time::sleep(Duration::from_micros(40)).await;
+                            }
+                            3 => {
+                                // Delete session
+                                tokio::time::sleep(Duration::from_micros(35)).await;
+                            }
+                            _ => unreachable!(),
                         }
-                        1 => {
-                            // Read session
-                            tokio::time::sleep(Duration::from_micros(30)).await;
-                        }
-                        2 => {
-                            // Update session
-                            tokio::time::sleep(Duration::from_micros(40)).await;
-                        }
-                        3 => {
-                            // Delete session
-                            tokio::time::sleep(Duration::from_micros(35)).await;
-                        }
-                        _ => unreachable!(),
+
+                        latencies.push(start.elapsed());
                     }
 
-                    latencies.push(start.elapsed());
-                }
-
-                latencies
+                    latencies
+                })
             })
-        }).collect();
+            .collect();
 
         // Collect results
         for handle in handles {
@@ -233,15 +251,30 @@ impl PerformanceTestSuite {
             name: name.to_string(),
             operations_per_second: total_operations as f64 / total_duration.as_secs_f64(),
             average_latency: total_duration / total_operations as u32,
-            p50_latency: all_latencies.get(p50_idx).copied().unwrap_or(Duration::default()),
-            p95_latency: all_latencies.get(p95_idx).copied().unwrap_or(Duration::default()),
-            p99_latency: all_latencies.get(p99_idx).copied().unwrap_or(Duration::default()),
+            p50_latency: all_latencies
+                .get(p50_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
+            p95_latency: all_latencies
+                .get(p95_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
+            p99_latency: all_latencies
+                .get(p99_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
             total_operations,
             total_duration,
             memory_usage: None,
             metadata: HashMap::from([
-                ("concurrent_sessions".to_string(), concurrent_sessions.to_string()),
-                ("operations_per_session".to_string(), operations_per_session.to_string()),
+                (
+                    "concurrent_sessions".to_string(),
+                    concurrent_sessions.to_string(),
+                ),
+                (
+                    "operations_per_session".to_string(),
+                    operations_per_session.to_string(),
+                ),
                 ("backend".to_string(), "simulated".to_string()),
             ]),
         };
@@ -253,32 +286,42 @@ impl PerformanceTestSuite {
     }
 
     /// Compare current results with baseline
-    pub async fn compare_with_baseline(&self, baseline_name: &str) -> HashMap<String, PerformanceComparison> {
+    pub async fn compare_with_baseline(
+        &self,
+        baseline_name: &str,
+    ) -> HashMap<String, PerformanceComparison> {
         let benchmarks = self.benchmarks.read().await;
         let baseline_results = self.baseline_results.read().await;
         let mut comparisons = HashMap::new();
 
         for benchmark in &*benchmarks {
             if let Some(baseline) = baseline_results.get(&benchmark.name) {
-                let ops_per_sec_change = ((benchmark.operations_per_second - baseline.operations_per_second)
-                    / baseline.operations_per_second) * 100.0;
+                let ops_per_sec_change = ((benchmark.operations_per_second
+                    - baseline.operations_per_second)
+                    / baseline.operations_per_second)
+                    * 100.0;
 
                 let avg_latency_change = if baseline.average_latency.as_nanos() > 0 {
-                    ((benchmark.average_latency.as_nanos() as f64 - baseline.average_latency.as_nanos() as f64)
-                        / baseline.average_latency.as_nanos() as f64) * 100.0
+                    ((benchmark.average_latency.as_nanos() as f64
+                        - baseline.average_latency.as_nanos() as f64)
+                        / baseline.average_latency.as_nanos() as f64)
+                        * 100.0
                 } else {
                     0.0
                 };
 
-                comparisons.insert(benchmark.name.clone(), PerformanceComparison {
-                    benchmark_name: benchmark.name.clone(),
-                    ops_per_sec_change,
-                    avg_latency_change,
-                    baseline_ops_per_sec: baseline.operations_per_second,
-                    current_ops_per_sec: benchmark.operations_per_second,
-                    baseline_avg_latency: baseline.average_latency,
-                    current_avg_latency: benchmark.average_latency,
-                });
+                comparisons.insert(
+                    benchmark.name.clone(),
+                    PerformanceComparison {
+                        benchmark_name: benchmark.name.clone(),
+                        ops_per_sec_change,
+                        avg_latency_change,
+                        baseline_ops_per_sec: baseline.operations_per_second,
+                        current_ops_per_sec: benchmark.operations_per_second,
+                        baseline_avg_latency: baseline.average_latency,
+                        current_avg_latency: benchmark.average_latency,
+                    },
+                );
             }
         }
 
@@ -312,11 +355,13 @@ impl PerformanceTestSuite {
         let total_ops_per_sec: f64 = benchmarks.iter().map(|b| b.operations_per_second).sum();
         let avg_ops_per_sec = total_ops_per_sec / benchmarks.len() as f64;
 
-        let slowest = benchmarks.iter()
+        let slowest = benchmarks
+            .iter()
             .min_by_key(|b| b.average_latency)
             .map(|b| (b.name.clone(), b.average_latency));
 
-        let fastest = benchmarks.iter()
+        let fastest = benchmarks
+            .iter()
             .max_by_key(|b| b.operations_per_second)
             .map(|b| (b.name.clone(), b.operations_per_second));
 
@@ -380,12 +425,18 @@ impl PerformanceReport {
         for benchmark in &self.benchmarks {
             println!("Benchmark: {}", benchmark.name);
             println!("  Operations/sec: {:.2}", benchmark.operations_per_second);
-            println!("  Average latency: {:.2}ms", benchmark.average_latency.as_millis());
+            println!(
+                "  Average latency: {:.2}ms",
+                benchmark.average_latency.as_millis()
+            );
             println!("  P50 latency: {:.2}ms", benchmark.p50_latency.as_millis());
             println!("  P95 latency: {:.2}ms", benchmark.p95_latency.as_millis());
             println!("  P99 latency: {:.2}ms", benchmark.p99_latency.as_millis());
             println!("  Total operations: {}", benchmark.total_operations);
-            println!("  Total duration: {:.2}s", benchmark.total_duration.as_secs_f64());
+            println!(
+                "  Total duration: {:.2}s",
+                benchmark.total_duration.as_secs_f64()
+            );
             println!("  Metadata: {:?}", benchmark.metadata);
             println!();
         }
@@ -398,8 +449,14 @@ impl PerformanceReport {
                 println!("  Latency change: {:.2}%", comparison.avg_latency_change);
                 println!("  Baseline ops/sec: {:.2}", comparison.baseline_ops_per_sec);
                 println!("  Current ops/sec: {:.2}", comparison.current_ops_per_sec);
-                println!("  Baseline latency: {:.2}ms", comparison.baseline_avg_latency.as_millis());
-                println!("  Current latency: {:.2}ms", comparison.current_avg_latency.as_millis());
+                println!(
+                    "  Baseline latency: {:.2}ms",
+                    comparison.baseline_avg_latency.as_millis()
+                );
+                println!(
+                    "  Current latency: {:.2}ms",
+                    comparison.current_avg_latency.as_millis()
+                );
                 println!();
             }
         }
@@ -409,7 +466,11 @@ impl PerformanceReport {
         println!("Average ops/sec: {:.2}", self.summary.average_ops_per_sec);
 
         if let Some((name, latency)) = &self.summary.slowest_benchmark {
-            println!("Slowest benchmark: {} ({:.2}ms avg latency)", name, latency.as_millis());
+            println!(
+                "Slowest benchmark: {} ({:.2}ms avg latency)",
+                name,
+                latency.as_millis()
+            );
         }
 
         if let Some((name, ops_per_sec)) = &self.summary.fastest_benchmark {
@@ -488,30 +549,32 @@ pub mod load_testing {
         let mut latencies = Vec::new();
 
         // Run concurrent operations until time expires
-        let handles: Vec<_> = (0..concurrent_users).map(|user_id| {
-            tokio::spawn(async move {
-                let mut local_operations = 0;
-                let mut local_latencies = Vec::new();
-                let mut local_total_latency = Duration::default();
+        let handles: Vec<_> = (0..concurrent_users)
+            .map(|user_id| {
+                tokio::spawn(async move {
+                    let mut local_operations = 0;
+                    let mut local_latencies = Vec::new();
+                    let mut local_total_latency = Duration::default();
 
-                while Instant::now() < end_time {
-                    let op_start = Instant::now();
+                    while Instant::now() < end_time {
+                        let op_start = Instant::now();
 
-                    // Simulate authentication operation
-                    simulate_auth_operation(user_id, local_operations).await;
+                        // Simulate authentication operation
+                        simulate_auth_operation(user_id, local_operations).await;
 
-                    let latency = op_start.elapsed();
-                    local_latencies.push(latency);
-                    local_total_latency += latency;
-                    local_operations += 1;
+                        let latency = op_start.elapsed();
+                        local_latencies.push(latency);
+                        local_total_latency += latency;
+                        local_operations += 1;
 
-                    // Small delay to prevent overwhelming the system
-                    tokio::time::sleep(Duration::from_millis(1)).await;
-                }
+                        // Small delay to prevent overwhelming the system
+                        tokio::time::sleep(Duration::from_millis(1)).await;
+                    }
 
-                (local_operations, local_latencies, local_total_latency)
+                    (local_operations, local_latencies, local_total_latency)
+                })
             })
-        }).collect();
+            .collect();
 
         // Collect results
         for handle in handles {
@@ -538,10 +601,23 @@ pub mod load_testing {
             concurrent_users,
             total_operations: operation_count,
             operations_per_second: operation_count as f64 / actual_duration.as_secs_f64(),
-            average_latency: if operation_count > 0 { total_latency / operation_count as u32 } else { Duration::default() },
-            p50_latency: latencies.get(p50_idx).copied().unwrap_or(Duration::default()),
-            p95_latency: latencies.get(p95_idx).copied().unwrap_or(Duration::default()),
-            p99_latency: latencies.get(p99_idx).copied().unwrap_or(Duration::default()),
+            average_latency: if operation_count > 0 {
+                total_latency / operation_count as u32
+            } else {
+                Duration::default()
+            },
+            p50_latency: latencies
+                .get(p50_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
+            p95_latency: latencies
+                .get(p95_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
+            p99_latency: latencies
+                .get(p99_idx)
+                .copied()
+                .unwrap_or(Duration::default()),
             test_duration: actual_duration,
             requested_duration: Duration::from_secs(duration_secs),
         })
@@ -595,12 +671,14 @@ mod tests {
 
         // Test token cache benchmark
         let config = TokenCacheConfig::default();
-        let result = suite.benchmark_token_cache(
-            "test_cache",
-            config,
-            2,  // concurrent users
-            10, // operations per user
-        ).await;
+        let result = suite
+            .benchmark_token_cache(
+                "test_cache",
+                config,
+                2,  // concurrent users
+                10, // operations per user
+            )
+            .await;
 
         assert!(result.is_ok(), "Token cache benchmark should succeed");
 
@@ -613,11 +691,13 @@ mod tests {
     async fn test_session_store_benchmark() {
         let suite = PerformanceTestSuite::new();
 
-        let result = suite.benchmark_session_store(
-            "test_session",
-            2,  // concurrent sessions
-            10, // operations per session
-        ).await;
+        let result = suite
+            .benchmark_session_store(
+                "test_session",
+                2,  // concurrent sessions
+                10, // operations per session
+            )
+            .await;
 
         assert!(result.is_ok(), "Session store benchmark should succeed");
 
@@ -632,9 +712,10 @@ mod tests {
         let result = load_testing::run_comprehensive_load_test(
             &suite,
             "test_load",
-            2,    // concurrent users
-            1,    // duration in seconds
-        ).await;
+            2, // concurrent users
+            1, // duration in seconds
+        )
+        .await;
 
         assert!(result.is_ok(), "Load test should succeed");
 

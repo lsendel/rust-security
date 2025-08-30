@@ -18,17 +18,17 @@ use common::TokenRecord;
 /// Strategy for generating valid token records
 pub fn token_record_strategy() -> impl Strategy<Value = TokenRecord> {
     (
-        any::<bool>(), // active
+        any::<bool>(),                              // active
         proptest::option::of("[a-zA-Z0-9_]{1,50}"), // scope
         proptest::option::of("[a-zA-Z0-9_]{1,50}"), // client_id
-        proptest::option::of(any::<i64>()), // exp
-        proptest::option::of(any::<i64>()), // iat
+        proptest::option::of(any::<i64>()),         // exp
+        proptest::option::of(any::<i64>()),         // iat
         proptest::option::of("[a-zA-Z0-9_]{1,50}"), // sub
-        proptest::option::of(any::<String>()), // token_binding
-        any::<bool>(), // mfa_verified
+        proptest::option::of(any::<String>()),      // token_binding
+        any::<bool>(),                              // mfa_verified
     )
-        .prop_map(|(active, scope, client_id, exp, iat, sub, token_binding, mfa_verified)| {
-            TokenRecord {
+        .prop_map(
+            |(active, scope, client_id, exp, iat, sub, token_binding, mfa_verified)| TokenRecord {
                 active,
                 scope,
                 client_id,
@@ -37,19 +37,19 @@ pub fn token_record_strategy() -> impl Strategy<Value = TokenRecord> {
                 sub,
                 token_binding,
                 mfa_verified,
-            }
-        })
+            },
+        )
 }
 
 /// Strategy for generating valid cache configurations
 pub fn cache_config_strategy() -> impl Strategy<Value = TokenCacheConfig> {
-    (1..100000usize, 1..86400u64, 1..3600u64).prop_map(|(max_tokens, max_age_secs, cleanup_interval_secs)| {
-        TokenCacheConfig {
+    (1..100000usize, 1..86400u64, 1..3600u64).prop_map(
+        |(max_tokens, max_age_secs, cleanup_interval_secs)| TokenCacheConfig {
             max_tokens,
             max_age: Duration::from_secs(max_age_secs),
             cleanup_interval: Duration::from_secs(cleanup_interval_secs),
-        }
-    })
+        },
+    )
 }
 
 proptest! {
@@ -284,8 +284,10 @@ mod tests {
         for _ in 0..10 {
             let result = runner.run_one(&strategy, |token| {
                 // Just verify the token has reasonable structure
-                prop_assert!(token.sub.is_some() || token.client_id.is_some(),
-                           "Token should have at least a subject or client ID");
+                prop_assert!(
+                    token.sub.is_some() || token.client_id.is_some(),
+                    "Token should have at least a subject or client ID"
+                );
                 Ok(())
             });
 
@@ -304,7 +306,10 @@ mod tests {
             let result = runner.run_one(&strategy, |config| {
                 prop_assert!(config.max_tokens > 0, "Max tokens should be positive");
                 prop_assert!(config.max_age.as_secs() > 0, "Max age should be positive");
-                prop_assert!(config.cleanup_interval.as_secs() > 0, "Cleanup interval should be positive");
+                prop_assert!(
+                    config.cleanup_interval.as_secs() > 0,
+                    "Cleanup interval should be positive"
+                );
                 Ok(())
             });
 

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use validator::{Validate, ValidationError, ValidationErrors};
 
-/// Helper function to create a ValidationError with just a code
+/// Helper function to create a `ValidationError` with just a code
 fn validation_error(code: &'static str) -> ValidationError {
     ValidationError {
         code: std::borrow::Cow::Borrowed(code),
