@@ -4,7 +4,7 @@ use crate::threat_behavioral_analyzer::{
 };
 use crate::threat_intelligence::{ThreatIntelligenceConfig, ThreatIntelligenceCorrelator};
 use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOrchestrator};
-use crate::threat_types::*;
+use crate::threat_types::{ThreatType, AttackPhase, ThreatSeverity, ThreatSignature, ThreatContext, BusinessImpact};
 use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingConfig};
 use crate::core::security::SecurityEvent;
 
@@ -386,7 +386,7 @@ impl Default for ThreatHuntingConfig {
 
 impl ThreatHuntingOrchestrator {
     /// Create a new threat hunting orchestrator
-    pub fn new(config: ThreatHuntingConfig) -> Self {
+    #[must_use] pub fn new(config: ThreatHuntingConfig) -> Self {
         let (event_sender, event_receiver) = unbounded();
 
         // Initialize subsystems with their configurations
@@ -637,7 +637,7 @@ impl ThreatHuntingOrchestrator {
             let user_id = &auth_context.user_id;
             // Convert string user_id to Uuid
             let user_uuid = uuid::Uuid::parse_str(user_id)
-                .map_err(|e| format!("Invalid user ID format: {}", e))?;
+                .map_err(|e| format!("Invalid user ID format: {e}"))?;
             
             // Use the existing assess_user_risk method as a substitute
             let risk_assessment = self.user_profiler
@@ -681,7 +681,7 @@ impl ThreatHuntingOrchestrator {
 
             loop {
                 tokio::select! {
-                    _ = shutdown_signal.notified() => {
+                    () = shutdown_signal.notified() => {
                         info!("Shutting down event processor");
                         break;
                     }
@@ -726,7 +726,7 @@ impl ThreatHuntingOrchestrator {
 
             loop {
                 tokio::select! {
-                    _ = shutdown_signal.notified() => {
+                    () = shutdown_signal.notified() => {
                         info!("Shutting down correlation engine");
                         break;
                     }
@@ -753,7 +753,7 @@ impl ThreatHuntingOrchestrator {
 
             loop {
                 tokio::select! {
-                    _ = shutdown_signal.notified() => {
+                    () = shutdown_signal.notified() => {
                         info!("Shutting down system monitor");
                         break;
                     }
@@ -879,8 +879,14 @@ pub enum ComponentHealth {
 }
 
 // Implementation for ThreatCorrelationEngine
+impl Default for ThreatCorrelationEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ThreatCorrelationEngine {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             correlation_rules: Arc::new(RwLock::new(Self::default_correlation_rules())),
             active_correlations: Arc::new(RwLock::new(HashMap::new())),
@@ -951,11 +957,11 @@ impl ThreatCorrelationEngine {
 impl From<BusinessImpact> for ThreatSeverity {
     fn from(impact: BusinessImpact) -> Self {
         match impact {
-            BusinessImpact::Critical => ThreatSeverity::Critical,
-            BusinessImpact::High => ThreatSeverity::High,
-            BusinessImpact::Medium => ThreatSeverity::Medium,
-            BusinessImpact::Low => ThreatSeverity::Low,
-            BusinessImpact::None => ThreatSeverity::Info,
+            BusinessImpact::Critical => Self::Critical,
+            BusinessImpact::High => Self::High,
+            BusinessImpact::Medium => Self::Medium,
+            BusinessImpact::Low => Self::Low,
+            BusinessImpact::None => Self::Info,
         }
     }
 }

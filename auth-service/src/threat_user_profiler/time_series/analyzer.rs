@@ -1,4 +1,4 @@
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::types::{BehavioralTimeSeries, SeriesStatistics, TrendAnalysis, TrendDirection, ChangePoint, SeasonalityAnalysis, SeasonalPeriod, LinearRegressionResult, ChangeType};
 // Commented out missing dependencies for now
 // use nalgebra::{DMatrix, DVector};
 // use statrs::distribution::{ChiSquared, ContinuousCDF, Normal};
@@ -78,7 +78,7 @@ pub struct TimeSeriesAnalyzer {
 
 impl TimeSeriesAnalyzer {
     /// Create a new time series analyzer
-    pub fn new(
+    #[must_use] pub const fn new(
         window_size: usize,
         seasonality_periods: Vec<usize>,
         change_point_sensitivity: f64,
@@ -339,8 +339,8 @@ impl TimeSeriesAnalyzer {
         let sum_x_squared: f64 = x_values.iter().map(|x| x * x).sum();
         let _sum_y_squared: f64 = y_values.iter().map(|y| y * y).sum();
 
-        let slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x_squared - sum_x * sum_x);
-        let intercept = (sum_y - slope * sum_x) / n;
+        let slope = n.mul_add(sum_xy, -(sum_x * sum_y)) / n.mul_add(sum_x_squared, -(sum_x * sum_x));
+        let intercept = slope.mul_add(-sum_x, sum_y) / n;
 
         // Calculate R-squared
         let y_mean = sum_y / n;
@@ -429,7 +429,7 @@ impl TimeSeriesAnalyzer {
             }
 
             if count > 0 {
-                seasonal_component[i] = sum / count as f64;
+                seasonal_component[i] = sum / f64::from(count);
             }
         }
 
@@ -447,8 +447,7 @@ impl TimeSeriesAnalyzer {
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| i)
-            .unwrap_or(0);
+            .map_or(0, |(i, _)| i);
         let phase = max_index as f64 / period_length as f64 * 2.0 * std::f64::consts::PI;
 
         // Calculate confidence based on consistency across cycles

@@ -26,7 +26,7 @@ pub struct ThreatProcessor {
 #[cfg(feature = "threat-hunting")]
 impl ThreatProcessor {
     /// Create a new threat processor
-    pub fn new(
+    #[must_use] pub fn new(
         behavioral_analyzer: Arc<BehavioralAnalyzer>,
         intelligence_engine: Arc<ThreatIntelligenceEngine>,
         response_orchestrator: Arc<ThreatResponseOrchestrator>,

@@ -1,5 +1,5 @@
 use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
-use crate::threat_types::*;
+use crate::threat_types::{AttackPatternType, TimingConstraint, EventOutcome, ThreatSeverity, AttackPhase, AttackPattern, TimingConstraintType, BusinessImpact, MitigationAction};
 use chrono::{DateTime, Duration, Utc};
 use petgraph::{graph::NodeIndex, Directed, Graph};
 #[cfg(feature = "monitoring")]
@@ -518,7 +518,7 @@ impl Default for TemporalAnalysisConfig {
 
 impl AttackPatternDetector {
     /// Create a new attack pattern detector
-    pub fn new(config: AttackPatternConfig) -> Self {
+    #[must_use] pub fn new(config: AttackPatternConfig) -> Self {
         Self {
             config: Arc::new(RwLock::new(config)),
             attack_graph: Arc::new(Mutex::new(Graph::new())),
@@ -673,7 +673,7 @@ impl AttackPatternDetector {
                 let (node1, type1) = &event_nodes[i];
                 let (node2, type2) = &event_nodes[j];
 
-                let edge_type = self.determine_edge_type(&type1, &type2);
+                let edge_type = self.determine_edge_type(type1, type2);
                 let edge = AttackGraphEdge {
                     edge_id: Uuid::new_v4().to_string(),
                     edge_type,
@@ -748,7 +748,7 @@ impl AttackPatternDetector {
     }
 
     /// Determine edge type between two node types
-    fn determine_edge_type(
+    const fn determine_edge_type(
         &self,
         type1: &AttackNodeType,
         type2: &AttackNodeType,
@@ -987,33 +987,29 @@ impl AttackPatternDetector {
             let prev_event = &events[i - 1];
             let curr_event = &events[i];
 
-            if requirements.same_user {
-                if prev_event.user_id != curr_event.user_id || prev_event.user_id.is_none() {
+            if requirements.same_user
+                && (prev_event.user_id != curr_event.user_id || prev_event.user_id.is_none()) {
                     return false;
                 }
-            }
 
-            if requirements.same_ip {
-                if prev_event.ip_address != curr_event.ip_address || prev_event.ip_address.is_none()
+            if requirements.same_ip
+                && (prev_event.ip_address != curr_event.ip_address || prev_event.ip_address.is_none())
                 {
                     return false;
                 }
-            }
 
-            if requirements.same_session {
-                if prev_event.session_id != curr_event.session_id || prev_event.session_id.is_none()
+            if requirements.same_session
+                && (prev_event.session_id != curr_event.session_id || prev_event.session_id.is_none())
                 {
                     return false;
                 }
-            }
 
-            if requirements.same_device {
-                if prev_event.device_fingerprint != curr_event.device_fingerprint
-                    || prev_event.device_fingerprint.is_none()
+            if requirements.same_device
+                && (prev_event.device_fingerprint != curr_event.device_fingerprint
+                    || prev_event.device_fingerprint.is_none())
                 {
                     return false;
                 }
-            }
 
             // TODO: Implement IP proximity and geo proximity checks
         }

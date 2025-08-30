@@ -109,7 +109,7 @@ pub struct MetricsRegistry {
 
 impl MetricsRegistry {
     /// Create a new metrics registry with all collectors initialized
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let registry = Registry::new();
 
         // === Token Operation Metrics ===
@@ -500,8 +500,7 @@ pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     let path = req
         .extensions()
         .get::<MatchedPath>()
-        .map(|p| normalize_path_for_cardinality(p.as_str()))
-        .unwrap_or("unknown".to_string());
+        .map_or("unknown".to_string(), |p| normalize_path_for_cardinality(p.as_str()));
 
     // Extract client ID with cardinality protection
     let client_id = extract_client_id_with_protection(&req);
@@ -635,7 +634,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 [("content-type", "text/plain")],
-                format!("Error gathering metrics: {}", e),
+                format!("Error gathering metrics: {e}"),
             )
         }
     }

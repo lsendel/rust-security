@@ -1,6 +1,12 @@
 pub struct UserClusteringModel;
+impl Default for UserClusteringModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserClusteringModel {
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self
     }
 }

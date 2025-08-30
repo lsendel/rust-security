@@ -1,9 +1,9 @@
 use crate::core::security::SecurityEventType;
-use crate::threat_user_profiler::config::*;
+use crate::threat_user_profiler::config::UserProfilingConfig;
 use crate::threat_user_profiler::features::BehavioralFeatureExtractor;
 use crate::threat_user_profiler::risk_assessment::RiskAssessmentEngine;
 use crate::threat_user_profiler::time_series::TimeSeriesAnalyzer;
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::types::{EnhancedUserBehaviorProfile, BehavioralTimeSeries, ProfilingStatistics, UserSecurityEvent, RiskAssessment, TemporalFeatures, PeerComparisons, TimeSeriesPoint};
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 use redis::aio::ConnectionManager;
@@ -85,7 +85,7 @@ pub struct ProfileUpdateRequest {
 }
 
 /// Priority levels for profile updates
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdatePriority {
     Low,
     Normal,
@@ -95,7 +95,7 @@ pub enum UpdatePriority {
 
 impl AdvancedUserBehaviorProfiler {
     /// Create a new advanced user behavior profiler
-    pub fn new(config: UserProfilingConfig) -> Self {
+    #[must_use] pub fn new(config: UserProfilingConfig) -> Self {
         let (profile_update_sender, profile_update_receiver) = unbounded();
 
         // Initialize component engines with their respective configurations
@@ -165,7 +165,7 @@ impl AdvancedUserBehaviorProfiler {
         self.profile_update_queue
             .send_async(update_request)
             .await
-            .map_err(|e| format!("Failed to queue profile update: {}", e))?;
+            .map_err(|e| format!("Failed to queue profile update: {e}"))?;
 
         Ok(())
     }

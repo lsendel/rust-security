@@ -1,7 +1,7 @@
-use crate::threat_user_profiler::config::*;
+use crate::threat_user_profiler::config::RiskScoringConfig;
 use crate::threat_user_profiler::risk_assessment::peer_analysis::PeerComparisonAnalyzer;
 use crate::threat_user_profiler::risk_assessment::scoring::RiskScoringAlgorithm;
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::types::{RiskAssessment, EnhancedUserBehaviorProfile, TemporalFeatures, RiskFactor, LocationFeatures, DeviceFeatures, NetworkFeatures, ActivityFeatures, RiskCategory};
 use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,10 +20,10 @@ pub struct RiskAssessmentEngine {
 
 impl RiskAssessmentEngine {
     /// Create a new risk assessment engine
-    pub fn new(config: RiskScoringConfig) -> Self {
+    #[must_use] pub fn new(config: RiskScoringConfig) -> Self {
         Self {
             config: Arc::new(RwLock::new(config.clone())),
-            scoring_algorithm: RiskScoringAlgorithm::new(config.clone()),
+            scoring_algorithm: RiskScoringAlgorithm::new(config),
             peer_analyzer: PeerComparisonAnalyzer::new(),
             risk_history: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -492,10 +492,10 @@ impl RiskAssessmentEngine {
         for (anomaly_type, &score) in anomaly_scores {
             if score > 0.8 {
                 risk_factors.push(RiskFactor {
-                    factor_name: format!("anomaly_{}", anomaly_type),
+                    factor_name: format!("anomaly_{anomaly_type}"),
                     risk_score: score,
                     weight: config.anomaly_score_multiplier * 0.1,
-                    description: format!("High anomaly score for {}", anomaly_type),
+                    description: format!("High anomaly score for {anomaly_type}"),
                     evidence: vec![format!("Anomaly score: {:.3}", score)],
                 });
             }

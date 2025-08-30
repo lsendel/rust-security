@@ -3,7 +3,7 @@ use crate::core::security::SecurityEvent;
 use crate::errors::AuthError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::{ThreatDetectionAdapter, process_with_conversion};
-use crate::threat_types::*;
+use crate::threat_types::{ThreatSeverity, EscalationRule, MitigationAction, ThreatContext, ActionResult, ThreatResponsePlan, ThreatSignature, EscalationTrigger, EscalationAction, ResponseStatus, PlannedAction, ThreatType, SuccessCriterion, SuccessCriterionType, VerificationMethod, RollbackPlan, BusinessImpact};
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
 #[cfg(feature = "monitoring")]
@@ -86,7 +86,7 @@ pub struct EmailConfig {
     pub incident_response_addresses: Vec<String>,
 }
 
-/// PagerDuty configuration
+/// `PagerDuty` configuration
 #[derive(Debug, Clone)]
 pub struct PagerDutyConfig {
     pub integration_key: String,
@@ -501,7 +501,7 @@ impl ThreatResponseConfig {
 
 impl ThreatResponseOrchestrator {
     /// Create a new threat response orchestrator
-    pub fn new(config: ThreatResponseConfig) -> Self {
+    #[must_use] pub fn new(config: ThreatResponseConfig) -> Self {
         let (response_sender, response_receiver) = unbounded();
         let (notification_sender, notification_receiver) = unbounded();
 
@@ -1032,7 +1032,7 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Determine response priority based on threat severity
-    fn determine_priority(&self, severity: &ThreatSeverity) -> ResponsePriority {
+    const fn determine_priority(&self, severity: &ThreatSeverity) -> ResponsePriority {
         match severity {
             ThreatSeverity::Critical => ResponsePriority::Emergency,
             ThreatSeverity::High => ResponsePriority::Critical,
@@ -1066,7 +1066,7 @@ impl ThreatResponseOrchestrator {
                 .await;
 
                 match result {
-                    Ok(_) => {
+                    Ok(()) => {
                         info!(
                             "Response plan executed successfully for threat: {}",
                             response_request.threat_signature.threat_id
@@ -1167,7 +1167,7 @@ impl ThreatResponseOrchestrator {
                     Self::send_notification(&notification_request, &http_client, &config).await;
 
                 match result {
-                    Ok(_) => {
+                    Ok(()) => {
                         debug!(
                             "Notification sent successfully: {}",
                             notification_request.notification_id

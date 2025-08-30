@@ -192,6 +192,7 @@ pub struct EnhancedUserBehaviorProfile {
 
 /// Comprehensive behavioral feature vector
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct BehavioralFeatureVector {
     pub temporal_features: TemporalFeatures,
     pub location_features: LocationFeatures,
@@ -317,17 +318,6 @@ pub struct FeatureNormalization {
     pub parameters: HashMap<String, f64>,
 }
 
-impl Default for BehavioralFeatureVector {
-    fn default() -> Self {
-        Self {
-            temporal_features: TemporalFeatures::default(),
-            location_features: LocationFeatures::default(),
-            device_features: DeviceFeatures::default(),
-            network_features: NetworkFeatures::default(),
-            activity_features: ActivityFeatures::default(),
-        }
-    }
-}
 
 impl Default for RiskAssessment {
     fn default() -> Self {

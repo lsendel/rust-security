@@ -13,11 +13,11 @@ use tracing::{info, Instrument, Span};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use uuid::Uuid;
 
-/// Initialize distributed tracing with OpenTelemetry and Jaeger
+/// Initialize distributed tracing with `OpenTelemetry` and Jaeger
 ///
 /// # Errors
 /// Returns an error if:
-/// - OpenTelemetry tracer pipeline fails to initialize  
+/// - `OpenTelemetry` tracer pipeline fails to initialize  
 /// - Jaeger agent connection fails
 /// - Tracing subscriber configuration is invalid
 pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

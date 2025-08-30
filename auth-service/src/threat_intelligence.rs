@@ -3,10 +3,9 @@ use tracing::debug;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
 use crate::errors::AuthError;
-use crate::threat_types::*;
+use crate::threat_types::{IndicatorType, ThreatType, ThreatSeverity, AttackPhase, MitigationAction, ThreatIndicator};
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};
-use once_cell::sync::Lazy;
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
@@ -58,7 +57,7 @@ static THREAT_INTEL_RESPONSE_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     ).expect("Failed to create threat_intel_response_time histogram")
 });
 
-static ACTIVE_INDICATORS: Lazy<Gauge> = Lazy::new(|| {
+static ACTIVE_INDICATORS: std::sync::LazyLock<Gauge> = std::sync::LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_indicators",
         "Number of active threat indicators"
@@ -343,7 +342,7 @@ impl Default for ThreatIntelligenceConfig {
 
 impl ThreatIntelligenceCorrelator {
     /// Create a new threat intelligence correlator
-    pub fn new(config: ThreatIntelligenceConfig) -> Self {
+    #[must_use] pub fn new(config: ThreatIntelligenceConfig) -> Self {
         let (query_sender, query_receiver) = unbounded();
 
         let http_client = ClientBuilder::new()
@@ -680,7 +679,7 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Determine query priority based on event characteristics
-    fn determine_query_priority(&self, event: &SecurityEvent) -> QueryPriority {
+    const fn determine_query_priority(&self, event: &SecurityEvent) -> QueryPriority {
         match event.severity {
             ViolationSeverity::Critical => QueryPriority::Critical,
             ViolationSeverity::High => QueryPriority::High,
@@ -872,7 +871,7 @@ impl ThreatIntelligenceCorrelator {
         result
     }
 
-    /// Query AbuseIPDB for IP reputation
+    /// Query `AbuseIPDB` for IP reputation
     async fn query_abuse_ipdb(
         feed: &ThreatFeedConfig,
         indicator: &str,
@@ -907,7 +906,7 @@ impl ThreatIntelligenceCorrelator {
                     indicator: indicator.to_string(),
                     indicator_type: IndicatorType::IpAddress,
                     threat_types: vec![ThreatType::MaliciousBot], // Simplified
-                    confidence: abuse_result.abuse_confidence_percentage as f64 / 100.0,
+                    confidence: f64::from(abuse_result.abuse_confidence_percentage) / 100.0,
                     severity: if abuse_result.abuse_confidence_percentage > 75 {
                         ThreatSeverity::High
                     } else if abuse_result.abuse_confidence_percentage > 50 {
@@ -939,10 +938,10 @@ impl ThreatIntelligenceCorrelator {
                     .into_iter()
                     .collect(),
                     false_positive_rate: 0.1,
-                    reputation_score: abuse_result.abuse_confidence_percentage as f64 / 100.0,
+                    reputation_score: f64::from(abuse_result.abuse_confidence_percentage) / 100.0,
                     malware_families: Vec::new(),
                     threat_actor_groups: Vec::new(),
-                    geographic_regions: vec![abuse_result.country_code.clone().unwrap_or_default()],
+                    geographic_regions: vec![abuse_result.country_code.unwrap_or_default()],
                     kill_chain_phases: vec![AttackPhase::InitialAccess],
                 };
 
@@ -953,7 +952,7 @@ impl ThreatIntelligenceCorrelator {
         Ok(None)
     }
 
-    /// Query VirusTotal for indicator information
+    /// Query `VirusTotal` for indicator information
     async fn query_virustotal(
         _feed: &ThreatFeedConfig,
         _indicator: &str,
@@ -1076,7 +1075,7 @@ impl ThreatIntelligenceCorrelator {
     }
 }
 
-/// AbuseIPDB API response structure
+/// `AbuseIPDB` API response structure
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -1096,7 +1095,7 @@ struct AbuseIpdbResponse {
 }
 
 /// Helper function to convert indicator type to string
-fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
+const fn indicator_type_to_string(indicator_type: &IndicatorType) -> &'static str {
     match indicator_type {
         IndicatorType::IpAddress => "ip",
         IndicatorType::Domain => "domain",
@@ -1132,8 +1131,7 @@ impl ThreatIntelligenceCorrelator {
             Err(e) => {
                 error!("Failed to download feed {}: {}", feed.name, e);
                 return Err(AuthError::ExternalService(format!(
-                    "Feed download failed: {}",
-                    e
+                    "Feed download failed: {e}"
                 )));
             }
         };
@@ -1144,8 +1142,7 @@ impl ThreatIntelligenceCorrelator {
             Err(e) => {
                 error!("Failed to parse feed {}: {}", feed.name, e);
                 return Err(AuthError::ExternalService(format!(
-                    "Feed parsing failed: {}",
-                    e
+                    "Feed parsing failed: {e}"
                 )));
             }
         };
@@ -1198,7 +1195,7 @@ impl ThreatIntelligenceCorrelator {
 
         // Add authentication if required
         if let Some(ref api_key) = feed.api_key {
-            request = request.header("Authorization", format!("Bearer {}", api_key));
+            request = request.header("Authorization", format!("Bearer {api_key}"));
         }
 
         let response = request.send().await?.text().await?;
@@ -1216,7 +1213,7 @@ impl ThreatIntelligenceCorrelator {
             "json" => {
                 // Parse JSON format feed
                 let json_data: serde_json::Value = serde_json::from_str(data)
-                    .map_err(|e| AuthError::ExternalService(format!("JSON parse error: {}", e)))?;
+                    .map_err(|e| AuthError::ExternalService(format!("JSON parse error: {e}")))?;
 
                 if let Some(array) = json_data.as_array() {
                     for item in array {
@@ -1238,8 +1235,8 @@ impl ThreatIntelligenceCorrelator {
                             value: fields[0].to_string(),
                             confidence: fields.get(2).and_then(|s| s.parse().ok()).unwrap_or(0.5),
                             severity: ThreatSeverity::Medium, // Default
-                            source: fields.get(1).unwrap_or(&"unknown").to_string(),
-                            description: fields.get(3).map(|s| s.to_string()),
+                            source: (*fields.get(1).unwrap_or(&"unknown")).to_string(),
+                            description: fields.get(3).map(|s| (*s).to_string()),
                             created_at: Utc::now(),
                             updated_at: Utc::now(),
                             expires_at: None,
@@ -1279,8 +1276,7 @@ impl ThreatIntelligenceCorrelator {
             }
             _ => {
                 return Err(AuthError::ExternalService(format!(
-                    "Unsupported feed format: {}",
-                    format
+                    "Unsupported feed format: {format}"
                 )));
             }
         }
@@ -1307,7 +1303,7 @@ impl ThreatIntelligenceCorrelator {
             value,
             confidence: item
                 .get("confidence")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or(0.5),
             severity: self.parse_severity(item.get("severity")),
             source: item
@@ -1318,7 +1314,7 @@ impl ThreatIntelligenceCorrelator {
             description: item
                 .get("description")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             created_at: Utc::now(),
             updated_at: Utc::now(),
             expires_at: item

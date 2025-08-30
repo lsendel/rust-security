@@ -2,8 +2,14 @@ use crate::threat_user_profiler::{NetworkFeatures, UserSecurityEvent};
 
 #[derive(Clone)]
 pub struct NetworkFeatureExtractor;
+impl Default for NetworkFeatureExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NetworkFeatureExtractor {
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self
     }
     pub async fn extract_network_features(

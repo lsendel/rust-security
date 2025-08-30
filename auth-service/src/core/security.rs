@@ -568,7 +568,7 @@ pub enum SecurityEventType {
 
 impl SecurityEvent {
     /// Check if this event represents a security failure
-    pub fn is_security_failure(&self) -> bool {
+    #[must_use] pub const fn is_security_failure(&self) -> bool {
         matches!(
             self.event_type,
             SecurityEventType::AuthenticationFailure

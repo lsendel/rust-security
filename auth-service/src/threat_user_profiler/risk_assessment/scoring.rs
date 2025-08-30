@@ -1,9 +1,9 @@
-use crate::threat_user_profiler::config::*;
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::config::{RiskScoringConfig, RiskAggregationMethod};
+use crate::threat_user_profiler::types::RiskFactor;
 #[derive(Clone)]
 pub struct RiskScoringAlgorithm;
 impl RiskScoringAlgorithm {
-    pub fn new(_config: RiskScoringConfig) -> Self {
+    #[must_use] pub fn new(_config: RiskScoringConfig) -> Self {
         Self
     }
     pub async fn calculate_overall_risk(

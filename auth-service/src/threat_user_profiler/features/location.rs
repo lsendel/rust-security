@@ -7,7 +7,7 @@ pub struct LocationFeatureExtractor {
 }
 
 impl LocationFeatureExtractor {
-    pub fn new(clustering_radius: f64) -> Self {
+    #[must_use] pub const fn new(clustering_radius: f64) -> Self {
         Self { clustering_radius }
     }
 

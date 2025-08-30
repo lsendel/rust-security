@@ -1,4 +1,4 @@
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::types::{FeatureNormalization, NormalizationMethod};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -158,12 +158,12 @@ impl Default for ProfilingRedisConfig {
 
 impl UserProfilingConfig {
     /// Create a new configuration with custom settings
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 
     /// Configure for high-security environments
-    pub fn high_security() -> Self {
+    #[must_use] pub fn high_security() -> Self {
         let mut config = Self::default();
         config.anomaly_detection_threshold = 0.99;
         config.risk_scoring.anomaly_score_multiplier = 3.0;
@@ -174,7 +174,7 @@ impl UserProfilingConfig {
     }
 
     /// Configure for performance-optimized environments
-    pub fn performance_optimized() -> Self {
+    #[must_use] pub fn performance_optimized() -> Self {
         let mut config = Self::default();
         config.temporal_analysis.time_series_window_size = 500;
         config.temporal_analysis.enable_real_time_analysis = false;
@@ -185,7 +185,7 @@ impl UserProfilingConfig {
     }
 
     /// Configure for development/testing environments
-    pub fn development() -> Self {
+    #[must_use] pub fn development() -> Self {
         let mut config = Self::default();
         config.profile_retention_days = 7;
         config.redis_config.profile_ttl_seconds = 604_800; // 7 days
@@ -237,7 +237,7 @@ impl UserProfilingConfig {
 
     /// Update configuration at runtime
     pub fn update_feature_weight(&mut self, feature: &str, weight: f64) -> Result<(), String> {
-        if weight < 0.0 || weight > 1.0 {
+        if !(0.0..=1.0).contains(&weight) {
             return Err("Feature weight must be between 0.0 and 1.0".to_string());
         }
 
@@ -249,7 +249,7 @@ impl UserProfilingConfig {
 
     /// Update risk scoring weight
     pub fn update_risk_weight(&mut self, risk_factor: &str, weight: f64) -> Result<(), String> {
-        if weight < 0.0 || weight > 1.0 {
+        if !(0.0..=1.0).contains(&weight) {
             return Err("Risk weight must be between 0.0 and 1.0".to_string());
         }
 
@@ -260,7 +260,7 @@ impl UserProfilingConfig {
     }
 
     /// Get effective configuration for a specific tenant
-    pub fn for_tenant(&self, tenant_id: &str) -> Self {
+    #[must_use] pub fn for_tenant(&self, tenant_id: &str) -> Self {
         // In a real implementation, this would load tenant-specific overrides
         // For now, return the base configuration
         let mut config = self.clone();

@@ -70,7 +70,7 @@ impl ObservabilitySystem {
                 .await
                 .map_err(|e| AuthError::InternalError {
                     error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to initialize enhanced observability: {}", e),
+                    context: format!("Failed to initialize enhanced observability: {e}"),
                 })?,
             );
 

@@ -238,11 +238,11 @@ impl AuthError {
     fn get_error_details(&self) -> (StatusCode, &'static str, &'static str, bool) {
         match self {
             // Authentication and authorization errors
-            AuthError::InvalidClientCredentials
-            | AuthError::InvalidRefreshToken
-            | AuthError::InvalidToken { .. }
-            | AuthError::UnauthorizedClient { .. }
-            | AuthError::Forbidden { .. } => self.handle_auth_error(self),
+            Self::InvalidClientCredentials
+            | Self::InvalidRefreshToken
+            | Self::InvalidToken { .. }
+            | Self::UnauthorizedClient { .. }
+            | Self::Forbidden { .. } => self.handle_auth_error(self),
 
             // Rate limiting errors
             error if Self::is_rate_limit_error(error) => Self::handle_rate_limit_error(error),
@@ -264,7 +264,7 @@ impl AuthError {
     /// Handle authentication errors
     fn handle_auth_error(
         &self,
-        error: &AuthError,
+        error: &Self,
     ) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
             Self::InvalidClientCredentials => (
@@ -302,28 +302,28 @@ impl AuthError {
     }
 
     /// Check if error is rate limiting related
-    fn is_rate_limit_error(error: &AuthError) -> bool {
+    const fn is_rate_limit_error(error: &Self) -> bool {
         matches!(
             error,
-            AuthError::RateLimitExceeded
-                | AuthError::IpRateLimitExceeded { .. }
-                | AuthError::ClientRateLimitExceeded { .. }
-                | AuthError::TokenUsageLimitExceeded
+            Self::RateLimitExceeded
+                | Self::IpRateLimitExceeded { .. }
+                | Self::ClientRateLimitExceeded { .. }
+                | Self::TokenUsageLimitExceeded
         )
     }
 
     /// Handle rate limiting errors
     fn handle_rate_limit_error(
-        error: &AuthError,
+        error: &Self,
     ) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
-            AuthError::RateLimitExceeded => (
+            Self::RateLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "rate_limit_exceeded",
                 "Too many requests",
                 false,
             ),
-            AuthError::IpRateLimitExceeded { ip } => {
+            Self::IpRateLimitExceeded { ip } => {
                 // Log security event but don't expose IP to client
                 warn!("IP rate limit exceeded for {ip}");
                 (
@@ -333,7 +333,7 @@ impl AuthError {
                     false,
                 )
             }
-            AuthError::ClientRateLimitExceeded { client_id } => {
+            Self::ClientRateLimitExceeded { client_id } => {
                 warn!("Client rate limit exceeded for {client_id}");
                 (
                     StatusCode::TOO_MANY_REQUESTS,
@@ -342,7 +342,7 @@ impl AuthError {
                     false,
                 )
             }
-            AuthError::TokenUsageLimitExceeded => (
+            Self::TokenUsageLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "token_usage_limit_exceeded",
                 "Token usage limit exceeded",
@@ -353,17 +353,17 @@ impl AuthError {
     }
 
     /// Check if error is internal system error
-    fn is_internal_error(error: &AuthError) -> bool {
+    const fn is_internal_error(error: &Self) -> bool {
         matches!(
             error,
-            AuthError::InternalError { .. }
-                | AuthError::TokenStoreError { .. }
-                | AuthError::ConfigurationError { .. }
-                | AuthError::TokenGenerationFailed(_)
+            Self::InternalError { .. }
+                | Self::TokenStoreError { .. }
+                | Self::ConfigurationError { .. }
+                | Self::TokenGenerationFailed(_)
         ) || {
             #[cfg(feature = "enhanced-session-store")]
             {
-                matches!(error, AuthError::RedisConnectionError { .. })
+                matches!(error, Self::RedisConnectionError { .. })
             }
             #[cfg(not(feature = "enhanced-session-store"))]
             {
@@ -373,9 +373,9 @@ impl AuthError {
     }
 
     /// Handle internal system errors
-    fn handle_internal_error(error: &AuthError) -> (StatusCode, &'static str, &'static str, bool) {
+    fn handle_internal_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
-            AuthError::InternalError { error_id, context } => {
+            Self::InternalError { error_id, context } => {
                 Self::log_internal_error(error_id, context, error);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -440,25 +440,25 @@ impl AuthError {
     }
 
     /// Check if error is security/policy related
-    fn is_security_error(&self, error: &AuthError) -> bool {
+    const fn is_security_error(&self, error: &Self) -> bool {
         matches!(
             error,
-            AuthError::SecurityViolation { .. }
-                | AuthError::PolicyViolation { .. }
-                | AuthError::ThreatDetected { .. }
-                | AuthError::AnomalyDetected { .. }
-                | AuthError::SuspiciousActivity { .. }
-                | AuthError::SecurityScanTriggered { .. }
+            Self::SecurityViolation { .. }
+                | Self::PolicyViolation { .. }
+                | Self::ThreatDetected { .. }
+                | Self::AnomalyDetected
+                | Self::SuspiciousActivity { .. }
+                | Self::SecurityScanTriggered { .. }
         )
     }
 
     /// Handle security/policy errors
     fn handle_security_error(
         &self,
-        error: &AuthError,
+        error: &Self,
     ) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
-            AuthError::SecurityViolation { violation_type, .. } => {
+            Self::SecurityViolation { violation_type, .. } => {
                 warn!("Security violation detected: {:?}", violation_type);
                 (
                     StatusCode::FORBIDDEN,
@@ -477,17 +477,17 @@ impl AuthError {
     }
 
     /// Check if error is token related
-    fn is_token_error(&self, error: &AuthError) -> bool {
-        matches!(error, AuthError::TokenRevoked)
+    const fn is_token_error(&self, error: &Self) -> bool {
+        matches!(error, Self::TokenRevoked)
     }
 
     /// Handle token specific errors
     fn handle_token_error(
         &self,
-        error: &AuthError,
+        error: &Self,
     ) -> (StatusCode, &'static str, &'static str, bool) {
         match error {
-            AuthError::TokenRevoked => (
+            Self::TokenRevoked => (
                 StatusCode::UNAUTHORIZED,
                 "token_revoked",
                 "Token has been revoked",
@@ -514,7 +514,7 @@ impl AuthError {
     }
 
     /// Helper method to log internal errors with consistent format
-    fn log_internal_error(error_id: &Uuid, context: &str, error: &AuthError) {
+    fn log_internal_error(error_id: &Uuid, context: &str, error: &Self) {
         tracing::error!(
             error_id = %error_id,
             context = %context,

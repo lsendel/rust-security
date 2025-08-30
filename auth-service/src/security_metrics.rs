@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 /// Global security metrics instance
-pub static SECURITY_METRICS: LazyLock<SecurityMetrics> = LazyLock::new(|| SecurityMetrics::new());
+pub static SECURITY_METRICS: LazyLock<SecurityMetrics> = LazyLock::new(SecurityMetrics::new);
 
 /// Security metrics collector
 pub struct SecurityMetrics {
@@ -17,8 +17,8 @@ pub struct SecurityMetrics {
 }
 
 impl SecurityMetrics {
-    /// Create a new SecurityMetrics instance
-    pub fn new() -> Self {
+    /// Create a new `SecurityMetrics` instance
+    #[must_use] pub fn new() -> Self {
         Self {
             failed_logins: RwLock::new(HashMap::new()),
             blocked_ips: RwLock::new(HashMap::new()),
@@ -56,17 +56,17 @@ impl SecurityMetrics {
 
         let failed_logins = self.failed_logins.read().unwrap();
         for (ip, count) in failed_logins.iter() {
-            all_metrics.insert(format!("failed_logins_{}", ip), *count);
+            all_metrics.insert(format!("failed_logins_{ip}"), *count);
         }
 
         let blocked_ips = self.blocked_ips.read().unwrap();
         for (ip, count) in blocked_ips.iter() {
-            all_metrics.insert(format!("blocked_ip_{}", ip), *count);
+            all_metrics.insert(format!("blocked_ip_{ip}"), *count);
         }
 
         let security_events = self.security_events.read().unwrap();
         for (event, count) in security_events.iter() {
-            all_metrics.insert(format!("security_event_{}", event), *count);
+            all_metrics.insert(format!("security_event_{event}"), *count);
         }
 
         all_metrics

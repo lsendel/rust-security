@@ -8,58 +8,56 @@ use crate::threat_types::{
     EventOutcome, ThreatSecurityEvent, ThreatSecurityEventType, ThreatSeverity,
 };
 
-/// Convert SecurityEventType to ThreatSecurityEventType
+/// Convert `SecurityEventType` to `ThreatSecurityEventType`
 #[cfg(feature = "threat-hunting")]
 impl From<SecurityEventType> for ThreatSecurityEventType {
     fn from(event_type: SecurityEventType) -> Self {
         match event_type {
             SecurityEventType::AuthenticationFailure => {
-                ThreatSecurityEventType::AuthenticationFailure
+                Self::AuthenticationFailure
             }
             SecurityEventType::AuthenticationSuccess => {
-                ThreatSecurityEventType::AuthenticationSuccess
+                Self::AuthenticationSuccess
             }
             SecurityEventType::AuthenticationAttempt => {
-                ThreatSecurityEventType::AuthenticationAttempt
+                Self::AuthenticationAttempt
             }
-            SecurityEventType::Login => ThreatSecurityEventType::AuthenticationSuccess,
-            SecurityEventType::AuthorizationDenied => ThreatSecurityEventType::AuthorizationDenied,
-            SecurityEventType::SuspiciousActivity => ThreatSecurityEventType::SuspiciousActivity,
-            SecurityEventType::RateLimitExceeded => ThreatSecurityEventType::RateLimitExceeded,
-            SecurityEventType::PolicyViolation => ThreatSecurityEventType::PolicyViolation,
-            SecurityEventType::ThreatDetected => ThreatSecurityEventType::ThreatDetected,
-            SecurityEventType::AnomalyDetected => ThreatSecurityEventType::AnomalyDetected,
+            SecurityEventType::Login => Self::AuthenticationSuccess,
+            SecurityEventType::AuthorizationDenied => Self::AuthorizationDenied,
+            SecurityEventType::SuspiciousActivity => Self::SuspiciousActivity,
+            SecurityEventType::RateLimitExceeded => Self::RateLimitExceeded,
+            SecurityEventType::PolicyViolation => Self::PolicyViolation,
+            SecurityEventType::ThreatDetected => Self::ThreatDetected,
+            SecurityEventType::AnomalyDetected => Self::AnomalyDetected,
             SecurityEventType::SecurityScanTriggered => {
-                ThreatSecurityEventType::SecurityScanTriggered
+                Self::SecurityScanTriggered
             }
-            SecurityEventType::MfaFailure => ThreatSecurityEventType::MfaFailure,
-            SecurityEventType::MfaChallenge => ThreatSecurityEventType::MfaChallenge,
-            SecurityEventType::PasswordChange => ThreatSecurityEventType::PasswordChange,
-            SecurityEventType::DataAccess => ThreatSecurityEventType::DataAccess,
+            SecurityEventType::MfaFailure => Self::MfaFailure,
+            SecurityEventType::MfaChallenge => Self::MfaChallenge,
+            SecurityEventType::PasswordChange => Self::PasswordChange,
+            SecurityEventType::DataAccess => Self::DataAccess,
         }
     }
 }
 
-/// Convert ViolationSeverity to ThreatSeverity
+/// Convert `ViolationSeverity` to `ThreatSeverity`
 #[cfg(feature = "threat-hunting")]
 impl From<ViolationSeverity> for ThreatSeverity {
     fn from(severity: ViolationSeverity) -> Self {
         match severity {
-            ViolationSeverity::Low => ThreatSeverity::Low,
-            ViolationSeverity::Medium => ThreatSeverity::Medium,
-            ViolationSeverity::High => ThreatSeverity::High,
-            ViolationSeverity::Critical => ThreatSeverity::Critical,
+            ViolationSeverity::Low => Self::Low,
+            ViolationSeverity::Medium => Self::Medium,
+            ViolationSeverity::High => Self::High,
+            ViolationSeverity::Critical => Self::Critical,
         }
     }
 }
 
-/// Convert SystemTime to DateTime<Utc>
-
-/// Convert SecurityEvent to ThreatSecurityEvent
+/// Convert `SecurityEvent` to `ThreatSecurityEvent`
 #[cfg(feature = "threat-hunting")]
 impl From<&SecurityEvent> for ThreatSecurityEvent {
     fn from(event: &SecurityEvent) -> Self {
-        ThreatSecurityEvent {
+        Self {
             event_id: uuid::Uuid::new_v4().to_string(),
             timestamp: event.timestamp,
             event_type: event.event_type.clone().into(),
@@ -95,8 +93,8 @@ impl From<&SecurityEvent> for ThreatSecurityEvent {
 
 /// Conversion helper for batch operations
 #[cfg(feature = "threat-hunting")]
-pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEvent> {
-    events.iter().map(|event| event.into()).collect()
+#[must_use] pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEvent> {
+    events.iter().map(std::convert::Into::into).collect()
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
-use crate::threat_user_profiler::config::*;
-use crate::threat_user_profiler::features::*;
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::config::BehavioralFeatureConfig;
+use crate::threat_user_profiler::features::{TemporalFeatureExtractor, LocationFeatureExtractor, DeviceFeatureExtractor, NetworkFeatureExtractor, ActivityFeatureExtractor};
+use crate::threat_user_profiler::types::{UserSecurityEvent, EnhancedUserBehaviorProfile, BehavioralFeatureVector, FeatureNormalization, NormalizationMethod, TemporalFeatures, LocationFeatures, DeviceFeatures, NetworkFeatures, ActivityFeatures};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -20,7 +20,7 @@ pub struct BehavioralFeatureExtractor {
 
 impl BehavioralFeatureExtractor {
     /// Create a new behavioral feature extractor
-    pub fn new(config: BehavioralFeatureConfig) -> Self {
+    #[must_use] pub fn new(config: BehavioralFeatureConfig) -> Self {
         Self {
             config: Arc::new(RwLock::new(config.clone())),
             temporal_extractor: TemporalFeatureExtractor::new(config.temporal_window_hours),
@@ -344,13 +344,11 @@ impl BehavioralFeatureExtractor {
 
     /// Calculate variance in temporal features
     fn calculate_temporal_variance(&self, features: &TemporalFeatures) -> f64 {
-        let values = vec![
-            features.login_frequency,
+        let values = [features.login_frequency,
             features.session_duration_avg,
             features.session_duration_std,
             features.time_between_logins_avg,
-            features.time_between_logins_std,
-        ];
+            features.time_between_logins_std];
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
         values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64
@@ -358,13 +356,11 @@ impl BehavioralFeatureExtractor {
 
     /// Calculate variance in location features
     fn calculate_location_variance(&self, features: &LocationFeatures) -> f64 {
-        let values = vec![
-            features.unique_locations as f64,
+        let values = [features.unique_locations as f64,
             features.location_entropy,
             features.travel_velocity,
             features.location_consistency,
-            features.geofence_violations as f64,
-        ];
+            features.geofence_violations as f64];
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
         values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64
@@ -372,13 +368,11 @@ impl BehavioralFeatureExtractor {
 
     /// Calculate variance in device features
     fn calculate_device_variance(&self, features: &DeviceFeatures) -> f64 {
-        let values = vec![
-            features.unique_devices as f64,
+        let values = [features.unique_devices as f64,
             features.device_consistency,
             features.new_device_frequency,
             features.device_type_diversity,
-            features.browser_consistency,
-        ];
+            features.browser_consistency];
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
         values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64
@@ -386,13 +380,11 @@ impl BehavioralFeatureExtractor {
 
     /// Calculate variance in network features
     fn calculate_network_variance(&self, features: &NetworkFeatures) -> f64 {
-        let values = vec![
-            features.unique_ip_addresses as f64,
+        let values = [features.unique_ip_addresses as f64,
             features.ip_geolocation_consistency,
             features.network_type_diversity,
             features.suspicious_ip_interactions as f64,
-            features.tor_usage_frequency,
-        ];
+            features.tor_usage_frequency];
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
         values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64
@@ -400,7 +392,7 @@ impl BehavioralFeatureExtractor {
 
     /// Calculate variance in activity features
     fn calculate_activity_variance(&self, features: &ActivityFeatures) -> f64 {
-        let values = vec![features.action_diversity, features.failed_action_rate];
+        let values = [features.action_diversity, features.failed_action_rate];
 
         let mean = values.iter().sum::<f64>() / values.len() as f64;
         values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64

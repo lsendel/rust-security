@@ -44,7 +44,7 @@ pub struct GeoLocation {
 }
 
 /// Token binding information for session security
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TokenBindingInfo {
     pub binding_type: String,
     pub binding_value: String,
@@ -188,7 +188,7 @@ pub enum IndicatorType {
 }
 
 impl ThreatIndicator {
-    pub fn new(
+    #[must_use] pub fn new(
         id: String,
         indicator_type: IndicatorType,
         value: String,
@@ -217,7 +217,7 @@ impl ThreatIndicator {
 }
 
 impl ThreatContext {
-    pub fn new(
+    #[must_use] pub fn new(
         threat_id: String,
         threat_type: String,
         severity: ThreatSeverity,
@@ -671,7 +671,7 @@ pub struct RollbackPlan {
 
 impl ThreatSecurityEvent {
     /// Create a new security event with minimal required fields
-    pub fn new(
+    #[must_use] pub fn new(
         event_type: ThreatSecurityEventType,
         severity: ThreatSeverity,
         source: String,
@@ -746,7 +746,7 @@ impl ThreatSecurityEvent {
         let mfa_modifier = if self.mfa_used { -5 } else { 10 };
 
         let final_score =
-            ((score as f64 * severity_multiplier) as i16 + outcome_modifier + mfa_modifier)
+            ((f64::from(score) * severity_multiplier) as i16 + outcome_modifier + mfa_modifier)
                 .max(0)
                 .min(100) as u8;
 
@@ -754,7 +754,7 @@ impl ThreatSecurityEvent {
     }
 
     /// Check if event represents a security failure
-    pub fn is_security_failure(&self) -> bool {
+    #[must_use] pub const fn is_security_failure(&self) -> bool {
         matches!(
             self.event_type,
             ThreatSecurityEventType::AuthenticationFailure
@@ -769,7 +769,7 @@ impl ThreatSecurityEvent {
     }
 
     /// Get time window for threat correlation (in minutes)
-    pub fn get_correlation_window(&self) -> u64 {
+    #[must_use] pub const fn get_correlation_window(&self) -> u64 {
         match self.event_type {
             ThreatSecurityEventType::AuthenticationFailure => 15,
             ThreatSecurityEventType::MfaFailure => 10,
@@ -782,7 +782,7 @@ impl ThreatSecurityEvent {
 
 impl ThreatSignature {
     /// Create a new threat signature
-    pub fn new(threat_type: ThreatType, severity: ThreatSeverity, confidence: f64) -> Self {
+    #[must_use] pub fn new(threat_type: ThreatType, severity: ThreatSeverity, confidence: f64) -> Self {
         Self {
             threat_id: Uuid::new_v4().to_string(),
             threat_type,
@@ -840,13 +840,13 @@ impl ThreatSignature {
     }
 
     /// Check if threat is still active (seen within last hour)
-    pub fn is_active(&self) -> bool {
+    #[must_use] pub fn is_active(&self) -> bool {
         let now = Utc::now();
         now.signed_duration_since(self.last_seen).num_hours() < 1
     }
 
     /// Get threat age in hours
-    pub fn age_hours(&self) -> i64 {
+    #[must_use] pub fn age_hours(&self) -> i64 {
         Utc::now()
             .signed_duration_since(self.first_seen)
             .num_hours()
@@ -855,7 +855,7 @@ impl ThreatSignature {
 
 impl UserBehaviorProfile {
     /// Create a new user behavior profile
-    pub fn new(user_id: String) -> Self {
+    #[must_use] pub fn new(user_id: String) -> Self {
         Self {
             user_id,
             created_at: Utc::now(),
@@ -930,7 +930,7 @@ impl UserBehaviorProfile {
         // Update MFA usage rate
         if event.mfa_used {
             let current_rate = self.mfa_usage_rate;
-            let events_with_mfa = self.security_events_count as f64 * current_rate + 1.0;
+            let events_with_mfa = (self.security_events_count as f64).mul_add(current_rate, 1.0);
             self.mfa_usage_rate = events_with_mfa / self.security_events_count as f64;
         }
     }
@@ -961,14 +961,14 @@ impl UserBehaviorProfile {
     }
 
     /// Check if behavior is suspicious based on entropy and patterns
-    pub fn is_behavior_suspicious(&self) -> bool {
+    #[must_use] pub fn is_behavior_suspicious(&self) -> bool {
         self.behavior_entropy > 0.8
             || self.failed_login_baseline > 5.0
             || self.threat_exposure_score > 0.7
     }
 
     /// Get profile age in days
-    pub fn age_days(&self) -> i64 {
+    #[must_use] pub fn age_days(&self) -> i64 {
         Utc::now().signed_duration_since(self.created_at).num_days()
     }
 }
@@ -976,35 +976,35 @@ impl UserBehaviorProfile {
 // Helper functions for threat analysis
 impl ThreatType {
     /// Get default severity for threat type
-    pub fn default_severity(&self) -> ThreatSeverity {
+    #[must_use] pub const fn default_severity(&self) -> ThreatSeverity {
         match self {
-            ThreatType::CredentialStuffing => ThreatSeverity::High,
-            ThreatType::AccountTakeover => ThreatSeverity::Critical,
-            ThreatType::BruteForce => ThreatSeverity::Medium,
-            ThreatType::SessionHijacking => ThreatSeverity::High,
-            ThreatType::BehavioralAnomaly => ThreatSeverity::Medium,
-            ThreatType::AdvancedPersistentThreat => ThreatSeverity::Critical,
-            ThreatType::DataExfiltration => ThreatSeverity::Critical,
-            ThreatType::InsiderThreat => ThreatSeverity::High,
+            Self::CredentialStuffing => ThreatSeverity::High,
+            Self::AccountTakeover => ThreatSeverity::Critical,
+            Self::BruteForce => ThreatSeverity::Medium,
+            Self::SessionHijacking => ThreatSeverity::High,
+            Self::BehavioralAnomaly => ThreatSeverity::Medium,
+            Self::AdvancedPersistentThreat => ThreatSeverity::Critical,
+            Self::DataExfiltration => ThreatSeverity::Critical,
+            Self::InsiderThreat => ThreatSeverity::High,
             _ => ThreatSeverity::Medium,
         }
     }
 
     /// Get typical indicators for threat type
-    pub fn typical_indicators(&self) -> Vec<IndicatorType> {
+    #[must_use] pub fn typical_indicators(&self) -> Vec<IndicatorType> {
         match self {
-            ThreatType::CredentialStuffing => vec![
+            Self::CredentialStuffing => vec![
                 IndicatorType::IpAddress,
                 IndicatorType::UserAgent,
                 IndicatorType::BehaviorPattern,
             ],
-            ThreatType::AccountTakeover => vec![
+            Self::AccountTakeover => vec![
                 IndicatorType::IpAddress,
                 IndicatorType::DeviceFingerprint,
                 IndicatorType::BehaviorPattern,
                 IndicatorType::TimePattern,
             ],
-            ThreatType::SessionHijacking => vec![
+            Self::SessionHijacking => vec![
                 IndicatorType::SessionId,
                 IndicatorType::IpAddress,
                 IndicatorType::DeviceFingerprint,

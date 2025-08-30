@@ -230,7 +230,7 @@ fn generate_token() -> String {
     let rng = SystemRandom::new();
     let mut dest = [0; 32];
     rng.fill(&mut dest).unwrap();
-    URL_SAFE_NO_PAD.encode(&dest)
+    URL_SAFE_NO_PAD.encode(dest)
 }
 
 /// Create a JWT token for the given user

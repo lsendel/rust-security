@@ -1,10 +1,9 @@
 use crate::core::security::{SecurityEvent, SecurityEventType};
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
-use crate::threat_types::*;
+use crate::threat_types::{UserBehaviorProfile, ThreatSignature, GeoLocation, ThreatType, ThreatSeverity, ThreatIndicator, IndicatorType, MitigationAction, BusinessImpact, AttackPhase};
 use chrono::{DateTime, Duration, Utc, Timelike, Datelike};
 use flume::{unbounded, Receiver, Sender};
-use once_cell::sync::Lazy;
 #[cfg(feature = "monitoring")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
@@ -23,28 +22,28 @@ use tracing::{error, info, warn};
 
 /// Prometheus metrics for behavioral analysis
 
-static THREAT_PATTERNS_DETECTED: Lazy<Counter> = Lazy::new(|| {
+static THREAT_PATTERNS_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_patterns_detected_total",
         "Total threat patterns detected by behavioral analyzer"
     ).expect("Failed to create threat_patterns_detected counter")
 });
 
-static BEHAVIORAL_ANOMALIES_DETECTED: Lazy<Counter> = Lazy::new(|| {
+static BEHAVIORAL_ANOMALIES_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_behavioral_anomalies_total",
         "Total behavioral anomalies detected"
     ).expect("Failed to create behavioral_anomalies_detected counter")
 });
 
-static ANALYSIS_DURATION: Lazy<Histogram> = Lazy::new(|| {
+static ANALYSIS_DURATION: std::sync::LazyLock<Histogram> = std::sync::LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_analysis_duration_seconds",
         "Duration of behavioral analysis operations"
     ).expect("Failed to create analysis_duration histogram")
 });
 
-static ACTIVE_THREATS_GAUGE: Lazy<Gauge> = Lazy::new(|| {
+static ACTIVE_THREATS_GAUGE: std::sync::LazyLock<Gauge> = std::sync::LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_threats",
         "Number of currently active threats"
@@ -52,14 +51,14 @@ static ACTIVE_THREATS_GAUGE: Lazy<Gauge> = Lazy::new(|| {
 });
 
 #[allow(dead_code)]
-static ML_PREDICTIONS: Lazy<Counter> = Lazy::new(|| {
+static ML_PREDICTIONS: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_ml_predictions_total",
         "Total ML model predictions made"
     ).expect("Failed to create ml_predictions counter")
 });
 
-static USER_PROFILES_UPDATED: Lazy<Counter> = Lazy::new(|| {
+static USER_PROFILES_UPDATED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_user_profiles_updated_total",
         "Total user profiles updated"
@@ -290,7 +289,7 @@ impl Default for ThreatDetectionThresholds {
 
 impl AdvancedBehavioralThreatDetector {
     /// Create a new behavioral threat detector
-    pub fn new(config: BehavioralAnalysisConfig) -> Self {
+    #[must_use] pub fn new(config: BehavioralAnalysisConfig) -> Self {
         let (event_sender, event_receiver) = unbounded();
 
         Self {
@@ -504,7 +503,7 @@ impl AdvancedBehavioralThreatDetector {
             );
 
             threat.add_source_ip(ip_address);
-            for user in unique_users.iter() {
+            for user in &unique_users {
                 threat.add_affected_entity(user.clone());
             }
 
@@ -520,7 +519,7 @@ impl AdvancedBehavioralThreatDetector {
             indicator.last_seen = event.timestamp;
             indicator.tags = ["credential_stuffing", "high_volume", "multiple_users"]
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| (*s).to_string())
                 .collect();
 
             threat.add_indicator(indicator);
@@ -617,8 +616,7 @@ impl AdvancedBehavioralThreatDetector {
             > (profile.failed_login_baseline * thresholds.behavior_deviation_threshold) as u32
         {
             anomaly_indicators.push(format!(
-                "Elevated failure rate: {} attempts",
-                recent_failures
+                "Elevated failure rate: {recent_failures} attempts"
             ));
             confidence += 0.2;
         }
@@ -653,7 +651,7 @@ impl AdvancedBehavioralThreatDetector {
                 indicator.last_seen = event.timestamp;
                 indicator.tags = ["account_takeover", "behavioral_anomaly"]
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(|s| (*s).to_string())
                     .collect();
                 threat.add_indicator(indicator);
             }
@@ -727,7 +725,7 @@ impl AdvancedBehavioralThreatDetector {
             indicator.last_seen = event.timestamp;
             indicator.tags = ["brute_force", "high_volume"]
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| (*s).to_string())
                 .collect();
 
             threat.add_indicator(indicator);
@@ -797,8 +795,7 @@ impl AdvancedBehavioralThreatDetector {
 
                         if time_diff < thresholds.time_threshold_minutes as i64 {
                             anomaly_indicators.push(format!(
-                                "Rapid location change in {} minutes",
-                                time_diff
+                                "Rapid location change in {time_diff} minutes"
                             ));
                             confidence += 0.5;
                         }
@@ -845,7 +842,7 @@ impl AdvancedBehavioralThreatDetector {
                         indicator.last_seen = event.timestamp;
                         indicator.tags = ["session_hijacking", "session_anomaly"]
                             .iter()
-                            .map(|s| s.to_string())
+                            .map(|s| (*s).to_string())
                             .collect();
                         threat.add_indicator(indicator);
                     }
@@ -920,7 +917,7 @@ impl AdvancedBehavioralThreatDetector {
             let mut indicator = ThreatIndicator::new(
                 uuid::Uuid::new_v4().to_string(),
                 IndicatorType::BehaviorPattern,
-                format!("Statistical anomaly detected (score: {:.3})", anomaly_score),
+                format!("Statistical anomaly detected (score: {anomaly_score:.3})"),
                 confidence,
                 ThreatSeverity::Medium,
                 "ml_behavioral_analyzer".to_string(),
@@ -929,7 +926,7 @@ impl AdvancedBehavioralThreatDetector {
             indicator.last_seen = event.timestamp;
             indicator.tags = ["behavioral_anomaly", "ml_detection"]
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| (*s).to_string())
                 .collect();
 
             threat.add_indicator(indicator);
@@ -1154,12 +1151,12 @@ impl AdvancedBehavioralThreatDetector {
         let mut features = Vec::new();
 
         // Time-based features
-        features.push(event.timestamp.hour() as f64);
-        features.push(event.timestamp.weekday().num_days_from_monday() as f64);
-        features.push(event.timestamp.minute() as f64);
+        features.push(f64::from(event.timestamp.hour()));
+        features.push(f64::from(event.timestamp.weekday().num_days_from_monday()));
+        features.push(f64::from(event.timestamp.minute()));
 
         // Risk score
-        features.push(event.risk_score.unwrap_or(0) as f64);
+        features.push(f64::from(event.risk_score.unwrap_or(0)));
 
         // Event type encoding
         let event_type_encoding = match event.event_type {
@@ -1204,7 +1201,7 @@ impl AdvancedBehavioralThreatDetector {
         let mut anomaly_score = 0.0;
 
         for (i, &feature_value) in features.iter().enumerate() {
-            let metric_name = format!("feature_{}", i);
+            let metric_name = format!("feature_{i}");
             if let Some(baseline) = baselines.get(&metric_name) {
                 let z_score = (feature_value - baseline.mean) / baseline.std_dev;
                 anomaly_score += z_score.abs();
@@ -1243,7 +1240,7 @@ impl AdvancedBehavioralThreatDetector {
     /// Get recent user sessions
     async fn get_recent_user_sessions(&self, user_id: &str, hours: u32) -> Vec<SessionInfo> {
         let session_tracking = self.user_session_tracking.read().await;
-        let cutoff = Utc::now() - Duration::hours(hours as i64);
+        let cutoff = Utc::now() - Duration::hours(i64::from(hours));
 
         session_tracking
             .get(user_id)

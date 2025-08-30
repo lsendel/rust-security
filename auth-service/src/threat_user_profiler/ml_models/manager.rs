@@ -1,4 +1,4 @@
-use crate::threat_user_profiler::types::*;
+use crate::threat_user_profiler::types::BehavioralFeatureVector;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -36,8 +36,14 @@ pub trait MLModel {
     fn model_type(&self) -> String;
 }
 
+impl Default for MLModelManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MLModelManager {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             models: Arc::new(RwLock::new(HashMap::new())),
         }
@@ -63,7 +69,7 @@ impl MLModelManager {
         if let Some(model) = models.get(model_name) {
             model.predict(features)
         } else {
-            Err(format!("Model {} not found", model_name).into())
+            Err(format!("Model {model_name} not found").into())
         }
     }
 }

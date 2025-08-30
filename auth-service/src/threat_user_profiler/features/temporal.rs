@@ -7,7 +7,7 @@ pub struct TemporalFeatureExtractor {
 }
 
 impl TemporalFeatureExtractor {
-    pub fn new(window_hours: i64) -> Self {
+    #[must_use] pub const fn new(window_hours: i64) -> Self {
         Self { window_hours }
     }
 

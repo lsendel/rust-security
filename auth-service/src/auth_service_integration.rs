@@ -12,7 +12,7 @@ pub struct AuthServiceWithThreatProcessing {
 impl AuthServiceWithThreatProcessing {
     /// Create a new auth service with threat processing
     #[must_use]
-    pub fn new(threat_processor: Arc<ThreatProcessor>) -> Self {
+    pub const fn new(threat_processor: Arc<ThreatProcessor>) -> Self {
         Self { threat_processor }
     }
 
