@@ -32,7 +32,13 @@ pub fn create_secure_client_config(
     let client_config = ClientConfig::builder()
         .with_root_certificates({
             let mut root_store = rustls::RootCertStore::empty();
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+                rustls::pki_types::TrustAnchor {
+                    subject: ta.subject.clone(),
+                    subject_public_key_info: ta.subject_public_key_info.clone(),
+                    name_constraints: ta.name_constraints.clone(),
+                }
+            }));
             root_store
         })
         .with_no_client_auth();

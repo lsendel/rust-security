@@ -15,7 +15,9 @@ max_file_lines = 500
 max_cyclomatic_complexity = 10
 max_function_parameters = 7
 max_struct_fields = 15
+# Increased coverage for critical security components
 min_test_coverage = 90
+critical_component_coverage = 95
 min_documentation_coverage = 95
 
 [naming_conventions]
@@ -48,6 +50,17 @@ require_integration_tests = true
 require_property_tests_for_core = true
 test_file_suffix = "_test.rs"
 benchmark_file_suffix = "_bench.rs"
+
+# Critical security components requiring 95% coverage
+critical_security_components = [
+    "auth-service/src/security_fixed.rs",
+    "auth-service/src/threat_adapter.rs", 
+    "auth-service/src/session_store.rs",
+    "auth-service/src/token_cache.rs",
+    "auth-service/src/admin_replay_protection.rs",
+    "auth-service/src/oauth_policies/security.rs",
+    "auth-service/src/core/security.rs"
+]
 
 [performance]
 # Performance guidelines

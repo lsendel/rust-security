@@ -402,7 +402,7 @@ async fn validate_request_with_replay_protection(
     // Apply replay protection
     if let Some(replay_protection) = REPLAY_PROTECTION.get() {
         replay_protection
-            .validate_request(nonce, timestamp, signature)
+            .validate_request(nonce, timestamp, signature, signing_secret, method, path)
             .await?;
     }
 

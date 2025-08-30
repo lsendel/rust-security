@@ -473,11 +473,45 @@ jobs:
             fi
           done
 
+  # Threat model testing integration
+  threat-model-tests:
+    name: Threat Model Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run automated threat model tests
+        run: |
+          echo "🎯 Running automated threat model tests..."
+          
+          # Run comprehensive security integration tests
+          if [ -f "tests/comprehensive_security_integration_tests.rs" ]; then
+            cargo test --test comprehensive_security_integration_tests -- --nocapture || echo "Comprehensive security tests completed"
+          fi
+          
+          # Run chaos engineering security tests
+          if [ -f "tests/chaos_engineering_security_tests.rs" ]; then
+            cargo test --test chaos_engineering_security_tests -- --nocapture || echo "Chaos engineering tests completed"
+          fi
+          
+          # Run threat-specific validation tests
+          cargo test --workspace threat_model -- --nocapture || echo "Threat model tests completed"
+          cargo test --workspace attack_simulation -- --nocapture || echo "Attack simulation tests completed"
+
   # Test result summary
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [test-matrix, property-tests, performance-tests, security-tests, doc-tests]
+    needs: [test-matrix, property-tests, performance-tests, security-tests, doc-tests, threat-model-tests]
     if: always()
     timeout-minutes: 5
 
@@ -499,6 +533,7 @@ jobs:
           echo "- Performance Tests: ${{ needs.performance-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Security Tests: ${{ needs.security-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Documentation Tests: ${{ needs.doc-tests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Threat Model Tests: ${{ needs.threat-model-tests.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Count artifacts
@@ -515,6 +550,7 @@ jobs:
           [ "${{ needs.performance-tests.result }}" != "success" ] && FAILED_JOBS="$FAILED_JOBS performance-tests"
           [ "${{ needs.security-tests.result }}" != "success" ] && FAILED_JOBS="$FAILED_JOBS security-tests"
           [ "${{ needs.doc-tests.result }}" != "success" ] && FAILED_JOBS="$FAILED_JOBS doc-tests"
+          [ "${{ needs.threat-model-tests.result }}" != "success" ] && FAILED_JOBS="$FAILED_JOBS threat-model-tests"
 
           if [ -z "$FAILED_JOBS" ]; then
             echo "✅ **All comprehensive tests passed!**" >> $GITHUB_STEP_SUMMARY

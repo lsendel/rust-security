@@ -1,337 +1,49 @@
-# Dependabot configuration for automated dependency updates
-# This ensures the supply chain security by keeping dependencies up to date
-# Enhanced security-focused configuration with risk management
-
 version: 2
 updates:
-  # Rust/Cargo dependencies for the main workspace
+  # Rust dependencies
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-      timezone: "UTC"
     open-pull-requests-limit: 10
-    reviewers:
-      - "security-team"
+    # reviewers:
+    #   - "security-team"
     assignees:
       - "security-team"
-    labels:
-      - "dependencies"
-      - "security"
-      - "rust"
     commit-message:
       prefix: "deps"
       include: "scope"
-    # Enhanced security-focused grouping
     groups:
-      critical-security-updates:
-        patterns:
-          - "*security*"
-          - "*crypto*"
-          - "*tls*"
-          - "*ssl*"
-          - "ring*"
-          - "rustls*"
-          - "openssl*"
-          - "jsonwebtoken*"
-          - "argon2*"
-          - "aes*"
-          - "chacha*"
-          - "hmac*"
-          - "sha*"
-          - "rand*"
-          - "secrecy*"
-          - "zeroize*"
-        update-types:
-          - "security-update"
-          - "minor"
-          - "patch"
-        priority: 10
-      runtime-core-updates:
-        patterns:
-          - "tokio*"
-          - "serde*"
-          - "axum*"
-          - "hyper*"
-          - "tower*"
+      security-updates:
+        applies-to: security-updates
         update-types:
           - "minor"
           - "patch"
-        priority: 8
-      performance-updates:
-        patterns:
-          - "async*"
-          - "futures*"
-          - "rayon*"
-          - "dashmap*"
-          - "mimalloc*"
-          - "jemalloc*"
+      workspace-dependencies:
+        dependency-type: "production"
         update-types:
           - "minor"
           - "patch"
-        priority: 6
-      database-storage-updates:
-        patterns:
-          - "redis*"
-          - "sqlx*"
-          - "bb8*"
-          - "deadpool*"
+      dev-dependencies:
+        dependency-type: "development"
         update-types:
           - "minor"
           - "patch"
-        priority: 7
-      web-framework-updates:
-        patterns:
-          - "reqwest*"
-          - "tower-http*"
-          - "utoipa*"
-        update-types:
-          - "minor"
-          - "patch"
-        priority: 5
-    # Enhanced dependency management rules
-    allow:
-      - dependency-type: "all"
-    # Strategic ignore rules for critical dependencies
-    ignore:
-      - dependency-name: "tokio"
-        update-types: ["version-update:semver-major"]
-        reason: "Major tokio updates require extensive testing"
-      - dependency-name: "serde"
-        update-types: ["version-update:semver-major"]
-        reason: "Core serialization library - manual review required"
-      - dependency-name: "axum"
-        update-types: ["version-update:semver-major"]
-        reason: "Web framework changes need careful migration"
-      - dependency-name: "ring"
-        update-types: ["version-update:semver-major"]
-        reason: "Cryptographic library - security review required"
-      - dependency-name: "rustls"
-        update-types: ["version-update:semver-major"]
-        reason: "TLS implementation - security team approval needed"
 
-  # Auth Service specific dependencies
-  - package-ecosystem: "cargo"
-    directory: "/auth-service"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "auth-team"
-    labels:
-      - "dependencies"
-      - "auth-service"
-    commit-message:
-      prefix: "deps(auth)"
-
-  # Policy Service specific dependencies
-  - package-ecosystem: "cargo"
-    directory: "/policy-service"
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "policy-team"
-    labels:
-      - "dependencies"
-      - "policy-service"
-    commit-message:
-      prefix: "deps(policy)"
-
-  # Compliance Tools dependencies
-  - package-ecosystem: "cargo"
-    directory: "/compliance-tools"
-    schedule:
-      interval: "weekly"
-      day: "thursday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "compliance"
-    commit-message:
-      prefix: "deps(compliance)"
-
-  # Example applications
-  - package-ecosystem: "cargo"
-    directory: "/examples/axum-integration-example"
-    schedule:
-      interval: "monthly"
-      day: "first monday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "examples"
-    commit-message:
-      prefix: "deps(examples)"
-
-  # Red Team Exercises
-  - package-ecosystem: "cargo"
-    directory: "/red-team-exercises"
-    schedule:
-      interval: "monthly"
-      day: "second monday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "red-team"
-    commit-message:
-      prefix: "deps(red-team)"
-
-  # Docker dependencies
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "devops-team"
-    labels:
-      - "dependencies"
-      - "docker"
-      - "security"
-    commit-message:
-      prefix: "deps(docker)"
-
-  # Docker for auth-service
-  - package-ecosystem: "docker"
-    directory: "/auth-service"
-    schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "10:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "docker"
-      - "auth-service"
-
-  # GitHub Actions dependencies
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "saturday"
-      time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "devops-team"
-    labels:
-      - "dependencies"
-      - "github-actions"
-      - "ci-cd"
-    commit-message:
-      prefix: "deps(actions)"
-
-  # JavaScript dependencies for user portal
-  - package-ecosystem: "npm"
-    directory: "/user-portal"
-    schedule:
-      interval: "weekly"
       day: "monday"
-      time: "10:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "frontend-team"
-    labels:
-      - "dependencies"
-      - "javascript"
-      - "user-portal"
-    commit-message:
-      prefix: "deps(frontend)"
-    # Group React and related updates
-    groups:
-      react-ecosystem:
-        patterns:
-          - "react*"
-          - "@types/react*"
-          - "react-dom*"
-          - "react-router*"
-        update-types:
-          - "minor"
-          - "patch"
-      security-js:
-        patterns:
-          - "*security*"
-          - "*crypto*"
-          - "*auth*"
-        update-types:
-          - "minor" 
-          - "patch"
-    ignore:
-      # Ignore major React updates until tested
-      - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "react-dom"
-        update-types: ["version-update:semver-major"]
-
-  # Security Dashboard dependencies
-  - package-ecosystem: "npm"
-    directory: "/red-team-exercises/security-dashboard"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "10:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "security-dashboard"
-      - "typescript"
-    commit-message:
-      prefix: "deps(dashboard)"
-
-  # Python dependencies for ML attack detection
-  - package-ecosystem: "pip"
-    directory: "/ml-attack-detection"
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "10:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "ml-team"
-    labels:
-      - "dependencies"
-      - "python"
-      - "machine-learning"
-    commit-message:
-      prefix: "deps(ml)"
-
-  # Terraform dependencies for infrastructure
-  - package-ecosystem: "terraform"
-    directory: "/red-team-exercises/terraform"
-    schedule:
-      interval: "monthly"
-      day: "first friday"
       time: "09:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 3
-    reviewers:
-      - "infrastructure-team"
-    labels:
-      - "dependencies"
-      - "terraform"
-      - "infrastructure"
+    open-pull-requests-limit: 5
+    # reviewers:
+    #   - "platform-team"
+    assignees:
+      - "platform-team"
     commit-message:
-      prefix: "deps(terraform)"
+      prefix: "ci"
+      include: "scope"

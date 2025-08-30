@@ -21,7 +21,9 @@ mfa_tests = 600
 [coverage]
 # Code coverage settings
 target_line_coverage = 90.0
-target_branch_coverage = 85.0
+target_branch_coverage = 90.0
+# Critical security components require higher coverage
+critical_component_coverage = 95.0
 exclude_patterns = [
     "tests/*",
     "benches/*", 

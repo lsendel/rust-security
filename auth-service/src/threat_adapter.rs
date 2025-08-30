@@ -70,11 +70,9 @@ mod tests {
     #[cfg(feature = "threat-hunting")]
     use super::*;
     #[cfg(feature = "threat-hunting")]
-    use crate::core::auth::AuthContext;
-    #[cfg(feature = "threat-hunting")]
     use crate::core::security::{SecurityContext, SecurityLevel, ViolationSeverity};
     #[cfg(feature = "threat-hunting")]
-    use chrono::{DateTime, Utc};
+    use chrono::Utc;
     #[cfg(feature = "threat-hunting")]
     use std::collections::HashMap;
     #[cfg(feature = "threat-hunting")]

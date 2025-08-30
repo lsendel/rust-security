@@ -1,5 +1,6 @@
 use crate::errors::AuthError;
 use axum::{extract::Request, middleware::Next, response::Response};
+use rand::RngCore;
 #[cfg(feature = "monitoring")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
@@ -311,7 +312,10 @@ impl BackpressureState {
                 - ((load_ratio - self.config.load_shed_threshold)
                     / (1.0 - self.config.load_shed_threshold));
 
-            if rand::random::<f64>() > admit_probability {
+            // Use cryptographically secure random for security-critical load shedding decisions
+            let mut rng = rand::rngs::OsRng;
+            let random_value = rng.next_u64() as f64 / u64::MAX as f64;
+            if random_value > admit_probability {
                 inc_requests_rejected_total();
                 return Err(AuthError::ServiceUnavailable {
                     reason: "Load shedding active".to_string(),
@@ -576,7 +580,7 @@ mod tests {
         assert_eq!(stats.per_ip_active_connections, 2);
 
         state.on_request_end("192.168.1.1");
-        let stats = state.stats();
-        assert_eq!(stats.concurrent_requests, 1);
+        let updated_stats = state.stats();
+        assert_eq!(updated_stats.concurrent_requests, 1);
     }
 }

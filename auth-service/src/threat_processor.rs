@@ -152,7 +152,8 @@ impl ThreatProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    #[cfg(feature = "threat-hunting")]
+    use crate::threat_processor::ThreatProcessor;
 
     #[tokio::test]
     async fn test_threat_processor_disabled_feature() {

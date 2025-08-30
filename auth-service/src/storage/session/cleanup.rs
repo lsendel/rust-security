@@ -1,9 +1,8 @@
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-#[cfg(feature = "monitoring")]
-use crate::security_metrics::SECURITY_METRICS;
-use crate::session_manager::{SessionError, SessionManager};
+use crate::storage::session::manager::{SessionError, SessionManager};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -144,20 +143,27 @@ impl SessionCleanupScheduler {
         info!("Starting session cleanup scheduler");
 
         // Log scheduler startup
-        SecurityLogger::log_event(
-            &mut SecurityEvent::new(
-                SecurityEventType::ConfigurationChange,
-                SecuritySeverity::Low,
-                "auth-service".to_string(),
-                "Session cleanup scheduler started".to_string(),
-            )
-            .with_detail(
-                "base_interval_secs".to_string(),
-                self.config.base_interval_secs,
-            )
-            .with_detail("jitter_percent".to_string(), self.config.jitter_percent)
-            .with_detail("batch_size".to_string(), self.config.batch_size),
+        let event = SecurityEvent::new(
+            SecurityEventType::SystemEvent,
+            SecuritySeverity::Low,
+            "auth-service".to_string(),
+            "Session cleanup scheduler started".to_string(),
+        )
+        .with_detail(
+            "base_interval_secs".to_string(),
+            serde_json::Value::Number(self.config.base_interval_secs.into()),
+        )
+        .with_detail(
+            "jitter_percent".to_string(),
+            serde_json::Value::String(self.config.jitter_percent.to_string()),
+        )
+        .with_detail(
+            "batch_size".to_string(),
+            serde_json::Value::Number(self.config.batch_size.into()),
         );
+
+        let logger = crate::security_logging::SecurityLogger::new(crate::security_logging::SecurityLoggerConfig::default());
+        logger.log_event(event);
 
         let mut cleanup_interval = self.create_jittered_interval();
         cleanup_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -201,21 +207,31 @@ impl SessionCleanupScheduler {
 
         // Log scheduler shutdown
         let stats = self.stats.read().await;
-        SecurityLogger::log_event(
-            &mut SecurityEvent::new(
-                SecurityEventType::ConfigurationChange,
-                SecuritySeverity::Low,
-                "auth-service".to_string(),
-                "Session cleanup scheduler stopped".to_string(),
-            )
-            .with_detail("total_runs".to_string(), stats.total_runs)
-            .with_detail("successful_runs".to_string(), stats.successful_runs)
-            .with_detail("failed_runs".to_string(), stats.failed_runs)
-            .with_detail(
-                "total_sessions_cleaned".to_string(),
-                stats.total_sessions_cleaned,
-            ),
+        let shutdown_event = SecurityEvent::new(
+            SecurityEventType::SystemEvent,
+            SecuritySeverity::Low,
+            "auth-service".to_string(),
+            "Session cleanup scheduler stopped".to_string(),
+        )
+        .with_detail(
+            "total_runs".to_string(),
+            serde_json::Value::Number(stats.total_runs.into()),
+        )
+        .with_detail(
+            "successful_runs".to_string(),
+            serde_json::Value::Number(stats.successful_runs.into()),
+        )
+        .with_detail(
+            "failed_runs".to_string(),
+            serde_json::Value::Number(stats.failed_runs.into()),
+        )
+        .with_detail(
+            "total_sessions_cleaned".to_string(),
+            serde_json::Value::Number(stats.total_sessions_cleaned.into()),
         );
+
+        let logger = crate::security_logging::SecurityLogger::new(crate::security_logging::SecurityLoggerConfig::default());
+        logger.log_event(shutdown_event);
 
         Ok(())
     }
@@ -326,9 +342,7 @@ impl SessionCleanupScheduler {
             #[cfg(feature = "monitoring")]
             if self.config.enable_metrics {
                 use crate::security_metrics::SECURITY_METRICS;
-                SECURITY_METRICS.security_events_total
-                    .with_label_values(&["session_cleanup", "info", "auth-service"])
-                    .inc();
+                SECURITY_METRICS.record_security_event("session_cleanup");
             }
 
             Ok(())
@@ -347,7 +361,7 @@ impl SessionCleanupScheduler {
                 Ok(_) => {
                     if attempt > 1 {
                         info!(
-                            operation_id = operation_result.operation_id,
+                            operation_id = result.operation_id,
                             attempt = attempt,
                             "Cleanup succeeded after retry"
                         );
@@ -357,7 +371,7 @@ impl SessionCleanupScheduler {
                 Err(e) => {
                     _last_error = Some(format!("{}", e));
                     warn!(
-                        operation_id = operation_result.operation_id,
+                        operation_id = result.operation_id,
                         attempt = attempt,
                         max_attempts = self.config.retry_attempts,
                         error = %e,
@@ -399,10 +413,10 @@ impl SessionCleanupScheduler {
                         .cleanup_sessions()
                         .await
                         .map_err(|e| CleanupError::SessionManager(e))?;
-                    operation_result.expired_sessions_cleaned += count;
+                    result.expired_sessions_cleaned += count;
 
                     debug!(
-                        operation_id = operation_result.operation_id,
+                        operation_id = result.operation_id,
                         count = count,
                         "Cleaned expired sessions"
                     );
@@ -424,21 +438,24 @@ impl SessionCleanupScheduler {
         }
 
         // Log cleanup results
-        if operation_result.total_cleaned() > 0 {
-            SecurityLogger::log_event(
-                &mut SecurityEvent::new(
-                    SecurityEventType::DataAccess,
-                    SecuritySeverity::Low,
-                    "auth-service".to_string(),
-                    "Session cleanup completed".to_string(),
-                )
-                .with_detail("operation_id".to_string(), operation_result.operation_id)
-                .with_detail(
-                    "expired_cleaned".to_string(),
-                    operation_result.expired_sessions_cleaned,
-                )
-                .with_detail("total_cleaned".to_string(), operation_result.total_cleaned()),
+        if result.total_cleaned() > 0 {
+            let cleanup_event = SecurityEvent::new(
+                SecurityEventType::SystemEvent,
+                SecuritySeverity::Low,
+                "auth-service".to_string(),
+                "Session cleanup completed".to_string(),
+            )
+            .with_detail("operation_id".to_string(), serde_json::Value::String(result.operation_id.to_string()))
+            .with_detail(
+                "expired_cleaned".to_string(),
+                serde_json::Value::Number(result.expired_sessions_cleaned.into()),
+            )
+            .with_detail(
+                "total_cleaned".to_string(),
+                serde_json::Value::Number(result.total_cleaned().into()),
             );
+
+            crate::security_logging::log_event(&cleanup_event);
         }
 
         Ok(())
@@ -450,11 +467,11 @@ impl SessionCleanupScheduler {
 
         stats.total_runs += 1;
         stats.successful_runs += 1;
-        stats.total_sessions_cleaned += operation_result.total_cleaned() as u64;
-        stats.expired_sessions_cleaned += operation_result.expired_sessions_cleaned as u64;
-        stats.inactive_sessions_cleaned += operation_result.inactive_sessions_cleaned as u64;
-        stats.revoked_sessions_cleaned += operation_result.revoked_sessions_cleaned as u64;
-        stats.orphaned_sessions_cleaned += operation_result.orphaned_sessions_cleaned as u64;
+        stats.total_sessions_cleaned += result.total_cleaned() as u64;
+        stats.expired_sessions_cleaned += result.expired_sessions_cleaned as u64;
+        stats.inactive_sessions_cleaned += result.inactive_sessions_cleaned as u64;
+        stats.revoked_sessions_cleaned += result.revoked_sessions_cleaned as u64;
+        stats.orphaned_sessions_cleaned += result.orphaned_sessions_cleaned as u64;
         stats.last_cleanup_time = Some(current_timestamp());
 
         // Update average cleanup time using exponential moving average
@@ -641,9 +658,9 @@ mod tests {
 
         // Wait for shutdown with longer timeout
         let result = tokio::time::timeout(Duration::from_secs(10), handle).await;
-        assert!(operation_result.is_ok(), "Scheduler should shutdown within timeout");
+        assert!(result.is_ok(), "Scheduler should shutdown within timeout");
         assert!(
-            operation_result.unwrap().is_ok(),
+            result.unwrap().is_ok(),
             "Scheduler should shutdown without error"
         );
         assert!(!scheduler.is_running());
@@ -665,11 +682,11 @@ mod tests {
     #[test]
     fn test_cleanup_cycle_result() {
         let mut result = CleanupCycleResult::new(123);
-        assert_eq!(operation_result.operation_id, 123);
-        assert_eq!(operation_result.total_cleaned(), 0);
+        assert_eq!(result.operation_id, 123);
+        assert_eq!(result.total_cleaned(), 0);
 
-        operation_result.expired_sessions_cleaned = 5;
-        operation_result.inactive_sessions_cleaned = 3;
-        assert_eq!(operation_result.total_cleaned(), 8);
+        result.expired_sessions_cleaned = 5;
+        result.inactive_sessions_cleaned = 3;
+        assert_eq!(result.total_cleaned(), 8);
     }
 }

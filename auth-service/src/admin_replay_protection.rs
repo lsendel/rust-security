@@ -60,20 +60,31 @@ impl ReplayProtection {
         &self,
         nonce: &str,
         timestamp: u64,
-        _signature: &str,
+        signature: &str,
+        secret: &str,
+        method: &str,
+        path: &str,
     ) -> Result<(), AuthError> {
-        // Step 1: Validate timestamp is within acceptable window
+        // Step 1: Verify HMAC signature first
+        if !Self::verify_signature(secret, method, path, nonce, timestamp, signature) {
+            warn!("Invalid signature provided for admin request");
+            return Err(AuthError::InvalidRequest {
+                reason: "Invalid request signature".to_string(),
+            });
+        }
+
+        // Step 2: Validate timestamp is within acceptable window
         self.validate_timestamp(timestamp)?;
 
-        // Step 2: Check if nonce has been used
+        // Step 3: Check if nonce has been used
         if self.is_nonce_used(nonce).await? {
-            warn!("Replay attack detected: nonce {} already used", nonce);
+            warn!("Replay attack detected: nonce already used");
             return Err(AuthError::InvalidRequest {
                 reason: "Request replay detected".to_string(),
             });
         }
 
-        // Step 3: Store nonce to prevent future replay
+        // Step 4: Store nonce to prevent future replay
         self.store_nonce(nonce, timestamp).await?;
 
         Ok(())
@@ -328,6 +339,9 @@ mod tests {
     #[tokio::test]
     async fn test_replay_protection() {
         let replay_protection = ReplayProtection::new(None, 300, 60);
+        let secret = "test_secret";
+        let method = "POST";
+        let path = "/admin/test";
 
         let nonce = ReplayProtection::generate_nonce();
         let timestamp = SystemTime::now()
@@ -335,15 +349,17 @@ mod tests {
             .unwrap()
             .as_secs();
 
+        let signature = ReplayProtection::create_signature(secret, method, path, &nonce, timestamp);
+
         // First request should succeed
         assert!(replay_protection
-            .validate_request(&nonce, timestamp, "signature")
+            .validate_request(&nonce, timestamp, &signature, secret, method, path)
             .await
             .is_ok());
 
         // Replay should fail
         assert!(replay_protection
-            .validate_request(&nonce, timestamp, "signature")
+            .validate_request(&nonce, timestamp, &signature, secret, method, path)
             .await
             .is_err());
     }
@@ -354,7 +370,7 @@ mod tests {
         let method = "POST";
         let path = "/admin/users";
         let nonce = "test_nonce";
-        let timestamp = 1234567890;
+        let timestamp = 1_234_567_890;
 
         let signature = ReplayProtection::create_signature(secret, method, path, nonce, timestamp);
 

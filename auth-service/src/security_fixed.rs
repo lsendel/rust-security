@@ -18,7 +18,9 @@ static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::ne
 
 /// Generate a token binding value from client information using secure practices
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
+    let timestamp = chrono::Utc::now().timestamp();
     let salt = TOKEN_BINDING_SALT.as_bytes();
+    
 
     // Use HMAC-SHA256 for secure binding
     let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
@@ -28,7 +30,7 @@ pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
     ctx.update(b"|"); // Separator to prevent collision attacks
     ctx.update(user_agent.as_bytes());
     ctx.update(b"|");
-    ctx.update(&chrono::Utc::now().timestamp().to_be_bytes()); // Add timestamp
+    ctx.update(&timestamp.to_be_bytes()); // Add timestamp
 
     let tag = ctx.sign();
     base64::engine::general_purpose::STANDARD.encode(tag.as_ref())
@@ -48,9 +50,11 @@ pub fn validate_token_binding(
 
     // For validation, we need to check against recent timestamps
     let now = chrono::Utc::now().timestamp();
+    
 
     // Check multiple recent timestamps to account for clock skew
-    for offset in 0..=max_age_seconds {
+    // Check both backwards and forwards to handle generation/validation timing differences
+    for offset in -5..=max_age_seconds {
         let test_timestamp = now - offset;
 
         let salt = TOKEN_BINDING_SALT.as_bytes();
@@ -64,6 +68,7 @@ pub fn validate_token_binding(
         ctx.update(&test_timestamp.to_be_bytes());
 
         let expected_tag = ctx.sign();
+
 
         // Use constant-time comparison to prevent timing attacks
         if hmac::verify(&key, &stored_bytes, expected_tag.as_ref()).is_ok() {
@@ -331,7 +336,13 @@ mod tests {
         let challenge = generate_code_challenge(&verifier).unwrap();
 
         assert!(verify_code_challenge(&verifier, &challenge).unwrap());
-        assert!(!verify_code_challenge("wrong_verifier", &challenge).unwrap());
+        
+        // Test with an invalid verifier (too short) - should return an error
+        assert!(verify_code_challenge("wrong_verifier", &challenge).is_err());
+        
+        // Test with a valid length but wrong verifier
+        let wrong_verifier = generate_code_verifier().unwrap();
+        assert!(!verify_code_challenge(&wrong_verifier, &challenge).unwrap());
     }
 
     #[test]

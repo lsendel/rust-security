@@ -124,38 +124,42 @@ impl PolicyCache {
         }
 
         let key = Self::generate_cache_key(request);
-        let policy_type = &request.action; // Used in metrics collection
+        let _policy_type = &request.action; // Used in metrics collection
 
         if let Some(mut entry) = self.cache.get_mut(&key) {
             // Check if entry is still valid
             if Instant::now() < entry.expires_at {
-                // Update hit count and stats
-                entry.hit_count += 1;
+                // Update hit count and stats atomically
+                let response = entry.response.clone();
+                let hit_count = entry.hit_count + 1;
+                entry.hit_count = hit_count;
+
+                // Acquire stats lock once for both updates
                 let mut stats = self.stats.write().await;
                 stats.hits += 1;
 
                 info!(
                     cache_key = %key,
-                    decision = %entry.response.decision,
-                    hit_count = entry.hit_count,
+                    decision = %response.decision,
+                    hit_count = hit_count,
                     age_seconds = entry.created_at.elapsed().as_secs(),
                     "Policy cache hit"
                 );
 
                 // Record cache hit metrics
-                let duration = start_time.elapsed();
+                let _duration = start_time.elapsed();
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .policy_cache_operations
-                    .with_label_values(&["get", "hit", policy_type])
+                    .with_label_values(&["get", "hit", _policy_type])
                     .inc();
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .cache_operation_duration
                     .with_label_values(&["policy", "get"])
-                    .observe(duration.as_secs_f64());
+                    .observe(_duration.as_secs_f64());
 
-                return Some(entry.response.clone());
+                return Some(response);
             }
 
             // Entry expired, remove it
@@ -176,11 +180,11 @@ impl PolicyCache {
         stats.misses += 1;
 
         // Record cache miss metrics
-        let duration = start_time.elapsed();
+        let _duration = start_time.elapsed();
         #[cfg(feature = "monitoring")]
         METRICS
             .policy_cache_operations
-            .with_label_values(&["get", "miss", policy_type])
+            .with_label_values(&["get", "miss", _policy_type])
             .inc();
 
         None
@@ -201,8 +205,8 @@ impl PolicyCache {
             return Ok(());
         }
 
-        // Check cache cache_size limit before insertion
-        if self.cache.len() >= self.config.max_entries {
+        // Check cache size limit before insertion
+        if self.cache.len() > self.config.max_entries {
             self.evict_lru().await;
         }
 
@@ -569,7 +573,7 @@ mod tests {
             serde_json::json!({"type": "document"}),
             serde_json::json!({
                 "request_id": "req-123",
-                "timestamp": 1234567890,
+                "timestamp": 1_234_567_890,
                 "mfa_required": true,
                 "important_context": "keep_me"
             }),

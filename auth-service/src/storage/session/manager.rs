@@ -1,9 +1,11 @@
 // Secure session management with Redis backend and security features
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecurityLoggerConfig, SecuritySeverity};
 #[cfg(feature = "monitoring")]
 use crate::security_metrics::SECURITY_METRICS;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -232,18 +234,19 @@ impl SessionManager {
         .with_user_id(user_id)
         .with_ip_address(ip_address)
         .with_session_id(session.id.clone())
-        .with_detail("duration_seconds".to_string(), duration)
-        .with_detail("has_user_agent".to_string(), user_agent.is_some());
+        .with_detail("duration_seconds".to_string(), serde_json::Value::Number(duration.into()))
+        .with_detail("has_user_agent".to_string(), serde_json::Value::Bool(user_agent.is_some()));
 
         if let Some(client_id) = &client_id {
             event = event.with_client_id(client_id.clone());
         }
 
-        SecurityLogger::log_event(&event);
+        let logger = SecurityLogger::new(SecurityLoggerConfig::default());
+        logger.log_event(event);
 
         // Update metrics
         #[cfg(feature = "monitoring")]
-        SECURITY_METRICS.active_sessions.inc();
+        SECURITY_METRICS.record_security_event("session_created");
 
         Ok(session)
     }
@@ -288,7 +291,7 @@ impl SessionManager {
             match self.delete_session_from_redis(client, session_id).await {
                 Ok(_) => {
                     #[cfg(feature = "monitoring")]
-                    SECURITY_METRICS.active_sessions.dec();
+                    SECURITY_METRICS.record_security_event("session_destroyed");
                     return Ok(());
                 }
                 Err(e) => {
@@ -301,7 +304,7 @@ impl SessionManager {
         let mut store = self.memory_store.write().await;
         if store.remove(session_id).is_some() {
             #[cfg(feature = "monitoring")]
-            SECURITY_METRICS.active_sessions.dec();
+            SECURITY_METRICS.record_security_event("session_removed");
         }
         Ok(())
     }
@@ -320,9 +323,10 @@ impl SessionManager {
             self.store_session(&session).await?;
 
             // Log session refresh
-            SecurityLogger::log_event(
-                &SecurityEvent::new(
-                    SecurityEventType::DataAccess,
+            let logger = SecurityLogger::new(SecurityLoggerConfig::default());
+            logger.log_event(
+                SecurityEvent::new(
+                    SecurityEventType::SystemEvent,
                     SecuritySeverity::Low,
                     "auth-service".to_string(),
                     "Session refreshed".to_string(),
@@ -335,7 +339,7 @@ impl SessionManager {
                 .with_session_id(session.id.clone())
                 .with_user_id(session.user_id.clone())
                 .with_ip_address(session.ip_address.clone())
-                .with_detail("new_expires_at".to_string(), session.expires_at),
+                .with_detail("new_expires_at".to_string(), serde_json::Value::Number(session.expires_at.into())),
             );
 
             Ok(Some(session))
@@ -359,8 +363,9 @@ impl SessionManager {
             self.delete_session(&session.id).await?;
 
             // Log session invalidation
-            SecurityLogger::log_event(
-                &SecurityEvent::new(
+            let logger = SecurityLogger::new(SecurityLoggerConfig::default());
+            logger.log_event(
+                SecurityEvent::new(
                     SecurityEventType::AuthenticationFailure,
                     SecuritySeverity::Medium,
                     "auth-service".to_string(),
@@ -374,7 +379,7 @@ impl SessionManager {
                 .with_session_id(session.id.clone())
                 .with_user_id(session.user_id.clone())
                 .with_ip_address(session.ip_address.clone())
-                .with_detail("reason".to_string(), "user_session_invalidation"),
+                .with_detail("reason".to_string(), serde_json::Value::String("user_session_invalidation".to_string())),
             );
         }
 
@@ -407,7 +412,7 @@ impl SessionManager {
 
         if cleaned_count > 0 {
             #[cfg(feature = "monitoring")]
-            SECURITY_METRICS.active_sessions.sub(cleaned_count as i64);
+            SECURITY_METRICS.record_security_event("sessions_cleaned");
             info!(
                 cleaned_sessions = cleaned_count,
                 "Cleaned up expired sessions"
@@ -588,8 +593,9 @@ impl SessionManager {
                 self.delete_session(&session.id).await?;
 
                 // Log session eviction
-                SecurityLogger::log_event(
-                    &SecurityEvent::new(
+                let logger = SecurityLogger::new(SecurityLoggerConfig::default());
+                logger.log_event(
+                    SecurityEvent::new(
                         SecurityEventType::AuthenticationFailure,
                         SecuritySeverity::Low,
                         "auth-service".to_string(),
@@ -603,7 +609,7 @@ impl SessionManager {
                     .with_session_id(session.id.clone())
                     .with_user_id(session.user_id.clone())
                     .with_ip_address(session.ip_address.clone())
-                    .with_detail("reason".to_string(), "concurrent_session_limit"),
+                    .with_detail("reason".to_string(), serde_json::Value::String("concurrent_session_limit".to_string())),
                 );
             }
         }

@@ -3,6 +3,15 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use validator::{Validate, ValidationError, ValidationErrors};
 
+/// Helper function to create a ValidationError with just a code
+fn validation_error(code: &'static str) -> ValidationError {
+    ValidationError {
+        code: std::borrow::Cow::Borrowed(code),
+        message: None,
+        params: std::collections::HashMap::new(),
+    }
+}
+
 /// Maximum lengths for various input fields
 pub const MAX_CLIENT_ID_LENGTH: usize = 255;
 pub const MAX_CLIENT_SECRET_LENGTH: usize = 128;
@@ -481,27 +490,27 @@ pub struct RateLimitConfig {
 fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     // Check for valid scope format (space-separated tokens)
     if scope.is_empty() {
-        return Err(ValidationError::new("scope_empty"));
+        return Err(validation_error("scope_empty"));
     }
 
     let scopes: Vec<&str> = scope.split_whitespace().collect();
     if scopes.is_empty() {
-        return Err(ValidationError::new("scope_invalid"));
+        return Err(validation_error("scope_invalid"));
     }
 
     // Validate each scope token
     for scope_token in scopes {
         if scope_token.is_empty() {
-            return Err(ValidationError::new("scope_token_empty"));
+            return Err(validation_error("scope_token_empty"));
         }
 
         // Scope tokens should not contain certain characters
         if scope_token.contains(['\"', '\\', '\r', '\n', '\t']) {
-            return Err(ValidationError::new("scope_token_invalid_chars"));
+            return Err(validation_error("scope_token_invalid_chars"));
         }
 
         if scope_token.len() > 100 {
-            return Err(ValidationError::new("scope_token_too_long"));
+            return Err(validation_error("scope_token_too_long"));
         }
     }
 
@@ -523,7 +532,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
             ')' => {
                 paren_count -= 1;
                 if paren_count < 0 {
-                    return Err(ValidationError::new("scim_filter_unbalanced_parens"));
+                    return Err(validation_error("scim_filter_unbalanced_parens"));
                 }
             }
             _ => {}
@@ -531,7 +540,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     }
 
     if paren_count != 0 {
-        return Err(ValidationError::new("scim_filter_unbalanced_parens"));
+        return Err(validation_error("scim_filter_unbalanced_parens"));
     }
 
     // Check for SQL injection patterns
@@ -543,7 +552,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
 
     for pattern in &sql_patterns {
         if filter_lower.contains(pattern) {
-            return Err(ValidationError::new("scim_filter_sql_injection"));
+            return Err(validation_error("scim_filter_sql_injection"));
         }
     }
 
@@ -551,7 +560,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     let xss_patterns = ["<script", "javascript:", "onload=", "onerror="];
     for pattern in &xss_patterns {
         if filter_lower.contains(pattern) {
-            return Err(ValidationError::new("scim_filter_xss_attempt"));
+            return Err(validation_error("scim_filter_xss_attempt"));
         }
     }
 
@@ -562,7 +571,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
 fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
     // Basic phone number validation
     if phone.is_empty() {
-        return Err(ValidationError::new("phone_empty"));
+        return Err(validation_error("phone_empty"));
     }
 
     // Allow digits, spaces, hyphens, parentheses, and + for international format
@@ -570,12 +579,12 @@ fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
         .chars()
         .all(|c| c.is_ascii_digit() || " -+()".contains(c))
     {
-        return Err(ValidationError::new("phone_invalid_chars"));
+        return Err(validation_error("phone_invalid_chars"));
     }
 
     // Must contain at least some digits
     if !phone.chars().any(|c| c.is_ascii_digit()) {
-        return Err(ValidationError::new("phone_no_digits"));
+        return Err(validation_error("phone_no_digits"));
     }
 
     Ok(())
@@ -591,13 +600,13 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     if origin.starts_with("http://") || origin.starts_with("https://") {
         // Basic URL validation
         if url::Url::parse(origin).is_err() {
-            return Err(ValidationError::new("origin_invalid_url"));
+            return Err(validation_error("origin_invalid_url"));
         }
     } else if origin.starts_with("localhost:") || origin == "localhost" {
         // Allow localhost variations
         return Ok(());
     } else {
-        return Err(ValidationError::new("origin_invalid_format"));
+        return Err(validation_error("origin_invalid_format"));
     }
 
     Ok(())
@@ -666,7 +675,7 @@ fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
 
     // Require at least 4 out of 5 criteria for a strong password
     if score < 4 || !errors.is_empty() {
-        return Err(ValidationError::new("password_too_weak"));
+        return Err(validation_error("password_too_weak"));
     }
 
     Ok(())

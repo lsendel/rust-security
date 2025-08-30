@@ -420,6 +420,7 @@ mod tests {
     use super::*;
     use chrono::Utc;
 
+    #[cfg(feature = "threat-hunting")]
     #[tokio::test]
     async fn test_feature_extraction() {
         let config = BehavioralFeatureConfig::default();

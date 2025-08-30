@@ -519,7 +519,7 @@ mod tests {
         let profiler = AdvancedUserBehaviorProfiler::new(config);
 
         // Test initialization (Redis connection may fail in test environment)
-        let result = profiler.initialize().await;
+        let _result = profiler.initialize().await;
         // Don't assert success since Redis may not be available in tests
 
         let stats = profiler.get_statistics().await;

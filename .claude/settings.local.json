@@ -11,7 +11,8 @@
       "Bash(cargo fmt:*)",
       "Bash(sed:*)",
       "Bash(cargo clippy:*)",
-      "Bash(RUSTFLAGS=\"-W warnings\" cargo check --all-features)"
+      "Bash(RUSTFLAGS=\"-W warnings\" cargo check --all-features)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

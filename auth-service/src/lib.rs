@@ -92,12 +92,12 @@ pub mod crypto_unified;
 pub mod jwks_rotation;
 pub mod jwt_secure;
 pub mod keys;
-pub mod policy_cache;
 pub mod security;
-pub mod session_store;
-pub mod token_cache;
 pub mod validation;
 pub mod validation_secure;
+
+// Consolidated storage layer
+pub mod storage;
 
 // Feature-gated modules
 #[cfg(feature = "rate-limiting")]
@@ -122,10 +122,7 @@ pub mod observability_init;
 pub mod per_ip_rate_limit;
 #[cfg(feature = "monitoring")]
 pub mod security_metrics;
-#[cfg(feature = "api-keys")]
-pub mod sql_store;
-#[cfg(feature = "enhanced-session-store")]
-pub mod store;
+
 #[cfg(feature = "threat-hunting")]
 pub mod threat_attack_patterns;
 #[cfg(feature = "threat-hunting")]
@@ -168,7 +165,7 @@ pub mod security_headers;
 pub mod security_logging;
 pub mod security_monitoring;
 pub mod security_tests;
-pub mod session_secure;
+
 pub mod test_mode_security;
 pub mod tls_security;
 
@@ -185,15 +182,15 @@ pub const MAX_REQUEST_BODY_SIZE: usize = constants::security::MAX_REQUEST_BODY_S
 #[derive(Clone)]
 pub struct AppState {
     #[cfg(feature = "enhanced-session-store")]
-    pub store: Arc<crate::store::HybridStore>,
+    pub store: Arc<crate::storage::store::hybrid::HybridStore>,
     #[cfg(feature = "api-keys")]
     pub api_key_store: Arc<crate::api_key_store::ApiKeyStore>,
-    pub session_store: Arc<crate::session_store::RedisSessionStore>,
+    pub session_store: Arc<crate::storage::session::store::RedisSessionStore>,
     pub token_store: Arc<std::sync::RwLock<std::collections::HashMap<String, common::TokenRecord>>>,
     pub client_credentials: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
     pub allowed_scopes: Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
     pub authorization_codes: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
-    pub policy_cache: Arc<crate::policy_cache::PolicyCache>,
+    pub policy_cache: Arc<crate::storage::cache::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<std::sync::RwLock<bool>>,
     pub jwks_manager: Arc<crate::jwks_rotation::JwksManager>,
 }

@@ -67,7 +67,7 @@ impl OptimizedRedisStore {
     /// Returns an error if:
     /// - Redis connection cannot be established
     /// - Connection pool initialization fails
-    pub async fn new(redis_url: &str) -> Result<Self> {
+    pub async fn new(_redis_url: &str) -> Result<Self> {
         let store = Self {
             connection_pool: Arc::new(OnceCell::new()),
         };
@@ -120,10 +120,9 @@ impl OptimizedTokenStore {
                 if let Some(cached) = map.get(token) {
                     if !cached.is_expired() {
                         return Ok(cached.record.clone());
-                    } else {
-                        // Remove expired entry
-                        map.remove(token);
                     }
+                    // Remove expired entry
+                    map.remove(token);
                 }
 
                 // Return default inactive record
@@ -371,7 +370,7 @@ impl OptimizedTokenStore {
         match self {
             Self::InMemory(map) => {
                 let mut removed_count = 0;
-                let now = SystemTime::now()
+                let _now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs();
@@ -498,8 +497,8 @@ mod tests {
             scope: Some("read write".to_string()),
             client_id: Some("test-client".to_string()),
             username: Some("test-user".to_string()),
-            exp: Some(1234567890),
-            iat: Some(1234567890),
+            exp: Some(1_234_567_890),
+            iat: Some(1_234_567_890),
             nbf: None,
             sub: Some("test-user".to_string()),
             aud: None,

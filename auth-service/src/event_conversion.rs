@@ -1,5 +1,6 @@
 //! Event conversion utilities for bridging core security and threat detection systems
 
+
 #[cfg(feature = "threat-hunting")]
 use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
 #[cfg(feature = "threat-hunting")]
@@ -13,7 +14,9 @@ impl From<SecurityEventType> for ThreatSecurityEventType {
     fn from(event_type: SecurityEventType) -> Self {
         match event_type {
             SecurityEventType::AuthenticationFailure => Self::AuthenticationFailure,
-            SecurityEventType::AuthenticationSuccess | SecurityEventType::Login => Self::AuthenticationSuccess,
+            SecurityEventType::AuthenticationSuccess | SecurityEventType::Login => {
+                Self::AuthenticationSuccess
+            }
             SecurityEventType::AuthenticationAttempt => Self::AuthenticationAttempt,
             SecurityEventType::AuthorizationDenied => Self::AuthorizationDenied,
             SecurityEventType::SuspiciousActivity => Self::SuspiciousActivity,

@@ -152,7 +152,7 @@ mod tests {
 
         let token_data = create_token_data(
             "user123".to_string(),
-            9999999999, // Far future
+            9_999_999_999, // Far future
             vec!["read".to_string(), "write".to_string()],
         );
 
