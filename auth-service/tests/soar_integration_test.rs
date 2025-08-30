@@ -2,11 +2,12 @@
 #![cfg(feature = "soar")]
 
 use auth_service::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
-use auth_service::soar_case_management::*;
-use auth_service::soar_core::*;
-use auth_service::soar_correlation::*;
-use auth_service::soar_executors::*;
-use auth_service::soar_workflow::*;
+// TODO: Uncomment when SOAR modules are properly exposed
+// use auth_service::modules::soar::case_management::*;
+// use auth_service::soar_core::*;
+// use auth_service::soar_correlation::*;
+// use auth_service::soar_executors::*;
+// use auth_service::soar_workflow::*;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::collections::HashMap;

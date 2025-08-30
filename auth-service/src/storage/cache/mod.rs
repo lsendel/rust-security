@@ -26,6 +26,10 @@ pub use token_cache::{LruTokenCache, TokenCacheConfig};
 use async_trait::async_trait;
 use std::fmt::Debug;
 
+// Error conversion imports
+use redis;
+use serde_json;
+
 /// Common cache operations trait
 #[async_trait]
 pub trait Cache<K, V>: Send + Sync + Debug
@@ -69,9 +73,9 @@ pub struct CacheStats {
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
     #[error("Redis connection error: {0}")]
-    RedisError(String),
+    RedisError(#[from] redis::RedisError),
     #[error("Serialization error: {0}")]
-    SerializationError(String),
+    SerializationError(#[from] serde_json::Error),
     #[error("Cache operation timeout")]
     Timeout,
     #[error("Cache is full")]

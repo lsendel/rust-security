@@ -534,7 +534,7 @@ pub mod load_testing {
 
     /// Comprehensive load test with performance monitoring
     pub async fn run_comprehensive_load_test(
-        suite: &PerformanceTestSuite,
+        _suite: &PerformanceTestSuite,
         test_name: &str,
         concurrent_users: usize,
         duration_secs: u64,
@@ -623,7 +623,7 @@ pub mod load_testing {
         })
     }
 
-    async fn simulate_auth_operation(user_id: usize, operation_id: usize) {
+    async fn simulate_auth_operation(_user_id: usize, operation_id: usize) {
         // Simulate various authentication operations
         match operation_id % 4 {
             0 => {

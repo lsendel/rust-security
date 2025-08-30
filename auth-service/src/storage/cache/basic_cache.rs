@@ -8,6 +8,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
+use super::CacheError;
+
 #[cfg(feature = "monitoring")]
 use crate::metrics::MetricsHelper;
 
@@ -81,9 +83,7 @@ impl Cache {
     /// - Redis connection fails when Redis is enabled
     /// - Cache configuration is invalid
     /// - Memory allocation fails
-    pub async fn new(
-        config: CacheConfig,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn new(config: CacheConfig) -> Result<Self, CacheError> {
         let redis_client = if config.use_redis && config.redis_url.is_some() {
             match Client::open(config.redis_url.as_ref().unwrap().as_str()) {
                 Ok(client) => {
@@ -116,7 +116,29 @@ impl Cache {
         })
     }
 
-    /// Get an item from cache
+    /// Get a value from the cache
+    ///
+    /// This method attempts to retrieve a value from the cache using a hierarchical lookup:
+    /// 1. Redis (if configured and available)
+    /// 2. In-memory cache (fallback)
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type to deserialize the cached value into. Must implement `Deserialize`.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The cache key to look up
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(T)` if the key exists and deserialization succeeds, `None` otherwise.
+    ///
+    /// # Performance
+    ///
+    /// - Redis lookups are O(1) with network latency
+    /// - Memory lookups are O(1) with hash map access
+    /// - Automatic fallback from Redis to memory on failure
     pub async fn get<T>(&self, key: &str) -> Option<T>
     where
         T: for<'de> Deserialize<'de>,
@@ -171,20 +193,41 @@ impl Cache {
         }
     }
 
-    /// Set an item in cache
+    /// Set a value in the cache
+    ///
+    /// This method stores a value in the cache using a hierarchical storage strategy:
+    /// 1. Redis (if configured and available)
+    /// 2. In-memory cache (always available as fallback)
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The type to serialize into the cache. Must implement `Serialize`.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The cache key to store the value under
+    /// * `value` - The value to store in the cache
+    /// * `ttl` - Optional time-to-live duration. Uses default TTL if `None`.
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - Value serialization fails
     /// - Memory allocation fails
+    /// - Redis connection fails (when Redis is enabled)
     /// - Cache operation fails
+    ///
+    /// # Performance
+    ///
+    /// - Redis storage is O(1) with network latency
+    /// - Memory storage is O(1) with hash map access
+    /// - Automatic fallback to memory when Redis fails
     pub async fn set<T>(
         &self,
         key: &str,
         value: &T,
         ttl: Option<Duration>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    ) -> Result<(), CacheError>
     where
         T: Serialize,
     {
@@ -220,12 +263,27 @@ impl Cache {
         Ok(())
     }
 
-    /// Delete an item from cache
+    /// Delete a value from the cache
+    ///
+    /// This method removes a value from all cache layers:
+    /// 1. Redis (if configured and available)
+    /// 2. In-memory cache (always attempted)
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The cache key to delete
     ///
     /// # Errors
     ///
-    /// Returns an error if cache deletion operation fails
-    pub async fn delete(&self, key: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    /// Returns an error if:
+    /// - Redis deletion fails (when Redis is enabled)
+    /// - Memory cache deletion fails
+    ///
+    /// # Note
+    ///
+    /// This method does not return an error if Redis is unavailable or fails.
+    /// It will log a warning and continue with memory cache deletion.
+    pub async fn delete(&self, key: &str) -> Result<(), CacheError> {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
         // Delete from Redis if available
@@ -247,7 +305,7 @@ impl Cache {
     /// # Errors
     ///
     /// Returns an error if cache clear operation fails
-    pub async fn clear(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn clear(&self) -> Result<(), CacheError> {
         // Clear Redis if available
         if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.clear_redis().await {
@@ -262,7 +320,22 @@ impl Cache {
         Ok(())
     }
 
-    /// Get cache statistics
+    /// Get cache statistics and health information
+    ///
+    /// This method returns real-time statistics about the cache's current state,
+    /// including memory usage, Redis availability, and configuration limits.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `CacheStats` struct containing:
+    /// - Current memory cache size (number of items)
+    /// - Redis availability status
+    /// - Maximum configured memory cache size
+    ///
+    /// # Performance
+    ///
+    /// This method acquires a read lock on the memory cache, so it may block
+    /// if there are concurrent write operations.
     pub async fn stats(&self) -> CacheStats {
         let memory_size = self.memory_cache.read().await.len();
 
@@ -274,10 +347,7 @@ impl Cache {
     }
 
     // Redis operations
-    async fn get_from_redis<T>(
-        &self,
-        key: &str,
-    ) -> Result<Option<T>, Box<dyn std::error::Error + Send + Sync>>
+    async fn get_from_redis<T>(&self, key: &str) -> Result<Option<T>, CacheError>
     where
         T: for<'de> Deserialize<'de>,
     {
@@ -298,7 +368,7 @@ impl Cache {
         key: &str,
         data: &[u8],
         ttl_seconds: u64,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), CacheError> {
         if let Some(ref client) = self.redis_client {
             let mut conn = client.get_multiplexed_async_connection().await?;
             conn.set_ex::<_, _, ()>(key, data, ttl_seconds).await?;
@@ -306,10 +376,7 @@ impl Cache {
         Ok(())
     }
 
-    async fn delete_from_redis(
-        &self,
-        key: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn delete_from_redis(&self, key: &str) -> Result<(), CacheError> {
         if let Some(ref client) = self.redis_client {
             let mut conn = client.get_multiplexed_async_connection().await?;
             let _: i32 = conn.del(key).await?;
@@ -317,7 +384,7 @@ impl Cache {
         Ok(())
     }
 
-    async fn clear_redis(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn clear_redis(&self) -> Result<(), CacheError> {
         if let Some(ref client) = self.redis_client {
             let mut conn = client.get_multiplexed_async_connection().await?;
             let pattern = format!("{}*", self.config.key_prefix);
@@ -412,10 +479,8 @@ pub struct CachedTokenInfo {
 pub async fn cached_token_introspection(
     cache: &Cache,
     token: &str,
-    introspect_fn: impl std::future::Future<
-        Output = Result<CachedTokenInfo, Box<dyn std::error::Error + Send + Sync>>,
-    >,
-) -> Result<CachedTokenInfo, Box<dyn std::error::Error + Send + Sync>> {
+    introspect_fn: impl std::future::Future<Output = Result<CachedTokenInfo, CacheError>>,
+) -> Result<CachedTokenInfo, CacheError> {
     let cache_key = format!("token_introspect:{token}");
 
     // Try to get from cache first

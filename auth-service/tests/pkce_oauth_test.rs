@@ -1,6 +1,6 @@
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
-use auth_service::session_store::RedisSessionStore;
-use auth_service::store::HybridStore;
+use auth_service::storage::session::store::RedisSessionStore;
+use auth_service::storage::store::hybrid::HybridStore;
 use auth_service::{api_key_store::ApiKeyStore, app, AppState};
 use common::TokenRecord;
 use reqwest::header::{CONTENT_TYPE, LOCATION};
@@ -50,8 +50,8 @@ async fn spawn_app() -> String {
             "profile".to_string(),
         ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
-        policy_cache: std::sync::Arc::new(auth_service::policy_cache::PolicyCache::new(
-            auth_service::policy_cache::PolicyCacheConfig::default(),
+        policy_cache: std::sync::Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
+            auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
         )),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
         api_key_store: Arc::new(api_key_store),

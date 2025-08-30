@@ -1,8 +1,8 @@
 // Test utilities and helpers for comprehensive testing
 
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
-use auth_service::session_store::RedisSessionStore;
-use auth_service::store::HybridStore;
+use auth_service::storage::session::store::RedisSessionStore;
+use auth_service::storage::store::hybrid::HybridStore;
 use auth_service::{api_key_store::ApiKeyStore, app, AppState};
 // Removed unused import: use axum::extract::Request;
 use axum::response::Response;
@@ -41,8 +41,8 @@ impl TestFixture {
         client_credentials.insert("read_client".to_string(), "read_secret".to_string());
         client_credentials.insert("write_client".to_string(), "write_secret".to_string());
 
-        let policy_cache_config = auth_service::policy_cache::PolicyCacheConfig::default();
-        let policy_cache = Arc::new(auth_service::policy_cache::PolicyCache::new(
+        let policy_cache_config = auth_service::storage::cache::policy_cache::PolicyCacheConfig::default();
+        let policy_cache = Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
             policy_cache_config,
         ));
 

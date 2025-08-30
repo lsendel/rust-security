@@ -11,8 +11,8 @@ async fn spawn_app() -> String {
     let addr = listener.local_addr().unwrap();
 
     // Create minimal test state
-    let store = Arc::new(auth_service::store::HybridStore::new().await);
-    let session_store = Arc::new(auth_service::session_store::RedisSessionStore::new(
+    let store = Arc::new(auth_service::storage::store::hybrid::HybridStore::new().await);
+    let session_store = Arc::new(auth_service::storage::session::store::RedisSessionStore::new(
         None, // Use in-memory fallback for tests
     ));
 
@@ -40,8 +40,8 @@ async fn spawn_app() -> String {
             "email".to_string(),
         ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
-        policy_cache: Arc::new(auth_service::policy_cache::PolicyCache::new(
-            auth_service::policy_cache::PolicyCacheConfig::default(),
+        policy_cache: Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
+            auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
         )),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
         api_key_store: Arc::new(api_key_store),
