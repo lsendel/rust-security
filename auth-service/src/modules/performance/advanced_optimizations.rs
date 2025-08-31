@@ -289,20 +289,22 @@ pub mod cache_optimization {
 
     impl<T> CacheAligned<T> {
         /// Allocate cache-aligned memory (64-byte alignment for modern CPUs)
-        pub fn new(value: T) -> Self {
-            let layout = Layout::new::<T>().align_to(64).unwrap();
+        pub fn new(value: T) -> Result<Self, String> {
+            let layout = Layout::new::<T>()
+                .align_to(64)
+                .map_err(|e| format!("Failed to create aligned layout: {}", e))?;
 
             unsafe {
                 let ptr = alloc(layout) as *mut T;
                 if ptr.is_null() {
-                    panic!("Failed to allocate cache-aligned memory");
+                    return Err("Failed to allocate cache-aligned memory".to_string());
                 }
                 ptr.write(value);
 
-                Self {
+                Ok(Self {
                     ptr: NonNull::new_unchecked(ptr),
                     layout,
-                }
+                })
             }
         }
 

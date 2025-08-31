@@ -274,115 +274,169 @@ async fn process_single_operation(
     let data = operation.data.clone().unwrap_or_default();
 
     match (operation.method.clone(), path_parts.as_slice()) {
-        // Create User
         (BulkOperationMethod::Post, [_, "scim", "v2", "Users"]) => {
-            let user: ScimUser = serde_json::from_value(data).map_err(|_| {
-                create_error_response(operation.method.clone(), "400", "Invalid user data")
-            })?;
-            let created_user = state.store.create_user(&user).await.map_err(|e| {
-                create_error_response(operation.method.clone(), "500", &e.to_string())
-            })?;
-
-            Ok(BulkOperationResponse {
-                method: BulkOperationMethod::Post,
-                bulk_id: operation.bulk_id.clone(),
-                status: "201".to_string(),
-                location: Some(format!("/scim/v2/Users/{}", created_user.id)),
-                response: Some(serde_json::to_value(created_user).unwrap()),
-                version: None,
-            })
+            create_user_operation(state, operation, data).await
         }
-        // Update User (PUT)
         (BulkOperationMethod::Put, [_, "scim", "v2", "Users", user_id]) => {
-            let mut user: ScimUser = serde_json::from_value(data).map_err(|_| {
-                create_error_response(operation.method.clone(), "400", "Invalid user data")
-            })?;
-            user.id = user_id.to_string();
-            let updated_user = state.store.update_user(&user).await.map_err(|e| {
-                create_error_response(operation.method.clone(), "500", &e.to_string())
-            })?;
-
-            Ok(BulkOperationResponse {
-                method: BulkOperationMethod::Put,
-                bulk_id: operation.bulk_id.clone(),
-                status: "200".to_string(),
-                location: Some(format!("/scim/v2/Users/{}", updated_user.id)),
-                response: Some(serde_json::to_value(updated_user).unwrap()),
-                version: None,
-            })
+            update_user_operation(state, operation, data, user_id).await
         }
-        // Delete User
         (BulkOperationMethod::Delete, [_, "scim", "v2", "Users", user_id]) => {
-            state.store.delete_user(user_id).await.map_err(|e| {
-                create_error_response(operation.method.clone(), "500", &e.to_string())
-            })?;
-
-            Ok(BulkOperationResponse {
-                method: BulkOperationMethod::Delete,
-                bulk_id: operation.bulk_id.clone(),
-                status: "204".to_string(),
-                location: None,
-                response: None,
-                version: None,
-            })
+            delete_user_operation(state, operation, user_id).await
         }
-        // Create Group
         (BulkOperationMethod::Post, [_, "scim", "v2", "Groups"]) => {
-            let group: ScimGroup = serde_json::from_value(data).map_err(|_| {
-                create_error_response(operation.method.clone(), "400", "Invalid group data")
-            })?;
-            let created_group = state.store.create_group(&group).await.map_err(|e| {
-                create_error_response(operation.method.clone(), "500", &e.to_string())
-            })?;
-
-            Ok(BulkOperationResponse {
-                method: BulkOperationMethod::Post,
-                bulk_id: operation.bulk_id.clone(),
-                status: "201".to_string(),
-                location: Some(format!("/scim/v2/Groups/{}", created_group.id)),
-                response: Some(serde_json::to_value(created_group).unwrap()),
-                version: None,
-            })
+            create_group_operation(state, operation, data).await
         }
-        // Note: PATCH is complex and not fully implemented here. This is a simplified version.
         (BulkOperationMethod::Patch, [_, "scim", "v2", "Users", user_id]) => {
-            let patch_data: serde_json::Value = serde_json::from_value(data).map_err(|_| {
-                create_error_response(operation.method.clone(), "400", "Invalid patch data")
-            })?;
-
-            let mut user = state
-                .store
-                .get_user(user_id)
-                .await
-                .map_err(|e| {
-                    create_error_response(operation.method.clone(), "500", &e.to_string())
-                })?
-                .ok_or_else(|| {
-                    create_error_response(operation.method.clone(), "404", "User not found")
-                })?;
-
-            if let Some(active) = patch_data.get("active").and_then(|v| v.as_bool()) {
-                user.active = active;
-            }
-
-            let updated_user = state.store.update_user(&user).await.map_err(|e| {
-                create_error_response(operation.method.clone(), "500", &e.to_string())
-            })?;
-
-            Ok(BulkOperationResponse {
-                method: BulkOperationMethod::Patch,
-                bulk_id: operation.bulk_id.clone(),
-                status: "200".to_string(),
-                location: Some(format!("/scim/v2/Users/{}", updated_user.id)),
-                response: Some(serde_json::to_value(updated_user).unwrap()),
-                version: None,
-            })
+            patch_user_operation(state, operation, data, user_id).await
         }
         _ => Err(create_error_response(
             operation.method.clone(),
             "404",
             "Operation not supported or path is invalid",
         )),
+    }
+}
+
+/// Handle user creation operation
+async fn create_user_operation(
+    state: &AppState,
+    operation: &BulkOperation,
+    data: serde_json::Value,
+) -> Result<BulkOperationResponse, BulkOperationResponse> {
+    let user: ScimUser = serde_json::from_value(data).map_err(|_| {
+        create_error_response(operation.method.clone(), "400", "Invalid user data")
+    })?;
+    
+    let created_user = state.store.create_user(&user).await.map_err(|e| {
+        create_error_response(operation.method.clone(), "500", &e.to_string())
+    })?;
+
+    Ok(create_success_response(
+        BulkOperationMethod::Post,
+        operation.bulk_id.clone(),
+        "201",
+        Some(format!("/scim/v2/Users/{}", created_user.id)),
+        Some(serde_json::to_value(created_user).unwrap()),
+    ))
+}
+
+/// Handle user update operation
+async fn update_user_operation(
+    state: &AppState,
+    operation: &BulkOperation,
+    data: serde_json::Value,
+    user_id: &str,
+) -> Result<BulkOperationResponse, BulkOperationResponse> {
+    let mut user: ScimUser = serde_json::from_value(data).map_err(|_| {
+        create_error_response(operation.method.clone(), "400", "Invalid user data")
+    })?;
+    
+    user.id = user_id.to_string();
+    let updated_user = state.store.update_user(&user).await.map_err(|e| {
+        create_error_response(operation.method.clone(), "500", &e.to_string())
+    })?;
+
+    Ok(create_success_response(
+        BulkOperationMethod::Put,
+        operation.bulk_id.clone(),
+        "200",
+        Some(format!("/scim/v2/Users/{}", updated_user.id)),
+        Some(serde_json::to_value(updated_user).unwrap()),
+    ))
+}
+
+/// Handle user deletion operation
+async fn delete_user_operation(
+    state: &AppState,
+    operation: &BulkOperation,
+    user_id: &str,
+) -> Result<BulkOperationResponse, BulkOperationResponse> {
+    state.store.delete_user(user_id).await.map_err(|e| {
+        create_error_response(operation.method.clone(), "500", &e.to_string())
+    })?;
+
+    Ok(create_success_response(
+        BulkOperationMethod::Delete,
+        operation.bulk_id.clone(),
+        "204",
+        None,
+        None,
+    ))
+}
+
+/// Handle group creation operation
+async fn create_group_operation(
+    state: &AppState,
+    operation: &BulkOperation,
+    data: serde_json::Value,
+) -> Result<BulkOperationResponse, BulkOperationResponse> {
+    let group: ScimGroup = serde_json::from_value(data).map_err(|_| {
+        create_error_response(operation.method.clone(), "400", "Invalid group data")
+    })?;
+    
+    let created_group = state.store.create_group(&group).await.map_err(|e| {
+        create_error_response(operation.method.clone(), "500", &e.to_string())
+    })?;
+
+    Ok(create_success_response(
+        BulkOperationMethod::Post,
+        operation.bulk_id.clone(),
+        "201",
+        Some(format!("/scim/v2/Groups/{}", created_group.id)),
+        Some(serde_json::to_value(created_group).unwrap()),
+    ))
+}
+
+/// Handle user patch operation (simplified)
+async fn patch_user_operation(
+    state: &AppState,
+    operation: &BulkOperation,
+    data: serde_json::Value,
+    user_id: &str,
+) -> Result<BulkOperationResponse, BulkOperationResponse> {
+    let patch_data: serde_json::Value = serde_json::from_value(data).map_err(|_| {
+        create_error_response(operation.method.clone(), "400", "Invalid patch data")
+    })?;
+
+    let mut user = state
+        .store
+        .get_user(user_id)
+        .await
+        .map_err(|e| create_error_response(operation.method.clone(), "500", &e.to_string()))?
+        .ok_or_else(|| create_error_response(operation.method.clone(), "404", "User not found"))?;
+
+    if let Some(active) = patch_data.get("active").and_then(|v| v.as_bool()) {
+        user.active = active;
+    }
+
+    let updated_user = state.store.update_user(&user).await.map_err(|e| {
+        create_error_response(operation.method.clone(), "500", &e.to_string())
+    })?;
+
+    Ok(create_success_response(
+        BulkOperationMethod::Patch,
+        operation.bulk_id.clone(),
+        "200",
+        Some(format!("/scim/v2/Users/{}", updated_user.id)),
+        Some(serde_json::to_value(updated_user).unwrap()),
+    ))
+}
+
+/// Helper to create successful bulk operation responses
+fn create_success_response(
+    method: BulkOperationMethod,
+    bulk_id: Option<String>,
+    status: &str,
+    location: Option<String>,
+    response: Option<serde_json::Value>,
+) -> BulkOperationResponse {
+    BulkOperationResponse {
+        method,
+        bulk_id,
+        status: status.to_string(),
+        location,
+        response,
+        version: None,
     }
 }
 

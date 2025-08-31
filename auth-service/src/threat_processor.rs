@@ -166,7 +166,7 @@ mod tests {
     async fn test_threat_processor_disabled_feature() {
         #[cfg(not(feature = "threat-hunting"))]
         {
-            let processor = ThreatProcessor::new();
+            let processor = crate::threat_processor::ThreatProcessor::new();
             assert!(!processor.is_enabled().await);
         }
     }

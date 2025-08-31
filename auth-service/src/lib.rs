@@ -94,6 +94,8 @@ pub mod jwt_secure;
 pub mod keys;
 pub mod security;
 pub mod validation;
+pub mod validation_framework;
+pub mod error_conversion_macro;
 pub mod validation_secure;
 
 // Consolidated storage layer
@@ -201,78 +203,114 @@ pub async fn mint_local_tokens_for_subject(
     subject: String,
     scope: Option<String>,
 ) -> Result<serde_json::Value, crate::errors::AuthError> {
-    use chrono::{Duration, Utc};
-    use uuid::Uuid;
+    let token_params = TokenCreationParams::new(subject, scope);
+    let signing_key = get_signing_key(state).await?;
+    
+    let access_token = create_jwt_token(&signing_key, &token_params.access_claims())?;
+    let refresh_token = create_jwt_token(&signing_key, &token_params.refresh_claims())?;
 
-    let now = Utc::now();
-    let expires_at = now + Duration::hours(1);
-    let refresh_expires_at = now + Duration::days(30);
+    Ok(build_token_response(access_token, refresh_token, &token_params))
+}
 
-    // Get the current signing key
-    let key_manager = &state.jwks_manager;
-    let signing_key =
-        key_manager
-            .get_encoding_key()
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to get signing key: {e}"),
-            })?;
+/// Parameters for token creation
+struct TokenCreationParams {
+    subject: String,
+    scope: Option<String>,
+    now: chrono::DateTime<chrono::Utc>,
+    access_expires_at: chrono::DateTime<chrono::Utc>,
+    refresh_expires_at: chrono::DateTime<chrono::Utc>,
+}
 
-    // Create JWT claims
-    let claims = crate::jwt_secure::SecureJwtClaims {
-        sub: subject.clone(),
-        iss: "rust-security-auth-service".to_string(),
-        aud: "rust-security-platform".to_string(),
-        exp: expires_at.timestamp(),
-        iat: now.timestamp(),
-        nbf: Some(now.timestamp()),
-        jti: Some(Uuid::new_v4().to_string()),
-        token_type: Some("Bearer".to_string()),
-        scope: scope.clone(),
-        nonce: None,
-        client_id: None,
-    };
+impl TokenCreationParams {
+    fn new(subject: String, scope: Option<String>) -> Self {
+        use chrono::{Duration, Utc};
+        
+        let now = Utc::now();
+        Self {
+            subject,
+            scope,
+            now,
+            access_expires_at: now + Duration::hours(1),
+            refresh_expires_at: now + Duration::days(30),
+        }
+    }
 
-    // Create JWT token
+    fn access_claims(&self) -> crate::jwt_secure::SecureJwtClaims {
+        use uuid::Uuid;
+        
+        crate::jwt_secure::SecureJwtClaims {
+            sub: self.subject.clone(),
+            iss: "rust-security-auth-service".to_string(),
+            aud: "rust-security-platform".to_string(),
+            exp: self.access_expires_at.timestamp(),
+            iat: self.now.timestamp(),
+            nbf: Some(self.now.timestamp()),
+            jti: Some(Uuid::new_v4().to_string()),
+            token_type: Some("Bearer".to_string()),
+            scope: self.scope.clone(),
+            nonce: None,
+            client_id: None,
+        }
+    }
+
+    fn refresh_claims(&self) -> crate::jwt_secure::SecureJwtClaims {
+        use uuid::Uuid;
+        
+        crate::jwt_secure::SecureJwtClaims {
+            sub: self.subject.clone(),
+            iss: "rust-security-auth-service".to_string(),
+            aud: "rust-security-platform".to_string(),
+            exp: self.refresh_expires_at.timestamp(),
+            iat: self.now.timestamp(),
+            nbf: Some(self.now.timestamp()),
+            jti: Some(Uuid::new_v4().to_string()),
+            token_type: Some("Refresh".to_string()),
+            scope: self.scope.clone(),
+            nonce: None,
+            client_id: None,
+        }
+    }
+}
+
+/// Get the signing key from the key manager
+async fn get_signing_key(state: &AppState) -> Result<jsonwebtoken::EncodingKey, crate::errors::AuthError> {
+    state
+        .jwks_manager
+        .get_encoding_key()
+        .await
+        .map_err(|e| AuthError::InternalError {
+            error_id: uuid::Uuid::new_v4(),
+            context: format!("Failed to get signing key: {e}"),
+        })
+}
+
+/// Create a JWT token from claims
+fn create_jwt_token(
+    signing_key: &jsonwebtoken::EncodingKey,
+    claims: &crate::jwt_secure::SecureJwtClaims,
+) -> Result<String, crate::errors::AuthError> {
     let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
-    let token = jsonwebtoken::encode(&header, &claims, &signing_key).map_err(|e| {
+    jsonwebtoken::encode(&header, claims, signing_key).map_err(|e| {
         AuthError::InternalError {
             error_id: uuid::Uuid::new_v4(),
             context: format!("Failed to encode JWT: {e}"),
         }
-    })?;
+    })
+}
 
-    // Create refresh token
-    let refresh_claims = crate::jwt_secure::SecureJwtClaims {
-        sub: subject,
-        iss: "rust-security-auth-service".to_string(),
-        aud: "rust-security-platform".to_string(),
-        exp: refresh_expires_at.timestamp(),
-        iat: now.timestamp(),
-        nbf: Some(now.timestamp()),
-        jti: Some(Uuid::new_v4().to_string()),
-        token_type: Some("Refresh".to_string()),
-        scope,
-        nonce: None,
-        client_id: None,
-    };
-
-    let refresh_token =
-        jsonwebtoken::encode(&header, &refresh_claims, &signing_key).map_err(|e| {
-            AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to encode refresh JWT: {e}"),
-            }
-        })?;
-
-    Ok(serde_json::json!({
-        "access_token": token,
+/// Build the final token response
+fn build_token_response(
+    access_token: String,
+    refresh_token: String,
+    params: &TokenCreationParams,
+) -> serde_json::Value {
+    serde_json::json!({
+        "access_token": access_token,
         "token_type": "Bearer",
         "expires_in": 3600,
         "refresh_token": refresh_token,
-        "scope": claims.scope
-    }))
+        "scope": params.scope
+    })
 }
 
 // Missing type definition - stub for compilation

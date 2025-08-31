@@ -21,7 +21,19 @@ impl Default for AppConfig {
             port: 3000,
             database_url: None,
             redis_url: None,
-            jwt_secret: "default-secret-key".to_string(),
+            jwt_secret: std::env::var("JWT_SECRET")
+                .unwrap_or_else(|_| {
+                    eprintln!("WARNING: JWT_SECRET not set. Using a random secret for development only.");
+                    eprintln!("Set JWT_SECRET environment variable for production use.");
+                    // Generate a random secret for development/testing only
+                    use rand::Rng;
+                    use base64::Engine;
+                    let random_bytes: Vec<u8> = rand::thread_rng()
+                        .sample_iter(rand::distributions::Standard)
+                        .take(32)
+                        .collect();
+                    base64::engine::general_purpose::STANDARD.encode(random_bytes)
+                }),
         }
     }
 }

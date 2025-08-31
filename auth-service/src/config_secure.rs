@@ -435,57 +435,71 @@ pub fn load_secure_config() -> Result<SecureAppConfig, ConfigError> {
     Ok(config)
 }
 
-#[allow(clippy::too_many_lines)]
 fn apply_production_security(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
-    // Production security hardening
+    apply_production_timeouts(config);
+    validate_production_secrets(config)?;
+    enforce_https_requirement()?;
+    configure_production_cors(config)?;
+    disable_debug_features(config);
+    apply_strict_rate_limits(config);
+    Ok(())
+}
+
+fn apply_production_timeouts(config: &mut SecureAppConfig) {
     config.security.jwt_access_token_ttl_seconds = 600; // 10 minutes
     config.security.session_ttl_seconds = 1800; // 30 minutes
     config.security.session_rotation_interval_seconds = 600; // 10 minutes
+}
 
-    // Require request signing in production
-    config.security.request_signing_secret =
-        Some(env::var("REQUEST_SIGNING_SECRET").map_err(|_| {
-            ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET".to_string())
-        })?);
-
-    // Validate signing secret strength
-    if let Some(ref secret) = config.security.request_signing_secret {
-        if secret.len() < 32 {
-            return Err(ConfigError::WeakSecret(
-                "REQUEST_SIGNING_SECRET must be at least 32 characters".to_string(),
-            ));
-        }
+fn validate_production_secrets(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
+    let secret = env::var("REQUEST_SIGNING_SECRET").map_err(|_| {
+        ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET".to_string())
+    })?;
+    
+    if secret.len() < 32 {
+        return Err(ConfigError::WeakSecret(
+            "REQUEST_SIGNING_SECRET must be at least 32 characters".to_string(),
+        ));
     }
+    
+    config.security.request_signing_secret = Some(secret);
+    Ok(())
+}
 
-    // Require HTTPS in production
+fn enforce_https_requirement() -> Result<(), ConfigError> {
     if env::var("FORCE_HTTPS").unwrap_or_default() != "true" {
         return Err(ConfigError::InsecureConfiguration(
             "HTTPS must be enabled in production (set FORCE_HTTPS=true)".to_string(),
         ));
     }
+    Ok(())
+}
 
-    // Require explicit CORS configuration in production
+fn configure_production_cors(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
     let cors_origins = env::var("ALLOWED_ORIGINS").unwrap_or_default();
     if cors_origins.is_empty() {
         return Err(ConfigError::InsecureConfiguration(
             "ALLOWED_ORIGINS must be explicitly set in production".to_string(),
         ));
     }
+    
     config.security.allowed_origins = cors_origins
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
+    
+    Ok(())
+}
 
-    // Disable debug features in production
+fn disable_debug_features(config: &mut SecureAppConfig) {
     config.features.debug_endpoints_enabled = false;
     config.features.experimental_features_enabled = false;
+}
 
-    // Stricter rate limiting in production
+fn apply_strict_rate_limits(config: &mut SecureAppConfig) {
     config.rate_limiting.oauth_requests_per_minute = 5;
     config.rate_limiting.admin_requests_per_minute = 2;
-
-    Ok(())
 }
 
 fn apply_staging_security(config: &mut SecureAppConfig) {

@@ -541,7 +541,17 @@ pub async fn token(
     State(state): State<AuthState>,
     Json(request): Json<TokenRequest>,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Validate request
+    validate_token_request(&request)?;
+    let _client = authenticate_oauth_client(&state, &request).await?;
+
+    match request.grant_type.as_str() {
+        "authorization_code" => handle_authorization_code_flow(&state, &request).await,
+        _ => Err(oauth_error("unsupported_grant_type", "Grant type not supported")),
+    }
+}
+
+/// Validate the incoming token request
+fn validate_token_request(request: &TokenRequest) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     if let Err(errors) = request.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -551,122 +561,106 @@ pub async fn token(
             }),
         ));
     }
+    Ok(())
+}
 
-    // Validate client credentials
-    let _client = {
-        let oauth_clients = state.oauth_clients.read().await;
-        let client = oauth_clients.get(&request.client_id).ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    error: "invalid_client".to_string(),
-                    error_description: "Invalid client credentials".to_string(),
-                }),
-            )
-        })?;
+/// Authenticate OAuth client credentials
+async fn authenticate_oauth_client(
+    state: &AuthState, 
+    request: &TokenRequest
+) -> Result<OAuthClient, (StatusCode, Json<ErrorResponse>)> {
+    let oauth_clients = state.oauth_clients.read().await;
+    let client = oauth_clients.get(&request.client_id)
+        .ok_or_else(|| oauth_error("invalid_client", "Invalid client credentials"))?;
 
-        if client.client_secret != request.client_secret {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    error: "invalid_client".to_string(),
-                    error_description: "Invalid client credentials".to_string(),
-                }),
-            ));
-        }
-
-        client.clone()
-    };
-
-    match request.grant_type.as_str() {
-        "authorization_code" => {
-            let code = request.code.ok_or_else(|| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ErrorResponse {
-                        error: "invalid_request".to_string(),
-                        error_description: "Missing authorization code".to_string(),
-                    }),
-                )
-            })?;
-
-            // Get and validate auth code, then extract user ID and scope
-            let (user_id, scope) = {
-                let mut authorization_codes = state.authorization_codes.write().await;
-                let auth_code = authorization_codes.get_mut(&code).ok_or_else(|| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: "invalid_grant".to_string(),
-                            error_description: "Invalid authorization code".to_string(),
-                        }),
-                    )
-                })?;
-
-                // Check if code is expired or used
-                if auth_code.used || Utc::now() > auth_code.expires_at {
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: "invalid_grant".to_string(),
-                            error_description: "Authorization code expired or already used"
-                                .to_string(),
-                        }),
-                    ));
-                }
-
-                // Mark code as used and extract needed data
-                auth_code.used = true;
-                (auth_code.user_id.clone(), auth_code.scope.clone())
-            };
-
-            // Get user with the extracted user_id
-            let user = {
-                let users = state.users.read().await;
-                users
-                    .values()
-                    .find(|u| u.id == user_id)
-                    .cloned()
-                    .ok_or_else(|| {
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(ErrorResponse {
-                                error: "server_error".to_string(),
-                                error_description: "User not found".to_string(),
-                            }),
-                        )
-                    })?
-            };
-
-            // Generate access token
-            let access_token = create_jwt_token(&user, &state.jwt_secret).map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: "server_error".to_string(),
-                        error_description: "Failed to generate access token".to_string(),
-                    }),
-                )
-            })?;
-
-            info!("Access token generated for user: {}", user.email);
-
-            Ok(Json(TokenResponse {
-                access_token,
-                token_type: "Bearer".to_string(),
-                expires_in: 3600, // 1 hour
-                refresh_token: None,
-                scope: Some(scope),
-            }))
-        }
-        _ => Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "unsupported_grant_type".to_string(),
-                error_description: "Grant type not supported".to_string(),
-            }),
-        )),
+    if client.client_secret != request.client_secret {
+        return Err(oauth_error("invalid_client", "Invalid client credentials"));
     }
+
+    Ok(client.clone())
+}
+
+/// Handle authorization code grant flow
+async fn handle_authorization_code_flow(
+    state: &AuthState,
+    request: &TokenRequest,
+) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let code = request.code.as_ref()
+        .ok_or_else(|| oauth_error("invalid_request", "Missing authorization code"))?;
+
+    let (user_id, scope) = validate_and_consume_auth_code(state, code).await?;
+    let user = find_user_by_id(state, &user_id).await?;
+    let access_token = generate_access_token(&user, &state.jwt_secret)?;
+
+    info!("Access token generated for user: {}", user.email);
+
+    Ok(Json(TokenResponse {
+        access_token,
+        token_type: "Bearer".to_string(),
+        expires_in: 3600, // 1 hour
+        refresh_token: None,
+        scope: Some(scope),
+    }))
+}
+
+/// Validate and consume authorization code
+async fn validate_and_consume_auth_code(
+    state: &AuthState,
+    code: &str,
+) -> Result<(String, String), (StatusCode, Json<ErrorResponse>)> {
+    let mut authorization_codes = state.authorization_codes.write().await;
+    let auth_code = authorization_codes.get_mut(code)
+        .ok_or_else(|| oauth_error("invalid_grant", "Invalid authorization code"))?;
+
+    if auth_code.used || Utc::now() > auth_code.expires_at {
+        return Err(oauth_error(
+            "invalid_grant", 
+            "Authorization code expired or already used"
+        ));
+    }
+
+    auth_code.used = true;
+    Ok((auth_code.user_id.clone(), auth_code.scope.clone()))
+}
+
+/// Find user by ID
+async fn find_user_by_id(
+    state: &AuthState,
+    user_id: &str,
+) -> Result<User, (StatusCode, Json<ErrorResponse>)> {
+    let users = state.users.read().await;
+    users
+        .values()
+        .find(|u| u.id == user_id)
+        .cloned()
+        .ok_or_else(|| oauth_error("server_error", "User not found"))
+}
+
+/// Generate access token for user
+fn generate_access_token(
+    user: &User,
+    jwt_secret: &str,
+) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
+    create_jwt_token(user, jwt_secret).map_err(|_| {
+        oauth_error("server_error", "Failed to generate access token")
+    })
+}
+
+/// Helper to create consistent OAuth error responses
+fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorResponse>) {
+    let status = match error {
+        "invalid_client" => StatusCode::UNAUTHORIZED,
+        "server_error" => StatusCode::INTERNAL_SERVER_ERROR,
+        _ => StatusCode::BAD_REQUEST,
+    };
+    
+    (
+        status,
+        Json(ErrorResponse {
+            error: error.to_string(),
+            error_description: description.to_string(),
+        }),
+    )
 }
 
 /// Get current user info

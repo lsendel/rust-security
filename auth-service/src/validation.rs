@@ -187,7 +187,8 @@ pub struct ScimEmail {
     pub value: String,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub email_type: Option<String>,
 
     pub primary: Option<bool>,
 
@@ -202,7 +203,8 @@ pub struct ScimPhoneNumber {
     pub value: String,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub phone_type: Option<String>,
 
     pub primary: Option<bool>,
 
@@ -232,7 +234,8 @@ pub struct ScimAddress {
     pub country: Option<String>,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub address_type: Option<String>,
 
     pub primary: Option<bool>,
 }
@@ -247,7 +250,8 @@ pub struct ScimGroup {
     pub display: Option<String>,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub group_type: Option<String>,
 }
 
 /// SCIM Role DTO
@@ -260,7 +264,8 @@ pub struct ScimRole {
     pub display: Option<String>,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub role_type: Option<String>,
 
     pub primary: Option<bool>,
 }
@@ -275,7 +280,8 @@ pub struct ScimEntitlement {
     pub display: Option<String>,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub entitlement_type: Option<String>,
 
     pub primary: Option<bool>,
 }
@@ -290,7 +296,8 @@ pub struct ScimX509Certificate {
     pub display: Option<String>,
 
     #[validate(length(max = 50))]
-    pub type_: Option<String>,
+    #[serde(rename = "type")]
+    pub certificate_type: Option<String>,
 
     pub primary: Option<bool>,
 }
@@ -614,71 +621,108 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
 
 /// Validate password strength
 fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
-    let mut score = 0;
-    let mut errors = Vec::new();
+    let validator = PasswordValidator::new(password);
+    
+    validator.check_length()
+            .check_character_types()
+            .check_common_patterns()
+            .check_sequential_chars()
+            .finalize()
+}
 
-    // Check minimum length
-    if password.len() < 12 {
-        errors.push("Password must be at least 12 characters long");
-    } else {
-        score += 1;
-    }
+/// Helper struct for password validation with scoring
+struct PasswordValidator<'a> {
+    password: &'a str,
+    score: u8,
+    errors: Vec<&'static str>,
+}
 
-    // Check for uppercase letters
-    if password.chars().any(char::is_uppercase) {
-        score += 1;
-    } else {
-        errors.push("Password must contain at least one uppercase letter");
-    }
-
-    // Check for lowercase letters
-    if password.chars().any(char::is_lowercase) {
-        score += 1;
-    } else {
-        errors.push("Password must contain at least one lowercase letter");
-    }
-
-    // Check for digits
-    if password.chars().any(char::is_numeric) {
-        score += 1;
-    } else {
-        errors.push("Password must contain at least one digit");
-    }
-
-    // Check for special characters
-    if password
-        .chars()
-        .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c))
-    {
-        score += 1;
-    } else {
-        errors.push("Password must contain at least one special character");
-    }
-
-    // Check for common patterns
-    let common_patterns = [
-        "password", "123456", "qwerty", "admin", "root", "user", "letmein", "welcome", "monkey",
-        "dragon",
-    ];
-
-    for pattern in &common_patterns {
-        if password.to_lowercase().contains(pattern) {
-            errors.push("Password contains common patterns and is not secure");
-            break;
+impl<'a> PasswordValidator<'a> {
+    const MIN_SCORE: u8 = 4;
+    const SPECIAL_CHARS: &'static str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+    
+    fn new(password: &'a str) -> Self {
+        Self {
+            password,
+            score: 0,
+            errors: Vec::new(),
         }
     }
 
-    // Check for sequential characters
-    if has_sequential_chars(password) {
-        errors.push("Password contains sequential characters");
+    fn check_length(mut self) -> Self {
+        if self.password.len() < 12 {
+            self.errors.push("Password must be at least 12 characters long");
+        } else {
+            self.score += 1;
+        }
+        self
     }
 
-    // Require at least 4 out of 5 criteria for a strong password
-    if score < 4 || !errors.is_empty() {
-        return Err(validation_error("password_too_weak"));
+    fn check_character_types(self) -> Self {
+        self.check_character_type(
+            char::is_uppercase,
+            "Password must contain at least one uppercase letter",
+        )
+        .check_character_type(
+            char::is_lowercase,
+            "Password must contain at least one lowercase letter",
+        )
+        .check_character_type(
+            char::is_numeric,
+            "Password must contain at least one digit",
+        )
+        .check_special_characters()
     }
 
-    Ok(())
+    fn check_character_type(
+        mut self,
+        predicate: fn(char) -> bool,
+        error_message: &'static str,
+    ) -> Self {
+        if self.password.chars().any(predicate) {
+            self.score += 1;
+        } else {
+            self.errors.push(error_message);
+        }
+        self
+    }
+
+    fn check_special_characters(mut self) -> Self {
+        if self.password.chars().any(|c| Self::SPECIAL_CHARS.contains(c)) {
+            self.score += 1;
+        } else {
+            self.errors.push("Password must contain at least one special character");
+        }
+        self
+    }
+
+    fn check_common_patterns(mut self) -> Self {
+        const COMMON_PATTERNS: &[&str] = &[
+            "password", "123456", "qwerty", "admin", "root", 
+            "user", "letmein", "welcome", "monkey", "dragon",
+        ];
+
+        let lowercase_password = self.password.to_lowercase();
+        if COMMON_PATTERNS.iter().any(|&pattern| lowercase_password.contains(pattern)) {
+            self.errors.push("Password contains common patterns and is not secure");
+        }
+        self
+    }
+
+    fn check_sequential_chars(mut self) -> Self {
+        if has_sequential_chars(self.password) {
+            self.errors.push("Password contains sequential characters");
+        }
+        self
+    }
+
+    fn finalize(self) -> Result<(), ValidationError> {
+        if self.score < Self::MIN_SCORE || !self.errors.is_empty() {
+            Err(validation_error("password_too_weak"))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Check for sequential characters (3 or more in a row)
@@ -967,13 +1011,13 @@ mod tests {
             active: Some(true),
             emails: Some(vec![ScimEmail {
                 value: "john.doe@example.com".to_string(),
-                type_: Some("work".to_string()),
+                email_type: Some("work".to_string()),
                 primary: Some(true),
                 display: None,
             }]),
             phone_numbers: Some(vec![ScimPhoneNumber {
                 value: "+1-555-123-4567".to_string(),
-                type_: Some("work".to_string()),
+                phone_type: Some("work".to_string()),
                 primary: Some(true),
                 display: None,
             }]),
