@@ -287,7 +287,8 @@ async fn test_openid_id_token_generation() {
     assert_eq!(parts.len(), 3, "ID token should be a valid JWT with 3 parts");
 
     // Decode header (without verification for test)
-    let header_json = base64::decode_config(parts[0], base64::URL_SAFE_NO_PAD).unwrap();
+    use base64::{Engine as _, engine::general_purpose};
+    let header_json = general_purpose::URL_SAFE_NO_PAD.decode(parts[0]).unwrap();
     let header: Value = serde_json::from_slice(&header_json).unwrap();
     assert_eq!(header.get("alg").unwrap(), "RS256");
     assert!(header.get("kid").is_some());

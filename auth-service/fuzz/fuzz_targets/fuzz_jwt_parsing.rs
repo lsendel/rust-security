@@ -66,9 +66,10 @@ fuzz_target!(|data: &[u8]| {
         let parts: Vec<&str> = token_utf8.split('.').collect();
         if parts.len() == 3 {
             // Try to decode each part as base64
+            use base64::{Engine as _, engine::general_purpose};
             for part in parts {
-                let _ = base64::decode_config(part, base64::URL_SAFE_NO_PAD);
-                let _ = base64::decode(part);
+                let _ = general_purpose::URL_SAFE_NO_PAD.decode(part);
+                let _ = general_purpose::STANDARD.decode(part);
             }
         }
     }
