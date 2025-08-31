@@ -523,9 +523,9 @@ impl PolicyEnforcementEngine {
             .await?;
 
         // Final policy decision
-        if operation_result.has_blocking_violations() {
+        if result.has_blocking_violations() {
             return Err(ClientRegistrationError::PolicyViolation(
-                operation_result.get_violation_summary(),
+                result.get_violation_summary(),
             ));
         }
 
@@ -543,7 +543,7 @@ impl PolicyEnforcementEngine {
 
         // Check if registration is globally enabled
         if !global.enabled {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::RegistrationDisabled,
                 "Dynamic client registration is disabled".to_string(),
                 PolicySeverity::Error,
@@ -558,7 +558,7 @@ impl PolicyEnforcementEngine {
                 &global.allowed_registration_sources,
                 &global.blocked_registration_sources,
             ) {
-                operation_result.add_violation(
+                result.add_violation(
                     PolicyViolationType::SourceRestriction,
                     format!("Registration from IP {} is not allowed", ip),
                     PolicySeverity::Error,
@@ -568,7 +568,7 @@ impl PolicyEnforcementEngine {
 
         // Check software statement requirements
         if global.require_software_statements && request.software_statement.is_none() {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::MissingRequirement,
                 "Software statement is required".to_string(),
                 PolicySeverity::Error,
@@ -584,7 +584,7 @@ impl PolicyEnforcementEngine {
                     software_statement,
                     &global.trusted_software_issuers,
                 ) {
-                    operation_result.add_violation(
+                    result.add_violation(
                         PolicyViolationType::UntrustedIssuer,
                         "Software statement from untrusted issuer".to_string(),
                         PolicySeverity::Error,
@@ -616,7 +616,7 @@ impl PolicyEnforcementEngine {
                     }
                 }
             } else {
-                operation_result.add_violation(
+                result.add_violation(
                     PolicyViolationType::InvalidUri,
                     format!("Invalid redirect URI format: {}", redirect_uri),
                     PolicySeverity::Error,
@@ -639,7 +639,7 @@ impl PolicyEnforcementEngine {
                 if let Some(ref grant_types) = request.grant_types {
                     for grant_type in grant_types {
                         if !policy.allowed_grant_types.contains(grant_type) {
-                            operation_result.add_violation(
+                            result.add_violation(
                                 PolicyViolationType::DisallowedGrantType,
                                 format!(
                                     "Grant type '{}' not allowed for application type '{}'",
@@ -655,7 +655,7 @@ impl PolicyEnforcementEngine {
                 if let Some(ref response_types) = request.response_types {
                     for response_type in response_types {
                         if !policy.allowed_response_types.contains(response_type) {
-                            operation_result.add_violation(
+                            result.add_violation(
                                 PolicyViolationType::DisallowedResponseType,
                                 format!(
                                     "Response type '{}' not allowed for application type '{}'",
@@ -672,7 +672,7 @@ impl PolicyEnforcementEngine {
                     match required_field.as_str() {
                         "client_name" => {
                             if request.client_name.is_none() {
-                                operation_result.add_violation(
+                                result.add_violation(
                                     PolicyViolationType::MissingRequirement,
                                     format!(
                                         "Field '{}' is required for application type '{}'",
@@ -686,7 +686,7 @@ impl PolicyEnforcementEngine {
                             if request.contacts.is_none()
                                 || request.contacts.as_ref().unwrap().is_empty()
                             {
-                                operation_result.add_violation(
+                                result.add_violation(
                                     PolicyViolationType::MissingRequirement,
                                     format!(
                                         "Field '{}' is required for application type '{}'",
@@ -799,7 +799,7 @@ impl PolicyEnforcementEngine {
         // Check against blacklist patterns
         for pattern in &content_policy.blacklist_patterns {
             if self.check_content_against_pattern(request, pattern) {
-                operation_result.add_violation(
+                result.add_violation(
                     PolicyViolationType::ContentViolation,
                     format!("Content matches blacklisted pattern: {}", pattern),
                     PolicySeverity::Warning,
@@ -882,7 +882,7 @@ impl PolicyEnforcementEngine {
         result: &mut PolicyEnforcementResult,
     ) {
         if !policy.allowed_for_redirects {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::DisallowedDomain,
                 format!(
                     "Domain not allowed for redirect URIs: {}",
@@ -894,7 +894,7 @@ impl PolicyEnforcementEngine {
 
         // Check scheme restrictions
         if !policy.allowed_schemes.contains(&url.scheme().to_string()) {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::DisallowedScheme,
                 format!("Scheme '{}' not allowed for domain", url.scheme()),
                 PolicySeverity::Error,
@@ -903,7 +903,7 @@ impl PolicyEnforcementEngine {
 
         // Check security requirements
         if policy.security_requirements.require_https && url.scheme() != "https" {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::SecurityViolation,
                 "HTTPS required for this domain".to_string(),
                 PolicySeverity::Error,
@@ -914,7 +914,7 @@ impl PolicyEnforcementEngine {
     fn apply_default_domain_restrictions(&self, url: &Url, result: &mut PolicyEnforcementResult) {
         // Apply default security restrictions
         if url.scheme() != "https" && url.host_str() != Some("localhost") {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::SecurityViolation,
                 "HTTPS required for non-localhost URLs".to_string(),
                 PolicySeverity::Warning,
@@ -931,7 +931,7 @@ impl PolicyEnforcementEngine {
         for uri in &request.redirect_uris {
             // Check URI length
             if uri.len() > policy.max_uri_length {
-                operation_result.add_violation(
+                result.add_violation(
                     PolicyViolationType::PolicyViolation,
                     format!("URI too long: {} > {}", uri.len(), policy.max_uri_length),
                     PolicySeverity::Error,
@@ -943,7 +943,7 @@ impl PolicyEnforcementEngine {
                 if policy.block_localhost
                     && (url.host_str() == Some("localhost") || url.host_str() == Some("127.0.0.1"))
                 {
-                    operation_result.add_violation(
+                    result.add_violation(
                         PolicyViolationType::SecurityViolation,
                         "Localhost URLs are not allowed".to_string(),
                         PolicySeverity::Error,
@@ -955,7 +955,7 @@ impl PolicyEnforcementEngine {
                     if let Some(host) = url.host_str() {
                         if let Ok(ip) = host.parse::<IpAddr>() {
                             if self.is_private_ip(&ip) {
-                                operation_result.add_violation(
+                                result.add_violation(
                                     PolicyViolationType::SecurityViolation,
                                     "Private IP addresses are not allowed".to_string(),
                                     PolicySeverity::Error,
@@ -970,7 +970,7 @@ impl PolicyEnforcementEngine {
             for pattern in &policy.blocked_uri_patterns {
                 if let Ok(regex) = Regex::new(pattern) {
                     if regex.is_match(uri) {
-                        operation_result.add_violation(
+                        result.add_violation(
                             PolicyViolationType::PolicyViolation,
                             format!("URI matches blocked pattern: {}", pattern),
                             PolicySeverity::Error,
@@ -992,7 +992,7 @@ impl PolicyEnforcementEngine {
             match required_field.as_str() {
                 "client_name" => {
                     if request.client_name.is_none() {
-                        operation_result.add_violation(
+                        result.add_violation(
                             PolicyViolationType::MissingRequirement,
                             format!("Required field missing: {}", required_field),
                             PolicySeverity::Error,
@@ -1008,7 +1008,7 @@ impl PolicyEnforcementEngine {
         if let Some(ref client_name) = request.client_name {
             if let Some(&max_len) = policy.max_field_lengths.get("client_name") {
                 if client_name.len() > max_len {
-                    operation_result.add_violation(
+                    result.add_violation(
                         PolicyViolationType::PolicyViolation,
                         format!("client_name too long: {} > {}", client_name.len(), max_len),
                         PolicySeverity::Error,
@@ -1035,7 +1035,7 @@ impl PolicyEnforcementEngine {
                     }
                 }
                 if !allowed {
-                    operation_result.add_violation(
+                    result.add_violation(
                         PolicyViolationType::SourceRestriction,
                         "Source IP not in allowed networks".to_string(),
                         PolicySeverity::Error,
@@ -1046,7 +1046,7 @@ impl PolicyEnforcementEngine {
             // Check blocked networks
             for network in &policy.blocked_source_networks {
                 if self.ip_matches_cidr(&ip_addr, network) {
-                    operation_result.add_violation(
+                    result.add_violation(
                         PolicyViolationType::SourceRestriction,
                         "Source IP in blocked networks".to_string(),
                         PolicySeverity::Error,
@@ -1065,7 +1065,7 @@ impl PolicyEnforcementEngine {
         // Check signing algorithm
         if let Some(ref alg) = request.id_token_signed_response_alg {
             if !policy.allowed_signing_algorithms.contains(alg) {
-                operation_result.add_violation(
+                result.add_violation(
                     PolicyViolationType::CryptographicViolation,
                     format!("Signing algorithm '{}' not allowed", alg),
                     PolicySeverity::Error,
@@ -1081,7 +1081,7 @@ impl PolicyEnforcementEngine {
         result: &mut PolicyEnforcementResult,
     ) {
         if policy.require_privacy_policy && request.policy_uri.is_none() {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::ComplianceViolation,
                 "Privacy policy URI required for GDPR compliance".to_string(),
                 PolicySeverity::Error,
@@ -1096,7 +1096,7 @@ impl PolicyEnforcementEngine {
         result: &mut PolicyEnforcementResult,
     ) {
         if policy.require_privacy_policy && request.policy_uri.is_none() {
-            operation_result.add_violation(
+            result.add_violation(
                 PolicyViolationType::ComplianceViolation,
                 "Privacy policy URI required for CCPA compliance".to_string(),
                 PolicySeverity::Error,
@@ -1115,7 +1115,7 @@ impl PolicyEnforcementEngine {
             match requirement.as_str() {
                 "require_mtls" => {
                     if request.token_endpoint_auth_method.as_deref() != Some("tls_client_auth") {
-                        operation_result.add_violation(
+                        result.add_violation(
                             PolicyViolationType::ComplianceViolation,
                             format!("mTLS required for {} industry", policy.industry_type),
                             PolicySeverity::Error,
@@ -1170,7 +1170,7 @@ impl PolicyEnforcementEngine {
                     FilterAction::Allow => return, // No violation
                 };
 
-                operation_result.add_violation(
+                result.add_violation(
                     PolicyViolationType::ContentViolation,
                     format!(
                         "Content filter triggered: {} in field {}",

@@ -212,6 +212,7 @@ pub async fn admin_auth_middleware(
     }
 }
 
+
 /// Extract admin key from Bearer token for rate limiting and logging
 async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<String, AuthError> {
     // Extract bearer token
