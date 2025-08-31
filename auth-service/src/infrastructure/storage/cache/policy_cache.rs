@@ -8,7 +8,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{error, info, instrument, warn};
 
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 #[cfg(feature = "monitoring")]
 use crate::metrics::METRICS;
 
@@ -200,7 +200,7 @@ impl PolicyCache {
         &self,
         request: &PolicyRequest,
         response: PolicyResponse,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         if !self.config.enabled {
             return Ok(());
         }

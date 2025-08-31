@@ -2,7 +2,7 @@ use crate::circuit_breaker::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, RetryBackoff, RetryConfig,
     TimeoutConfig,
 };
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use bytes::Bytes;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
@@ -58,9 +58,9 @@ impl ResilientHttpClient {
     /// 
     /// # Errors
     /// 
-    /// Returns `AuthError::ServiceUnavailable` if HTTP client creation fails due to 
+    /// Returns `crate::shared::error::AppError::ServiceUnavailable` if HTTP client creation fails due to 
     /// invalid configuration or TLS setup issues
-    pub fn new(name: impl Into<String>, config: ResilientHttpConfig) -> Result<Self, AuthError> {
+    pub fn new(name: impl Into<String>, config: ResilientHttpConfig) -> Result<Self, crate::shared::error::AppError> {
         let client = Client::builder()
             .timeout(config.timeouts.request_timeout)
             .connect_timeout(config.timeouts.connect_timeout)
@@ -69,7 +69,7 @@ impl ResilientHttpClient {
             // Enable secure TLS settings
             .https_only(true)
             .build()
-            .map_err(|e| AuthError::ServiceUnavailable {
+            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable {
                 reason: format!("Failed to create HTTP client: {}", e),
             })?;
 
@@ -165,7 +165,7 @@ impl ResilientRequestBuilder {
         self
     }
 
-    pub async fn send(self) -> Result<ResilientResponse, AuthError> {
+    pub async fn send(self) -> Result<ResilientResponse, crate::shared::error::AppError> {
         let mut backoff = RetryBackoff::new(self.config.retry.clone());
 
         loop {
@@ -173,7 +173,7 @@ impl ResilientRequestBuilder {
             let request =
                 self.request_builder
                     .try_clone()
-                    .ok_or_else(|| AuthError::ServiceUnavailable {
+                    .ok_or_else(|| crate::shared::error::AppError::ServiceUnavailable {
                         reason: "Cannot retry request with streaming body".to_string(),
                     })?;
 
@@ -187,7 +187,7 @@ impl ResilientRequestBuilder {
                     return Ok(ResilientResponse { response });
                 }
                 Err(CircuitBreakerError::Open) => {
-                    return Err(AuthError::ServiceUnavailable {
+                    return Err(crate::shared::error::AppError::ServiceUnavailable {
                         reason: "HTTP circuit breaker is open".to_string(),
                     });
                 }
@@ -206,7 +206,7 @@ impl ResilientRequestBuilder {
                     );
                 }
                 Err(CircuitBreakerError::TooManyRequests) => {
-                    return Err(AuthError::ServiceUnavailable {
+                    return Err(crate::shared::error::AppError::ServiceUnavailable {
                         reason: "HTTP circuit breaker: too many requests".to_string(),
                     });
                 }
@@ -214,7 +214,7 @@ impl ResilientRequestBuilder {
 
             // Try to get next delay for retry
             if backoff.next_delay().await.is_none() {
-                return Err(AuthError::ServiceUnavailable {
+                return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "HTTP request failed after all retries".to_string(),
                 });
             }
@@ -239,39 +239,39 @@ impl ResilientResponse {
         self.response.url()
     }
 
-    pub async fn text(self) -> Result<String, AuthError> {
+    pub async fn text(self) -> Result<String, crate::shared::error::AppError> {
         self.response
             .text()
             .await
-            .map_err(|e| AuthError::ServiceUnavailable {
+            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable {
                 reason: format!("Failed to read response text: {}", e),
             })
     }
 
-    pub async fn bytes(self) -> Result<Bytes, AuthError> {
+    pub async fn bytes(self) -> Result<Bytes, crate::shared::error::AppError> {
         self.response
             .bytes()
             .await
-            .map_err(|e| AuthError::ServiceUnavailable {
+            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable {
                 reason: format!("Failed to read response bytes: {}", e),
             })
     }
 
-    pub async fn json<T: for<'de> Deserialize<'de>>(self) -> Result<T, AuthError> {
+    pub async fn json<T: for<'de> Deserialize<'de>>(self) -> Result<T, crate::shared::error::AppError> {
         self.response
             .json()
             .await
-            .map_err(|e| AuthError::ValidationError {
+            .map_err(|e| crate::shared::error::AppError::ValidationError {
                 field: "response".to_string(),
                 reason: format!("Failed to parse JSON response: {}", e),
             })
     }
 
-    pub fn error_for_status(self) -> Result<Self, AuthError> {
+    pub fn error_for_status(self) -> Result<Self, crate::shared::error::AppError> {
         let status = self.response.status();
 
         if status.is_client_error() || status.is_server_error() {
-            Err(AuthError::ServiceUnavailable {
+            Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: format!(
                     "HTTP error {}: {}",
                     status.as_u16(),
@@ -290,7 +290,7 @@ pub struct OidcHttpClient {
 }
 
 impl OidcHttpClient {
-    pub fn new(provider: &str) -> Result<Self, AuthError> {
+    pub fn new(provider: &str) -> Result<Self, crate::shared::error::AppError> {
         let config = ResilientHttpConfig {
             circuit_breaker: CircuitBreakerConfig {
                 failure_threshold: 3,

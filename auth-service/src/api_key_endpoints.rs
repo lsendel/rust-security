@@ -1,5 +1,5 @@
 use crate::api_key_store::{ApiKey, ApiKeyDetails};
-use crate::errors::{internal_error, AuthError};
+use crate::shared::error::AppError;
 use crate::AppState;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
@@ -35,8 +35,8 @@ pub fn router() -> Router<AppState> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError::NotFound` if the API key with the given prefix does not exist.
-/// Returns `AuthError::InternalError` if the revocation operation fails.
+/// Returns `crate::shared::error::AppError::NotFound` if the API key with the given prefix does not exist.
+/// Returns `crate::shared::error::AppError::InternalError` if the revocation operation fails.
 ///
 /// # Panics
 ///
@@ -44,16 +44,16 @@ pub fn router() -> Router<AppState> {
 async fn revoke_api_key(
     State(state): State<AppState>,
     Path(prefix): Path<String>,
-) -> Result<(), AuthError> {
+) -> Result<(), crate::shared::error::AppError> {
     state
         .api_key_store
         .revoke_api_key(&prefix)
         .await
         .map_err(|e| match e {
-            crate::api_key_store::ApiKeyError::NotFound => AuthError::NotFound {
+            crate::api_key_store::ApiKeyError::NotFound => crate::shared::error::AppError::NotFound {
                 resource: "API Key".to_string(),
             },
-            _ => internal_error("Failed to revoke API key"),
+            _ => AppError::internal("Failed to revoke API key"),
         })?;
 
     Ok(())
@@ -63,7 +63,7 @@ async fn revoke_api_key(
 ///
 /// # Errors
 ///
-/// Returns `AuthError::InternalError` if the list operation fails due to:
+/// Returns `crate::shared::error::AppError::InternalError` if the list operation fails due to:
 /// - Database connection issues
 /// - Serialization failures
 /// - Storage backend errors
@@ -73,12 +73,12 @@ async fn revoke_api_key(
 /// This function does not panic under normal operation.
 async fn list_api_keys(
     State(state): State<AppState>,
-) -> Result<Json<Vec<ApiKeyDetails>>, AuthError> {
+) -> Result<Json<Vec<ApiKeyDetails>>, crate::shared::error::AppError> {
     let keys = state
         .api_key_store
         .list_api_keys()
         .await
-        .map_err(|e| internal_error(&format!("Failed to list API keys: {e}")))?;
+        .map_err(|e| AppError::internal(&format!("Failed to list API keys: {e}")))?;
 
     Ok(Json(keys))
 }
@@ -87,8 +87,8 @@ async fn list_api_keys(
 ///
 /// # Errors
 ///
-/// Returns `AuthError::NotFound` if the API key with the given prefix does not exist.
-/// Returns `AuthError::InternalError` if the get operation fails due to storage backend errors.
+/// Returns `crate::shared::error::AppError::NotFound` if the API key with the given prefix does not exist.
+/// Returns `crate::shared::error::AppError::InternalError` if the get operation fails due to storage backend errors.
 ///
 /// # Panics
 ///
@@ -96,13 +96,13 @@ async fn list_api_keys(
 async fn get_api_key(
     State(state): State<AppState>,
     Path(prefix): Path<String>,
-) -> Result<Json<ApiKeyDetails>, AuthError> {
+) -> Result<Json<ApiKeyDetails>, crate::shared::error::AppError> {
     let api_key = state
         .api_key_store
         .get_api_key_by_prefix(&prefix)
         .await
-        .map_err(|e| internal_error(&format!("Failed to get API key: {e}")))?
-        .ok_or(AuthError::NotFound {
+        .map_err(|e| AppError::internal(&format!("Failed to get API key: {e}")))?
+        .ok_or(crate::shared::error::AppError::NotFound {
             resource: "API Key".to_string(),
         })?;
 
@@ -123,7 +123,7 @@ async fn get_api_key(
 ///
 /// # Errors
 ///
-/// Returns `AuthError::InternalError` if:
+/// Returns `crate::shared::error::AppError::InternalError` if:
 /// - Random key generation fails
 /// - Password hashing with Argon2 fails
 /// - API key storage operation fails
@@ -135,7 +135,7 @@ async fn get_api_key(
 async fn create_api_key(
     State(state): State<AppState>,
     Json(payload): Json<CreateApiKeyRequest>,
-) -> Result<Json<CreateApiKeyResponse>, AuthError> {
+) -> Result<Json<CreateApiKeyResponse>, crate::shared::error::AppError> {
     // 1. Generate a new secure API key string.
     let mut key_bytes = [0u8; 32];
     OsRng.fill_bytes(&mut key_bytes);
@@ -150,7 +150,7 @@ async fn create_api_key(
     let argon2 = Argon2::default();
     let hashed_key = argon2
         .hash_password(api_key_string.as_bytes(), &salt)
-        .map_err(|e| internal_error(&format!("Failed to hash API key: {e}")))?
+        .map_err(|e| AppError::internal(&format!("Failed to hash API key: {e}")))?
         .to_string();
 
     // 4. Store the hashed key, prefix, client_id, and other metadata in the database.
@@ -164,7 +164,7 @@ async fn create_api_key(
             payload.expires_at,
         )
         .await
-        .map_err(|e| internal_error(&format!("Failed to create API key: {e}")))?;
+        .map_err(|e| AppError::internal(&format!("Failed to create API key: {e}")))?;
 
     // 5. Return the full, unhashed key to the user.
     Ok(Json(CreateApiKeyResponse {

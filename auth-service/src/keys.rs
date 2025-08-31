@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{error, info, instrument, warn};
 
-use crate::errors::{internal_error, AuthError};
+use crate::shared::error::AppError;
 
 #[derive(Clone)]
 pub struct SecureKeyMaterial {
@@ -59,7 +59,7 @@ impl KeyManager {
 
     /// Initialize keys with proper synchronization and retry logic
     #[instrument(skip(self))]
-    async fn initialize(&self) -> Result<(), AuthError> {
+    async fn initialize(&self) -> Result<(), crate::shared::error::AppError> {
         // Use OnceCell to ensure initialization happens only once
         if self.initialized.get().is_some() {
             return Ok(());
@@ -85,7 +85,7 @@ impl KeyManager {
                     );
                     self.initialized
                         .set(true)
-                        .map_err(|_| internal_error("Failed to mark key manager as initialized"))?;
+                        .map_err(|_| AppError::internal("Failed to mark key manager as initialized"))?;
                     return Ok(());
                 }
                 Err(e) => {
@@ -112,7 +112,7 @@ impl KeyManager {
 
     /// Generate and store a new key with atomic operations
     #[instrument(skip(self))]
-    async fn generate_and_store_key(&self, is_initialization: bool) -> Result<String, AuthError> {
+    async fn generate_and_store_key(&self, is_initialization: bool) -> Result<String, crate::shared::error::AppError> {
         let key_material = Self::generate_secure_key_material()?;
         let kid = key_material.kid.clone();
 
@@ -142,7 +142,7 @@ impl KeyManager {
 
     /// Thread-safe key rotation with proper synchronization
     #[instrument(skip(self))]
-    async fn ensure_key_available(&self) -> Result<(), AuthError> {
+    async fn ensure_key_available(&self) -> Result<(), crate::shared::error::AppError> {
         // Fast path: check if we have a recent key
         {
             let keys = self.keys.read().await;
@@ -202,14 +202,14 @@ impl KeyManager {
     }
 
     /// Get current signing key with fallback handling
-    async fn get_signing_key(&self) -> Result<(String, EncodingKey), AuthError> {
+    async fn get_signing_key(&self) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
         // Ensure we have an available key first
         self.ensure_key_available().await?;
 
         let keys = self.keys.read().await;
         keys.last().map_or_else(
             || {
-                Err(internal_error(
+                Err(AppError::internal(
                     "No signing key available after initialization",
                 ))
             },
@@ -235,13 +235,13 @@ impl KeyManager {
     }
 
     /// Generate secure key material with proper error handling
-    fn generate_secure_key_material() -> Result<SecureKeyMaterial, AuthError> {
+    fn generate_secure_key_material() -> Result<SecureKeyMaterial, crate::shared::error::AppError> {
         // SECURITY: Load RSA key from secure environment variable or external key management
         // This prevents hardcoded keys and supports key rotation
         let private_key_pem = std::env::var("JWT_RSA_PRIVATE_KEY")
             .or_else(|_| std::env::var("RSA_PRIVATE_KEY"))
             .map_err(|_| {
-                internal_error(
+                AppError::internal(
                     "JWT_RSA_PRIVATE_KEY or RSA_PRIVATE_KEY environment variable must be set. \
                      Generate with: openssl genpkey -algorithm RSA -pkcs8 -out private_key.pem -pkcs8"
                 )
@@ -251,14 +251,14 @@ impl KeyManager {
 
         // Create jsonwebtoken keys
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| internal_error(&format!("Failed to create encoding key: {e}")))?;
+            .map_err(|e| AppError::internal(&format!("Failed to create encoding key: {e}")))?;
         let decoding_key = DecodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| internal_error(&format!("Failed to create decoding key: {e}")))?;
+            .map_err(|e| AppError::internal(&format!("Failed to create decoding key: {e}")))?;
 
         // Extract public key components for JWK (from the generated key)
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex)
-            .map_err(|e| internal_error(&format!("Failed to decode modulus hex: {e}")))?;
+            .map_err(|e| AppError::internal(&format!("Failed to decode modulus hex: {e}")))?;
 
         let n = Self::base64url(&modulus_bytes);
         let e = Self::base64url(&[0x01, 0x00, 0x01]); // Standard RSA exponent (65537)
@@ -309,11 +309,11 @@ pub async fn jwks_document() -> Value {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if:
+/// Returns `crate::shared::error::AppError` if:
 /// - No active signing key is available
 /// - Key management system is not initialized
 /// - Key loading or decoding fails
-pub async fn current_signing_key() -> Result<(String, EncodingKey), AuthError> {
+pub async fn current_signing_key() -> Result<(String, EncodingKey), crate::shared::error::AppError> {
     KEY_MANAGER.get_signing_key().await
 }
 
@@ -326,8 +326,8 @@ pub async fn get_current_jwks() -> Value {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if key initialization or availability check fails
-pub async fn ensure_key_available() -> Result<(), AuthError> {
+/// Returns `crate::shared::error::AppError` if key initialization or availability check fails
+pub async fn ensure_key_available() -> Result<(), crate::shared::error::AppError> {
     KEY_MANAGER.ensure_key_available().await
 }
 
@@ -340,8 +340,8 @@ pub async fn get_current_kid() -> Option<String> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if key rotation or availability check fails
-pub async fn maybe_rotate() -> Result<(), AuthError> {
+/// Returns `crate::shared::error::AppError` if key rotation or availability check fails
+pub async fn maybe_rotate() -> Result<(), crate::shared::error::AppError> {
     KEY_MANAGER.ensure_key_available().await
 }
 
@@ -351,7 +351,7 @@ pub async fn maybe_rotate() -> Result<(), AuthError> {
 ///
 /// Returns an error if key initialization fails due to cryptographic errors or storage issues
 #[instrument]
-pub async fn initialize_keys() -> Result<(), AuthError> {
+pub async fn initialize_keys() -> Result<(), crate::shared::error::AppError> {
     KEY_MANAGER.initialize().await
 }
 

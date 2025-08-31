@@ -17,13 +17,13 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    errors::AuthError,
     jit_token_manager::{JitTokenManager, TokenResponse},
     non_human_monitoring::{NonHumanIdentityMonitor, NonHumanMetrics},
     service_identity::{
         Environment, IdentityConfig, IdentityType, JitAccessRequest, RequestContext,
         ServiceIdentity, ServiceIdentityManager,
     },
+    shared::error::AppError,
 };
 
 /// Register a new service identity
@@ -205,9 +205,9 @@ pub async fn request_jit_token(
         .map_err(|e| {
             warn!("JIT token request failed: {}", e);
             match e {
-                AuthError::IdentityNotFound => ApiError::NotFound,
-                AuthError::IdentitySuspended => ApiError::Forbidden,
-                AuthError::AnomalyDetected => ApiError::TooManyRequests,
+                crate::shared::error::AppError::IdentityNotFound => ApiError::NotFound,
+                crate::shared::error::AppError::IdentitySuspended => ApiError::Forbidden,
+                crate::shared::error::AppError::AnomalyDetected => ApiError::TooManyRequests,
                 _ => ApiError::InternalError,
             }
         })?;

@@ -1,4 +1,4 @@
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use std::sync::{
     atomic::{AtomicU32, AtomicU64, Ordering},
     Arc, Mutex,
@@ -19,7 +19,7 @@ pub enum CircuitBreakerError {
     OperationFailed(String),
 }
 
-impl From<CircuitBreakerError> for AuthError {
+impl From<CircuitBreakerError> for crate::shared::error::AppError {
     fn from(err: CircuitBreakerError) -> Self {
         match err {
             CircuitBreakerError::Open => Self::ServiceUnavailable {

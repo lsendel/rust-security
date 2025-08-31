@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use crate::jit_token_manager::TokenUsage;
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use crate::service_identity::{BehavioralBaseline, IdentityType, RequestContext, ServiceIdentity};
@@ -133,7 +133,7 @@ pub struct NonHumanIdentityMonitor {
 /// Alert handler for security incidents
 #[async_trait]
 pub trait AlertHandler: Send + Sync {
-    async fn send_alert(&self, alert: SecurityAlert) -> Result<(), AuthError>;
+    async fn send_alert(&self, alert: SecurityAlert) -> Result<(), crate::shared::error::AppError>;
     async fn get_alert_history(&self, identity_id: Uuid) -> Vec<SecurityAlert>;
 }
 
@@ -167,7 +167,7 @@ impl NonHumanIdentityMonitor {
         identity: &ServiceIdentity,
         success: bool,
         context: &RequestContext,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let mut metrics = self.metrics.write().await;
 
         let identity_metrics = metrics
@@ -225,7 +225,7 @@ impl NonHumanIdentityMonitor {
         request_size: usize,
         response_size: usize,
         latency_ms: u64,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let activity = ActivityLog {
             identity_id,
             timestamp: Utc::now(),
@@ -312,22 +312,22 @@ impl NonHumanIdentityMonitor {
     pub async fn establish_baseline(
         &self,
         identity_id: Uuid,
-    ) -> Result<BehavioralBaseline, AuthError> {
+    ) -> Result<BehavioralBaseline, crate::shared::error::AppError> {
         let logs = self.activity_logs.read().await;
         let metrics = self.metrics.read().await;
 
         let identity_logs = logs
             .get(&identity_id)
-            .ok_or(AuthError::InsufficientDataForBaseline)?;
+            .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?;
 
         let identity_metrics = metrics
             .get(&identity_id)
-            .ok_or(AuthError::InsufficientDataForBaseline)?;
+            .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?;
 
         let config = self.config.read().await;
 
         if identity_logs.len() < config.min_requests_for_baseline {
-            return Err(AuthError::InsufficientDataForBaseline);
+            return Err(crate::shared::error::AppError::InsufficientDataForBaseline);
         }
 
         // Calculate baseline metrics
@@ -447,7 +447,7 @@ impl NonHumanIdentityMonitor {
         identity: &ServiceIdentity,
         anomaly_type: RiskFactorType,
         severity: AlertSeverity,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let config = self.config.read().await;
 
         match severity {
@@ -503,7 +503,7 @@ impl NonHumanIdentityMonitor {
         identity: &ServiceIdentity,
         metrics: &mut NonHumanMetrics,
         context: &RequestContext,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let mut risk_factors = Vec::new();
 
         // Check request rate
@@ -596,7 +596,7 @@ mod tests {
 
     #[async_trait]
     impl AlertHandler for MockAlertHandler {
-        async fn send_alert(&self, _: SecurityAlert) -> Result<(), AuthError> {
+        async fn send_alert(&self, _: SecurityAlert) -> Result<(), crate::shared::error::AppError> {
             Ok(())
         }
         async fn get_alert_history(&self, _: Uuid) -> Vec<SecurityAlert> {

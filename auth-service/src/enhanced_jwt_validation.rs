@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::AuthError;
+use crate::shared::error::AppError;
 
 /// JWT validation configuration with security constraints
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,14 +178,14 @@ impl EnhancedJwtValidator {
         &self,
         token: &str,
         decoding_key: &DecodingKey,
-    ) -> Result<JwtValidationResult, AuthError> {
+    ) -> Result<JwtValidationResult, crate::shared::error::AppError> {
         let validation_start = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
 
         // Step 1: Decode header and perform algorithm validation
-        let header = jsonwebtoken::decode_header(token).map_err(|e| AuthError::InvalidToken {
+        let header = jsonwebtoken::decode_header(token).map_err(|e| crate::shared::error::AppError::InvalidToken {
             reason: format!("Invalid JWT header: {}", e),
         })?;
 
@@ -199,7 +199,7 @@ impl EnhancedJwtValidator {
         let token_data =
             jsonwebtoken::decode::<Value>(token, decoding_key, &validation).map_err(|e| {
                 self.log_validation_failure("JWT decode failed", &e.to_string());
-                AuthError::InvalidToken {
+                crate::shared::error::AppError::InvalidToken {
                     reason: format!("JWT validation failed: {}", e),
                 }
             })?;
@@ -224,20 +224,20 @@ impl EnhancedJwtValidator {
     }
 
     /// Validate that the algorithm is in the allowed list
-    fn validate_algorithm(&self, algorithm: &Algorithm) -> Result<(), AuthError> {
+    fn validate_algorithm(&self, algorithm: &Algorithm) -> Result<(), crate::shared::error::AppError> {
         if !self.config.allowed_algorithms.contains(algorithm) {
             let error_msg = format!(
                 "Algorithm {:?} not in allowed algorithms: {:?}",
                 algorithm, self.config.allowed_algorithms
             );
             self.log_validation_failure("Algorithm not allowed", &error_msg);
-            return Err(AuthError::InvalidToken { reason: error_msg });
+            return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
         }
         Ok(())
     }
 
     /// Validate token type in header
-    fn validate_token_type(&self, header: &jsonwebtoken::Header) -> Result<(), AuthError> {
+    fn validate_token_type(&self, header: &jsonwebtoken::Header) -> Result<(), crate::shared::error::AppError> {
         if let Some(required_type) = &self.config.required_token_type {
             let default_type = "JWT".to_string();
             let token_type = header.typ.as_ref().unwrap_or(&default_type);
@@ -247,14 +247,14 @@ impl EnhancedJwtValidator {
                     token_type, required_type
                 );
                 self.log_validation_failure("Invalid token type", &error_msg);
-                return Err(AuthError::InvalidToken { reason: error_msg });
+                return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
             }
         }
         Ok(())
     }
 
     /// Create validation parameters based on configuration
-    fn create_validation_params(&self, algorithm: &Algorithm) -> Result<Validation, AuthError> {
+    fn create_validation_params(&self, algorithm: &Algorithm) -> Result<Validation, crate::shared::error::AppError> {
         let mut validation = Validation::new(*algorithm);
 
         validation.validate_exp = self.config.validate_expiration;
@@ -285,19 +285,19 @@ impl EnhancedJwtValidator {
     }
 
     /// Validate required claims are present
-    fn validate_claims(&self, claims: &Value) -> Result<(), AuthError> {
+    fn validate_claims(&self, claims: &Value) -> Result<(), crate::shared::error::AppError> {
         for required_claim in &self.config.required_claims {
             if !claims.get(required_claim).is_some() {
                 let error_msg = format!("Missing required claim: {}", required_claim);
                 self.log_validation_failure("Missing required claim", &error_msg);
-                return Err(AuthError::InvalidToken { reason: error_msg });
+                return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
             }
         }
         Ok(())
     }
 
     /// Validate token age if configured
-    fn validate_token_age(&self, claims: &Value, current_time: i64) -> Result<(), AuthError> {
+    fn validate_token_age(&self, claims: &Value, current_time: i64) -> Result<(), crate::shared::error::AppError> {
         if let Some(max_age) = self.config.max_token_age_seconds {
             if let Some(iat) = claims.get("iat").and_then(|v| v.as_i64()) {
                 let token_age = current_time - iat;
@@ -307,7 +307,7 @@ impl EnhancedJwtValidator {
                         token_age, max_age
                     );
                     self.log_validation_failure("Token too old", &error_msg);
-                    return Err(AuthError::InvalidToken { reason: error_msg });
+                    return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
                 }
             }
         }
@@ -315,7 +315,7 @@ impl EnhancedJwtValidator {
     }
 
     /// Run custom claim validators
-    fn run_custom_validators(&self, claims: &Value) -> Result<(), AuthError> {
+    fn run_custom_validators(&self, claims: &Value) -> Result<(), crate::shared::error::AppError> {
         for validator in &self.config.custom_validators {
             if let Some(claim_value) = claims.get(&validator.claim_name) {
                 if let Err(error) = (validator.validator)(claim_value) {
@@ -324,7 +324,7 @@ impl EnhancedJwtValidator {
                         validator.claim_name, error
                     );
                     self.log_validation_failure("Custom validation failed", &error_msg);
-                    return Err(AuthError::InvalidToken { reason: error_msg });
+                    return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
                 }
             }
         }
@@ -337,7 +337,7 @@ impl EnhancedJwtValidator {
         header: &jsonwebtoken::Header,
         claims: &Value,
         validation_time: i64,
-    ) -> Result<ValidationMetadata, AuthError> {
+    ) -> Result<ValidationMetadata, crate::shared::error::AppError> {
         let issued_at = claims.get("iat").and_then(|v| v.as_i64());
         let token_age = issued_at.map(|iat| validation_time - iat);
 
@@ -449,7 +449,7 @@ impl Default for EnhancedJwtValidator {
 }
 
 /// Convenience function to create a validator for OAuth access tokens
-pub fn create_oauth_access_token_validator() -> Result<EnhancedJwtValidator, AuthError> {
+pub fn create_oauth_access_token_validator() -> Result<EnhancedJwtValidator, crate::shared::error::AppError> {
     let mut config = JwtValidationConfig::default();
 
     // OAuth-specific claims
@@ -480,7 +480,7 @@ pub fn create_oauth_access_token_validator() -> Result<EnhancedJwtValidator, Aut
 }
 
 /// Convenience function to create a validator for ID tokens
-pub fn create_id_token_validator() -> Result<EnhancedJwtValidator, AuthError> {
+pub fn create_id_token_validator() -> Result<EnhancedJwtValidator, crate::shared::error::AppError> {
     let mut config = JwtValidationConfig::default();
 
     // ID token specific claims

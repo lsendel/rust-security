@@ -1,5 +1,5 @@
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::AuthError;
+use crate::shared::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -255,13 +255,13 @@ impl ScimAuthorizationManager {
         &self,
         context: &ScimUserContext,
         operation: &ScimOperation,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let required_permission = operation.required_permission();
 
         // Check basic permission
         if !context.has_permission(&required_permission) {
             self.log_authorization_failure(context, operation, "insufficient_permissions");
-            return Err(AuthError::Forbidden {
+            return Err(crate::shared::error::AppError::Forbidden {
                 reason: format!("Insufficient permissions for operation: {:?}", operation),
             });
         }
@@ -273,7 +273,7 @@ impl ScimAuthorizationManager {
             | ScimOperation::UserDelete { user_id } => {
                 if !context.can_access_user(user_id, &required_permission) {
                     self.log_authorization_failure(context, operation, "user_access_denied");
-                    return Err(AuthError::Forbidden {
+                    return Err(crate::shared::error::AppError::Forbidden {
                         reason: "Cannot access the specified user".to_string(),
                     });
                 }
@@ -282,7 +282,7 @@ impl ScimAuthorizationManager {
                 // Password reset requires special handling
                 if !context.has_permission(&ScimPermission::UserPasswordReset) {
                     self.log_authorization_failure(context, operation, "password_reset_denied");
-                    return Err(AuthError::Forbidden {
+                    return Err(crate::shared::error::AppError::Forbidden {
                         reason: "Password reset permission required".to_string(),
                     });
                 }
@@ -294,7 +294,7 @@ impl ScimAuthorizationManager {
                         operation,
                         "self_service_password_reset_denied",
                     );
-                    return Err(AuthError::Forbidden {
+                    return Err(crate::shared::error::AppError::Forbidden {
                         reason: "Self-service users cannot reset passwords via SCIM".to_string(),
                     });
                 }
@@ -481,7 +481,7 @@ pub fn authorize_scim_operation(
     client_id: Option<&str>,
     ip_address: Option<&str>,
     operation: &ScimOperation,
-) -> Result<(), AuthError> {
+) -> Result<(), crate::shared::error::AppError> {
     let manager = SCIM_AUTHZ_MANAGER.lock().unwrap();
     let context = manager.get_user_context(user_id, username, client_id, ip_address);
     manager.authorize_operation(&context, operation)

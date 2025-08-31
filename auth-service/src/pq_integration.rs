@@ -39,7 +39,7 @@ use crate::pq_migration::{
     run_benchmark, PerformanceBenchmark,
 };
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::{AppState, AuthError};
+use crate::{AppState, crate::shared::error::AppError};
 
 /// Post-quantum configuration endpoint response
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -212,7 +212,7 @@ async fn should_use_post_quantum(client_id: &Option<String>) -> bool {
     path = "/admin/post-quantum/config",
     responses((status = 200, description = "Post-quantum configuration", body = PQConfigResponse))
 )]
-pub async fn get_pq_config() -> Result<Json<PQConfigResponse>, AuthError> {
+pub async fn get_pq_config() -> Result<Json<PQConfigResponse>, crate::shared::error::AppError> {
     let manager = get_pq_manager();
     let status = manager.migration_status();
 
@@ -243,7 +243,7 @@ pub async fn get_pq_config() -> Result<Json<PQConfigResponse>, AuthError> {
 )]
 pub async fn create_pq_jwt(
     Json(request): Json<PQJwtRequest>,
-) -> Result<Json<serde_json::Value>, AuthError> {
+) -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let expires_in = request.expires_in.unwrap_or(3600);
     let force_pq = request.force_post_quantum.unwrap_or(false);
 
@@ -255,7 +255,7 @@ pub async fn create_pq_jwt(
         force_pq,
     )
     .await
-    .map_err(|e| AuthError::InternalError { 
+    .map_err(|e| crate::shared::error::AppError::Internal( 
         error_id: uuid::Uuid::new_v4(), 
         context: e.to_string() 
     })?;
@@ -294,13 +294,13 @@ pub async fn create_pq_jwt(
 )]
 pub async fn run_pq_benchmark(
     Json(request): Json<BenchmarkRequest>,
-) -> Result<Json<PerformanceBenchmark>, AuthError> {
+) -> Result<Json<PerformanceBenchmark>, crate::shared::error::AppError> {
     let algorithm = match request.algorithm.as_deref().unwrap_or("DILITHIUM3") {
         "DILITHIUM2" => PQAlgorithm::Dilithium(SecurityLevel::Level1),
         "DILITHIUM3" => PQAlgorithm::Dilithium(SecurityLevel::Level3),
         "DILITHIUM5" => PQAlgorithm::Dilithium(SecurityLevel::Level5),
         _ => {
-            return Err(AuthError::InvalidRequest { 
+            return Err(crate::shared::error::AppError::InvalidRequest { 
                 reason: "Unsupported algorithm".to_string() 
             })
         }
@@ -309,14 +309,14 @@ pub async fn run_pq_benchmark(
     let iterations = request.iterations.unwrap_or(100);
 
     if iterations > 10000 {
-        return Err(AuthError::InvalidRequest { 
+        return Err(crate::shared::error::AppError::InvalidRequest { 
             reason: "Too many iterations (max 10000)".to_string() 
         });
     }
 
     let benchmark = run_benchmark(algorithm, iterations)
         .await
-        .map_err(|e| AuthError::InternalError { 
+        .map_err(|e| crate::shared::error::AppError::Internal( 
             error_id: uuid::Uuid::new_v4(), 
             context: e.to_string() 
         })?;
@@ -330,7 +330,7 @@ pub async fn run_pq_benchmark(
     path = "/admin/post-quantum/keys/stats",
     responses((status = 200, description = "Key management statistics"))
 )]
-pub async fn get_key_stats() -> Result<Json<serde_json::Value>, AuthError> {
+pub async fn get_key_stats() -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let key_manager = get_pq_key_manager();
     let stats = key_manager.get_statistics().await;
 
@@ -346,7 +346,7 @@ pub async fn get_key_stats() -> Result<Json<serde_json::Value>, AuthError> {
 )]
 pub async fn force_key_rotation(
     Json(request): Json<KeyRotationRequest>,
-) -> Result<Json<serde_json::Value>, AuthError> {
+) -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let key_manager = get_pq_key_manager();
 
     let reason = if request.force_rotation.unwrap_or(false) {
@@ -358,7 +358,7 @@ pub async fn force_key_rotation(
     let rotated_keys = key_manager
         .rotate_keys(reason)
         .await
-        .map_err(|e| AuthError::InternalError { 
+        .map_err(|e| crate::shared::error::AppError::Internal( 
             error_id: uuid::Uuid::new_v4(), 
             context: e.to_string() 
         })?;
@@ -398,13 +398,13 @@ pub async fn force_key_rotation(
 )]
 pub async fn start_migration_phase(
     Json(request): Json<MigrationPhaseRequest>,
-) -> Result<Json<serde_json::Value>, AuthError> {
+) -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let migration_manager = get_migration_manager();
 
     migration_manager
         .start_phase(&request.phase_id)
         .await
-        .map_err(|e| AuthError::InternalError { 
+        .map_err(|e| crate::shared::error::AppError::Internal( 
             error_id: uuid::Uuid::new_v4(), 
             context: e.to_string() 
         })?;
@@ -422,7 +422,7 @@ pub async fn start_migration_phase(
     path = "/admin/post-quantum/migration/timeline",
     responses((status = 200, description = "Migration timeline"))
 )]
-pub async fn get_migration_timeline() -> Result<Json<serde_json::Value>, AuthError> {
+pub async fn get_migration_timeline() -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let migration_manager = get_migration_manager();
     let timeline = migration_manager.get_migration_timeline().await;
 
@@ -435,7 +435,7 @@ pub async fn get_migration_timeline() -> Result<Json<serde_json::Value>, AuthErr
     path = "/admin/post-quantum/compliance/report",
     responses((status = 200, description = "NIST compliance report"))
 )]
-pub async fn get_compliance_report() -> Result<Json<serde_json::Value>, AuthError> {
+pub async fn get_compliance_report() -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let report = generate_compliance_report().await;
 
     Ok(Json(serde_json::to_value(report).unwrap()))
@@ -450,9 +450,9 @@ pub async fn get_compliance_report() -> Result<Json<serde_json::Value>, AuthErro
 )]
 pub async fn emergency_rollback(
     Json(request): Json<EmergencyRollbackRequest>,
-) -> Result<Json<serde_json::Value>, AuthError> {
+) -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     if !request.confirm {
-        return Err(AuthError::InvalidRequest { 
+        return Err(crate::shared::error::AppError::InvalidRequest { 
             reason: "Emergency rollback requires confirmation".to_string() 
         });
     }
@@ -463,7 +463,7 @@ pub async fn emergency_rollback(
         "quantum_threat" => EmergencyTrigger::QuantumThreatEscalation,
         "manual" => EmergencyTrigger::Manual,
         _ => {
-            return Err(AuthError::InvalidRequest { 
+            return Err(crate::shared::error::AppError::InvalidRequest { 
                 reason: "Invalid trigger type".to_string() 
             })
         }
@@ -473,7 +473,7 @@ pub async fn emergency_rollback(
     let rotated_keys = key_manager
         .emergency_rotation(trigger)
         .await
-        .map_err(|e| AuthError::InternalError { 
+        .map_err(|e| crate::shared::error::AppError::Internal( 
             error_id: uuid::Uuid::new_v4(), 
             context: e.to_string() 
         })?;
@@ -512,7 +512,7 @@ pub async fn emergency_rollback(
     path = "/admin/post-quantum/metrics",
     responses((status = 200, description = "Performance metrics"))
 )]
-pub async fn get_pq_metrics() -> Result<Json<serde_json::Value>, AuthError> {
+pub async fn get_pq_metrics() -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let pq_manager = get_pq_manager();
     let key_manager = get_pq_key_manager();
     let migration_manager = get_migration_manager();
@@ -541,7 +541,7 @@ pub async fn get_pq_metrics() -> Result<Json<serde_json::Value>, AuthError> {
     path = "/admin/post-quantum/health",
     responses((status = 200, description = "Post-quantum health status"))
 )]
-pub async fn pq_health_check() -> Result<Json<serde_json::Value>, AuthError> {
+pub async fn pq_health_check() -> Result<Json<serde_json::Value>, crate::shared::error::AppError> {
     let pq_manager = get_pq_manager();
     let key_manager = get_pq_key_manager();
 
@@ -615,7 +615,7 @@ pub async fn pq_middleware(
 }
 
 /// Enhanced JWT verification that supports both classical and post-quantum
-pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, AuthError> {
+pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, crate::shared::error::AppError> {
     let jwt_manager = get_pq_jwt_manager();
 
     match jwt_manager.extract_claims(token).await {
@@ -656,7 +656,7 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
                 .with_detail("error".to_string(), e.to_string()),
             );
 
-            Err(AuthError::InvalidToken { 
+            Err(crate::shared::error::AppError::InvalidToken { 
                 reason: e.to_string() 
             })
         }
@@ -670,7 +670,7 @@ pub async fn migrate_token_issuance(
     client_id: Option<String>,
     make_id_token: bool,
     subject: Option<String>,
-) -> Result<crate::TokenResponse, AuthError> {
+) -> Result<crate::TokenResponse, crate::shared::error::AppError> {
     let expires_in = crate::get_token_expiry_seconds();
 
     // Try post-quantum first
@@ -685,7 +685,7 @@ pub async fn migrate_token_issuance(
     {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| AuthError::InternalError { 
+            .map_err(|_| crate::shared::error::AppError::Internal( 
                 error_id: uuid::Uuid::new_v4(), 
                 context: "System time error".to_string() 
             })?

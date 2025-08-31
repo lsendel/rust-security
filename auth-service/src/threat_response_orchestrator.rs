@@ -1,5 +1,5 @@
 use crate::core::security::SecurityEvent;
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::{process_with_conversion, ThreatDetectionAdapter};
 use crate::threat_types::{
@@ -1356,7 +1356,7 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Execute response actions for a given threat context
-    pub async fn execute_response(&self, threat_context: &ThreatContext) -> Result<(), AuthError> {
+    pub async fn execute_response(&self, threat_context: &ThreatContext) -> Result<(), crate::shared::error::AppError> {
         info!(
             "Executing response for threat: {}",
             threat_context.threat_id

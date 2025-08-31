@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
-use crate::errors::{internal_error, AuthError};
+use crate::shared::error::AppError;
 use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 
@@ -172,7 +172,7 @@ impl KeyManagementService {
 
     /// Initialize key management service
     #[instrument(skip(self))]
-    pub async fn initialize(&self) -> Result<(), AuthError> {
+    pub async fn initialize(&self) -> Result<(), crate::shared::error::AppError> {
         info!("Initializing key management service");
 
         // Generate initial key if none exists
@@ -193,7 +193,7 @@ impl KeyManagementService {
 
     /// Generate a new key pair
     #[instrument(skip(self))]
-    pub async fn generate_new_key(&self, actor: &str) -> Result<String, AuthError> {
+    pub async fn generate_new_key(&self, actor: &str) -> Result<String, crate::shared::error::AppError> {
         let kid = format!("key-{}", Uuid::new_v4());
         let now = Self::current_timestamp();
 
@@ -201,7 +201,7 @@ impl KeyManagementService {
 
         let (encoding_key, decoding_key, public_jwk) = match self.config.algorithm {
             KeyAlgorithm::Rs256 => self.generate_rsa_key(&kid).await?,
-            KeyAlgorithm::Es256 => return Err(internal_error("ECDSA not yet implemented")),
+            KeyAlgorithm::Es256 => return Err(AppError::internal("ECDSA not yet implemented")),
         };
 
         let key_material = SecureKeyMaterial {
@@ -257,17 +257,17 @@ impl KeyManagementService {
 
     /// Activate a key for signing
     #[instrument(skip(self))]
-    pub async fn activate_key(&self, kid: &str, actor: &str) -> Result<(), AuthError> {
+    pub async fn activate_key(&self, kid: &str, actor: &str) -> Result<(), crate::shared::error::AppError> {
         info!(kid = %kid, "Activating key");
 
         let mut keys = self.keys.write().await;
         let key = keys
             .get_mut(kid)
-            .ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(&format!("Key not found: {}", kid)))?;
 
         // Validate key can be activated
         if key.state == KeyState::Revoked {
-            return Err(internal_error("Cannot activate revoked key"));
+            return Err(AppError::internal("Cannot activate revoked key"));
         }
 
         // Get current active key ID before modifications
@@ -317,7 +317,7 @@ impl KeyManagementService {
 
     /// Perform key rotation
     #[instrument(skip(self))]
-    pub async fn rotate_keys(&self, actor: &str) -> Result<(), AuthError> {
+    pub async fn rotate_keys(&self, actor: &str) -> Result<(), crate::shared::error::AppError> {
         info!("Starting key rotation");
 
         // Generate new key
@@ -345,13 +345,13 @@ impl KeyManagementService {
 
     /// Revoke a key immediately
     #[instrument(skip(self))]
-    pub async fn revoke_key(&self, kid: &str, reason: &str, actor: &str) -> Result<(), AuthError> {
+    pub async fn revoke_key(&self, kid: &str, reason: &str, actor: &str) -> Result<(), crate::shared::error::AppError> {
         warn!(kid = %kid, reason = %reason, "Revoking key");
 
         let mut keys = self.keys.write().await;
         let key = keys
             .get_mut(kid)
-            .ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(&format!("Key not found: {}", kid)))?;
 
         key.state = KeyState::Revoked;
         key.revoked_at = Some((Self::current_timestamp(), reason.to_string()));
@@ -414,7 +414,7 @@ impl KeyManagementService {
 
     /// Emergency key rotation
     #[instrument(skip(self))]
-    pub async fn emergency_rotation(&self, actor: &str) -> Result<(), AuthError> {
+    pub async fn emergency_rotation(&self, actor: &str) -> Result<(), crate::shared::error::AppError> {
         error!("Performing emergency key rotation");
 
         // Generate and activate new key immediately
@@ -454,25 +454,25 @@ impl KeyManagementService {
     }
 
     /// Get current signing key
-    pub async fn get_signing_key(&self) -> Result<(String, EncodingKey), AuthError> {
+    pub async fn get_signing_key(&self) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
         let active_key_id = self.active_key_id.read().await;
         let kid = active_key_id
             .as_ref()
-            .ok_or_else(|| internal_error("No active signing key available"))?;
+            .ok_or_else(|| AppError::internal("No active signing key available"))?;
 
         let keys = self.keys.read().await;
         let key = keys
             .get(kid)
-            .ok_or_else(|| internal_error(&format!("Active key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(&format!("Active key not found: {}", kid)))?;
 
         if key.state != KeyState::Active {
-            return Err(internal_error("Active key is not in active state"));
+            return Err(AppError::internal("Active key is not in active state"));
         }
 
         let encoding_key = key
             .encoding_key
             .as_ref()
-            .ok_or_else(|| internal_error("Encoding key not available"))?;
+            .ok_or_else(|| AppError::internal("Encoding key not available"))?;
 
         let encoding_key_clone = encoding_key.clone();
         let kid_clone = kid.clone();
@@ -489,20 +489,20 @@ impl KeyManagementService {
     }
 
     /// Get decoding key for verification
-    pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, AuthError> {
+    pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, crate::shared::error::AppError> {
         let keys = self.keys.read().await;
         let key = keys
             .get(kid)
-            .ok_or_else(|| internal_error(&format!("Key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(&format!("Key not found: {}", kid)))?;
 
         // Allow verification with any non-revoked key
         if key.state == KeyState::Revoked {
-            return Err(internal_error("Cannot use revoked key for verification"));
+            return Err(AppError::internal("Cannot use revoked key for verification"));
         }
 
         key.decoding_key
             .as_ref()
-            .ok_or_else(|| internal_error("Decoding key not available"))
+            .ok_or_else(|| AppError::internal("Decoding key not available"))
             .map(|k| k.clone())
     }
 
@@ -544,7 +544,7 @@ impl KeyManagementService {
     }
 
     /// Clean up expired keys
-    async fn cleanup_expired_keys(&self) -> Result<(), AuthError> {
+    async fn cleanup_expired_keys(&self) -> Result<(), crate::shared::error::AppError> {
         let mut keys = self.keys.write().await;
         let now = Self::current_timestamp();
         let max_age = self.config.max_key_age.as_secs();
@@ -567,10 +567,10 @@ impl KeyManagementService {
     }
 
     /// Generate RSA key PEM string dynamically
-    async fn generate_rsa_key_pem(&self) -> Result<String, AuthError> {
+    async fn generate_rsa_key_pem(&self) -> Result<String, crate::shared::error::AppError> {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing
-        Err(AuthError::KeyGenerationError {
+        Err(crate::shared::error::AppError::KeyGenerationError {
             source: "RSA key generation not implemented - use HMAC keys for development".into(),
         })
     }
@@ -579,19 +579,19 @@ impl KeyManagementService {
     async fn generate_rsa_key(
         &self,
         kid: &str,
-    ) -> Result<(EncodingKey, DecodingKey, Value), AuthError> {
+    ) -> Result<(EncodingKey, DecodingKey, Value), crate::shared::error::AppError> {
         // Generate a new RSA key dynamically for security
         let private_key_pem = self.generate_rsa_key_pem().await?;
 
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes()).map_err(|e| {
-            internal_error(&format!(
+            AppError::internal(&format!(
                 "Failed to create encoding key: {}",
                 redact_log(&e.to_string())
             ))
         })?;
 
         let decoding_key = DecodingKey::from_rsa_pem(private_key_pem.as_bytes()).map_err(|e| {
-            internal_error(&format!(
+            AppError::internal(&format!(
                 "Failed to create decoding key: {}",
                 redact_log(&e.to_string())
             ))
@@ -600,7 +600,7 @@ impl KeyManagementService {
         // Create JWK (using hardcoded values for now)
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex).map_err(|e| {
-            internal_error(&format!(
+            AppError::internal(&format!(
                 "Failed to decode modulus: {}",
                 redact_log(&e.to_string())
             ))

@@ -1,5 +1,5 @@
 use crate::core::security::{SecurityEvent, ViolationSeverity};
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
 use crate::threat_types::{
@@ -1141,7 +1141,7 @@ impl ThreatIntelligenceCorrelator {
     async fn synchronize_threat_feed(
         &self,
         feed: &ThreatFeedConfig,
-    ) -> Result<FeedSyncResult, AuthError> {
+    ) -> Result<FeedSyncResult, crate::shared::error::AppError> {
         let start_time = std::time::Instant::now();
         let mut sync_result = FeedSyncResult::default();
 
@@ -1152,7 +1152,7 @@ impl ThreatIntelligenceCorrelator {
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to download feed {}: {}", feed.name, e);
-                return Err(AuthError::ExternalService(format!(
+                return Err(crate::shared::error::AppError::ExternalService(format!(
                     "Feed download failed: {e}"
                 )));
             }
@@ -1163,7 +1163,7 @@ impl ThreatIntelligenceCorrelator {
             Ok(indicators) => indicators,
             Err(e) => {
                 error!("Failed to parse feed {}: {}", feed.name, e);
-                return Err(AuthError::ExternalService(format!(
+                return Err(crate::shared::error::AppError::ExternalService(format!(
                     "Feed parsing failed: {e}"
                 )));
             }
@@ -1228,14 +1228,14 @@ impl ThreatIntelligenceCorrelator {
         &self,
         data: &str,
         format: &str,
-    ) -> Result<Vec<ThreatIndicator>, AuthError> {
+    ) -> Result<Vec<ThreatIndicator>, crate::shared::error::AppError> {
         let mut indicators = Vec::new();
 
         match format.to_lowercase().as_str() {
             "json" => {
                 // Parse JSON format feed
                 let json_data: serde_json::Value = serde_json::from_str(data)
-                    .map_err(|e| AuthError::ExternalService(format!("JSON parse error: {e}")))?;
+                    .map_err(|e| crate::shared::error::AppError::ExternalService(format!("JSON parse error: {e}")))?;
 
                 if let Some(array) = json_data.as_array() {
                     for item in array {
@@ -1297,7 +1297,7 @@ impl ThreatIntelligenceCorrelator {
                 }
             }
             _ => {
-                return Err(AuthError::ExternalService(format!(
+                return Err(crate::shared::error::AppError::ExternalService(format!(
                     "Unsupported feed format: {format}"
                 )));
             }
@@ -1309,7 +1309,7 @@ impl ThreatIntelligenceCorrelator {
     fn parse_json_indicator(
         &self,
         item: &serde_json::Value,
-    ) -> Result<Option<ThreatIndicator>, AuthError> {
+    ) -> Result<Option<ThreatIndicator>, crate::shared::error::AppError> {
         let value = match item.get("indicator").or_else(|| item.get("value")) {
             Some(v) => v.as_str().unwrap_or_default().to_string(),
             None => return Ok(None),
@@ -1396,7 +1396,7 @@ impl ThreatIntelligenceCorrelator {
     async fn get_feed_indicators(
         &self,
         _feed_name: &str,
-    ) -> Result<std::collections::HashSet<String>, AuthError> {
+    ) -> Result<std::collections::HashSet<String>, crate::shared::error::AppError> {
         // In a real implementation, this would query the database
         // For now, return an empty set
         Ok(std::collections::HashSet::new())
@@ -1407,7 +1407,7 @@ impl ThreatIntelligenceCorrelator {
         indicator: &ThreatIndicator,
         _feed_name: &str,
         existing: &std::collections::HashSet<String>,
-    ) -> Result<ProcessResult, AuthError> {
+    ) -> Result<ProcessResult, crate::shared::error::AppError> {
         if existing.contains(&indicator.value) {
             // Update existing indicator
             Ok(ProcessResult::Updated)
@@ -1421,7 +1421,7 @@ impl ThreatIntelligenceCorrelator {
         &self,
         _feed_name: &str,
         _existing: &std::collections::HashSet<String>,
-    ) -> Result<u32, AuthError> {
+    ) -> Result<u32, crate::shared::error::AppError> {
         // In a real implementation, this would remove indicators not in the current feed
         Ok(0)
     }

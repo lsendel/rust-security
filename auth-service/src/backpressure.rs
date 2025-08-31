@@ -1,4 +1,4 @@
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use axum::{extract::Request, middleware::Next, response::Response};
 #[cfg(feature = "monitoring")]
 use prometheus::{
@@ -256,16 +256,16 @@ impl BackpressureState {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if:
+    /// Returns `crate::shared::error::AppError` if:
     /// - Server is at maximum concurrent request capacity
     /// - Client IP has exceeded per-IP rate limits
     /// - Request should be rejected due to backpressure
-    pub fn should_admit_request(&self, client_ip: &str) -> Result<(), AuthError> {
+    pub fn should_admit_request(&self, client_ip: &str) -> Result<(), crate::shared::error::AppError> {
         // Check global concurrent request limit
         let current_concurrent = self.concurrent_requests.load(Ordering::Relaxed);
         if current_concurrent >= self.config.max_concurrent_requests {
             inc_requests_rejected_total();
-            return Err(AuthError::ServiceUnavailable {
+            return Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: "Server is at capacity".to_string(),
             });
         }
@@ -280,7 +280,7 @@ impl BackpressureState {
             let ip_concurrent = ip_counter.load(Ordering::Relaxed);
             if ip_concurrent >= self.config.max_concurrent_per_ip {
                 inc_requests_rejected_total();
-                return Err(AuthError::ServiceUnavailable {
+                return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "Too many concurrent requests from this IP".to_string(),
                 });
             }
@@ -290,7 +290,7 @@ impl BackpressureState {
         let queue_depth = self.queue_depth.load(Ordering::Relaxed);
         if queue_depth >= self.config.queue_depth_threshold {
             inc_requests_rejected_total();
-            return Err(AuthError::ServiceUnavailable {
+            return Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: "Request queue is full".to_string(),
             });
         }
@@ -299,7 +299,7 @@ impl BackpressureState {
         let memory_usage = self.memory_usage.load(Ordering::Relaxed);
         if memory_usage >= self.config.memory_pressure_threshold {
             inc_requests_rejected_total();
-            return Err(AuthError::ServiceUnavailable {
+            return Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: "Server memory pressure".to_string(),
             });
         }
@@ -317,7 +317,7 @@ impl BackpressureState {
             let random_value = rng.next_u64() as f64 / u64::MAX as f64;
             if random_value > admit_probability {
                 inc_requests_rejected_total();
-                return Err(AuthError::ServiceUnavailable {
+                return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "Load shedding active".to_string(),
                 });
             }
@@ -388,7 +388,7 @@ pub async fn backpressure_middleware(
     axum::extract::State(state): axum::extract::State<Arc<BackpressureState>>,
     request: Request,
     next: Next,
-) -> Result<Response, AuthError> {
+) -> Result<Response, crate::shared::error::AppError> {
     let start_time = Instant::now();
 
     // Extract client IP (simplified - in production, use proper IP extraction)
@@ -439,7 +439,7 @@ pub async fn backpressure_middleware(
 
     match result {
         Ok(response) => Ok(response),
-        Err(_) => Err(AuthError::TimeoutError {
+        Err(_) => Err(crate::shared::error::AppError::TimeoutError {
             operation: "request_processing".to_string(),
         }),
     }
@@ -478,7 +478,7 @@ pub fn create_backpressure_middleware(
 pub async fn adaptive_body_limit_middleware(
     request: Request,
     next: Next,
-) -> Result<Response, AuthError> {
+) -> Result<Response, crate::shared::error::AppError> {
     let config = BackpressureConfig::from_env();
     let path = request.uri().path();
 
@@ -489,7 +489,7 @@ pub async fn adaptive_body_limit_middleware(
         if let Ok(size_str) = content_length.to_str() {
             if let Ok(size) = size_str.parse::<usize>() {
                 if size > limit {
-                    return Err(AuthError::ValidationError {
+                    return Err(crate::shared::error::AppError::ValidationError {
                         field: "request_body".to_string(),
                         reason: format!(
                             "Request body too large: {size} bytes (limit: {limit} bytes)"

@@ -1,0 +1,248 @@
+//! Authentication Service
+//!
+//! Core business logic for authentication operations.
+
+use async_trait::async_trait;
+use chrono::{DateTime, Utc, Duration};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use thiserror::Error;
+
+use crate::domain::entities::{User, Session};
+use crate::domain::repositories::{UserRepository, SessionRepository};
+use crate::domain::value_objects::{Email, UserId};
+use crate::shared::crypto::{CryptoService, CryptoServiceTrait};
+
+/// Authentication service errors
+#[derive(Debug, Error)]
+pub enum AuthError {
+    #[error("Invalid credentials")]
+    InvalidCredentials,
+    #[error("User not found")]
+    UserNotFound,
+    #[error("User account is inactive")]
+    UserInactive,
+    #[error("User account not verified")]
+    UserNotVerified,
+    #[error("Repository error: {0}")]
+    Repository(#[from] crate::domain::repositories::RepositoryError),
+    #[error("Crypto error: {0}")]
+    Crypto(String),
+    #[error("Session error: {0}")]
+    Session(String),
+}
+
+/// Login request DTO
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+/// Login response DTO
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    pub user: UserInfo,
+    pub session_id: String,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+}
+
+/// User information DTO
+#[derive(Debug, Serialize)]
+pub struct UserInfo {
+    pub id: String,
+    pub email: String,
+    pub name: String,
+    pub roles: Vec<String>,
+    pub verified: bool,
+    pub last_login: Option<DateTime<Utc>>,
+}
+
+/// Authentication service trait
+#[async_trait]
+pub trait AuthServiceTrait: Send + Sync {
+    async fn login(&self, request: LoginRequest) -> Result<LoginResponse, crate::shared::error::AppError>;
+    async fn logout(&self, session_id: &str) -> Result<(), crate::shared::error::AppError>;
+    async fn validate_session(&self, session_id: &str) -> Result<UserInfo, crate::shared::error::AppError>;
+    async fn refresh_token(&self, refresh_token: &str) -> Result<LoginResponse, crate::shared::error::AppError>;
+}
+
+/// Authentication service implementation
+pub struct AuthService<R: UserRepository, S: SessionRepository> {
+    user_repo: Arc<R>,
+    session_repo: Arc<S>,
+    crypto_service: Arc<CryptoService>,
+}
+
+impl<R: UserRepository, S: SessionRepository> AuthService<R, S> {
+    /// Create a new authentication service
+    pub fn new(
+        user_repo: Arc<R>,
+        session_repo: Arc<S>,
+        crypto_service: Arc<CryptoService>,
+    ) -> Self {
+        Self {
+            user_repo,
+            session_repo,
+            crypto_service,
+        }
+    }
+}
+
+#[async_trait]
+impl<R: UserRepository, S: SessionRepository> AuthServiceTrait for AuthService<R, S> {
+    async fn login(&self, request: LoginRequest) -> Result<LoginResponse, crate::shared::error::AppError> {
+        // 1. Validate input
+        let email = Email::new(request.email)
+            .map_err(|_| crate::shared::error::AppError::InvalidCredentials)?;
+
+        // 2. Find user
+        let user = self.user_repo
+            .find_by_email(&email)
+            .await?
+            .ok_or(crate::shared::error::AppError::InvalidCredentials)?;
+
+        // 3. Check if user is active and verified
+        if !user.is_active {
+            return Err(crate::shared::error::AppError::UserInactive);
+        }
+
+        if !user.is_verified {
+            return Err(crate::shared::error::AppError::UserNotVerified);
+        }
+
+        // 4. Verify password
+        let is_valid_password = self.crypto_service
+            .verify_password(&request.password, &user.password_hash)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+
+        if !is_valid_password {
+            return Err(crate::shared::error::AppError::InvalidCredentials);
+        }
+
+        // 5. Update last login
+        let now = Utc::now();
+        self.user_repo
+            .update_last_login(&user.id, now)
+            .await?;
+
+        // 6. Create session
+        let session = Session::new(user.id.clone(), now);
+        self.session_repo.save(&session).await?;
+
+        // 7. Generate tokens
+        let access_token = self.crypto_service
+            .generate_access_token(&user, &session)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+
+        let refresh_token = self.crypto_service
+            .generate_refresh_token(&user, &session)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+
+        // 8. Return response
+        Ok(LoginResponse {
+            user: UserInfo {
+                id: user.id.into_string(),
+                email: user.email.into_string(),
+                name: user.name,
+                roles: user.roles,
+                verified: user.is_verified,
+                last_login: user.last_login,
+            },
+            session_id: session.id,
+            access_token,
+            refresh_token,
+            expires_in: 3600, // 1 hour
+        })
+    }
+
+    async fn logout(&self, session_id: &str) -> Result<(), crate::shared::error::AppError> {
+        self.session_repo
+            .delete(session_id)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Session(e.to_string()))?;
+        Ok(())
+    }
+
+    async fn validate_session(&self, session_id: &str) -> Result<UserInfo, crate::shared::error::AppError> {
+        let session = self.session_repo
+            .find_by_id(session_id)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Session(e.to_string()))?
+            .ok_or(crate::shared::error::AppError::InvalidCredentials)?;
+
+        // Check if session is expired
+        if session.is_expired() {
+            return Err(crate::shared::error::AppError::InvalidCredentials);
+        }
+
+        let user = self.user_repo
+            .find_by_id(&session.user_id)
+            .await?
+            .ok_or(crate::shared::error::AppError::UserNotFound)?;
+
+        Ok(UserInfo {
+            id: user.id.into_string(),
+            email: user.email.into_string(),
+            name: user.name,
+            roles: user.roles,
+            verified: user.is_verified,
+            last_login: user.last_login,
+        })
+    }
+
+    async fn refresh_token(&self, refresh_token: &str) -> Result<LoginResponse, crate::shared::error::AppError> {
+        // Validate refresh token and get user/session info
+        let (user, session) = self.crypto_service
+            .validate_refresh_token(refresh_token)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+
+        // Generate new tokens
+        let access_token = self.crypto_service
+            .generate_access_token(&user, &session)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+
+        let new_refresh_token = self.crypto_service
+            .generate_refresh_token(&user, &session)
+            .await
+            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+
+        Ok(LoginResponse {
+            user: UserInfo {
+                id: user.id.into_string(),
+                email: user.email.into_string(),
+                name: user.name,
+                roles: user.roles,
+                verified: user.is_verified,
+                last_login: user.last_login,
+            },
+            session_id: session.id,
+            access_token,
+            refresh_token: new_refresh_token,
+            expires_in: 3600,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::repositories::user_repository::MockUserRepository;
+    use crate::domain::value_objects::{Email, PasswordHash};
+    use std::sync::Arc;
+
+    // Mock implementations would go here for comprehensive testing
+
+    #[tokio::test]
+    async fn test_auth_service_creation() {
+        // This would test the service creation with mocks
+        // Implementation depends on having mock repositories and crypto service
+    }
+}

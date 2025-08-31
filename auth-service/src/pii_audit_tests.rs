@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 /// Automated tests to ensure no secrets or tokens are logged at any level
 /// This module provides comprehensive testing for PII/SPI redaction compliance
 use crate::pii_protection::{DataClassification, PiiSpiRedactor, SensitiveDataType};
@@ -164,7 +164,7 @@ mod tests {
 
         for sensitive_item in test_data.all_sensitive_data() {
             let error_message = format!("Authentication failed for user: {}", sensitive_item);
-            let error = AuthError::InvalidRequest {
+            let error = crate::shared::error::AppError::InvalidRequest {
                 reason: error_message.clone(),
             };
 

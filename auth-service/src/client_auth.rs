@@ -1,5 +1,5 @@
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::{internal_error, AuthError};
+use crate::shared::error::AppError;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use std::collections::HashMap;
@@ -62,7 +62,7 @@ impl ClientAuthenticator {
         client_id: String,
         client_secret: String,
         metadata: ClientMetadata,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         // Validate client secret strength unless running in TEST_MODE to keep integration tests simple
         if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
             self.validate_client_secret_strength(&client_secret)?;
@@ -73,7 +73,7 @@ impl ClientAuthenticator {
         let password_hash = self
             .argon2
             .hash_password(client_secret.as_bytes(), &salt)
-            .map_err(|e| internal_error(&format!("Failed to hash client secret: {e}")))?;
+            .map_err(|e| AppError::internal(&format!("Failed to hash client secret: {e}")))?;
 
         // Store hashed secret and metadata
         self.client_secrets
@@ -89,7 +89,7 @@ impl ClientAuthenticator {
         client_id: &str,
         client_secret: &str,
         ip_address: Option<&str>,
-    ) -> Result<bool, AuthError> {
+    ) -> Result<bool, crate::shared::error::AppError> {
         let start_time = Instant::now();
 
         // Always perform the same operations regardless of client existence
@@ -101,7 +101,7 @@ impl ClientAuthenticator {
             if metadata.is_active {
                 // Verify password hash
                 let parsed_hash = PasswordHash::new(hash)
-                    .map_err(|e| internal_error(&format!("Invalid stored hash: {e}")))?;
+                    .map_err(|e| AppError::internal(&format!("Invalid stored hash: {e}")))?;
 
                 let verification_result = self
                     .argon2
@@ -168,28 +168,28 @@ impl ClientAuthenticator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if:
+    /// Returns `crate::shared::error::AppError` if:
     /// - Secret is shorter than 32 characters
     /// - Secret contains only digits or only letters
     /// - Secret has too many repeated characters
     /// - Secret matches common weak patterns
-    fn validate_client_secret_strength(&self, secret: &str) -> Result<(), AuthError> {
+    fn validate_client_secret_strength(&self, secret: &str) -> Result<(), crate::shared::error::AppError> {
         // Minimum length requirement
         if secret.len() < 32 {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Client secret must be at least 32 characters long".to_string(),
             });
         }
 
         // Check for common weak patterns
         if secret.chars().all(|c| c.is_ascii_digit()) {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Client secret cannot be all digits".to_string(),
             });
         }
 
         if secret.chars().all(|c| c.is_ascii_alphabetic()) {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Client secret must contain mixed character types".to_string(),
             });
         }
@@ -202,7 +202,7 @@ impl ClientAuthenticator {
 
         let max_repeated = char_counts.values().max().unwrap_or(&0);
         if *max_repeated > secret.len() / 4 {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Client secret has too many repeated characters".to_string(),
             });
         }
@@ -258,11 +258,11 @@ impl ClientAuthenticator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if:
+    /// Returns `crate::shared::error::AppError` if:
     /// - Client secret validation fails
     /// - Environment variable parsing fails
     /// - Client registration fails
-    pub fn load_from_env(&mut self) -> Result<(), AuthError> {
+    pub fn load_from_env(&mut self) -> Result<(), crate::shared::error::AppError> {
         if let Ok(client_creds) = std::env::var("CLIENT_CREDENTIALS") {
             for entry in client_creds.split(';') {
                 if let Some((client_id, client_secret)) = entry.split_once(':') {
@@ -286,7 +286,7 @@ impl ClientAuthenticator {
                             .argon2
                             .hash_password(client_secret.as_bytes(), &salt)
                             .map_err(|e| {
-                                internal_error(&format!("Failed to hash client secret: {e}"))
+                                AppError::internal(&format!("Failed to hash client secret: {e}"))
                             })?;
                         self.client_secrets
                             .insert(client_id.to_string(), password_hash.to_string());
@@ -340,7 +340,7 @@ pub async fn authenticate_client(
     client_id: &str,
     client_secret: &str,
     ip_address: Option<&str>,
-) -> Result<bool, AuthError> {
+) -> Result<bool, crate::shared::error::AppError> {
     // Try the new API key store first
     let parts: Vec<&str> = client_secret.split('_').collect();
     if parts.len() >= 2 {
@@ -348,7 +348,7 @@ pub async fn authenticate_client(
         if let Ok(Some(api_key)) = api_key_store.get_api_key_by_prefix(&prefix).await {
             let argon2 = Argon2::default();
             let parsed_hash = PasswordHash::new(&api_key.hashed_key)
-                .map_err(|e| internal_error(&format!("Invalid stored hash: {e}")))?;
+                .map_err(|e| AppError::internal(&format!("Invalid stored hash: {e}")))?;
 
             if argon2
                 .verify_password(client_secret.as_bytes(), &parsed_hash)

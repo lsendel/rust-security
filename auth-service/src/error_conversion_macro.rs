@@ -3,7 +3,7 @@
 //! This module provides derive macros to automatically generate
 //! From implementations for error types, reducing boilerplate code.
 
-/// Macro to generate From implementations for AuthError
+/// Macro to generate From implementations for crate::shared::error::AppError
 /// 
 /// Usage:
 /// ```rust
@@ -17,7 +17,7 @@
 macro_rules! auth_error_from {
     ($($source_type:ty => $variant:ident),+ $(,)?) => {
         $(
-            impl From<$source_type> for $crate::errors::AuthError {
+            impl From<$source_type> for $crate::errors::crate::shared::error::AppError {
                 fn from(source: $source_type) -> Self {
                     Self::$variant { source }
                 }
@@ -39,7 +39,7 @@ macro_rules! auth_error_from {
 macro_rules! auth_error_from_with_context {
     ($($source_type:ty => $variant:ident($context:expr)),+ $(,)?) => {
         $(
-            impl From<$source_type> for $crate::errors::AuthError {
+            impl From<$source_type> for $crate::errors::crate::shared::error::AppError {
                 fn from(source: $source_type) -> Self {
                     Self::$variant {
                         error_id: uuid::Uuid::new_v4(),
@@ -64,7 +64,7 @@ macro_rules! auth_error_from_with_context {
 macro_rules! auth_error_from_boxed {
     ($($variant:ident($operation:expr)),+ $(,)?) => {
         $(
-            impl<T: std::error::Error + Send + Sync + 'static> From<T> for $crate::errors::AuthError
+            impl<T: std::error::Error + Send + Sync + 'static> From<T> for $crate::errors::crate::shared::error::AppError
             where
                 T: std::error::Error + Send + Sync + 'static,
             {
@@ -107,7 +107,7 @@ macro_rules! soar_error_from {
 /// Usage:
 /// ```rust
 /// generate_error_conversions! {
-///     AuthError {
+///     crate::shared::error::AppError {
 ///         redis::RedisError => RedisConnectionError,
 ///         serde_json::Error => SerializationError,
 ///         reqwest::Error => HttpClientError,
@@ -138,7 +138,7 @@ mod tests {
     
     #[derive(Debug, thiserror::Error)]
     #[allow(dead_code)]
-    enum MockAuthError {
+    enum MockAppError {
         #[error("Redis error")]
         RedisConnectionError { source: TestError },
         #[error("Serialization error")]
@@ -152,7 +152,7 @@ mod tests {
     
     // This would generate the From implementations:
     // generate_error_conversions! {
-    //     MockAuthError {
+    //     Mockcrate::shared::error::AppError {
     //         TestError => RedisConnectionError,
     //     }
     // }

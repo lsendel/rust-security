@@ -84,7 +84,7 @@ impl HybridStore {
     pub async fn get_token_record(
         &self,
         token: &str,
-    ) -> Result<Option<crate::IntrospectionRecord>, crate::errors::AuthError> {
+    ) -> Result<Option<crate::IntrospectionRecord>, crate::shared::error::AppError> {
         // Try to get from the Store trait implementation and convert
         match Store::get_token_record(self, token).await {
             Ok(Some(token_record)) => {
@@ -108,7 +108,7 @@ impl HybridStore {
                 }))
             }
             Ok(None) => Ok(None),
-            Err(e) => Err(crate::errors::AuthError::TokenStoreError {
+            Err(e) => Err(crate::shared::error::AppError::TokenStoreError {
                 operation: "get_token_record".to_string(),
                 source: e,
             }),
@@ -121,7 +121,7 @@ impl HybridStore {
         token: &str,
         record: &crate::IntrospectionRecord,
         ttl_secs: Option<u64>,
-    ) -> Result<(), crate::errors::AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         // Convert IntrospectionRecord to TokenRecord for storage
         let token_record = TokenRecord {
             active: record.active,
@@ -137,7 +137,7 @@ impl HybridStore {
         // Use the trait method to store
         match Store::set_token_record(self, token, &token_record, ttl_secs).await {
             Ok(()) => Ok(()),
-            Err(e) => Err(crate::errors::AuthError::TokenStoreError {
+            Err(e) => Err(crate::shared::error::AppError::TokenStoreError {
                 operation: "set_token_record".to_string(),
                 source: e,
             }),

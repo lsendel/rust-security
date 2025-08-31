@@ -2,7 +2,7 @@
 use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
 use crate::pii_protection::redact_log;
 use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::{errors::AuthError, AppState};
+use crate::{shared::error::AppError, AppState};
 use axum::{
     body::Body,
     extract::{Request, State},
@@ -148,7 +148,7 @@ pub async fn admin_auth_middleware(
             };
             crate::security_logging::log_event(&event);
 
-            let rate_limit_error = AuthError::RateLimitExceeded;
+            let rate_limit_error = crate::shared::error::AppError::RateLimitExceeded;
             return handle_auth_failure(rate_limit_error, method, path, &client_ip, &headers);
         }
     }
@@ -212,9 +212,8 @@ pub async fn admin_auth_middleware(
     }
 }
 
-
 /// Extract admin key from Bearer token for rate limiting and logging
-async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<String, AuthError> {
+async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<String, crate::shared::error::AppError> {
     // Extract bearer token
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
@@ -223,12 +222,12 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
 
     let token = auth
         .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
             reason: "Missing or malformed authorization header".to_string(),
         })?;
 
     if token.is_empty() {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Empty bearer token".to_string(),
         });
     }
@@ -240,7 +239,7 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
             .store
             .get_token_record(token)
             .await?
-            .ok_or_else(|| AuthError::InvalidToken {
+            .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
                 reason: "Token not found or invalid".to_string(),
             })?;
 
@@ -259,7 +258,7 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
 
     // Check if token is active
     if !record.active {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Token is inactive".to_string(),
         });
     }
@@ -274,14 +273,14 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
             let result = hasher.finalize();
             Ok(format!("admin_{}", hex::encode(&result[..8]))) // Use first 8 bytes as key
         }
-        _ => Err(AuthError::Forbidden {
+        _ => Err(crate::shared::error::AppError::Forbidden {
             reason: "Insufficient privileges: admin scope required".to_string(),
         }),
     }
 }
 
 /// Enhanced admin scope validation
-async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<(), AuthError> {
+async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<(), crate::shared::error::AppError> {
     // Extract bearer token
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
@@ -290,12 +289,12 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
 
     let token = auth
         .strip_prefix("Bearer ")
-        .ok_or_else(|| AuthError::InvalidToken {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
             reason: "Missing or malformed authorization header".to_string(),
         })?;
 
     if token.is_empty() {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Empty bearer token".to_string(),
         });
     }
@@ -307,7 +306,7 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
             .store
             .get_token_record(token)
             .await?
-            .ok_or_else(|| AuthError::InvalidToken {
+            .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
                 reason: "Token not found or invalid".to_string(),
             })?;
 
@@ -326,7 +325,7 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
 
     // Check if token is active
     if !record.active {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Token is inactive".to_string(),
         });
     }
@@ -337,7 +336,7 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
             // Additional validation could be added here (e.g., token expiry, client validation)
             Ok(())
         }
-        _ => Err(AuthError::Forbidden {
+        _ => Err(crate::shared::error::AppError::Forbidden {
             reason: "Insufficient privileges: admin scope required".to_string(),
         }),
     }
@@ -349,9 +348,9 @@ async fn validate_request_with_replay_protection(
     config: &AdminAuthConfig,
     method: &str,
     path: &str,
-) -> Result<(), AuthError> {
+) -> Result<(), crate::shared::error::AppError> {
     let Some(signing_secret) = &config.signing_secret else {
-        return Err(AuthError::ConfigurationError {
+        return Err(crate::shared::error::AppError::ConfigurationError {
             field: "signing_secret".to_string(),
             reason: "Request signing is required but no signing secret is configured".to_string(),
         });
@@ -361,28 +360,28 @@ async fn validate_request_with_replay_protection(
     let nonce = headers
         .get("X-Request-Nonce")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
             reason: "Missing X-Request-Nonce header".to_string(),
         })?;
 
     let timestamp_str = headers
         .get("X-Request-Timestamp")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
             reason: "Missing X-Request-Timestamp header".to_string(),
         })?;
 
     let signature = headers
         .get("X-Request-Signature")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
             reason: "Missing X-Request-Signature header".to_string(),
         })?;
 
     // Parse timestamp
     let timestamp: u64 = timestamp_str
         .parse()
-        .map_err(|_| AuthError::InvalidRequest {
+        .map_err(|_| crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid timestamp format".to_string(),
         })?;
 
@@ -395,7 +394,7 @@ async fn validate_request_with_replay_protection(
         timestamp,
         signature,
     ) {
-        return Err(AuthError::InvalidRequest {
+        return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid request signature".to_string(),
         });
     }
@@ -417,9 +416,9 @@ fn validate_request_signature(
     config: &AdminAuthConfig,
     method: &str,
     path: &str,
-) -> Result<(), AuthError> {
+) -> Result<(), crate::shared::error::AppError> {
     let Some(signing_secret) = &config.signing_secret else {
-        return Err(AuthError::ConfigurationError {
+        return Err(crate::shared::error::AppError::ConfigurationError {
             field: "signing_secret".to_string(),
             reason: "Request signing is required but no signing secret is configured".to_string(),
         });
@@ -429,35 +428,34 @@ fn validate_request_signature(
     let signature = headers
         .get("x-signature")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
             reason: "Missing x-signature header".to_string(),
         })?;
 
     let timestamp_str = headers
         .get("x-timestamp")
         .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| AuthError::InvalidRequest {
+        .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
             reason: "Missing x-timestamp header".to_string(),
         })?;
 
     // Parse and validate timestamp
     let timestamp: u64 = timestamp_str
         .parse()
-        .map_err(|_| AuthError::InvalidRequest {
+        .map_err(|_| crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid timestamp format".to_string(),
         })?;
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| AuthError::InternalError {
-            error_id: uuid::Uuid::new_v4(),
-            context: "Failed to get current timestamp".to_string(),
-        })?
+        .map_err(|_| crate::shared::error::AppError::Internal(
+            "Failed to get current timestamp".to_string()
+        ))?
         .as_secs();
 
     // Check timestamp skew
     if current_time.abs_diff(timestamp) > config.max_timestamp_skew {
-        return Err(AuthError::InvalidRequest {
+        return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Request timestamp is too far from current time".to_string(),
         });
     }
@@ -468,7 +466,7 @@ fn validate_request_signature(
 
     // Constant-time comparison to prevent timing attacks
     if !constant_time_compare(signature, &expected_signature) {
-        return Err(AuthError::InvalidRequest {
+        return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid request signature".to_string(),
         });
     }
@@ -478,7 +476,7 @@ fn validate_request_signature(
 
 /// Handle authentication failures with proper logging and response
 fn handle_auth_failure(
-    auth_error: AuthError,
+    auth_error: crate::shared::error::AppError,
     method: &str,
     path: &str,
     client_ip: &Option<String>,
@@ -537,7 +535,7 @@ fn handle_auth_failure(
 /// Handle signature validation failures with proper logging and response
 #[allow(dead_code)]
 fn handle_signature_failure(
-    error: AuthError,
+    error: crate::shared::error::AppError,
     method: &str,
     path: &str,
     client_ip: &Option<String>,
@@ -545,7 +543,7 @@ fn handle_signature_failure(
 ) -> Result<Response, impl IntoResponse> {
     // Determine the appropriate status code based on error type
     let (status_code, reason) = match &error {
-        AuthError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "rate_limit_exceeded"),
+        crate::shared::error::AppError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "rate_limit_exceeded"),
         _ => (StatusCode::UNAUTHORIZED, "invalid_signature_or_replay"),
     };
 
@@ -598,14 +596,14 @@ fn handle_signature_failure(
 
 /// Calculate HMAC-SHA256 signature
 #[allow(dead_code)]
-fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, AuthError> {
+fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, crate::shared::error::AppError> {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
 
     type HmacSha256 = Hmac<Sha256>;
 
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
-        AuthError::CryptographicError {
+        crate::shared::error::AppError::CryptographicError {
             operation: "hmac_initialization".to_string(),
             source: Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,

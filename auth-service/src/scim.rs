@@ -1,4 +1,4 @@
-use crate::{AppState, AuthError};
+use crate::{AppState, crate::shared::error::AppError};
 use axum::{
     extract::{Path, Query, State},
     routing::{get, post},
@@ -90,7 +90,7 @@ pub fn router() -> Router<AppState> {
 async fn create_user(
     State(state): State<AppState>,
     Json(user): Json<ScimUser>,
-) -> Result<Json<ScimUser>, AuthError> {
+) -> Result<Json<ScimUser>, crate::shared::error::AppError> {
     let created_user = state.store.create_user(&user).await?;
     Ok(Json(created_user))
 }
@@ -124,7 +124,7 @@ struct ListResponse<T> {
 async fn list_users(
     State(state): State<AppState>,
     Query(p): Query<ListParams>,
-) -> Result<Json<ListResponse<ScimUser>>, AuthError> {
+) -> Result<Json<ListResponse<ScimUser>>, crate::shared::error::AppError> {
     let filter = p.filter.as_deref();
     let mut users = state.store.list_users(filter).await?;
 
@@ -152,7 +152,7 @@ async fn list_users(
 async fn get_user(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<Option<ScimUser>>, AuthError> {
+) -> Result<Json<Option<ScimUser>>, crate::shared::error::AppError> {
     let user = state.store.get_user(&id).await?;
     Ok(Json(user))
 }
@@ -160,7 +160,7 @@ async fn get_user(
 async fn create_group(
     State(state): State<AppState>,
     Json(group): Json<ScimGroup>,
-) -> Result<Json<ScimGroup>, AuthError> {
+) -> Result<Json<ScimGroup>, crate::shared::error::AppError> {
     let created_group = state.store.create_group(&group).await?;
     Ok(Json(created_group))
 }
@@ -170,7 +170,7 @@ async fn create_group(
 async fn list_groups(
     State(state): State<AppState>,
     Query(p): Query<ListParams>,
-) -> Result<Json<ListResponse<ScimGroup>>, AuthError> {
+) -> Result<Json<ListResponse<ScimGroup>>, crate::shared::error::AppError> {
     let filter = p.filter.as_deref();
     let mut groups = state.store.list_groups(filter).await?;
 
@@ -196,7 +196,7 @@ async fn list_groups(
 async fn get_group(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<Option<ScimGroup>>, AuthError> {
+) -> Result<Json<Option<ScimGroup>>, crate::shared::error::AppError> {
     let group = state.store.get_group(&id).await?;
     Ok(Json(group))
 }
@@ -220,18 +220,18 @@ const ERROR_SCHEMA: &str = "urn:ietf:params:scim:api:messages:2.0:Error";
 async fn bulk_operations(
     State(state): State<AppState>,
     Json(request): Json<BulkRequest>,
-) -> Result<Json<BulkResponse>, AuthError> {
+) -> Result<Json<BulkResponse>, crate::shared::error::AppError> {
     // TODO: Implement transactional support for bulk operations.
     // The current implementation executes operations sequentially but does not roll back
     // on failure, which could leave the system in an inconsistent state.
 
     if !request.schemas.contains(&BULK_SCHEMA.to_string()) {
-        return Err(AuthError::InvalidRequest {
+        return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid bulk request schema".to_string(),
         });
     }
     if request.operations.len() > MAX_BULK_OPERATIONS {
-        return Err(AuthError::InvalidRequest {
+        return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Too many operations".to_string(),
         });
     }

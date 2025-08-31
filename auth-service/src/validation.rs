@@ -3,14 +3,7 @@ use std::collections::HashMap;
 use utoipa::ToSchema;
 use validator::{Validate, ValidationError, ValidationErrors};
 
-/// Helper function to create a `ValidationError` with just a code
-fn validation_error(code: &'static str) -> ValidationError {
-    ValidationError {
-        code: std::borrow::Cow::Borrowed(code),
-        message: None,
-        params: std::collections::HashMap::new(),
-    }
-}
+use crate::shared::error::AppError;
 
 /// Maximum lengths for various input fields
 pub const MAX_CLIENT_ID_LENGTH: usize = 255;
@@ -497,27 +490,27 @@ pub struct RateLimitConfig {
 fn validate_scope(scope: &str) -> Result<(), ValidationError> {
     // Check for valid scope format (space-separated tokens)
     if scope.is_empty() {
-        return Err(validation_error("scope_empty"));
+        return Err(AppError::validation("scope_empty"));
     }
 
     let scopes: Vec<&str> = scope.split_whitespace().collect();
     if scopes.is_empty() {
-        return Err(validation_error("scope_invalid"));
+        return Err(AppError::validation("scope_invalid"));
     }
 
     // Validate each scope token
     for scope_token in scopes {
         if scope_token.is_empty() {
-            return Err(validation_error("scope_token_empty"));
+            return Err(AppError::validation("scope_token_empty"));
         }
 
         // Scope tokens should not contain certain characters
         if scope_token.contains(['\"', '\\', '\r', '\n', '\t']) {
-            return Err(validation_error("scope_token_invalid_chars"));
+            return Err(AppError::validation("scope_token_invalid_chars"));
         }
 
         if scope_token.len() > 100 {
-            return Err(validation_error("scope_token_too_long"));
+            return Err(AppError::validation("scope_token_too_long"));
         }
     }
 
@@ -539,7 +532,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
             ')' => {
                 paren_count -= 1;
                 if paren_count < 0 {
-                    return Err(validation_error("scim_filter_unbalanced_parens"));
+                    return Err(AppError::validation("scim_filter_unbalanced_parens"));
                 }
             }
             _ => {}
@@ -547,7 +540,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     }
 
     if paren_count != 0 {
-        return Err(validation_error("scim_filter_unbalanced_parens"));
+        return Err(AppError::validation("scim_filter_unbalanced_parens"));
     }
 
     // Check for SQL injection patterns
@@ -559,7 +552,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
 
     for pattern in &sql_patterns {
         if filter_lower.contains(pattern) {
-            return Err(validation_error("scim_filter_sql_injection"));
+            return Err(AppError::validation("scim_filter_sql_injection"));
         }
     }
 
@@ -567,7 +560,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     let xss_patterns = ["<script", "javascript:", "onload=", "onerror="];
     for pattern in &xss_patterns {
         if filter_lower.contains(pattern) {
-            return Err(validation_error("scim_filter_xss_attempt"));
+            return Err(AppError::validation("scim_filter_xss_attempt"));
         }
     }
 
@@ -578,7 +571,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
 fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
     // Basic phone number validation
     if phone.is_empty() {
-        return Err(validation_error("phone_empty"));
+        return Err(AppError::validation("phone_empty"));
     }
 
     // Allow digits, spaces, hyphens, parentheses, and + for international format
@@ -586,12 +579,12 @@ fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
         .chars()
         .all(|c| c.is_ascii_digit() || " -+()".contains(c))
     {
-        return Err(validation_error("phone_invalid_chars"));
+        return Err(AppError::validation("phone_invalid_chars"));
     }
 
     // Must contain at least some digits
     if !phone.chars().any(|c| c.is_ascii_digit()) {
-        return Err(validation_error("phone_no_digits"));
+        return Err(AppError::validation("phone_no_digits"));
     }
 
     Ok(())
@@ -607,13 +600,13 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     if origin.starts_with("http://") || origin.starts_with("https://") {
         // Basic URL validation
         if url::Url::parse(origin).is_err() {
-            return Err(validation_error("origin_invalid_url"));
+            return Err(AppError::validation("origin_invalid_url"));
         }
     } else if origin.starts_with("localhost:") || origin == "localhost" {
         // Allow localhost variations
         return Ok(());
     } else {
-        return Err(validation_error("origin_invalid_format"));
+        return Err(AppError::validation("origin_invalid_format"));
     }
 
     Ok(())
@@ -622,12 +615,13 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
 /// Validate password strength
 fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
     let validator = PasswordValidator::new(password);
-    
-    validator.check_length()
-            .check_character_types()
-            .check_common_patterns()
-            .check_sequential_chars()
-            .finalize()
+
+    validator
+        .check_length()
+        .check_character_types()
+        .check_common_patterns()
+        .check_sequential_chars()
+        .finalize()
 }
 
 /// Helper struct for password validation with scoring
@@ -640,7 +634,7 @@ struct PasswordValidator<'a> {
 impl<'a> PasswordValidator<'a> {
     const MIN_SCORE: u8 = 4;
     const SPECIAL_CHARS: &'static str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
-    
+
     fn new(password: &'a str) -> Self {
         Self {
             password,
@@ -651,7 +645,8 @@ impl<'a> PasswordValidator<'a> {
 
     fn check_length(mut self) -> Self {
         if self.password.len() < 12 {
-            self.errors.push("Password must be at least 12 characters long");
+            self.errors
+                .push("Password must be at least 12 characters long");
         } else {
             self.score += 1;
         }
@@ -667,10 +662,7 @@ impl<'a> PasswordValidator<'a> {
             char::is_lowercase,
             "Password must contain at least one lowercase letter",
         )
-        .check_character_type(
-            char::is_numeric,
-            "Password must contain at least one digit",
-        )
+        .check_character_type(char::is_numeric, "Password must contain at least one digit")
         .check_special_characters()
     }
 
@@ -688,23 +680,32 @@ impl<'a> PasswordValidator<'a> {
     }
 
     fn check_special_characters(mut self) -> Self {
-        if self.password.chars().any(|c| Self::SPECIAL_CHARS.contains(c)) {
+        if self
+            .password
+            .chars()
+            .any(|c| Self::SPECIAL_CHARS.contains(c))
+        {
             self.score += 1;
         } else {
-            self.errors.push("Password must contain at least one special character");
+            self.errors
+                .push("Password must contain at least one special character");
         }
         self
     }
 
     fn check_common_patterns(mut self) -> Self {
         const COMMON_PATTERNS: &[&str] = &[
-            "password", "123456", "qwerty", "admin", "root", 
-            "user", "letmein", "welcome", "monkey", "dragon",
+            "password", "123456", "qwerty", "admin", "root", "user", "letmein", "welcome",
+            "monkey", "dragon",
         ];
 
         let lowercase_password = self.password.to_lowercase();
-        if COMMON_PATTERNS.iter().any(|&pattern| lowercase_password.contains(pattern)) {
-            self.errors.push("Password contains common patterns and is not secure");
+        if COMMON_PATTERNS
+            .iter()
+            .any(|&pattern| lowercase_password.contains(pattern))
+        {
+            self.errors
+                .push("Password contains common patterns and is not secure");
         }
         self
     }
@@ -718,7 +719,7 @@ impl<'a> PasswordValidator<'a> {
 
     fn finalize(self) -> Result<(), ValidationError> {
         if self.score < Self::MIN_SCORE || !self.errors.is_empty() {
-            Err(validation_error("password_too_weak"))
+            Err(AppError::validation("password_too_weak"))
         } else {
             Ok(())
         }
@@ -834,7 +835,7 @@ impl ValidatedDto for RateLimitConfig {}
 /// Validation middleware for Axum extractors
 pub mod middleware {
     use super::{Deserialize, ValidatedDto};
-    use crate::errors::{validation_error, AuthError};
+    use crate::shared::error::AppError;
     use axum::{extract::FromRequest, http::Request};
 
     /// Validated JSON extractor that automatically validates DTOs
@@ -846,7 +847,7 @@ pub mod middleware {
         T: ValidatedDto + for<'de> Deserialize<'de>,
         S: Send + Sync,
     {
-        type Rejection = AuthError;
+        type Rejection = crate::shared::error::AppError;
 
         async fn from_request(
             req: Request<axum::body::Body>,
@@ -854,7 +855,7 @@ pub mod middleware {
         ) -> Result<Self, Self::Rejection> {
             let axum::Json(dto) = axum::Json::<T>::from_request(req, state)
                 .await
-                .map_err(|_| validation_error("json", "Invalid JSON format"))?;
+                .map_err(|_| AppError::validation("validation error"))?;
 
             match dto.validate_and_return() {
                 Ok(validated_dto) => Ok(Self(validated_dto)),
@@ -868,7 +869,7 @@ pub mod middleware {
                         .collect::<Vec<_>>()
                         .join("; ");
 
-                    Err(validation_error("validation", &error_msg))
+                    Err(AppError::validation("validation", &error_msg))
                 }
             }
         }
@@ -883,7 +884,7 @@ pub mod middleware {
         T: ValidatedDto + for<'de> Deserialize<'de>,
         S: Send + Sync,
     {
-        type Rejection = AuthError;
+        type Rejection = crate::shared::error::AppError;
 
         async fn from_request(
             req: Request<axum::body::Body>,
@@ -891,7 +892,7 @@ pub mod middleware {
         ) -> Result<Self, Self::Rejection> {
             let axum::extract::Query(dto) = axum::extract::Query::<T>::from_request(req, state)
                 .await
-                .map_err(|_| validation_error("query", "Invalid query parameters"))?;
+                .map_err(|_| AppError::validation("validation error"))?;
 
             match dto.validate_and_return() {
                 Ok(validated_dto) => Ok(Self(validated_dto)),
@@ -905,7 +906,7 @@ pub mod middleware {
                         .collect::<Vec<_>>()
                         .join("; ");
 
-                    Err(validation_error("validation", &error_msg))
+                    Err(AppError::validation("validation", &error_msg))
                 }
             }
         }

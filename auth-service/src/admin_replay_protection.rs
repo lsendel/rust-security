@@ -1,4 +1,4 @@
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use dashmap::DashMap;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
@@ -64,11 +64,11 @@ impl ReplayProtection {
         secret: &str,
         method: &str,
         path: &str,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         // Step 1: Verify HMAC signature first
         if !Self::verify_signature(secret, method, path, nonce, timestamp, signature) {
             warn!("Invalid signature provided for admin request");
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Invalid request signature".to_string(),
             });
         }
@@ -79,7 +79,7 @@ impl ReplayProtection {
         // Step 3: Check if nonce has been used
         if self.is_nonce_used(nonce).await? {
             warn!("Replay attack detected: nonce already used");
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Request replay detected".to_string(),
             });
         }
@@ -91,10 +91,10 @@ impl ReplayProtection {
     }
 
     /// Validate timestamp is within acceptable window
-    fn validate_timestamp(&self, timestamp: u64) -> Result<(), AuthError> {
+    fn validate_timestamp(&self, timestamp: u64) -> Result<(), crate::shared::error::AppError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| AuthError::InternalError {
+            .map_err(|_| crate::shared::error::AppError::Internal(
                 error_id: uuid::Uuid::new_v4(),
                 context: "Time error".to_string(),
             })?
@@ -106,7 +106,7 @@ impl ReplayProtection {
                 "Request timestamp too old: {} (current: {})",
                 timestamp, now
             );
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Request expired".to_string(),
             });
         }
@@ -117,7 +117,7 @@ impl ReplayProtection {
                 "Request timestamp too far in future: {} (current: {})",
                 timestamp, now
             );
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Invalid timestamp".to_string(),
             });
         }
@@ -126,7 +126,7 @@ impl ReplayProtection {
     }
 
     /// Check if nonce has been used
-    async fn is_nonce_used(&self, nonce: &str) -> Result<bool, AuthError> {
+    async fn is_nonce_used(&self, nonce: &str) -> Result<bool, crate::shared::error::AppError> {
         // Try Redis first
         if let Some(client) = &self.redis_client {
             match self.check_redis_nonce(client, nonce).await {
@@ -154,7 +154,7 @@ impl ReplayProtection {
     }
 
     /// Store nonce to prevent replay
-    async fn store_nonce(&self, nonce: &str, timestamp: u64) -> Result<(), AuthError> {
+    async fn store_nonce(&self, nonce: &str, timestamp: u64) -> Result<(), crate::shared::error::AppError> {
         let expiry = self.time_window + self.max_clock_skew;
 
         // Try Redis first
@@ -285,7 +285,7 @@ impl AdminRateLimiter {
     }
 
     /// Check if request should be rate limited
-    pub fn check_rate_limit(&self, admin_key: &str) -> Result<(), AuthError> {
+    pub fn check_rate_limit(&self, admin_key: &str) -> Result<(), crate::shared::error::AppError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -307,7 +307,7 @@ impl AdminRateLimiter {
                 entry.len(),
                 self.window_seconds
             );
-            return Err(AuthError::RateLimitExceeded);
+            return Err(crate::shared::error::AppError::RateLimitExceeded);
         }
 
         // Add current request

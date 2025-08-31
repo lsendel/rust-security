@@ -1,4 +1,4 @@
-use crate::AuthError;
+use crate::shared::error::AppError;
 use data_encoding::BASE64URL_NOPAD;
 use rand::RngCore;
 
@@ -18,7 +18,7 @@ impl SecureRandomGenerator {
     ///
     /// This function currently never returns an error but uses Result for future compatibility
     /// with potential OS random number generator failures
-    pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, AuthError> {
+    pub fn generate_bytes(&self, length: usize) -> Result<Vec<u8>, crate::shared::error::AppError> {
         use rand::rngs::OsRng;
         let mut bytes = vec![0u8; length];
         OsRng.fill_bytes(&mut bytes);
@@ -29,8 +29,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_string(&self, byte_length: usize) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_string(&self, byte_length: usize) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(byte_length)?;
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
@@ -39,8 +39,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_authorization_code(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_authorization_code(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("ac_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
@@ -49,8 +49,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_access_token(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_access_token(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("tk_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
@@ -59,8 +59,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_refresh_token(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_refresh_token(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("rt_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
@@ -69,8 +69,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_session_id(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_session_id(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("sess_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
@@ -79,8 +79,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_csrf_token(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_csrf_token(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("csrf_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
@@ -89,8 +89,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_totp_secret(&self) -> Result<Vec<u8>, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_totp_secret(&self) -> Result<Vec<u8>, crate::shared::error::AppError> {
         self.generate_bytes(20) // 160 bits
     }
 
@@ -98,8 +98,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_backup_codes(&self, count: usize) -> Result<Vec<String>, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_backup_codes(&self, count: usize) -> Result<Vec<String>, crate::shared::error::AppError> {
         let mut codes = Vec::with_capacity(count);
         for _ in 0..count {
             // Generate 8-digit backup codes
@@ -114,8 +114,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_pkce_verifier(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_pkce_verifier(&self) -> Result<String, crate::shared::error::AppError> {
         // PKCE code verifier: 43-128 characters, we'll use 128 for maximum security
         let bytes = self.generate_bytes(96)?; // 96 bytes = 128 base64url chars
         Ok(BASE64URL_NOPAD.encode(&bytes))
@@ -125,8 +125,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_oauth_state(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_oauth_state(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
@@ -135,8 +135,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_oidc_nonce(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_oidc_nonce(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
@@ -145,8 +145,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_salt(&self) -> Result<Vec<u8>, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_salt(&self) -> Result<Vec<u8>, crate::shared::error::AppError> {
         self.generate_bytes(32) // 256 bits
     }
 
@@ -154,8 +154,8 @@ impl SecureRandomGenerator {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if random byte generation fails
-    pub fn generate_api_key(&self) -> Result<String, AuthError> {
+    /// Returns `crate::shared::error::AppError` if random byte generation fails
+    pub fn generate_api_key(&self) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(32)?; // 256 bits of entropy
         Ok(format!("ak_{}", BASE64URL_NOPAD.encode(&bytes)))
     }
@@ -169,8 +169,8 @@ static SECURE_RNG: std::sync::LazyLock<SecureRandomGenerator> =
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_authorization_code() -> Result<String, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_authorization_code() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_authorization_code()
 }
 
@@ -178,8 +178,8 @@ pub fn generate_secure_authorization_code() -> Result<String, AuthError> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_access_token() -> Result<String, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_access_token() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_access_token()
 }
 
@@ -187,8 +187,8 @@ pub fn generate_secure_access_token() -> Result<String, AuthError> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_refresh_token() -> Result<String, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_refresh_token() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_refresh_token()
 }
 
@@ -196,8 +196,8 @@ pub fn generate_secure_refresh_token() -> Result<String, AuthError> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_session_id() -> Result<String, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_session_id() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_session_id()
 }
 
@@ -205,8 +205,8 @@ pub fn generate_secure_session_id() -> Result<String, AuthError> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_csrf_token() -> Result<String, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_csrf_token() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_csrf_token()
 }
 
@@ -214,8 +214,8 @@ pub fn generate_secure_csrf_token() -> Result<String, AuthError> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_totp_secret() -> Result<Vec<u8>, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_totp_secret() -> Result<Vec<u8>, crate::shared::error::AppError> {
     SECURE_RNG.generate_totp_secret()
 }
 
@@ -223,28 +223,28 @@ pub fn generate_secure_totp_secret() -> Result<Vec<u8>, AuthError> {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if random byte generation fails
-pub fn generate_secure_backup_codes(count: usize) -> Result<Vec<String>, AuthError> {
+/// Returns `crate::shared::error::AppError` if random byte generation fails
+pub fn generate_secure_backup_codes(count: usize) -> Result<Vec<String>, crate::shared::error::AppError> {
     SECURE_RNG.generate_backup_codes(count)
 }
 
-pub fn generate_secure_pkce_verifier() -> Result<String, AuthError> {
+pub fn generate_secure_pkce_verifier() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_pkce_verifier()
 }
 
-pub fn generate_secure_oauth_state() -> Result<String, AuthError> {
+pub fn generate_secure_oauth_state() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_oauth_state()
 }
 
-pub fn generate_secure_oidc_nonce() -> Result<String, AuthError> {
+pub fn generate_secure_oidc_nonce() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_oidc_nonce()
 }
 
-pub fn generate_secure_salt() -> Result<Vec<u8>, AuthError> {
+pub fn generate_secure_salt() -> Result<Vec<u8>, crate::shared::error::AppError> {
     SECURE_RNG.generate_salt()
 }
 
-pub fn generate_secure_api_key() -> Result<String, AuthError> {
+pub fn generate_secure_api_key() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_api_key()
 }
 

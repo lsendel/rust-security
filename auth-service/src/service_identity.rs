@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 // Security monitoring types are now part of the security_monitoring module
 use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 
@@ -204,7 +204,7 @@ impl ServiceIdentityManager {
         &self,
         identity_type: IdentityType,
         config: IdentityConfig,
-    ) -> Result<ServiceIdentity, AuthError> {
+    ) -> Result<ServiceIdentity, crate::shared::error::AppError> {
         let identity = ServiceIdentity {
             id: Uuid::new_v4(),
             identity_type: identity_type.clone(),
@@ -237,18 +237,18 @@ impl ServiceIdentityManager {
     pub async fn request_jit_access(
         &self,
         request: JitAccessRequest,
-    ) -> Result<JitToken, AuthError> {
+    ) -> Result<JitToken, crate::shared::error::AppError> {
         // Validate identity exists and is active
         let identities = self.identities.read().await;
         let identity =
             identities
                 .get(&request.identity_id)
-                .ok_or_else(|| AuthError::InvalidRequest {
+                .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
                     reason: format!("Identity not found: {}", request.identity_id),
                 })?;
 
         if identity.status != IdentityStatus::Active {
-            return Err(AuthError::Forbidden {
+            return Err(crate::shared::error::AppError::Forbidden {
                 reason: format!("Identity suspended: {}", request.identity_id),
             });
         }
@@ -278,18 +278,18 @@ impl ServiceIdentityManager {
                 })
                 .await;
 
-            return Err(AuthError::AnomalyDetected);
+            return Err(crate::shared::error::AppError::AnomalyDetected);
         }
 
         // Apply policy engine
         let policy_decision = self.policy_engine.evaluate(identity, &request).await?;
 
         if policy_decision == PolicyEffect::Deny {
-            return Err(AuthError::PolicyDenied);
+            return Err(crate::shared::error::AppError::PolicyDenied);
         }
 
         if policy_decision == PolicyEffect::RequireApproval && !request.approval_required {
-            return Err(AuthError::ApprovalRequired);
+            return Err(crate::shared::error::AppError::ApprovalRequired);
         }
 
         // Calculate token lifetime (minimum of requested and max allowed)
@@ -329,7 +329,7 @@ impl ServiceIdentityManager {
         &self,
         token_id: Uuid,
         context: &RequestContext,
-    ) -> Result<bool, AuthError> {
+    ) -> Result<bool, crate::shared::error::AppError> {
         let mut tokens = self.jit_tokens.write().await;
 
         if let Some(token) = tokens.get_mut(&token_id) {
@@ -362,7 +362,7 @@ impl ServiceIdentityManager {
     }
 
     /// Revoke all tokens for a compromised identity
-    pub async fn revoke_identity_tokens(&self, identity_id: Uuid) -> Result<u32, AuthError> {
+    pub async fn revoke_identity_tokens(&self, identity_id: Uuid) -> Result<u32, crate::shared::error::AppError> {
         let mut tokens = self.jit_tokens.write().await;
         let mut revoked = 0;
 
@@ -390,7 +390,7 @@ impl ServiceIdentityManager {
     }
 
     /// Rotate credentials for an identity
-    pub async fn rotate_credentials(&self, identity_id: Uuid) -> Result<(), AuthError> {
+    pub async fn rotate_credentials(&self, identity_id: Uuid) -> Result<(), crate::shared::error::AppError> {
         let mut identities = self.identities.write().await;
 
         if let Some(identity) = identities.get_mut(&identity_id) {
@@ -406,7 +406,7 @@ impl ServiceIdentityManager {
             );
             Ok(())
         } else {
-            Err(AuthError::IdentityNotFound)
+            Err(crate::shared::error::AppError::IdentityNotFound)
         }
     }
 
@@ -472,7 +472,7 @@ impl PolicyEngine {
         &self,
         identity: &ServiceIdentity,
         request: &JitAccessRequest,
-    ) -> Result<PolicyEffect, AuthError> {
+    ) -> Result<PolicyEffect, crate::shared::error::AppError> {
         let policies = self.policies.read().await;
 
         // Find applicable policies sorted by priority

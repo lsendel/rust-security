@@ -1,4 +1,4 @@
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -67,7 +67,7 @@ pub fn create_secure_jwt_validation() -> Validation {
 ///
 /// # Errors
 ///
-/// Returns `AuthError` if:
+/// Returns `crate::shared::error::AppError` if:
 /// - JWT header is malformed or invalid
 /// - Algorithm is not RS256 (prevents algorithm confusion attacks)
 /// - Key ID (kid) is missing from header
@@ -81,22 +81,22 @@ pub fn validate_jwt_secure(
     token: &str,
     decoding_key: &DecodingKey,
     expected_token_type: TokenType,
-) -> Result<SecureJwtClaims, AuthError> {
+) -> Result<SecureJwtClaims, crate::shared::error::AppError> {
     // Decode header first to check algorithm
-    let header = decode_header(token).map_err(|e| AuthError::InvalidToken {
+    let header = decode_header(token).map_err(|e| crate::shared::error::AppError::InvalidToken {
         reason: format!("Invalid JWT header: {e}"),
     })?;
 
     // Prevent algorithm confusion attacks - ONLY RS256 allowed
     if header.alg != Algorithm::RS256 {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Only RS256 algorithm is supported".to_string(),
         });
     }
 
     // Check for critical header parameters
     if header.kid.is_none() {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Missing key ID in JWT header".to_string(),
         });
     }
@@ -104,7 +104,7 @@ pub fn validate_jwt_secure(
     // Validate token structure and signature
     let validation = create_secure_jwt_validation();
     let token_data = decode::<SecureJwtClaims>(token, decoding_key, &validation).map_err(|e| {
-        AuthError::InvalidToken {
+        crate::shared::error::AppError::InvalidToken {
             reason: format!("JWT validation failed: {e}"),
         }
     })?;
@@ -120,11 +120,11 @@ pub fn validate_jwt_secure(
 }
 
 /// Validate token type matches expected
-fn validate_token_type(claims: &SecureJwtClaims, expected: TokenType) -> Result<(), AuthError> {
+fn validate_token_type(claims: &SecureJwtClaims, expected: TokenType) -> Result<(), crate::shared::error::AppError> {
     match expected {
         TokenType::AccessToken => {
             if claims.token_type.as_deref() != Some("access_token") {
-                return Err(AuthError::InvalidToken {
+                return Err(crate::shared::error::AppError::InvalidToken {
                     reason: "Expected access token".to_string(),
                 });
             }
@@ -132,14 +132,14 @@ fn validate_token_type(claims: &SecureJwtClaims, expected: TokenType) -> Result<
         TokenType::IdToken => {
             // ID tokens must have nonce for security
             if claims.nonce.is_none() {
-                return Err(AuthError::InvalidToken {
+                return Err(crate::shared::error::AppError::InvalidToken {
                     reason: "ID token missing required nonce".to_string(),
                 });
             }
         }
         TokenType::RefreshToken => {
             if claims.token_type.as_deref() != Some("refresh_token") {
-                return Err(AuthError::InvalidToken {
+                return Err(crate::shared::error::AppError::InvalidToken {
                     reason: "Expected refresh token".to_string(),
                 });
             }
@@ -149,13 +149,13 @@ fn validate_token_type(claims: &SecureJwtClaims, expected: TokenType) -> Result<
 }
 
 /// Validate token freshness and timing
-fn validate_token_freshness(claims: &SecureJwtClaims) -> Result<(), AuthError> {
+fn validate_token_freshness(claims: &SecureJwtClaims) -> Result<(), crate::shared::error::AppError> {
     let now = chrono::Utc::now().timestamp();
 
     // Check if token is not yet valid
     if let Some(nbf) = claims.nbf {
         if now < nbf {
-            return Err(AuthError::InvalidToken {
+            return Err(crate::shared::error::AppError::InvalidToken {
                 reason: "Token not yet valid".to_string(),
             });
         }
@@ -164,7 +164,7 @@ fn validate_token_freshness(claims: &SecureJwtClaims) -> Result<(), AuthError> {
     // Check if token was issued in the future (clock skew protection)
     if claims.iat > now + 300 {
         // 5 minute tolerance
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Token issued in the future".to_string(),
         });
     }
@@ -176,7 +176,7 @@ fn validate_token_freshness(claims: &SecureJwtClaims) -> Result<(), AuthError> {
         .unwrap_or(86400);
 
     if now - claims.iat > max_age {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Token too old".to_string(),
         });
     }
@@ -185,10 +185,10 @@ fn validate_token_freshness(claims: &SecureJwtClaims) -> Result<(), AuthError> {
 }
 
 /// Validate token structure and required fields
-fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
+fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), crate::shared::error::AppError> {
     // Validate subject is not empty
     if claims.sub.is_empty() {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Empty subject claim".to_string(),
         });
     }
@@ -196,7 +196,7 @@ fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
     // Validate issuer matches expected
     let expected_issuer = std::env::var("JWT_ISSUER").unwrap_or_default();
     if !expected_issuer.is_empty() && claims.iss != expected_issuer {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Invalid issuer".to_string(),
         });
     }
@@ -204,7 +204,7 @@ fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
     // Validate audience matches expected
     let expected_audience = std::env::var("JWT_AUDIENCE").unwrap_or_default();
     if !expected_audience.is_empty() && claims.aud != expected_audience {
-        return Err(AuthError::InvalidToken {
+        return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Invalid audience".to_string(),
         });
     }
@@ -212,7 +212,7 @@ fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
     // Validate scope format if present
     if let Some(scope) = &claims.scope {
         if scope.len() > 1000 {
-            return Err(AuthError::InvalidToken {
+            return Err(crate::shared::error::AppError::InvalidToken {
                 reason: "Scope too long".to_string(),
             });
         }
@@ -232,7 +232,7 @@ fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
         let scope_lower = scope.to_lowercase();
         for pattern in &dangerous_patterns {
             if scope_lower.contains(pattern) {
-                return Err(AuthError::InvalidToken {
+                return Err(crate::shared::error::AppError::InvalidToken {
                     reason: "Invalid characters in scope".to_string(),
                 });
             }
@@ -248,7 +248,7 @@ fn validate_token_structure(claims: &SecureJwtClaims) -> Result<(), AuthError> {
 ///
 /// This function currently never returns an error but uses Result for future compatibility
 /// with potential configuration loading failures
-pub fn create_oauth_access_token_validator() -> Result<Validation, AuthError> {
+pub fn create_oauth_access_token_validator() -> Result<Validation, crate::shared::error::AppError> {
     let mut validation = create_secure_jwt_validation();
 
     // OAuth access tokens have specific requirements
@@ -266,7 +266,7 @@ pub fn create_oauth_access_token_validator() -> Result<Validation, AuthError> {
 ///
 /// This function currently never returns an error but uses Result for future compatibility
 /// with potential configuration loading failures
-pub fn create_id_token_validator() -> Result<Validation, AuthError> {
+pub fn create_id_token_validator() -> Result<Validation, crate::shared::error::AppError> {
     let mut validation = create_secure_jwt_validation();
 
     // ID tokens have specific OIDC requirements

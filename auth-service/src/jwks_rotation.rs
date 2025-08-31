@@ -1,5 +1,6 @@
-use crate::errors::AuthError;
+use crate::shared::error::AppError;
 use chrono::{DateTime, Duration, Utc};
+use std::str::FromStr;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header};
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
@@ -88,16 +89,16 @@ pub struct JwksManager {
 #[async_trait::async_trait]
 pub trait KeyStorage: Send + Sync {
     /// Store a key
-    async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError>;
+    async fn store_key(&self, key: &CryptoKey) -> Result<(), crate::shared::error::AppError>;
 
     /// Load all keys
-    async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError>;
+    async fn load_keys(&self) -> Result<Vec<CryptoKey>, crate::shared::error::AppError>;
 
     /// Delete a key
-    async fn delete_key(&self, kid: &str) -> Result<(), AuthError>;
+    async fn delete_key(&self, kid: &str) -> Result<(), crate::shared::error::AppError>;
 
     /// Update key status
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError>;
+    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), crate::shared::error::AppError>;
 }
 
 impl JwksManager {
@@ -109,7 +110,7 @@ impl JwksManager {
     pub async fn new(
         config: KeyRotationConfig,
         storage: Arc<dyn KeyStorage>,
-    ) -> Result<Self, AuthError> {
+    ) -> Result<Self, crate::shared::error::AppError> {
         let manager = Self {
             keys: Arc::new(RwLock::new(HashMap::new())),
             active_kid: Arc::new(RwLock::new(None)),
@@ -130,7 +131,7 @@ impl JwksManager {
 
     /// Load keys from storage
     #[allow(clippy::significant_drop_tightening)]
-    async fn load_keys_from_storage(&self) -> Result<(), AuthError> {
+    async fn load_keys_from_storage(&self) -> Result<(), crate::shared::error::AppError> {
         let stored_keys = self.storage.load_keys().await?;
         let mut keys = self.keys.write().await;
         let mut active_kid = self.active_kid.write().await;
@@ -172,7 +173,7 @@ impl JwksManager {
     ///
     /// Returns an error if key generation, storage, or rotation fails
     #[allow(clippy::significant_drop_tightening)]
-    pub async fn rotate_keys(&self) -> Result<(), AuthError> {
+    pub async fn rotate_keys(&self) -> Result<(), crate::shared::error::AppError> {
         info!("Starting key rotation");
 
         // Generate new key
@@ -270,7 +271,7 @@ impl JwksManager {
 
     /// Clean up expired keys
     #[allow(clippy::significant_drop_tightening)]
-    async fn cleanup_expired_keys(&self) -> Result<(), AuthError> {
+    async fn cleanup_expired_keys(&self) -> Result<(), crate::shared::error::AppError> {
         let now = Utc::now();
         let mut keys = self.keys.write().await;
 
@@ -332,15 +333,11 @@ impl JwksManager {
     /// # Errors
     ///
     /// Returns an error if no active key is available
-    pub async fn create_jwt_header(&self) -> Result<Header, AuthError> {
+    pub async fn create_jwt_header(&self) -> Result<Header, crate::shared::error::AppError> {
         let active_key = self
             .get_active_key()
             .await
-            .ok_or_else(|| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: "No active signing key".to_string(),
-            })?;
-
+            .ok_or_else(|| crate::shared::error::AppError::Internal("No active signing key".to_string()))?;
         let mut header = Header::new(self.config.algorithm);
         header.kid = Some(active_key.kid);
         Ok(header)
@@ -350,53 +347,35 @@ impl JwksManager {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if:
+    /// Returns `crate::shared::error::AppError` if:
     /// - No active signing key is available
     /// - Private key is missing from the active key
     /// - Private key is invalid or corrupted
-    pub async fn get_encoding_key(&self) -> Result<EncodingKey, AuthError> {
+    pub async fn get_encoding_key(&self) -> Result<EncodingKey, crate::shared::error::AppError> {
         let active_key = self
             .get_active_key()
             .await
-            .ok_or_else(|| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: "No active signing key".to_string(),
-            })?;
-
+            .ok_or_else(|| crate::shared::error::AppError::Internal("No active signing key".to_string()))?;
         let private_key = active_key
             .private_key
-            .ok_or_else(|| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: "Private key not available".to_string(),
-            })?;
+            .ok_or_else(|| crate::shared::error::AppError::Internal("Private key not available".to_string()))?;
 
-        EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| AuthError::InternalError {
-            error_id: uuid::Uuid::new_v4(),
-            context: format!("Invalid private key: {e}"),
-        })
-    }
+        EncodingKey::from_rsa_pem(private_key.as_bytes())
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid private key: {e}")))    }
 
     /// Get decoding key for validation
     ///
-    /// # Errors
-    ///
-    /// Returns `AuthError` if:
-    /// - The key ID (kid) is unknown or not found
-    /// - The key is expired or revoked
+        EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid private key: {e}")))    /// - The key is expired or revoked
     /// - Public key is invalid or corrupted
-    pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, AuthError> {
+    pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, crate::shared::error::AppError> {
         let key = self
             .get_key(kid)
             .await
-            .ok_or_else(|| AuthError::InvalidToken {
+            .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
                 reason: format!("Unknown kid: {kid}"),
             })?;
 
-        DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| AuthError::InternalError {
-            error_id: uuid::Uuid::new_v4(),
-            context: format!("Invalid public key: {e}"),
-        })
-    }
+        DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid public key: {e}")))    }
 
     /// Check if rotation is needed
     pub async fn check_rotation_needed(&self) -> bool {
@@ -411,11 +390,11 @@ impl JwksManager {
     ///
     /// # Errors
     ///
-    /// Returns `AuthError` if:
+    /// Returns `crate::shared::error::AppError` if:
     /// - Storage update fails when marking key as revoked
     /// - Key rotation fails when revoking the active key
     /// - Database or Redis connection issues occur
-    pub async fn revoke_key(&self, kid: &str) -> Result<(), AuthError> {
+    pub async fn revoke_key(&self, kid: &str) -> Result<(), crate::shared::error::AppError> {
         let should_rotate = {
             let mut keys = self.keys.write().await;
             if let Some(key) = keys.get_mut(kid) {
@@ -497,21 +476,21 @@ impl InMemoryKeyStorage {
 
 #[async_trait::async_trait]
 impl KeyStorage for InMemoryKeyStorage {
-    async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError> {
+    async fn store_key(&self, key: &CryptoKey) -> Result<(), crate::shared::error::AppError> {
         self.keys.write().await.push(key.clone());
         Ok(())
     }
 
-    async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError> {
+    async fn load_keys(&self) -> Result<Vec<CryptoKey>, crate::shared::error::AppError> {
         Ok(self.keys.read().await.clone())
     }
 
-    async fn delete_key(&self, kid: &str) -> Result<(), AuthError> {
+    async fn delete_key(&self, kid: &str) -> Result<(), crate::shared::error::AppError> {
         self.keys.write().await.retain(|k| k.kid != kid);
         Ok(())
     }
 
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError> {
+    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), crate::shared::error::AppError> {
         if let Some(key) = self.keys.write().await.iter_mut().find(|k| k.kid == kid) {
             key.status = status;
         }
@@ -531,12 +510,8 @@ impl RedisKeyStorage {
     /// # Errors
     ///
     /// Returns an error if Redis client creation fails
-    pub fn new(redis_url: &str) -> Result<Self, AuthError> {
-        let client = redis::Client::open(redis_url).map_err(|e| AuthError::InternalError {
-            error_id: uuid::Uuid::new_v4(),
-            context: format!("Failed to create Redis client: {e}"),
-        })?;
-
+    pub fn new(redis_url: &str) -> Result<Self, crate::shared::error::AppError> {
+        let client = redis::Client::open(redis_url).map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to create Redis client: {e}")))?;
         Ok(Self {
             client,
             key_prefix: "jwks:keys:".to_string(),
@@ -546,21 +521,15 @@ impl RedisKeyStorage {
 
 #[async_trait::async_trait]
 impl KeyStorage for RedisKeyStorage {
-    async fn store_key(&self, key: &CryptoKey) -> Result<(), AuthError> {
         let mut conn = self
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {e}"),
-            })?;
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}")))?;
 
         let redis_key = format!("{}{}", self.key_prefix, key.kid);
-        let key_json = serde_json::to_string(key).map_err(|e| AuthError::InternalError {
-            error_id: uuid::Uuid::new_v4(),
-            context: format!("Failed to serialize key: {e}"),
-        })?;
+        let key_json = serde_json::to_string(key)
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to serialize key: {e}")))?;
 
         // Store with expiration based on key expiry
         let ttl = (key.expires_at.timestamp() - chrono::Utc::now().timestamp()).max(60);
@@ -570,43 +539,21 @@ impl KeyStorage for RedisKeyStorage {
             .expire(&redis_key, ttl)
             .query_async::<()>(&mut conn)
             .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Failed to store key in Redis: {e}"),
-            })?;
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to store key in Redis: {e}")))?;
 
         Ok(())
-    }
-
-    async fn load_keys(&self) -> Result<Vec<CryptoKey>, AuthError> {
-        let mut conn = self
-            .client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {e}"),
-            })?;
 
         let pattern = format!("{}*", self.key_prefix);
         let key_names: Vec<String> =
             conn.keys(&pattern)
                 .await
-                .map_err(|e| AuthError::InternalError {
-                    error_id: uuid::Uuid::new_v4(),
-                    context: format!("Failed to scan keys: {e}"),
-                })?;
-
+                .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to scan keys: {e}")))?;
         let mut keys = Vec::new();
         for key_name in key_names {
             let key_json: Option<String> =
                 conn.get(&key_name)
                     .await
-                    .map_err(|e| AuthError::InternalError {
-                        error_id: uuid::Uuid::new_v4(),
-                        context: format!("Failed to get key {key_name}: {e}"),
-                    })?;
-
+                    .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to get key {key_name}: {e}")))?;
             if let Some(json) = key_json {
                 match serde_json::from_str::<CryptoKey>(&json) {
                     Ok(key) => keys.push(key),
@@ -620,33 +567,25 @@ impl KeyStorage for RedisKeyStorage {
         Ok(keys)
     }
 
-    async fn delete_key(&self, kid: &str) -> Result<(), AuthError> {
+    async fn delete_key(&self, kid: &str) -> Result<(), crate::shared::error::AppError> {
         let mut conn = self
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| AuthError::InternalError {
-                error_id: uuid::Uuid::new_v4(),
-                context: format!("Redis connection failed: {e}"),
-            })?;
-
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}")))?;
         let redis_key = format!("{}{}", self.key_prefix, kid);
         conn.del::<_, ()>(&redis_key)
             .await
-            .map_err(|e| AuthError::InternalError {
+            .map_err(|e| crate::shared::error::AppError::Internal(
                 error_id: uuid::Uuid::new_v4(),
                 context: format!("Failed to delete key: {e}"),
             })?;
-
-        Ok(())
-    }
-
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), AuthError> {
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to delete key {kid}: {e}")))?;    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), crate::shared::error::AppError> {
         let mut conn = self
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| AuthError::InternalError {
+            .map_err(|e| crate::shared::error::AppError::Internal(
                 error_id: uuid::Uuid::new_v4(),
                 context: format!("Redis connection failed: {e}"),
             })?;
@@ -655,14 +594,14 @@ impl KeyStorage for RedisKeyStorage {
         let key_json: Option<String> =
             conn.get(&redis_key)
                 .await
-                .map_err(|e| AuthError::InternalError {
+                .map_err(|e| crate::shared::error::AppError::Internal(
                     error_id: uuid::Uuid::new_v4(),
                     context: format!("Failed to get key for status update: {e}"),
                 })?;
 
         if let Some(json) = key_json {
             let mut key: CryptoKey =
-                serde_json::from_str(&json).map_err(|e| AuthError::InternalError {
+                serde_json::from_str(&json).map_err(|e| crate::shared::error::AppError::Internal(
                     error_id: uuid::Uuid::new_v4(),
                     context: format!("Failed to deserialize key: {e}"),
                 })?;
@@ -673,14 +612,14 @@ impl KeyStorage for RedisKeyStorage {
             }
 
             let updated_json =
-                serde_json::to_string(&key).map_err(|e| AuthError::InternalError {
+                serde_json::to_string(&key).map_err(|e| crate::shared::error::AppError::Internal(
                     error_id: uuid::Uuid::new_v4(),
                     context: format!("Failed to serialize updated key: {e}"),
                 })?;
 
             conn.set::<_, _, ()>(&redis_key, updated_json)
                 .await
-                .map_err(|e| AuthError::InternalError {
+                .map_err(|e| crate::shared::error::AppError::Internal(
                     error_id: uuid::Uuid::new_v4(),
                     context: format!("Failed to update key status: {e}"),
                 })?;

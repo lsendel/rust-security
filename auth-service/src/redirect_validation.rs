@@ -1,4 +1,4 @@
-use crate::AuthError;
+use crate::shared::error::AppError;
 use regex::Regex;
 use std::collections::HashSet;
 use url::Url;
@@ -81,7 +81,7 @@ impl RedirectUriValidator {
         &mut self,
         client_id: &str,
         uris: Vec<String>,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let mut validated_uris = HashSet::new();
 
         for uri in uris {
@@ -102,10 +102,10 @@ impl RedirectUriValidator {
         &self,
         client_id: &str,
         redirect_uri: &str,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         // 1. Length validation
         if redirect_uri.len() > self.max_uri_length {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI exceeds maximum length".to_string(),
             });
         }
@@ -123,35 +123,35 @@ impl RedirectUriValidator {
     }
 
     /// Validate URI format and structure
-    fn validate_uri_format(&self, uri: &str) -> Result<(), AuthError> {
+    fn validate_uri_format(&self, uri: &str) -> Result<(), crate::shared::error::AppError> {
         // Basic string-level path traversal guard prior to parsing (URL parsing may normalize dot segments)
         if uri.contains("/../") || uri.ends_with("/..") {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Path traversal detected in redirect URI".to_string(),
             });
         }
         // Parse URL
-        let parsed_url = Url::parse(uri).map_err(|_| AuthError::InvalidRequest {
+        let parsed_url = Url::parse(uri).map_err(|_| crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid redirect URI format".to_string(),
         })?;
 
         // Basic scheme presence; detailed scheme enforcement happens in security policies
         if parsed_url.scheme() != "https" && parsed_url.scheme() != "http" {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: format!("Unsupported scheme: {}", parsed_url.scheme()),
             });
         }
 
         // Validate host exists
         if parsed_url.host().is_none() {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI must have a valid host".to_string(),
             });
         }
 
         // Prevent fragment in redirect URI (OAuth2 security best practice)
         if parsed_url.fragment().is_some() {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI must not contain fragments".to_string(),
             });
         }
@@ -164,16 +164,16 @@ impl RedirectUriValidator {
         &self,
         client_id: &str,
         redirect_uri: &str,
-    ) -> Result<(), AuthError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         let client_uris = self.client_redirect_uris.get(client_id).ok_or_else(|| {
-            AuthError::UnauthorizedClient {
+            crate::shared::error::AppError::UnauthorizedClient {
                 client_id: "Client not registered".to_string(),
             }
         })?;
 
         // Exact match required for security
         if !client_uris.contains(redirect_uri) {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI not registered for this client".to_string(),
             });
         }
@@ -182,7 +182,7 @@ impl RedirectUriValidator {
     }
 
     /// Apply additional security policies
-    fn validate_security_policies(&self, redirect_uri: &str) -> Result<(), AuthError> {
+    fn validate_security_policies(&self, redirect_uri: &str) -> Result<(), crate::shared::error::AppError> {
         let parsed_url = Url::parse(redirect_uri).unwrap(); // Already validated above
 
         // HTTPS enforcement in production
@@ -190,7 +190,7 @@ impl RedirectUriValidator {
             // Allow localhost for development
             if let Some(host) = parsed_url.host_str() {
                 if !self.is_localhost(host) {
-                    return Err(AuthError::InvalidRequest {
+                    return Err(crate::shared::error::AppError::InvalidRequest {
                         reason: "HTTPS required for redirect URIs in production".to_string(),
                     });
                 }
@@ -200,21 +200,21 @@ impl RedirectUriValidator {
         // Prevent IP addresses (except localhost)
         if let Some(host) = parsed_url.host_str() {
             if self.is_ip_address(host) && !self.is_localhost(host) {
-                return Err(AuthError::InvalidRequest {
+                return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "IP addresses not allowed in redirect URIs".to_string(),
                 });
             }
 
             // Check for blocked domains
             if self.is_blocked_domain(host) {
-                return Err(AuthError::InvalidRequest {
+                return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "Domain is on the blocklist".to_string(),
                 });
             }
 
             // Validate TLD
             if !self.is_valid_tld(host) {
-                return Err(AuthError::InvalidRequest {
+                return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "Invalid or suspicious TLD".to_string(),
                 });
             }
@@ -223,7 +223,7 @@ impl RedirectUriValidator {
         // Check for suspicious patterns
         for pattern in &self.suspicious_patterns {
             if pattern.is_match(redirect_uri) {
-                return Err(AuthError::InvalidRequest {
+                return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "Suspicious pattern detected in redirect URI".to_string(),
                 });
             }
@@ -232,14 +232,14 @@ impl RedirectUriValidator {
         // Prevent suspicious paths
         let raw_path = parsed_url.path();
         if raw_path.contains("..") || raw_path.contains("//") {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Path traversal detected in redirect URI".to_string(),
             });
         }
 
         // Check for encoded attack attempts
         if self.contains_encoded_attacks(redirect_uri) {
-            return Err(AuthError::InvalidRequest {
+            return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Encoded attack detected in redirect URI".to_string(),
             });
         }

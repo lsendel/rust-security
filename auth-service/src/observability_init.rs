@@ -18,7 +18,7 @@ use crate::{
     enhanced_observability::{
         observability_middleware, EnhancedObservability, ObservabilityConfig, SliConfig,
     },
-    AuthError,
+    crate::shared::error::AppError,
 };
 
 #[cfg(feature = "monitoring")]
@@ -40,7 +40,7 @@ pub struct ObservabilitySystem {
 
 impl ObservabilitySystem {
     /// Initialize the complete observability system
-    pub async fn initialize() -> Result<Self, AuthError> {
+    pub async fn initialize() -> Result<Self, crate::shared::error::AppError> {
         info!("Initializing comprehensive observability system");
 
         // Initialize business metrics
@@ -68,7 +68,7 @@ impl ObservabilitySystem {
                     Arc::clone(&business_metrics),
                 )
                 .await
-                .map_err(|e| AuthError::InternalError {
+                .map_err(|e| crate::shared::error::AppError::Internal(
                     error_id: uuid::Uuid::new_v4(),
                     context: format!("Failed to initialize enhanced observability: {e}"),
                 })?,
@@ -85,7 +85,7 @@ impl ObservabilitySystem {
                 Arc::clone(&business_metrics),
             )
             .await
-            .map_err(|e| AuthError::InternalError {
+            .map_err(|e| crate::shared::error::AppError::Internal(
                 error_id: uuid::Uuid::new_v4(),
                 context: format!("Failed to initialize enhanced observability: {e}"),
             })?,

@@ -1,0 +1,10 @@
+//! Database Infrastructure
+//!
+//! Database connection and repository implementations.
+
+pub mod postgres;
+pub mod redis;
+
+// Re-export database implementations
+pub use postgres::*;
+pub use redis::*;
