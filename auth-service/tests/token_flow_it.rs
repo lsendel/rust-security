@@ -1,8 +1,13 @@
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::storage::session::store::RedisSessionStore;
 use auth_service::{
-    api_key_store::ApiKeyStore, app, storage::store::sql::SqlStore, store::HybridStore, AppState,
-    IntrospectRequest, IntrospectResponse,
+    api_key_store::ApiKeyStore,
+    app,
+    storage::store::sql::SqlStore,
+    storage::store::hybrid::HybridStore,
+    AppState,
+    IntrospectRequest,
+    IntrospectResponse,
 };
 use common::TokenRecord;
 use reqwest::header::CONTENT_TYPE;

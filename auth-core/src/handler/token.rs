@@ -1,7 +1,7 @@
 //! OAuth token endpoint handler
 
 use axum::{extract::State, response::Json, Form};
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 
 use crate::{
     error::{AuthError, Result},
@@ -60,7 +60,7 @@ pub async fn client_credentials(
 }
 
 fn generate_random_token() -> String {
-    let mut rng = rand::thread_rng();
+    let mut rng = OsRng;
     let token: String = (0..32)
         .map(|_| {
             let idx = rng.gen_range(0..62);

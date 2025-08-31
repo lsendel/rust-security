@@ -117,14 +117,27 @@ async fn test_threat_processor_no_feature() {
 #[cfg(feature = "threat-hunting")]
 #[tokio::test]
 async fn test_auth_service_integration() {
-    let threat_processor = Arc::new(ThreatProcessor::new());
+    let threat_processor = Arc::new(ThreatProcessor::new(
+        Arc::new(
+            auth_service::threat_behavioral_analyzer::AdvancedBehavioralThreatDetector::new(
+                auth_service::threat_behavioral_analyzer::BehavioralAnalysisConfig::default(),
+            ),
+        ),
+        Arc::new(auth_service::threat_intelligence::ThreatIntelligenceCorrelator::new(
+            auth_service::threat_intelligence::ThreatIntelligenceConfig::default(),
+        )),
+        Arc::new(
+            auth_service::threat_response_orchestrator::ThreatResponseOrchestrator::new(
+                auth_service::threat_response_orchestrator::ThreatResponseConfig::default(),
+            ),
+        ),
+    ));
     let auth_service = AuthServiceWithThreatProcessing::new(threat_processor.clone());
 
     let event = create_test_security_event();
     let result = auth_service.process_security_event(event).await;
 
     assert!(result.is_ok());
-    assert!(!threat_processor.is_enabled().await); // No-op implementation
 }
 
 #[tokio::test]

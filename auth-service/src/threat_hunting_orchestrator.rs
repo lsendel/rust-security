@@ -8,6 +8,7 @@ use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOr
 use crate::threat_types::{
     AttackPhase, BusinessImpact, ThreatContext, ThreatSeverity, ThreatSignature, ThreatType,
 };
+use std::sync::LazyLock;
 use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingConfig};
 
 use chrono::{DateTime, Utc};
@@ -18,7 +19,7 @@ use redis::aio::ConnectionManager;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::LazyLock;
+
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
@@ -26,6 +27,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Prometheus metrics for threat hunting orchestration
+#[cfg(feature = "monitoring")]
 static THREAT_HUNTING_EVENTS_PROCESSED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_events_processed_total",
@@ -34,6 +36,7 @@ static THREAT_HUNTING_EVENTS_PROCESSED: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create threat_hunting_events_processed counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_HUNTING_THREATS_DETECTED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_threats_detected_total",
@@ -42,6 +45,7 @@ static THREAT_HUNTING_THREATS_DETECTED: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create threat_hunting_threats_detected counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_HUNTING_RESPONSE_PLANS_EXECUTED: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_response_plans_executed_total",
@@ -50,6 +54,7 @@ static THREAT_HUNTING_RESPONSE_PLANS_EXECUTED: LazyLock<Counter> = LazyLock::new
     .expect("Failed to create threat_hunting_response_plans_executed counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_HUNTING_PROCESSING_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_processing_time_seconds",
@@ -58,6 +63,7 @@ static THREAT_HUNTING_PROCESSING_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     .expect("Failed to create threat_hunting_processing_time histogram")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_HUNTING_SYSTEM_HEALTH: LazyLock<Gauge> = LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_system_health",
@@ -66,6 +72,7 @@ static THREAT_HUNTING_SYSTEM_HEALTH: LazyLock<Gauge> = LazyLock::new(|| {
     .expect("Failed to create threat_hunting_system_health gauge")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_HUNTING_ACTIVE_CORRELATIONS: LazyLock<Gauge> = LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_correlations",
@@ -466,6 +473,7 @@ impl ThreatHuntingOrchestrator {
         self.start_system_monitor().await;
 
         // Set initial health status
+        #[cfg(feature = "monitoring")]
         THREAT_HUNTING_SYSTEM_HEALTH.set(1.0);
 
         info!("Threat Hunting Orchestrator initialized successfully");
@@ -500,7 +508,10 @@ impl ThreatHuntingOrchestrator {
         event: SecurityEvent,
     ) -> Result<ThreatHuntingResult, Box<dyn std::error::Error + Send + Sync>> {
         let start_time = SystemTime::now();
+        #[cfg(feature = "monitoring")]
         let timer = THREAT_HUNTING_PROCESSING_TIME.start_timer();
+        #[cfg(not(feature = "monitoring"))]
+        let timer = || {}; // No-op timer when monitoring is disabled
 
         // Send event to processing queue
         if let Err(e) = self.event_ingestion_queue.send(event.clone()) {
@@ -600,6 +611,7 @@ impl ThreatHuntingOrchestrator {
                 {
                     Ok(plan) => {
                         operation_result.response_plans_created.push(plan.plan_id);
+                        #[cfg(feature = "monitoring")]
                         THREAT_HUNTING_RESPONSE_PLANS_EXECUTED.inc();
                     }
                     Err(e) => {
@@ -625,11 +637,14 @@ impl ThreatHuntingOrchestrator {
         }
 
         // Update metrics
+        #[cfg(feature = "monitoring")]
         THREAT_HUNTING_EVENTS_PROCESSED.inc();
         if !operation_result.threats_detected.is_empty() {
+            #[cfg(feature = "monitoring")]
             THREAT_HUNTING_THREATS_DETECTED.inc_by(operation_result.threats_detected.len() as f64);
         }
 
+        #[cfg(feature = "monitoring")]
         drop(timer);
         Ok(operation_result)
     }
@@ -772,6 +787,7 @@ impl ThreatHuntingOrchestrator {
                         metrics.system_uptime_hours += 0.5 / 60.0; // 30 seconds
 
                         // Update Prometheus metrics
+                        #[cfg(feature = "monitoring")]
                         THREAT_HUNTING_SYSTEM_HEALTH.set(1.0); // Healthy
                     }
                 }
@@ -835,6 +851,7 @@ impl ThreatHuntingOrchestrator {
         *redis_client = None;
 
         // Update health status
+        #[cfg(feature = "monitoring")]
         THREAT_HUNTING_SYSTEM_HEALTH.set(0.0);
 
         info!("Threat Hunting Orchestrator shutdown complete");
@@ -930,6 +947,7 @@ impl ThreatCorrelationEngine {
             };
 
             correlations.push(correlation);
+            #[cfg(feature = "monitoring")]
             THREAT_HUNTING_ACTIVE_CORRELATIONS.inc();
         }
 

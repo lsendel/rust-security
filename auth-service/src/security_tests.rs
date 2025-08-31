@@ -6,7 +6,9 @@ mod security_tests {
         generate_code_challenge, generate_code_verifier, generate_request_signature,
         generate_token_binding, verify_code_challenge, verify_request_signature,
     };
-    // use crate::session_secure::*;
+    use crate::storage::session::secure::{
+        SecureSessionConfig, SecureSessionManager, SessionError,
+    };
     use crate::validation_secure::*;
     use base64::Engine;
     use std::net::{IpAddr, Ipv4Addr};

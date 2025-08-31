@@ -56,7 +56,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
             rt.block_on(async {
-                black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap())
+                black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0"))
             })
         })
     });
@@ -200,7 +200,7 @@ fn bench_concurrent_operations(c: &mut Criterion) {
                             .map(|i| {
                                 let ip = format!("192.168.1.{}", (i % 254) + 1);
                                 tokio::spawn(async move {
-                                    generate_token_binding(&ip, "Mozilla/5.0").unwrap()
+                                    generate_token_binding(&ip, "Mozilla/5.0")
                                 })
                             })
                             .collect();
@@ -224,7 +224,7 @@ fn bench_memory_intensive_operations(c: &mut Criterion) {
     group.bench_function("large_payload_processing", |b| {
         let large_payload = "x".repeat(1_000); // 1KB payload (reduced for faster benchmarks)
 
-        b.iter(|| black_box(generate_token_binding("192.168.1.1", &large_payload).unwrap()))
+        b.iter(|| black_box(generate_token_binding("192.168.1.1", &large_payload)))
     });
 
     group.finish();
@@ -250,7 +250,7 @@ fn bench_security_validation_pipeline(c: &mut Criterion) {
                     .await;
 
                 // Step 2: Token binding generation
-                let _token_binding = generate_token_binding("192.168.1.1", "Mozilla/5.0").unwrap();
+                let _token_binding = generate_token_binding("192.168.1.1", "Mozilla/5.0");
 
                 // Step 3: PKCE code generation
                 let verifier = generate_code_verifier().unwrap();
@@ -307,7 +307,7 @@ fn bench_high_throughput_scenarios(c: &mut Criterion) {
                         for i in 0..rps {
                             let ip = format!("192.168.1.{}", (i % 254) + 1);
                             tasks.push(tokio::spawn(async move {
-                                generate_token_binding(&ip, "Mozilla/5.0").unwrap()
+                                generate_token_binding(&ip, "Mozilla/5.0")
                             }));
                         }
 

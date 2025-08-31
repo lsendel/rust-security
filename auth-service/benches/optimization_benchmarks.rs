@@ -3,12 +3,10 @@
 //! Measures the performance impact of the implemented optimizations
 //! to validate that our changes provide measurable improvements.
 
-use auth_service::{
-    security::{generate_token_binding, validate_token_binding},
-    token_cache::{LruTokenCache, TokenCacheConfig},
-};
+use auth_service::security::{generate_token_binding, validate_token_binding};
+use auth_service::storage::cache::{LruTokenCache, TokenCacheConfig};
 use common::TokenRecord;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
@@ -32,7 +30,7 @@ fn bench_token_validation(c: &mut Criterion) {
     // Benchmark validation with the optimized window approach
     let client_ip = "192.168.1.1";
     let user_agent = "Mozilla/5.0 (Test Browser)";
-    let binding = generate_token_binding(client_ip, user_agent).unwrap();
+    let binding = generate_token_binding(client_ip, user_agent);
 
     group.bench_function("validate_token_binding_optimized", |b| {
         b.iter(|| {
@@ -229,7 +227,8 @@ fn bench_integration_performance(c: &mut Criterion) {
                 let user_agent = "Test Client/1.0";
 
                 // 1. Generate token binding
-                let binding = generate_token_binding(client_ip, user_agent).unwrap();
+                let binding = generate_token_binding(client_ip, user_agent);
+                let binding = generate_token_binding(client_ip, user_agent);
 
                 // 2. Store token in cache
                 let token_key = format!("req_{}", request_counter);

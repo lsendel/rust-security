@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn test_security_event_conversion() {
         let security_event = SecurityEvent {
-            timestamp: SystemTime::now(),
+            timestamp: chrono::Utc::now(),
             event_type: SecurityEventType::AuthenticationFailure,
             security_context: SecurityContext {
                 client_ip: "127.0.0.1".parse::<IpAddr>().unwrap(),
@@ -130,7 +130,7 @@ mod tests {
                 security_level: SecurityLevel::High,
                 risk_score: 0.5,
                 threat_indicators: vec![],
-                flags: vec![],
+                flags: Default::default(),
                 metadata: std::collections::HashMap::new(),
             },
             auth_context: Some(AuthContext {
@@ -143,6 +143,15 @@ mod tests {
             }),
             details: std::collections::HashMap::new(),
             severity: ViolationSeverity::High,
+            user_id: Some("user-123".to_string()),
+            session_id: Some("session-123".to_string()),
+            ip_address: Some("127.0.0.1".parse::<IpAddr>().unwrap()),
+            location: Some("US".to_string()),
+            device_fingerprint: Some("device-123".to_string()),
+            risk_score: Some(50),
+            outcome: Some("failure".to_string()),
+            mfa_used: false,
+            user_agent: Some("test-agent".to_string()),
         };
 
         let threat_event: ThreatSecurityEvent = (&security_event).into();

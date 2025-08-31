@@ -4,8 +4,9 @@
 //! to prevent unbounded memory growth and improve performance.
 
 use common::TokenRecord;
-use serde::{Deserialize, Serialize};
+
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -64,6 +65,8 @@ pub struct LruTokenCache {
     cache: Arc<RwLock<HashMap<String, CacheEntry<TokenRecord>>>>,
     config: TokenCacheConfig,
     cleanup_task: Option<tokio::task::JoinHandle<()>>,
+    hits: Arc<AtomicU64>,
+    misses: Arc<AtomicU64>,
 }
 
 impl Default for LruTokenCache {
@@ -87,6 +90,8 @@ impl LruTokenCache {
             cache,
             config,
             cleanup_task: None,
+            hits: Arc::new(AtomicU64::new(0)),
+            misses: Arc::new(AtomicU64::new(0)),
         };
 
         instance.start_cleanup_task();
@@ -144,12 +149,15 @@ impl LruTokenCache {
         if let Some(entry) = cache.get_mut(key) {
             if entry.is_expired(self.config.max_age) {
                 cache.remove(key);
+                self.misses.fetch_add(1, Ordering::Relaxed);
                 None
             } else {
                 entry.touch();
+                self.hits.fetch_add(1, Ordering::Relaxed);
                 Some(entry.value.clone())
             }
         } else {
+            self.misses.fetch_add(1, Ordering::Relaxed);
             None
         }
     }
@@ -180,26 +188,41 @@ impl LruTokenCache {
     }
 
     /// Check if a token exists in the cache
+    ///
+    /// # Panics
+    ///
+    /// This function may panic if the cache contains a key that was not properly
+    /// initialized, causing an unwrap failure when accessing the entry.
     pub async fn contains(&self, key: &str) -> bool {
         let cache = self.cache.read().await;
-        cache.contains_key(key) && !cache.get(key).unwrap().is_expired(self.config.max_age)
+        if let Some(entry) = cache.get(key) {
+            !entry.is_expired(self.config.max_age)
+        } else {
+            false
+        }
     }
 
     /// Get cache statistics
-    pub async fn stats(&self) -> CacheStats {
+    pub async fn stats(&self) -> super::CacheStats {
         let cache = self.cache.read().await;
-        let total_entries = cache.len();
-        let expired_count = cache
+        let active_entries = cache
             .values()
-            .filter(|entry| entry.is_expired(self.config.max_age))
+            .filter(|entry| !entry.is_expired(self.config.max_age))
             .count();
+        let hits = self.hits.load(Ordering::Relaxed);
+        let misses = self.misses.load(Ordering::Relaxed);
+        let total = hits + misses;
+        let hit_rate = if total > 0 {
+            hits as f64 / total as f64
+        } else {
+            0.0
+        };
 
-        CacheStats {
-            total_entries,
-            expired_entries: expired_count,
-            active_entries: total_entries - expired_count,
-            max_capacity: self.config.max_tokens,
-            hit_rate: 0.0, // Would need separate tracking for this
+        super::CacheStats {
+            entries: active_entries,
+            hits,
+            misses,
+            hit_rate,
         }
     }
 
@@ -208,6 +231,27 @@ impl LruTokenCache {
         let mut cache = self.cache.write().await;
         cache.clear();
         info!("Token cache cleared");
+    }
+
+    /// Manually trigger cleanup of expired and excess entries (useful for tests)
+    pub async fn cleanup_expired(&self) {
+        let mut cache_guard = self.cache.write().await;
+        // Remove expired entries
+        cache_guard.retain(|_, entry| !entry.is_expired(self.config.max_age));
+
+        // If still over capacity, remove least recently used
+        if cache_guard.len() > self.config.max_tokens {
+            let mut entries: Vec<_> = cache_guard
+                .iter()
+                .map(|(k, v)| (k.clone(), v.last_accessed))
+                .collect();
+            entries.sort_by_key(|(_, last_accessed)| *last_accessed);
+
+            let to_remove = cache_guard.len() - self.config.max_tokens;
+            for (key, _) in entries.into_iter().take(to_remove) {
+                cache_guard.remove(&key);
+            }
+        }
     }
 }
 
@@ -219,14 +263,16 @@ impl Drop for LruTokenCache {
     }
 }
 
-/// Cache performance statistics
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CacheStats {
-    pub total_entries: usize,
-    pub expired_entries: usize,
-    pub active_entries: usize,
-    pub max_capacity: usize,
-    pub hit_rate: f64,
+impl Clone for LruTokenCache {
+    fn clone(&self) -> Self {
+        Self {
+            cache: Arc::clone(&self.cache),
+            config: self.config.clone(),
+            cleanup_task: None,
+            hits: Arc::clone(&self.hits),
+            misses: Arc::clone(&self.misses),
+        }
+    }
 }
 
 #[cfg(test)]

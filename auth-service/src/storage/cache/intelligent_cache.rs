@@ -303,6 +303,13 @@ where
     }
 
     /// Put value into cache
+    ///
+    /// # Errors
+    ///
+    /// Returns `CacheError` if:
+    /// - Entry eviction fails during size management
+    /// - Memory allocation fails
+    /// - Cache size limits are exceeded and eviction cannot free space
     pub async fn put(&self, key: K, value: V, ttl: Option<Duration>) -> Result<(), CacheError> {
         let mut storage = self.storage.write().await;
         let config = self.config.read().await;
@@ -387,6 +394,13 @@ where
     }
 
     /// Warm up cache with predefined keys
+    ///
+    /// # Errors
+    ///
+    /// Returns `CacheError` if:
+    /// - Cache warming is disabled in configuration
+    /// - Loader function fails to provide data
+    /// - Cache insertion fails during warm-up
     pub async fn warm_up<F, Fut>(&self, loader: F) -> Result<(), CacheError>
     where
         F: Fn(String) -> Fut + Send + Sync,

@@ -130,6 +130,10 @@ impl SessionCleanupScheduler {
     }
 
     /// Start the cleanup scheduler with graceful shutdown support
+    ///
+    /// # Errors
+    ///
+    /// Returns `CleanupError::AlreadyRunning` if the cleanup scheduler is already running.
     pub async fn start(&self) -> Result<(), CleanupError> {
         if self.is_running.swap(true, Ordering::SeqCst) {
             return Err(CleanupError::AlreadyRunning);
@@ -144,29 +148,7 @@ impl SessionCleanupScheduler {
         info!("Starting session cleanup scheduler");
 
         // Log scheduler startup
-        let event = SecurityEvent::new(
-            SecurityEventType::SystemEvent,
-            SecuritySeverity::Low,
-            "auth-service".to_string(),
-            "Session cleanup scheduler started".to_string(),
-        )
-        .with_detail(
-            "base_interval_secs".to_string(),
-            serde_json::Value::Number(self.config.base_interval_secs.into()),
-        )
-        .with_detail(
-            "jitter_percent".to_string(),
-            serde_json::Value::String(self.config.jitter_percent.to_string()),
-        )
-        .with_detail(
-            "batch_size".to_string(),
-            serde_json::Value::Number(self.config.batch_size.into()),
-        );
-
-        let logger = crate::security_logging::SecurityLogger::new(
-            crate::security_logging::SecurityLoggerConfig::default(),
-        );
-        logger.log_event(event);
+        self.log_scheduler_startup().await;
 
         let mut cleanup_interval = self.create_jittered_interval();
         cleanup_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -242,6 +224,11 @@ impl SessionCleanupScheduler {
     }
 
     /// Send shutdown signal to the scheduler
+    ///
+    /// # Errors
+    ///
+    /// Returns `CleanupError::ShutdownFailed` if sending the shutdown signal fails,
+    /// or `CleanupError::NotRunning` if the scheduler is not running.
     pub async fn shutdown(&self, signal: ShutdownSignal) -> Result<(), CleanupError> {
         let sender_guard = self.shutdown_sender.read().await;
         if let Some(sender) = sender_guard.as_ref() {
@@ -252,6 +239,33 @@ impl SessionCleanupScheduler {
         } else {
             Err(CleanupError::NotRunning)
         }
+    }
+
+    /// Log scheduler startup event
+    async fn log_scheduler_startup(&self) {
+        let event = SecurityEvent::new(
+            SecurityEventType::SystemEvent,
+            SecuritySeverity::Low,
+            "auth-service".to_string(),
+            "Session cleanup scheduler started".to_string(),
+        )
+        .with_detail(
+            "base_interval_secs".to_string(),
+            serde_json::Value::Number(self.config.base_interval_secs.into()),
+        )
+        .with_detail(
+            "jitter_percent".to_string(),
+            serde_json::Value::String(self.config.jitter_percent.to_string()),
+        )
+        .with_detail(
+            "batch_size".to_string(),
+            serde_json::Value::Number(self.config.batch_size.into()),
+        );
+
+        let logger = crate::security_logging::SecurityLogger::new(
+            crate::security_logging::SecurityLoggerConfig::default(),
+        );
+        logger.log_event(event);
     }
 
     /// Get current cleanup statistics
@@ -265,6 +279,11 @@ impl SessionCleanupScheduler {
     }
 
     /// Force an immediate cleanup cycle (for testing/admin)
+    ///
+    /// # Errors
+    ///
+    /// Returns `CleanupError::NotRunning` if the cleanup scheduler is not running,
+    /// or `CleanupError` if the cleanup cycle fails.
     pub async fn force_cleanup(&self) -> Result<CleanupStats, CleanupError> {
         if !self.is_running() {
             return Err(CleanupError::NotRunning);
@@ -583,6 +602,10 @@ fn current_timestamp() -> u64 {
 }
 
 /// Factory function to create and start session cleanup scheduler
+///
+/// # Errors
+///
+/// Returns `CleanupError` if the cleanup scheduler fails to start.
 pub async fn create_and_start_session_cleanup(
     config: SessionCleanupConfig,
     session_manager: Arc<SessionManager>,

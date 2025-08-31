@@ -427,20 +427,22 @@ impl WebAuthnMfa {
 
     fn generate_challenge(&self) -> String {
         use rand::rngs::OsRng;
+        use base64::{Engine as _, engine::general_purpose};
         let mut challenge = vec![0u8; 32];
         OsRng.fill_bytes(&mut challenge);
-        base64::encode_config(&challenge, base64::URL_SAFE_NO_PAD)
+        general_purpose::URL_SAFE_NO_PAD.encode(&challenge)
     }
 
     fn generate_user_handle(&self, user_id: &str) -> String {
         // Generate a stable user handle from user ID
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
+        use base64::{Engine as _, engine::general_purpose};
 
         let mut hasher = DefaultHasher::new();
         user_id.hash(&mut hasher);
         let hash = hasher.finish();
-        base64::encode_config(&hash.to_be_bytes(), base64::URL_SAFE_NO_PAD)
+        general_purpose::URL_SAFE_NO_PAD.encode(&hash.to_be_bytes())
     }
 
     async fn store_registration_challenge(&self, user_id: &str, challenge: &str, options: &PublicKeyCredentialCreationOptions) -> MfaResult<()> {

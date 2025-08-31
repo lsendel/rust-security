@@ -1,4 +1,4 @@
-use auth_service::store::TokenStore;
+use auth_service::storage::store::hybrid::TokenStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

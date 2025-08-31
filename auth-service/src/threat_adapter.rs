@@ -98,6 +98,14 @@ mod tests {
             details: HashMap::new(),
             severity: ViolationSeverity::High,
             user_id: Some("test_user".to_string()),
+            session_id: None,
+            ip_address: Some("127.0.0.1".parse::<IpAddr>().unwrap()),
+            location: None,
+            device_fingerprint: None,
+            risk_score: Some(80),
+            outcome: Some("failure".to_string()),
+            mfa_used: false,
+            user_agent: Some("test".to_string()),
         };
 
         let result = process_with_conversion(&event, |threat_event| async move {

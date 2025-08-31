@@ -13,7 +13,7 @@ use redis::aio::ConnectionManager;
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::SystemTime;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
@@ -22,8 +22,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 /// Prometheus metrics for threat intelligence
-use std::sync::LazyLock;
-
+#[cfg(feature = "monitoring")]
 static THREAT_INTEL_QUERIES: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_queries_total",
@@ -32,6 +31,7 @@ static THREAT_INTEL_QUERIES: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create threat_intel_queries counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_INTEL_MATCHES: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_matches_total",
@@ -40,6 +40,7 @@ static THREAT_INTEL_MATCHES: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create threat_intel_matches counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_INTEL_ERRORS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_errors_total",
@@ -48,6 +49,7 @@ static THREAT_INTEL_ERRORS: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create threat_intel_errors counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_INTEL_CACHE_HITS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_intel_cache_hits_total",
@@ -56,6 +58,7 @@ static THREAT_INTEL_CACHE_HITS: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create threat_intel_cache_hits counter")
 });
 
+#[cfg(feature = "monitoring")]
 static THREAT_INTEL_RESPONSE_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_intel_response_time_seconds",
@@ -64,6 +67,7 @@ static THREAT_INTEL_RESPONSE_TIME: LazyLock<Histogram> = LazyLock::new(|| {
     .expect("Failed to create threat_intel_response_time histogram")
 });
 
+#[cfg(feature = "monitoring")]
 static ACTIVE_INDICATORS: std::sync::LazyLock<Gauge> = std::sync::LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_indicators",
@@ -456,6 +460,7 @@ impl ThreatIntelligenceCorrelator {
             }
 
             info!("Loaded {} threat intelligence indicators", indicators.len());
+            #[cfg(feature = "monitoring")]
             ACTIVE_INDICATORS.set(indicators.len() as f64);
         }
         Ok(())
@@ -494,6 +499,7 @@ impl ThreatIntelligenceCorrelator {
             // Check cache first
             if let Some(cached_match) = self.check_cache(&indicator_value, &indicator_type).await {
                 matches.push(cached_match);
+                #[cfg(feature = "monitoring")]
                 THREAT_INTEL_CACHE_HITS.inc();
                 continue;
             }
@@ -524,8 +530,10 @@ impl ThreatIntelligenceCorrelator {
             }
         }
 
+        #[cfg(feature = "monitoring")]
         THREAT_INTEL_QUERIES.inc_by(matches.len() as f64);
         if !matches.is_empty() {
+            #[cfg(feature = "monitoring")]
             THREAT_INTEL_MATCHES.inc_by(matches.len() as f64);
         }
 
@@ -804,6 +812,7 @@ impl ThreatIntelligenceCorrelator {
                 Ok(None) => {}
                 Err(e) => {
                     error!("Failed to query feed {}: {}", feed.name, e);
+                    #[cfg(feature = "monitoring")]
                     THREAT_INTEL_ERRORS.inc();
                     {}
                 }
@@ -861,7 +870,10 @@ impl ThreatIntelligenceCorrelator {
         indicator_type: &IndicatorType,
         http_client: &Client,
     ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
+        #[cfg(feature = "monitoring")]
         let timer = THREAT_INTEL_RESPONSE_TIME.start_timer();
+        #[cfg(not(feature = "monitoring"))]
+        let timer = || {}; // No-op timer when monitoring is disabled
 
         let result = match feed.feed_type {
             ThreatFeedType::AbuseIpdb => {
@@ -876,6 +888,7 @@ impl ThreatIntelligenceCorrelator {
             }
         };
 
+        #[cfg(feature = "monitoring")]
         drop(timer);
         result
     }
@@ -1060,6 +1073,7 @@ impl ThreatIntelligenceCorrelator {
                 stats.feeds_active = feeds_active;
 
                 // Update Prometheus metrics
+                #[cfg(feature = "monitoring")]
                 ACTIVE_INDICATORS.set(indicators_count as f64);
             }
         });

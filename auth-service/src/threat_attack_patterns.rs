@@ -16,6 +16,7 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, info};
 use uuid::Uuid;
 
+#[cfg(feature = "monitoring")]
 lazy_static::lazy_static! {
     static ref ATTACK_PATTERNS_DETECTED: Counter = register_counter!(
         "threat_hunting_attack_patterns_detected_total",
@@ -572,7 +573,10 @@ impl AttackPatternDetector {
         &self,
         event: SecurityEvent,
     ) -> Result<Vec<DetectedAttackSequence>, Box<dyn std::error::Error + Send + Sync>> {
+        #[cfg(feature = "monitoring")]
         let timer = GRAPH_ANALYSIS_DURATION.start_timer();
+        #[cfg(not(feature = "monitoring"))]
+        let timer = || {}; // No-op timer when monitoring is disabled
         let mut detected_sequences = Vec::new();
 
         // Add event to buffer
@@ -600,6 +604,7 @@ impl AttackPatternDetector {
         stats.sequences_analyzed += 1;
         stats.patterns_detected += detected_sequences.len() as u64;
 
+        #[cfg(feature = "monitoring")]
         drop(timer);
         Ok(detected_sequences)
     }
@@ -785,6 +790,7 @@ impl AttackPatternDetector {
 
             if let Some(sequence) = self.check_rule_match(rule, event, &buffer).await {
                 detected_sequences.push(sequence);
+                #[cfg(feature = "monitoring")]
                 ATTACK_PATTERNS_DETECTED.inc();
             }
         }
@@ -1300,6 +1306,7 @@ impl AttackPatternDetector {
                 // Remove expired sequences
                 sequences.retain(|_, sequence| sequence.last_event > cutoff_time);
 
+                #[cfg(feature = "monitoring")]
                 ACTIVE_ATTACK_SEQUENCES.set(sequences.len() as f64);
             }
         });

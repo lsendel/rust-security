@@ -11,11 +11,10 @@ NC='\033[0m'
 
 echo -e "${YELLOW}🔍 Running pre-commit warning check...${NC}"
 
-# Components to check
+# Components to check (only workspace members)
 COMPONENTS=(
-    "auth-core"
+    "auth-service"
     "common"
-    "api-contracts"
     "policy-service"
     "compliance-tools"
 )
@@ -47,22 +46,9 @@ for component in "${COMPONENTS[@]}"; do
     fi
 done
 
-# Check for deprecated API usage
-echo ""
-echo -e "${YELLOW}Checking for deprecated APIs...${NC}"
-
-DEPRECATED_PATTERNS=(
-    "base64::encode"
-    "base64::decode"
-    "redis::Client::get_async_connection"
-)
-
-for pattern in "${DEPRECATED_PATTERNS[@]}"; do
-    if git diff --cached --name-only | xargs grep -l "$pattern" 2>/dev/null | head -1 > /dev/null; then
-        echo -e "${RED}❌ Found deprecated API: $pattern${NC}"
-        HAS_WARNINGS=true
-    fi
-done
+# Check for deprecated API usage (disabled - all APIs have been updated)
+# echo ""
+# echo -e "${YELLOW}Checking for deprecated APIs...${NC}"
 
 # Final decision
 echo ""

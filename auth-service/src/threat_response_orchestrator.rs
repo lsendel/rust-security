@@ -23,6 +23,7 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+#[cfg(feature = "monitoring")]
 lazy_static::lazy_static! {
     static ref RESPONSE_PLANS_CREATED: Counter = register_counter!(
         "threat_hunting_response_plans_created_total",
@@ -671,7 +672,9 @@ impl ThreatResponseOrchestrator {
         active_plans.insert(plan_id.clone(), response_plan.clone());
 
         // Update metrics
+        #[cfg(feature = "monitoring")]
         RESPONSE_PLANS_CREATED.inc();
+        #[cfg(feature = "monitoring")]
         ACTIVE_RESPONSE_PLANS.set(active_plans.len() as f64);
 
         // Queue for execution if auto-execute is enabled
@@ -1060,7 +1063,10 @@ impl ThreatResponseOrchestrator {
             info!("Starting threat response processor");
 
             while let Ok(response_request) = response_receiver.recv_async().await {
+                #[cfg(feature = "monitoring")]
                 let timer = RESPONSE_PLAN_DURATION.start_timer();
+                #[cfg(not(feature = "monitoring"))]
+                let timer = || {}; // No-op timer when monitoring is disabled
 
                 // Execute the response plan
                 let result = Self::execute_response_plan(
@@ -1077,6 +1083,7 @@ impl ThreatResponseOrchestrator {
                             "Response plan executed successfully for threat: {}",
                             response_request.threat_signature.threat_id
                         );
+                        #[cfg(feature = "monitoring")]
                         RESPONSE_ACTIONS_EXECUTED.inc();
                     }
                     Err(e) => {
@@ -1084,6 +1091,7 @@ impl ThreatResponseOrchestrator {
                             "Failed to execute response plan for threat {}: {}",
                             response_request.threat_signature.threat_id, e
                         );
+                        #[cfg(feature = "monitoring")]
                         RESPONSE_ACTIONS_FAILED.inc();
                     }
                 }
@@ -1092,6 +1100,7 @@ impl ThreatResponseOrchestrator {
                 let mut stats = orchestration_statistics.lock().await;
                 stats.plans_executed += 1;
 
+                #[cfg(feature = "monitoring")]
                 drop(timer);
             }
         });
@@ -1280,6 +1289,7 @@ impl ThreatResponseOrchestrator {
                 interval.tick().await;
 
                 let plans = active_plans.read().await;
+                #[cfg(feature = "monitoring")]
                 ACTIVE_RESPONSE_PLANS.set(plans.len() as f64);
 
                 debug!("Health monitoring cycle completed");

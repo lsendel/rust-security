@@ -352,112 +352,47 @@ impl FeatureFlags {
     #[must_use]
     #[allow(clippy::too_many_lines)]
     pub fn enabled_features(&self) -> Vec<&'static str> {
-        let mut features = Vec::new();
+        let feature_flags = [
+            (self.google_oidc, "google_oidc"),
+            (self.microsoft_oidc, "microsoft_oidc"),
+            (self.github_oidc, "github_oidc"),
+            (self.webauthn, "webauthn"),
+            (self.advanced_mfa, "advanced_mfa"),
+            (self.totp_mfa, "totp_mfa"),
+            (self.sms_mfa, "sms_mfa"),
+            (self.scim_v2, "scim_v2"),
+            (self.oauth2_device_flow, "oauth2_device_flow"),
+            (self.oauth2_token_exchange, "oauth2_token_exchange"),
+            (self.threat_detection, "threat_detection"),
+            (self.anomaly_detection, "anomaly_detection"),
+            (self.bot_protection, "bot_protection"),
+            (self.request_signing, "request_signing"),
+            (self.token_binding, "token_binding"),
+            (self.soar_integration, "soar_integration"),
+            (self.policy_engine, "policy_engine"),
+            (self.external_policy_providers, "external_policy_providers"),
+            (self.advanced_metrics, "advanced_metrics"),
+            (self.distributed_tracing, "distributed_tracing"),
+            (self.security_monitoring, "security_monitoring"),
+            (self.audit_logging, "audit_logging"),
+            (self.redis_clustering, "redis_clustering"),
+            (self.connection_pooling, "connection_pooling"),
+            (self.response_compression, "response_compression"),
+            (self.request_caching, "request_caching"),
+            (self.admin_dashboard, "admin_dashboard"),
+            (self.admin_api, "admin_api"),
+            (self.bulk_operations, "bulk_operations"),
+            (self.data_export, "data_export"),
+            (self.debug_mode, "debug_mode"),
+            (self.mock_providers, "mock_providers"),
+            (self.test_endpoints, "test_endpoints"),
+            (self.performance_profiling, "performance_profiling"),
+        ];
 
-        if self.google_oidc {
-            features.push("google_oidc");
-        }
-        if self.microsoft_oidc {
-            features.push("microsoft_oidc");
-        }
-        if self.github_oidc {
-            features.push("github_oidc");
-        }
-        if self.webauthn {
-            features.push("webauthn");
-        }
-        if self.advanced_mfa {
-            features.push("advanced_mfa");
-        }
-        if self.totp_mfa {
-            features.push("totp_mfa");
-        }
-        if self.sms_mfa {
-            features.push("sms_mfa");
-        }
-        if self.scim_v2 {
-            features.push("scim_v2");
-        }
-        if self.oauth2_device_flow {
-            features.push("oauth2_device_flow");
-        }
-        if self.oauth2_token_exchange {
-            features.push("oauth2_token_exchange");
-        }
-        if self.threat_detection {
-            features.push("threat_detection");
-        }
-        if self.anomaly_detection {
-            features.push("anomaly_detection");
-        }
-        if self.bot_protection {
-            features.push("bot_protection");
-        }
-        if self.request_signing {
-            features.push("request_signing");
-        }
-        if self.token_binding {
-            features.push("token_binding");
-        }
-        if self.soar_integration {
-            features.push("soar_integration");
-        }
-        if self.policy_engine {
-            features.push("policy_engine");
-        }
-        if self.external_policy_providers {
-            features.push("external_policy_providers");
-        }
-        if self.advanced_metrics {
-            features.push("advanced_metrics");
-        }
-        if self.distributed_tracing {
-            features.push("distributed_tracing");
-        }
-        if self.security_monitoring {
-            features.push("security_monitoring");
-        }
-        if self.audit_logging {
-            features.push("audit_logging");
-        }
-        if self.redis_clustering {
-            features.push("redis_clustering");
-        }
-        if self.connection_pooling {
-            features.push("connection_pooling");
-        }
-        if self.response_compression {
-            features.push("response_compression");
-        }
-        if self.request_caching {
-            features.push("request_caching");
-        }
-        if self.admin_dashboard {
-            features.push("admin_dashboard");
-        }
-        if self.admin_api {
-            features.push("admin_api");
-        }
-        if self.bulk_operations {
-            features.push("bulk_operations");
-        }
-        if self.data_export {
-            features.push("data_export");
-        }
-        if self.debug_mode {
-            features.push("debug_mode");
-        }
-        if self.mock_providers {
-            features.push("mock_providers");
-        }
-        if self.test_endpoints {
-            features.push("test_endpoints");
-        }
-        if self.performance_profiling {
-            features.push("performance_profiling");
-        }
-
-        features
+        feature_flags
+            .iter()
+            .filter_map(|(enabled, name)| enabled.then_some(*name))
+            .collect()
     }
 }
 

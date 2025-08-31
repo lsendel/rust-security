@@ -194,6 +194,13 @@ impl SessionManager {
     }
 
     /// Create a new session
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if:
+    /// - Redis connection fails (when Redis is enabled)
+    /// - Session ID generation fails
+    /// - Session storage fails
     pub async fn create_session(
         &self,
         user_id: String,
@@ -318,6 +325,13 @@ impl SessionManager {
     }
 
     /// Refresh a session's expiration
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionError` if:
+    /// - Session retrieval fails
+    /// - Session storage fails after refresh
+    /// - Session has expired and cannot be refreshed
     pub async fn refresh_session(
         &self,
         session_id: &str,

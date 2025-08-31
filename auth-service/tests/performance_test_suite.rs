@@ -14,7 +14,7 @@ use auth_service::storage::cache::{LruTokenCache, TokenCacheConfig};
 use auth_service::storage::session::store::RedisSessionStore;
 
 // Import test framework
-use super::test_framework::*;
+use crate::tests::test_framework::*;
 
 /// Performance benchmark results
 #[derive(Debug, Clone)]
@@ -72,16 +72,15 @@ impl PerformanceTestSuite {
     ) -> Result<(), String> {
         info!("Running token cache benchmark: {}", name);
 
-        let cache = Arc::new(LruTokenCache::with_config(config));
+        let cache = Arc::new(LruTokenCache::with_config(config.clone()));
         let start_time = Instant::now();
 
         // Pre-populate cache
         for i in 0..1000 {
-            let token = test_utils::create_test_token(&format!("user_{}", i), Some("read write"));
+            let token = common::TokenRecord { active: true, scope: Some("read write".to_string()), client_id: Some("client".to_string()), exp: None, iat: None, sub: Some(format!("user_{}", i)), token_binding: None, mfa_verified: false };
             cache
                 .insert(format!("token_{}", i), token)
-                .await
-                .map_err(|e| format!("Failed to pre-populate cache: {}", e))?;
+                .await;
         }
 
         // Run concurrent benchmark
@@ -99,10 +98,7 @@ impl PerformanceTestSuite {
                     // Mix of read and write operations
                     if op % 3 == 0 {
                         // Write operation
-                        let token = test_utils::create_test_token(
-                            &format!("user_{}_{}", user_id, op),
-                            Some("read write"),
-                        );
+                        let token = common::TokenRecord { active: true, scope: Some("read write".to_string()), client_id: Some("client".to_string()), exp: None, iat: None, sub: Some(format!("user_{}_{}", user_id, op)), token_binding: None, mfa_verified: false };
                         let _ = cache
                             .insert(format!("token_{}_{}", user_id, op), token)
                             .await;
@@ -200,10 +196,22 @@ impl PerformanceTestSuite {
                         match op % 4 {
                             0 => {
                                 // Create session
-                                let session_data = test_utils::create_test_session(
-                                    &format!("user_{}", session_id),
-                                    &format!("session_{}_{}", session_id, op),
-                                );
+                                let session_data = auth_service::storage::session::secure::SecureSessionData {
+                                    user_id: format!("user_{}", session_id),
+                                    client_id: Some(format!("client_{}", session_id)),
+                                    created_at: chrono::Utc::now(),
+                                    last_accessed: chrono::Utc::now(),
+                                    expires_at: chrono::Utc::now(),
+                                    ip_address: "127.0.0.1".to_string(),
+                                    user_agent_hash: "ua".to_string(),
+                                    is_authenticated: true,
+                                    requires_mfa: false,
+                                    mfa_completed: true,
+                                    csrf_token: "csrf".to_string(),
+                                    session_version: 1,
+                                    access_count: 0,
+                                    last_rotation: chrono::Utc::now(),
+                                };
                                 // Simulate storage operation
                                 tokio::time::sleep(Duration::from_micros(50)).await;
                             }
@@ -362,7 +370,7 @@ impl PerformanceTestSuite {
 
         let fastest = benchmarks
             .iter()
-            .max_by_key(|b| b.operations_per_second)
+            .max_by(|a, b| a.operations_per_second.partial_cmp(&b.operations_per_second).unwrap_or(std::cmp::Ordering::Equal))
             .map(|b| (b.name.clone(), b.operations_per_second));
 
         PerformanceSummary {
@@ -498,10 +506,10 @@ pub mod memory_profiling {
         let final_stats = get_memory_stats();
 
         let memory_stats = MemoryStats {
-            initial_rss: initial_stats.rss,
-            final_rss: final_stats.rss,
-            peak_rss: final_stats.rss, // Would need more sophisticated tracking
-            memory_growth: final_stats.rss.saturating_sub(initial_stats.rss),
+            initial_rss: initial_stats.initial_rss,
+            final_rss: final_stats.final_rss,
+            peak_rss: final_stats.peak_rss,
+            memory_growth: final_stats.memory_growth,
         };
 
         (result, memory_stats)

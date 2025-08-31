@@ -112,10 +112,11 @@ fn test_conversion_preserves_data() {
     use auth_service::core::security::{SecurityContext, SecurityEvent, SecurityLevel};
     use std::collections::HashMap;
     use std::net::IpAddr;
+    use chrono::Utc;
     use std::time::SystemTime;
 
     let security_event = SecurityEvent {
-        timestamp: SystemTime::now(),
+        timestamp: Utc::now(),
         event_type: SecurityEventType::AuthenticationFailure,
         security_context: SecurityContext {
             client_ip: "10.0.0.1".parse::<IpAddr>().unwrap(),
@@ -137,6 +138,15 @@ fn test_conversion_preserves_data() {
         }),
         details: HashMap::new(),
         severity: ViolationSeverity::Critical,
+        user_id: Some("user123".to_string()),
+        session_id: Some("session456".to_string()),
+        ip_address: Some("10.0.0.1".parse::<IpAddr>().unwrap()),
+        location: None,
+        device_fingerprint: Some("unique-fingerprint".to_string()),
+        risk_score: Some(90),
+        outcome: Some("failure".to_string()),
+        mfa_used: false,
+        user_agent: Some("Test Agent".to_string()),
     };
 
     let threat_event: auth_service::threat_types::ThreatSecurityEvent = (&security_event).into();

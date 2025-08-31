@@ -26,29 +26,37 @@ static TEST_MODE_USAGE_COUNT: std::sync::LazyLock<std::sync::atomic::AtomicU64> 
 pub fn is_test_mode() -> bool {
     // First check if we're in production
     if is_production_environment() && is_test_mode_raw() {
-        error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
-        error!("This creates serious security vulnerabilities and MUST be disabled immediately");
-
-        // Log to security audit trail
-        audit_log_security_violation();
-
-        // In production, we force disable test mode regardless of environment variable
+        handle_production_violation();
         return false;
     }
 
     let enabled = TEST_MODE_ENABLED.load(Ordering::Relaxed);
     if enabled {
-        // Track usage for monitoring
-        TEST_MODE_USAGE_COUNT.fetch_add(1, Ordering::Relaxed);
-
-        // Log each test mode usage for audit trail
-        warn!(
-            "Test mode bypass used (count: {})",
-            TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed)
-        );
+        track_test_mode_usage();
     }
 
     enabled
+}
+
+/// Handle test mode violation in production
+fn handle_production_violation() {
+    error!("CRITICAL SECURITY VIOLATION: TEST_MODE is enabled in production environment!");
+    error!("This creates serious security vulnerabilities and MUST be disabled immediately");
+
+    // Log to security audit trail
+    audit_log_security_violation();
+}
+
+/// Track and log test mode usage
+fn track_test_mode_usage() {
+    // Track usage for monitoring
+    TEST_MODE_USAGE_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    // Log each test mode usage for audit trail
+    warn!(
+        "Test mode bypass used (count: {})",
+        TEST_MODE_USAGE_COUNT.load(Ordering::Relaxed)
+    );
 }
 
 /// Raw check without production safeguards - for internal use only

@@ -25,7 +25,7 @@ async fn test_soar_core_initialization() {
     assert!(soar_core.is_ok());
 
     let soar = soar_core.unwrap();
-    let _result = soar.initialize().await;
+    let result = soar.initialize().await;
     assert!(result.is_ok());
 
     // Test metrics retrieval
@@ -43,7 +43,7 @@ async fn test_workflow_orchestrator() {
     assert!(orchestrator.is_ok());
 
     let orchestrator = orchestrator.unwrap();
-    let _result = orchestrator.initialize().await;
+    let result = orchestrator.initialize().await;
     assert!(result.is_ok());
 
     // Create a test playbook
@@ -91,7 +91,7 @@ async fn test_step_executors() {
     let step = create_test_ip_block_step();
     let context = HashMap::new();
 
-    let _result = ip_executor.unwrap().execute_step(&step, &context).await;
+    let result = ip_executor.unwrap().execute_step(&step, &context).await;
     assert!(result.is_ok());
 
     let outputs = result.unwrap();
@@ -108,7 +108,7 @@ async fn test_alert_correlation() {
     assert!(correlation_engine.is_ok());
 
     let engine = correlation_engine.unwrap();
-    let _result = engine.initialize().await;
+    let result = engine.initialize().await;
     assert!(result.is_ok());
 
     // Create test alerts
@@ -183,7 +183,7 @@ async fn test_workflow_scheduling() {
     let inputs = HashMap::new();
     let context = HashMap::new();
 
-    let _result = orchestrator
+    let result = orchestrator
         .schedule_workflow(
             "test_playbook".to_string(),
             future_time,
@@ -221,7 +221,7 @@ async fn test_custom_playbook_execution() {
 
     let context = HashMap::new();
 
-    let _result = orchestrator
+    let result = orchestrator
         .execute_workflow(playbook, inputs, context)
         .await;
     assert!(result.is_ok());
@@ -241,7 +241,7 @@ async fn test_error_handling() {
     let inputs = HashMap::new();
     let context = HashMap::new();
 
-    let _result = orchestrator
+    let result = orchestrator
         .execute_workflow(playbook, inputs, context)
         .await;
     assert!(result.is_ok()); // Should handle errors gracefully
@@ -295,7 +295,7 @@ async fn test_performance_load() {
 
     // Wait for all to complete
     for handle in handles {
-        let _result = handle.await;
+        let result = handle.await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_ok());
     }

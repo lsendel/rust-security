@@ -13,9 +13,7 @@ NC='\033[0m' # No Color
 
 # Components to check
 CORE_COMPONENTS=(
-    "auth-core"
     "common"
-    "api-contracts"
     "policy-service"
     "compliance-tools"
 )

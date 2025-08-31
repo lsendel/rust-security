@@ -53,7 +53,25 @@ mod tests {
 
     #[tokio::test]
     async fn test_auth_service_integration() {
-        let threat_processor = Arc::new(ThreatProcessor::new());
+        #[cfg(feature = "threat-hunting")]
+        let threat_processor = Arc::new(ThreatProcessor::new(
+            Arc::new(
+                crate::threat_behavioral_analyzer::AdvancedBehavioralThreatDetector::new(
+                    crate::threat_behavioral_analyzer::BehavioralAnalysisConfig::default(),
+                ),
+            ),
+            Arc::new(crate::threat_intelligence::ThreatIntelligenceCorrelator::new(
+                crate::threat_intelligence::ThreatIntelligenceConfig::default(),
+            )),
+            Arc::new(
+                crate::threat_response_orchestrator::ThreatResponseOrchestrator::new(
+                    crate::threat_response_orchestrator::ThreatResponseConfig::default(),
+                ),
+            ),
+        ));
+
+        #[cfg(not(feature = "threat-hunting"))]
+        let threat_processor = Arc::new(ThreatProcessor::default());
         let auth_service = AuthServiceWithThreatProcessing::new(threat_processor);
 
         let event = SecurityEvent {

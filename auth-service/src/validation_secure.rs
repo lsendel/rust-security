@@ -306,6 +306,15 @@ pub fn validate_client_id(client_id: &str) -> Result<(), ValidationError> {
 }
 
 /// Validate email with comprehensive checks
+///
+/// # Errors
+///
+/// Returns `ValidationError` if:
+/// - Email is empty
+/// - Email is too long (exceeds `MAX_EMAIL_LENGTH`)
+/// - Email contains dangerous characters or patterns
+/// - Email format is invalid
+/// - Email local or domain part is malformed
 pub fn validate_email_secure(email: &str) -> Result<(), ValidationError> {
     if email.is_empty() {
         return Err(ValidationError::new("Email cannot be empty"));
@@ -355,6 +364,14 @@ pub fn validate_email_secure(email: &str) -> Result<(), ValidationError> {
 }
 
 /// Validate username with security constraints
+///
+/// # Errors
+///
+/// Returns `ValidationError` if:
+/// - Username is empty
+/// - Username is too long (exceeds `MAX_USERNAME_LENGTH`)
+/// - Username contains dangerous characters or patterns
+/// - Username format is invalid
 pub fn validate_username_secure(username: &str) -> Result<(), ValidationError> {
     if username.is_empty() {
         return Err(ValidationError::new("Username cannot be empty"));
@@ -403,6 +420,15 @@ pub fn validate_username_secure(username: &str) -> Result<(), ValidationError> {
 }
 
 /// Validate password strength
+///
+/// # Errors
+///
+/// Returns `ValidationError` if:
+/// - Password is empty
+/// - Password is too short (less than 8 characters)
+/// - Password is too long (more than 128 characters)
+/// - Password lacks character variety (missing uppercase, lowercase, or digits)
+/// - Password contains common weak patterns
 pub fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
     if password.is_empty() {
         return Err(ValidationError::new("Password cannot be empty"));
@@ -463,6 +489,13 @@ pub fn sanitize_string(input: &str) -> String {
 }
 
 /// Validate and sanitize general text input
+///
+/// # Errors
+///
+/// Returns `ValidationError` if:
+/// - Input is empty
+/// - Input exceeds maximum length
+/// - Input contains dangerous characters
 pub fn validate_text_input(
     input: &str,
     max_length: usize,

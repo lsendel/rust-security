@@ -167,7 +167,8 @@ proptest! {
         prop_assert_eq!(binding1, binding2);
         
         // Property: Token binding should be valid base64
-        let decoded = base64::decode(&binding1);
+        use base64::{Engine as _, engine::general_purpose};
+        let decoded = general_purpose::STANDARD.decode(&binding1);
         prop_assert!(decoded.is_ok());
         
         // Property: Different inputs should produce different bindings (with high probability)
@@ -214,7 +215,8 @@ proptest! {
         
         // Property: Generated signature should be valid base64
         if let Ok(signature) = sig1 {
-            let decoded = base64::decode(&signature);
+            use base64::{Engine as _, engine::general_purpose};
+            let decoded = general_purpose::STANDARD.decode(&signature);
             prop_assert!(decoded.is_ok());
             
             // Property: Signature verification should succeed

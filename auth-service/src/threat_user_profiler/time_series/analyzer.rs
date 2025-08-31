@@ -532,8 +532,10 @@ impl TimeSeriesAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::threat_user_profiler::types::TimeSeriesPoint;
     use chrono::Utc;
     use std::collections::HashMap;
+    use std::collections::VecDeque;
 
     #[tokio::test]
     async fn test_time_series_analysis() {

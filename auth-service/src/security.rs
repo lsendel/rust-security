@@ -528,6 +528,13 @@ pub fn start_rate_limiter_cleanup() {
 }
 
 /// High-performance sharded rate limiter: configurable requests/min per client IP (via X-Forwarded-For)
+///
+/// # Panics
+///
+/// This function may panic if:
+/// - Environment variables cannot be read
+/// - Rate limiter operations fail
+/// - Header parsing encounters invalid UTF-8 sequences
 pub async fn rate_limit(request: Request, next: Next) -> Response {
     // Allow bypass in test mode or when explicitly disabled
     if std::env::var("DISABLE_RATE_LIMIT").ok().as_deref() == Some("1")

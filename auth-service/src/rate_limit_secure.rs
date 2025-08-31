@@ -159,16 +159,7 @@ impl SecureRateLimiter {
         user_agent: Option<&str>,
     ) -> Result<(), RateLimitError> {
         // Check if IP is banned first
-        {
-            let mut banned_ips = self.banned_ips.write().await;
-            if let Some(ban_expiry) = banned_ips.get(&ip) {
-                if Utc::now() < *ban_expiry {
-                    return Err(RateLimitError::IpBanned { ip });
-                }
-                // Ban expired, remove it
-                banned_ips.remove(&ip);
-            }
-        }
+        self.check_ip_ban(&ip).await?;
 
         // Check global rate limit
         {
@@ -397,6 +388,25 @@ pub struct RateLimitStats {
     pub tracked_clients: usize,
     pub banned_ips: usize,
     pub suspicious_ips: usize,
+}
+
+impl SecureRateLimiter {
+    /// Check if an IP is currently banned
+    ///
+    /// # Errors
+    ///
+    /// Returns `RateLimitError::IpBanned` if the IP is currently banned.
+    async fn check_ip_ban(&self, ip: &IpAddr) -> Result<(), RateLimitError> {
+        let mut banned_ips = self.banned_ips.write().await;
+        if let Some(ban_expiry) = banned_ips.get(ip) {
+            if Utc::now() < *ban_expiry {
+                return Err(RateLimitError::IpBanned { ip: *ip });
+            }
+            // Ban expired, remove it
+            banned_ips.remove(ip);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

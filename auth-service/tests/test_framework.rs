@@ -327,7 +327,7 @@ pub mod load_test {
     ) -> Result<LoadTestResults, String>
     where
         F: Fn() -> Fut + Send + Sync + Clone + 'static,
-        Fut: std::future::Future<Output = Result<(), String>>,
+        Fut: std::future::Future<Output = Result<(), String>> + Send + 'static,
     {
         let start_time = Instant::now();
         let mut handles = Vec::new();
@@ -404,8 +404,8 @@ pub mod security {
         iterations: usize,
     ) -> Result<TimingAnalysis, String>
     where
-        F: Fn() -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<(), String>>,
+        F: Fn() -> Fut + Clone + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Result<(), String>> + Send + 'static,
     {
         let mut timings = Vec::new();
 
@@ -422,7 +422,7 @@ pub mod security {
         }
 
         Ok(TimingAnalysis {
-            operation_timings: timings,
+            operation_timings: timings.clone(),
             timing_variance: calculate_timing_variance(&timings),
         })
     }

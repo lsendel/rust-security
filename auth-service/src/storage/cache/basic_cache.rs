@@ -476,6 +476,13 @@ pub struct CachedTokenInfo {
 }
 
 /// Cache middleware for token introspection
+///
+/// # Errors
+///
+/// Returns `CacheError` if:
+/// - Cache retrieval fails
+/// - Token introspection function fails
+/// - Cache storage fails
 pub async fn cached_token_introspection(
     cache: &Cache,
     token: &str,

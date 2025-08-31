@@ -32,6 +32,7 @@ static USER_PROFILES_ANALYZED: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create user_profiles_analyzed counter")
 });
 
+#[cfg(feature = "monitoring")]
 static BEHAVIORAL_ANOMALIES_FOUND: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(
         "threat_hunting_behavioral_anomalies_found_total",
@@ -40,6 +41,7 @@ static BEHAVIORAL_ANOMALIES_FOUND: LazyLock<Counter> = LazyLock::new(|| {
     .expect("Failed to create behavioral_anomalies_found counter")
 });
 
+#[cfg(feature = "monitoring")]
 static PROFILE_ANALYSIS_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_profile_analysis_duration_seconds",
@@ -48,6 +50,7 @@ static PROFILE_ANALYSIS_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     .expect("Failed to create profile_analysis_duration histogram")
 });
 
+#[cfg(feature = "monitoring")]
 static ACTIVE_USER_PROFILES: LazyLock<Gauge> = LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_user_profiles",
@@ -56,6 +59,7 @@ static ACTIVE_USER_PROFILES: LazyLock<Gauge> = LazyLock::new(|| {
     .expect("Failed to create active_user_profiles gauge")
 });
 
+#[cfg(feature = "monitoring")]
 #[allow(dead_code)]
 static TIME_SERIES_PREDICTIONS: LazyLock<Counter> = LazyLock::new(|| {
     register_counter!(

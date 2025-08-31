@@ -418,6 +418,8 @@ impl BehavioralFeatureExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::security::SecurityEventType;
+    use crate::threat_user_profiler::types::GeoLocation;
     use chrono::Utc;
 
     #[cfg(feature = "threat-hunting")]

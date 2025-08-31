@@ -1,5 +1,5 @@
 #![cfg(feature = "benchmarks")]
-use auth_service::store::TokenStore;
+use auth_service::storage::store::hybrid::TokenStore;
 use auth_service::*;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use jsonwebtoken::EncodingKey;
@@ -32,7 +32,7 @@ fn bench_token_store_operations(c: &mut Criterion) {
     });
 
     // Benchmark token retrieval
-    group.bench_function("in_memory_get_record", |b| {
+    group.bench_function("in_memory_get_active", |b| {
         b.iter(|| {
             // Pre-populate with some tokens
             for i in 0..100 {
@@ -40,7 +40,7 @@ fn bench_token_store_operations(c: &mut Criterion) {
                 let _ = rt.block_on(in_memory_store.set_active(&token, true, Some(3600)));
             }
             let token = format!("bench_token_{}", 50usize);
-            black_box(rt.block_on(in_memory_store.get_record(&token)).unwrap());
+            black_box(rt.block_on(in_memory_store.get_active(&token)).unwrap());
         });
     });
 
@@ -98,10 +98,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
-            black_box(
-                generate_token_binding("192.168.1.1", "Mozilla/5.0 (compatible; test)")
-                    .unwrap_or_else(|_| "fallback_binding".to_string()),
-            );
+            black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0 (compatible; test)"));
         });
     });
 
@@ -120,7 +117,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
 // Benchmark MFA operations
 fn bench_mfa_operations(c: &mut Criterion) {
-    use auth_service::mfa::*;
+    // use auth_service::mfa::*; // Not available in this build
 
     let mut group = c.benchmark_group("mfa_operations");
 
@@ -200,7 +197,7 @@ fn bench_concurrent_operations(c: &mut Criterion) {
                     for i in 0..concurrent_ops {
                         let token = format!("concurrent_token_{}", i);
                         let _ = rt.block_on(in_memory_store.set_active(&token, true, Some(3600)));
-                        let _ = rt.block_on(in_memory_store.get_record(&token));
+                        let _ = rt.block_on(in_memory_store.get_active(&token));
                     }
                 });
             },
@@ -225,13 +222,7 @@ fn bench_memory_usage(c: &mut Criterion) {
             for i in 0..1000 {
                 let token = format!("memory_test_token_{}", i);
                 let _ = rt.block_on(store.set_active(&token, true, Some(3600)));
-                let _ = rt.block_on(store.set_scope(
-                    &token,
-                    Some("read write".to_string()),
-                    Some(3600),
-                ));
-                let _ =
-                    rt.block_on(store.set_client_id(&token, format!("client_{}", i), Some(3600)));
+                // Metadata setters removed in this simplified benchmark
             }
             black_box(store);
         });
