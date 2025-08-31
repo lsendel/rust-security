@@ -44,7 +44,7 @@ pub struct BackpressureConfig {
     // Load shedding configuration
     pub load_shed_threshold: f64,   // 0.0 to 1.0
     pub admission_sample_rate: f64, // 0.0 to 1.0
-)
+}
 
 impl Default for BackpressureConfig {
     fn default() -> Self {
@@ -62,9 +62,9 @@ impl Default for BackpressureConfig {
             queue_depth_threshold: 100,
             load_shed_threshold: 0.95,
             admission_sample_rate: 1.0,
-        )
-    )
-)
+        }
+    }
+}
 
 impl BackpressureConfig {
     #[must_use]
@@ -74,50 +74,50 @@ impl BackpressureConfig {
         if let Ok(val) = std::env::var("OAUTH_REQUEST_LIMIT_KB") {
             if let Ok(kb) = val.parse::<usize>() {
                 config.oauth_request_limit = kb * 1024;
-            )
-        )
+            }
+        }
 
         if let Ok(val) = std::env::var("SCIM_REQUEST_LIMIT_KB") {
             if let Ok(kb) = val.parse::<usize>() {
                 config.scim_request_limit = kb * 1024;
-            )
-        )
+            }
+        }
 
         if let Ok(val) = std::env::var("DEFAULT_REQUEST_LIMIT_KB") {
             if let Ok(kb) = val.parse::<usize>() {
                 config.default_request_limit = kb * 1024;
-            )
-        )
+            }
+        }
 
         if let Ok(val) = std::env::var("MAX_CONCURRENT_REQUESTS") {
             if let Ok(max) = val.parse() {
                 config.max_concurrent_requests = max;
-            )
-        )
+            }
+        }
 
         if let Ok(val) = std::env::var("MAX_CONCURRENT_PER_IP") {
             if let Ok(max) = val.parse() {
                 config.max_concurrent_per_ip = max;
-            )
-        )
+            }
+        }
 
         if let Ok(val) = std::env::var("REQUEST_TIMEOUT_SECS") {
             if let Ok(secs) = val.parse::<u64>() {
                 config.request_timeout = Duration::from_secs(secs);
-            )
-        )
+            }
+        }
 
         if let Ok(val) = std::env::var("LOAD_SHED_THRESHOLD") {
             if let Ok(threshold) = val.parse::<f64>() {
                 if (0.0..=1.0).contains(&threshold) {
                     config.load_shed_threshold = threshold;
-                )
-            )
-        )
+                }
+            }
+        }
 
         config
-    )
-)
+    }
+}
 
 // Metrics (feature-gated)
 #[cfg(feature = "monitoring")]
@@ -174,7 +174,7 @@ static QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
 const fn inc_requests_total() {
     // TODO: Implement actual metrics increment
     // METRICS.requests_total.inc();
-)
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 const fn inc_requests_total() {}
@@ -184,7 +184,7 @@ const fn inc_requests_total() {}
 const fn inc_requests_rejected_total() {
     // TODO: Implement actual metrics increment
     // METRICS.requests_rejected_total.inc();
-)
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 const fn inc_requests_rejected_total() {}
@@ -194,7 +194,7 @@ const fn inc_requests_rejected_total() {}
 const fn inc_concurrent_requests() {
     // TODO: Implement actual metrics increment
     // METRICS.concurrent_requests.inc();
-)
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 const fn inc_concurrent_requests() {}
@@ -204,7 +204,7 @@ const fn inc_concurrent_requests() {}
 const fn dec_concurrent_requests() {
     // TODO: Implement actual metrics decrement
     // METRICS.concurrent_requests.dec();
-)
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 const fn dec_concurrent_requests() {}
@@ -214,7 +214,7 @@ const fn dec_concurrent_requests() {}
 const fn observe_request_body_size(_size: f64) {
     // TODO: Implement actual metrics observation
     // METRICS.request_body_size.observe(size);
-)
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 const fn observe_request_body_size(_size: f64) {}
@@ -223,7 +223,7 @@ const fn observe_request_body_size(_size: f64) {}
 #[inline]
 fn observe_request_duration(duration: f64) {
     REQUEST_DURATION.observe(duration);
-)
+}
 #[cfg(not(feature = "monitoring"))]
 #[inline]
 const fn observe_request_duration(_duration: f64) {}
@@ -237,7 +237,7 @@ pub struct BackpressureState {
     last_load_check: Mutex<Instant>,
     per_ip_counters: Mutex<HashMap<String, AtomicUsize>>,
     config: BackpressureConfig,
-)
+}
 
 impl BackpressureState {
     #[must_use]
@@ -249,8 +249,8 @@ impl BackpressureState {
             last_load_check: Mutex::new(Instant::now()),
             per_ip_counters: Mutex::new(HashMap::new()),
             config,
-        )
-    )
+        }
+    }
 
     /// Determine if a request should be admitted based on backpressure policies
     ///
@@ -260,7 +260,10 @@ impl BackpressureState {
     /// - Server is at maximum concurrent request capacity
     /// - Client IP has exceeded per-IP rate limits
     /// - Request should be rejected due to backpressure
-    pub fn should_admit_request(&self, client_ip: &str) -> Result<(), crate::shared::error::AppError> {
+    pub fn should_admit_request(
+        &self,
+        client_ip: &str,
+    ) -> Result<(), crate::shared::error::AppError> {
         // Check global concurrent request limit
         let current_concurrent = self.concurrent_requests.load(Ordering::Relaxed);
         if current_concurrent >= self.config.max_concurrent_requests {
@@ -268,7 +271,7 @@ impl BackpressureState {
             return Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: "Server is at capacity".to_string(),
             });
-        )
+        }
 
         // Check per-IP limit
         {
@@ -283,8 +286,8 @@ impl BackpressureState {
                 return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "Too many concurrent requests from this IP".to_string(),
                 });
-            )
-        )
+            }
+        }
 
         // Check queue depth
         let queue_depth = self.queue_depth.load(Ordering::Relaxed);
@@ -293,7 +296,7 @@ impl BackpressureState {
             return Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: "Request queue is full".to_string(),
             });
-        )
+        }
 
         // Check memory pressure
         let memory_usage = self.memory_usage.load(Ordering::Relaxed);
@@ -302,7 +305,7 @@ impl BackpressureState {
             return Err(crate::shared::error::AppError::ServiceUnavailable {
                 reason: "Server memory pressure".to_string(),
             });
-        )
+        }
 
         // Load shedding with sampling
         let load_ratio = current_concurrent as f64 / self.config.max_concurrent_requests as f64;
@@ -320,11 +323,11 @@ impl BackpressureState {
                 return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "Load shedding active".to_string(),
                 });
-            )
-        )
+            }
+        }
 
         Ok(())
-    )
+    }
 
     pub fn on_request_start(&self, client_ip: &str) {
         self.concurrent_requests.fetch_add(1, Ordering::Relaxed);
@@ -337,7 +340,7 @@ impl BackpressureState {
             .entry(client_ip.to_string())
             .or_insert_with(|| AtomicUsize::new(0));
         ip_counter.fetch_add(1, Ordering::Relaxed);
-    )
+    }
 
     pub fn on_request_end(&self, client_ip: &str) {
         self.concurrent_requests.fetch_sub(1, Ordering::Relaxed);
@@ -347,7 +350,7 @@ impl BackpressureState {
         let mut counters = self.per_ip_counters.lock().unwrap();
         if let Some(ip_counter) = counters.get(client_ip) {
             ip_counter.fetch_sub(1, Ordering::Relaxed);
-        )
+        }
 
         // Cleanup IP counters periodically (simple cleanup)
         let mut last_check = self.last_load_check.lock().unwrap();
@@ -355,12 +358,12 @@ impl BackpressureState {
             // 5 minutes
             counters.retain(|_, counter| counter.load(Ordering::Relaxed) > 0);
             *last_check = Instant::now();
-        )
-    )
+        }
+    }
 
     pub fn update_memory_usage(&self, bytes: usize) {
         self.memory_usage.store(bytes, Ordering::Relaxed);
-    )
+    }
 
     pub fn stats(&self) -> BackpressureStats {
         BackpressureStats {
@@ -371,9 +374,9 @@ impl BackpressureState {
                 let counters = self.per_ip_counters.lock().unwrap();
                 counters.len()
             },
-        )
-    )
-)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct BackpressureStats {
@@ -381,7 +384,7 @@ pub struct BackpressureStats {
     pub queue_depth: usize,
     pub memory_usage: usize,
     pub per_ip_active_connections: usize,
-)
+}
 
 // Middleware for backpressure and limits
 pub async fn backpressure_middleware(
@@ -414,9 +417,9 @@ pub async fn backpressure_middleware(
         if let Ok(size_str) = content_length.to_str() {
             if let Ok(size) = size_str.parse::<f64>() {
                 observe_request_body_size(size);
-            )
-        )
-    )
+            }
+        }
+    }
 
     // Process request with timeout
     let result = timeout(state.config.request_timeout, next.run(request)).await;
@@ -435,15 +438,15 @@ pub async fn backpressure_middleware(
             client_ip = %client_ip,
             "Slow request detected"
         );
-    )
+    }
 
     match result {
         Ok(response) => Ok(response),
         Err(_) => Err(crate::shared::error::AppError::TimeoutError {
             operation: "request_processing".to_string(),
         }),
-    )
-)
+    }
+}
 
 // Request body size limit based on endpoint
 #[must_use]
@@ -456,8 +459,8 @@ pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize 
         config.admin_request_limit
     } else {
         config.default_request_limit
-    )
-)
+    }
+}
 
 // Create comprehensive backpressure middleware stack
 #[must_use]
@@ -472,7 +475,7 @@ pub fn create_backpressure_middleware(
     let middleware = ServiceBuilder::new().layer(TimeoutLayer::new(config.request_timeout));
 
     (middleware, state)
-)
+}
 
 // Adaptive request body limit middleware
 pub async fn adaptive_body_limit_middleware(
@@ -495,13 +498,13 @@ pub async fn adaptive_body_limit_middleware(
                             "Request body too large: {size} bytes (limit: {limit} bytes)"
                         ),
                     });
-                )
-            )
-        )
-    )
+                }
+            }
+        }
+    }
 
     Ok(next.run(request).await)
-)
+}
 
 #[cfg(test)]
 mod tests {
@@ -514,7 +517,7 @@ mod tests {
         assert_eq!(config.scim_request_limit, 512 * 1024);
         assert_eq!(config.max_concurrent_requests, 1000);
         assert!((0.0..=1.0).contains(&config.load_shed_threshold));
-    )
+    }
 
     #[tokio::test]
     async fn test_admission_control() {
@@ -543,7 +546,7 @@ mod tests {
         // Clean up
         state.on_request_end("192.168.1.1");
         state.on_request_end("192.168.1.2");
-    )
+    }
 
     #[test]
     fn test_request_body_limits() {
@@ -565,7 +568,7 @@ mod tests {
             get_request_body_limit("/health", &config),
             config.default_request_limit
         );
-    )
+    }
 
     #[tokio::test]
     async fn test_state_stats() {
@@ -582,5 +585,5 @@ mod tests {
         state.on_request_end("192.168.1.1");
         let updated_stats = state.stats();
         assert_eq!(updated_stats.concurrent_requests, 1);
-    )
-)
+    }
+}

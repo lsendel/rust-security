@@ -14,19 +14,19 @@ pub struct ReplayProtection {
     redis_client: Option<redis::Client>,
     /// In-memory fallback for nonce storage
     local_cache: Arc<DashMap<String, u64>>,
-    /// Time window for request validity (seconds}
+    /// Time window for request validity (seconds)
     time_window: u64,
-    /// Maximum allowed clock skew (seconds}
+    /// Maximum allowed clock skew (seconds)
     max_clock_skew: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize}]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RequestSignature {
     /// Unique nonce for this request
     pub nonce: String,
     /// Timestamp when request was created
     pub timestamp: u64,
-    /// Request method (GET, POST, etc.}
+    /// Request method (GET, POST, etc.)
     pub method: String,
     /// Request path
     pub path: String,
@@ -37,19 +37,19 @@ pub struct RequestSignature {
 impl ReplayProtection {
     /// Create a new replay protection instance
     #[must_use]
-    pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64} -> Self {
+    pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64) -> Self {
         let redis_client = redis_url.and_then(|url| {
-            redis::Client::open(url}
+            redis::Client::open(url)
                 .map_err(|e| {
-                    error!("Failed to create Redis client for replay protection: {}", e};
+                    error!("Failed to create Redis client for replay protection: {}", e);
                     e
-                }}
-                .ok(}
-        }};
+                })
+                .ok()
+        });
 
         Self {
             redis_client,
-            local_cache: Arc::new(DashMap::new(}},
+            local_cache: Arc::new(DashMap::new()),
             time_window,
             max_clock_skew,
         }
@@ -64,81 +64,81 @@ impl ReplayProtection {
         secret: &str,
         method: &str,
         path: &str,
-    } -> Result<(}, crate::shared::error::AppError> {
+    ) -> Result<(), crate::shared::error::AppError> {
         // Step 1: Verify HMAC signature first
-        if !Self::verify_signature(secret, method, path, nonce, timestamp, signature} {
-            warn!("Invalid signature provided for admin request"};
+        if !Self::verify_signature(secret, method, path, nonce, timestamp, signature) {
+            warn!("Invalid signature provided for admin request");
             return Err(crate::shared::error::AppError::InvalidRequest {
-                reason: "Invalid request signature".to_string(},
-            }};
+                reason: "Invalid request signature".to_string(),
+            });
         }
 
         // Step 2: Validate timestamp is within acceptable window
-        self.validate_timestamp(timestamp}?;
+        self.validate_timestamp(timestamp)?;
 
         // Step 3: Check if nonce has been used
-        if self.is_nonce_used(nonce}.await? {
-            warn!("Replay attack detected: nonce already used"};
+        if self.is_nonce_used(nonce).await? {
+            warn!("Replay attack detected: nonce already used");
             return Err(crate::shared::error::AppError::InvalidRequest {
-                reason: "Request replay detected".to_string(},
-            }};
+                reason: "Request replay detected".to_string(),
+            });
         }
 
         // Step 4: Store nonce to prevent future replay
-        self.store_nonce(nonce, timestamp}.await?;
+        self.store_nonce(nonce, timestamp).await?;
 
-        Ok((}}
+        Ok(())
     }
 
     /// Validate timestamp is within acceptable window
-    fn validate_timestamp(&self, timestamp: u64} -> Result<(}, crate::shared::error::AppError> {
-        let now = SystemTime::now(}
-            .duration_since(UNIX_EPOCH}
+    fn validate_timestamp(&self, timestamp: u64) -> Result<(), crate::shared::error::AppError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
             .map_err(|_| crate::shared::error::AppError::Internal {
-                error_id: uuid::Uuid::new_v4(},
-                context: "Time error".to_string(},
-            }}?
-            .as_secs(};
+                error_id: uuid::Uuid::new_v4(),
+                context: "Time error".to_string(),
+            })?
+            .as_secs();
 
         // Check if timestamp is too old
         if timestamp + self.time_window < now {
             warn!(
-                "Request timestamp too old: {} (current: {}}",
+                "Request timestamp too old: {} (current: {})",
                 timestamp, now
-            };
+            );
             return Err(crate::shared::error::AppError::InvalidRequest {
-                reason: "Request expired".to_string(},
-            }};
+                reason: "Request expired".to_string(),
+            });
         }
 
-        // Check if timestamp is too far in the future (clock skew}
+        // Check if timestamp is too far in the future (clock skew)
         if timestamp > now + self.max_clock_skew {
             warn!(
-                "Request timestamp too far in future: {} (current: {}}",
+                "Request timestamp too far in future: {} (current: {})",
                 timestamp, now
-            };
+            );
             return Err(crate::shared::error::AppError::InvalidRequest {
-                reason: "Invalid timestamp".to_string(},
-            }};
+                reason: "Invalid timestamp".to_string(),
+            });
         }
 
-        Ok((}}
+        Ok(())
     }
 
     /// Check if nonce has been used
-    async fn is_nonce_used(&self, nonce: &str} -> Result<bool, crate::shared::error::AppError> {
+    async fn is_nonce_used(&self, nonce: &str) -> Result<bool, crate::shared::error::AppError> {
         // Try Redis first
-        if let Some(client} = &self.redis_client {
-            match self.check_redis_nonce(client, nonce}.await {
-                Ok(used} => return Ok(used},
-                Err(e} => {
-                    error!("Redis nonce check failed, falling back to local: {}", e};
+        if let Some(client) = &self.redis_client {
+            match self.check_redis_nonce(client, nonce).await {
+                Ok(used) => return Ok(used),
+                Err(e) => {
+                    error!("Redis nonce check failed, falling back to local: {}", e);
                 }
             }
         }
 
         // Fallback to local cache
-        Ok(self.local_cache.contains_key(nonce}}
+        Ok(self.local_cache.contains_key(nonce))
     }
 
     /// Check Redis for nonce
@@ -146,39 +146,43 @@ impl ReplayProtection {
         &self,
         client: &redis::Client,
         nonce: &str,
-    } -> Result<bool, redis::RedisError> {
-        let mut conn = client.get_multiplexed_async_connection(}.await?;
-        let key = format!("admin:nonce:{nonce}"};
-        let exists: bool = conn.exists(&key}.await?;
-        Ok(exists}
+    ) -> Result<bool, redis::RedisError> {
+        let mut conn = client.get_multiplexed_async_connection().await?;
+        let key = format!("admin:nonce:{}", nonce);
+        let exists: bool = conn.exists(&key).await?;
+        Ok(exists)
     }
 
     /// Store nonce to prevent replay
-    async fn store_nonce(&self, nonce: &str, timestamp: u64} -> Result<(}, crate::shared::error::AppError> {
+    async fn store_nonce(
+        &self,
+        nonce: &str,
+        timestamp: u64,
+    ) -> Result<(), crate::shared::error::AppError> {
         let expiry = self.time_window + self.max_clock_skew;
 
         // Try Redis first
-        if let Some(client} = &self.redis_client {
+        if let Some(client) = &self.redis_client {
             match self
-                .store_redis_nonce(client, nonce, timestamp, expiry}
+                .store_redis_nonce(client, nonce, timestamp, expiry)
                 .await
             {
-                Ok((}} => {
+                Ok(()) => {
                     // Also store locally for redundancy
-                    self.local_cache.insert(nonce.to_string(}, timestamp};
-                    self.cleanup_local_cache(};
-                    return Ok((}};
+                    self.local_cache.insert(nonce.to_string(), timestamp);
+                    self.cleanup_local_cache();
+                    return Ok(());
                 }
-                Err(e} => {
-                    error!("Redis nonce storage failed, using local only: {}", e};
+                Err(e) => {
+                    error!("Redis nonce storage failed, using local only: {}", e);
                 }
             }
         }
 
         // Fallback to local cache
-        self.local_cache.insert(nonce.to_string(}, timestamp};
-        self.cleanup_local_cache(};
-        Ok((}}
+        self.local_cache.insert(nonce.to_string(), timestamp);
+        self.cleanup_local_cache();
+        Ok(())
     }
 
     /// Store nonce in Redis with expiry
@@ -188,39 +192,41 @@ impl ReplayProtection {
         nonce: &str,
         timestamp: u64,
         expiry: u64,
-    } -> Result<(}, redis::RedisError> {
-        let mut conn = client.get_multiplexed_async_connection(}.await?;
-        let key = format!("admin:nonce:{nonce}"};
+    ) -> Result<(), redis::RedisError> {
+        let mut conn = client.get_multiplexed_async_connection().await?;
+        let key = format!("admin:nonce:{}", nonce);
 
         // Store with expiry
-        conn.set_ex::<_, _, (}>(&key, timestamp, expiry}.await?;
-        Ok((}}
+        conn.set_ex(&key, timestamp, expiry).await?;
+        Ok(())
     }
 
     /// Clean up expired entries from local cache
-    fn cleanup_local_cache(&self} {
-        let now = SystemTime::now(}
-            .duration_since(UNIX_EPOCH}
-            .unwrap_or_default(}
-            .as_secs(};
+    fn cleanup_local_cache(&self) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
 
         let expired_window = self.time_window + self.max_clock_skew;
 
         // Remove entries older than the time window
         self.local_cache
-            .retain(|_, timestamp| *timestamp + expired_window > now};
+            .retain(|_, timestamp| *timestamp + expired_window > now);
     }
 
     /// Generate a secure nonce
     #[must_use]
-    pub fn generate_nonce(} -> String {
+    pub fn generate_nonce() -> String {
         use base64::{engine::general_purpose, Engine as _};
         use rand::RngCore;
         let mut bytes = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut bytes};
-        general_purpose::STANDARD.encode(bytes}
+        rand::rngs::OsRng.fill_bytes(&mut bytes);
+        general_purpose::STANDARD.encode(bytes)
     }
+}
 
+impl ReplayProtection {
     /// Create HMAC signature for request
     #[must_use]
     pub fn create_signature(
@@ -229,14 +235,14 @@ impl ReplayProtection {
         path: &str,
         nonce: &str,
         timestamp: u64,
-    } -> String {
+    ) -> String {
         use crate::infrastructure::crypto::crypto_unified::UnifiedHmac;
         use base64::{engine::general_purpose, Engine as _};
 
-        let message = format!("{method}:{path}:{nonce}:{timestamp}"};
-        let hmac_result = UnifiedHmac::hmac_sha256(secret.as_bytes(}, message.as_bytes(}};
+        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
+        let hmac_result = UnifiedHmac::hmac_sha256(secret.as_bytes(), message.as_bytes());
 
-        general_purpose::STANDARD.encode(hmac_result}
+        general_purpose::STANDARD.encode(hmac_result)
     }
 
     /// Verify HMAC signature
@@ -248,19 +254,19 @@ impl ReplayProtection {
         nonce: &str,
         timestamp: u64,
         provided_signature: &str,
-    } -> bool {
+    ) -> bool {
         use crate::infrastructure::crypto::crypto_unified::UnifiedHmac;
         use base64::{engine::general_purpose, Engine as _};
 
-        let message = format!("{method}:{path}:{nonce}:{timestamp}"};
+        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
 
         // Decode the provided signature
-        let Ok(provided_bytes} = general_purpose::STANDARD.decode(provided_signature} else {
+        let Ok(provided_bytes) = general_purpose::STANDARD.decode(provided_signature) else {
             return false;
         };
 
         // Use ring's constant-time HMAC verification
-        UnifiedHmac::verify_hmac_sha256(secret.as_bytes(}, message.as_bytes(}, &provided_bytes}
+        UnifiedHmac::verify_hmac_sha256(secret.as_bytes(), message.as_bytes(), &provided_bytes)
     }
 }
 
@@ -276,107 +282,110 @@ pub struct AdminRateLimiter {
 
 impl AdminRateLimiter {
     #[must_use]
-    pub fn new(max_requests: u32, window_seconds: u64} -> Self {
+    pub fn new(max_requests: u32, window_seconds: u64) -> Self {
         Self {
-            requests: Arc::new(DashMap::new(}},
+            requests: Arc::new(DashMap::new()),
             max_requests,
             window_seconds,
         }
     }
 
     /// Check if request should be rate limited
-    pub fn check_rate_limit(&self, admin_key: &str} -> Result<(}, crate::shared::error::AppError> {
-        let now = SystemTime::now(}
-            .duration_since(UNIX_EPOCH}
-            .unwrap_or_default(}
-            .as_secs(};
+    pub fn check_rate_limit(&self, admin_key: &str) -> Result<(), crate::shared::error::AppError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
 
         let window_start = now - self.window_seconds;
 
         // Get or create request history
-        let mut entry = self.requests.entry(admin_key.to_string(}}.or_default(};
+        let mut entry = self.requests.entry(admin_key.to_string()).or_default();
 
         // Remove old entries outside the window
-        entry.retain(|timestamp| *timestamp > window_start};
+        entry.retain(|timestamp| *timestamp > window_start);
 
         // Check if limit exceeded
-        if entry.len(} >= self.max_requests as usize {
+        if entry.len() >= self.max_requests as usize {
             warn!(
-                "Rate limit exceeded for admin key: {} ({} requests in {} seconds}",
+                "Rate limit exceeded for admin key: {} ({} requests in {} seconds)",
                 admin_key,
-                entry.len(},
+                entry.len(),
                 self.window_seconds
-            };
-            return Err(crate::shared::error::AppError::RateLimitExceeded};
+            );
+            return Err(crate::shared::error::AppError::RateLimitExceeded);
         }
 
         // Add current request
-        entry.push(now};
+        entry.push(now);
 
-        Ok((}}
+        Ok(())
     }
 
     /// Clean up old entries periodically
-    pub fn cleanup(&self} {
-        let now = SystemTime::now(}
-            .duration_since(UNIX_EPOCH}
-            .unwrap_or_default(}
-            .as_secs(};
+    pub fn cleanup(&self) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
 
         let window_start = now - self.window_seconds;
 
         self.requests.retain(|_, timestamps| {
-            timestamps.retain(|t| *t > window_start};
-            !timestamps.is_empty(}
-        }};
+            timestamps.retain(|t| *t > window_start);
+            !timestamps.is_empty()
+        });
     }
 }
 
-#[cfg(test}]
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_replay_protection(} {
-        let replay_protection = ReplayProtection::new(None, 300, 60};
-        let secret = std::env::var("TEST_SECRET"}.unwrap_or_else(|_| "test_secret_for_development_only".to_string(}};
+    async fn test_replay_protection() {
+        let replay_protection = ReplayProtection::new(None, 300, 60);
+        let secret = std::env::var("TEST_SECRET")
+            .unwrap_or_else(|_| "test_secret_for_development_only".to_string());
         let method = "POST";
         let path = "/admin/test";
 
-        let nonce = ReplayProtection::generate_nonce(};
-        let timestamp = SystemTime::now(}
-            .duration_since(UNIX_EPOCH}
-            .unwrap(}
-            .as_secs(};
+        let nonce = ReplayProtection::generate_nonce();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
-        let signature = ReplayProtection::create_signature(secret, method, path, &nonce, timestamp};
+        let signature =
+            ReplayProtection::create_signature(&secret, method, path, &nonce, timestamp);
 
         // First request should succeed
         assert!(replay_protection
-            .validate_request(&nonce, timestamp, &signature, secret, method, path}
+            .validate_request(&nonce, timestamp, &signature, &secret, method, path)
             .await
-            .is_ok(}};
+            .is_ok());
 
         // Replay should fail
         assert!(replay_protection
-            .validate_request(&nonce, timestamp, &signature, secret, method, path}
+            .validate_request(&nonce, timestamp, &signature, &secret, method, path)
             .await
-            .is_err(}};
+            .is_err());
     }
 
     #[test]
-    fn test_signature_generation(} {
-        let secret = std::env::var("TEST_SECRET"}.unwrap_or_else(|_| "test_secret_for_development_only".to_string(}};
+    fn test_signature_generation() {
+        let secret = std::env::var("TEST_SECRET")
+            .unwrap_or_else(|_| "test_secret_for_development_only".to_string());
         let method = "POST";
         let path = "/admin/users";
         let nonce = "test_nonce";
         let timestamp = 1_234_567_890;
 
-        let signature = ReplayProtection::create_signature(secret, method, path, nonce, timestamp};
+        let signature = ReplayProtection::create_signature(&secret, method, path, nonce, timestamp);
 
         assert!(ReplayProtection::verify_signature(
             secret, method, path, nonce, timestamp, &signature
-        }};
+        ));
 
         // Wrong signature should fail
         assert!(!ReplayProtection::verify_signature(
@@ -386,39 +395,40 @@ mod tests {
             nonce,
             timestamp,
             "wrong_signature"
-        }};
+        ));
     }
 
     #[test]
-    fn test_rate_limiter(} {
-        let limiter = AdminRateLimiter::new(3, 60};
-        let admin_key = std::env::var("ADMIN_TEST_KEY"}.unwrap_or_else(|_| "admin_test_key_for_development_only".to_string(}};
+    fn test_rate_limiter() {
+        let limiter = AdminRateLimiter::new(3, 60);
+        let admin_key = std::env::var("ADMIN_TEST_KEY")
+            .unwrap_or_else(|_| "admin_test_key_for_development_only".to_string());
 
         // First 3 requests should succeed
-        assert!(limiter.check_rate_limit(admin_key}.is_ok(}};
-        assert!(limiter.check_rate_limit(admin_key}.is_ok(}};
-        assert!(limiter.check_rate_limit(admin_key}.is_ok(}};
+        assert!(limiter.check_rate_limit(&admin_key).is_ok());
+        assert!(limiter.check_rate_limit(&admin_key).is_ok());
+        assert!(limiter.check_rate_limit(&admin_key).is_ok());
 
         // 4th request should fail
-        assert!(limiter.check_rate_limit(admin_key}.is_err(}};
+        assert!(limiter.check_rate_limit(&admin_key).is_err());
     }
 
     #[tokio::test]
-    async fn test_timestamp_validation(} {
-        let replay_protection = ReplayProtection::new(None, 300, 60};
+    async fn test_timestamp_validation() {
+        let replay_protection = ReplayProtection::new(None, 300, 60);
 
-        let now = SystemTime::now(}
-            .duration_since(UNIX_EPOCH}
-            .unwrap(}
-            .as_secs(};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         // Current timestamp should be valid
-        assert!(replay_protection.validate_timestamp(now}.is_ok(}};
+        assert!(replay_protection.validate_timestamp(now).is_ok());
 
         // Old timestamp should fail
-        assert!(replay_protection.validate_timestamp(now - 400}.is_err(}};
+        assert!(replay_protection.validate_timestamp(now - 400).is_err());
 
         // Future timestamp beyond skew should fail
-        assert!(replay_protection.validate_timestamp(now + 120}.is_err(}};
+        assert!(replay_protection.validate_timestamp(now + 120).is_err());
     }
 }
