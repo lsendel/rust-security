@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use policy_service::errors::{AppError, AuthorizationError, ConfigError, EntityError, PolicyError};
 
-// Adding unused imports to suppress warnings
+// Acknowledge unused dev dependencies for test compilation
 use anyhow as _;
 use cedar_policy as _;
 use cedar_policy_core as _;

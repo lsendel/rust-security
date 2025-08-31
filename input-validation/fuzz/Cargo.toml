@@ -13,9 +13,11 @@ libfuzzer-sys = "0.4"
 [dependencies.input-validation]
 path = ".."
 
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
+# Additional dependencies for fuzz targets (main crate provides most)
+jsonwebtoken = "9.3"
+proptest = "1.5"
+quickcheck = "1.0"
+arbitrary = "1.4"
 
 [profile.release]
 debug = 1

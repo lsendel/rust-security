@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::domain::entities::{Token, TokenType};
-use crate::domain::repositories::{TokenRepository, SessionRepository};
+use crate::domain::repositories::{TokenRepository, SessionRepository, DynTokenRepository, DynSessionRepository};
 use crate::domain::value_objects::UserId;
 use crate::shared::crypto::CryptoService;
 
@@ -38,17 +38,17 @@ pub trait TokenServiceTrait: Send + Sync {
 }
 
 /// Token service implementation
-pub struct TokenService<R: TokenRepository, S: SessionRepository> {
-    token_repo: Arc<R>,
-    session_repo: Arc<S>,
+pub struct TokenService {
+    token_repo: DynTokenRepository,
+    session_repo: DynSessionRepository,
     crypto_service: Arc<CryptoService>,
 }
 
-impl<R: TokenRepository, S: SessionRepository> TokenService<R, S> {
+impl TokenService {
     /// Create a new token service
     pub fn new(
-        token_repo: Arc<R>,
-        session_repo: Arc<S>,
+        token_repo: DynTokenRepository,
+        session_repo: DynSessionRepository,
         crypto_service: Arc<CryptoService>,
     ) -> Self {
         Self {
@@ -60,7 +60,7 @@ impl<R: TokenRepository, S: SessionRepository> TokenService<R, S> {
 }
 
 #[async_trait]
-impl<R: TokenRepository, S: SessionRepository> TokenServiceTrait for TokenService<R, S> {
+impl TokenServiceTrait for TokenService {
     async fn revoke_token(&self, token_hash: &str) -> Result<(), TokenError> {
         self.token_repo.revoke_by_hash(token_hash).await?;
         Ok(())

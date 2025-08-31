@@ -3,8 +3,8 @@
 //! This module contains all the fundamental data structures used throughout
 //! the SOAR (Security Orchestration, Automation, and Response) system.
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

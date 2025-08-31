@@ -20,7 +20,7 @@ pub struct RedirectUriValidator {
     blocked_domains: HashSet<String>,
     /// Pattern to validate URI components
     suspicious_patterns: Vec<Regex>,
-}
+)
 
 // Suspicious patterns to detect in URIs
 static SUSPICIOUS_PATTERNS: std::sync::LazyLock<Vec<Regex>> = std::sync::LazyLock::new(|| {
@@ -56,7 +56,7 @@ impl RedirectUriValidator {
         // Allow http only for localhost in development
         if !enforce_https {
             allowed_schemes.insert("http".to_string());
-        }
+        )
 
         let mut blocked_domains = HashSet::new();
         // Add common suspicious domains
@@ -73,8 +73,8 @@ impl RedirectUriValidator {
             allowed_tlds: COMMON_TLDS.clone(),
             blocked_domains,
             suspicious_patterns: SUSPICIOUS_PATTERNS.clone(),
-        }
-    }
+        )
+    )
 
     /// Register allowed redirect URIs for a client
     pub fn register_client_uris(
@@ -90,12 +90,12 @@ impl RedirectUriValidator {
             // Reject path traversal early to prevent registration of suspicious URIs
             self.validate_security_policies(&uri)?;
             validated_uris.insert(uri);
-        }
+        )
 
         self.client_redirect_uris
             .insert(client_id.to_string(), validated_uris);
         Ok(())
-    }
+    )
 
     /// Comprehensive redirect URI validation
     pub fn validate_redirect_uri(
@@ -108,7 +108,7 @@ impl RedirectUriValidator {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI exceeds maximum length".to_string(),
             });
-        }
+        )
 
         // 2. Basic format validation
         self.validate_uri_format(redirect_uri)?;
@@ -120,7 +120,7 @@ impl RedirectUriValidator {
         self.validate_security_policies(redirect_uri)?;
 
         Ok(())
-    }
+    )
 
     /// Validate URI format and structure
     fn validate_uri_format(&self, uri: &str) -> Result<(), crate::shared::error::AppError> {
@@ -129,7 +129,7 @@ impl RedirectUriValidator {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Path traversal detected in redirect URI".to_string(),
             });
-        }
+        )
         // Parse URL
         let parsed_url = Url::parse(uri).map_err(|_| crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid redirect URI format".to_string(),
@@ -140,24 +140,24 @@ impl RedirectUriValidator {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: format!("Unsupported scheme: {}", parsed_url.scheme()),
             });
-        }
+        )
 
         // Validate host exists
         if parsed_url.host().is_none() {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI must have a valid host".to_string(),
             });
-        }
+        )
 
         // Prevent fragment in redirect URI (OAuth2 security best practice)
         if parsed_url.fragment().is_some() {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI must not contain fragments".to_string(),
             });
-        }
+        )
 
         Ok(())
-    }
+    )
 
     /// Validate against client's registered redirect URIs
     fn validate_client_whitelist(
@@ -168,7 +168,7 @@ impl RedirectUriValidator {
         let client_uris = self.client_redirect_uris.get(client_id).ok_or_else(|| {
             crate::shared::error::AppError::UnauthorizedClient {
                 client_id: "Client not registered".to_string(),
-            }
+            )
         })?;
 
         // Exact match required for security
@@ -176,10 +176,10 @@ impl RedirectUriValidator {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Redirect URI not registered for this client".to_string(),
             });
-        }
+        )
 
         Ok(())
-    }
+    )
 
     /// Apply additional security policies
     fn validate_security_policies(&self, redirect_uri: &str) -> Result<(), crate::shared::error::AppError> {
@@ -193,9 +193,9 @@ impl RedirectUriValidator {
                     return Err(crate::shared::error::AppError::InvalidRequest {
                         reason: "HTTPS required for redirect URIs in production".to_string(),
                     });
-                }
-            }
-        }
+                )
+            )
+        )
 
         // Prevent IP addresses (except localhost)
         if let Some(host) = parsed_url.host_str() {
@@ -203,22 +203,22 @@ impl RedirectUriValidator {
                 return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "IP addresses not allowed in redirect URIs".to_string(),
                 });
-            }
+            )
 
             // Check for blocked domains
             if self.is_blocked_domain(host) {
                 return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "Domain is on the blocklist".to_string(),
                 });
-            }
+            )
 
             // Validate TLD
             if !self.is_valid_tld(host) {
                 return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "Invalid or suspicious TLD".to_string(),
                 });
-            }
-        }
+            )
+        )
 
         // Check for suspicious patterns
         for pattern in &self.suspicious_patterns {
@@ -226,8 +226,8 @@ impl RedirectUriValidator {
                 return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "Suspicious pattern detected in redirect URI".to_string(),
                 });
-            }
-        }
+            )
+        )
 
         // Prevent suspicious paths
         let raw_path = parsed_url.path();
@@ -235,47 +235,47 @@ impl RedirectUriValidator {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Path traversal detected in redirect URI".to_string(),
             });
-        }
+        )
 
         // Check for encoded attack attempts
         if self.contains_encoded_attacks(redirect_uri) {
             return Err(crate::shared::error::AppError::InvalidRequest {
                 reason: "Encoded attack detected in redirect URI".to_string(),
             });
-        }
+        )
 
         Ok(())
-    }
+    )
 
     /// Check if host is localhost
     fn is_localhost(&self, host: &str) -> bool {
         matches!(host, "localhost" | "127.0.0.1" | "::1" | "0.0.0.0")
-    }
+    )
 
     /// Check if host is an IP address
     fn is_ip_address(&self, host: &str) -> bool {
         host.parse::<std::net::IpAddr>().is_ok()
-    }
+    )
 
     /// Check if domain is blocked
     fn is_blocked_domain(&self, host: &str) -> bool {
         self.blocked_domains.contains(&host.to_lowercase())
-    }
+    )
 
     /// Validate TLD against known good TLDs
     fn is_valid_tld(&self, host: &str) -> bool {
         // Allow localhost and IP addresses
         if self.is_localhost(host) || self.is_ip_address(host) {
             return true;
-        }
+        )
 
         if let Some(tld) = host.split('.').next_back() {
             self.allowed_tlds.contains(&tld.to_lowercase())
         } else {
             // Single word hosts like "localhost" are allowed
             host.to_lowercase() == "localhost"
-        }
-    }
+        )
+    )
 
     /// Check for encoded attack patterns
     fn contains_encoded_attacks(&self, uri: &str) -> bool {
@@ -285,7 +285,7 @@ impl RedirectUriValidator {
         let double_decoded = urlencoding::decode(&decoded).unwrap_or_default();
         if decoded != double_decoded {
             return true;
-        }
+        )
 
         // Check for dangerous decoded patterns
         let dangerous_patterns = [
@@ -302,22 +302,22 @@ impl RedirectUriValidator {
         for pattern in &dangerous_patterns {
             if decoded.to_lowercase().contains(pattern) {
                 return true;
-            }
-        }
+            )
+        )
 
         false
-    }
+    )
 
     /// Add a domain to the blocklist
     pub fn block_domain(&mut self, domain: &str) {
         self.blocked_domains.insert(domain.to_lowercase());
-    }
+    )
 
     /// Remove a domain from the blocklist
     pub fn unblock_domain(&mut self, domain: &str) {
         self.blocked_domains.remove(&domain.to_lowercase());
-    }
-}
+    )
+)
 
 /// Default redirect URI configurations for common clients
 impl Default for RedirectUriValidator {
@@ -335,8 +335,8 @@ impl Default for RedirectUriValidator {
         );
 
         validator
-    }
-}
+    )
+)
 
 #[cfg(test)]
 mod tests {
@@ -355,7 +355,7 @@ mod tests {
         assert!(validator
             .validate_redirect_uri("test_client", "https://example.com/callback")
             .is_ok());
-    }
+    )
 
     #[test]
     fn test_unregistered_redirect_uri() {
@@ -370,7 +370,7 @@ mod tests {
         assert!(validator
             .validate_redirect_uri("test_client", "https://evil.com/callback")
             .is_err());
-    }
+    )
 
     #[test]
     fn test_fragment_rejection() {
@@ -381,7 +381,7 @@ mod tests {
                 vec!["https://example.com/callback#fragment".to_string()],
             )
             .unwrap_err(); // Should fail during registration
-    }
+    )
 
     #[test]
     fn test_https_enforcement() {
@@ -396,8 +396,8 @@ mod tests {
             assert!(validator
                 .validate_redirect_uri("test_client", "http://example.com/callback")
                 .is_err());
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_localhost_exception() {
@@ -412,7 +412,7 @@ mod tests {
         assert!(validator
             .validate_redirect_uri("test_client", "http://localhost:3000/callback")
             .is_ok());
-    }
+    )
 
     #[test]
     fn test_path_traversal_prevention() {
@@ -423,7 +423,7 @@ mod tests {
         );
 
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_ip_address_rejection() {
@@ -434,7 +434,7 @@ mod tests {
         );
 
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_uri_length_limit() {
@@ -444,7 +444,7 @@ mod tests {
         assert!(validator
             .validate_redirect_uri("test_client", &long_uri)
             .is_err());
-    }
+    )
 
     #[test]
     fn test_blocked_domains() {
@@ -454,7 +454,7 @@ mod tests {
         let result = validator
             .register_client_uris("test_client", vec!["https://evil.com/callback".to_string()]);
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_invalid_tld() {
@@ -464,7 +464,7 @@ mod tests {
             vec!["https://example.badtld/callback".to_string()],
         );
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_javascript_protocol_attack() {
@@ -472,7 +472,7 @@ mod tests {
         let result = validator
             .register_client_uris("test_client", vec!["javascript:alert('xss')".to_string()]);
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_data_protocol_attack() {
@@ -482,7 +482,7 @@ mod tests {
             vec!["data:text/html,<script>alert('xss')</script>".to_string()],
         );
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_encoded_attack_detection() {
@@ -504,7 +504,7 @@ mod tests {
             vec!["https://example.com/callback?param=%25%33%43script%25%33%45".to_string()],
         );
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_hex_encoded_attacks() {
@@ -514,7 +514,7 @@ mod tests {
             vec!["https://example.com/callback\\x3cscript\\x3e".to_string()],
         );
         assert!(result.is_err());
-    }
+    )
 
     #[test]
     fn test_path_injection_variants() {
@@ -531,8 +531,8 @@ mod tests {
             let result =
                 validator.register_client_uris("test_client", vec![attack_path.to_string()]);
             assert!(result.is_err(), "Should reject path: {}", attack_path);
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_open_redirect_attempts() {
@@ -561,8 +561,8 @@ mod tests {
                 "Should reject redirect attempt: {}",
                 attempt
             );
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_homograph_attacks() {
@@ -580,8 +580,8 @@ mod tests {
             // These might pass basic validation but should be caught by TLD validation
             // or manual review processes
             println!("Testing spoofed domain: {} - Result: {:?}", domain, result);
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_punycode_domains() {
@@ -595,7 +595,7 @@ mod tests {
 
         // This should pass if the TLD is valid
         println!("Punycode domain result: {:?}", result);
-    }
+    )
 
     #[test]
     fn test_port_variations() {
@@ -617,9 +617,9 @@ mod tests {
                 assert!(result.is_ok(), "Should allow URI: {}", uri);
             } else {
                 assert!(result.is_err(), "Should reject URI: {}", uri);
-            }
-        }
-    }
+            )
+        )
+    )
 
     #[test]
     fn test_url_shortener_blocking() {
@@ -634,9 +634,9 @@ mod tests {
         for domain in shortener_domains {
             let result = validator.register_client_uris("test_client", vec![domain.to_string()]);
             assert!(result.is_err(), "Should block URL shortener: {}", domain);
-        }
-    }
-}
+        )
+    )
+)
 
 // Additional validation for configuration loading
 impl RedirectUriValidator {
@@ -652,12 +652,12 @@ impl RedirectUriValidator {
         if let Ok(blocked) = std::env::var("OAUTH_BLOCKED_DOMAINS") {
             for domain in blocked.split(',') {
                 validator.block_domain(domain.trim());
-            }
-        }
+            )
+        )
 
         validator
-    }
-}
+    )
+)
 
 // Integration test module for real-world scenarios
 #[cfg(test)]
@@ -683,7 +683,7 @@ mod integration_tests {
         // Clean up
         std::env::remove_var("OAUTH_ENFORCE_HTTPS");
         std::env::remove_var("OAUTH_BLOCKED_DOMAINS");
-    }
+    )
 
     #[test]
     fn test_comprehensive_attack_suite() {
@@ -717,8 +717,8 @@ mod integration_tests {
         for attack in attack_vectors {
             let result = validator.register_client_uris("attack_client", vec![attack.to_string()]);
             assert!(result.is_err(), "Should block attack vector: {}", attack);
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_legitimate_use_cases() {
@@ -736,6 +736,6 @@ mod integration_tests {
         for uri in legitimate_uris {
             let result = validator.register_client_uris("legit_client", vec![uri.to_string()]);
             assert!(result.is_ok(), "Should allow legitimate URI: {}", uri);
-        }
-    }
-}
+        )
+    )
+)

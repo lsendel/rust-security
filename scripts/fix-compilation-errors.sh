@@ -1,92 +1,85 @@
 #!/bin/bash
-
-# Quick fix script for common compilation errors
-# This addresses the most frequent issues to get packages compiling
+# Automated Compilation Error Fix Script
+# Systematically fixes enum variant syntax errors
 
 set -e
 
-echo "🔧 Fixing common compilation errors..."
+echo "🔧 Auto-fixing compilation errors..."
 
-# Fix 1: Add missing derives for enums
-echo "  Adding missing derives..."
+# Find all Rust files in auth-service
+find auth-service/src -name "*.rs" -type f > /tmp/rust_files.txt
 
-# Fix ThreatType enum
-sed -i '' 's/pub enum ThreatType {/#[derive(Debug, Clone, PartialEq, Eq, Hash)]\npub enum ThreatType {/' auth-service/src/ai_threat_detection.rs
+echo "Found $(wc -l < /tmp/rust_files.txt) Rust files to check"
 
-# Fix ThreatAction enum  
-sed -i '' 's/pub enum ThreatAction {/#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]\npub enum ThreatAction {/' auth-service/src/ai_threat_detection.rs
+# Fix ServiceUnavailable struct syntax to tuple syntax
+echo "Fixing ServiceUnavailable enum variants..."
+while IFS= read -r file; do
+    if grep -q "ServiceUnavailable\s*{" "$file" 2>/dev/null; then
+        echo "Fixing ServiceUnavailable in: $file"
 
-# Fix ComplianceStatus enum
-sed -i '' 's/pub enum ComplianceStatus {/#[derive(Debug, Clone, PartialEq, Eq)]\npub enum ComplianceStatus {/' auth-service/src/zero_trust_auth.rs
+        # Replace struct-style with tuple-style using sed with proper escaping
+        sed -i.bak 's/ServiceUnavailable\s*{\s*reason:/ServiceUnavailable(/g' "$file"
+        sed -i.bak 's/ServiceUnavailable\s*{\s*client_id:/ServiceUnavailable(/g' "$file"
 
-# Fix 2: Add missing imports
-echo "  Adding missing imports..."
+        # Fix closing braces - replace } with ) at end of lines
+        sed -i.bak 's/^\([[:space:]]*\)}\s*$/\1)/g' "$file"
 
-# Add chrono traits
-sed -i '' '1i\
-use chrono::{Datelike, Timelike};\
-' auth-service/src/ai_threat_detection.rs
+        # Fix compiler placeholder comments
+        sed -i.bak 's/ServiceUnavailable(\s*\/\* std::string::String \*\/\s*)/ServiceUnavailable("PLACEHOLDER_MESSAGE".to_string())/g' "$file"
 
-# Add base64 Engine trait
-sed -i '' '1i\
-use base64::Engine;\
-' auth-service/src/session_secure.rs
+        # Clean up backup files
+        rm -f "${file}.bak"
+    fi
+done < /tmp/rust_files.txt
 
-# Fix 3: Fix type annotations for float ambiguity
-echo "  Fixing float type ambiguity..."
+# Fix InvalidRequest struct syntax to tuple syntax
+echo "Fixing InvalidRequest enum variants..."
+while IFS= read -r file; do
+    if grep -q "InvalidRequest\s*{" "$file" 2>/dev/null; then
+        echo "Fixing InvalidRequest in: $file"
 
-sed -i '' 's/let mut score = 0\.3;/let mut score: f64 = 0.3;/' auth-service/src/zero_trust_auth.rs
-sed -i '' 's/let mut score = 0\.5;/let mut score: f64 = 0.5;/' auth-service/src/zero_trust_auth.rs
+        sed -i.bak 's/InvalidRequest\s*{\s*reason:/InvalidRequest(/g' "$file"
+        sed -i.bak 's/^\([[:space:]]*\)}\s*$/\1)/g' "$file"
+        sed -i.bak 's/InvalidRequest(\s*\/\* std::string::String \*\/\s*)/InvalidRequest("PLACEHOLDER_MESSAGE".to_string())/g' "$file"
+        rm -f "${file}.bak"
+    fi
+done < /tmp/rust_files.txt
 
-# Fix 4: Fix string literal issues in config errors
-echo "  Fixing string literal issues..."
+# Fix UnauthorizedClient struct syntax to tuple syntax
+echo "Fixing UnauthorizedClient enum variants..."
+while IFS= read -r file; do
+    if grep -q "UnauthorizedClient\s*{" "$file" 2>/dev/null; then
+        echo "Fixing UnauthorizedClient in: $file"
 
-sed -i '' 's/ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET")/ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET".to_string())/' auth-service/src/config_secure.rs
-sed -i '' 's/ConfigError::WeakSecret("REQUEST_SIGNING_SECRET must be at least 32 characters")/ConfigError::WeakSecret("REQUEST_SIGNING_SECRET must be at least 32 characters".to_string())/' auth-service/src/config_secure.rs
+        sed -i.bak 's/UnauthorizedClient\s*{\s*client_id:/UnauthorizedClient(/g' "$file"
+        sed -i.bak 's/^\([[:space:]]*\)}\s*$/\1)/g' "$file"
+        sed -i.bak 's/UnauthorizedClient(\s*\/\* std::string::String \*\/\s*)/UnauthorizedClient("PLACEHOLDER_MESSAGE".to_string())/g' "$file"
+        rm -f "${file}.bak"
+    fi
+done < /tmp/rust_files.txt
 
-# Fix 5: Fix pattern matching issues
-echo "  Fixing pattern matching..."
+# Fix CircuitBreaker error mappings
+echo "Fixing CircuitBreaker error mappings..."
+while IFS= read -r file; do
+    if grep -q "CircuitBreakerError::" "$file" 2>/dev/null; then
+        echo "Fixing CircuitBreaker in: $file"
 
-sed -i '' 's/content_lower\.contains(pattern)/content_lower.contains(*pattern)/' auth-service/src/ai_threat_detection.rs
-sed -i '' 's/content\.contains(pattern)/content.contains(*pattern)/' auth-service/src/ai_threat_detection.rs
+        # Fix the mapping patterns
+        sed -i.bak 's/CircuitBreakerError::Open\s*=>\s*Self::ServiceUnavailable\s*{\s*reason:/CircuitBreakerError::Open => Self::ServiceUnavailable(/g' "$file"
+        sed -i.bak 's/CircuitBreakerError::Timeout\s*{\s*timeout\s*}\s*=>\s*Self::ServiceUnavailable\s*{\s*reason:/CircuitBreakerError::Timeout { timeout } => Self::ServiceUnavailable(/g' "$file"
+        sed -i.bak 's/CircuitBreakerError::OperationFailed(msg)\s*=>\s*Self::ServiceUnavailable\s*{\s*reason:/CircuitBreakerError::OperationFailed(msg) => Self::ServiceUnavailable(/g' "$file"
+        rm -f "${file}.bak"
+    fi
+done < /tmp/rust_files.txt
 
-# Fix 6: Fix ErrorResponse missing fields
-echo "  Fixing ErrorResponse initialization..."
+# Clean up any remaining placeholder comments
+echo "Cleaning up placeholder comments..."
+find auth-service/src -name "*.rs" -type f -exec sed -i 's/\/\* std::string::String \*\///g' {} \;
 
-cat > /tmp/error_response_fix.txt << 'EOF'
-        let mut error_response = ErrorResponse {
-            error: error_code.to_string(),
-            error_description: user_message.to_string(),
-            error_uri: None,
-            error_id: None,
-            correlation_id: None,
-            details: None,
-        };
-EOF
+echo "✅ Auto-fixes applied. Running cargo check to verify..."
 
-sed -i '' '/let mut error_response = ErrorResponse {/,/};/c\
-        let mut error_response = ErrorResponse {\
-            error: error_code.to_string(),\
-            error_description: user_message.to_string(),\
-            error_uri: None,\
-            error_id: None,\
-            correlation_id: None,\
-            details: None,\
-        };' auth-service/src/errors.rs
+# Run cargo check to see remaining errors
+cargo check --workspace 2>&1 | grep -c "error[" || echo "0"
 
-echo "✅ Basic fixes applied!"
-echo ""
-echo "🧪 Testing compilation..."
-
-if cargo check -p auth-service >/dev/null 2>&1; then
-    echo "✅ auth-service now compiles!"
-else
-    echo "❌ auth-service still has errors. Manual fixes needed."
-    echo "Run: cargo check -p auth-service"
-fi
-
-echo ""
-echo "📋 Next steps:"
-echo "1. Review remaining compilation errors"
-echo "2. Fix complex logic issues manually"
-echo "3. Add packages back to CI as they're fixed"
+echo "If errors remain, you may need to manually fix complex cases."
+echo "Run: cargo check --workspace --message-format=short for detailed error messages."

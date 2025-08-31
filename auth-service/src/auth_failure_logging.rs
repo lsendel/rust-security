@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use dashmap::DashMap;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -268,7 +268,7 @@ impl AuthFailureTracker {
             .with_outcome("failure".to_string())
             .with_reason(failure_reason.to_string());
 
-        crate::security_logging::log_event(&mut event);
+        crate::infrastructure::security::security_logging::log_event(&event);
 
         // Log additional alert for suspicious activity
         if is_suspicious {
@@ -333,7 +333,7 @@ impl AuthFailureTracker {
             .with_outcome("detected".to_string())
             .with_reason("Suspicious authentication patterns detected".to_string());
 
-        crate::security_logging::log_event(&mut event);
+        crate::infrastructure::security::security_logging::log_event(&event);
     }
 
     /// Get failure statistics

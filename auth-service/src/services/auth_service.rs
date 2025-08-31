@@ -9,7 +9,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::domain::entities::{User, Session};
-use crate::domain::repositories::{UserRepository, SessionRepository};
+use crate::domain::repositories::{UserRepository, SessionRepository, DynUserRepository, DynSessionRepository};
 use crate::domain::value_objects::{Email, UserId};
 use crate::shared::crypto::{CryptoService, CryptoServiceTrait};
 
@@ -70,17 +70,17 @@ pub trait AuthServiceTrait: Send + Sync {
 }
 
 /// Authentication service implementation
-pub struct AuthService<R: UserRepository, S: SessionRepository> {
-    user_repo: Arc<R>,
-    session_repo: Arc<S>,
+pub struct AuthService {
+    user_repo: DynUserRepository,
+    session_repo: DynSessionRepository,
     crypto_service: Arc<CryptoService>,
 }
 
-impl<R: UserRepository, S: SessionRepository> AuthService<R, S> {
+impl AuthService {
     /// Create a new authentication service
     pub fn new(
-        user_repo: Arc<R>,
-        session_repo: Arc<S>,
+        user_repo: DynUserRepository,
+        session_repo: DynSessionRepository,
         crypto_service: Arc<CryptoService>,
     ) -> Self {
         Self {
@@ -92,7 +92,7 @@ impl<R: UserRepository, S: SessionRepository> AuthService<R, S> {
 }
 
 #[async_trait]
-impl<R: UserRepository, S: SessionRepository> AuthServiceTrait for AuthService<R, S> {
+impl AuthServiceTrait for AuthService {
     async fn login(&self, request: LoginRequest) -> Result<LoginResponse, crate::shared::error::AppError> {
         // 1. Validate input
         let email = Email::new(request.email)

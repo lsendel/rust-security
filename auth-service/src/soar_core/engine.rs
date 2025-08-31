@@ -4,8 +4,8 @@
 //! security operations, automation, and response activities.
 
 use super::types::*;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 #[cfg(feature = "soar")]

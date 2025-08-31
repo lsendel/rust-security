@@ -1,7 +1,9 @@
 #[cfg(feature = "rate-limiting")]
 use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
+use crate::infrastructure::security::security_logging::{
+    SecurityEvent, SecurityEventType, SecuritySeverity,
+};
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::{shared::error::AppError, AppState};
 use axum::{
     body::Body,
@@ -146,7 +148,7 @@ pub async fn admin_auth_middleware(
                 request_path: Some(path.to_string()),
                 response_time_ms: None,
             };
-            crate::security_logging::log_event(&event);
+            crate::infrastructure::security::security_logging::log_event(&event);
 
             let rate_limit_error = crate::shared::error::AppError::RateLimitExceeded;
             return handle_auth_failure(rate_limit_error, method, path, &client_ip, &headers);
@@ -194,7 +196,7 @@ pub async fn admin_auth_middleware(
                 request_path: Some(path.to_string()),
                 response_time_ms: None,
             };
-            crate::security_logging::log_event(&event);
+            crate::infrastructure::security::security_logging::log_event(&event);
 
             // If request signing is required, validate the signature with replay protection
             if config.require_request_signing {
@@ -213,35 +215,35 @@ pub async fn admin_auth_middleware(
 }
 
 /// Extract admin key from Bearer token for rate limiting and logging
-async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<String, crate::shared::error::AppError> {
+async fn extract_admin_key(
+    headers: &HeaderMap,
+    state: &AppState,
+) -> Result<String, crate::shared::error::AppError> {
     // Extract bearer token
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let token = auth
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
+    let token = auth.strip_prefix("Bearer ").ok_or_else(|| {
+        crate::shared::error::AppError::InvalidToken {
             reason: "Missing or malformed authorization header".to_string(),
-        })?;
+        )
+    })?;
 
     if token.is_empty() {
         return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Empty bearer token".to_string(),
         });
-    }
+    )
 
     // Validate token and extract record
     #[cfg(feature = "enhanced-session-store")]
-    let record =
-        state
-            .store
-            .get_token_record(token)
-            .await?
-            .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
-                reason: "Token not found or invalid".to_string(),
-            })?;
+    let record = state.store.get_token_record(token).await?.ok_or_else(|| {
+        crate::shared::error::AppError::InvalidToken {
+            reason: "Token not found or invalid".to_string(),
+        )
+    })?;
 
     #[cfg(not(feature = "enhanced-session-store"))]
     let record = crate::store::TokenRecord {
@@ -261,7 +263,7 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
         return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Token is inactive".to_string(),
         });
-    }
+    )
 
     // Check for admin scope
     match record.scope {
@@ -272,43 +274,43 @@ async fn extract_admin_key(headers: &HeaderMap, state: &AppState) -> Result<Stri
             hasher.update(token.as_bytes());
             let result = hasher.finalize();
             Ok(format!("admin_{}", hex::encode(&result[..8]))) // Use first 8 bytes as key
-        }
+        )
         _ => Err(crate::shared::error::AppError::Forbidden {
             reason: "Insufficient privileges: admin scope required".to_string(),
         }),
-    }
-}
+    )
+)
 
 /// Enhanced admin scope validation
-async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<(), crate::shared::error::AppError> {
+async fn require_admin_scope(
+    headers: &HeaderMap,
+    state: &AppState,
+) -> Result<(), crate::shared::error::AppError> {
     // Extract bearer token
     let auth = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let token = auth
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
+    let token = auth.strip_prefix("Bearer ").ok_or_else(|| {
+        crate::shared::error::AppError::InvalidToken {
             reason: "Missing or malformed authorization header".to_string(),
-        })?;
+        )
+    })?;
 
     if token.is_empty() {
         return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Empty bearer token".to_string(),
         });
-    }
+    )
 
     // Validate token and extract record
     #[cfg(feature = "enhanced-session-store")]
-    let record =
-        state
-            .store
-            .get_token_record(token)
-            .await?
-            .ok_or_else(|| crate::shared::error::AppError::InvalidToken {
-                reason: "Token not found or invalid".to_string(),
-            })?;
+    let record = state.store.get_token_record(token).await?.ok_or_else(|| {
+        crate::shared::error::AppError::InvalidToken {
+            reason: "Token not found or invalid".to_string(),
+        )
+    })?;
 
     #[cfg(not(feature = "enhanced-session-store"))]
     let record = crate::store::TokenRecord {
@@ -328,19 +330,19 @@ async fn require_admin_scope(headers: &HeaderMap, state: &AppState) -> Result<()
         return Err(crate::shared::error::AppError::InvalidToken {
             reason: "Token is inactive".to_string(),
         });
-    }
+    )
 
     // Check for admin scope
     match record.scope {
         Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
             // Additional validation could be added here (e.g., token expiry, client validation)
             Ok(())
-        }
+        )
         _ => Err(crate::shared::error::AppError::Forbidden {
             reason: "Insufficient privileges: admin scope required".to_string(),
         }),
-    }
-}
+    )
+)
 
 /// Validate request with replay protection and signature verification
 async fn validate_request_with_replay_protection(
@@ -379,11 +381,12 @@ async fn validate_request_with_replay_protection(
         })?;
 
     // Parse timestamp
-    let timestamp: u64 = timestamp_str
-        .parse()
-        .map_err(|_| crate::shared::error::AppError::InvalidRequest {
-            reason: "Invalid timestamp format".to_string(),
-        })?;
+    let timestamp: u64 =
+        timestamp_str
+            .parse()
+            .map_err(|_| crate::shared::error::AppError::InvalidRequest {
+                reason: "Invalid timestamp format".to_string(),
+            })?;
 
     // Verify signature using SHA-256
     if !ReplayProtection::verify_signature(
@@ -397,17 +400,17 @@ async fn validate_request_with_replay_protection(
         return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid request signature".to_string(),
         });
-    }
+    )
 
     // Apply replay protection
     if let Some(replay_protection) = REPLAY_PROTECTION.get() {
         replay_protection
             .validate_request(nonce, timestamp, signature, signing_secret, method, path)
             .await?;
-    }
+    )
 
     Ok(())
-}
+)
 
 /// Legacy validate request signature function (now deprecated)
 #[allow(dead_code)]
@@ -440,17 +443,18 @@ fn validate_request_signature(
         })?;
 
     // Parse and validate timestamp
-    let timestamp: u64 = timestamp_str
-        .parse()
-        .map_err(|_| crate::shared::error::AppError::InvalidRequest {
-            reason: "Invalid timestamp format".to_string(),
-        })?;
+    let timestamp: u64 =
+        timestamp_str
+            .parse()
+            .map_err(|_| crate::shared::error::AppError::InvalidRequest {
+                reason: "Invalid timestamp format".to_string(),
+            })?;
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| crate::shared::error::AppError::Internal(
-            "Failed to get current timestamp".to_string()
-        ))?
+        .map_err(|_| {
+            crate::shared::error::AppError::Internal("Failed to get current timestamp".to_string())
+        })?
         .as_secs();
 
     // Check timestamp skew
@@ -458,7 +462,7 @@ fn validate_request_signature(
         return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Request timestamp is too far from current time".to_string(),
         });
-    }
+    )
 
     // Calculate expected signature
     let payload = format!("{method}:{path}:{timestamp}");
@@ -469,10 +473,10 @@ fn validate_request_signature(
         return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid request signature".to_string(),
         });
-    }
+    )
 
     Ok(())
-}
+)
 
 /// Handle authentication failures with proper logging and response
 fn handle_auth_failure(
@@ -527,10 +531,10 @@ fn handle_auth_failure(
         request_path: Some(path.to_string()),
         response_time_ms: None,
     };
-    crate::security_logging::log_event(&event);
+    crate::infrastructure::security::security_logging::log_event(&event);
 
     Err(auth_error.into_response())
-}
+)
 
 /// Handle signature validation failures with proper logging and response
 #[allow(dead_code)]
@@ -543,7 +547,9 @@ fn handle_signature_failure(
 ) -> Result<Response, impl IntoResponse> {
     // Determine the appropriate status code based on error type
     let (status_code, reason) = match &error {
-        crate::shared::error::AppError::RateLimitExceeded => (StatusCode::TOO_MANY_REQUESTS, "rate_limit_exceeded"),
+        crate::shared::error::AppError::RateLimitExceeded => {
+            (StatusCode::TOO_MANY_REQUESTS, "rate_limit_exceeded")
+        )
         _ => (StatusCode::UNAUTHORIZED, "invalid_signature_or_replay"),
     };
 
@@ -589,14 +595,17 @@ fn handle_signature_failure(
         request_path: Some(path.to_string()),
         response_time_ms: None,
     };
-    crate::security_logging::log_event(&event);
+    crate::infrastructure::security::security_logging::log_event(&event);
 
     Err((status_code, format!("Request validation failed: {error}")).into_response())
-}
+)
 
 /// Calculate HMAC-SHA256 signature
 #[allow(dead_code)]
-fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, crate::shared::error::AppError> {
+fn calculate_hmac_sha256(
+    secret: &str,
+    payload: &str,
+) -> Result<String, crate::shared::error::AppError> {
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
 
@@ -609,27 +618,19 @@ fn calculate_hmac_sha256(secret: &str, payload: &str) -> Result<String, crate::s
                 std::io::ErrorKind::InvalidInput,
                 "Invalid HMAC key",
             )),
-        }
+        )
     })?;
 
     mac.update(payload.as_bytes());
     let result = mac.finalize();
     Ok(hex::encode(result.into_bytes()))
-}
+)
 
 /// Constant-time string comparison to prevent timing attacks
-#[allow(dead_code)]
+/// Uses the secure implementation from the password service
 fn constant_time_compare(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-
-    let mut result = 0u8;
-    for (byte_a, byte_b) in a.bytes().zip(b.bytes()) {
-        result |= byte_a ^ byte_b;
-    }
-    result == 0
-}
+    crate::services::constant_time_compare(a, b)
+)
 
 /// Extract client IP from request headers (considering proxies)
 fn extract_client_ip(headers: &HeaderMap) -> Option<String> {
@@ -639,26 +640,26 @@ fn extract_client_ip(headers: &HeaderMap) -> Option<String> {
             // Take the first IP (original client)
             if let Some(first_ip) = xff_str.split(',').next() {
                 return Some(first_ip.trim().to_string());
-            }
-        }
-    }
+            )
+        )
+    )
 
     // Try X-Real-IP (nginx)
     if let Some(real_ip) = headers.get("x-real-ip") {
         if let Ok(ip_str) = real_ip.to_str() {
             return Some(ip_str.to_string());
-        }
-    }
+        )
+    )
 
     // Try CF-Connecting-IP (Cloudflare)
     if let Some(cf_ip) = headers.get("cf-connecting-ip") {
         if let Ok(ip_str) = cf_ip.to_str() {
             return Some(ip_str.to_string());
-        }
-    }
+        )
+    )
 
     None
-}
+)
 
 /// Extract correlation ID from request headers
 fn extract_correlation_id(headers: &HeaderMap) -> Option<String> {
@@ -668,7 +669,7 @@ fn extract_correlation_id(headers: &HeaderMap) -> Option<String> {
         .or_else(|| headers.get("traceparent"))
         .and_then(|v| v.to_str().ok())
         .map(String::from)
-}
+)
 
 /// Extract User-Agent from request headers
 fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
@@ -676,7 +677,7 @@ fn extract_user_agent(headers: &HeaderMap) -> Option<String> {
         .get("user-agent")
         .and_then(|v| v.to_str().ok())
         .map(String::from)
-}
+)
 
 #[cfg(test)]
 mod tests {
@@ -690,11 +691,12 @@ mod tests {
         assert!(!constant_time_compare("hello123", "hello"));
         assert!(!constant_time_compare("", "hello"));
         assert!(constant_time_compare("", ""));
-    }
+    )
 
     #[test]
     fn test_calculate_hmac_sha256() {
-        let secret = "test_secret";
+        let secret = std::env::var("TEST_SECRET")
+            .unwrap_or_else(|_| "test_secret_for_development_only".to_string());
         let payload = "GET:/admin/test:1234567890";
         let signature = calculate_hmac_sha256(secret, payload).unwrap();
 
@@ -703,9 +705,9 @@ mod tests {
         assert_eq!(signature, signature2);
 
         // Verify different payload gives different signature
-        let different_signature = calculate_hmac_sha256(secret, "different").unwrap();
+        let different_signature = calculate_hmac_sha256(&secret, "different").unwrap();
         assert_ne!(signature, different_signature);
-    }
+    )
 
     #[test]
     fn test_admin_auth_config_default() {
@@ -714,7 +716,7 @@ mod tests {
         assert_eq!(config.rate_limit_per_minute, 100);
         assert_eq!(config.replay_time_window, 300);
         assert!(!config.require_request_signing);
-    }
+    )
 
     #[test]
     fn test_extract_client_ip() {
@@ -736,7 +738,7 @@ mod tests {
         headers.remove("x-real-ip");
         headers.insert("cf-connecting-ip", "1.2.3.4".parse().unwrap());
         assert_eq!(extract_client_ip(&headers), Some("1.2.3.4".to_string()));
-    }
+    )
 
     #[tokio::test]
     async fn test_replay_protection_integration() {
@@ -744,7 +746,10 @@ mod tests {
 
         let config = AdminAuthConfig {
             require_request_signing: true,
-            signing_secret: Some("test_secret_key".to_string()),
+            signing_secret: Some(
+                std::env::var("TEST_SIGNING_SECRET")
+                    .unwrap_or_else(|_| "test_signing_secret_for_development_only".to_string()),
+            ),
             max_timestamp_skew: 300,
             rate_limit_per_minute: 100,
             replay_time_window: 300,
@@ -790,5 +795,5 @@ mod tests {
         let result2 =
             validate_request_with_replay_protection(&headers, &config, "POST", "/admin/test").await;
         assert!(result2.is_err());
-    }
-}
+    )
+)

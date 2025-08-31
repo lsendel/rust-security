@@ -286,7 +286,8 @@ pub enum CacheError {
 
 impl CoreError {
     /// Get the HTTP status code for this error
-    #[must_use] pub const fn status_code(&self) -> StatusCode {
+    #[must_use]
+    pub const fn status_code(&self) -> StatusCode {
         match self {
             Self::Authentication(auth_err) => match auth_err {
                 AuthenticationError::InvalidCredentials
@@ -309,8 +310,9 @@ impl CoreError {
             Self::Configuration(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Network(net_err) => match net_err {
                 NetworkError::ConnectionTimeout => StatusCode::REQUEST_TIMEOUT,
-                NetworkError::ConnectionRefused
-                | NetworkError::NetworkUnreachable => StatusCode::SERVICE_UNAVAILABLE,
+                NetworkError::ConnectionRefused | NetworkError::NetworkUnreachable => {
+                    StatusCode::SERVICE_UNAVAILABLE
+                }
                 _ => StatusCode::BAD_GATEWAY,
             },
             Self::Storage(storage_err) => match storage_err {
@@ -326,7 +328,8 @@ impl CoreError {
     }
 
     /// Get the error category for logging and metrics
-    #[must_use] pub const fn category(&self) -> &'static str {
+    #[must_use]
+    pub const fn category(&self) -> &'static str {
         match self {
             Self::Authentication(_) => "authentication",
             Self::Authorization(_) => "authorization",
@@ -344,14 +347,14 @@ impl CoreError {
     }
 
     /// Check if the error is retryable
-    #[must_use] pub const fn is_retryable(&self) -> bool {
+    #[must_use]
+    pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
-            Self::Network(NetworkError::ConnectionTimeout |
-NetworkError::NetworkUnreachable) |
-Self::Storage(StorageError::ConnectionFailed) |
-Self::Cache(CacheError::Timeout | CacheError::ConnectionFailed) |
-Self::RateLimit(RateLimitError::Exceeded)
+            Self::Network(NetworkError::ConnectionTimeout | NetworkError::NetworkUnreachable)
+                | Self::Storage(StorageError::ConnectionFailed)
+                | Self::Cache(CacheError::Timeout | CacheError::ConnectionFailed)
+                | Self::RateLimit(RateLimitError::Exceeded)
         )
     }
 
@@ -398,14 +401,10 @@ impl From<CommonError> for CoreError {
                 Self::Configuration(ConfigurationError::ValidationFailed)
             }
             CommonError::Network { message: _ } => Self::Network(NetworkError::InvalidUrl),
-            CommonError::Database { message: _ } => {
-                Self::Storage(StorageError::ConnectionFailed)
-            }
+            CommonError::Database { message: _ } => Self::Storage(StorageError::ConnectionFailed),
             CommonError::Cache { message: _ } => Self::Cache(CacheError::ConnectionFailed),
             CommonError::RateLimit { message: _ } => Self::RateLimit(RateLimitError::Exceeded),
-            CommonError::Security { message: _ } => {
-                Self::Security(SecurityError::PolicyViolation)
-            }
+            CommonError::Security { message: _ } => Self::Security(SecurityError::PolicyViolation),
             CommonError::ServiceUnavailable { message: _ } => {
                 Self::Network(NetworkError::NetworkUnreachable)
             }
@@ -450,10 +449,7 @@ mod tests {
             CoreError::Authentication(AuthenticationError::InvalidCredentials).category(),
             "authentication"
         );
-        assert_eq!(
-            CoreError::Token(TokenError::Expired).category(),
-            "token"
-        );
+        assert_eq!(CoreError::Token(TokenError::Expired).category(), "token");
         assert_eq!(
             CoreError::Security(SecurityError::PolicyViolation).category(),
             "security"

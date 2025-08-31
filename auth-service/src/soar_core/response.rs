@@ -4,7 +4,7 @@
 //! security alerts and execute predefined response actions.
 
 use super::types::*;
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use std::collections::HashMap;

@@ -36,6 +36,40 @@ use axum::{
 };
 use cedar_policy::{Authorizer, Context, Entities, PolicySet, Request};
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize)]
+pub struct PolicyConflict {
+    pub policy_id: String,
+    pub conflicting_policy: String,
+    pub conflict_type: String,
+}
+
+#[must_use]
+pub fn detect_policy_conflicts(policies: &PolicySet) -> Vec<PolicyConflict> {
+    let mut conflicts = Vec::new();
+    let policy_list: Vec<_> = policies.policies().collect();
+
+    for (i, policy1) in policy_list.iter().enumerate() {
+        for policy2 in policy_list.iter().skip(i + 1) {
+            if policies_conflict(policy1, policy2) {
+                conflicts.push(PolicyConflict {
+                    policy_id: policy1.id().to_string(),
+                    conflicting_policy: policy2.id().to_string(),
+                    conflict_type: "overlapping_conditions".to_string(),
+                });
+            }
+        }
+    }
+    conflicts
+}
+
+fn policies_conflict(policy1: &cedar_policy::Policy, policy2: &cedar_policy::Policy) -> bool {
+    // Basic conflict detection - same principal/action/resource with different effects
+    policy1.principal_constraint() == policy2.principal_constraint()
+        && policy1.action_constraint() == policy2.action_constraint()
+        && policy1.resource_constraint() == policy2.resource_constraint()
+        && policy1.effect() != policy2.effect()
+}
 use tower_http::{
     cors::CorsLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
@@ -282,6 +316,7 @@ pub fn app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/v1/authorize", post(authorize))
+        .route("/v1/policies/conflicts", get(check_policy_conflicts))
         .route("/metrics", get(get_metrics))
         .layer(axum::middleware::from_fn(policy_metrics_middleware))
         .layer(PropagateRequestIdLayer::x_request_id())
@@ -289,6 +324,11 @@ pub fn app(state: Arc<AppState>) -> Router {
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn check_policy_conflicts(State(state): State<Arc<AppState>>) -> Result<Json<Vec<PolicyConflict>>, AppError> {
+    let conflicts = detect_policy_conflicts(&state.policies);
+    Ok(Json(conflicts))
 }
 
 pub use documentation::ApiDoc;

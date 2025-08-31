@@ -4,7 +4,7 @@
 //! related security events and reduce alert fatigue through intelligent grouping.
 
 use super::types::*;
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use std::collections::HashMap;

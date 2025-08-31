@@ -748,7 +748,7 @@ impl ClientRegistrationManager {
         let today = Utc::now().date_naive();
 
         let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM oauth_client_registrations 
+            "SELECT COUNT(*) FROM oauth_client_registrations
              WHERE created_by_ip = $1 AND DATE(created_at) = $2",
         )
         .bind(ip)
@@ -1092,7 +1092,7 @@ fn hash_secret(secret: &str) -> String {
 
 fn verify_registration_access_token(token: &str, hash: &str) -> bool {
     let token_hash = hash_secret(token);
-    token_hash == hash
+    crate::services::constant_time_compare(&token_hash, hash)
 }
 
 /// Axum handlers

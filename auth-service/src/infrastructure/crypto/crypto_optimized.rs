@@ -2,6 +2,8 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine as _;
 use dashmap::DashMap;
+use once_cell::sync::Lazy;
+use rayon::prelude::*;
 use ring::rand::SecureRandom;
 use ring::{aead, digest, hmac, rand, signature};
 use std::sync::Arc;
@@ -155,7 +157,7 @@ impl CryptoOptimized {
 
         // Prepend nonce to ciphertext
         let mut result = nonce_bytes.to_vec();
-        operation_result.extend_from_slice(&in_out);
+        result.extend_from_slice(&in_out);
 
         self.update_metrics(start.elapsed(), cache_hit).await;
         Ok(result)
@@ -427,8 +429,8 @@ pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
 
 #[cfg(not(feature = "simd"))]
 pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
-    use ring::constant_time;
-    constant_time::constant_time_eq::constant_time_eq(a, b)
+    use constant_time_eq::constant_time_eq;
+    constant_time_eq(a, b)
 }
 
 #[cfg(test)]

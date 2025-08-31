@@ -22,6 +22,7 @@
 //! - Input validation and sanitization
 //! - Security headers and monitoring
 //! - `PII` protection
+//! - SAML assertion encryption
 //!
 //! ### API & Middleware
 //! - `HTTP` handlers and routing
@@ -43,34 +44,8 @@
 //! ## Test Utilities
 //!
 //! The service provides test utilities for proper timeout handling:
-//!
-//! ```rust
-//! use tokio::time::{timeout, Duration};
-//!
-//! #[tokio::test]
-//! async fn example_test_with_timeout() {
-//!     let test_future = async {
-//!         // Your test logic here
-//!         tokio::time::sleep(Duration::from_secs(1)).await;
-//!         assert!(true);
-//!     };
-//!
-//!     // Timeout after 30 seconds to prevent hanging
-//!     timeout(Duration::from_secs(30), test_future)
-//!         .await
-//!         .expect("Test timed out");
-//! }
-//! ```
-//!
-//! ### Data Layer
-//! - Redis and SQL storage
-//! - Caching mechanisms
-//! - Session persistence
-//!
-//! ### Observability
-//! - Metrics and monitoring
-//! - Logging and tracing
-//! - Health checks
+
+pub mod saml_service;
 
 use common::constants;
 use std::sync::Arc;
@@ -96,22 +71,21 @@ pub mod threat_processor;
 
 // Essential modules for backward compatibility
 pub mod auth_api;
-pub mod crypto_unified;
 pub mod error_conversion_macro;
-// pub mod jwks_rotation; // Temporarily disabled due to compilation issues
 pub mod jwt_secure;
-pub mod keys;
-pub mod security;
 pub mod validation;
 pub mod validation_framework;
 pub mod validation_secure;
 
-// Consolidated storage layer
-pub mod storage;
+// Infrastructure layer (new modular architecture)
+
+// Comprehensive test suite
+#[cfg(test)]
+pub mod tests;
 
 // Feature-gated modules
 #[cfg(feature = "rate-limiting")]
-// pub mod admin_replay_protection; // Temporarily disabled due to compilation issues
+pub mod admin_replay_protection;
 #[cfg(feature = "api-keys")]
 pub mod api_key_endpoints;
 #[cfg(feature = "api-keys")]
@@ -120,18 +94,13 @@ pub mod api_key_store;
 pub mod async_optimized;
 #[cfg(feature = "rate-limiting")]
 pub mod auth_failure_logging;
-#[cfg(feature = "tracing")]
-pub mod enhanced_observability;
-#[cfg(feature = "monitoring")]
-pub mod metrics;
-#[cfg(feature = "tracing")]
-pub mod observability;
-#[cfg(feature = "tracing")]
-pub mod observability_init;
 #[cfg(feature = "rate-limiting")]
 pub mod per_ip_rate_limit;
-#[cfg(feature = "monitoring")]
-pub mod security_metrics;
+
+// Core monitoring module
+// pub mod modules {  // Temporarily disabled due to prometheus dependency issues
+//     pub mod monitoring;
+// }
 
 #[cfg(feature = "threat-hunting")]
 pub mod threat_attack_patterns;
@@ -147,8 +116,8 @@ pub mod threat_response_orchestrator;
 pub mod threat_types;
 #[cfg(feature = "threat-hunting")]
 pub mod threat_user_profiler;
-#[cfg(feature = "tracing")]
-pub mod tracing_config;
+// #[cfg(feature = "tracing")]
+// pub mod tracing_config;  // Temporarily disabled due to opentelemetry issues
 
 // Core functionality modules
 pub mod admin_middleware;
@@ -170,14 +139,9 @@ pub mod rate_limit_secure;
 pub mod redirect_validation;
 pub mod scim_filter;
 pub mod secure_random;
-pub mod security_fixed;
-pub mod security_headers;
-pub mod security_logging;
-pub mod security_monitoring;
 pub mod security_tests;
 
 pub mod test_mode_security;
-pub mod tls_security;
 
 // Service-specific modules
 pub mod jit_token_manager;
@@ -192,17 +156,17 @@ pub const MAX_REQUEST_BODY_SIZE: usize = constants::security::MAX_REQUEST_BODY_S
 #[derive(Clone)]
 pub struct AppState {
     #[cfg(feature = "enhanced-session-store")]
-    pub store: Arc<crate::storage::store::hybrid::HybridStore>,
+    pub store: Arc<crate::infrastructure::storage::store::hybrid::HybridStore>,
     #[cfg(feature = "api-keys")]
     pub api_key_store: Arc<crate::api_key_store::ApiKeyStore>,
-    pub session_store: Arc<crate::storage::session::store::RedisSessionStore>,
+    pub session_store: Arc<crate::infrastructure::storage::session::store::RedisSessionStore>,
     pub token_store: Arc<std::sync::RwLock<std::collections::HashMap<String, common::TokenRecord>>>,
     pub client_credentials: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
     pub allowed_scopes: Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
     pub authorization_codes: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
-    pub policy_cache: Arc<crate::storage::cache::policy_cache::PolicyCache>,
+    pub policy_cache: Arc<crate::infrastructure::cache::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<std::sync::RwLock<bool>>,
-    pub jwks_manager: Arc<crate::jwks_rotation::JwksManager>,
+    pub jwks_manager: Arc<crate::infrastructure::crypto::jwks_rotation::JwksManager>,
 }
 
 /// Mint access and refresh tokens for a subject with proper JWT implementation

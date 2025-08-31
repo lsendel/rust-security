@@ -27,12 +27,11 @@ impl PostgresUserRepository {
 #[async_trait]
 impl UserRepository for PostgresUserRepository {
     async fn find_by_email(&self, email: &Email) -> Result<Option<User>, RepositoryError> {
-        let result = sqlx::query_as!(
-            User,
+        let result = sqlx::query_as::<_, User>(
             "SELECT id, email, password_hash, name, created_at, last_login, is_active, roles
-             FROM users WHERE email = $1",
-            email.as_str()
+             FROM users WHERE email = $1"
         )
+        .bind(email.as_str())
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -41,12 +40,11 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError> {
-        let result = sqlx::query_as!(
-            User,
+        let result = sqlx::query_as::<_, User>(
             "SELECT id, email, password_hash, name, created_at, last_login, is_active, roles
-             FROM users WHERE id = $1",
-            id.as_str()
+             FROM users WHERE id = $1"
         )
+        .bind(id.as_str())
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -55,22 +53,22 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn save(&self, user: &User) -> Result<(), RepositoryError> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO users (id, email, password_hash, name, created_at, is_active, roles)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (id) DO UPDATE SET
                password_hash = EXCLUDED.password_hash,
                last_login = EXCLUDED.last_login,
                is_active = EXCLUDED.is_active,
-               updated_at = NOW()",
-            user.id.as_str(),
-            user.email.as_str(),
-            user.password_hash.as_str(),
-            user.name,
-            user.created_at,
-            user.is_active,
-            &user.roles
+               updated_at = NOW()"
         )
+        .bind(user.id.as_str())
+        .bind(user.email.as_str())
+        .bind(user.password_hash.as_str())
+        .bind(&user.name)
+        .bind(user.created_at)
+        .bind(user.is_active)
+        .bind(&user.roles)
         .execute(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -83,11 +81,11 @@ impl UserRepository for PostgresUserRepository {
         id: &UserId,
         login_time: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), RepositoryError> {
-        sqlx::query!(
-            "UPDATE users SET last_login = $1, updated_at = NOW() WHERE id = $2",
-            login_time,
-            id.as_str()
+        sqlx::query(
+            "UPDATE users SET last_login = $1, updated_at = NOW() WHERE id = $2"
         )
+        .bind(login_time)
+        .bind(id.as_str())
         .execute(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -96,7 +94,8 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn delete(&self, id: &UserId) -> Result<(), RepositoryError> {
-        sqlx::query!("DELETE FROM users WHERE id = $1", id.as_str())
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(id.as_str())
             .execute(&*self.pool)
             .await
             .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -105,24 +104,23 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn exists_by_email(&self, email: &Email) -> Result<bool, RepositoryError> {
-        let result = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)",
-            email.as_str()
+        let result = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)"
         )
+        .bind(email.as_str())
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
 
-        Ok(result.unwrap_or(false))
+        Ok(result)
     }
 
     async fn find_by_role(&self, role: &str) -> Result<Vec<User>, RepositoryError> {
-        let result = sqlx::query_as!(
-            User,
+        let result = sqlx::query_as::<_, User>(
             "SELECT id, email, password_hash, name, created_at, last_login, is_active, roles
-             FROM users WHERE $1 = ANY(roles)",
-            role
+             FROM users WHERE $1 = ANY(roles)"
         )
+        .bind(role)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -138,13 +136,12 @@ impl UserRepository for PostgresUserRepository {
         let limit = limit.unwrap_or(100);
         let offset = offset.unwrap_or(0);
 
-        let result = sqlx::query_as!(
-            User,
+        let result = sqlx::query_as::<_, User>(
             "SELECT id, email, password_hash, name, created_at, last_login, is_active, roles
-             FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            limit,
-            offset
+             FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2"
         )
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -158,13 +155,13 @@ impl UserRepository for PostgresUserRepository {
         name: Option<String>,
         avatar_url: Option<String>,
     ) -> Result<(), RepositoryError> {
-        sqlx::query!(
+        sqlx::query(
             "UPDATE users SET name = COALESCE($1, name), avatar_url = COALESCE($2, avatar_url), updated_at = NOW()
-             WHERE id = $3",
-            name,
-            avatar_url,
-            id.as_str()
+             WHERE id = $3"
         )
+        .bind(name.as_ref())
+        .bind(avatar_url.as_ref())
+        .bind(id.as_str())
         .execute(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -173,11 +170,11 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn set_active_status(&self, id: &UserId, is_active: bool) -> Result<(), RepositoryError> {
-        sqlx::query!(
-            "UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2",
-            is_active,
-            id.as_str()
+        sqlx::query(
+            "UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2"
         )
+        .bind(is_active)
+        .bind(id.as_str())
         .execute(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -186,11 +183,11 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn add_role(&self, id: &UserId, role: String) -> Result<(), RepositoryError> {
-        sqlx::query!(
-            "UPDATE users SET roles = array_append(roles, $1), updated_at = NOW() WHERE id = $2",
-            role,
-            id.as_str()
+        sqlx::query(
+            "UPDATE users SET roles = array_append(roles, $1), updated_at = NOW() WHERE id = $2"
         )
+        .bind(role)
+        .bind(id.as_str())
         .execute(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -199,11 +196,11 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn remove_role(&self, id: &UserId, role: &str) -> Result<(), RepositoryError> {
-        sqlx::query!(
-            "UPDATE users SET roles = array_remove(roles, $1), updated_at = NOW() WHERE id = $2",
-            role,
-            id.as_str()
+        sqlx::query(
+            "UPDATE users SET roles = array_remove(roles, $1), updated_at = NOW() WHERE id = $2"
         )
+        .bind(role)
+        .bind(id.as_str())
         .execute(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -212,12 +209,12 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn count(&self) -> Result<i64, RepositoryError> {
-        let result = sqlx::query_scalar!("SELECT COUNT(*) FROM users")
+        let result = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| RepositoryError::Database(Box::new(e)))?;
 
-        Ok(result.unwrap_or(0))
+        Ok(result)
     }
 
     async fn find_created_between(
@@ -225,13 +222,12 @@ impl UserRepository for PostgresUserRepository {
         start: chrono::DateTime<chrono::Utc>,
         end: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<User>, RepositoryError> {
-        let result = sqlx::query_as!(
-            User,
+        let result = sqlx::query_as::<_, User>(
             "SELECT id, email, password_hash, name, created_at, last_login, is_active, roles
-             FROM users WHERE created_at BETWEEN $1 AND $2",
-            start,
-            end
+             FROM users WHERE created_at BETWEEN $1 AND $2"
         )
+        .bind(start)
+        .bind(end)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;
@@ -243,12 +239,11 @@ impl UserRepository for PostgresUserRepository {
         &self,
         since: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<User>, RepositoryError> {
-        let result = sqlx::query_as!(
-            User,
+        let result = sqlx::query_as::<_, User>(
             "SELECT id, email, password_hash, name, created_at, last_login, is_active, roles
-             FROM users WHERE last_login IS NULL OR last_login < $1",
-            since
+             FROM users WHERE last_login IS NULL OR last_login < $1"
         )
+        .bind(since)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| RepositoryError::Database(Box::new(e)))?;

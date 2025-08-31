@@ -1,11 +1,12 @@
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
-use opentelemetry::{global, KeyValue};
-#[allow(deprecated)]
-use opentelemetry_jaeger::new_agent_pipeline;
-use opentelemetry_sdk::{
-    trace::{self, RandomIdGenerator, Sampler},
-    Resource,
-};
+// Temporarily disabled OpenTelemetry imports
+// use opentelemetry::{global, KeyValue};
+// #[allow(deprecated)]
+// use opentelemetry_jaeger::new_agent_pipeline;
+// use opentelemetry_sdk::{
+//     trace::{self, RandomIdGenerator, Sampler},
+//     Resource,
+// };
 use rand::RngCore;
 use std::collections::HashMap;
 use std::env;

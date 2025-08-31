@@ -3,7 +3,7 @@
 //! This module contains all types related to security playbooks,
 //! workflow definitions, and execution parameters.
 
-use crate::security_monitoring::{AlertSeverity, SecurityAlertType};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlertType};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

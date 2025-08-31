@@ -112,14 +112,14 @@ pub enum MfaError {
 
     #[error("Conflict: {message}")]
     Conflict { message: String },
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MfaErrorResponse {
     pub error: ErrorDetails,
     pub request_id: Option<String>,
     pub timestamp: u64,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorDetails {
@@ -130,7 +130,7 @@ pub struct ErrorDetails {
     pub retry_after_secs: Option<u64>,
     pub details: HashMap<String, serde_json::Value>,
     pub suggestions: Vec<String>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ErrorCategory {
@@ -142,7 +142,7 @@ pub enum ErrorCategory {
     Configuration,
     Service,
     Internal,
-}
+)
 
 impl MfaError {
     pub fn error_code(&self) -> &'static str {
@@ -177,8 +177,8 @@ impl MfaError {
             MfaError::BadRequest { .. } => "BAD_REQUEST",
             MfaError::Forbidden { .. } => "FORBIDDEN",
             MfaError::Conflict { .. } => "CONFLICT",
-        }
-    }
+        )
+    )
 
     pub fn category(&self) -> ErrorCategory {
         match self {
@@ -204,15 +204,15 @@ impl MfaError {
 
             MfaError::Configuration { .. } | MfaError::FeatureNotEnabled { .. } => {
                 ErrorCategory::Configuration
-            }
+            )
 
             MfaError::ServiceUnavailable { .. }
             | MfaError::ExternalServiceError { .. }
             | MfaError::Timeout { .. } => ErrorCategory::Service,
 
             _ => ErrorCategory::Internal,
-        }
-    }
+        )
+    )
 
     pub fn http_status_code(&self) -> StatusCode {
         match self {
@@ -233,7 +233,7 @@ impl MfaError {
 
             MfaError::RateLimit(_) | MfaError::RateLimitExceeded { .. } => {
                 StatusCode::TOO_MANY_REQUESTS
-            }
+            )
 
             MfaError::ReplayAttack | MfaError::SuspiciousActivity { .. } => StatusCode::FORBIDDEN,
 
@@ -242,8 +242,8 @@ impl MfaError {
             MfaError::Timeout { .. } => StatusCode::REQUEST_TIMEOUT,
 
             _ => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
+        )
+    )
 
     pub fn is_retryable(&self) -> bool {
         match self {
@@ -256,8 +256,8 @@ impl MfaError {
             MfaError::RateLimitExceeded { .. } => true, // Retryable after waiting
 
             _ => false,
-        }
-    }
+        )
+    )
 
     pub fn retry_after_secs(&self) -> Option<u64> {
         match self {
@@ -267,8 +267,8 @@ impl MfaError {
             MfaError::ServiceUnavailable { .. } => Some(60), // Default retry after 1 minute
             MfaError::Timeout { .. } => Some(30),            // Retry after 30 seconds
             _ => None,
-        }
-    }
+        )
+    )
 
     pub fn suggestions(&self) -> Vec<String> {
         match self {
@@ -300,8 +300,8 @@ impl MfaError {
                 "Contact your administrator if MFA should be enabled".to_string(),
             ],
             _ => vec![],
-        }
-    }
+        )
+    )
 
     pub fn additional_details(&self) -> HashMap<String, serde_json::Value> {
         let mut details = HashMap::new();
@@ -309,7 +309,7 @@ impl MfaError {
         match self {
             MfaError::InvalidInput { field, .. } => {
                 details.insert("field".to_string(), serde_json::Value::String(field.clone()));
-            }
+            )
             MfaError::RateLimitExceeded {
                 limit_type,
                 remaining_attempts,
@@ -323,25 +323,25 @@ impl MfaError {
                     "remaining_attempts".to_string(),
                     serde_json::Value::Number((*remaining_attempts).into()),
                 );
-            }
+            )
             MfaError::UserNotFound { user_id } => {
                 details.insert(
                     "user_id".to_string(),
                     serde_json::Value::String(user_id.clone()),
                 );
-            }
+            )
             MfaError::ServiceUnavailable { service } => {
                 details.insert(
                     "service".to_string(),
                     serde_json::Value::String(service.clone()),
                 );
-            }
+            )
             _ => {}
-        }
+        )
 
         details
-    }
-}
+    )
+)
 
 impl IntoResponse for MfaError {
     fn into_response(self) -> Response {
@@ -385,11 +385,11 @@ impl IntoResponse for MfaError {
                 "Retry-After",
                 retry_after.to_string().parse().unwrap(),
             );
-        }
+        )
 
         response
-    }
-}
+    )
+)
 
 // Helper functions for creating common errors
 impl MfaError {
@@ -397,53 +397,53 @@ impl MfaError {
         MfaError::InvalidInput {
             field: field.to_string(),
             message: message.to_string(),
-        }
-    }
+        )
+    )
 
     pub fn missing_field(field: &str) -> Self {
         MfaError::MissingField {
             field: field.to_string(),
-        }
-    }
+        )
+    )
 
     pub fn user_not_found(user_id: &str) -> Self {
         MfaError::UserNotFound {
             user_id: user_id.to_string(),
-        }
-    }
+        )
+    )
 
     pub fn authentication_failed(reason: &str) -> Self {
         MfaError::AuthenticationFailed {
             reason: reason.to_string(),
-        }
-    }
+        )
+    )
 
     pub fn rate_limit_exceeded(limit_type: &str, retry_after_secs: u64, remaining: i64) -> Self {
         MfaError::RateLimitExceeded {
             limit_type: limit_type.to_string(),
             retry_after_secs,
             remaining_attempts: remaining,
-        }
-    }
+        )
+    )
 
     pub fn suspicious_activity(reason: &str) -> Self {
         MfaError::SuspiciousActivity {
             reason: reason.to_string(),
-        }
-    }
+        )
+    )
 
     pub fn service_unavailable(service: &str) -> Self {
         MfaError::ServiceUnavailable {
             service: service.to_string(),
-        }
-    }
+        )
+    )
 
     pub fn configuration_error(message: &str) -> Self {
         MfaError::Configuration {
             message: message.to_string(),
-        }
-    }
-}
+        )
+    )
+)
 
 // Result type alias for MFA operations
 pub type MfaResult<T> = Result<T, MfaError>;
@@ -464,7 +464,7 @@ mod tests {
         assert_eq!(rate_limit_error.http_status_code(), StatusCode::TOO_MANY_REQUESTS);
         assert!(rate_limit_error.is_retryable());
         assert_eq!(rate_limit_error.retry_after_secs(), Some(60));
-    }
+    )
 
     #[test]
     fn test_error_suggestions() {
@@ -476,7 +476,7 @@ mod tests {
         let rate_limit_error = MfaError::rate_limit_exceeded("verification", 60, 0);
         let suggestions = rate_limit_error.suggestions();
         assert!(suggestions.iter().any(|s| s.contains("Wait before")));
-    }
+    )
 
     #[test]
     fn test_error_details() {
@@ -497,7 +497,7 @@ mod tests {
             details.get("remaining_attempts"),
             Some(&serde_json::Value::Number(3.into()))
         );
-    }
+    )
 
     #[tokio::test]
     async fn test_into_response() {
@@ -507,5 +507,5 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         // In a real test, you'd deserialize the response body and check the structure
-    }
-}
+    )
+)

@@ -21,7 +21,7 @@ pub enum BulkOperationMethod {
     Put,
     Patch,
     Delete,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BulkOperation {
@@ -33,7 +33,7 @@ pub struct BulkOperation {
     pub data: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BulkRequest {
@@ -42,7 +42,7 @@ pub struct BulkRequest {
     pub operations: Vec<BulkOperation>,
     #[serde(rename = "failOnErrors", skip_serializing_if = "Option::is_none")]
     pub fail_on_errors: Option<u32>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BulkOperationResponse {
@@ -56,14 +56,14 @@ pub struct BulkOperationResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response: Option<serde_json::Value>,
     pub status: String,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BulkResponse {
     pub schemas: Vec<String>,
     #[serde(rename = "Operations")]
     pub operations: Vec<BulkOperationResponse>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScimError {
@@ -72,7 +72,7 @@ pub struct ScimError {
     pub status: String,
     #[serde(rename = "scimType", skip_serializing_if = "Option::is_none")]
     pub scim_type: Option<String>,
-}
+)
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -82,7 +82,7 @@ pub fn router() -> Router<AppState> {
         .route("/scim/v2/Groups/:id", get(get_group))
     // Note: Bulk operations are complex and will be refactored separately.
     // .route("/scim/v2/Bulk", post(bulk_operations))
-}
+)
 
 // Note: scim_basic_auth middleware is removed.
 // SCIM endpoints should be protected by the main admin_auth_middleware.
@@ -93,7 +93,7 @@ async fn create_user(
 ) -> Result<Json<ScimUser>, crate::shared::error::AppError> {
     let created_user = state.store.create_user(&user).await?;
     Ok(Json(created_user))
-}
+)
 
 #[derive(Debug, Deserialize)]
 struct ListParams {
@@ -103,7 +103,7 @@ struct ListParams {
     count: Option<usize>,
     #[serde(default)]
     filter: Option<String>,
-}
+)
 
 #[derive(Debug, Serialize)]
 struct ListResponse<T> {
@@ -117,7 +117,7 @@ struct ListResponse<T> {
     items_per_page: usize,
     #[serde(rename = "Resources")]
     resources: Vec<T>,
-}
+)
 
 // ... (filter parsing logic remains the same)
 
@@ -147,7 +147,7 @@ async fn list_users(
         items_per_page: slice.len(),
         resources: slice,
     }))
-}
+)
 
 async fn get_user(
     State(state): State<AppState>,
@@ -155,7 +155,7 @@ async fn get_user(
 ) -> Result<Json<Option<ScimUser>>, crate::shared::error::AppError> {
     let user = state.store.get_user(&id).await?;
     Ok(Json(user))
-}
+)
 
 async fn create_group(
     State(state): State<AppState>,
@@ -163,7 +163,7 @@ async fn create_group(
 ) -> Result<Json<ScimGroup>, crate::shared::error::AppError> {
     let created_group = state.store.create_group(&group).await?;
     Ok(Json(created_group))
-}
+)
 
 // ... (filter parsing logic for groups remains the same)
 
@@ -191,7 +191,7 @@ async fn list_groups(
         items_per_page: slice.len(),
         resources: slice,
     }))
-}
+)
 
 async fn get_group(
     State(state): State<AppState>,
@@ -199,7 +199,7 @@ async fn get_group(
 ) -> Result<Json<Option<ScimGroup>>, crate::shared::error::AppError> {
     let group = state.store.get_group(&id).await?;
     Ok(Json(group))
-}
+)
 
 // Note: Bulk operations implementation is removed for this refactoring pass.
 // It was tightly coupled to the old ScimStore and needs a more careful redesign
@@ -229,12 +229,12 @@ async fn bulk_operations(
         return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Invalid bulk request schema".to_string(),
         });
-    }
+    )
     if request.operations.len() > MAX_BULK_OPERATIONS {
         return Err(crate::shared::error::AppError::InvalidRequest {
             reason: "Too many operations".to_string(),
         });
-    }
+    )
 
     let mut response_operations = Vec::new();
     let fail_on_errors = request.fail_on_errors.unwrap_or(0);
@@ -246,16 +246,16 @@ async fn bulk_operations(
         match result {
             Ok(response_op) => {
                 response_operations.push(response_op);
-            }
+            )
             Err(error_response) => {
                 error_count += 1;
                 response_operations.push(error_response);
                 if fail_on_errors > 0 && error_count >= fail_on_errors {
                     break;
-                }
-            }
-        }
-    }
+                )
+            )
+        )
+    )
 
     let response = BulkResponse {
         schemas: vec![BULK_RESPONSE_SCHEMA.to_string()],
@@ -263,7 +263,7 @@ async fn bulk_operations(
     };
 
     Ok(Json(response))
-}
+)
 
 #[allow(dead_code)]
 async fn process_single_operation(
@@ -276,26 +276,26 @@ async fn process_single_operation(
     match (operation.method.clone(), path_parts.as_slice()) {
         (BulkOperationMethod::Post, [_, "scim", "v2", "Users"]) => {
             create_user_operation(state, operation, data).await
-        }
+        )
         (BulkOperationMethod::Put, [_, "scim", "v2", "Users", user_id]) => {
             update_user_operation(state, operation, data, user_id).await
-        }
+        )
         (BulkOperationMethod::Delete, [_, "scim", "v2", "Users", user_id]) => {
             delete_user_operation(state, operation, user_id).await
-        }
+        )
         (BulkOperationMethod::Post, [_, "scim", "v2", "Groups"]) => {
             create_group_operation(state, operation, data).await
-        }
+        )
         (BulkOperationMethod::Patch, [_, "scim", "v2", "Users", user_id]) => {
             patch_user_operation(state, operation, data, user_id).await
-        }
+        )
         _ => Err(create_error_response(
             operation.method.clone(),
             "404",
             "Operation not supported or path is invalid",
         )),
-    }
-}
+    )
+)
 
 /// Handle user creation operation
 async fn create_user_operation(
@@ -318,7 +318,7 @@ async fn create_user_operation(
         Some(format!("/scim/v2/Users/{}", created_user.id)),
         Some(serde_json::to_value(created_user).unwrap()),
     ))
-}
+)
 
 /// Handle user update operation
 async fn update_user_operation(
@@ -343,7 +343,7 @@ async fn update_user_operation(
         Some(format!("/scim/v2/Users/{}", updated_user.id)),
         Some(serde_json::to_value(updated_user).unwrap()),
     ))
-}
+)
 
 /// Handle user deletion operation
 async fn delete_user_operation(
@@ -362,7 +362,7 @@ async fn delete_user_operation(
         None,
         None,
     ))
-}
+)
 
 /// Handle group creation operation
 async fn create_group_operation(
@@ -385,7 +385,7 @@ async fn create_group_operation(
         Some(format!("/scim/v2/Groups/{}", created_group.id)),
         Some(serde_json::to_value(created_group).unwrap()),
     ))
-}
+)
 
 /// Handle user patch operation (simplified)
 async fn patch_user_operation(
@@ -407,7 +407,7 @@ async fn patch_user_operation(
 
     if let Some(active) = patch_data.get("active").and_then(|v| v.as_bool()) {
         user.active = active;
-    }
+    )
 
     let updated_user = state.store.update_user(&user).await.map_err(|e| {
         create_error_response(operation.method.clone(), "500", &e.to_string())
@@ -420,7 +420,7 @@ async fn patch_user_operation(
         Some(format!("/scim/v2/Users/{}", updated_user.id)),
         Some(serde_json::to_value(updated_user).unwrap()),
     ))
-}
+)
 
 /// Helper to create successful bulk operation responses
 fn create_success_response(
@@ -437,8 +437,8 @@ fn create_success_response(
         location,
         response,
         version: None,
-    }
-}
+    )
+)
 
 #[allow(dead_code)]
 fn create_error_response(
@@ -460,5 +460,5 @@ fn create_error_response(
         location: None,
         response: Some(serde_json::to_value(&error).unwrap()),
         status: status.to_string(),
-    }
-}
+    )
+)

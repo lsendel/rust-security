@@ -16,7 +16,7 @@ pub struct SensitiveTestData {
     pub credit_cards: Vec<&'static str>,
     pub ip_addresses: Vec<&'static str>,
     pub uuids: Vec<&'static str>,
-}
+)
 
 impl SensitiveTestData {
     pub fn new() -> Self {
@@ -61,8 +61,8 @@ impl SensitiveTestData {
                 "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
                 "f47ac10b-58cc-4372-a567-0e02b2c3d479",
             ],
-        }
-    }
+        )
+    )
 
     /// Get all sensitive data as a single vector for testing
     pub fn all_sensitive_data(&self) -> Vec<&'static str> {
@@ -76,8 +76,8 @@ impl SensitiveTestData {
         all_data.extend(&self.ip_addresses);
         all_data.extend(&self.uuids);
         all_data
-    }
-}
+    )
+)
 
 /// Audit trail for redaction events
 #[derive(Debug, Clone)]
@@ -87,7 +87,7 @@ pub struct RedactionAudit {
     pub sensitive_types_found: Vec<SensitiveDataType>,
     pub redaction_count: usize,
     pub classification_level: DataClassification,
-}
+)
 
 impl RedactionAudit {
     pub fn new(original: &str, redacted: &str, redactor: &PiiSpiRedactor) -> Self {
@@ -107,8 +107,8 @@ impl RedactionAudit {
             sensitive_types_found: sensitive_types,
             redaction_count,
             classification_level,
-        }
-    }
+        )
+    )
 
     /// Check if redaction was applied when it should have been
     pub fn is_compliant(&self) -> bool {
@@ -119,8 +119,8 @@ impl RedactionAudit {
             // Sensitive data found, redaction should have occurred
             self.original_content != self.redacted_content
                 && !self.contains_original_sensitive_data()
-        }
-    }
+        )
+    )
 
     /// Check if the redacted content still contains original sensitive data
     pub fn contains_original_sensitive_data(&self) -> bool {
@@ -128,7 +128,7 @@ impl RedactionAudit {
         !redactor
             .contains_sensitive_data(&self.redacted_content)
             .is_empty()
-    }
+    )
 
     /// Get compliance score (0.0 to 1.0)
     pub fn compliance_score(&self) -> f64 {
@@ -143,14 +143,14 @@ impl RedactionAudit {
             } else {
                 let redacted_count = original_sensitive.len() - remaining_sensitive.len();
                 redacted_count as f64 / original_sensitive.len() as f64
-            }
-        }
-    }
-}
+            )
+        )
+    )
+)
 
 fn redactor() -> PiiSpiRedactor {
     PiiSpiRedactor::new()
-}
+)
 
 /// Comprehensive PII/SPI redaction compliance tests
 #[cfg(test)]
@@ -176,15 +176,15 @@ mod tests {
 
             let audit = RedactionAudit::new(&error_string, &redacted, &redactor);
             audit_results.push(audit);
-        }
+        )
 
         // Check compliance for all audit results
         let mut failed_audits = Vec::new();
         for audit in &audit_results {
             if !audit.is_compliant() {
                 failed_audits.push(audit);
-            }
-        }
+            )
+        )
 
         if !failed_audits.is_empty() {
             println!("\n=== PII REDACTION COMPLIANCE FAILURES ===");
@@ -194,15 +194,15 @@ mod tests {
                 println!("Redacted: {}", failure.redacted_content);
                 println!("Compliance Score: {:.2}", failure.compliance_score());
                 println!("---");
-            }
-        }
+            )
+        )
 
         assert!(
             failed_audits.is_empty(),
             "{} error messages failed PII redaction compliance",
             failed_audits.len()
         );
-    }
+    )
 
     #[test]
     fn test_security_event_redaction_compliance() {
@@ -228,7 +228,7 @@ mod tests {
 
             let audit = RedactionAudit::new(&original, &event.description, &redactor);
             audit_results.push(audit);
-        }
+        )
 
         // Check compliance
         let failed_count = audit_results
@@ -241,7 +241,7 @@ mod tests {
             "{} security events failed PII redaction compliance",
             failed_count
         );
-    }
+    )
 
     #[test]
     fn test_log_message_redaction_compliance() {
@@ -260,8 +260,8 @@ mod tests {
                 log_message,
                 redacted
             );
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_no_false_positives_in_redaction() {
@@ -282,8 +282,8 @@ mod tests {
                 "False positive: safe content was incorrectly redacted: {} -> {}",
                 content, redacted
             );
-        }
-    }
+        )
+    )
 
     #[test]
     fn test_mixed_content_redaction() {
@@ -314,9 +314,9 @@ mod tests {
                     "No redaction occurred despite sensitive data: {}",
                     content
                 );
-            }
-        }
-    }
+            )
+        )
+    )
 
     #[test]
     fn test_classification_levels() {
@@ -342,9 +342,9 @@ mod tests {
                     "Classification level mismatch for: {}",
                     content
                 );
-            }
-        }
-    }
+            )
+        )
+    )
 
     #[test]
     fn test_comprehensive_pattern_coverage() {
@@ -379,9 +379,9 @@ mod tests {
                     "Failed to redact sensitive data in category '{}': {}",
                     category_name, item
                 );
-            }
-        }
-    }
+            )
+        )
+    )
 
     /// Generate a comprehensive compliance report
     #[test]
@@ -396,7 +396,7 @@ mod tests {
             let redacted_log = redactor.redact_log_message(item);
 
             report.add_test_result(item, &redacted_error, &redacted_log, &redactor);
-        }
+        )
 
         // Print report for visibility
         println!("\n{}", report.generate_report());
@@ -407,27 +407,27 @@ mod tests {
             "Overall PII/SPI compliance below 95%: {:.2}%",
             report.overall_compliance() * 100.0
         );
-    }
-}
+    )
+)
 
 /// Compliance reporting structure
 pub struct ComplianceReport {
     pub test_results: Vec<ComplianceTestResult>,
-}
+)
 
 pub struct ComplianceTestResult {
     pub test_input: String,
     pub error_redaction: RedactionAudit,
     pub log_redaction: RedactionAudit,
     pub overall_compliance: f64,
-}
+)
 
 impl ComplianceReport {
     pub fn new() -> Self {
         Self {
             test_results: Vec::new(),
-        }
-    }
+        )
+    )
 
     pub fn add_test_result(
         &mut self,
@@ -448,17 +448,17 @@ impl ComplianceReport {
             log_redaction: log_audit,
             overall_compliance,
         });
-    }
+    )
 
     pub fn overall_compliance(&self) -> f64 {
         if self.test_results.is_empty() {
             return 1.0;
-        }
+        )
 
         let total_compliance: f64 = self.test_results.iter().map(|r| r.overall_compliance).sum();
 
         total_compliance / self.test_results.len() as f64
-    }
+    )
 
     pub fn generate_report(&self) -> String {
         let mut report = String::new();
@@ -484,11 +484,11 @@ impl ComplianceReport {
                     test.test_input,
                     test.overall_compliance * 100.0
                 ));
-            }
+            )
             report.push_str("\n");
         } else {
             report.push_str("✅ ALL TESTS PASSED - 100% COMPLIANCE\n\n");
-        }
+        )
 
         // Classification breakdown
         let mut classification_counts = std::collections::HashMap::new();
@@ -496,14 +496,14 @@ impl ComplianceReport {
             for data_type in &operation_result.error_redaction.sensitive_types_found {
                 let classification = data_type.classification();
                 *classification_counts.entry(classification).or_insert(0) += 1;
-            }
-        }
+            )
+        )
 
         report.push_str("DATA CLASSIFICATION BREAKDOWN:\n");
         for (classification, count) in classification_counts {
             report.push_str(&format!("- {:?}: {} items\n", classification, count));
-        }
+        )
 
         report
-    }
-}
+    )
+)

@@ -1,11 +1,65 @@
 //! Security Logging Module - MVP Version
 //!
 //! Simple security event logging for basic authentication monitoring.
+//!
+//! # Security Considerations
+//!
+//! This module provides secure logging practices:
+//! - Structured logging with tracing
+//! - Sensitive data redaction
+//! - PII protection
+//! - Audit trail generation
 
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::LazyLock;
+
+/// Security patterns for detecting sensitive data
+static SENSITIVE_DATA_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r"(?i)password|passwd|pwd").unwrap(),
+        Regex::new(r"(?i)token|bearer|jwt").unwrap(),
+        Regex::new(r"(?i)secret|key|apikey").unwrap(),
+        Regex::new(r"(?i)ssn|social|credit").unwrap(),
+        Regex::new(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b").unwrap(), // Credit card pattern
+        Regex::new(r"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b").unwrap(),           // SSN pattern
+    ]
+});
+
+/// Security guardrail for logging sensitive data
+pub struct SecurityLoggingGuard;
+
+impl SecurityLoggingGuard {
+    /// Check if a string contains potentially sensitive data
+    pub fn contains_sensitive_data(text: &str) -> bool {
+        SENSITIVE_DATA_PATTERNS
+            .iter()
+            .any(|pattern| pattern.is_match(text))
+    }
+
+    /// Redact sensitive data from a string
+    pub fn redact_sensitive_data(text: &str) -> String {
+        let mut result = text.to_string();
+        for pattern in SENSITIVE_DATA_PATTERNS.iter() {
+            result = pattern.replace_all(&result, "[REDACTED]").to_string();
+        }
+        result
+    }
+
+    /// Validate that a log message is safe to log
+    pub fn validate_log_safety(text: &str) -> Result<(), String> {
+        if Self::contains_sensitive_data(text) {
+            return Err(format!(
+                "Log message contains potentially sensitive data: {}",
+                Self::redact_sensitive_data(text)
+            ));
+        }
+        Ok(())
+    }
+}
 
 /// Basic security event severity levels
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +98,7 @@ pub enum SecurityEventType {
     RequestSignatureFailure,
     WorkflowTriggered,
     WorkflowCompleted,
+    KeyManagement,
 }
 
 /// Simple security event structure
@@ -307,13 +362,24 @@ impl SecurityLogger {
 
     pub fn log_event(&self, event: SecurityEvent) {
         if self.config.enabled {
+            // Apply security guardrails before logging
+            let safe_description = SecurityLoggingGuard::redact_sensitive_data(&event.description);
+            let safe_source = SecurityLoggingGuard::redact_sensitive_data(&event.source);
+
+            // Validate log safety in debug mode
+            #[cfg(debug_assertions)]
+            if let Err(e) = SecurityLoggingGuard::validate_log_safety(&safe_description) {
+                tracing::warn!("Security logging guardrail triggered: {}", e);
+            }
+
             tracing::info!(
                 event_type = ?event.event_type,
                 severity = ?event.severity,
-                source = event.source,
-                description = event.description,
+                source = safe_source,
+                description = safe_description,
                 ip_address = event.ip_address,
                 user_id = event.user_id,
+                correlation_id = event.correlation_id,
                 "Security event logged"
             );
         }
@@ -323,6 +389,42 @@ impl SecurityLogger {
     pub fn log_event_static(event: &SecurityEvent) {
         let logger = Self::default();
         logger.log_event(event.clone());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sensitive_data_detection() {
+        assert!(SecurityLoggingGuard::contains_sensitive_data(
+            "User password is: secret123"
+        ));
+        assert!(SecurityLoggingGuard::contains_sensitive_data(
+            "Token: Bearer abc123"
+        ));
+        assert!(SecurityLoggingGuard::contains_sensitive_data(
+            "API Key: sk-123456"
+        ));
+        assert!(!SecurityLoggingGuard::contains_sensitive_data(
+            "Normal log message"
+        ));
+    }
+
+    #[test]
+    fn test_sensitive_data_redaction() {
+        let input = "User password is: secret123 and token is: Bearer abc123";
+        let redacted = SecurityLoggingGuard::redact_sensitive_data(input);
+        assert!(!redacted.contains("secret123"));
+        assert!(!redacted.contains("Bearer"));
+        assert!(redacted.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_log_validation() {
+        assert!(SecurityLoggingGuard::validate_log_safety("Normal message").is_ok());
+        assert!(SecurityLoggingGuard::validate_log_safety("Password: secret123").is_err());
     }
 }
 

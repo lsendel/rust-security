@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
     use tokio_test;
 
     #[tokio::test]
@@ -44,9 +44,9 @@ notifications:
         write!(config_file, "{}", config_content).unwrap();
 
         // Test JSON output format
-        let _result = collect_metrics_json(config_file.path().to_str().unwrap()).await;
+        let result = collect_metrics_json(config_file.path().to_str().unwrap()).await;
         assert!(result.is_ok());
-        
+
         let json_str = result.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert!(parsed.is_object());
@@ -81,9 +81,9 @@ notifications:
 "#;
         write!(config_file, "{}", config_content).unwrap();
 
-        let _result = collect_metrics_prometheus(config_file.path().to_str().unwrap()).await;
+        let result = collect_metrics_prometheus(config_file.path().to_str().unwrap()).await;
         assert!(result.is_ok());
-        
+
         let prometheus_output = result.unwrap();
         assert!(prometheus_output.contains("# HELP"));
         assert!(prometheus_output.contains("# TYPE"));
@@ -116,9 +116,9 @@ notifications:
 "#;
         write!(config_file, "{}", config_content).unwrap();
 
-        let _result = collect_metrics_csv(config_file.path().to_str().unwrap()).await;
+        let result = collect_metrics_csv(config_file.path().to_str().unwrap()).await;
         assert!(result.is_ok());
-        
+
         let csv_output = result.unwrap();
         assert!(csv_output.contains("metric_name,value,threshold,status,description"));
     }
@@ -147,8 +147,9 @@ notifications:
   teams_webhook: ~
   custom_webhooks: []
 "#;
-        
-        let config: compliance_tools::ComplianceConfig = serde_yaml::from_str(yaml_content).unwrap();
+
+        let config: compliance_tools::ComplianceConfig =
+            serde_yaml::from_str(yaml_content).unwrap();
         assert_eq!(config.organization.name, "Test Org");
         assert_eq!(config.organization.domain, "test.com");
         assert_eq!(config.organization.assessment_period_days, 30);

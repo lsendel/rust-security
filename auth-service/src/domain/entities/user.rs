@@ -127,11 +127,35 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
+    fn create_test_password_hash() -> PasswordHash {
+        use argon2::{Argon2, Params};
+        use rand::Rng;
+        use base64::Engine;
+
+        let mut salt = [0u8; 32];
+        rand::thread_rng().fill(&mut salt);
+
+        let argon2 = Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::V0x13,
+            Params::new(65536, 3, 4, Some(32)).unwrap(),
+        );
+
+        let mut hash = [0u8; 32];
+        argon2.hash_password_into(b"test_password_123", &salt, &mut hash).unwrap();
+
+        let salt_b64 = base64::engine::general_purpose::STANDARD.encode(salt);
+        let hash_b64 = base64::engine::general_purpose::STANDARD.encode(hash);
+        let hash_str = format!("$argon2id$v=19$m=65536,t=3,p=4${}${}", salt_b64, hash_b64);
+
+        PasswordHash::new(hash_str).unwrap()
+    }
+
     #[test]
     fn test_user_creation() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let user = User::new(user_id.clone(), email.clone(), password_hash.clone(), Some("Test User".to_string()));
 
@@ -148,7 +172,7 @@ mod tests {
     fn test_user_role_management() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 
@@ -171,7 +195,7 @@ mod tests {
     fn test_user_activation() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 
@@ -188,7 +212,7 @@ mod tests {
     fn test_email_verification() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 
@@ -203,7 +227,7 @@ mod tests {
     fn test_password_reset_token() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 
@@ -224,7 +248,7 @@ mod tests {
     fn test_expired_password_reset_token() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 
@@ -238,7 +262,7 @@ mod tests {
     fn test_profile_update() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 
@@ -260,7 +284,7 @@ mod tests {
     fn test_user_last_login() {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash = create_test_password_hash();
 
         let mut user = User::new(user_id, email, password_hash, None);
 

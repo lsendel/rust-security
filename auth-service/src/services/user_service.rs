@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::domain::entities::User;
-use crate::domain::repositories::UserRepository;
+use crate::domain::repositories::{UserRepository, DynUserRepository};
 use crate::domain::value_objects::{Email, PasswordHash, UserId};
 use crate::shared::crypto::{CryptoService, CryptoServiceTrait};
 
@@ -67,14 +67,14 @@ pub trait UserServiceTrait: Send + Sync {
 }
 
 /// User service implementation
-pub struct UserService<R: UserRepository> {
-    user_repo: Arc<R>,
+pub struct UserService {
+    user_repo: DynUserRepository,
     crypto_service: Arc<CryptoService>,
 }
 
-impl<R: UserRepository> UserService<R> {
+impl UserService {
     /// Create a new user service
-    pub fn new(user_repo: Arc<R>, crypto_service: Arc<CryptoService>) -> Self {
+    pub fn new(user_repo: DynUserRepository, crypto_service: Arc<CryptoService>) -> Self {
         Self {
             user_repo,
             crypto_service,
@@ -83,7 +83,7 @@ impl<R: UserRepository> UserService<R> {
 }
 
 #[async_trait]
-impl<R: UserRepository> UserServiceTrait for UserService<R> {
+impl UserServiceTrait for UserService {
     async fn register(&self, request: RegisterRequest) -> Result<UserResponse, UserError> {
         // Validate email
         let email = Email::new(request.email).map_err(|_| UserError::InvalidEmail)?;

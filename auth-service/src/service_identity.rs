@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::shared::error::AppError;
 // Security monitoring types are now part of the security_monitoring module
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 
 /// Identity type classification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -44,7 +44,7 @@ pub enum IdentityType {
         orchestrator: String,
         namespace: String,
     },
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Environment {
@@ -441,7 +441,7 @@ impl ServiceIdentityManager {
                 | IdentityType::ServiceAccount {
                     environment: Environment::Production,
                     ..
-                }
+                )
         )
     }
 }
@@ -512,11 +512,11 @@ impl PolicyEngine {
             PolicyCondition::RiskScoreThreshold(threshold) => identity.risk_score <= *threshold,
             PolicyCondition::ScopeRestriction(allowed) => {
                 request.requested_scopes.iter().all(|s| allowed.contains(s))
-            }
+            )
             PolicyCondition::IpWhitelist(ips) => ips.contains(&request.request_context.source_ip),
             PolicyCondition::RequireAttestation => {
                 request.request_context.attestation_data.is_some()
-            }
+            )
             _ => true,
         })
     }

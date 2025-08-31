@@ -91,8 +91,7 @@ pub trait UserRepository: Send + Sync {
         -> Result<Vec<User>, RepositoryError>;
 }
 
-/// Type alias for user repository trait object
-pub type DynUserRepository = Box<dyn UserRepository>;
+// Type alias moved to mod.rs to avoid duplication
 
 #[cfg(test)]
 mod tests {

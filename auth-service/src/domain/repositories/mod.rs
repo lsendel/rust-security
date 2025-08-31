@@ -10,10 +10,10 @@ pub use session_repository::{SessionRepository, SessionRepositoryError};
 pub use token_repository::{TokenRepository, TokenRepositoryError};
 pub use user_repository::{RepositoryError, UserRepository};
 
-// Type aliases for convenience
-pub type DynUserRepository = Box<dyn UserRepository>;
-pub type DynSessionRepository = Box<dyn SessionRepository>;
-pub type DynTokenRepository = Box<dyn TokenRepository>;
+// Type aliases for convenience - use Arc to enable cloning
+pub type DynUserRepository = std::sync::Arc<dyn UserRepository>;
+pub type DynSessionRepository = std::sync::Arc<dyn SessionRepository>;
+pub type DynTokenRepository = std::sync::Arc<dyn TokenRepository>;
 
 // Re-export mock repositories for testing
 #[cfg(test)]

@@ -10,9 +10,11 @@ use tokio::sync::RwLock;
 use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
-use crate::shared::error::AppError;
+use crate::infrastructure::security::security_logging::{
+    SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity,
+};
 use crate::pii_protection::redact_log;
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::shared::error::AppError;
 
 /// Key lifecycle states
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -193,7 +195,10 @@ impl KeyManagementService {
 
     /// Generate a new key pair
     #[instrument(skip(self))]
-    pub async fn generate_new_key(&self, actor: &str) -> Result<String, crate::shared::error::AppError> {
+    pub async fn generate_new_key(
+        &self,
+        actor: &str,
+    ) -> Result<String, crate::shared::error::AppError> {
         let kid = format!("key-{}", Uuid::new_v4());
         let now = Self::current_timestamp();
 
@@ -246,10 +251,10 @@ impl KeyManagementService {
         .with_outcome("success".to_string())
         .with_reason("New key generated for JWT signing operations".to_string())
         .with_resource(kid.clone())
-        .with_detail("key_algorithm".to_string(), &self.config.algorithm)
-        .with_detail("key_size".to_string(), self.config.key_size);
+        .with_detail_string("key_algorithm".to_string(), format!("{:?}", self.config.algorithm))
+        .with_detail_string("key_size".to_string(), self.config.key_size.to_string());
 
-        SecurityLogger::log_event(&mut event);
+        crate::infrastructure::security::security_logging::log_event(&event);
 
         info!(kid = %kid, "Key generated successfully");
         Ok(kid)
@@ -257,7 +262,11 @@ impl KeyManagementService {
 
     /// Activate a key for signing
     #[instrument(skip(self))]
-    pub async fn activate_key(&self, kid: &str, actor: &str) -> Result<(), crate::shared::error::AppError> {
+    pub async fn activate_key(
+        &self,
+        kid: &str,
+        actor: &str,
+    ) -> Result<(), crate::shared::error::AppError> {
         info!(kid = %kid, "Activating key");
 
         let mut keys = self.keys.write().await;
@@ -307,9 +316,9 @@ impl KeyManagementService {
         .with_outcome("success".to_string())
         .with_reason("Key successfully activated as primary signing key".to_string())
         .with_resource(kid.to_string())
-        .with_detail("key_id".to_string(), kid);
+        .with_detail_string("key_id".to_string(), kid.to_string());
 
-        SecurityLogger::log_event(&mut event);
+        crate::infrastructure::security::security_logging::log_event(&event);
 
         info!(kid = %kid, "Key activated successfully");
         Ok(())
@@ -345,7 +354,12 @@ impl KeyManagementService {
 
     /// Revoke a key immediately
     #[instrument(skip(self))]
-    pub async fn revoke_key(&self, kid: &str, reason: &str, actor: &str) -> Result<(), crate::shared::error::AppError> {
+    pub async fn revoke_key(
+        &self,
+        kid: &str,
+        reason: &str,
+        actor: &str,
+    ) -> Result<(), crate::shared::error::AppError> {
         warn!(kid = %kid, reason = %reason, "Revoking key");
 
         let mut keys = self.keys.write().await;
@@ -394,13 +408,13 @@ impl KeyManagementService {
         })
         .with_reason(format!("Key revocation required: {}", redact_log(reason)))
         .with_resource(kid.to_string())
-        .with_detail("revocation_reason".to_string(), redact_log(reason))
-        .with_detail(
+        .with_detail_string("revocation_reason".to_string(), redact_log(reason))
+        .with_detail_string(
             "emergency_rotation_needed".to_string(),
-            needs_emergency_rotation,
+            needs_emergency_rotation.to_string(),
         );
 
-        SecurityLogger::log_event(&mut event);
+        crate::infrastructure::security::security_logging::log_event(&event);
 
         // Perform emergency rotation if needed
         if needs_emergency_rotation {
@@ -414,7 +428,10 @@ impl KeyManagementService {
 
     /// Emergency key rotation
     #[instrument(skip(self))]
-    pub async fn emergency_rotation(&self, actor: &str) -> Result<(), crate::shared::error::AppError> {
+    pub async fn emergency_rotation(
+        &self,
+        actor: &str,
+    ) -> Result<(), crate::shared::error::AppError> {
         error!("Performing emergency key rotation");
 
         // Generate and activate new key immediately
@@ -444,17 +461,19 @@ impl KeyManagementService {
         .with_outcome("success".to_string())
         .with_reason("Emergency rotation triggered due to active key compromise".to_string())
         .with_resource(new_kid.clone())
-        .with_detail("new_key_id".to_string(), &new_kid)
-        .with_detail("trigger".to_string(), "key_compromise");
+        .with_detail_string("new_key_id".to_string(), new_kid.clone())
+        .with_detail_string("trigger".to_string(), "key_compromise".to_string());
 
-        SecurityLogger::log_event(&mut event);
+        crate::infrastructure::security::security_logging::log_event(&event);
 
         error!(new_kid = %new_kid, "Emergency rotation completed");
         Ok(())
     }
 
     /// Get current signing key
-    pub async fn get_signing_key(&self) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
+    pub async fn get_signing_key(
+        &self,
+    ) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
         let active_key_id = self.active_key_id.read().await;
         let kid = active_key_id
             .as_ref()
@@ -489,7 +508,10 @@ impl KeyManagementService {
     }
 
     /// Get decoding key for verification
-    pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, crate::shared::error::AppError> {
+    pub async fn get_decoding_key(
+        &self,
+        kid: &str,
+    ) -> Result<DecodingKey, crate::shared::error::AppError> {
         let keys = self.keys.read().await;
         let key = keys
             .get(kid)
@@ -497,7 +519,9 @@ impl KeyManagementService {
 
         // Allow verification with any non-revoked key
         if key.state == KeyState::Revoked {
-            return Err(AppError::internal("Cannot use revoked key for verification"));
+            return Err(AppError::internal(
+                "Cannot use revoked key for verification",
+            ));
         }
 
         key.decoding_key
@@ -571,7 +595,7 @@ impl KeyManagementService {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing
         Err(crate::shared::error::AppError::KeyGenerationError {
-            source: "RSA key generation not implemented - use HMAC keys for development".into(),
+            message: "RSA key generation not implemented - use HMAC keys for development".to_string(),
         })
     }
 
@@ -673,7 +697,7 @@ impl KeyManagementService {
         if let Some(kid) = active_key_id.as_ref() {
             let keys = self.keys.read().await;
             if let Some(key) = keys.get(kid) {
-                operation_result.active_key_age = Some(Self::current_timestamp() - key.created_at);
+                result.active_key_age = Some(Self::current_timestamp() - key.created_at);
             }
         }
 

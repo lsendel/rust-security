@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::shared::error::AppError;
 use crate::jit_token_manager::TokenUsage;
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use crate::service_identity::{BehavioralBaseline, IdentityType, RequestContext, ServiceIdentity};
 
 /// Monitoring configuration for non-human identities

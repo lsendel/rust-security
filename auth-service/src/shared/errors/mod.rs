@@ -178,16 +178,16 @@ pub enum AuthError {
     // Generic errors (use sparingly)
     #[error("Internal server error")]
     InternalError { error_id: Uuid, context: String },
-}
+)
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for AuthError {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
         Self::InternalError {
             error_id: Uuid::new_v4(),
             context: err.to_string(),
-        }
-    }
-}
+        )
+    )
+)
 
 impl IntoResponse for AuthError {
     /// Convert `AuthError` into an HTTP response
@@ -213,8 +213,8 @@ impl IntoResponse for AuthError {
         if log_details {
             if let Self::InternalError { error_id, .. } = &self {
                 error_response.error_id = Some(error_id.to_string());
-            }
-        }
+            )
+        )
 
         // Add security headers
         let response_tuple = (status, Json(error_response));
@@ -231,8 +231,8 @@ impl IntoResponse for AuthError {
         );
 
         response
-    }
-}
+    )
+)
 
 impl AuthError {
     fn get_error_details(&self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -258,8 +258,8 @@ impl AuthError {
 
             // Default case for any other errors
             _ => self.handle_default_error(),
-        }
-    }
+        )
+    )
 
     /// Handle authentication errors
     fn handle_auth_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -295,8 +295,8 @@ impl AuthError {
                 false,
             ),
             _ => unreachable!("Non-auth error passed to handle_auth_error"),
-        }
-    }
+        )
+    )
 
     /// Check if error is rate limiting related
     const fn is_rate_limit_error(error: &Self) -> bool {
@@ -307,7 +307,7 @@ impl AuthError {
                 | Self::ClientRateLimitExceeded { .. }
                 | Self::TokenUsageLimitExceeded
         )
-    }
+    )
 
     /// Handle rate limiting errors
     fn handle_rate_limit_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -327,7 +327,7 @@ impl AuthError {
                     "Too many requests",
                     false,
                 )
-            }
+            )
             Self::ClientRateLimitExceeded { client_id } => {
                 warn!("Client rate limit exceeded for {client_id}");
                 (
@@ -336,7 +336,7 @@ impl AuthError {
                     "Too many requests",
                     false,
                 )
-            }
+            )
             Self::TokenUsageLimitExceeded => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "token_usage_limit_exceeded",
@@ -344,8 +344,8 @@ impl AuthError {
                 false,
             ),
             _ => unreachable!("Non-rate-limit error passed to handle_rate_limit_error"),
-        }
-    }
+        )
+    )
 
     /// Check if error is internal system error
     const fn is_internal_error(error: &Self) -> bool {
@@ -359,13 +359,13 @@ impl AuthError {
             #[cfg(feature = "enhanced-session-store")]
             {
                 matches!(error, Self::RedisConnectionError { .. })
-            }
+            )
             #[cfg(not(feature = "enhanced-session-store"))]
             {
                 false
-            }
-        }
-    }
+            )
+        )
+    )
 
     /// Handle internal system errors
     fn handle_internal_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -378,7 +378,7 @@ impl AuthError {
                     "An internal error occurred",
                     true,
                 )
-            }
+            )
             Self::TokenStoreError { operation, .. } => {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
@@ -393,7 +393,7 @@ impl AuthError {
                     "An internal error occurred",
                     true,
                 )
-            }
+            )
             #[cfg(feature = "enhanced-session-store")]
             Self::RedisConnectionError { .. } => {
                 let error_id = uuid::Uuid::new_v4();
@@ -408,7 +408,7 @@ impl AuthError {
                     "Service temporarily unavailable",
                     true,
                 )
-            }
+            )
             Self::ConfigurationError { field, .. } => {
                 let error_id = uuid::Uuid::new_v4();
                 tracing::error!(
@@ -423,7 +423,7 @@ impl AuthError {
                     "An internal error occurred",
                     true,
                 )
-            }
+            )
             Self::TokenGenerationFailed(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "token_generation_failed",
@@ -431,8 +431,8 @@ impl AuthError {
                 true,
             ),
             _ => unreachable!("Non-internal error passed to handle_internal_error"),
-        }
-    }
+        )
+    )
 
     /// Check if error is security/policy related
     const fn is_security_error(error: &Self) -> bool {
@@ -445,7 +445,7 @@ impl AuthError {
                 | Self::SuspiciousActivity { .. }
                 | Self::SecurityScanTriggered { .. }
         )
-    }
+    )
 
     /// Handle security/policy errors
     fn handle_security_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -458,20 +458,20 @@ impl AuthError {
                     "Security violation detected",
                     true, // Log security event
                 )
-            }
+            )
             _ => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "security_error",
                 "Security error occurred",
                 true,
             ),
-        }
-    }
+        )
+    )
 
     /// Check if error is token related
     const fn is_token_error(error: &Self) -> bool {
         matches!(error, Self::TokenRevoked)
-    }
+    )
 
     /// Handle token specific errors
     fn handle_token_error(error: &Self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -483,8 +483,8 @@ impl AuthError {
                 false,
             ),
             _ => unreachable!("Non-token error passed to handle_token_error"),
-        }
-    }
+        )
+    )
 
     /// Handle default/unhandled errors
     fn handle_default_error(&self) -> (StatusCode, &'static str, &'static str, bool) {
@@ -500,7 +500,7 @@ impl AuthError {
             "Request could not be processed",
             true,
         )
-    }
+    )
 
     /// Helper method to log internal errors with consistent format
     fn log_internal_error(error_id: &Uuid, context: &str, error: &Self) {
@@ -510,8 +510,8 @@ impl AuthError {
             error = %error,
             "Internal server error occurred"
         );
-    }
-}
+    )
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
@@ -521,7 +521,7 @@ pub struct ErrorResponse {
     pub error_id: Option<String>,
     pub correlation_id: Option<String>,
     pub details: Option<HashMap<String, serde_json::Value>>,
-}
+)
 
 impl ErrorResponse {
     #[must_use]
@@ -533,20 +533,20 @@ impl ErrorResponse {
             error_id: None,
             correlation_id: None,
             details: None,
-        }
-    }
+        )
+    )
 
     #[must_use]
     pub fn with_error_id(mut self, error_id: Uuid) -> Self {
         self.error_id = Some(error_id.to_string());
         self
-    }
+    )
 
     #[must_use]
     pub fn with_correlation_id(mut self, correlation_id: String) -> Self {
         self.correlation_id = Some(correlation_id);
         self
-    }
+    )
 
     /// Add a detail field to the error response
     ///
@@ -558,20 +558,20 @@ impl ErrorResponse {
     pub fn with_detail(mut self, key: &str, value: serde_json::Value) -> Self {
         if self.details.is_none() {
             self.details = Some(HashMap::new());
-        }
+        )
         self.details
             .as_mut()
             .unwrap()
             .insert(key.to_string(), value);
         self
-    }
+    )
 
     #[must_use]
     pub fn with_error_uri(mut self, uri: String) -> Self {
         self.error_uri = Some(uri);
         self
-    }
-}
+    )
+)
 
 // Error conversion implementations
 
@@ -579,20 +579,20 @@ impl ErrorResponse {
 impl From<redis::RedisError> for AuthError {
     fn from(err: redis::RedisError) -> Self {
         Self::RedisConnectionError { source: err }
-    }
-}
+    )
+)
 
 impl From<serde_json::Error> for AuthError {
     fn from(err: serde_json::Error) -> Self {
         Self::SerializationError { source: err }
-    }
-}
+    )
+)
 
 impl From<reqwest::Error> for AuthError {
     fn from(err: reqwest::Error) -> Self {
         Self::HttpClientError { source: err }
-    }
-}
+    )
+)
 
 impl From<jsonwebtoken::errors::Error> for AuthError {
     fn from(err: jsonwebtoken::errors::Error) -> Self {
@@ -609,9 +609,9 @@ impl From<jsonwebtoken::errors::Error> for AuthError {
             _ => Self::JwtVerificationError {
                 reason: "token validation failed".to_string(),
             },
-        }
-    }
-}
+        )
+    )
+)
 
 impl From<anyhow::Error> for AuthError {
     fn from(err: anyhow::Error) -> Self {
@@ -620,9 +620,9 @@ impl From<anyhow::Error> for AuthError {
         Self::InternalError {
             error_id,
             context: format!("Internal error: {err}"),
-        }
-    }
-}
+        )
+    )
+)
 
 // Utility functions for PII/SPI protection
 
@@ -635,8 +635,8 @@ fn redact_client_id(client_id: &str) -> String {
         client_id.to_string()
     } else {
         format!("{}****", &client_id[..4])
-    }
-}
+    )
+)
 
 /// Enhanced PII/SPI redaction for error contexts
 #[allow(dead_code)]
@@ -652,10 +652,10 @@ fn redact_error_with_context(input: &str, context: &str) -> String {
             redacted_length = redacted.len(),
             "Sensitive data redacted from error message"
         );
-    }
+    )
 
     redacted
-}
+)
 
 /// Create an internal error with proper context
 pub fn internal_error(context: &str) -> AuthError {
@@ -664,8 +664,8 @@ pub fn internal_error(context: &str) -> AuthError {
     AuthError::InternalError {
         error_id,
         context: context.to_string(),
-    }
-}
+    )
+)
 
 /// Create a validation error
 #[must_use]
@@ -673,8 +673,8 @@ pub fn validation_error(field: &str, reason: &str) -> AuthError {
     AuthError::ValidationError {
         field: field.to_string(),
         reason: reason.to_string(),
-    }
-}
+    )
+)
 
 /// Create a token store error
 #[must_use]
@@ -685,8 +685,8 @@ pub fn token_store_error(
     AuthError::TokenStoreError {
         operation: operation.to_string(),
         source,
-    }
-}
+    )
+)
 
 #[cfg(test)]
 mod tests {
@@ -698,13 +698,13 @@ mod tests {
         assert!(redact_log("555-123-4567").contains("****4567"));
         assert!(redact_log("eyJhbGciOiJIUzI1NiJ9.payload.signature").contains("JwtToken_REDACTED"));
         assert_eq!(redact_log("normal text"), "normal text");
-    }
+    )
 
     #[test]
     fn test_redact_client_id() {
         assert_eq!(redact_client_id("short"), "short");
         assert_eq!(redact_client_id("longerClientId"), "long****");
-    }
+    )
 
     #[test]
     fn test_error_response_building() {
@@ -718,5 +718,5 @@ mod tests {
         assert!(error.error_id.is_some());
         assert_eq!(error.correlation_id, Some("corr-123".to_string()));
         assert!(error.details.is_some());
-    }
-}
+    )
+)

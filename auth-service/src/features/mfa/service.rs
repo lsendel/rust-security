@@ -25,7 +25,7 @@ pub struct TotpRegistrationRequest {
     pub user_id: String,
     pub display_name: String,
     pub security_level: Option<SecurityLevel>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TotpRegistrationResponse {
@@ -33,14 +33,14 @@ pub struct TotpRegistrationResponse {
     pub otpauth_url: String,
     pub backup_codes: Vec<String>,
     pub qr_code_url: Option<String>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TotpVerificationRequest {
     pub user_id: String,
     pub code: String,
     pub remember_device: Option<bool>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TotpVerificationResponse {
@@ -49,27 +49,27 @@ pub struct TotpVerificationResponse {
     pub session_timeout: Option<u64>,
     pub requires_step_up: bool,
     pub backup_codes_remaining: Option<usize>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupCodeGenerationRequest {
     pub user_id: String,
     pub replace_existing: bool,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupCodeGenerationResponse {
     pub codes: Vec<String>,
     pub generated_at: u64,
     pub expires_at: Option<u64>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SecurityLevel {
     Standard,
     High,
     Maximum,
-}
+)
 
 impl SecurityLevel {
     fn to_totp_config(&self) -> EnhancedTotpConfig {
@@ -89,9 +89,9 @@ impl SecurityLevel {
                 0,
                 "auth-service".to_string(),
             ).unwrap(),
-        }
-    }
-}
+        )
+    )
+)
 
 pub struct HighPerformanceMfaService {
     storage: Arc<MfaStorage>,
@@ -104,7 +104,7 @@ pub struct HighPerformanceMfaService {
     cache: Arc<MfaCache>,
     metrics: Arc<MfaMetrics>,
     circuit_breaker: Arc<CircuitBreaker>,
-}
+)
 
 impl HighPerformanceMfaService {
     pub async fn new() -> MfaResult<Self> {
@@ -135,7 +135,7 @@ impl HighPerformanceMfaService {
             metrics,
             circuit_breaker,
         })
-    }
+    )
 
     pub async fn register_totp(&self, request: TotpRegistrationRequest, context: AuthContext) -> MfaResult<TotpRegistrationResponse> {
         // Start performance monitoring
@@ -153,7 +153,7 @@ impl HighPerformanceMfaService {
                 rate_limit_operation_result.retry_after_secs.unwrap_or(3600),
                 rate_limit_operation_result.remaining_attempts,
             ));
-        }
+        )
 
         // Adaptive security assessment
         let mfa_requirements = self.adaptive_policy.evaluate_mfa_requirements(&context).await?;
@@ -210,7 +210,7 @@ impl HighPerformanceMfaService {
             backup_codes,
             qr_code_url,
         })
-    }
+    )
 
     pub async fn verify_totp(&self, request: TotpVerificationRequest, context: AuthContext) -> MfaResult<TotpVerificationResponse> {
         // Start performance monitoring
@@ -221,7 +221,7 @@ impl HighPerformanceMfaService {
             return Err(MfaError::ServiceUnavailable {
                 service: "TOTP verification".to_string(),
             });
-        }
+        )
 
         // Rate limiting check (fast path)
         let rate_limit_result = self.rate_limiter.check_verification_attempts(&request.user_id).await?;
@@ -236,14 +236,14 @@ impl HighPerformanceMfaService {
                 requires_step_up: false,
                 backup_codes_remaining: None,
             });
-        }
+        )
 
         // Check if it's a backup code first (fast path)
         if let Ok(backup_code_result) = self.verify_backup_code(&request.user_id, &request.code).await {
             if backup_code_result {
                 return self.handle_successful_verification(&request, &context, true).await;
-            }
-        }
+            )
+        )
 
         // Replay protection check (Redis SET NX operation)
         if !self.replay_protection.check_and_mark_used(&request.user_id, &request.code, 90).await? {
@@ -257,7 +257,7 @@ impl HighPerformanceMfaService {
                 requires_step_up: false,
                 backup_codes_remaining: None,
             });
-        }
+        )
 
         // Get user's TOTP configuration and secret (with caching)
         let (secret, totp_config) = self.get_user_totp_data(&request.user_id).await?;
@@ -272,8 +272,8 @@ impl HighPerformanceMfaService {
             self.handle_successful_verification(&request, &context, false).await
         } else {
             self.handle_failed_verification(&request, &context).await
-        }
-    }
+        )
+    )
 
     async fn handle_successful_verification(
         &self,
@@ -303,7 +303,7 @@ impl HighPerformanceMfaService {
             MfaAuditEvent::backup_code_used(request.user_id.clone())
         } else {
             MfaAuditEvent::totp_verification_success(request.user_id.clone())
-        }
+        )
         .with_context("session_timeout".to_string(), serde_json::Value::Number(session_timeout.as_secs().into()))
         .with_context("requires_step_up".to_string(), serde_json::Value::Bool(requires_step_up));
 
@@ -313,7 +313,7 @@ impl HighPerformanceMfaService {
         self.metrics.increment_counter("totp_verifications_success_total");
         if is_backup_code {
             self.metrics.increment_counter("backup_codes_used_total");
-        }
+        )
 
         // Record successful authentication for future risk assessment
         self.record_successful_auth(&request.user_id, context).await?;
@@ -325,7 +325,7 @@ impl HighPerformanceMfaService {
             requires_step_up,
             backup_codes_remaining,
         })
-    }
+    )
 
     async fn handle_failed_verification(
         &self,
@@ -354,7 +354,7 @@ impl HighPerformanceMfaService {
             requires_step_up: false,
             backup_codes_remaining: None,
         })
-    }
+    )
 
     pub async fn generate_backup_codes_endpoint(&self, request: BackupCodeGenerationRequest) -> MfaResult<BackupCodeGenerationResponse> {
         let _timer = self.metrics.start_timer("backup_code_generation");
@@ -367,7 +367,7 @@ impl HighPerformanceMfaService {
                 rate_limit_operation_result.retry_after_secs.unwrap_or(3600),
                 rate_limit_operation_result.remaining_attempts,
             ));
-        }
+        )
 
         // Generate new backup codes
         let backup_codes = self.generate_backup_codes();
@@ -405,14 +405,14 @@ impl HighPerformanceMfaService {
             generated_at,
             expires_at,
         })
-    }
+    )
 
     // Helper methods
     async fn get_user_totp_data(&self, user_id: &str) -> MfaResult<(Vec<u8>, EnhancedTotpConfig)> {
         // Try cache first
         if let Some(cached_data) = self.cache.get_totp_data(user_id).await? {
             return Ok(cached_data);
-        }
+        )
 
         // Fetch from storage
         let secret = self.storage.get_decrypted_secret(user_id).await?;
@@ -432,7 +432,7 @@ impl HighPerformanceMfaService {
         self.cache.set_totp_data(user_id, &data).await?;
 
         Ok(data)
-    }
+    )
 
     async fn verify_backup_code(&self, user_id: &str, code: &str) -> MfaResult<bool> {
         let stored_codes = self.storage.get_backup_codes(user_id).await?;
@@ -444,11 +444,11 @@ impl HighPerformanceMfaService {
                 updated_codes.remove(stored_hash);
                 self.storage.update_backup_codes(user_id, updated_codes).await?;
                 return Ok(true);
-            }
-        }
+            )
+        )
 
         Ok(false)
-    }
+    )
 
     fn generate_backup_codes(&self) -> Vec<String> {
         let mut codes = Vec::new();
@@ -462,12 +462,12 @@ impl HighPerformanceMfaService {
                 OsRng.fill_bytes(&mut byte);
                 let char_index = byte[0] as usize % alphabet.len();
                 code.push(alphabet[char_index] as char);
-            }
+            )
             codes.push(code);
-        }
+        )
 
         codes
-    }
+    )
 
     fn hash_backup_code(&self, code: &str) -> String {
         use argon2::{Argon2, PasswordHasher};
@@ -478,7 +478,7 @@ impl HighPerformanceMfaService {
         argon2.hash_password(code.as_bytes(), &salt)
             .expect("Failed to hash backup code")
             .to_string()
-    }
+    )
 
     fn verify_backup_code_hash(&self, code: &str, hash: &str) -> bool {
         use argon2::{Argon2, PasswordHash, PasswordVerifier};
@@ -488,27 +488,27 @@ impl HighPerformanceMfaService {
             argon2.verify_password(code.as_bytes(), &parsed_hash).is_ok()
         } else {
             false
-        }
-    }
+        )
+    )
 
     async fn generate_qr_code_url(&self, otpauth_url: &str) -> MfaResult<Option<String>> {
         // In a real implementation, you might generate QR codes using a service
         // For now, return a URL that can be used by the frontend
         let encoded_url = urlencoding::encode(otpauth_url);
         Ok(Some(format!("https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={}", encoded_url)))
-    }
+    )
 
     async fn record_successful_auth(&self, user_id: &str, context: &AuthContext) -> MfaResult<()> {
         // Record authentication data for future risk assessment
         // This would update user patterns in Redis
         Ok(())
-    }
+    )
 
     async fn record_failed_auth(&self, user_id: &str, context: &AuthContext) -> MfaResult<()> {
         // Record failed authentication for risk assessment
         // This would update failure patterns and potentially trigger alerts
         Ok(())
-    }
+    )
 
     pub async fn health_check(&self) -> MfaResult<HealthStatus> {
         let storage_health = self.storage.health_check().await?;
@@ -521,8 +521,8 @@ impl HighPerformanceMfaService {
             circuit_breaker_closed: circuit_breaker_status.is_closed,
             total_users: storage_health.total_users,
         })
-    }
-}
+    )
+)
 
 // Supporting structures
 #[derive(Debug, Serialize)]
@@ -531,95 +531,95 @@ pub struct HealthStatus {
     pub cache_available: bool,
     pub circuit_breaker_closed: bool,
     pub total_users: usize,
-}
+)
 
 // Mock implementations for supporting components
 pub struct MfaCache {
     // In reality, this would use Redis or another caching layer
-}
+)
 
 impl MfaCache {
     pub async fn new() -> Self {
         Self {}
-    }
+    )
 
     pub async fn get_totp_data(&self, _user_id: &str) -> MfaResult<Option<(Vec<u8>, EnhancedTotpConfig)>> {
         // Mock implementation
         Ok(None)
-    }
+    )
 
     pub async fn set_totp_data(&self, _user_id: &str, _data: &(Vec<u8>, EnhancedTotpConfig)) -> MfaResult<()> {
         // Mock implementation
         Ok(())
-    }
+    )
 
     pub async fn health_check(&self) -> Result<(), ()> {
         Ok(())
-    }
-}
+    )
+)
 
 pub struct MfaMetrics {
     // In reality, this would integrate with Prometheus/metrics
-}
+)
 
 impl MfaMetrics {
     pub fn new() -> Self {
         Self {}
-    }
+    )
 
     pub fn start_timer(&self, _operation: &str) -> MetricsTimer {
         MetricsTimer::new()
-    }
+    )
 
     pub fn increment_counter(&self, _counter: &str) {
         // Mock implementation
-    }
-}
+    )
+)
 
 pub struct MetricsTimer {
     start_time: SystemTime,
-}
+)
 
 impl MetricsTimer {
     fn new() -> Self {
         Self {
             start_time: SystemTime::now(),
-        }
-    }
-}
+        )
+    )
+)
 
 impl Drop for MetricsTimer {
     fn drop(&mut self) {
         let _duration = self.start_time.elapsed().unwrap_or(Duration::from_secs(0));
         // Record timing metric
-    }
-}
+    )
+)
 
 pub struct CircuitBreaker {
     // Mock circuit breaker implementation
-}
+)
 
 impl CircuitBreaker {
     pub fn new() -> Self {
         Self {}
-    }
+    )
 
     pub async fn is_closed(&self, _service: &str) -> bool {
         true // Always closed for mock
-    }
+    )
 
     pub async fn record_failure(&self, _service: &str) {
         // Mock implementation
-    }
+    )
 
     pub async fn get_status(&self) -> CircuitBreakerStatus {
         CircuitBreakerStatus { is_closed: true }
-    }
-}
+    )
+)
 
 pub struct CircuitBreakerStatus {
     pub is_closed: bool,
-}
+)
 
 // Helper function to extract AuthContext from HTTP request
 pub fn extract_auth_context(headers: &HeaderMap, user_id: String) -> AuthContext {
@@ -654,8 +654,8 @@ pub fn extract_auth_context(headers: &HeaderMap, user_id: String) -> AuthContext
         account_age_days: 30,     // Would be calculated from user creation date
         is_privileged_user: false, // Would be determined from user roles
         current_time,
-    }
-}
+    )
+)
 
 #[cfg(test)]
 mod tests {
@@ -670,12 +670,12 @@ mod tests {
         for code in &codes {
             assert_eq!(code.len(), 10);
             assert!(code.chars().all(|c| c.is_ascii_alphanumeric()));
-        }
+        )
 
         // Ensure codes are unique
         let unique_codes: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(unique_codes.len(), codes.len());
-    }
+    )
 
     #[tokio::test]
     async fn test_backup_code_hashing() {
@@ -694,5 +694,5 @@ mod tests {
 
         // Wrong code should not verify
         assert!(!service.verify_backup_code_hash("WRONG12345", &hash1));
-    }
-}
+    )
+)

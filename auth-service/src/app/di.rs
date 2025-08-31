@@ -8,6 +8,8 @@ use crate::domain::repositories::{
     DynSessionRepository, DynTokenRepository, DynUserRepository, SessionRepository,
     TokenRepository, UserRepository,
 };
+use crate::infrastructure::monitoring::MetricsCollector;
+use crate::health_check::HealthChecker;
 use crate::services::{AuthService, AuthServiceTrait, TokenService, UserService};
 use crate::shared::crypto::CryptoService;
 
@@ -17,6 +19,8 @@ pub struct AppContainer {
     pub user_service: Arc<dyn crate::services::user_service::UserServiceTrait>,
     pub auth_service: Arc<dyn AuthServiceTrait>,
     pub token_service: Arc<dyn crate::services::token_service::TokenServiceTrait>,
+    pub metrics_collector: Arc<MetricsCollector>,
+    pub health_checker: Arc<HealthChecker>,
 }
 
 impl AppContainer {
@@ -36,10 +40,10 @@ impl AppContainer {
 
         // Create repositories
         let user_repo: DynUserRepository =
-            Box::new(postgres::PostgresUserRepository::new(pool.clone()));
+            Arc::new(postgres::PostgresUserRepository::new(Arc::new(pool.clone())));
         let session_repo: DynSessionRepository =
-            Box::new(postgres::PostgresSessionRepository::new(pool.clone()));
-        let token_repo: DynTokenRepository = Box::new(postgres::PostgresTokenRepository::new(pool));
+            Arc::new(postgres::PostgresSessionRepository::new(Arc::new(pool.clone())));
+        let token_repo: DynTokenRepository = Arc::new(postgres::PostgresTokenRepository::new(Arc::new(pool)));
 
         // Create crypto service
         let crypto_service = Arc::new(CryptoService::new(config.jwt_secret.clone()));
@@ -55,10 +59,17 @@ impl AppContainer {
 
         let token_service = Arc::new(TokenService::new(token_repo, session_repo, crypto_service));
 
+        // Create monitoring components
+        let metrics_collector = Arc::new(MetricsCollector::new()
+            .map_err(|e| AppError::Config(format!("Failed to create metrics collector: {e}")))?);
+        let health_checker = Arc::new(HealthChecker::new());
+
         Ok(Self {
             user_service,
             auth_service,
             token_service,
+            metrics_collector,
+            health_checker,
         })
     }
 
@@ -70,12 +81,13 @@ impl AppContainer {
         let redis_client = create_redis_client(&config.redis_url).await?;
 
         // Create repositories
+        let redis_client = Arc::new(redis_client);
         let user_repo: DynUserRepository =
-            Box::new(redis::RedisUserRepository::new(redis_client.clone()));
+            Arc::new(redis::RedisUserRepository::new(redis_client.clone()));
         let session_repo: DynSessionRepository =
-            Box::new(redis::RedisSessionRepository::new(redis_client.clone()));
+            Arc::new(redis::RedisSessionRepository::new(redis_client.clone()));
         let token_repo: DynTokenRepository =
-            Box::new(redis::RedisTokenRepository::new(redis_client));
+            Arc::new(redis::RedisTokenRepository::new(redis_client));
 
         // Create crypto service
         let crypto_service = Arc::new(CryptoService::new(config.jwt_secret.clone()));
@@ -91,10 +103,17 @@ impl AppContainer {
 
         let token_service = Arc::new(TokenService::new(token_repo, session_repo, crypto_service));
 
+        // Create monitoring components
+        let metrics_collector = Arc::new(MetricsCollector::new()
+            .map_err(|e| AppError::Config(format!("Failed to create metrics collector: {e}")))?);
+        let health_checker = Arc::new(HealthChecker::new());
+
         Ok(Self {
             user_service,
             auth_service,
             token_service,
+            metrics_collector,
+            health_checker,
         })
     }
 }

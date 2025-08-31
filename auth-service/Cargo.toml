@@ -78,7 +78,7 @@ serde_yaml = { workspace = true }
 # Common workspace dependency
 common = { path = "../common" }
 # SOAR optional dependencies
-sqlx = { workspace = true, features = ["postgres", "sqlite", "runtime-tokio-rustls", "chrono", "uuid", "json", "migrate", "macros"], default-features = false, optional = true }
+sqlx = { workspace = true, features = ["postgres", "sqlite", "runtime-tokio-rustls", "chrono", "uuid", "json", "migrate"], default-features = false, optional = true }
 handlebars = { workspace = true, optional = true }
 lettre = { workspace = true, optional = true }
 tera = { workspace = true, optional = true }
@@ -225,7 +225,7 @@ development = ["docs", "fast-build"]
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]
-tracing = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry", "opentelemetry_sdk"]
+tracing = []  # Temporarily disabled OpenTelemetry dependencies
 benchmarks = []  # Removed pprof2 due to security vulnerability
 simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
 performance = ["simd"]

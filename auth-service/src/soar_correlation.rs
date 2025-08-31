@@ -7,8 +7,8 @@
 //! - ML-enhanced correlation (when features are enabled)
 //! - Alert deduplication and grouping
 
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
 use crate::soar_core::*;
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;

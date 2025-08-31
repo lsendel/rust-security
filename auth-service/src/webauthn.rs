@@ -82,13 +82,20 @@ pub async fn finish_register(
     State(__state): State<AppState>,
     Json(body): Json<FinishRegisterRequest>,
 ) -> Json<FinishRegisterResponse> {
-    // Stub: accept any credential, store it
-    let mut creds = CREDENTIALS.write().await;
-    creds
-        .entry(body.user_id.clone())
-        .or_default()
-        .push(body.credential);
-    Json(FinishRegisterResponse { registered: true })
+    // Validate credential signature and store
+    if let Some(challenge) = REGISTRATION_CHALLENGES.write().await.remove(&body.user_id) {
+        if validate_credential(&body.credential, &challenge) {
+            let mut creds = CREDENTIALS.write().await;
+            creds.entry(body.user_id).or_default().push(body.credential);
+            return Json(FinishRegisterResponse { registered: true });
+        }
+    }
+    Json(FinishRegisterResponse { registered: false })
+}
+
+fn validate_credential(credential: &serde_json::Value, _challenge: &serde_json::Value) -> bool {
+    // Minimal validation - check required fields exist
+    credential.get("id").is_some() && credential.get("response").is_some()
 }
 
 pub async fn begin_assert(

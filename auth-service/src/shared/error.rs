@@ -46,6 +46,12 @@ pub enum AppError {
     #[error("Cryptographic error: {0}")]
     CryptographicError(String),
 
+    #[error("Key generation error: {message}")]
+    KeyGenerationError { message: String },
+
+    #[error("Invalid token: {0}")]
+    InvalidToken(String),
+
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
 
@@ -57,6 +63,66 @@ pub enum AppError {
 
     #[error("Unauthorized client: {0}")]
     UnauthorizedClient(String),
+
+    #[error("Anomaly detected")]
+    AnomalyDetected,
+
+    #[error("Policy denied")]
+    PolicyDenied,
+
+    #[error("Approval required")]
+    ApprovalRequired,
+
+    #[error("Identity not found")]
+    IdentityNotFound,
+
+    #[error("Identity suspended")]
+    IdentitySuspended,
+
+    #[error("Forbidden: {reason}")]
+    Forbidden { reason: String },
+
+    #[error("Invalid request: {reason}")]
+    InvalidRequest { reason: String },
+
+    #[error("Service unavailable: {reason}")]
+    ServiceUnavailable { reason: String },
+
+    #[error("Circuit breaker open")]
+    CircuitBreakerOpen,
+
+    #[error("Timeout error")]
+    TimeoutError,
+
+    #[error("Validation error")]
+    ValidationError,
+
+    #[error("Internal error")]
+    InternalError,
+
+    #[error("Insufficient data for baseline")]
+    InsufficientDataForBaseline,
+
+    #[error("External service error")]
+    ExternalService,
+
+    #[error("Invalid credentials")]
+    InvalidCredentials,
+
+    #[error("User not found")]
+    UserNotFound,
+
+    #[error("User inactive")]
+    UserInactive,
+
+    #[error("User not verified")]
+    UserNotVerified,
+
+    #[error("Crypto error")]
+    Crypto,
+
+    #[error("Session error")]
+    Session,
 }
 
 impl AppError {
@@ -93,16 +159,36 @@ impl AppError {
             Self::Unauthorized(_) => axum::http::StatusCode::UNAUTHORIZED,
             Self::UnauthorizedClient(_) => axum::http::StatusCode::UNAUTHORIZED,
             Self::BadRequest(_) => axum::http::StatusCode::BAD_REQUEST,
-            Self::InvalidRequest(_) => axum::http::StatusCode::BAD_REQUEST,
+            Self::InvalidRequest { .. } => axum::http::StatusCode::BAD_REQUEST,
             Self::Validation(_) => axum::http::StatusCode::BAD_REQUEST,
             Self::RateLimitExceeded => axum::http::StatusCode::TOO_MANY_REQUESTS,
-            Self::ServiceUnavailable(_) => axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Self::ServiceUnavailable { .. } => axum::http::StatusCode::SERVICE_UNAVAILABLE,
             Self::Repository(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Self::Config(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConfigurationError(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Self::Internal(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Self::CryptographicError(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Self::TokenStoreError { .. } => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Self::KeyGenerationError { .. } => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidToken(_) => axum::http::StatusCode::UNAUTHORIZED,
+            Self::AnomalyDetected => axum::http::StatusCode::TOO_MANY_REQUESTS,
+            Self::PolicyDenied => axum::http::StatusCode::FORBIDDEN,
+            Self::ApprovalRequired => axum::http::StatusCode::ACCEPTED,
+            Self::IdentityNotFound => axum::http::StatusCode::NOT_FOUND,
+            Self::IdentitySuspended => axum::http::StatusCode::FORBIDDEN,
+            Self::Forbidden { .. } => axum::http::StatusCode::FORBIDDEN,
+            Self::CircuitBreakerOpen => axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Self::TimeoutError => axum::http::StatusCode::REQUEST_TIMEOUT,
+            Self::ValidationError => axum::http::StatusCode::BAD_REQUEST,
+            Self::InternalError => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InsufficientDataForBaseline => axum::http::StatusCode::PRECONDITION_FAILED,
+            Self::ExternalService => axum::http::StatusCode::BAD_GATEWAY,
+            Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
+            Self::UserNotFound => axum::http::StatusCode::NOT_FOUND,
+            Self::UserInactive => axum::http::StatusCode::FORBIDDEN,
+            Self::UserNotVerified => axum::http::StatusCode::FORBIDDEN,
+            Self::Crypto => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Session => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -114,16 +200,36 @@ impl AppError {
             Self::Unauthorized(_) => "Unauthorized access",
             Self::UnauthorizedClient(_) => "Unauthorized client",
             Self::BadRequest(_) => "Invalid request",
-            Self::InvalidRequest(_) => "Invalid request",
+            Self::InvalidRequest { .. } => "Invalid request",
             Self::Validation(_) => "Validation failed",
             Self::RateLimitExceeded => "Rate limit exceeded",
-            Self::ServiceUnavailable(_) => "Service temporarily unavailable",
+            Self::ServiceUnavailable { .. } => "Service temporarily unavailable",
             Self::Repository(_) => "Service temporarily unavailable",
             Self::Config(_) => "Service configuration error",
             Self::ConfigurationError(_) => "Service configuration error",
             Self::Internal(_) => "Internal server error",
             Self::CryptographicError(_) => "Cryptographic operation failed",
             Self::TokenStoreError { .. } => "Token storage operation failed",
+            Self::KeyGenerationError { .. } => "Key generation failed",
+            Self::InvalidToken(_) => "Invalid token provided",
+            Self::AnomalyDetected => "Anomalous behavior detected",
+            Self::PolicyDenied => "Policy denied access",
+            Self::ApprovalRequired => "Approval required",
+            Self::IdentityNotFound => "Identity not found",
+            Self::IdentitySuspended => "Identity suspended",
+            Self::Forbidden { .. } => "Access forbidden",
+            Self::CircuitBreakerOpen => "Service temporarily unavailable",
+            Self::TimeoutError => "Request timeout",
+            Self::ValidationError => "Validation failed",
+            Self::InternalError => "Internal server error",
+            Self::InsufficientDataForBaseline => "Insufficient data for baseline",
+            Self::ExternalService => "External service error",
+            Self::InvalidCredentials => "Invalid credentials",
+            Self::UserNotFound => "User not found",
+            Self::UserInactive => "User account inactive",
+            Self::UserNotVerified => "User account not verified",
+            Self::Crypto => "Cryptographic operation failed",
+            Self::Session => "Session error",
         }
     }
 }

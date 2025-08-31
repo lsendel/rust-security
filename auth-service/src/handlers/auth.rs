@@ -56,7 +56,8 @@ pub async fn register(
         name: request.name,
     };
 
-    let response = container.user_service.register(register_req).await?;
+    let response = container.user_service.register(register_req).await
+        .map_err(|e| crate::shared::error::AppError::Internal(e.to_string()))?;
 
     // For now, return a basic response (would need to login after registration)
     Ok(Json(AuthResponseDto {

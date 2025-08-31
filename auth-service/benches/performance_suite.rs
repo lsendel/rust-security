@@ -1,7 +1,10 @@
 use base64;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rand;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
+use tokio::sync::RwLock;
 
 // Mock implementations for benchmarking
 mod mock_auth_service {
@@ -83,6 +86,12 @@ mod mock_policy_service {
 // Benchmark functions
 fn bench_token_generation(c: &mut Criterion) {
     let mut group = c.benchmark_group("token_generation");
+    group.sample_size(100);
+    group.warm_up_time(std::time::Duration::from_secs(1));
+    group.measurement_time(std::time::Duration::from_secs(3));
+
+    // Setup runtime and service once outside the benchmark loop
+    let rt = Arc::new(Runtime::new().unwrap());
 
     for concurrent_requests in [1, 10, 50, 100].iter() {
         group.throughput(Throughput::Elements(*concurrent_requests as u64));
@@ -90,20 +99,20 @@ fn bench_token_generation(c: &mut Criterion) {
             BenchmarkId::new("concurrent", concurrent_requests),
             concurrent_requests,
             |b, &concurrent_requests| {
+                let rt = Arc::clone(&rt);
                 b.iter(|| {
-                    let rt = Runtime::new().unwrap();
                     rt.block_on(async {
-                        let _service = mock_auth_service::MockAuthService::new();
                         let mut handles = Vec::new();
 
                         for i in 0..concurrent_requests {
                             let client_id = format!("client_{}", i);
                             let scope = "read write".to_string();
 
-                            handles.push(tokio::spawn(async move {
+                            let handle = tokio::spawn(async move {
                                 let mut service = mock_auth_service::MockAuthService::new();
                                 service.generate_token(&client_id, &scope).await
-                            }));
+                            });
+                            handles.push(handle);
                         }
 
                         for handle in handles {
@@ -119,10 +128,15 @@ fn bench_token_generation(c: &mut Criterion) {
 
 fn bench_token_introspection(c: &mut Criterion) {
     let mut group = c.benchmark_group("token_introspection");
+    group.sample_size(100);
+    group.warm_up_time(std::time::Duration::from_secs(1));
+    group.measurement_time(std::time::Duration::from_secs(3));
 
-    // Pre-generate tokens for introspection
-    let rt = Runtime::new().unwrap();
-    let tokens: Vec<String> = rt.block_on(async {
+    // Setup runtime and pre-populated service once outside benchmark loop
+    let rt = Arc::new(Runtime::new().unwrap());
+
+    // Pre-generate tokens and create a shared service with all tokens
+    let (tokens, service): (Vec<String>, Arc<RwLock<mock_auth_service::MockAuthService>>) = rt.block_on(async {
         let mut service = mock_auth_service::MockAuthService::new();
         let mut tokens = Vec::new();
 
@@ -133,7 +147,7 @@ fn bench_token_introspection(c: &mut Criterion) {
             tokens.push(token);
         }
 
-        tokens
+        (tokens, Arc::new(RwLock::new(service)))
     });
 
     for batch_size in [1, 10, 50, 100].iter() {
@@ -142,31 +156,22 @@ fn bench_token_introspection(c: &mut Criterion) {
             BenchmarkId::new("batch", batch_size),
             batch_size,
             |b, &batch_size| {
+                let rt = Arc::clone(&rt);
                 let tokens = tokens.clone();
+                let service = Arc::clone(&service);
                 b.iter(|| {
-                    let rt = Runtime::new().unwrap();
                     rt.block_on(async {
                         let mut handles = Vec::new();
 
                         for i in 0..batch_size {
                             let token = tokens[i % tokens.len()].clone();
-                            handles.push(tokio::spawn(async move {
-                                // Create a new service instance for each task to avoid borrowing issues
-                                let mut service = mock_auth_service::MockAuthService::new();
-                                // Pre-populate with a token for introspection
-                                let _ = service.generate_token("test_client", "read write").await;
-                                // For benchmarking purposes, we'll simulate introspection
-                                // In a real scenario, the service would have the tokens from setup
-                                if token.starts_with("tk_") {
-                                    Some(mock_auth_service::TokenInfo {
-                                        client_id: "test_client".to_string(),
-                                        scope: "read write".to_string(),
-                                        expires_at: 1234567890,
-                                    })
-                                } else {
-                                    None
-                                }
-                            }));
+                            let service = Arc::clone(&service);
+
+                            let handle = tokio::spawn(async move {
+                                let service_read = service.read().await;
+                                service_read.introspect_token(&token).await
+                            });
+                            handles.push(handle);
                         }
 
                         for handle in handles {
@@ -182,6 +187,9 @@ fn bench_token_introspection(c: &mut Criterion) {
 
 fn bench_policy_evaluation(c: &mut Criterion) {
     let mut group = c.benchmark_group("policy_evaluation");
+    group.sample_size(100);
+    group.warm_up_time(std::time::Duration::from_secs(1));
+    group.measurement_time(std::time::Duration::from_secs(3));
 
     let test_requests = vec![
         serde_json::json!({
@@ -201,25 +209,28 @@ fn bench_policy_evaluation(c: &mut Criterion) {
         }),
     ];
 
+    // Setup runtime once outside benchmark loop
+    let rt = Arc::new(Runtime::new().unwrap());
+
     for request_count in [1, 10, 50, 100].iter() {
         group.throughput(Throughput::Elements(*request_count as u64));
         group.bench_with_input(
             BenchmarkId::new("requests", request_count),
             request_count,
             |b, &request_count| {
+                let rt = Arc::clone(&rt);
                 let test_requests = test_requests.clone();
                 b.iter(|| {
-                    let rt = Runtime::new().unwrap();
                     rt.block_on(async {
-                        let _service = mock_policy_service::MockPolicyService::new();
                         let mut handles = Vec::new();
 
                         for i in 0..request_count {
                             let request = test_requests[i % test_requests.len()].clone();
-                            handles.push(tokio::spawn(async move {
+                            let handle = tokio::spawn(async move {
                                 let service = mock_policy_service::MockPolicyService::new();
                                 service.evaluate_policy(&request).await
-                            }));
+                            });
+                            handles.push(handle);
                         }
 
                         for handle in handles {
@@ -235,6 +246,9 @@ fn bench_policy_evaluation(c: &mut Criterion) {
 
 fn bench_jwt_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("jwt_operations");
+    group.sample_size(100);
+    group.warm_up_time(std::time::Duration::from_secs(1));
+    group.measurement_time(std::time::Duration::from_secs(3));
 
     // Mock JWT operations
     let _secret = "test-secret-key-for-benchmarking-purposes-only";
@@ -286,6 +300,9 @@ fn bench_jwt_operations(c: &mut Criterion) {
 
 fn bench_security_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("security_operations");
+    group.sample_size(100);
+    group.warm_up_time(std::time::Duration::from_secs(1));
+    group.measurement_time(std::time::Duration::from_secs(3));
 
     // Benchmark password hashing
     group.bench_function("password_hash", |b| {
@@ -330,16 +347,16 @@ fn bench_security_operations(c: &mut Criterion) {
 
 fn bench_cache_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("cache_operations");
+    group.sample_size(100);
+    group.warm_up_time(std::time::Duration::from_secs(1));
+    group.measurement_time(std::time::Duration::from_secs(3));
 
     // Mock cache implementation
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
 
     let cache: Arc<RwLock<HashMap<String, String>>> = Arc::new(RwLock::new(HashMap::new()));
 
-    // Pre-populate cache
-    let rt = Runtime::new().unwrap();
+    // Setup runtime and pre-populate cache once outside benchmark loop
+    let rt = Arc::new(Runtime::new().unwrap());
     rt.block_on(async {
         let mut cache_write = cache.write().await;
         for i in 0..1000 {
@@ -348,9 +365,9 @@ fn bench_cache_operations(c: &mut Criterion) {
     });
 
     group.bench_function("cache_read", |b| {
-        let cache = cache.clone();
+        let cache = Arc::clone(&cache);
+        let rt = Arc::clone(&rt);
         b.iter(|| {
-            let rt = Runtime::new().unwrap();
             rt.block_on(async {
                 let cache_read = cache.read().await;
                 let key = format!("key_{}", rand::random::<usize>() % 1000);
@@ -362,9 +379,9 @@ fn bench_cache_operations(c: &mut Criterion) {
     });
 
     group.bench_function("cache_write", |b| {
-        let cache = cache.clone();
+        let cache = Arc::clone(&cache);
+        let rt = Arc::clone(&rt);
         b.iter(|| {
-            let rt = Runtime::new().unwrap();
             rt.block_on(async {
                 let mut cache_write = cache.write().await;
                 let key = format!("new_key_{}", rand::random::<usize>());

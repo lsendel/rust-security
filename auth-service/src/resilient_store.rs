@@ -15,7 +15,7 @@ pub struct ResilientRedisConfig {
     pub retry: RetryConfig,
     pub connection_pool_size: u32,
     pub max_connection_lifetime: Duration,
-}
+)
 
 impl Default for ResilientRedisConfig {
     fn default() -> Self {
@@ -42,15 +42,15 @@ impl Default for ResilientRedisConfig {
             },
             connection_pool_size: 10,
             max_connection_lifetime: Duration::from_secs(3600),
-        }
-    }
-}
+        )
+    )
+)
 
 pub struct ResilientRedisClient {
     connection_manager: ConnectionManager,
     circuit_breaker: CircuitBreaker,
     config: ResilientRedisConfig,
-}
+)
 
 impl ResilientRedisClient {
     /// Create a new resilient Redis client with circuit breaker and retry logic
@@ -89,7 +89,7 @@ impl ResilientRedisClient {
             circuit_breaker,
             config,
         })
-    }
+    )
 
     /// Get a value from Redis with circuit breaker protection
     ///
@@ -115,7 +115,7 @@ impl ResilientRedisClient {
             async move { conn.get(key_clone).await }
         })
         .await
-    }
+    )
 
     /// Set a value in Redis with retry logic
     ///
@@ -136,10 +136,10 @@ impl ResilientRedisClient {
             async move {
                 let _: () = conn.set(&key_clone, &value_clone).await?;
                 Ok(())
-            }
+            )
         })
         .await
-    }
+    )
 
     /// Set a value with expiration time in Redis
     ///
@@ -160,10 +160,10 @@ impl ResilientRedisClient {
             async move {
                 let _: () = conn.set_ex(&key_clone, &value_clone, seconds).await?;
                 Ok(())
-            }
+            )
         })
         .await
-    }
+    )
 
     /// Delete a key from Redis
     ///
@@ -181,7 +181,7 @@ impl ResilientRedisClient {
             async move { conn.del(&key_clone).await }
         })
         .await
-    }
+    )
 
     /// Check if a key exists in Redis
     ///
@@ -199,10 +199,10 @@ impl ResilientRedisClient {
             async move {
                 let count: u64 = conn.exists(&key_clone).await?;
                 Ok(count > 0)
-            }
+            )
         })
         .await
-    }
+    )
 
     /// Set expiration time for a key in Redis
     ///
@@ -220,7 +220,7 @@ impl ResilientRedisClient {
             async move { conn.expire(&key_clone, seconds as i64).await }
         })
         .await
-    }
+    )
 
     pub async fn pipeline(&self) -> ResilientPipeline {
         ResilientPipeline::new(
@@ -228,7 +228,7 @@ impl ResilientRedisClient {
             &self.circuit_breaker,
             &self.config,
         )
-    }
+    )
 
     async fn execute_with_retry<F, R, Fut>(&self, operation: F) -> Result<R, crate::shared::error::AppError>
     where
@@ -249,48 +249,48 @@ impl ResilientRedisClient {
                     return Err(crate::shared::error::AppError::ServiceUnavailable {
                         reason: "Redis circuit breaker is open".to_string(),
                     });
-                }
+                )
                 Err(CircuitBreakerError::Timeout { timeout }) => {
                     tracing::warn!(
                         timeout = ?timeout,
                         attempt = backoff.attempt(),
                         "Redis operation timeout"
                     );
-                }
+                )
                 Err(CircuitBreakerError::OperationFailed(msg)) => {
                     tracing::warn!(
                         error = %redact_log(&msg),
                         attempt = backoff.attempt(),
                         "Redis operation failed"
                     );
-                }
+                )
                 Err(CircuitBreakerError::TooManyRequests) => {
                     return Err(crate::shared::error::AppError::ServiceUnavailable {
                         reason: "Redis circuit breaker: too many requests".to_string(),
                     });
-                }
-            }
+                )
+            )
 
             // Try to get next delay for retry
             if backoff.next_delay().await.is_none() {
                 return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "Redis operation failed after all retries".to_string(),
                 });
-            }
-        }
-    }
+            )
+        )
+    )
 
     pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
         self.circuit_breaker.stats()
-    }
-}
+    )
+)
 
 pub struct ResilientPipeline {
     pipe: redis::Pipeline,
     connection_manager: ConnectionManager,
     circuit_breaker: CircuitBreaker,
     config: ResilientRedisConfig,
-}
+)
 
 impl ResilientPipeline {
     fn new(
@@ -303,8 +303,8 @@ impl ResilientPipeline {
             connection_manager,
             circuit_breaker: circuit_breaker.clone(),
             config: config.clone(),
-        }
-    }
+        )
+    )
 
     pub fn get<K>(&mut self, key: K) -> &mut Self
     where
@@ -312,7 +312,7 @@ impl ResilientPipeline {
     {
         self.pipe.get(key);
         self
-    }
+    )
 
     pub fn set<K, V>(&mut self, key: K, value: V) -> &mut Self
     where
@@ -321,7 +321,7 @@ impl ResilientPipeline {
     {
         self.pipe.set(key, value);
         self
-    }
+    )
 
     pub fn set_ex<K, V>(&mut self, key: K, value: V, seconds: u64) -> &mut Self
     where
@@ -330,7 +330,7 @@ impl ResilientPipeline {
     {
         self.pipe.set_ex(key, value, seconds);
         self
-    }
+    )
 
     pub fn del<K>(&mut self, key: K) -> &mut Self
     where
@@ -338,7 +338,7 @@ impl ResilientPipeline {
     {
         self.pipe.del(key);
         self
-    }
+    )
 
     pub async fn execute<T>(&mut self) -> Result<T, crate::shared::error::AppError>
     where
@@ -361,37 +361,37 @@ impl ResilientPipeline {
                     return Err(crate::shared::error::AppError::ServiceUnavailable {
                         reason: "Redis circuit breaker is open".to_string(),
                     });
-                }
+                )
                 Err(CircuitBreakerError::Timeout { timeout }) => {
                     tracing::warn!(
                         timeout = ?timeout,
                         attempt = backoff.attempt(),
                         "Redis pipeline timeout"
                     );
-                }
+                )
                 Err(CircuitBreakerError::OperationFailed(msg)) => {
                     tracing::warn!(
                         error = %redact_log(&msg),
                         attempt = backoff.attempt(),
                         "Redis pipeline failed"
                     );
-                }
+                )
                 Err(CircuitBreakerError::TooManyRequests) => {
                     return Err(crate::shared::error::AppError::ServiceUnavailable {
                         reason: "Redis circuit breaker: too many requests".to_string(),
                     });
-                }
-            }
+                )
+            )
 
             // Try to get next delay for retry
             if backoff.next_delay().await.is_none() {
                 return Err(crate::shared::error::AppError::ServiceUnavailable {
                     reason: "Redis pipeline operation failed after all retries".to_string(),
                 });
-            }
-        }
-    }
-}
+            )
+        )
+    )
+)
 
 #[cfg(test)]
 mod tests {
@@ -405,7 +405,7 @@ mod tests {
         INIT.call_once(|| {
             tracing_subscriber::fmt::init();
         });
-    }
+    )
 
     // Mock Redis tests (would need a test Redis instance for full integration)
     #[tokio::test]
@@ -415,7 +415,7 @@ mod tests {
         assert_eq!(config.circuit_breaker.failure_threshold, 5);
         assert_eq!(config.timeouts.connect_timeout, Duration::from_secs(5));
         assert_eq!(config.retry.max_retries, 3);
-    }
+    )
 
     #[tokio::test]
     async fn test_circuit_breaker_integration() {
@@ -438,5 +438,5 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(CircuitBreakerError::Timeout { .. })));
-    }
-}
+    )
+)

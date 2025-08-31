@@ -24,6 +24,8 @@ path = "src/bin/threat_feed_validator.rs"
 name = "sbom-generator"
 path = "src/bin/sbom_generator.rs"
 
+# Git hooks setup moved to workspace scripts
+
 
 [dependencies]
 # Core dependencies

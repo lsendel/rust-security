@@ -108,7 +108,7 @@ impl KeyRotationService {
     /// Ensure there's at least one key available
     async fn ensure_initial_key(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Check if we have any keys
-        let jwks = crate::keys::jwks_document().await;
+        let jwks = crate::infrastructure::crypto::keys::jwks_document().await;
         let empty_vec = Vec::new();
         let keys = jwks["keys"].as_array().unwrap_or(&empty_vec);
 
@@ -142,7 +142,7 @@ impl KeyRotationService {
         info!("Performing key rotation");
 
         // Rotate the keys using the existing keys module
-        let _ = crate::keys::maybe_rotate().await;
+        let _ = crate::infrastructure::crypto::keys::maybe_rotate().await;
 
         // Update last rotation time
         self.last_rotation = Some(now);
@@ -218,7 +218,7 @@ pub async fn force_rotation() -> Result<axum::Json<serde_json::Value>, axum::htt
     // For now, return a placeholder response
 
     // Trigger key rotation
-    let _ = crate::keys::maybe_rotate().await;
+    let _ = crate::infrastructure::crypto::keys::maybe_rotate().await;
     match Ok::<(), &str>(()) {
         Ok(()) => Ok(axum::Json(serde_json::json!({
             "status": "success",

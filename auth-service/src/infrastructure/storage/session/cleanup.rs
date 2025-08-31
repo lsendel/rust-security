@@ -1,5 +1,7 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
-use crate::storage::session::manager::{SessionError, SessionManager};
+use crate::infrastructure::security::security_logging::{
+    SecurityEvent, SecurityEventType, SecuritySeverity,
+};
+use crate::infrastructure::storage::session::manager::{SessionError, SessionManager};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -215,8 +217,8 @@ impl SessionCleanupScheduler {
             serde_json::Value::Number(stats.total_sessions_cleaned.into()),
         );
 
-        let logger = crate::security_logging::SecurityLogger::new(
-            crate::security_logging::SecurityLoggerConfig::default(),
+        let logger = crate::infrastructure::security::security_logging::SecurityLogger::new(
+            crate::infrastructure::security::security_logging::SecurityLoggerConfig::default(),
         );
         logger.log_event(shutdown_event);
 
@@ -262,8 +264,8 @@ impl SessionCleanupScheduler {
             serde_json::Value::Number(self.config.batch_size.into()),
         );
 
-        let logger = crate::security_logging::SecurityLogger::new(
-            crate::security_logging::SecurityLoggerConfig::default(),
+        let logger = crate::infrastructure::security::security_logging::SecurityLogger::new(
+            crate::infrastructure::security::security_logging::SecurityLoggerConfig::default(),
         );
         logger.log_event(event);
     }
@@ -479,7 +481,7 @@ impl SessionCleanupScheduler {
                 serde_json::Value::Number(result.total_cleaned().into()),
             );
 
-            crate::security_logging::log_event(&cleanup_event);
+            crate::infrastructure::security::security_logging::log_event(&cleanup_event);
         }
 
         Ok(())

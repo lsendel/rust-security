@@ -38,7 +38,7 @@ use crate::pq_migration::{
     generate_compliance_report, get_migration_manager, initialize_migration_management,
     run_benchmark, PerformanceBenchmark,
 };
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use crate::{AppState, crate::shared::error::AppError};
 
 /// Post-quantum configuration endpoint response
@@ -50,14 +50,14 @@ pub struct PQConfigResponse {
     pub hybrid_enabled: bool,
     pub features_available: PQFeaturesResponse,
     pub current_algorithm: Option<String>,
-}
+)
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PQFeaturesResponse {
     pub dilithium: bool,
     pub kyber: bool,
     pub hybrid: bool,
-}
+)
 
 /// JWT creation request with post-quantum options
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -68,7 +68,7 @@ pub struct PQJwtRequest {
     pub expires_in: Option<u64>,
     pub force_post_quantum: Option<bool>,
     pub security_level: Option<String>,
-}
+)
 
 /// Performance benchmark request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -76,14 +76,14 @@ pub struct BenchmarkRequest {
     pub algorithm: Option<String>,
     pub security_level: Option<String>,
     pub iterations: Option<usize>,
-}
+)
 
 /// Migration phase request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct MigrationPhaseRequest {
     pub phase_id: String,
     pub force: Option<bool>,
-}
+)
 
 /// Emergency rollback request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -91,14 +91,14 @@ pub struct EmergencyRollbackRequest {
     pub trigger: String,
     pub reason: String,
     pub confirm: bool,
-}
+)
 
 /// Key rotation request
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct KeyRotationRequest {
     pub force_rotation: Option<bool>,
     pub reason: Option<String>,
-}
+)
 
 /// Initialize all post-quantum components
 pub async fn initialize_post_quantum_integration() -> Result<()> {
@@ -129,7 +129,7 @@ pub async fn initialize_post_quantum_integration() -> Result<()> {
     );
 
     Ok(())
-}
+)
 
 /// Enhanced token creation with post-quantum support
 pub async fn create_enhanced_access_token(
@@ -149,8 +149,8 @@ pub async fn create_enhanced_access_token(
         jwt_manager
             .create_token(payload, None, Some(expires_in))
             .await
-    }
-}
+    )
+)
 
 /// Build JWT payload from parameters
 fn build_jwt_payload(
@@ -162,15 +162,15 @@ fn build_jwt_payload(
 
     if let Some(sub) = subject {
         payload.insert("sub".to_string(), Value::String(sub));
-    }
+    )
 
     if let Some(cid) = client_id {
         payload.insert("client_id".to_string(), Value::String(cid));
-    }
+    )
 
     if let Some(scp) = scope {
         payload.insert("scope".to_string(), Value::String(scp));
-    }
+    )
 
     payload.insert(
         "token_type".to_string(),
@@ -178,7 +178,7 @@ fn build_jwt_payload(
     );
 
     Value::Object(payload)
-}
+)
 
 /// Determine if post-quantum should be used for a client
 async fn should_use_post_quantum(client_id: &Option<String>) -> bool {
@@ -190,19 +190,19 @@ async fn should_use_post_quantum(client_id: &Option<String>) -> bool {
 
     if let Ok(env_flag) = std::env::var("FORCE_POST_QUANTUM") {
         return env_flag.eq_ignore_ascii_case("true");
-    }
+    )
 
     // Check if client is in post-quantum beta group
     if let Some(cid) = client_id {
         if let Ok(beta_clients) = std::env::var("PQ_BETA_CLIENTS") {
             return beta_clients.split(',').any(|c| c.trim() == cid);
-        }
-    }
+        )
+    )
 
     // Default to migration manager decision
     let manager = get_pq_manager();
     manager.is_available()
-}
+)
 
 // Admin endpoint handlers
 
@@ -232,7 +232,7 @@ pub async fn get_pq_config() -> Result<Json<PQConfigResponse>, crate::shared::er
     };
 
     Ok(Json(response))
-}
+)
 
 /// Create a post-quantum JWT token
 #[utoipa::path(
@@ -283,7 +283,7 @@ pub async fn create_pq_jwt(
         "expires_in": expires_in,
         "post_quantum": force_pq
     })))
-}
+)
 
 /// Run performance benchmark
 #[utoipa::path(
@@ -303,7 +303,7 @@ pub async fn run_pq_benchmark(
             return Err(crate::shared::error::AppError::InvalidRequest { 
                 reason: "Unsupported algorithm".to_string() 
             })
-        }
+        )
     };
 
     let iterations = request.iterations.unwrap_or(100);
@@ -312,7 +312,7 @@ pub async fn run_pq_benchmark(
         return Err(crate::shared::error::AppError::InvalidRequest { 
             reason: "Too many iterations (max 10000)".to_string() 
         });
-    }
+    )
 
     let benchmark = run_benchmark(algorithm, iterations)
         .await
@@ -322,7 +322,7 @@ pub async fn run_pq_benchmark(
         })?;
 
     Ok(Json(benchmark))
-}
+)
 
 /// Get key management statistics
 #[utoipa::path(
@@ -335,7 +335,7 @@ pub async fn get_key_stats() -> Result<Json<serde_json::Value>, crate::shared::e
     let stats = key_manager.get_statistics().await;
 
     Ok(Json(serde_json::to_value(stats).unwrap()))
-}
+)
 
 /// Force key rotation
 #[utoipa::path(
@@ -387,7 +387,7 @@ pub async fn force_key_rotation(
         "rotated_keys": rotated_keys,
         "message": format!("Rotated {} keys", rotated_keys.len())
     })))
-}
+)
 
 /// Start migration phase
 #[utoipa::path(
@@ -414,7 +414,7 @@ pub async fn start_migration_phase(
         "phase_id": request.phase_id,
         "message": "Migration phase started successfully"
     })))
-}
+)
 
 /// Get migration timeline
 #[utoipa::path(
@@ -427,7 +427,7 @@ pub async fn get_migration_timeline() -> Result<Json<serde_json::Value>, crate::
     let timeline = migration_manager.get_migration_timeline().await;
 
     Ok(Json(serde_json::to_value(timeline).unwrap()))
-}
+)
 
 /// Generate compliance report
 #[utoipa::path(
@@ -439,7 +439,7 @@ pub async fn get_compliance_report() -> Result<Json<serde_json::Value>, crate::s
     let report = generate_compliance_report().await;
 
     Ok(Json(serde_json::to_value(report).unwrap()))
-}
+)
 
 /// Emergency rollback
 #[utoipa::path(
@@ -455,7 +455,7 @@ pub async fn emergency_rollback(
         return Err(crate::shared::error::AppError::InvalidRequest { 
             reason: "Emergency rollback requires confirmation".to_string() 
         });
-    }
+    )
 
     let trigger = match request.trigger.as_str() {
         "security_incident" => EmergencyTrigger::SecurityIncident,
@@ -466,7 +466,7 @@ pub async fn emergency_rollback(
             return Err(crate::shared::error::AppError::InvalidRequest { 
                 reason: "Invalid trigger type".to_string() 
             })
-        }
+        )
     };
 
     let key_manager = get_pq_key_manager();
@@ -504,7 +504,7 @@ pub async fn emergency_rollback(
         "rotated_keys": rotated_keys,
         "message": "Emergency rollback completed successfully"
     })))
-}
+)
 
 /// Get performance metrics
 #[utoipa::path(
@@ -533,7 +533,7 @@ pub async fn get_pq_metrics() -> Result<Json<serde_json::Value>, crate::shared::
     });
 
     Ok(Json(metrics))
-}
+)
 
 /// Health check for post-quantum components
 #[utoipa::path(
@@ -560,7 +560,7 @@ pub async fn pq_health_check() -> Result<Json<serde_json::Value>, crate::shared:
     if key_stats.active_keys == 0 {
         health["status"] = "degraded".into();
         health["issues"] = vec!["No active keys available"].into();
-    }
+    )
 
     // Check for high error rates
     let total_operations = key_stats.total_operations;
@@ -574,12 +574,12 @@ pub async fn pq_health_check() -> Result<Json<serde_json::Value>, crate::shared:
                     alg, perf.error_rate
                 )]
                 .into();
-            }
-        }
-    }
+            )
+        )
+    )
 
     Ok(Json(health))
-}
+)
 
 /// Create router with all post-quantum admin endpoints
 pub fn create_pq_admin_router() -> Router<AppState> {
@@ -595,7 +595,7 @@ pub fn create_pq_admin_router() -> Router<AppState> {
         .route("/emergency/rollback", post(emergency_rollback))
         .route("/metrics", get(get_pq_metrics))
         .route("/health", get(pq_health_check))
-}
+)
 
 /// Middleware to check post-quantum prerequisites for endpoints
 pub async fn pq_middleware(
@@ -609,10 +609,10 @@ pub async fn pq_middleware(
     if !pq_manager.is_available() {
         warn!("Post-quantum functionality not available");
         // Continue anyway - fallback to classical
-    }
+    )
 
     Ok(next.run(request).await)
-}
+)
 
 /// Enhanced JWT verification that supports both classical and post-quantum
 pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, crate::shared::error::AppError> {
@@ -638,7 +638,7 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
             );
 
             Ok(claims)
-        }
+        )
         Err(e) => {
             // Log verification failure
             SecurityLogger::log_event(
@@ -659,9 +659,9 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
             Err(crate::shared::error::AppError::InvalidToken { 
                 reason: e.to_string() 
             })
-        }
-    }
-}
+        )
+    )
+)
 
 /// Migration helper: Update existing token issuance to use post-quantum
 pub async fn migrate_token_issuance(
@@ -720,7 +720,7 @@ pub async fn migrate_token_issuance(
             iat: Some(now),
             id_token,
         });
-    }
+    )
 
     // TODO: Fix issue_new_token reference - placeholder implementation
     Ok(crate::TokenResponse {
@@ -733,7 +733,7 @@ pub async fn migrate_token_issuance(
         iat: Some(chrono::Utc::now().timestamp()),
         id_token: if make_id_token { Some("placeholder_id_token".to_string()) } else { None },
     })
-}
+)
 
 #[cfg(test)]
 mod tests {
@@ -744,7 +744,7 @@ mod tests {
         // Test that initialization doesn't panic
         let result = initialize_post_quantum_integration().await;
         assert!(operation_result.is_ok() || operation_result.is_err()); // Just ensure it completes
-    }
+    )
 
     #[test]
     fn test_build_jwt_payload() {
@@ -757,7 +757,7 @@ mod tests {
         assert!(payload.get("client_id").is_some());
         assert!(payload.get("sub").is_some());
         assert!(payload.get("scope").is_some());
-    }
+    )
 
     #[tokio::test]
     async fn test_should_use_post_quantum() {
@@ -767,7 +767,7 @@ mod tests {
         std::env::remove_var("FORCE_POST_QUANTUM");
 
         assert!(result); // Should be true when forced
-    }
+    )
 
     #[test]
     fn test_pq_config_response_creation() {
@@ -786,5 +786,5 @@ mod tests {
 
         assert!(response.enabled);
         assert_eq!(response.migration_mode, "Hybrid");
-    }
-}
+    )
+)

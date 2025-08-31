@@ -6,7 +6,7 @@ rust-version = "1.80"
 [workspace]
 members = [
     "auth-service",
-    "policy-service", 
+    "policy-service",
     "common",
     "compliance-tools"     # Re-enabled for compliance automation
 ]
@@ -43,6 +43,15 @@ clippy.all = { level = "warn", priority = -1 }
 clippy.pedantic = { level = "warn", priority = -1 }
 clippy.cargo = { level = "warn", priority = -1 }
 clippy.nursery = { level = "warn", priority = -1 }
+# Security-focused lints
+clippy.dbg_macro = "warn"  # Debug prints in production
+clippy.print_stdout = "warn"  # Direct stdout printing
+clippy.print_stderr = "warn"  # Direct stderr printing
+clippy.implicit_clone = "warn"  # Potential performance issues
+clippy.lossy_float_literal = "warn"  # Precision loss
+clippy.panic = "warn"  # Explicit panics
+clippy.unimplemented = "warn"  # Unimplemented! calls
+clippy.todo = "warn"  # TODO comments
 # Allow multiple versions of dependencies (often unavoidable with transitive deps)
 clippy.multiple_crate_versions = "allow"
 
@@ -321,3 +330,7 @@ audit_policy = "strict"
 vulnerability_tolerance = "none"
 dependency_review_required = true
 security_contact = "security@company.com"
+
+# Development tools dependencies
+[workspace.dependencies.dev-tools]
+regex = "1.10"

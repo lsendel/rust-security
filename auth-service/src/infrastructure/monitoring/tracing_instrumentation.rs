@@ -3,10 +3,11 @@
 //! This module provides detailed tracing for all authentication operations,
 //! security events, and performance monitoring with OpenTelemetry integration.
 
-use opentelemetry::{
-    trace::{SpanKind, TraceContextExt, Tracer, Span as OtelSpan},
-    Context, KeyValue,
-};
+// Temporarily disabled OpenTelemetry imports
+// use opentelemetry::{
+//     trace::{SpanKind, TraceContextExt, Tracer, Span as OtelSpan},
+//     Context, KeyValue,
+// };
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -14,17 +15,17 @@ use std::{
     time::{Duration, Instant},
 };
 use tracing::{error, info, instrument, warn, Span as TracingSpan};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
+// use tracing_opentelemetry::OpenTelemetrySpanExt;
 use uuid::Uuid;
 
 use crate::{
     error_handling::{SecurityError, SecurityResult},
-    observability::{ObservabilityProvider, ServiceMetrics, TracingUtils},
+    // infrastructure::monitoring::observability::{ObservabilityProvider, ServiceMetrics, TracingUtils},  // Not found
 };
 
 /// Authentication flow tracer for detailed operation tracking
 pub struct AuthFlowTracer {
-    observability: Arc<ObservabilityProvider>,
+    // observability: Arc<ObservabilityProvider>,  // Temporarily disabled
     flow_id: String,
     user_context: Option<UserContext>,
     security_context: SecurityContext,
@@ -156,7 +157,7 @@ impl AuthFlowTracer {
         let mut span = TracingUtils::create_span_with_tracer(
             tracer,
             &span_name,
-            crate::observability::SpanKind::Server,
+            // crate::observability::SpanKind::Server,  // Module not found
             vec![
                 crate::observability::KeyValue::new("auth.flow_type", flow_type.to_string()),
                 crate::observability::KeyValue::new("auth.flow_id", self.flow_id.clone()),

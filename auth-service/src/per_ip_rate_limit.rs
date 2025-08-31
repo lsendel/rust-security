@@ -1,4 +1,4 @@
-use crate::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
 use axum::http::StatusCode;
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;
@@ -350,7 +350,7 @@ impl PerIpRateLimiter {
             event = event.with_detail_string("user_agent".to_string(), ua.to_string());
         }
 
-        crate::security_logging::log_event(&event);
+        crate::infrastructure::security::security_logging::log_event(&event);
     }
 }
 

@@ -30,7 +30,7 @@ pub enum WebAuthnError {
     Base64Decode(String),
     #[error("Redis error: {0}")]
     Redis(#[from] redis::RedisError),
-}
+)
 
 // WebAuthn data structures (simplified - in production use webauthn-rs crate)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,7 +41,7 @@ pub struct PublicKeyCredentialRequestOptions {
     pub allow_credentials: Vec<PublicKeyCredentialDescriptor>,
     pub user_verification: UserVerificationRequirement,
     pub extensions: Option<HashMap<String, serde_json::Value>>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicKeyCredentialCreationOptions {
@@ -54,7 +54,7 @@ pub struct PublicKeyCredentialCreationOptions {
     pub authenticator_selection: Option<AuthenticatorSelectionCriteria>,
     pub attestation: AttestationConveyancePreference,
     pub extensions: Option<HashMap<String, serde_json::Value>>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicKeyCredentialDescriptor {
@@ -62,14 +62,14 @@ pub struct PublicKeyCredentialDescriptor {
     pub credential_type: String, // "public-key"
     pub id: String,              // base64url encoded credential ID
     pub transports: Option<Vec<String>>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelyingParty {
     pub id: String,
     pub name: String,
     pub icon: Option<String>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -77,14 +77,14 @@ pub struct User {
     pub name: String,         // user identifier (email)
     pub display_name: String, // human-readable name
     pub icon: Option<String>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicKeyCredentialParameters {
     #[serde(rename = "type")]
     pub credential_type: String, // "public-key"
     pub alg: i32,               // COSE algorithm identifier
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorSelectionCriteria {
@@ -92,7 +92,7 @@ pub struct AuthenticatorSelectionCriteria {
     pub resident_key: Option<ResidentKeyRequirement>,
     pub require_resident_key: Option<bool>,
     pub user_verification: UserVerificationRequirement,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthenticatorAttachment {
@@ -100,7 +100,7 @@ pub enum AuthenticatorAttachment {
     Platform,
     #[serde(rename = "cross-platform")]
     CrossPlatform,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResidentKeyRequirement {
@@ -110,7 +110,7 @@ pub enum ResidentKeyRequirement {
     Preferred,
     #[serde(rename = "required")]
     Required,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UserVerificationRequirement {
@@ -120,7 +120,7 @@ pub enum UserVerificationRequirement {
     Preferred,
     #[serde(rename = "discouraged")]
     Discouraged,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AttestationConveyancePreference {
@@ -132,7 +132,7 @@ pub enum AttestationConveyancePreference {
     Direct,
     #[serde(rename = "enterprise")]
     Enterprise,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicKeyCredential {
@@ -142,20 +142,20 @@ pub struct PublicKeyCredential {
     #[serde(rename = "type")]
     pub credential_type: String,
     pub client_extension_results: Option<HashMap<String, serde_json::Value>>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum AuthenticatorResponse {
     Registration(AuthenticatorAttestationResponse),
     Authentication(AuthenticatorAssertionResponse),
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorAttestationResponse {
     pub client_data_json: String, // base64url
     pub attestation_object: String, // base64url
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorAssertionResponse {
@@ -163,7 +163,7 @@ pub struct AuthenticatorAssertionResponse {
     pub authenticator_data: String, // base64url
     pub signature: String,        // base64url
     pub user_handle: Option<String>, // base64url
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredCredential {
@@ -178,7 +178,7 @@ pub struct StoredCredential {
     pub backup_state: bool,
     pub device_type: String,
     pub aaguid: Option<String>,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistrationChallenge {
@@ -187,7 +187,7 @@ pub struct RegistrationChallenge {
     pub created_at: u64,
     pub expires_at: u64,
     pub options: PublicKeyCredentialCreationOptions,
-}
+)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticationChallenge {
@@ -196,7 +196,7 @@ pub struct AuthenticationChallenge {
     pub created_at: u64,
     pub expires_at: u64,
     pub options: PublicKeyCredentialRequestOptions,
-}
+)
 
 pub struct WebAuthnMfa {
     redis: Option<ConnectionManager>,
@@ -204,7 +204,7 @@ pub struct WebAuthnMfa {
     rp_name: String,
     origin: String,
     challenge_timeout: Duration,
-}
+)
 
 impl WebAuthnMfa {
     pub async fn new(rp_id: String, rp_name: String, origin: String) -> Self {
@@ -215,14 +215,14 @@ impl WebAuthnMfa {
             rp_name,
             origin,
             challenge_timeout: Duration::from_secs(300), // 5 minutes
-        }
-    }
+        )
+    )
 
     async fn create_redis_connection() -> Option<ConnectionManager> {
         let url = std::env::var("REDIS_URL").ok()?;
         let client = redis::Client::open(url).ok()?;
         client.get_connection_manager().await.ok()
-    }
+    )
 
     pub async fn start_registration(&self, user_id: &str, user_name: &str, display_name: &str) -> MfaResult<PublicKeyCredentialCreationOptions> {
         let challenge = self.generate_challenge();
@@ -285,7 +285,7 @@ impl WebAuthnMfa {
         self.store_registration_challenge(user_id, &challenge, &options).await?;
 
         Ok(options)
-    }
+    )
 
     pub async fn finish_registration(&self, user_id: &str, credential: &PublicKeyCredential) -> MfaResult<StoredCredential> {
         // Validate challenge
@@ -323,7 +323,7 @@ impl WebAuthnMfa {
         );
 
         Ok(stored_credential)
-    }
+    )
 
     pub async fn start_authentication(&self, user_id: &str) -> MfaResult<PublicKeyCredentialRequestOptions> {
         let challenge = self.generate_challenge();
@@ -334,7 +334,7 @@ impl WebAuthnMfa {
             return Err(MfaError::BadRequest {
                 message: "No WebAuthn credentials found for user".to_string(),
             });
-        }
+        )
 
         let allow_credentials: Vec<PublicKeyCredentialDescriptor> = credentials
             .into_iter()
@@ -358,7 +358,7 @@ impl WebAuthnMfa {
         self.store_authentication_challenge(user_id, &challenge, &options).await?;
 
         Ok(options)
-    }
+    )
 
     pub async fn finish_authentication(&self, user_id: &str, credential: &PublicKeyCredential) -> MfaResult<bool> {
         // Validate challenge
@@ -388,11 +388,11 @@ impl WebAuthnMfa {
         );
 
         Ok(true)
-    }
+    )
 
     pub async fn list_user_credentials(&self, user_id: &str) -> MfaResult<Vec<StoredCredential>> {
         self.get_user_credentials(user_id).await
-    }
+    )
 
     pub async fn delete_credential(&self, user_id: &str, credential_id: &str) -> MfaResult<bool> {
         let Some(mut conn) = self.redis.clone() else {
@@ -407,7 +407,7 @@ impl WebAuthnMfa {
             return Err(MfaError::Forbidden {
                 message: "Cannot delete credential belonging to another user".to_string(),
             });
-        }
+        )
 
         let key = format!("webauthn:credential:{}", credential_id);
         let deleted: u64 = conn.del(&key).await?;
@@ -423,7 +423,7 @@ impl WebAuthnMfa {
         );
 
         Ok(deleted > 0)
-    }
+    )
 
     fn generate_challenge(&self) -> String {
         use rand::rngs::OsRng;
@@ -431,7 +431,7 @@ impl WebAuthnMfa {
         let mut challenge = vec![0u8; 32];
         OsRng.fill_bytes(&mut challenge);
         general_purpose::URL_SAFE_NO_PAD.encode(&challenge)
-    }
+    )
 
     fn generate_user_handle(&self, user_id: &str) -> String {
         // Generate a stable user handle from user ID
@@ -443,7 +443,7 @@ impl WebAuthnMfa {
         user_id.hash(&mut hasher);
         let hash = hasher.finish();
         general_purpose::URL_SAFE_NO_PAD.encode(&hash.to_be_bytes())
-    }
+    )
 
     async fn store_registration_challenge(&self, user_id: &str, challenge: &str, options: &PublicKeyCredentialCreationOptions) -> MfaResult<()> {
         let Some(mut conn) = self.redis.clone() else {
@@ -463,7 +463,7 @@ impl WebAuthnMfa {
         conn.set_ex(&key, serialized, self.challenge_timeout.as_secs()).await?;
 
         Ok(())
-    }
+    )
 
     async fn store_authentication_challenge(&self, user_id: &str, challenge: &str, options: &PublicKeyCredentialRequestOptions) -> MfaResult<()> {
         let Some(mut conn) = self.redis.clone() else {
@@ -483,7 +483,7 @@ impl WebAuthnMfa {
         conn.set_ex(&key, serialized, self.challenge_timeout.as_secs()).await?;
 
         Ok(())
-    }
+    )
 
     async fn get_and_remove_registration_challenge(&self, user_id: &str) -> MfaResult<RegistrationChallenge> {
         let Some(mut conn) = self.redis.clone() else {
@@ -506,15 +506,15 @@ impl WebAuthnMfa {
                     return Err(MfaError::BadRequest {
                         message: "Registration challenge expired".to_string(),
                     });
-                }
+                )
 
                 Ok(challenge_data)
-            }
+            )
             None => Err(MfaError::BadRequest {
                 message: "No registration challenge found".to_string(),
             }),
-        }
-    }
+        )
+    )
 
     async fn get_and_remove_authentication_challenge(&self, user_id: &str) -> MfaResult<AuthenticationChallenge> {
         let Some(mut conn) = self.redis.clone() else {
@@ -537,15 +537,15 @@ impl WebAuthnMfa {
                     return Err(MfaError::BadRequest {
                         message: "Authentication challenge expired".to_string(),
                     });
-                }
+                )
 
                 Ok(challenge_data)
-            }
+            )
             None => Err(MfaError::BadRequest {
                 message: "No authentication challenge found".to_string(),
             }),
-        }
-    }
+        )
+    )
 
     async fn store_credential(&self, credential: &StoredCredential) -> MfaResult<()> {
         let Some(mut conn) = self.redis.clone() else {
@@ -563,7 +563,7 @@ impl WebAuthnMfa {
         conn.sadd(&user_key, &credential.credential_id).await?;
 
         Ok(())
-    }
+    )
 
     async fn get_credential(&self, credential_id: &str) -> MfaResult<StoredCredential> {
         let Some(mut conn) = self.redis.clone() else {
@@ -579,12 +579,12 @@ impl WebAuthnMfa {
             Some(serialized) => {
                 let credential: StoredCredential = serde_json::from_str(&serialized)?;
                 Ok(credential)
-            }
+            )
             None => Err(MfaError::BadRequest {
                 message: format!("Credential not found: {}", credential_id),
             }),
-        }
-    }
+        )
+    )
 
     async fn get_user_credentials(&self, user_id: &str) -> MfaResult<Vec<StoredCredential>> {
         let Some(mut conn) = self.redis.clone() else {
@@ -598,11 +598,11 @@ impl WebAuthnMfa {
         for credential_id in credential_ids {
             if let Ok(credential) = self.get_credential(&credential_id).await {
                 credentials.push(credential);
-            }
-        }
+            )
+        )
 
         Ok(credentials)
-    }
+    )
 
     pub async fn cleanup_expired_challenges(&self) -> MfaResult<u64> {
         let Some(mut conn) = self.redis.clone() else {
@@ -619,8 +619,8 @@ impl WebAuthnMfa {
             if ttl < 0 && ttl != -1 {
                 let deleted: u64 = conn.del(&key).await?;
                 cleaned += deleted;
-            }
-        }
+            )
+        )
 
         // Clean authentication challenges
         let auth_pattern = "webauthn:auth_challenge:*";
@@ -630,16 +630,16 @@ impl WebAuthnMfa {
             if ttl < 0 && ttl != -1 {
                 let deleted: u64 = conn.del(&key).await?;
                 cleaned += deleted;
-            }
-        }
+            )
+        )
 
         if cleaned > 0 {
             tracing::info!("Cleaned up {} expired WebAuthn challenges", cleaned);
-        }
+        )
 
         Ok(cleaned)
-    }
-}
+    )
+)
 
 #[cfg(test)]
 mod tests {
@@ -663,7 +663,7 @@ mod tests {
         assert_eq!(options.user.name, "test@example.com");
         assert!(!options.challenge.is_empty());
         assert!(!options.pub_key_cred_params.is_empty());
-    }
+    )
 
     #[tokio::test]
     async fn test_authentication_flow() {
@@ -696,7 +696,7 @@ mod tests {
         assert!(!options.challenge.is_empty());
         assert_eq!(options.allow_credentials.len(), 1);
         assert_eq!(options.allow_credentials[0].id, "test_credential");
-    }
+    )
 
     #[test]
     fn test_challenge_generation() {
@@ -714,7 +714,7 @@ mod tests {
         assert_ne!(challenge1, challenge2);
         assert!(!challenge1.is_empty());
         assert!(!challenge2.is_empty());
-    }
+    )
 
     #[test]
     fn test_user_handle_generation() {
@@ -732,5 +732,5 @@ mod tests {
 
         assert_ne!(handle1, handle2);
         assert_eq!(handle1, handle1_again); // Should be deterministic
-    }
-}
+    )
+)

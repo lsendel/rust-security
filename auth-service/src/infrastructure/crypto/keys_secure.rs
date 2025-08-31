@@ -3,6 +3,7 @@ use tokio::sync::RwLock;
 use serde_json::Value;
 use jsonwebtoken::{EncodingKey, DecodingKey};
 use thiserror::Error;
+use once_cell::sync::Lazy;
 
 #[cfg(feature = "vault")]
 use vaultrs::{client::VaultClient, kv2};

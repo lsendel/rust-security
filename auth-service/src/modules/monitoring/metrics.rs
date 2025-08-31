@@ -3,7 +3,7 @@
 //! Provides comprehensive metrics collection for the authentication service,
 //! including HTTP metrics, business metrics, and system health indicators.
 
-use prometheus::{Counter, Encoder, Gauge, Histogram, IntCounter, IntGauge, Registry, TextEncoder};
+// use prometheus::{Counter, Encoder, Gauge, Histogram, IntCounter, IntGauge, Registry, TextEncoder};  // Temporarily disabled
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
