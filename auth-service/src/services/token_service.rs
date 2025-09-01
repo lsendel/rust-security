@@ -44,7 +44,9 @@ pub trait TokenServiceTrait: Send + Sync {
 /// Token service implementation
 pub struct TokenService {
     token_repo: DynTokenRepository,
+    #[allow(dead_code)] // TODO: Will be used for session management operations
     session_repo: DynSessionRepository,
+    #[allow(dead_code)] // TODO: Will be used for cryptographic operations
     crypto_service: Arc<CryptoService>,
 }
 
@@ -85,9 +87,8 @@ impl TokenServiceTrait for TokenService {
         if !token.is_active() {
             if token.is_expired() {
                 return Err(TokenError::Expired);
-            } else {
-                return Err(TokenError::Revoked);
             }
+            return Err(TokenError::Revoked);
         }
 
         Ok(token)
@@ -107,8 +108,8 @@ impl TokenServiceTrait for TokenService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::repositories::session_repository::MockSessionRepository;
-    use crate::domain::repositories::token_repository::MockTokenRepository;
+    use crate::tests::mocks::MockSessionRepository;
+    use crate::tests::mocks::MockTokenRepository;
     use std::sync::Arc;
 
     #[tokio::test]

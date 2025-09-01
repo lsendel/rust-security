@@ -382,12 +382,12 @@ mod tests {
         let signature = ReplayProtection::create_signature(&secret, method, path, nonce, timestamp);
 
         assert!(ReplayProtection::verify_signature(
-            secret, method, path, nonce, timestamp, &signature
+            &secret, method, path, nonce, timestamp, &signature
         ));
 
         // Wrong signature should fail
         assert!(!ReplayProtection::verify_signature(
-            secret,
+            &secret,
             method,
             path,
             nonce,

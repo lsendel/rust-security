@@ -1385,7 +1385,7 @@ impl AttackPatternDetector {
     }
 
     /// Shutdown the detector
-    pub async fn shutdown(&self) {
+    pub fn shutdown(&self) {
         info!("Shutting down Attack Pattern Detector");
 
         // Save important state

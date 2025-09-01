@@ -2,10 +2,10 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine as _;
 use dashmap::DashMap;
-use once_cell::sync::Lazy;
+// use rayon::prelude::*; // Unused - parallel processing not implemented yet
 use ring::rand::SecureRandom;
 use ring::{aead, digest, hmac, rand, signature};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -25,6 +25,7 @@ pub struct CryptoOptimized {
     hmac_keys: Arc<DashMap<String, hmac::Key>>,
     aead_sealing_keys: Arc<DashMap<String, Arc<aead::LessSafeKey>>>,
     aead_opening_keys: Arc<DashMap<String, Arc<aead::LessSafeKey>>>,
+    #[allow(dead_code)] // TODO: Will be used for RSA signing operations
     signing_keys: Arc<RwLock<Vec<Arc<signature::RsaKeyPair>>>>,
     key_rotation_interval: Duration,
     last_rotation: Arc<RwLock<Instant>>,
@@ -57,7 +58,7 @@ impl aead::NonceSequence for HardwareAccelerated {
     }
 }
 
-static CRYPTO_ENGINE: Lazy<CryptoOptimized> = Lazy::new(|| CryptoOptimized::new());
+static CRYPTO_ENGINE: LazyLock<CryptoOptimized> = LazyLock::new(|| CryptoOptimized::new());
 
 impl CryptoOptimized {
     pub fn new() -> Self {
@@ -273,6 +274,7 @@ impl CryptoOptimized {
     }
 
     /// Constant-time password verification
+    #[allow(dead_code)] // TODO: Will be used when password verification is needed
     fn verify_password(&self, password: &str, hash: &str) -> bool {
         // Use argon2 for secure password verification
         use argon2::{Argon2, PasswordHash, PasswordVerifier};
@@ -387,7 +389,7 @@ pub fn get_crypto_engine() -> &'static CryptoOptimized {
 }
 
 /// Hardware-accelerated JWT signature verification
-pub async fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
+pub fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
     #[cfg(feature = "simd")]
     {
         CRYPTO_ENGINE.batch_validate_tokens(tokens)
@@ -483,7 +485,7 @@ mod tests {
             "tk_valid_token_2".to_string(),
         ];
 
-        let results = verify_jwt_signature_batch(&tokens).await;
+        let results = verify_jwt_signature_batch(&tokens);
         assert_eq!(results.len(), 3);
         assert!(results[0]); // valid
         assert!(!results[1]); // invalid

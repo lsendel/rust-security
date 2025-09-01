@@ -11,6 +11,8 @@
 //! The metrics are designed to be compatible with Prometheus and follow
 //! best practices for naming and labeling.
 
+#![cfg(feature = "monitoring")]
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -639,7 +641,7 @@ fn normalize_path_for_cardinality(path: &str) -> String {
 }
 
 /// Prometheus metrics endpoint handler
-pub async fn metrics_handler() -> impl IntoResponse {
+pub fn metrics_handler() -> impl IntoResponse {
     match METRICS.gather_metrics() {
         Ok(metrics) => (
             StatusCode::OK,

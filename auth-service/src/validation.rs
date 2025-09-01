@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
-use validator::{Validate, ValidationError, ValidationErrors};
-
-use crate::shared::error::AppError;
+use validator::{Validate, ValidationError as ValidatorError, ValidationErrors};
 
 /// Maximum lengths for various input fields
 pub const MAX_CLIENT_ID_LENGTH: usize = 255;
@@ -487,38 +485,14 @@ pub struct RateLimitConfig {
 // Custom validation functions
 
 /// Validate `OAuth` 2.0 scope parameter
-fn validate_scope(scope: &str) -> Result<(), ValidationError> {
+fn validate_scope(scope: &str) -> Result<(), ValidatorError> {
     // Check for valid scope format (space-separated tokens)
-    if scope.is_empty() {
-        return Err(AppError::validation("scope_empty"));
-    }
-
-    let scopes: Vec<&str> = scope.split_whitespace().collect();
-    if scopes.is_empty() {
-        return Err(AppError::validation("scope_invalid"));
-    }
-
-    // Validate each scope token
-    for scope_token in scopes {
-        if scope_token.is_empty() {
-            return Err(AppError::validation("scope_token_empty"));
-        }
-
-        // Scope tokens should not contain certain characters
-        if scope_token.contains(['\"', '\\', '\r', '\n', '\t']) {
-            return Err(AppError::validation("scope_token_invalid_chars"));
-        }
-
-        if scope_token.len() > 100 {
-            return Err(AppError::validation("scope_token_too_long"));
-        }
-    }
+    if scope.is_empty() {\n        return Err(ValidatorError::new(\"scope_empty\"));\n    }\n\n    let scopes: Vec<&str> = scope.split_whitespace().collect();\n    if scopes.is_empty() {\n        return Err(ValidatorError::new(\"scope_invalid\"));\n    }\n\n    // Validate each scope token\n    for scope_token in scopes {\n        if scope_token.is_empty() {\n            return Err(ValidatorError::new(\"scope_token_empty\"));\n        }\n\n        // Scope tokens should not contain certain characters\n        if scope_token.contains(['\"', '\\\\', '\\r', '\\n', '\\t']) {\n            return Err(ValidatorError::new(\"scope_token_invalid_chars\"));\n        }\n\n        if scope_token.len() > 100 {\n            return Err(ValidatorError::new(\"scope_token_too_long\"));\n        }\n    }\n
 
     Ok(())
 }
 
-/// Validate SCIM filter expression
-fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
+fn validate_scim_filter(filter: &str) -> Result<(), ValidatorError> {
     if filter.is_empty() {
         return Ok(());
     }
@@ -532,7 +506,9 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
             ')' => {
                 paren_count -= 1;
                 if paren_count < 0 {
-                    return Err(AppError::validation("scim_filter_unbalanced_parens"));
+                    return Err(ValidatorError::new(
+                        "scim_filter_unbalanced_parens",
+                    ));
                 }
             }
             _ => {}
@@ -540,7 +516,9 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     }
 
     if paren_count != 0 {
-        return Err(AppError::validation("scim_filter_unbalanced_parens"));
+        return Err(ValidatorError::new(
+            "scim_filter_unbalanced_parens",
+        ));
     }
 
     // Check for SQL injection patterns
@@ -552,7 +530,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
 
     for pattern in &sql_patterns {
         if filter_lower.contains(pattern) {
-            return Err(AppError::validation("scim_filter_sql_injection"));
+            return Err(ValidatorError::new("scim_filter_sql_injection"));
         }
     }
 
@@ -560,7 +538,7 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
     let xss_patterns = ["<script", "javascript:", "onload=", "onerror="];
     for pattern in &xss_patterns {
         if filter_lower.contains(pattern) {
-            return Err(AppError::validation("scim_filter_xss_attempt"));
+            return Err(ValidatorError::new("scim_filter_xss_attempt"));
         }
     }
 
@@ -568,10 +546,10 @@ fn validate_scim_filter(filter: &str) -> Result<(), ValidationError> {
 }
 
 /// Validate phone number format
-fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
+fn validate_phone_number(phone: &str) -> Result<(), ValidatorError> {
     // Basic phone number validation
     if phone.is_empty() {
-        return Err(AppError::validation("phone_empty"));
+        return Err(ValidatorError::new("phone_empty"));
     }
 
     // Allow digits, spaces, hyphens, parentheses, and + for international format
@@ -579,19 +557,19 @@ fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
         .chars()
         .all(|c| c.is_ascii_digit() || " -+()".contains(c))
     {
-        return Err(AppError::validation("phone_invalid_chars"));
+        return Err(ValidatorError::new("phone_invalid_chars"));
     }
 
     // Must contain at least some digits
     if !phone.chars().any(|c| c.is_ascii_digit()) {
-        return Err(AppError::validation("phone_no_digits"));
+        return Err(ValidatorError::new("phone_no_digits"));
     }
 
     Ok(())
 }
 
 /// Validate CORS origin
-fn validate_origin(origin: &str) -> Result<(), ValidationError> {
+fn validate_origin(origin: &str) -> Result<(), ValidatorError> {
     if origin == "*" {
         return Ok(()); // Wildcard is allowed
     }
@@ -600,20 +578,20 @@ fn validate_origin(origin: &str) -> Result<(), ValidationError> {
     if origin.starts_with("http://") || origin.starts_with("https://") {
         // Basic URL validation
         if url::Url::parse(origin).is_err() {
-            return Err(AppError::validation("origin_invalid_url"));
+            return Err(ValidatorError::new("origin_invalid_url"));
         }
     } else if origin.starts_with("localhost:") || origin == "localhost" {
         // Allow localhost variations
         return Ok(());
     } else {
-        return Err(AppError::validation("origin_invalid_format"));
+        return Err(ValidatorError::new("origin_invalid_format"));
     }
 
     Ok(())
 }
 
 /// Validate password strength
-fn validate_password_strength(password: &str) -> Result<(), ValidationError> {
+fn validate_password_strength(password: &str) -> Result<(), ValidatorError> {
     let validator = PasswordValidator::new(password);
 
     validator
@@ -717,9 +695,9 @@ impl<'a> PasswordValidator<'a> {
         self
     }
 
-    fn finalize(self) -> Result<(), ValidationError> {
+    fn finalize(self) -> Result<(), ValidatorError> {
         if self.score < Self::MIN_SCORE || !self.errors.is_empty() {
-            Err(AppError::validation("password_too_weak"))
+            Err(ValidatorError::new("password_too_weak"))
         } else {
             Ok(())
         }
@@ -834,8 +812,7 @@ impl ValidatedDto for RateLimitConfig {}
 
 /// Validation middleware for Axum extractors
 pub mod middleware {
-    use super::{Deserialize, ValidatedDto};
-    use crate::shared::error::AppError;
+    use super::{Deserialize, ValidatedDto, ValidatorError};
     use axum::{extract::FromRequest, http::Request};
 
     /// Validated JSON extractor that automatically validates DTOs
@@ -855,7 +832,7 @@ pub mod middleware {
         ) -> Result<Self, Self::Rejection> {
             let axum::Json(dto) = axum::Json::<T>::from_request(req, state)
                 .await
-                .map_err(|_| AppError::validation("validation error"))?;
+                .map_err(|_| ValidatorError::new("validation error"))?;
 
             match dto.validate_and_return() {
                 Ok(validated_dto) => Ok(Self(validated_dto)),
@@ -869,7 +846,7 @@ pub mod middleware {
                         .collect::<Vec<_>>()
                         .join("; ");
 
-                    Err(AppError::validation("validation", &error_msg))
+                    Err(validator::ValidationError::new("validation"))
                 }
             }
         }
@@ -892,7 +869,7 @@ pub mod middleware {
         ) -> Result<Self, Self::Rejection> {
             let axum::extract::Query(dto) = axum::extract::Query::<T>::from_request(req, state)
                 .await
-                .map_err(|_| AppError::validation("validation error"))?;
+                .map_err(|_| validator::ValidationError::new("validation error"))?;
 
             match dto.validate_and_return() {
                 Ok(validated_dto) => Ok(Self(validated_dto)),
@@ -906,7 +883,7 @@ pub mod middleware {
                         .collect::<Vec<_>>()
                         .join("; ");
 
-                    Err(AppError::validation("validation", &error_msg))
+                    Err(validator::ValidationError::new("validation"))
                 }
             }
         }

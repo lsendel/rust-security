@@ -183,7 +183,7 @@ impl UserServiceTrait for UserService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::repositories::user_repository::MockUserRepository;
+    use crate::tests::mocks::MockUserRepository;
     use std::sync::Arc;
 
     #[tokio::test]

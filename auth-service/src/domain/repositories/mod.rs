@@ -15,10 +15,4 @@ pub type DynUserRepository = std::sync::Arc<dyn UserRepository>;
 pub type DynSessionRepository = std::sync::Arc<dyn SessionRepository>;
 pub type DynTokenRepository = std::sync::Arc<dyn TokenRepository>;
 
-// Re-export mock repositories for testing
-#[cfg(test)]
-pub use session_repository::tests::MockSessionRepository;
-#[cfg(test)]
-pub use token_repository::tests::MockTokenRepository;
-#[cfg(test)]
-pub use user_repository::tests::MockUserRepository;
+// Mock repositories are available in crate::tests::mocks module

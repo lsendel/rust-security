@@ -231,11 +231,11 @@ mod tests {
 
         // Create a test user and session
         let user_id = crate::domain::value_objects::UserId::new();
-        let email = crate::domain::value_objects::Email::new("test@example.com").unwrap();
+        let email = crate::domain::value_objects::Email::new("test@example.com".to_string()).unwrap();
         let password_hash = crypto.hash_password("password").await.unwrap();
 
-        let user = User::new(email, password_hash, "Test User".to_string());
-        let session = Session::new(user_id, Utc::now());
+        let user = User::new(user_id, email, password_hash, Some("Test User".to_string()));
+        let session = Session::new(user.id.clone(), Utc::now());
 
         let access_token = crypto.generate_access_token(&user, &session).await.unwrap();
         assert!(!access_token.is_empty());

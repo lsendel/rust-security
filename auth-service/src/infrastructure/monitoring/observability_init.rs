@@ -9,6 +9,11 @@ use axum::Json;
 use std::sync::Arc;
 use tracing::info;
 
+#[cfg(feature = "monitoring")]
+use crate::metrics::MetricsRegistry;
+#[cfg(feature = "monitoring")]
+use crate::security_metrics::SecurityMetrics;
+
 /// Enhanced observability system (stub implementation)
 #[derive(Debug, Clone)]
 pub struct EnhancedObservability {
@@ -32,23 +37,23 @@ impl EnhancedObservability {
         serde_json::json!({"status": "healthy"})
     }
 
-    pub async fn get_slo_status(&self) -> serde_json::Value {
+    pub fn get_slo_status(&self) -> serde_json::Value {
         serde_json::json!({"slo_status": "ok"})
     }
 
-    pub async fn get_performance_profiles(&self) -> serde_json::Value {
+    pub fn get_performance_profiles(&self) -> serde_json::Value {
         serde_json::json!({"profiles": []})
     }
 
-    pub async fn get_active_alerts(&self) -> serde_json::Value {
+    pub fn get_active_alerts(&self) -> serde_json::Value {
         serde_json::json!({"alerts": []})
     }
 
-    pub async fn export_metrics_for_grafana(&self) -> Result<serde_json::Value, String> {
+    pub fn export_metrics_for_grafana(&self) -> Result<serde_json::Value, String> {
         Ok(serde_json::json!({"metrics": {}}))
     }
 
-    pub async fn record_operation_performance(
+    pub fn record_operation_performance(
         &self,
         _operation: &str,
         _duration: std::time::Duration,
@@ -57,7 +62,7 @@ impl EnhancedObservability {
         // Stub implementation
     }
 
-    pub async fn record_security_event(&self, _event: &str) {
+    pub fn record_security_event(&self, _event: &str) {
         // Stub implementation
     }
 }
@@ -149,8 +154,8 @@ impl ObservabilitySystem {
         let business_metrics = Arc::new(BusinessMetricsRegistry::new());
 
         // Load configuration from environment
-        let observability_config = Self::load_observability_config();
-        let sli_config = Self::load_sli_config();
+        let _observability_config = Self::load_observability_config();
+        let _sli_config = Self::load_sli_config();
 
         #[cfg(feature = "monitoring")]
         let (metrics_registry, security_metrics, enhanced_observability) = {
@@ -161,33 +166,13 @@ impl ObservabilitySystem {
             let security_metrics = Arc::new(SecurityMetrics::new());
 
             // Initialize enhanced observability
-            let enhanced_observability = Arc::new(
-                EnhancedObservability::new(
-                    observability_config,
-                    sli_config,
-                    Arc::clone(&metrics_registry),
-                    Arc::clone(&security_metrics),
-                    Arc::clone(&business_metrics),
-                )
-                .await
-                .map_err(|e| {
-                    crate::shared::error::AppError::Internal(format!(
-                        "Failed to initialize enhanced observability: {e}"
-                    ))
-                })?,
-            );
+            let enhanced_observability = Arc::new(EnhancedObservability::new());
 
             (metrics_registry, security_metrics, enhanced_observability)
         };
 
         #[cfg(not(feature = "monitoring"))]
-        let enhanced_observability = Arc::new(
-            EnhancedObservability::new_minimal(
-                observability_config,
-                sli_config,
-                Arc::clone(&business_metrics),
-            )
-        );
+        let enhanced_observability = Arc::new(EnhancedObservability::new());
 
         info!("Observability system initialized successfully");
 
@@ -279,7 +264,7 @@ pub async fn metrics_handler(
 pub async fn slo_status_handler(
     axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    let slo_status = observability.enhanced_observability.get_slo_status().await;
+    let slo_status = observability.enhanced_observability.get_slo_status();
     (axum::http::StatusCode::OK, axum::Json(slo_status))
 }
 
@@ -289,8 +274,7 @@ pub async fn performance_profiles_handler(
 ) -> impl axum::response::IntoResponse {
     let profiles = observability
         .enhanced_observability
-        .get_performance_profiles()
-        .await;
+        .get_performance_profiles();
     (axum::http::StatusCode::OK, axum::Json(profiles))
 }
 
@@ -300,8 +284,7 @@ pub async fn alerts_handler(
 ) -> impl axum::response::IntoResponse {
     let alerts = observability
         .enhanced_observability
-        .get_active_alerts()
-        .await;
+        .get_active_alerts();
     (axum::http::StatusCode::OK, axum::Json(alerts))
 }
 
@@ -312,7 +295,6 @@ pub async fn grafana_dashboard_handler(
     match observability
         .enhanced_observability
         .export_metrics_for_grafana()
-        .await
     {
         Ok(dashboard) => (
             axum::http::StatusCode::OK,
@@ -343,8 +325,7 @@ impl ObservabilitySystem {
     ) {
         // Record in enhanced observability
         self.enhanced_observability
-            .record_operation_performance("authentication", duration, success)
-            .await;
+            .record_operation_performance("authentication", duration, success);
 
         // Record business metrics
         // Note: This would need to be implemented based on the actual BusinessMetricsRegistry interface
@@ -366,8 +347,7 @@ impl ObservabilitySystem {
             );
 
             self.enhanced_observability
-                .record_security_event(&format!("{:?}", security_event))
-                .await;
+                .record_security_event(&format!("{:?}", security_event));
         }
     }
 
@@ -381,8 +361,7 @@ impl ObservabilitySystem {
     ) {
         // Record in enhanced observability
         self.enhanced_observability
-            .record_operation_performance(&format!("token_{operation}"), duration, success)
-            .await;
+            .record_operation_performance(&format!("token_{operation}"), duration, success);
 
         // Record in metrics registry
         // TODO: Implement get_metrics_helper method for MetricsRegistry
@@ -438,8 +417,7 @@ pub trait ObservabilityAware {
     ) {
         self.observability()
             .enhanced_observability
-            .record_operation_performance(operation, duration, success)
-            .await;
+            .record_operation_performance(operation, duration, success);
     }
 }
 

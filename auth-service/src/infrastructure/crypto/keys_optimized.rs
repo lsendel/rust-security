@@ -2,7 +2,6 @@
 // This provides non-blocking RSA key generation and better caching
 
 use base64::Engine as _;
-use once_cell::sync::Lazy;
 use ring::{
     error::Unspecified,
     rand::SystemRandom,
@@ -10,6 +9,7 @@ use ring::{
 };
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use tokio::sync::{RwLock, Semaphore};
 
 #[derive(Clone)]
@@ -182,6 +182,7 @@ impl OptimizedSecureKeyManager {
     }
 
     // Helper methods
+    #[allow(dead_code)] // TODO: Will be used when JWT encoding/decoding is implemented
     fn base64url(&self, data: &[u8]) -> String {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
     }
@@ -195,8 +196,8 @@ impl OptimizedSecureKeyManager {
 }
 
 // Global optimized key manager instance
-static OPTIMIZED_KEY_MANAGER: Lazy<OptimizedSecureKeyManager> =
-    Lazy::new(OptimizedSecureKeyManager::new);
+static OPTIMIZED_KEY_MANAGER: LazyLock<OptimizedSecureKeyManager> =
+    LazyLock::new(OptimizedSecureKeyManager::new);
 
 /// Public API functions
 pub async fn get_optimized_jwks() -> Value {

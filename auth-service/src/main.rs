@@ -12,6 +12,7 @@ mod config;
 
 use auth_api::AuthState;
 use config::Config;
+use auth_service::infrastructure::security::security::{start_rate_limiter_cleanup, rate_limit};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -33,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let auth_state = AuthState::new(config.jwt.secret.clone());
 
     // Start rate limiter cleanup task
-    auth_service::security::start_rate_limiter_cleanup();
+    start_rate_limiter_cleanup();
 
     // Create comprehensive HTTP server with authentication endpoints
     let app = axum::Router::new()
@@ -60,9 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Add authentication state
         .with_state(auth_state)
         // Security middleware
-        .layer(axum::middleware::from_fn(
-            auth_service::security::rate_limit,
-        ))
+        .layer(axum::middleware::from_fn(rate_limit))
         .layer(axum::middleware::from_fn(security_headers));
 
     let addr = config.server.bind_addr;

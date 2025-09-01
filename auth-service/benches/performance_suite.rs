@@ -170,7 +170,7 @@ fn bench_token_introspection(c: &mut Criterion) {
 
                             let handle = tokio::spawn(async move {
                                 let service_read = service.read().await;
-                                service_read.introspect_token(&token).await
+                                service_read.introspect_token(&token).await.cloned()
                             });
                             handles.push(handle);
                         }

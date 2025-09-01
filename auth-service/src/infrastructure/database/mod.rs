@@ -3,11 +3,10 @@
 //! Database connection and repository implementations.
 
 pub mod connection_pool;
-#[cfg(feature = "postgres")]
-pub mod postgres;
+// pub mod postgres; // Module file doesn't exist
 // pub mod redis; // Temporarily disabled due to complex async trait implementation issues
 
 // Re-export database implementations
 pub use connection_pool::{ConnectionPoolConfig, DatabaseConnectionManager, OptimizedPgPool};
-#[cfg(feature = "postgres")]
-pub use postgres::*;
+// #[cfg(feature = "postgres")]
+// pub use postgres::*; // Module doesn't exist

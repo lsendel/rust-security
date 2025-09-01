@@ -2,11 +2,13 @@ use regex::Regex;
 use std::collections::HashSet;
 use validator::ValidationError;
 
-// Import constants from the main validation module
-use crate::validation::{
-    MAX_CLIENT_ID_LENGTH, MAX_EMAIL_LENGTH, MAX_REDIRECT_URI_LENGTH, MAX_SCOPE_LENGTH,
-    MAX_USERNAME_LENGTH,
-};
+// Constants (copied from validation module temporarily)
+// TODO: Re-enable import when validation module is fixed
+const MAX_CLIENT_ID_LENGTH: usize = 255;
+const MAX_EMAIL_LENGTH: usize = 320;
+const MAX_REDIRECT_URI_LENGTH: usize = 2048;
+const MAX_SCOPE_LENGTH: usize = 1000;
+const MAX_USERNAME_LENGTH: usize = 255;
 
 // Compile security-focused regexes once for performance
 static SAFE_STRING_REGEX: std::sync::LazyLock<Regex> =

@@ -265,8 +265,7 @@ impl NonHumanIdentityMonitor {
             // Calculate request rate
             let config = self.config.read().await;
             let rate = self
-                .calculate_request_rate(identity_logs, config.rate_window_minutes)
-                .await;
+                .calculate_request_rate(identity_logs, config.rate_window_minutes);
             identity_metrics.request_rate_per_minute = rate;
         }
 
@@ -553,7 +552,7 @@ impl NonHumanIdentityMonitor {
         Ok(())
     }
 
-    async fn calculate_request_rate(
+    fn calculate_request_rate(
         &self,
         logs: &VecDeque<ActivityLog>,
         window_minutes: u64,

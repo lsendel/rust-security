@@ -353,7 +353,7 @@ impl Default for PerformanceHistory {
 }
 
 /// Performance monitoring middleware
-pub async fn performance_monitoring_middleware(
+pub fn performance_monitoring_middleware(
     optimizer: Arc<PerformanceOptimizer>,
 ) -> impl Fn() + Send + Sync {
     move || {

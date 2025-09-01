@@ -631,7 +631,7 @@ pub async fn create_and_start_session_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::session::manager::SessionConfig;
+    use crate::infrastructure::storage::session::manager::SessionConfig;
 
     #[tokio::test]
     async fn test_jittered_interval_calculation() {

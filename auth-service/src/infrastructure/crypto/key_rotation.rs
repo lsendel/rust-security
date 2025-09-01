@@ -148,7 +148,7 @@ impl KeyRotationService {
         self.last_rotation = Some(now);
 
         // Clean up old keys (this would be implemented based on your storage)
-        self.cleanup_old_keys().await?;
+        self.cleanup_old_keys()?;
 
         info!("Key rotation completed successfully");
 
@@ -156,7 +156,7 @@ impl KeyRotationService {
     }
 
     /// Clean up old keys that are past the retention period
-    async fn cleanup_old_keys(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    fn cleanup_old_keys(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // This is a placeholder - in a real implementation, you would:
         // 1. Get all keys with their creation timestamps
         // 2. Remove keys older than the retention period

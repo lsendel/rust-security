@@ -145,7 +145,7 @@ mod tests {
         async fn delete_expired(&self) -> Result<i64, SessionRepositoryError> {
             let mut sessions = self.sessions.write().unwrap();
             let before_count = sessions.len();
-            let now = Utc::now();
+            let _now = Utc::now();
             sessions.retain(|_, session| !session.is_expired());
             let deleted_count = before_count - sessions.len();
             Ok(deleted_count as i64)

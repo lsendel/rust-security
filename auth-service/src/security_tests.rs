@@ -2,14 +2,15 @@
 mod security_tests {
     use crate::jwt_secure::create_secure_jwt_validation;
     use crate::rate_limit_secure::{RateLimitConfig, SecureRateLimiter};
-    use crate::security::{
+    use crate::infrastructure::security::security::{
         generate_code_challenge, generate_code_verifier, generate_request_signature,
         generate_token_binding, verify_code_challenge, verify_request_signature,
     };
-    use crate::storage::session::secure::{
+    use crate::infrastructure::storage::session::secure::{
         SecureSessionConfig, SecureSessionManager, SessionError,
     };
     use crate::validation_secure::*;
+    use crate::redirect_validation::*;
     use base64::Engine;
     use std::net::{IpAddr, Ipv4Addr};
 

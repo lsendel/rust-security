@@ -364,6 +364,6 @@ mod tests {
         // This test would require a mock HTTP server to be fully functional
         // For now, we just test that the client can be created
         let result = ResilientHttpClient::new("test", config);
-        assert!(operation_result.is_ok());
+        assert!(result.is_ok());
     }
 }

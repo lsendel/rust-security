@@ -1,5 +1,4 @@
 use crate::core::security::{SecurityEvent, ViolationSeverity};
-use crate::shared::error::AppError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
 use crate::threat_types::{
@@ -880,7 +879,7 @@ impl ThreatIntelligenceCorrelator {
                 Self::query_abuse_ipdb(feed, indicator, indicator_type, http_client).await
             }
             ThreatFeedType::VirusTotal => {
-                Self::query_virustotal(feed, indicator, indicator_type, http_client).await
+                Self::query_virustotal(feed, indicator, indicator_type, http_client)
             }
             _ => {
                 warn!("Unsupported feed type: {:?}", feed.feed_type);
@@ -975,7 +974,7 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Query `VirusTotal` for indicator information
-    async fn query_virustotal(
+    fn query_virustotal(
         _feed: &ThreatFeedConfig,
         _indicator: &str,
         _indicator_type: &IndicatorType,
@@ -1152,9 +1151,7 @@ impl ThreatIntelligenceCorrelator {
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to download feed {}: {}", feed.name, e);
-                return Err(crate::shared::error::AppError::ExternalService(format!(
-                    "Feed download failed: {e}"
-                )));
+                return Err(crate::shared::error::AppError::ExternalService);
             }
         };
 
@@ -1163,9 +1160,7 @@ impl ThreatIntelligenceCorrelator {
             Ok(indicators) => indicators,
             Err(e) => {
                 error!("Failed to parse feed {}: {}", feed.name, e);
-                return Err(crate::shared::error::AppError::ExternalService(format!(
-                    "Feed parsing failed: {e}"
-                )));
+                return Err(crate::shared::error::AppError::ExternalService);
             }
         };
 
@@ -1234,10 +1229,8 @@ impl ThreatIntelligenceCorrelator {
         match format.to_lowercase().as_str() {
             "json" => {
                 // Parse JSON format feed
-                let json_data: serde_json::Value = serde_json::from_str(data).map_err(|e| {
-                    crate::shared::error::AppError::ExternalService(format!(
-                        "JSON parse error: {e}"
-                    ))
+                let json_data: serde_json::Value = serde_json::from_str(data).map_err(|_| {
+                    crate::shared::error::AppError::ExternalService
                 })?;
 
                 if let Some(array) = json_data.as_array() {
@@ -1300,9 +1293,7 @@ impl ThreatIntelligenceCorrelator {
                 }
             }
             _ => {
-                return Err(crate::shared::error::AppError::ExternalService(format!(
-                    "Unsupported feed format: {format}"
-                )));
+                return Err(crate::shared::error::AppError::ExternalService);
             }
         }
 

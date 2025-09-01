@@ -17,7 +17,7 @@
 macro_rules! auth_error_from {
     ($($source_type:ty => $variant:ident),+ $(,)?) => {
         $(
-            impl From<$source_type> for $crate::errors::crate::shared::error::AppError {
+            impl From<$source_type> for $crate::shared::error::AppError {
                 fn from(source: $source_type) -> Self {
                     Self::$variant { source }
                 }
@@ -39,7 +39,7 @@ macro_rules! auth_error_from {
 macro_rules! auth_error_from_with_context {
     ($($source_type:ty => $variant:ident($context:expr)),+ $(,)?) => {
         $(
-            impl From<$source_type> for $crate::errors::crate::shared::error::AppError {
+            impl From<$source_type> for $crate::shared::error::AppError {
                 fn from(source: $source_type) -> Self {
                     Self::$variant {
                         error_id: uuid::Uuid::new_v4(),
@@ -64,7 +64,7 @@ macro_rules! auth_error_from_with_context {
 macro_rules! auth_error_from_boxed {
     ($($variant:ident($operation:expr)),+ $(,)?) => {
         $(
-            impl<T: std::error::Error + Send + Sync + 'static> From<T> for $crate::errors::crate::shared::error::AppError
+            impl<T: std::error::Error + Send + Sync + 'static> From<T> for $crate::shared::error::AppError
             where
                 T: std::error::Error + Send + Sync + 'static,
             {

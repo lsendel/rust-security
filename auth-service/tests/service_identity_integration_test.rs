@@ -5,11 +5,12 @@
 
 use std::sync::Arc;
 use uuid::Uuid;
+use auth_service::infrastructure::security::security_monitoring::SecurityAlert;
 
 use auth_service::{
     jit_token_manager::{JitConfig, JitTokenManager, TokenBindingContext},
     non_human_monitoring::{NonHumanIdentityMonitor, NonHumanMonitoringConfig},
-    security_monitoring::SecurityAlert,
+    // security_monitoring::SecurityAlert, // Module not available
     service_identity::{
         BehavioralBaseline, Environment, IdentityConfig, IdentityStatus, IdentityType,
         JitAccessRequest, RequestContext, ServiceIdentity, ServiceIdentityManager,
@@ -73,7 +74,7 @@ impl auth_service::non_human_monitoring::AlertHandler for MockAlertHandler {
     async fn send_alert(
         &self,
         _alert: SecurityAlert,
-    ) -> Result<(), auth_service::errors::AuthError> {
+    ) -> Result<(), auth_service::AppError> {
         Ok(())
     }
 
@@ -556,7 +557,7 @@ async fn test_high_volume_token_requests() {
         let identity_id = identity.id;
 
         let handle: tokio::task::JoinHandle<
-            Result<auth_service::service_identity::JitToken, auth_service::errors::AuthError>,
+            Result<auth_service::service_identity::JitToken, auth_service::AppError>,
         > = tokio::spawn(async move {
             let jit_request = JitAccessRequest {
                 identity_id,

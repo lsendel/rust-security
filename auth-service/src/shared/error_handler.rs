@@ -511,7 +511,7 @@ mod tests {
     async fn test_error_boundary() {
         let handler = Arc::new(ErrorHandler::new(10));
 
-        let boundary = ErrorBoundary::new(
+        let boundary: ErrorBoundary<String> = ErrorBoundary::new(
             || Err(AppError::NotFound("Test resource".to_string())),
             Arc::clone(&handler),
             "test_boundary",
@@ -551,7 +551,7 @@ mod tests {
             })
             .await;
 
-        assert_eq!(result, Ok("success".to_string()));
+        assert!(matches!(result, Ok(ref s) if s == "success"));
         assert_eq!(attempts.load(Ordering::Relaxed), 3);
     }
 
@@ -560,13 +560,13 @@ mod tests {
         let breaker = recovery::CircuitBreaker::new(2, std::time::Duration::from_millis(100));
 
         // First failure
-        let result1 = breaker
+        let result1: Result<String, AppError> = breaker
             .call(|| Box::pin(async { Err(AppError::ServiceUnavailable { reason: "Failure 1".to_string() }) }))
             .await;
         assert!(result1.is_err());
 
         // Second failure - should open circuit
-        let result2 = breaker
+        let result2: Result<String, AppError> = breaker
             .call(|| Box::pin(async { Err(AppError::ServiceUnavailable { reason: "Failure 2".to_string() }) }))
             .await;
         assert!(result2.is_err());

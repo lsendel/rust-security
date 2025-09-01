@@ -5,10 +5,11 @@
 
 #[cfg(feature = "monitoring")]
 use prometheus::{
-    register_counter_vec, register_gauge_vec, register_histogram_vec, register_int_counter_vec,
-    register_int_gauge_vec, Counter, CounterVec, Gauge, GaugeVec, Histogram, HistogramVec,
-    IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    register_gauge_vec, register_histogram_vec, register_int_counter_vec, register_int_gauge_vec,
+    GaugeVec, HistogramVec, IntCounterVec, IntGaugeVec,
 };
+#[cfg(feature = "monitoring")]
+use std::sync::LazyLock;
 
 /// Service Identity Management Metrics
 #[cfg(feature = "monitoring")]
@@ -319,14 +320,14 @@ impl MonitoringMetrics {
 
 /// Global metrics instances
 #[cfg(feature = "monitoring")]
-pub static SERVICE_IDENTITY_METRICS: Lazy<ServiceIdentityMetrics> =
-    Lazy::new(ServiceIdentityMetrics::new);
+pub static SERVICE_IDENTITY_METRICS: LazyLock<ServiceIdentityMetrics> =
+    LazyLock::new(ServiceIdentityMetrics::new);
 
 #[cfg(feature = "monitoring")]
-pub static JIT_TOKEN_METRICS: Lazy<JitTokenMetrics> = Lazy::new(JitTokenMetrics::new);
+pub static JIT_TOKEN_METRICS: LazyLock<JitTokenMetrics> = LazyLock::new(JitTokenMetrics::new);
 
 #[cfg(feature = "monitoring")]
-pub static MONITORING_METRICS: Lazy<MonitoringMetrics> = Lazy::new(MonitoringMetrics::new);
+pub static MONITORING_METRICS: LazyLock<MonitoringMetrics> = LazyLock::new(MonitoringMetrics::new);
 
 // Metric helper functions
 
@@ -509,7 +510,7 @@ impl TokenRequestTimer {
 
         SERVICE_IDENTITY_METRICS
             .token_request_duration
-            .with_label_values(&[&self.identity_type, result])
+            .with_label_values(&[self.identity_type.as_str(), result])
             .observe(duration);
     }
 }

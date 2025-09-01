@@ -36,7 +36,7 @@ impl PasswordHash {
     /// Verify if the hash uses a secure algorithm
     pub fn is_secure_algorithm(&self) -> bool {
         match self.algorithm() {
-            Some("argon2id") | Some("argon2i") | Some("scrypt") | Some("bcrypt") => true,
+            Some("argon2id" | "argon2i" | "scrypt" | "bcrypt") => true,
             _ => false,
         }
     }

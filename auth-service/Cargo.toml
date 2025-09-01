@@ -67,7 +67,7 @@ sha2 = { workspace = true }
 async-trait = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
-once_cell.workspace = true
+once_cell = { workspace = true }
 base64 = { workspace = true }
 constant_time_eq = { workspace = true }
 # Configuration file parsing
@@ -218,6 +218,8 @@ rate-limiting = ["dep:dashmap"]
 # Temporarily disabled due to version conflicts
 # audit-logging = ["tracing"]
 zero-trust = ["enhanced-session-store"]  # Removed threat-hunting
+# Database features
+postgres = ["dep:sqlx"]
 
 # Development features
 fast-build = []  # Minimal feature set for fast development builds

@@ -842,7 +842,7 @@ impl ThreatHuntingOrchestrator {
         // Shutdown subsystems
         self.behavioral_analyzer.shutdown().await;
         self.threat_intelligence.shutdown().await;
-        self.attack_pattern_detector.shutdown().await;
+        self.attack_pattern_detector.shutdown();
         let _ = self.user_profiler.shutdown().await;
         self.response_orchestrator.shutdown().await;
 

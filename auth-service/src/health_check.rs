@@ -3,7 +3,7 @@ use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{error, info};
 
@@ -140,123 +140,138 @@ impl HealthChecker {
         let start = Instant::now();
         let mut metadata = HashMap::new();
 
-        // Simulate database check (replace with actual database ping)
-        let result = self.simulate_component_check("database", 0.95).await;
+        // Yield to make this properly async
+        tokio::task::yield_now().await;
 
-        let health = match result {
-            Ok(()) => {
-                metadata.insert("connection_pool".to_string(), "healthy".to_string());
-                metadata.insert("active_connections".to_string(), "5".to_string());
-                ComponentHealth {
-                    status: HealthStatus::Healthy,
-                    response_time_ms: start.elapsed().as_millis() as u64,
-                    last_check: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    error: None,
-                    metadata,
-                }
-            }
-            Err(e) => ComponentHealth {
+        // Simulate database check (replace with actual implementation)
+        let is_healthy = fastrand::u32(1..=100) > 5; // 95% success rate
+
+        if is_healthy {
+            metadata.insert("host".to_string(), "localhost:5432".to_string());
+            metadata.insert("version".to_string(), "PostgreSQL 15.2".to_string());
+
+            let health = ComponentHealth {
+                status: HealthStatus::Healthy,
+                response_time_ms: start.elapsed().as_millis() as u64,
+                last_check: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                error: None,
+                metadata,
+            };
+
+            Ok(("database".to_string(), health))
+        } else {
+            let error_msg = "Failed to connect to database";
+            error!("Database health check failed: {}", error_msg);
+
+            let health = ComponentHealth {
                 status: HealthStatus::Unhealthy,
                 response_time_ms: start.elapsed().as_millis() as u64,
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs(),
-                error: Some(e.to_string()),
+                error: Some(error_msg.to_string()),
                 metadata,
-            },
-        };
+            };
 
-        Ok(("database".to_string(), health))
+            Ok(("database".to_string(), health))
+        }
     }
 
-    /// Check Redis connectivity
     async fn check_redis(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
 
-        // Simulate Redis check (replace with actual Redis ping)
-        let result = self.simulate_component_check("redis", 0.98).await;
+        // Simulate Redis check (replace with actual implementation)
+        let is_healthy = fastrand::u32(1..=100) > 3; // 97% success rate
 
-        let health = match result {
-            Ok(()) => {
-                metadata.insert("memory_usage".to_string(), "45%".to_string());
-                metadata.insert("connected_clients".to_string(), "12".to_string());
-                ComponentHealth {
-                    status: HealthStatus::Healthy,
-                    response_time_ms: start.elapsed().as_millis() as u64,
-                    last_check: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    error: None,
-                    metadata,
-                }
-            }
-            Err(e) => ComponentHealth {
+        if is_healthy {
+            metadata.insert("host".to_string(), "localhost:6379".to_string());
+            metadata.insert("version".to_string(), "Redis 7.0.8".to_string());
+
+            let health = ComponentHealth {
+                status: HealthStatus::Healthy,
+                response_time_ms: start.elapsed().as_millis() as u64,
+                last_check: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                error: None,
+                metadata,
+            };
+
+            Ok(("redis".to_string(), health))
+        } else {
+            let error_msg = "Failed to connect to Redis";
+            error!("Redis health check failed: {}", error_msg);
+
+            let health = ComponentHealth {
                 status: HealthStatus::Unhealthy,
                 response_time_ms: start.elapsed().as_millis() as u64,
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs(),
-                error: Some(e.to_string()),
+                error: Some(error_msg.to_string()),
                 metadata,
-            },
-        };
+            };
 
-        Ok(("redis".to_string(), health))
+            Ok(("redis".to_string(), health))
+        }
     }
 
-    /// Check external services
     async fn check_external_services(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
 
-        // Check external dependencies (OIDC providers, etc.)
-        let result = self
-            .simulate_component_check("external_services", 0.92)
-            .await;
+        // Simulate external services check (replace with actual implementation)
+        let is_healthy = fastrand::u32(1..=100) > 10; // 90% success rate
 
-        let health = match result {
-            Ok(()) => {
-                metadata.insert("oidc_providers".to_string(), "2 healthy".to_string());
-                metadata.insert("saml_providers".to_string(), "1 healthy".to_string());
-                ComponentHealth {
-                    status: HealthStatus::Healthy,
-                    response_time_ms: start.elapsed().as_millis() as u64,
-                    last_check: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    error: None,
-                    metadata,
-                }
-            }
-            Err(e) => {
-                ComponentHealth {
-                    status: HealthStatus::Degraded, // External services can be degraded
-                    response_time_ms: start.elapsed().as_millis() as u64,
-                    last_check: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    error: Some(e.to_string()),
-                    metadata,
-                }
-            }
-        };
+        if is_healthy {
+            metadata.insert("services_count".to_string(), "3".to_string());
+            metadata.insert("healthy_services".to_string(), "3".to_string());
 
-        Ok(("external_services".to_string(), health))
+            let health = ComponentHealth {
+                status: HealthStatus::Healthy,
+                response_time_ms: start.elapsed().as_millis() as u64,
+                last_check: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                error: None,
+                metadata,
+            };
+
+            Ok(("external_services".to_string(), health))
+        } else {
+            let error_msg = "External service dependency is unhealthy";
+            error!("External services health check failed: {}", error_msg);
+
+            let health = ComponentHealth {
+                status: HealthStatus::Degraded,
+                response_time_ms: start.elapsed().as_millis() as u64,
+                last_check: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                error: Some(error_msg.to_string()),
+                metadata,
+            };
+
+            Ok(("external_services".to_string(), health))
+        }
     }
 
     /// Check system resources
     async fn check_system_resources(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
+
+        // Yield to make this properly async
+        tokio::task::yield_now().await;
 
         // Get system metrics
         let memory_usage = self.get_memory_usage();
@@ -287,17 +302,7 @@ impl HealthChecker {
         Ok(("system_resources".to_string(), health))
     }
 
-    /// Simulate component check (replace with actual implementations)
-    async fn simulate_component_check(&self, component: &str, success_rate: f64) -> Result<()> {
-        // Add realistic delay
-        tokio::time::sleep(Duration::from_millis(10 + rand::random::<u64>() % 50)).await;
 
-        if rand::random::<f64>() < success_rate {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("{} check failed", component))
-        }
-    }
 
     /// Get memory usage (simplified)
     fn get_memory_usage(&self) -> f64 {

@@ -186,7 +186,7 @@ impl KeyManagementService {
 
         // Start automatic rotation if enabled
         if self.config.auto_rotation_enabled {
-            self.schedule_rotation().await;
+            self.schedule_rotation();
         }
 
         info!("Key management service initialized successfully");
@@ -561,7 +561,7 @@ impl KeyManagementService {
     }
 
     /// Schedule automatic rotation
-    async fn schedule_rotation(&self) {
+    fn schedule_rotation(&self) {
         // In a real implementation, this would set up a timer or cron job
         // For now, we'll just log that rotation scheduling is enabled
         info!(
@@ -594,7 +594,7 @@ impl KeyManagementService {
     }
 
     /// Generate RSA key PEM string dynamically
-    async fn generate_rsa_key_pem(&self) -> Result<String, crate::shared::error::AppError> {
+    fn generate_rsa_key_pem(&self) -> Result<String, crate::shared::error::AppError> {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing
         Err(crate::shared::error::AppError::KeyGenerationError {
@@ -609,7 +609,7 @@ impl KeyManagementService {
         kid: &str,
     ) -> Result<(EncodingKey, DecodingKey, Value), crate::shared::error::AppError> {
         // Generate a new RSA key dynamically for security
-        let private_key_pem = self.generate_rsa_key_pem().await?;
+        let private_key_pem = self.generate_rsa_key_pem()?;
 
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes()).map_err(|e| {
             AppError::internal(&format!(
@@ -824,8 +824,8 @@ mod tests {
 
         kms.initialize().await.unwrap();
 
-        let (kid, encoding_key) = kms.get_signing_key().await.unwrap();
-        let decoding_key = kms.get_decoding_key(&kid).await.unwrap();
+        let (kid, _encoding_key) = kms.get_signing_key().await.unwrap();
+        let _decoding_key = kms.get_decoding_key(&kid).await.unwrap();
 
         // Test that we can create keys for JWT operations
         assert!(!kid.is_empty());

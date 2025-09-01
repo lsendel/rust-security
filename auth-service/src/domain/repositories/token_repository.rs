@@ -3,6 +3,7 @@
 //! Defines the contract for token data access operations.
 
 use async_trait::async_trait;
+use chrono::Utc;
 
 use crate::domain::entities::{Token, TokenType};
 use crate::domain::value_objects::UserId;
@@ -71,8 +72,8 @@ pub trait TokenRepository: Send + Sync {
     async fn count_active_by_user(&self, user_id: &UserId) -> Result<i64, TokenRepositoryError>;
 }
 
-/// Type alias for token repository trait object
-pub type DynTokenRepository = Box<dyn TokenRepository>;
+/// Type alias for token repository trait object  
+pub type DynTokenRepository = std::sync::Arc<dyn TokenRepository>;
 
 #[cfg(test)]
 mod tests {

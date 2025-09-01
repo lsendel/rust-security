@@ -13,6 +13,7 @@ pub struct SamlAssertion {
 }
 
 pub struct SamlService {
+    #[allow(dead_code)] // TODO: Will be used when AES-GCM encryption is implemented
     encryption_key: [u8; 32],
 }
 

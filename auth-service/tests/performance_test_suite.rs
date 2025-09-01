@@ -13,8 +13,8 @@ use tracing::{debug, info, warn};
 use auth_service::storage::cache::{LruTokenCache, TokenCacheConfig};
 use auth_service::storage::session::store::RedisSessionStore;
 
-// Import test framework
-use crate::tests::test_framework::*;
+// Import test framework (currently not available)
+// use crate::tests::test_framework::*;
 
 /// Performance benchmark results
 #[derive(Debug, Clone)]
@@ -213,7 +213,7 @@ impl PerformanceTestSuite {
                             0 => {
                                 // Create session
                                 let session_data =
-                                    auth_service::storage::session::secure::SecureSessionData {
+                                    auth_service::infrastructure::storage::session::secure::SecureSessionData {
                                         user_id: format!("user_{}", session_id),
                                         client_id: Some(format!("client_{}", session_id)),
                                         created_at: chrono::Utc::now(),

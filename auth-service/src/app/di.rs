@@ -4,13 +4,9 @@
 
 use std::sync::Arc;
 
-use crate::domain::repositories::{
-    DynSessionRepository, DynTokenRepository, DynUserRepository,
-};
-use crate::infrastructure::monitoring::MetricsCollector;
 use crate::health_check::HealthChecker;
-use crate::services::{AuthService, AuthServiceTrait, TokenService, UserService};
-use crate::shared::crypto::CryptoService;
+use crate::infrastructure::monitoring::MetricsCollector;
+use crate::services::AuthServiceTrait;
 
 /// Application container holding all dependencies
 #[derive(Clone)]
@@ -24,7 +20,7 @@ pub struct AppContainer {
 
 impl AppContainer {
     /// Create a new application container with mock repositories (for testing)
-    pub async fn new_mock() -> Self {
+    pub fn new_mock() -> Self {
         // TODO: Implement proper mock repositories
         // For now, we'll return an error indicating this is not implemented
         panic!("Mock repositories not yet implemented - use new_postgres instead (redis temporarily disabled)");
@@ -143,7 +139,8 @@ pub enum AppError {
 }
 
 /// Helper function to create PostgreSQL connection pool
-async fn create_postgres_pool(_config: &DatabaseConfig) -> Result<sqlx::PgPool, AppError> {
+#[allow(dead_code)] // TODO: Will be used when PostgreSQL implementation is completed
+fn create_postgres_pool(_config: &DatabaseConfig) -> Result<sqlx::PgPool, AppError> {
     // TODO: Implement PostgreSQL connection pool creation
     Err(AppError::Config(
         "PostgreSQL not yet implemented".to_string(),
@@ -162,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_container_creation() {
-        let container = AppContainer::new_mock().await;
+        let container = AppContainer::new_mock();
 
         // Verify services are created
         assert!(true); // Basic smoke test

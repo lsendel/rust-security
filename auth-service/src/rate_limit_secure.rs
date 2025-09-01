@@ -178,8 +178,7 @@ impl SecureRateLimiter {
             });
 
             // Detect suspicious patterns
-            self.detect_suspicious_activity(ip_bucket, user_agent, ip)
-                .await?;
+            self.detect_suspicious_activity(ip_bucket, user_agent, ip)?;
 
             if !ip_bucket.bucket.try_consume(1.0) {
                 // Track violation
@@ -271,7 +270,7 @@ impl SecureRateLimiter {
     }
 
     /// Detect suspicious activity patterns
-    async fn detect_suspicious_activity(
+    fn detect_suspicious_activity(
         &self,
         ip_bucket: &mut IpTokenBucket,
         user_agent: Option<&str>,

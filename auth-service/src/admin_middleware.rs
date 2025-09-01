@@ -688,10 +688,10 @@ mod tests {
         let secret = std::env::var("TEST_SECRET")
             .unwrap_or_else(|_| "test_secret_for_development_only".to_string());
         let payload = "GET:/admin/test:1234567890";
-        let signature = calculate_hmac_sha256(secret, payload).unwrap();
+        let signature = calculate_hmac_sha256(&secret, payload).unwrap();
 
         // Verify the signature is deterministic
-        let signature2 = calculate_hmac_sha256(secret, payload).unwrap();
+        let signature2 = calculate_hmac_sha256(&secret, payload).unwrap();
         assert_eq!(signature, signature2);
 
         // Verify different payload gives different signature

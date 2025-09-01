@@ -1,7 +1,7 @@
 use base64::Engine as _;
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use once_cell::sync::Lazy;
 use serde_json::Value;
+use std::sync::LazyLock;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -42,12 +42,22 @@ pub enum KeySource {
     Development,
 }
 
-#[derive(Clone)]
 pub struct SecureKeyManager {
     #[cfg(feature = "vault")]
     vault_client: Option<VaultClient>,
     key_rotation_interval: u64,
     max_keys: usize,
+}
+
+impl Clone for SecureKeyManager {
+    fn clone(&self) -> Self {
+        Self {
+            #[cfg(feature = "vault")]
+            vault_client: None, // VaultClient doesn't implement Clone, so we set to None
+            key_rotation_interval: self.key_rotation_interval,
+            max_keys: self.max_keys,
+        }
+    }
 }
 
 impl Default for SecureKeyManager {
@@ -61,8 +71,8 @@ impl Default for SecureKeyManager {
     }
 }
 
-static KEY_MANAGER: Lazy<SecureKeyManager> = Lazy::new(|| SecureKeyManager::default());
-static ACTIVE_KEYS: Lazy<RwLock<Vec<SecureKeyMaterial>>> = Lazy::new(|| RwLock::new(Vec::new()));
+static KEY_MANAGER: LazyLock<SecureKeyManager> = LazyLock::new(|| SecureKeyManager::default());
+static ACTIVE_KEYS: LazyLock<RwLock<Vec<SecureKeyMaterial>>> = LazyLock::new(|| RwLock::new(Vec::new()));
 
 impl SecureKeyManager {
     pub fn new() -> Self {
@@ -435,7 +445,7 @@ mod tests {
 
         let manager = SecureKeyManager::new();
         let result = manager.generate_development_key().await;
-        assert!(operation_result.is_ok());
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -460,8 +470,8 @@ mod tests {
         let manager = SecureKeyManager::new();
         let result = manager.load_private_key().await;
 
-        assert!(operation_result.is_ok());
-        let (_, source) = operation_result.unwrap();
+        assert!(result.is_ok());
+        let (_, source) = result.unwrap();
         assert!(matches!(source, KeySource::Environment));
 
         // Cleanup

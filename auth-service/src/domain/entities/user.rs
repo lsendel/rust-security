@@ -126,7 +126,6 @@ impl User {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
     fn create_test_password_hash() -> PasswordHash {
         use argon2::{Argon2, Params};

@@ -619,7 +619,7 @@ async fn test_performance_multiple_requests() {
         "Authorization took too long: {avg_duration:?} avg"
     );
 
-    println!("Performance test: {num_requests} requests in {duration:?} (avg: {avg_duration:?})");
+    // Performance test completed: {num_requests} requests in {duration:?} (avg: {avg_duration:?})
 }
 
 #[tokio::test]
@@ -662,7 +662,7 @@ async fn test_concurrent_authorization_requests() {
         "Concurrent requests took too long: {duration:?}"
     );
 
-    println!("Concurrent test: {num_concurrent} requests in {duration:?}");
+    // Concurrent test completed: {num_concurrent} requests in {duration:?}
 }
 
 #[tokio::test]

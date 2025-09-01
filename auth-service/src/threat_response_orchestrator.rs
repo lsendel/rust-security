@@ -1,5 +1,4 @@
 use crate::core::security::SecurityEvent;
-use crate::shared::error::AppError;
 #[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::{process_with_conversion, ThreatDetectionAdapter};
 use crate::threat_types::{

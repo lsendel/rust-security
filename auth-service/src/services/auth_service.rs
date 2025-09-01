@@ -262,7 +262,7 @@ impl AuthServiceTrait for AuthService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::repositories::user_repository::MockUserRepository;
+    use crate::tests::mocks::MockUserRepository;
     use crate::domain::value_objects::{Email, PasswordHash};
     use std::sync::Arc;
 
