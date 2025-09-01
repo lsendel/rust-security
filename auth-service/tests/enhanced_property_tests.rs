@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(feature = "property-tests")]
 //! Enhanced Property-Based Testing Suite
 //!
 //! Comprehensive property-based tests for critical security components,

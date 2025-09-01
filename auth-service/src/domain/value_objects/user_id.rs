@@ -125,7 +125,7 @@ mod tests {
     fn test_user_id_display() {
         let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
         let user_id = UserId::from_string(uuid_str.to_string()).unwrap();
-        assert_eq!(format!("{}", user_id), uuid_str);
+        assert_eq!(format!("{user_id}"), uuid_str);
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod tests {
 
         for valid_id in valid_ids {
             let user_id = UserId::from_string(valid_id.to_string());
-            assert!(user_id.is_ok(), "ID '{}' should be valid", valid_id);
+            assert!(user_id.is_ok(), "ID '{valid_id}' should be valid");
         }
     }
 
@@ -165,7 +165,7 @@ mod tests {
 
         for invalid_id in invalid_ids {
             let user_id = UserId::from_string(invalid_id.to_string());
-            assert!(user_id.is_err(), "ID '{}' should be invalid", invalid_id);
+            assert!(user_id.is_err(), "ID '{invalid_id}' should be invalid");
         }
     }
 
@@ -233,8 +233,8 @@ mod tests {
         let uuid_v5 = "6ba7b811-9dad-11d1-80b4-00c04fd430c8";
 
         for uuid in &[uuid_v1, uuid_v3, uuid_v5] {
-            let user_id = UserId::from_string(uuid.to_string());
-            assert!(user_id.is_ok(), "UUID {} should be valid", uuid);
+            let user_id = UserId::from_string((*uuid).to_string());
+            assert!(user_id.is_ok(), "UUID {uuid} should be valid");
         }
     }
 }

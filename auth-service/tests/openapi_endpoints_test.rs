@@ -1,3 +1,8 @@
+#![allow(
+    clippy::too_many_lines,
+    clippy::cast_precision_loss,
+    clippy::unused_async
+)]
 //! Comprehensive `OpenAPI` Endpoints Test Suite
 //! Tests all discovered API endpoints in the Rust Security Platform
 
@@ -454,7 +459,7 @@ async fn test_all_endpoints_comprehensive() {
             "identity_id": "test_id"
         }))),
 
-        // Policy Service Endpoints  
+        // Policy Service Endpoints
         ("GET", format!("{POLICY_SERVICE_URL}/health"), None),
         ("POST", format!("{POLICY_SERVICE_URL}/v1/authorize"), Some(json!({
             "subject": "user:test",
@@ -470,8 +475,7 @@ async fn test_all_endpoints_comprehensive() {
     for (method, url, body) in endpoints {
         let start = std::time::Instant::now();
 
-        let result = match timeout(TEST_TIMEOUT, client.request(method, &url, body.clone())).await
-        {
+        let result = match timeout(TEST_TIMEOUT, client.request(method, &url, body.clone())).await {
             Ok(Ok(response)) => {
                 let status = response.status();
                 TestResult {

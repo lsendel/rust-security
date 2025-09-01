@@ -1,3 +1,4 @@
+#![allow(clippy::default_trait_access, clippy::semicolon_if_nothing_returned)]
 //! Performance benchmarks for threat detection conversion
 
 use auth_service::core::auth::AuthContext;
@@ -85,7 +86,7 @@ fn bench_no_feature(c: &mut Criterion) {
     c.bench_function("no_feature_baseline", |b| {
         b.iter(|| {
             black_box(&event);
-        })
+        });
     });
 }
 

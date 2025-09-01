@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unused_async,
+    clippy::significant_drop_tightening,
+    clippy::unreadable_literal,
+    clippy::no_effect_underscore_binding,
+    clippy::cast_sign_loss
+)]
 use base64::Engine as _;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rand::{rngs::OsRng, Rng as _};
@@ -76,7 +83,7 @@ mod mock_policy_service {
             request
                 .get("action")
                 .and_then(|a| a.as_str())
-                .map_or(false, |action| {
+                .is_some_and(|action| {
                     // Allow read operations, deny write operations for benchmarking
                     !action.contains("write") && !action.contains("delete")
                 })

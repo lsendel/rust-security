@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 //! Enhanced Security Middleware
 //!
 //! Comprehensive security middleware with CSRF protection, advanced rate limiting,
@@ -301,7 +302,8 @@ pub struct RateLimiter {
 }
 
 impl RateLimiter {
-    #[must_use] pub fn new(max_requests: u32, window: Duration) -> Self {
+    #[must_use]
+    pub fn new(max_requests: u32, window: Duration) -> Self {
         Self {
             requests: Arc::new(RwLock::new(HashMap::new())),
             max_requests,
@@ -342,7 +344,8 @@ pub struct InputValidator {
 }
 
 impl InputValidator {
-    #[must_use] pub const fn new(max_body_size: usize) -> Self {
+    #[must_use]
+    pub const fn new(max_body_size: usize) -> Self {
         Self { max_body_size }
     }
 
@@ -413,7 +416,8 @@ pub mod monitoring {
     }
 
     impl SecurityMetrics {
-        #[must_use] pub const fn new() -> Self {
+        #[must_use]
+        pub const fn new() -> Self {
             Self {
                 csrf_attempts: AtomicU64::new(0),
                 csrf_failures: AtomicU64::new(0),

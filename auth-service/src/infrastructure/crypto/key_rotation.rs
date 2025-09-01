@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 // Removed unused import: use crate::keys;
 use std::time::Duration;
 use tokio::time::{interval, Instant};
@@ -69,7 +70,8 @@ pub struct KeyRotationService {
 
 impl KeyRotationService {
     /// Create a new key rotation service
-    #[must_use] pub const fn new(config: KeyRotationConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: KeyRotationConfig) -> Self {
         Self {
             config,
             last_rotation: None,
@@ -178,7 +180,8 @@ impl KeyRotationService {
     }
 
     /// Get rotation status information
-    #[must_use] pub fn get_status(&self) -> KeyRotationStatus {
+    #[must_use]
+    pub fn get_status(&self) -> KeyRotationStatus {
         KeyRotationStatus {
             enabled: self.config.enabled,
             rotation_interval: self.config.rotation_interval,

@@ -18,7 +18,7 @@ pub mod utils {
     use crate::services::PasswordService;
 
     /// Create a test user with valid data
-    pub fn create_test_user() -> User {
+    #[must_use] pub fn create_test_user() -> User {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
         let password_hash =
@@ -28,19 +28,19 @@ pub mod utils {
     }
 
     /// Create a test password hash
-    pub fn create_test_password_hash() -> PasswordHash {
+    #[must_use] pub fn create_test_password_hash() -> PasswordHash {
         let service = PasswordService::new();
         service.hash_password("TestPassword123!").unwrap()
     }
 
     /// Generate a random test email
-    pub fn random_email() -> Email {
+    #[must_use] pub fn random_email() -> Email {
         let random_id = uuid::Uuid::new_v4().simple().to_string();
         Email::new(format!("test.{}@example.com", &random_id[..8])).unwrap()
     }
 
     /// Generate a random test user ID
-    pub fn random_user_id() -> UserId {
+    #[must_use] pub fn random_user_id() -> UserId {
         UserId::new()
     }
 }
@@ -531,7 +531,7 @@ pub mod mocks {
                 .read()
                 .await
                 .get(session_id)
-                .map_or(false, |session| {
+                .is_some_and(|session| {
                     let now = chrono::Utc::now();
                     session.is_active && session.expires_at > now
                 }))
@@ -695,7 +695,7 @@ pub mod mocks {
                 .read()
                 .await
                 .get(token_hash)
-                .map_or(false, Token::is_active))
+                .is_some_and(Token::is_active))
         }
 
         async fn count_active_by_user(

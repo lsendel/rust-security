@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 //! Graceful shutdown handling for production deployments
 //!
 //! This module provides graceful shutdown capabilities for the authentication service,

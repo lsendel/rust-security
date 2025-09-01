@@ -307,10 +307,10 @@ async fn test_concurrent_authentication_load() {
 
                     match auth_result {
                         Ok(login_response) => {
-                            if !login_response.access_token.is_empty() {
-                                success_count += 1;
-                            } else {
+                            if login_response.access_token.is_empty() {
                                 error_count += 1;
+                            } else {
+                                success_count += 1;
                             }
                         }
                         Err(_) => {
@@ -361,9 +361,7 @@ async fn test_concurrent_authentication_load() {
     );
     assert!(
         total_success > total_error * 10,
-        "Too many errors: {} success, {} error",
-        total_success,
-        total_error
+        "Too many errors: {total_success} success, {total_error} error"
     );
 }
 

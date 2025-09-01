@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 //! Session management with Redis-backed storage
 //!
 //! Provides secure session management with automatic expiration,

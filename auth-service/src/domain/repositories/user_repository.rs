@@ -99,17 +99,20 @@ mod tests {
     use crate::domain::value_objects::Email;
 
     // Mock implementation for testing
-    pub(crate) struct MockUserRepository {
+    #[allow(dead_code)]
+    pub struct MockUserRepository {
         users: std::sync::RwLock<std::collections::HashMap<String, User>>,
     }
 
     impl MockUserRepository {
+        #[allow(dead_code)]
         pub fn new() -> Self {
             Self {
                 users: std::sync::RwLock::new(std::collections::HashMap::new()),
             }
         }
 
+        #[allow(dead_code)]
         pub fn add_user(&self, user: User) {
             let mut users = self.users.write().unwrap();
             users.insert(user.email.as_str().to_string(), user);

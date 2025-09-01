@@ -290,7 +290,7 @@ mod tests {
         let content = r#"{"keys":[{"kty":"RSA","use":"sig","kid":"test"}]}"#;
         let etag = calculate_etag(content);
         assert!(etag.starts_with("W/\""));
-        assert!(etag.ends_with("\""));
+        assert!(etag.ends_with('"'));
 
         // Same content should produce same ETag
         let etag2 = calculate_etag(content);

@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 //! Enhanced Error Handling System
 //!
 //! Unified error handling with proper error conversion, logging, and monitoring.
@@ -245,7 +246,7 @@ where
 
 /// Error recovery strategies
 pub mod recovery {
-    use super::{warn, info, AppError, Arc, RwLock};
+    use super::{info, warn, AppError, Arc, RwLock};
 
     /// Retry strategy with exponential backoff
     pub struct RetryStrategy {
@@ -255,7 +256,8 @@ pub mod recovery {
     }
 
     impl RetryStrategy {
-        #[must_use] pub const fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
+        #[must_use]
+        pub const fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
             Self {
                 max_attempts,
                 base_delay,
@@ -315,7 +317,8 @@ pub mod recovery {
     }
 
     impl CircuitBreaker {
-        #[must_use] pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
+        #[must_use]
+        pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
             Self {
                 failure_count: Arc::new(RwLock::new(0)),
                 last_failure_time: Arc::new(RwLock::new(None)),
@@ -342,7 +345,7 @@ pub mod recovery {
                             info!("Circuit breaker transitioning to half-open state");
                         } else {
                             return Err(AppError::ServiceUnavailable {
-                                reason: "Circuit breaker is open".to_string()
+                                reason: "Circuit breaker is open".to_string(),
                             });
                         }
                     }
@@ -398,7 +401,7 @@ pub mod recovery {
 
 /// Error monitoring and alerting
 pub mod monitoring {
-    use super::{error, Arc, ErrorHandler, RwLock, HashMap};
+    use super::{error, Arc, ErrorHandler, HashMap, RwLock};
 
     /// Error alert configuration
     #[derive(Debug, Clone)]
@@ -417,7 +420,8 @@ pub mod monitoring {
     }
 
     impl ErrorMonitor {
-        #[must_use] pub fn new(error_handler: Arc<ErrorHandler>, alerts: Vec<ErrorAlertConfig>) -> Self {
+        #[must_use]
+        pub fn new(error_handler: Arc<ErrorHandler>, alerts: Vec<ErrorAlertConfig>) -> Self {
             Self {
                 error_handler,
                 alerts,
@@ -542,7 +546,7 @@ mod tests {
                     let current = attempts.fetch_add(1, Ordering::Relaxed);
                     if current < 2 {
                         Err(AppError::ServiceUnavailable {
-                            reason: "Temporary failure".to_string()
+                            reason: "Temporary failure".to_string(),
                         })
                     } else {
                         Ok("success".to_string())
@@ -561,13 +565,25 @@ mod tests {
 
         // First failure
         let result1: Result<String, AppError> = breaker
-            .call(|| Box::pin(async { Err(AppError::ServiceUnavailable { reason: "Failure 1".to_string() }) }))
+            .call(|| {
+                Box::pin(async {
+                    Err(AppError::ServiceUnavailable {
+                        reason: "Failure 1".to_string(),
+                    })
+                })
+            })
             .await;
         assert!(result1.is_err());
 
         // Second failure - should open circuit
         let result2: Result<String, AppError> = breaker
-            .call(|| Box::pin(async { Err(AppError::ServiceUnavailable { reason: "Failure 2".to_string() }) }))
+            .call(|| {
+                Box::pin(async {
+                    Err(AppError::ServiceUnavailable {
+                        reason: "Failure 2".to_string(),
+                    })
+                })
+            })
             .await;
         assert!(result2.is_err());
 

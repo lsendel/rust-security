@@ -224,6 +224,7 @@ postgres = ["dep:sqlx"]
 # Development features
 fast-build = []  # Minimal feature set for fast development builds
 development = ["docs", "fast-build"]
+property-tests = []  # Property-based testing features
 docs = ["utoipa-swagger-ui"]
 vault = ["vaultrs"]
 aws = ["aws-config", "aws-sdk-secretsmanager"]

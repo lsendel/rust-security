@@ -615,20 +615,24 @@ async fn validate_and_consume_auth_code(
     state: &AuthState,
     code: &str,
 ) -> Result<(String, String), (StatusCode, Json<ErrorResponse>)> {
-    let mut authorization_codes = state.authorization_codes.write().await;
-    let auth_code = authorization_codes
-        .get_mut(code)
-        .ok_or_else(|| oauth_error("invalid_grant", "Invalid authorization code"))?;
+    let (user_id, scope) = {
+        let mut codes = state.authorization_codes.write().await;
+        let auth_code = codes
+            .get_mut(code)
+            .ok_or_else(|| oauth_error("invalid_grant", "Invalid authorization code"))?;
 
-    if auth_code.used || Utc::now() > auth_code.expires_at {
-        return Err(oauth_error(
-            "invalid_grant",
-            "Authorization code expired or already used",
-        ));
-    }
+        if auth_code.used || Utc::now() > auth_code.expires_at {
+            return Err(oauth_error(
+                "invalid_grant",
+                "Authorization code expired or already used",
+            ));
+        }
 
-    auth_code.used = true;
-    Ok((auth_code.user_id.clone(), auth_code.scope.clone()))
+        auth_code.used = true;
+        (auth_code.user_id.clone(), auth_code.scope.clone())
+    };
+
+    Ok((user_id, scope))
 }
 
 /// Find user by ID

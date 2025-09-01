@@ -2,8 +2,8 @@ use crate::threat_user_profiler::config::RiskScoringConfig;
 use crate::threat_user_profiler::risk_assessment::peer_analysis::PeerComparisonAnalyzer;
 use crate::threat_user_profiler::risk_assessment::scoring::RiskScoringAlgorithm;
 use crate::threat_user_profiler::types::{
-    ActivityFeatures, DeviceFeatures, EnhancedUserBehaviorProfile,
-    LocationFeatures, NetworkFeatures, RiskAssessment, RiskCategory, RiskFactor,
+    ActivityFeatures, BehavioralFeatureVector, DeviceFeatures, EnhancedUserBehaviorProfile,
+    LocationFeatures, NetworkFeatures, PeerComparisons, RiskAssessment, RiskCategory, RiskFactor,
     TemporalFeatures,
 };
 use chrono::Utc;

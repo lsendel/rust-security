@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 use base64::Engine as _;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use serde_json::Value;
@@ -72,10 +73,12 @@ impl Default for SecureKeyManager {
 }
 
 static KEY_MANAGER: LazyLock<SecureKeyManager> = LazyLock::new(SecureKeyManager::default);
-static ACTIVE_KEYS: LazyLock<RwLock<Vec<SecureKeyMaterial>>> = LazyLock::new(|| RwLock::new(Vec::new()));
+static ACTIVE_KEYS: LazyLock<RwLock<Vec<SecureKeyMaterial>>> =
+    LazyLock::new(|| RwLock::new(Vec::new()));
 
 impl SecureKeyManager {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -85,7 +88,8 @@ impl SecureKeyManager {
         self
     }
 
-    #[must_use] pub const fn with_rotation_interval(mut self, interval_seconds: u64) -> Self {
+    #[must_use]
+    pub const fn with_rotation_interval(mut self, interval_seconds: u64) -> Self {
         self.key_rotation_interval = interval_seconds;
         self
     }

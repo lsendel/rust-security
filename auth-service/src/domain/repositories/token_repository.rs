@@ -83,11 +83,13 @@ mod tests {
     use std::sync::RwLock;
 
     // Mock implementation for testing
-    pub(crate) struct MockTokenRepository {
+    #[allow(dead_code)]
+    pub struct MockTokenRepository {
         tokens: RwLock<HashMap<String, Token>>,
     }
 
     impl MockTokenRepository {
+        #[allow(dead_code)]
         pub fn new() -> Self {
             Self {
                 tokens: RwLock::new(HashMap::new()),

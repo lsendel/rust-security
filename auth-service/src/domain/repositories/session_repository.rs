@@ -75,11 +75,13 @@ mod tests {
     use std::sync::RwLock;
 
     // Mock implementation for testing
-    pub(crate) struct MockSessionRepository {
+    #[allow(dead_code)]
+    pub struct MockSessionRepository {
         sessions: RwLock<HashMap<String, Session>>,
     }
 
     impl MockSessionRepository {
+        #[allow(dead_code)]
         pub fn new() -> Self {
             Self {
                 sessions: RwLock::new(HashMap::new()),

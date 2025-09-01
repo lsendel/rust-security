@@ -45,7 +45,7 @@ impl AuthServiceWithThreatProcessing {
 mod tests {
     use super::*;
     use crate::core::security::{
-        SecurityContext, SecurityEventType, SecurityLevel, ViolationSeverity,
+        SecurityContext, SecurityEventType, SecurityFlags, SecurityLevel, ViolationSeverity,
     };
     use chrono::Utc;
     use std::collections::HashMap;

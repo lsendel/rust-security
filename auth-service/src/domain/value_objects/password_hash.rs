@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn test_password_hash_display() {
         let hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
-        assert_eq!(format!("{}", hash), "[REDACTED]");
+        assert_eq!(format!("{hash}"), "[REDACTED]");
     }
 
     #[test]
@@ -144,8 +144,7 @@ mod tests {
             let hash = PasswordHash::new(hash_str.to_string()).unwrap();
             assert!(
                 hash.is_secure_algorithm(),
-                "Hash {} should be considered secure",
-                hash_str
+                "Hash {hash_str} should be considered secure"
             );
         }
 
@@ -160,15 +159,14 @@ mod tests {
             let hash = PasswordHash::new(hash_str.to_string()).unwrap();
             assert!(
                 !hash.is_secure_algorithm(),
-                "Hash {} should NOT be considered secure",
-                hash_str
+                "Hash {hash_str} should NOT be considered secure"
             );
         }
     }
 
     #[test]
     fn test_empty_hash() {
-        let hash = PasswordHash::new("".to_string());
+        let hash = PasswordHash::new(String::new());
         assert!(hash.is_err());
         assert_eq!(hash.unwrap_err(), "Password hash cannot be empty");
     }
@@ -186,7 +184,7 @@ mod tests {
 
         for invalid_hash in invalid_hashes {
             let hash = PasswordHash::new(invalid_hash.to_string());
-            assert!(hash.is_err(), "Hash '{}' should be invalid", invalid_hash);
+            assert!(hash.is_err(), "Hash '{invalid_hash}' should be invalid");
         }
     }
 
@@ -202,8 +200,7 @@ mod tests {
             let hash = PasswordHash::new(suspicious_hash.to_string());
             assert!(
                 hash.is_err(),
-                "Hash '{}' should be considered suspicious",
-                suspicious_hash
+                "Hash '{suspicious_hash}' should be considered suspicious"
             );
             assert!(hash.unwrap_err().contains("same character"));
         }

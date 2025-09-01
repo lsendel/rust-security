@@ -148,7 +148,7 @@ mod tests {
 
         let salt_b64 = base64::engine::general_purpose::STANDARD.encode(salt);
         let hash_b64 = base64::engine::general_purpose::STANDARD.encode(hash);
-        let hash_str = format!("$argon2id$v=19$m=65536,t=3,p=4${}${}", salt_b64, hash_b64);
+        let hash_str = format!("$argon2id$v=19$m=65536,t=3,p=4${salt_b64}${hash_b64}");
 
         PasswordHash::new(hash_str).unwrap()
     }

@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 use crate::infrastructure::security::security_logging::{
     SecurityEvent, SecurityEventType, SecuritySeverity,
 };

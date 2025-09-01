@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 //! Unified threat processing service that coordinates all threat detection modules
 
 use crate::core::security::SecurityEvent;
@@ -160,8 +161,6 @@ impl ThreatProcessor {
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "threat-hunting")]
-
-
     #[tokio::test]
     async fn test_threat_processor_disabled_feature() {
         #[cfg(not(feature = "threat-hunting"))]

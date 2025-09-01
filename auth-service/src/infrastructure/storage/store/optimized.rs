@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 // Optimized token store implementation
 // This file contains performance-optimized versions of the token store operations
 

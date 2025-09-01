@@ -1,3 +1,11 @@
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::significant_drop_tightening,
+    clippy::or_fun_call,
+    clippy::unused_async
+)]
 //! Comprehensive Performance Test Suite
 //!
 //! Performance benchmarking and optimization for critical security components.
@@ -60,7 +68,8 @@ impl Default for PerformanceTestSuite {
 }
 
 impl PerformanceTestSuite {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             benchmarks: Arc::new(RwLock::new(Vec::new())),
             baseline_results: Arc::new(RwLock::new(HashMap::new())),
@@ -120,9 +129,7 @@ impl PerformanceTestSuite {
                             token_binding: None,
                             mfa_verified: false,
                         };
-                        let () = cache
-                            .insert(format!("token_{user_id}_{op}"), token)
-                            .await;
+                        let () = cache.insert(format!("token_{user_id}_{op}"), token).await;
                     } else {
                         // Read operation
                         let _ = cache.get(&format!("token_{}", op % 1000)).await;
@@ -217,7 +224,7 @@ impl PerformanceTestSuite {
                         match op % 4 {
                             0 => {
                                 // Create session
-                                let session_data =
+                                let _session_data =
                                     auth_service::infrastructure::storage::session::secure::SecureSessionData {
                                         user_id: format!("user_{session_id}"),
                                         client_id: Some(format!("client_{session_id}")),
@@ -318,7 +325,7 @@ impl PerformanceTestSuite {
     /// Compare current results with baseline
     pub async fn compare_with_baseline(
         &self,
-        baseline_name: &str,
+        _baseline_name: &str,
     ) -> HashMap<String, PerformanceComparison> {
         let benchmarks = self.benchmarks.read().await;
         let baseline_results = self.baseline_results.read().await;
@@ -515,7 +522,6 @@ impl PerformanceReport {
 
 /// Memory profiling utilities
 pub mod memory_profiling {
-    
 
     /// Track memory usage during benchmark
     pub async fn track_memory_usage<F, Fut, T>(f: F) -> (T, MemoryStats)
@@ -542,7 +548,8 @@ pub mod memory_profiling {
     }
 
     /// Get current memory statistics
-    #[must_use] pub const fn get_memory_stats() -> MemoryStats {
+    #[must_use]
+    pub const fn get_memory_stats() -> MemoryStats {
         // In a real implementation, this would read from /proc/self/statm or similar
         // For now, return placeholder values
         MemoryStats {

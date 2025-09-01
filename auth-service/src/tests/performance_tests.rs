@@ -85,7 +85,7 @@ pub fn bench_rate_limiting(c: &mut Criterion) {
     c.bench_function("rate_limit_check", |b| {
         b.iter(|| {
             let ip = format!("192.168.1.{}", fastrand::u8(1..255));
-            let result = limiter.is_rate_limited(&ip);
+            let result = futures::executor::block_on(limiter.is_rate_limited(&ip));
             black_box(result);
         });
     });
@@ -313,8 +313,8 @@ async fn test_memory_usage() {
 }
 */
 
-/// Cache hit rate test (disabled - AdvancedCache module not available)
 /*
+/// Cache hit rate test (disabled - `AdvancedCache` module not available)
 #[tokio::test]
 async fn test_cache_hit_rate() {
     const TARGET_HIT_RATE: f64 = 0.92; // 92%
@@ -407,20 +407,18 @@ async fn test_database_connection_performance() {
 
     let avg_connection_time =
         connection_times.iter().sum::<Duration>() / connection_times.len() as u32;
-    let connections_per_sec = connection_count as f64 / TEST_DURATION.as_secs_f64();
+    let connections_per_sec = f64::from(connection_count) / TEST_DURATION.as_secs_f64();
 
     println!("Database connection performance test:");
-    println!("Connections: {}", connection_count);
-    println!("Average connection time: {:?}", avg_connection_time);
-    println!("Connections/sec: {:.2}", connections_per_sec);
-    println!("Target connections/sec: {:.2}", TARGET_CONNECTIONS_PER_SEC);
+    println!("Connections: {connection_count}");
+    println!("Average connection time: {avg_connection_time:?}");
+    println!("Connections/sec: {connections_per_sec:.2}");
+    println!("Target connections/sec: {TARGET_CONNECTIONS_PER_SEC:.2}");
 
     // Assert performance meets requirements
     assert!(
         connections_per_sec >= TARGET_CONNECTIONS_PER_SEC * 0.8,
-        "Connection rate too low: {:.2} conn/sec (target: {:.2})",
-        connections_per_sec,
-        TARGET_CONNECTIONS_PER_SEC
+        "Connection rate too low: {connections_per_sec:.2} conn/sec (target: {TARGET_CONNECTIONS_PER_SEC:.2})"
     );
 }
 
@@ -592,6 +590,7 @@ async fn test_stress_limits() {
 */
 
 /// Helper function to get approximate memory usage
+#[allow(dead_code)]
 fn get_memory_usage_mb() -> usize {
     // This is a simplified approximation
     // In a real system, you'd use system-specific APIs
@@ -611,14 +610,12 @@ async fn test_performance_regression() {
     // Assert no performance regression
     assert!(
         current_p95 <= baseline_p95,
-        "Performance regression detected: current P95 {:?} > baseline P95 {:?}",
-        current_p95,
-        baseline_p95
+        "Performance regression detected: current P95 {current_p95:?} > baseline P95 {baseline_p95:?}"
     );
 
     println!("Performance regression test passed:");
-    println!("Baseline P95: {:?}", baseline_p95);
-    println!("Current P95: {:?}", current_p95);
+    println!("Baseline P95: {baseline_p95:?}");
+    println!("Current P95: {current_p95:?}");
     println!(
         "Improvement: {:?}",
         baseline_p95.saturating_sub(current_p95)

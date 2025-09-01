@@ -96,12 +96,12 @@ mod tests {
     #[test]
     fn test_email_display() {
         let email = Email::new("test@example.com".to_string()).unwrap();
-        assert_eq!(format!("{}", email), "test@example.com");
+        assert_eq!(format!("{email}"), "test@example.com");
     }
 
     #[test]
     fn test_empty_email() {
-        let email = Email::new("".to_string());
+        let email = Email::new(String::new());
         assert!(email.is_err());
         assert_eq!(email.unwrap_err(), "Email cannot be empty");
     }
@@ -131,8 +131,7 @@ mod tests {
             let email = Email::new(invalid_email.to_string());
             assert!(
                 email.is_err(),
-                "Email '{}' should be invalid",
-                invalid_email
+                "Email '{invalid_email}' should be invalid"
             );
         }
     }
@@ -150,7 +149,7 @@ mod tests {
 
         for valid_email in valid_emails {
             let email = Email::new(valid_email.to_string());
-            assert!(email.is_ok(), "Email '{}' should be valid", valid_email);
+            assert!(email.is_ok(), "Email '{valid_email}' should be valid");
         }
     }
 

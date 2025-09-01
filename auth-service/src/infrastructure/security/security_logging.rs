@@ -392,6 +392,17 @@ impl SecurityLogger {
     }
 }
 
+impl Default for SecurityLogger {
+    fn default() -> Self {
+        Self::new(SecurityLoggerConfig::default())
+    }
+}
+
+/// Global function for logging security events (backwards compatibility)
+pub fn log_event(event: &SecurityEvent) {
+    SecurityLogger::log_event_static(event);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,15 +437,4 @@ mod tests {
         assert!(SecurityLoggingGuard::validate_log_safety("Normal message").is_ok());
         assert!(SecurityLoggingGuard::validate_log_safety("Password: secret123").is_err());
     }
-}
-
-impl Default for SecurityLogger {
-    fn default() -> Self {
-        Self::new(SecurityLoggerConfig::default())
-    }
-}
-
-/// Global function for logging security events (backwards compatibility)
-pub fn log_event(event: &SecurityEvent) {
-    SecurityLogger::log_event_static(event);
 }

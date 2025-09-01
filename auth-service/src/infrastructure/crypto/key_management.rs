@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 use base64::Engine;
 use hex;
 use jsonwebtoken::{DecodingKey, EncodingKey};
@@ -161,7 +162,8 @@ pub struct KeyManagementService {
 
 impl KeyManagementService {
     /// Create new key management service
-    #[must_use] pub fn new(config: KeyManagementConfig) -> Self {
+    #[must_use]
+    pub fn new(config: KeyManagementConfig) -> Self {
         Self {
             keys: Arc::new(RwLock::new(HashMap::new())),
             active_key_id: Arc::new(RwLock::new(None)),
@@ -529,7 +531,8 @@ impl KeyManagementService {
 
         key.decoding_key
             .as_ref()
-            .ok_or_else(|| AppError::internal("Decoding key not available")).cloned()
+            .ok_or_else(|| AppError::internal("Decoding key not available"))
+            .cloned()
     }
 
     /// Get JWKS document

@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 // Optimized key management implementation using ring for security
 // This provides non-blocking RSA key generation and better caching
 
@@ -44,7 +45,8 @@ impl Default for OptimizedSecureKeyManager {
 }
 
 impl OptimizedSecureKeyManager {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             keys: Arc::new(RwLock::new(Vec::new())),
             generation_semaphore: Arc::new(Semaphore::new(1)), // Only one key generation at a time
