@@ -159,6 +159,13 @@ impl SecureCryptoManager {
     }
 
     /// Encrypt data with authenticated encryption
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Random nonce generation fails (`CryptoError::RandomGenerationFailed`)
+    /// - Nonce creation fails (`CryptoError::EncryptionFailed`)
+    /// - AES-GCM encryption fails (`CryptoError::EncryptionFailed`)
     pub async fn encrypt(&self, plaintext: &[u8]) -> Result<EncryptedData, CryptoError> {
         let current_key = self.current_key.read().await;
 
@@ -190,6 +197,15 @@ impl SecureCryptoManager {
     }
 
     /// Decrypt data with key lookup and validation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The algorithm is not supported (`CryptoError::DecryptionFailed`)
+    /// - The decryption key is not found (`CryptoError::KeyNotFound`)
+    /// - The nonce length is invalid (`CryptoError::DecryptionFailed`)
+    /// - Nonce creation fails (`CryptoError::DecryptionFailed`)
+    /// - AES-GCM decryption or authentication fails (`CryptoError::DecryptionFailed`)
     pub async fn decrypt(&self, encrypted: &EncryptedData) -> Result<Vec<u8>, CryptoError> {
         // Validate algorithm
         if encrypted.algorithm != "AES-256-GCM" {
@@ -236,6 +252,12 @@ impl SecureCryptoManager {
     }
 
     /// Rotate encryption key
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Key ID generation fails (`CryptoError::RandomGenerationFailed`)
+    /// - New secure key generation fails (`CryptoError::KeyGenerationFailed`)
     pub async fn rotate_key(&self) -> Result<(), CryptoError> {
         let mut current_key = self.current_key.write().await;
         let mut old_keys = self.old_keys.write().await;

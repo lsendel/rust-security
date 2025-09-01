@@ -46,6 +46,14 @@ pub struct UserDto {
 }
 
 /// User registration endpoint
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - User registration fails due to invalid email or password
+/// - User already exists with the provided email
+/// - Database connection or query fails
+/// - Any internal service error occurs during registration
 pub async fn register(
     State(container): State<AppContainer>,
     Json(request): Json<RegisterRequestDto>,
@@ -79,6 +87,15 @@ pub async fn register(
 }
 
 /// User login endpoint
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Invalid credentials (email/password combination)
+/// - User account is locked or disabled
+/// - Database connection or query fails
+/// - Session creation fails
+/// - Token generation fails
 pub async fn login(
     State(container): State<AppContainer>,
     Json(request): Json<LoginRequestDto>,
@@ -106,6 +123,15 @@ pub async fn login(
 }
 
 /// Get current user profile
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - JWT token is missing or invalid
+/// - User is not authenticated
+/// - Database connection fails when fetching user data
+/// - User account no longer exists
+/// - Token has expired
 pub async fn me(
     State(_container): State<AppContainer>,
     // TODO: Extract user from JWT token
@@ -118,6 +144,14 @@ pub async fn me(
 }
 
 /// Logout endpoint
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Session revocation fails
+/// - Database connection fails
+/// - Token invalidation fails
+/// - User is not authenticated (though this currently returns success)
 pub async fn logout(
     State(_container): State<AppContainer>,
     // TODO: Extract session from JWT token

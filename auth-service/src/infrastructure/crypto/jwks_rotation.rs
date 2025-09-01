@@ -221,8 +221,13 @@ impl JwksManager {
 
         CryptoKey {
             kid,
-            kty: "RSA".to_string(),
+            kty: match self.config.algorithm {
+                Algorithm::EdDSA => "OKP".to_string(), // Octet Key Pair for EdDSA
+                Algorithm::ES256 | Algorithm::ES384 => "EC".to_string(),
+                _ => "RSA".to_string(),
+            },
             alg: match self.config.algorithm {
+                Algorithm::EdDSA => "EdDSA".to_string(),
                 Algorithm::RS384 => "RS384".to_string(),
                 Algorithm::RS512 => "RS512".to_string(),
                 Algorithm::ES256 => "ES256".to_string(),
@@ -256,16 +261,46 @@ impl JwksManager {
         // Convert to PEM format using base64 engine
         let engine = base64::engine::general_purpose::STANDARD;
 
-        // NOTE: This is a PEM format template - not a hardcoded secret
-        // The actual key content is dynamically generated and base64 encoded
+        // Create proper PKCS#8 private key format for EdDSA
+        // This creates a proper ASN.1 DER encoded private key wrapped in PEM
+        let private_key_der = {
+            // Ed25519 private key OID: 1.3.101.112
+            let mut der = Vec::new();
+            // PKCS#8 PrivateKeyInfo structure
+            der.extend_from_slice(&[
+                0x30, 0x2E, // SEQUENCE, length 46
+                0x02, 0x01, 0x00, // INTEGER version (0)
+                0x30, 0x05, // SEQUENCE (AlgorithmIdentifier)
+                0x06, 0x03, 0x2B, 0x65, 0x70, // OID 1.3.101.112 (Ed25519)
+                0x04, 0x22, // OCTET STRING, length 34
+                0x04, 0x20, // OCTET STRING, length 32 (private key)
+            ]);
+            der.extend_from_slice(&signing_key.to_bytes());
+            der
+        };
+        
         let private_pem = format!(
             "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----",
-            engine.encode(signing_key.to_bytes())
+            engine.encode(&private_key_der)
         );
 
+        // Create proper SPKI public key format for EdDSA
+        let public_key_der = {
+            let mut der = Vec::new();
+            // SPKI SubjectPublicKeyInfo structure
+            der.extend_from_slice(&[
+                0x30, 0x2A, // SEQUENCE, length 42
+                0x30, 0x05, // SEQUENCE (AlgorithmIdentifier)
+                0x06, 0x03, 0x2B, 0x65, 0x70, // OID 1.3.101.112 (Ed25519)
+                0x03, 0x21, 0x00, // BIT STRING, length 33, unused bits 0
+            ]);
+            der.extend_from_slice(verifying_key.as_bytes());
+            der
+        };
+        
         let public_pem = format!(
             "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
-            engine.encode(verifying_key.to_bytes())
+            engine.encode(&public_key_der)
         );
 
         (private_pem, public_pem)
@@ -344,7 +379,7 @@ impl JwksManager {
         Ok(header)
     }
 
-    /// Get encoding key for signing
+    /// Get encoding key for signing (EdDSA)
     ///
     /// # Errors
     ///
@@ -360,13 +395,25 @@ impl JwksManager {
             crate::shared::error::AppError::Internal("Private key not available".to_string())
         })?;
 
-        EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| {
-            crate::shared::error::AppError::Internal(format!("Invalid private key: {e}"))
-        })
+        // For EdDSA keys, use from_ed_pem instead of from_rsa_pem
+        if self.config.algorithm == Algorithm::EdDSA {
+            EncodingKey::from_ed_pem(private_key.as_bytes()).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Invalid EdDSA private key: {e}"))
+            })
+        } else {
+            // Fallback to RSA for other algorithms
+            EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Invalid RSA private key: {e}"))
+            })
+        }
     }
 
-    /// Get decoding key for validation
+    /// Get decoding key for validation (EdDSA)
     ///
+    /// # Errors
+    ///
+    /// Returns `crate::shared::error::AppError` if:
+    /// - Key with specified kid is not found
     /// - The key is expired or revoked
     /// - Public key is invalid or corrupted
     pub async fn get_decoding_key(
@@ -377,9 +424,17 @@ impl JwksManager {
             crate::shared::error::AppError::InvalidToken(format!("Unknown kid: {kid}"))
         })?;
 
-        DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| {
-            crate::shared::error::AppError::Internal(format!("Invalid public key: {e}"))
-        })
+        // For EdDSA keys, use from_ed_pem instead of from_rsa_pem
+        if self.config.algorithm == Algorithm::EdDSA {
+            DecodingKey::from_ed_pem(key.public_key.as_bytes()).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Invalid EdDSA public key: {e}"))
+            })
+        } else {
+            // Fallback to RSA for other algorithms
+            DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Invalid RSA public key: {e}"))
+            })
+        }
     }
 
     /// Check if rotation is needed

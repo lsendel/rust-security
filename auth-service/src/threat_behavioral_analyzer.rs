@@ -11,10 +11,11 @@ use flume::{unbounded, Receiver, Sender};
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde_json;
-use smartcore::ensemble::random_forest_classifier::RandomForestClassifier;
-use smartcore::linalg::basic::matrix::DenseMatrix;
-
-use smartcore::preprocessing::numerical::StandardScaler;
+// Machine learning dependencies temporarily disabled
+// TODO: Re-enable when smartcore is added to workspace dependencies
+// use smartcore::ensemble::random_forest_classifier::RandomForestClassifier;
+// use smartcore::linalg::basic::matrix::DenseMatrix;
+// use smartcore::preprocessing::numerical::StandardScaler;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -153,10 +154,25 @@ pub struct BehavioralAnomalyThresholds {
 }
 
 /// Machine learning model for behavioral analysis
+/// 
+/// IMPORTANT: ML components are temporarily disabled due to smartcore dependency issues.
+/// When re-enabling:
+/// 1. Uncomment smartcore imports at the top of the file
+/// 2. Replace stub types with actual smartcore types:
+///    - classifier: Option<RandomForestClassifier<f64, i32, DenseMatrix<f64>, Vec<i32>>>
+///    - scaler: Option<StandardScaler<f64>>
+/// 3. Update ML training and prediction methods in start_model_trainer
+/// 4. Update extract_ml_features method to work with actual ML models
 #[derive(Debug)]
 pub struct BehavioralMLModel {
-    pub classifier: Option<RandomForestClassifier<f64, i32, DenseMatrix<f64>, Vec<i32>>>,
-    pub scaler: Option<StandardScaler<f64>>,
+    // Machine learning components temporarily disabled
+    // TODO: Re-enable when smartcore is added to workspace dependencies
+    // pub classifier: Option<RandomForestClassifier<f64, i32, DenseMatrix<f64>, Vec<i32>>>,
+    // pub scaler: Option<StandardScaler<f64>>,
+    #[allow(dead_code)] // Stub field to prevent compilation errors
+    classifier: Option<()>, // Stub for compilation - replace with RandomForestClassifier
+    #[allow(dead_code)] // Stub field to prevent compilation errors  
+    scaler: Option<()>,     // Stub for compilation - replace with StandardScaler
     pub feature_names: Vec<String>,
     pub model_version: String,
     pub training_data_size: usize,

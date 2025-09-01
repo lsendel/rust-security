@@ -18,6 +18,12 @@ pub struct MetricsCollector {
 
 impl MetricsCollector {
     /// Create a new metrics collector
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Prometheus client initialization fails
+    /// - Configuration validation fails
+    /// - Network connectivity issues occur
     pub async fn new(config: &ComplianceConfig) -> ComplianceResult<Self> {
         let prometheus_client = if let Some(url) = &config.data_sources.prometheus_url {
             let client = PrometheusClient::new(url.clone());
@@ -49,6 +55,13 @@ impl MetricsCollector {
     }
 
     /// Collect all available security metrics
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Prometheus query fails
+    /// - File system access fails
+    /// - Metric parsing fails
+    /// - Network connectivity issues occur
     pub async fn collect_all_metrics(&self) -> ComplianceResult<Vec<SecurityMetric>> {
         let mut all_metrics = Vec::new();
 
@@ -118,12 +131,12 @@ impl MetricsCollector {
         let total_events = metrics
             .iter()
             .find(|m| m.name == "audit_total_events")
-            .map_or(0, |m| m.value as u64);
+            .map_or(0, |m| m.value.max(0.0) as u64);
 
         let failed_events = metrics
             .iter()
             .find(|m| m.name == "audit_failed_events")
-            .map_or(0, |m| m.value as u64);
+            .map_or(0, |m| m.value.max(0.0) as u64);
 
         if total_events > 0 {
             let success_rate =

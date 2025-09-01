@@ -416,32 +416,58 @@ impl MetricsCollector {
     }
 
     /// Get metrics summary for logging
+    ///
+    /// Collects key metrics into a summary for logging and monitoring purposes.
+    /// Uses safe casting with proper error handling to prevent truncation.
+    ///
+    /// # Returns
+    /// A HashMap containing metric names and their current values as JSON values.
     pub fn get_summary(&self) -> HashMap<String, serde_json::Value> {
         let mut summary = HashMap::new();
 
         summary.insert("uptime_seconds".to_string(), self.uptime_seconds().into());
+        
+        // Safe casting with overflow protection
         summary.insert(
             "http_requests_total".to_string(),
-            self.http_requests_total.get() as i64,
+            Self::safe_cast_metric_value(self.http_requests_total.get()).into(),
         );
         summary.insert(
             "auth_attempts_total".to_string(),
-            self.auth_attempts_total.get() as i64,
+            Self::safe_cast_metric_value(self.auth_attempts_total.get()).into(),
         );
         summary.insert(
             "auth_success_total".to_string(),
-            self.auth_success_total.get() as i64,
+            Self::safe_cast_metric_value(self.auth_success_total.get()).into(),
         );
         summary.insert(
             "auth_failures_total".to_string(),
-            self.auth_failures_total.get() as i64,
+            Self::safe_cast_metric_value(self.auth_failures_total.get()).into(),
         );
         summary.insert(
             "active_connections".to_string(),
-            self.active_connections.get() as i64,
+            Self::safe_cast_metric_value(self.active_connections.get()).into(),
         );
 
         summary
+    }
+
+    /// Safely cast metric values to prevent truncation
+    ///
+    /// Provides safe casting of metric values with overflow detection.
+    /// If the value would overflow when cast to i64, it returns i64::MAX.
+    ///
+    /// # Arguments
+    /// * `value` - The metric value to cast
+    ///
+    /// # Returns
+    /// The safely cast value as i64, or i64::MAX if overflow would occur.
+    fn safe_cast_metric_value(value: u64) -> i64 {
+        if value > i64::MAX as u64 {
+            i64::MAX
+        } else {
+            value as i64
+        }
     }
 
     /// Register a custom metric

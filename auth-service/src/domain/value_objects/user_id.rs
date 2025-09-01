@@ -21,6 +21,13 @@ impl UserId {
     }
 
     /// Create a user ID from a string with validation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The user ID is empty
+    /// - The user ID is longer than 100 characters
+    /// - The user ID contains invalid characters (only alphanumeric, hyphens, and underscores are allowed)
     pub fn from_string(id: String) -> Result<Self, String> {
         Self::validate(&id)?;
         Ok(Self(id))

@@ -57,11 +57,11 @@ clippy.multiple_crate_versions = "allow"
 
 [workspace.dependencies]
 # ===== CORE ASYNC RUNTIME =====
-tokio = { version = "1.37", features = ["full"] }
-axum = { version = "0.7.4", features = ["macros"] }
-tower = { version = "0.4.13", features = ["util"] }
-hyper = { version = "1.2.0" }
-tower-http = { version = "0.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
+tokio = { version = "1.47", features = ["full"] }
+axum = { version = "0.7.9", features = ["macros"] }
+tower = { version = "0.5.2", features = ["util"] }
+hyper = { version = "1.7.0" }
+tower-http = { version = "0.6.6", features = ["cors", "fs", "trace", "request-id", "limit", "timeout"] }
 
 # ===== SERIALIZATION =====
 serde = { version = "1.0.197", features = ["derive"] }
@@ -73,7 +73,7 @@ serde_yaml = "0.9"
 
 # ===== ERROR HANDLING =====
 anyhow = "1.0.82"
-thiserror = "1.0"
+thiserror = "1.0.69"
 
 # ===== CRYPTOGRAPHY & SECURITY =====
 jsonwebtoken = "9.3"
@@ -133,12 +133,12 @@ geoutils = "0.5"
 hickory-resolver = "0.24"
 
 # ===== UTILITY & COMMON =====
-uuid = { version = "1.11", features = ["v4", "serde"] }
+uuid = { version = "1.18", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 time = "0.3"
 async-trait = "0.1"
 headers = "0.4"
-base64 = "0.21"
+base64 = "0.22"
 bytes = "1.8"
 hex = "0.4"
 once_cell = "1.20"
@@ -172,13 +172,14 @@ validator = { version = "0.20", features = ["derive"] }
 
 # ===== CLI =====
 clap = { version = "4.5", features = ["derive"] }
+csv = "1.3"
 
 # ===== POLICY ENGINE =====
-cedar-policy = "4.2"
-cedar-policy-core = "4.2"
+cedar-policy = "4.5"
+cedar-policy-core = "4.5"
 
 # ===== API DOCUMENTATION =====
-utoipa = { version = "5.1", features = ["axum_extras", "chrono"] }
+utoipa = { version = "5.4", features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { version = "8.1", features = ["axum"] }
 schemars = "1.0"  # Pin to avoid version conflicts
 
@@ -207,6 +208,11 @@ memmap2 = "0.9"
 
 # ===== FILESYSTEM =====
 walkdir = "2.5"
+
+# ===== DATA PROCESSING =====
+calamine = "0.25"
+pulldown-cmark = "0.12"
+moka = { version = "0.12", features = ["future"] }
 
 # ===== SEARCH & REGEX =====
 # Pin regex ecosystem versions to avoid conflicts

@@ -9,6 +9,14 @@ pub struct PasswordHash(String);
 
 impl PasswordHash {
     /// Create a new password hash with validation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The password hash is empty
+    /// - The password hash is shorter than 20 characters
+    /// - The hash format is invalid (must start with '$' or 'pbkdf2')
+    /// - The hash appears to be invalid (same character repeated throughout)
     pub fn new(hash: String) -> Result<Self, String> {
         Self::validate(&hash)?;
         Ok(Self(hash))
@@ -21,24 +29,15 @@ impl PasswordHash {
 
     /// Get the hash algorithm type
     #[must_use] pub fn algorithm(&self) -> Option<&str> {
-        if let Some(dollar_pos) = self.0.find('$') {
+        self.0.find('$').map_or(None, |dollar_pos| {
             let algorithm_part = &self.0[1..dollar_pos];
-            if let Some(second_dollar) = algorithm_part.find('$') {
-                Some(&algorithm_part[..second_dollar])
-            } else {
-                Some(algorithm_part)
-            }
-        } else {
-            None
-        }
+            algorithm_part.find('$').map_or(Some(algorithm_part), |second_dollar| Some(&algorithm_part[..second_dollar]))
+        })
     }
 
     /// Verify if the hash uses a secure algorithm
     #[must_use] pub fn is_secure_algorithm(&self) -> bool {
-        match self.algorithm() {
-            Some("argon2id" | "argon2i" | "scrypt" | "bcrypt") => true,
-            _ => false,
-        }
+        matches!(self.algorithm(), Some("argon2id" | "argon2i" | "scrypt" | "bcrypt"))
     }
 
     /// Validate password hash format

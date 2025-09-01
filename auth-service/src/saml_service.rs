@@ -24,12 +24,25 @@ impl SamlService {
         }
     }
 
+    /// Encrypts a SAML assertion
+    /// 
+    /// # Errors
+    /// Returns an error if:
+    /// - Base64 encoding fails
+    /// - Future AES-GCM encryption fails
     pub fn encrypt_assertion(&self, assertion: &str) -> Result<String, Box<dyn std::error::Error>> {
         // TODO: Implement AES-GCM encryption when aes_gcm dependency is added
         // For now, return base64-encoded assertion as a placeholder
         Ok(STANDARD.encode(assertion.as_bytes()))
     }
 
+    /// Decrypts a SAML assertion
+    /// 
+    /// # Errors
+    /// Returns an error if:
+    /// - Base64 decoding fails
+    /// - UTF-8 conversion fails
+    /// - Future AES-GCM decryption fails
     pub fn decrypt_assertion(&self, encrypted: &str) -> Result<String, Box<dyn std::error::Error>> {
         // TODO: Implement AES-GCM decryption when aes_gcm dependency is added
         // For now, assume data is just base64-encoded

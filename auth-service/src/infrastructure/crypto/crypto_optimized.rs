@@ -98,9 +98,9 @@ impl CryptoOptimized {
         metrics.total_duration += operation_duration;
 
         if metrics.total_operations > 0 {
-            metrics.avg_operation_time = metrics.total_duration / metrics.total_operations as u32;
+            metrics.avg_operation_time = metrics.total_duration / u32::try_from(metrics.total_operations).unwrap_or(1);
             metrics.operations_per_second =
-                metrics.total_operations as f64 / metrics.total_duration.as_secs_f64();
+                f64::from(u32::try_from(metrics.total_operations).unwrap_or(0)) / metrics.total_duration.as_secs_f64();
         }
 
         // Update cache hit rate (simple moving average)
@@ -115,14 +115,26 @@ impl CryptoOptimized {
 
     /// SIMD-optimized batch token validation
     #[cfg(feature = "simd")]
+    #[must_use]
     pub fn batch_validate_tokens(&self, tokens: &[String]) -> Vec<bool> {
         tokens
             .par_iter()
-            .map(|token| self.validate_token_format(token))
+            .map(|token| Self::validate_token_format(token))
             .collect()
     }
 
     /// Hardware-accelerated HMAC generation
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if the hardware random number generation
+    /// fails when creating a new HMAC key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the hardware random number generator fails to fill the key buffer,
+    /// which should not happen under normal circumstances but could occur if the
+    /// system's entropy source is unavailable.
     pub fn generate_hmac_secure(
         &self,
         key_id: &str,
@@ -139,6 +151,13 @@ impl CryptoOptimized {
     }
 
     /// Hardware-accelerated AES-GCM encryption with performance tracking
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if:
+    /// - Key creation or retrieval fails
+    /// - Hardware random number generation fails for nonce creation
+    /// - AES-GCM encryption operation fails
     pub async fn encrypt_secure(
         &self,
         key_id: &str,
@@ -172,6 +191,14 @@ impl CryptoOptimized {
     }
 
     /// Hardware-accelerated AES-GCM decryption with performance tracking
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if:
+    /// - The ciphertext is shorter than 12 bytes (minimum nonce size)
+    /// - Nonce extraction from ciphertext fails
+    /// - Key creation or retrieval fails
+    /// - AES-GCM decryption operation fails (including authentication failure)
     pub async fn decrypt_secure(
         &self,
         key_id: &str,
@@ -201,6 +228,12 @@ impl CryptoOptimized {
     }
 
     /// Optimized password hashing with Argon2id and timing attack protection
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if the Argon2id password hashing
+    /// operation fails, which can occur due to invalid parameters or memory
+    /// allocation issues.
     pub async fn hash_password_secure(
         &self,
         password: &str,
@@ -225,7 +258,7 @@ impl CryptoOptimized {
         let start = Instant::now();
 
         // Parse the stored hash
-        let parsed_hash = if let Ok(hash) = PasswordHash::new(hash) { hash } else {
+        let Ok(parsed_hash) = PasswordHash::new(hash) else {
             self.update_metrics(start.elapsed(), false).await;
             return false;
         };
@@ -241,7 +274,7 @@ impl CryptoOptimized {
     }
 
     /// Optimized token format validation
-    fn validate_token_format(&self, token: &str) -> bool {
+    fn validate_token_format(token: &str) -> bool {
         // Fast path validation using SIMD where available
         if token.len() < 32 || token.len() > 512 {
             return false;
@@ -271,29 +304,37 @@ impl CryptoOptimized {
 
     /// Batch hash operations for password verification
     #[cfg(feature = "simd")]
+    #[must_use]
     pub fn batch_verify_passwords(&self, credentials: &[(String, String)]) -> Vec<bool> {
         credentials
             .par_iter()
-            .map(|(password, hash)| self.verify_password(password, hash))
+            .map(|(password, hash)| Self::verify_password(password, hash))
             .collect()
     }
 
     /// Constant-time password verification
     #[allow(dead_code)] // TODO: Will be used when password verification is needed
-    fn verify_password(&self, password: &str, hash: &str) -> bool {
+    fn verify_password(password: &str, hash: &str) -> bool {
         // Use argon2 for secure password verification
         use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
-        if let Ok(parsed_hash) = PasswordHash::new(hash) {
-            Argon2::default()
+        PasswordHash::new(hash).map_or(false, |parsed_hash| Argon2::default()
                 .verify_password(password.as_bytes(), &parsed_hash)
-                .is_ok()
-        } else {
-            false
-        }
+                .is_ok())
     }
 
     /// Optimized key derivation using PBKDF2 with hardware acceleration
+    ///
+    /// # Errors
+    ///
+    /// This function currently always succeeds as `ring::pbkdf2::derive` does not
+    /// return errors for valid parameters, but the Result type is preserved for
+    /// API consistency.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `iterations` is 0, as `NonZeroU32::new(iterations).unwrap()`
+    /// will panic when called with 0.
     pub fn derive_key(
         &self,
         password: &[u8],
@@ -312,6 +353,13 @@ impl CryptoOptimized {
     }
 
     /// Get or create a sealing key with automatic rotation
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if:
+    /// - Key rotation fails
+    /// - Hardware random number generation fails when creating new key material
+    /// - AES-256-GCM unbound key creation fails
     async fn get_or_create_sealing_key(
         &self,
         key_id: &str,
@@ -339,6 +387,13 @@ impl CryptoOptimized {
     }
 
     /// Get or create an opening key (same as sealing key for AES-GCM)
+    ///
+    /// # Errors
+    ///
+    /// Returns `ring::error::Unspecified` if:
+    /// - Key rotation fails
+    /// - Hardware random number generation fails when creating new key material
+    /// - AES-256-GCM unbound key creation fails
     async fn get_or_create_opening_key(
         &self,
         key_id: &str,
@@ -372,6 +427,12 @@ impl CryptoOptimized {
     }
 
     /// Rotate all cryptographic keys for security
+    ///
+    /// # Errors
+    ///
+    /// This function currently does not return errors as key rotation involves
+    /// clearing existing keys and updating timestamps, which are infallible
+    /// operations. The Result type is preserved for future extensibility.
     async fn rotate_keys(&self) -> Result<(), ring::error::Unspecified> {
         tracing::info!("Starting automatic key rotation for enhanced security");
 
@@ -403,12 +464,19 @@ impl CryptoOptimized {
     {
         tokens
             .iter()
-            .map(|token| CRYPTO_ENGINE.validate_token_format(token))
+            .map(|token| CryptoOptimized::validate_token_format(token))
             .collect()
     }
 }
 
 /// Optimized token binding generation with hardware acceleration
+/// Optimized token binding generation with hardware acceleration
+///
+/// # Errors
+///
+/// This function currently does not return errors as the SHA256 digest operation
+/// and base64 encoding are infallible for the given inputs, but the Result type
+/// is preserved for future extensibility and API consistency.
 pub fn generate_optimized_token_binding(
     client_ip: &str,
     user_agent: &str,
@@ -420,6 +488,7 @@ pub fn generate_optimized_token_binding(
 
 /// SIMD-optimized string comparison for constant-time operations
 #[cfg(feature = "simd")]
+#[must_use]
 pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;

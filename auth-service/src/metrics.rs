@@ -111,11 +111,151 @@ pub struct MetricsRegistry {
 
 impl MetricsRegistry {
     /// Create a new metrics registry with all collectors initialized
+    ///
+    /// Initializes all metric collectors and registers them with the Prometheus registry.
+    /// The initialization is broken down into logical groups for better maintainability.
+    ///
+    /// # Returns
+    /// A new `MetricsRegistry` instance with all metrics initialized and registered.
     #[must_use]
     pub fn new() -> Self {
         let registry = Registry::new();
+        let metrics_groups = Self::create_all_metric_groups();
+        Self::register_all_metrics(&registry, &metrics_groups);
+        Self::build_registry(registry, metrics_groups)
+    }
 
-        // === Token Operation Metrics ===
+    /// Create all metric groups
+    ///
+    /// Creates and returns all metric groups in a structured format.
+    ///
+    /// # Returns
+    /// A tuple containing all metric groups.
+    fn create_all_metric_groups() -> (
+        (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec),
+        (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+        (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+        (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        (IntCounterVec, IntCounterVec, HistogramVec),
+        (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+        (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+    ) {
+        (
+            Self::create_token_metrics(),
+            Self::create_policy_metrics(),
+            Self::create_cache_metrics(),
+            Self::create_http_metrics(),
+            Self::create_rate_limit_metrics(),
+            Self::create_security_metrics(),
+            Self::create_system_metrics(),
+        )
+    }
+
+    /// Register all metrics with the registry
+    ///
+    /// Takes all metric groups and registers them with the Prometheus registry.
+    ///
+    /// # Arguments
+    /// * `registry` - The Prometheus registry to register metrics with
+    /// * `metrics_groups` - Tuple containing all metric groups
+    fn register_all_metrics(
+        registry: &Registry,
+        metrics_groups: &(
+            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec),
+            (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+            (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+            (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+            (IntCounterVec, IntCounterVec, HistogramVec),
+            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+        ),
+    ) {
+        let all_metrics = Self::collect_all_metrics(
+            &metrics_groups.0,
+            &metrics_groups.1,
+            &metrics_groups.2,
+            &metrics_groups.3,
+            &metrics_groups.4,
+            &metrics_groups.5,
+            &metrics_groups.6,
+        );
+        Self::register_metrics(registry, all_metrics);
+    }
+
+    /// Build the final MetricsRegistry struct
+    ///
+    /// Constructs the MetricsRegistry with all metrics from the groups.
+    ///
+    /// # Arguments
+    /// * `registry` - The Prometheus registry
+    /// * `metrics_groups` - Tuple containing all metric groups
+    ///
+    /// # Returns
+    /// A new MetricsRegistry instance
+    fn build_registry(
+        registry: Registry,
+        metrics_groups: (
+            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec),
+            (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+            (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+            (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+            (IntCounterVec, IntCounterVec, HistogramVec),
+            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+        ),
+    ) -> Self {
+        let (token_metrics, policy_metrics, cache_metrics, http_metrics, rate_limit_metrics, security_metrics, system_metrics) = metrics_groups;
+
+        Self {
+            registry,
+            token_issuance_total: token_metrics.0,
+            token_validation_total: token_metrics.1,
+            token_revocation_total: token_metrics.2,
+            token_introspection_total: token_metrics.3,
+            token_operation_duration: token_metrics.4,
+            active_tokens_gauge: token_metrics.5,
+            policy_evaluation_total: policy_metrics.0,
+            policy_evaluation_duration: policy_metrics.1,
+            policy_cache_operations: policy_metrics.2,
+            policy_compilation_total: policy_metrics.3,
+            cache_operations_total: cache_metrics.0,
+            cache_hit_ratio: cache_metrics.1,
+            cache_size_gauge: cache_metrics.2,
+            cache_operation_duration: cache_metrics.3,
+            http_requests_total: http_metrics.0,
+            http_request_duration: http_metrics.1,
+            http_request_size_bytes: http_metrics.2,
+            http_response_size_bytes: http_metrics.3,
+            http_requests_in_flight: http_metrics.4,
+            rate_limit_enforcement_total: rate_limit_metrics.0,
+            rate_limit_quota_gauge: rate_limit_metrics.1,
+            rate_limit_reset_duration: rate_limit_metrics.2,
+            auth_attempts_detailed: security_metrics.0,
+            mfa_operations_total: security_metrics.1,
+            security_violations_total: security_metrics.2,
+            anomaly_detection_total: security_metrics.3,
+            system_resources_gauge: system_metrics.0,
+            background_task_total: system_metrics.1,
+            connection_health_gauge: system_metrics.2,
+            circuit_breaker_state_changes: system_metrics.3,
+        }
+    }
+
+    /// Create token operation metrics
+    ///
+    /// Initializes all metrics related to token operations including issuance,
+    /// validation, revocation, and introspection.
+    ///
+    /// # Returns
+    /// A tuple containing all token-related metrics.
+    fn create_token_metrics() -> (
+        IntCounterVec,
+        IntCounterVec,
+        IntCounterVec,
+        IntCounterVec,
+        HistogramVec,
+        IntCounterVec,
+    ) {
         let token_issuance_total = IntCounterVec::new(
             Opts::new(
                 "auth_token_issuance_total",
@@ -170,7 +310,23 @@ impl MetricsRegistry {
         )
         .expect("Failed to create active_tokens_gauge metric");
 
-        // === Policy Evaluation Metrics ===
+        (
+            token_issuance_total,
+            token_validation_total,
+            token_revocation_total,
+            token_introspection_total,
+            token_operation_duration,
+            active_tokens_gauge,
+        )
+    }
+
+    /// Create policy evaluation metrics
+    ///
+    /// Initializes all metrics related to policy evaluation, caching, and compilation.
+    ///
+    /// # Returns
+    /// A tuple containing all policy-related metrics.
+    fn create_policy_metrics() -> (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec) {
         let policy_evaluation_total = IntCounterVec::new(
             Opts::new(
                 "auth_policy_evaluation_total",
@@ -210,7 +366,21 @@ impl MetricsRegistry {
         )
         .expect("Failed to create policy_compilation_total metric");
 
-        // === Cache Metrics ===
+        (
+            policy_evaluation_total,
+            policy_evaluation_duration,
+            policy_cache_operations,
+            policy_compilation_total,
+        )
+    }
+
+    /// Create cache operation metrics
+    ///
+    /// Initializes all metrics related to cache operations, hit ratios, and performance.
+    ///
+    /// # Returns
+    /// A tuple containing all cache-related metrics.
+    fn create_cache_metrics() -> (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec) {
         let cache_operations_total = IntCounterVec::new(
             Opts::new("auth_cache_operations_total", "Total cache operations"),
             &["cache_type", "operation", "result"],
@@ -245,7 +415,21 @@ impl MetricsRegistry {
         )
         .expect("Failed to create cache_operation_duration metric");
 
-        // === HTTP Request Metrics ===
+        (
+            cache_operations_total,
+            cache_hit_ratio,
+            cache_size_gauge,
+            cache_operation_duration,
+        )
+    }
+
+    /// Create HTTP request metrics
+    ///
+    /// Initializes all metrics related to HTTP requests, responses, and processing.
+    ///
+    /// # Returns
+    /// A tuple containing all HTTP-related metrics.
+    fn create_http_metrics() -> (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge) {
         let http_requests_total = IntCounterVec::new(
             Opts::new("auth_http_requests_total", "Total HTTP requests"),
             &["method", "endpoint", "status_code", "client_id"],
@@ -266,16 +450,7 @@ impl MetricsRegistry {
 
         let http_request_size_bytes = HistogramVec::new(
             HistogramOpts::new("auth_http_request_size_bytes", "HTTP request size in bytes")
-                .buckets(vec![
-                    64.0,
-                    256.0,
-                    1024.0,
-                    4096.0,
-                    16384.0,
-                    65_536.0,
-                    262_144.0,
-                    1_048_576.0,
-                ]),
+                .buckets(Self::get_size_buckets()),
             &["method", "endpoint"],
         )
         .expect("Failed to create http_request_size_bytes metric");
@@ -285,16 +460,7 @@ impl MetricsRegistry {
                 "auth_http_response_size_bytes",
                 "HTTP response size in bytes",
             )
-            .buckets(vec![
-                64.0,
-                256.0,
-                1024.0,
-                4096.0,
-                16384.0,
-                65_536.0,
-                262_144.0,
-                1_048_576.0,
-            ]),
+            .buckets(Self::get_size_buckets()),
             &["method", "endpoint", "status_code"],
         )
         .expect("Failed to create http_response_size_bytes metric");
@@ -305,7 +471,22 @@ impl MetricsRegistry {
         )
         .expect("Failed to create http_requests_in_flight metric");
 
-        // === Rate Limiting Metrics ===
+        (
+            http_requests_total,
+            http_request_duration,
+            http_request_size_bytes,
+            http_response_size_bytes,
+            http_requests_in_flight,
+        )
+    }
+
+    /// Create rate limiting metrics
+    ///
+    /// Initializes all metrics related to rate limiting enforcement and quotas.
+    ///
+    /// # Returns
+    /// A tuple containing all rate limiting-related metrics.
+    fn create_rate_limit_metrics() -> (IntCounterVec, IntCounterVec, HistogramVec) {
         let rate_limit_enforcement_total = IntCounterVec::new(
             Opts::new(
                 "auth_rate_limit_enforcement_total",
@@ -334,7 +515,20 @@ impl MetricsRegistry {
         )
         .expect("Failed to create rate_limit_reset_duration metric");
 
-        // === Security Event Metrics ===
+        (
+            rate_limit_enforcement_total,
+            rate_limit_quota_gauge,
+            rate_limit_reset_duration,
+        )
+    }
+
+    /// Create security event metrics
+    ///
+    /// Initializes all metrics related to security events, authentication, and MFA.
+    ///
+    /// # Returns
+    /// A tuple containing all security-related metrics.
+    fn create_security_metrics() -> (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec) {
         let auth_attempts_detailed = IntCounterVec::new(
             Opts::new(
                 "auth_authentication_attempts_detailed_total",
@@ -374,7 +568,21 @@ impl MetricsRegistry {
         )
         .expect("Failed to create anomaly_detection_total metric");
 
-        // === System Health Metrics ===
+        (
+            auth_attempts_detailed,
+            mfa_operations_total,
+            security_violations_total,
+            anomaly_detection_total,
+        )
+    }
+
+    /// Create system health metrics
+    ///
+    /// Initializes all metrics related to system resources, background tasks, and connections.
+    ///
+    /// # Returns
+    /// A tuple containing all system-related metrics.
+    fn create_system_metrics() -> (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec) {
         let system_resources_gauge = IntCounterVec::new(
             Opts::new("auth_system_resources", "System resource usage"),
             &["resource_type", "unit"],
@@ -405,76 +613,171 @@ impl MetricsRegistry {
         )
         .expect("Failed to create circuit_breaker_state_changes metric");
 
-        // Register all metrics with the registry
-        Self::register_metrics(
-            &registry,
-            vec![
-                Box::new(token_issuance_total.clone()),
-                Box::new(token_validation_total.clone()),
-                Box::new(token_revocation_total.clone()),
-                Box::new(token_introspection_total.clone()),
-                Box::new(token_operation_duration.clone()),
-                Box::new(active_tokens_gauge.clone()),
-                Box::new(policy_evaluation_total.clone()),
-                Box::new(policy_evaluation_duration.clone()),
-                Box::new(policy_cache_operations.clone()),
-                Box::new(policy_compilation_total.clone()),
-                Box::new(cache_operations_total.clone()),
-                Box::new(cache_hit_ratio.clone()),
-                Box::new(cache_size_gauge.clone()),
-                Box::new(cache_operation_duration.clone()),
-                Box::new(http_requests_total.clone()),
-                Box::new(http_request_duration.clone()),
-                Box::new(http_request_size_bytes.clone()),
-                Box::new(http_response_size_bytes.clone()),
-                Box::new(http_requests_in_flight.clone()),
-                Box::new(rate_limit_enforcement_total.clone()),
-                Box::new(rate_limit_quota_gauge.clone()),
-                Box::new(rate_limit_reset_duration.clone()),
-                Box::new(auth_attempts_detailed.clone()),
-                Box::new(mfa_operations_total.clone()),
-                Box::new(security_violations_total.clone()),
-                Box::new(anomaly_detection_total.clone()),
-                Box::new(system_resources_gauge.clone()),
-                Box::new(background_task_total.clone()),
-                Box::new(connection_health_gauge.clone()),
-                Box::new(circuit_breaker_state_changes.clone()),
-            ],
-        );
-
-        Self {
-            registry,
-            token_issuance_total,
-            token_validation_total,
-            token_revocation_total,
-            token_introspection_total,
-            token_operation_duration,
-            active_tokens_gauge,
-            policy_evaluation_total,
-            policy_evaluation_duration,
-            policy_cache_operations,
-            policy_compilation_total,
-            cache_operations_total,
-            cache_hit_ratio,
-            cache_size_gauge,
-            cache_operation_duration,
-            http_requests_total,
-            http_request_duration,
-            http_request_size_bytes,
-            http_response_size_bytes,
-            http_requests_in_flight,
-            rate_limit_enforcement_total,
-            rate_limit_quota_gauge,
-            rate_limit_reset_duration,
-            auth_attempts_detailed,
-            mfa_operations_total,
-            security_violations_total,
-            anomaly_detection_total,
+        (
             system_resources_gauge,
             background_task_total,
             connection_health_gauge,
             circuit_breaker_state_changes,
-        }
+        )
+    }
+
+    /// Get common size buckets for byte measurements
+    ///
+    /// Provides a consistent set of histogram buckets for measuring sizes in bytes.
+    ///
+    /// # Returns
+    /// A vector of bucket boundaries for byte measurements.
+    fn get_size_buckets() -> Vec<f64> {
+        vec![
+            64.0,
+            256.0,
+            1024.0,
+            4096.0,
+            16384.0,
+            65_536.0,
+            262_144.0,
+            1_048_576.0,
+        ]
+    }
+
+    /// Collect all metrics into a single vector for registration
+    ///
+    /// Aggregates all metrics from different categories into a single collection
+    /// for batch registration with the Prometheus registry.
+    ///
+    /// # Arguments
+    /// * `token_metrics` - Token operation metrics
+    /// * `policy_metrics` - Policy evaluation metrics
+    /// * `cache_metrics` - Cache operation metrics
+    /// * `http_metrics` - HTTP request metrics
+    /// * `rate_limit_metrics` - Rate limiting metrics
+    /// * `security_metrics` - Security event metrics
+    /// * `system_metrics` - System health metrics
+    ///
+    /// # Returns
+    /// A vector containing all metrics as boxed collectors.
+    #[allow(clippy::too_many_arguments)]
+    fn collect_all_metrics(
+        token_metrics: &(
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            HistogramVec,
+            IntCounterVec,
+        ),
+        policy_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+        cache_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
+        security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+        system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        let mut all_metrics = Vec::new();
+        
+        // Collect each metric group separately
+        all_metrics.extend(Self::collect_token_metrics(token_metrics));
+        all_metrics.extend(Self::collect_policy_metrics(policy_metrics));
+        all_metrics.extend(Self::collect_cache_metrics(cache_metrics));
+        all_metrics.extend(Self::collect_http_metrics(http_metrics));
+        all_metrics.extend(Self::collect_rate_limit_metrics(rate_limit_metrics));
+        all_metrics.extend(Self::collect_security_metrics(security_metrics));
+        all_metrics.extend(Self::collect_system_metrics(system_metrics));
+        
+        all_metrics
+    }
+
+    /// Collect token metrics into boxed collectors
+    fn collect_token_metrics(
+        token_metrics: &(
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            HistogramVec,
+            IntCounterVec,
+        ),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(token_metrics.0.clone()),
+            Box::new(token_metrics.1.clone()),
+            Box::new(token_metrics.2.clone()),
+            Box::new(token_metrics.3.clone()),
+            Box::new(token_metrics.4.clone()),
+            Box::new(token_metrics.5.clone()),
+        ]
+    }
+
+    /// Collect policy metrics into boxed collectors
+    fn collect_policy_metrics(
+        policy_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(policy_metrics.0.clone()),
+            Box::new(policy_metrics.1.clone()),
+            Box::new(policy_metrics.2.clone()),
+            Box::new(policy_metrics.3.clone()),
+        ]
+    }
+
+    /// Collect cache metrics into boxed collectors
+    fn collect_cache_metrics(
+        cache_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(cache_metrics.0.clone()),
+            Box::new(cache_metrics.1.clone()),
+            Box::new(cache_metrics.2.clone()),
+            Box::new(cache_metrics.3.clone()),
+        ]
+    }
+
+    /// Collect HTTP metrics into boxed collectors
+    fn collect_http_metrics(
+        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(http_metrics.0.clone()),
+            Box::new(http_metrics.1.clone()),
+            Box::new(http_metrics.2.clone()),
+            Box::new(http_metrics.3.clone()),
+            Box::new(http_metrics.4.clone()),
+        ]
+    }
+
+    /// Collect rate limit metrics into boxed collectors
+    fn collect_rate_limit_metrics(
+        rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(rate_limit_metrics.0.clone()),
+            Box::new(rate_limit_metrics.1.clone()),
+            Box::new(rate_limit_metrics.2.clone()),
+        ]
+    }
+
+    /// Collect security metrics into boxed collectors
+    fn collect_security_metrics(
+        security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(security_metrics.0.clone()),
+            Box::new(security_metrics.1.clone()),
+            Box::new(security_metrics.2.clone()),
+            Box::new(security_metrics.3.clone()),
+        ]
+    }
+
+    /// Collect system metrics into boxed collectors
+    fn collect_system_metrics(
+        system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        vec![
+            Box::new(system_metrics.0.clone()),
+            Box::new(system_metrics.1.clone()),
+            Box::new(system_metrics.2.clone()),
+            Box::new(system_metrics.3.clone()),
+        ]
     }
 
     /// Register metrics with the registry, handling registration errors gracefully

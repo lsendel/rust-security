@@ -11,6 +11,14 @@ pub struct Scope(String);
 
 impl Scope {
     /// Create a new scope with validation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The scope is empty (`ScopeError::Empty`)
+    /// - The scope is longer than 100 characters (`ScopeError::TooLong`)
+    /// - The scope contains invalid characters (only alphanumeric, underscore, 
+    ///   and hyphen are allowed) (`ScopeError::InvalidFormat`)
     pub fn new(scope: impl Into<String>) -> Result<Self, ScopeError> {
         let scope = scope.into();
 

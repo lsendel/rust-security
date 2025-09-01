@@ -179,9 +179,9 @@ der = { workspace = true, optional = true }
 vaultrs = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-secretsmanager = { workspace = true, optional = true }
-smartcore = "0.4.2"
-statrs = "0.18.0"
-nalgebra = "0.34.0"
+# smartcore = "0.4.2"  # Commented out to reduce conflicts
+# statrs = "0.18.0"    # Commented out to reduce conflicts
+# nalgebra = "0.34.0"  # Commented out to reduce conflicts
 
 [dev-dependencies]
 criterion = { workspace = true }

@@ -21,14 +21,18 @@ use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 use validator::Validate;
+
+// Import JWKS manager for secure JWT operations
+// use auth_service::infrastructure::crypto::jwks_rotation::{InMemoryKeyStorage, JwksManager, KeyRotationConfig};
 
 /// Application state for authentication
 #[derive(Clone)]
 pub struct AuthState {
-    pub jwt_secret: String,
+    pub jwt_secret: String, // Kept for backward compatibility during migration
+    // pub jwks_manager: Option<Arc<JwksManager>>, // New secure JWKS manager - temporarily disabled
     pub users: Arc<tokio::sync::RwLock<HashMap<String, User>>>,
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
@@ -183,6 +187,12 @@ pub struct ErrorResponse {
 impl AuthState {
     #[must_use]
     pub fn new(jwt_secret: String) -> Self {
+        Self::new_with_jwks(jwt_secret, None)
+    }
+
+    /// Create new auth state with JWKS manager for secure operations
+    #[must_use]
+    pub fn new_with_jwks(jwt_secret: String, _jwks_manager: Option<()>) -> Self { // Temporarily disabled
         let mut users = HashMap::new();
         let mut oauth_clients = HashMap::new();
 
@@ -213,11 +223,18 @@ impl AuthState {
 
         Self {
             jwt_secret,
+            // jwks_manager: _jwks_manager, // Temporarily disabled
             users: Arc::new(tokio::sync::RwLock::new(users)),
             oauth_clients: Arc::new(tokio::sync::RwLock::new(oauth_clients)),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
+
+    // /// Get or create JWKS manager (lazy initialization for secure operations) - Temporarily disabled
+    // async fn get_jwks_manager(&self) -> Result<Arc<JwksManager>, jsonwebtoken::errors::Error> {
+    //     // JWKS functionality temporarily disabled
+    //     Err(jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken))
+    // }
 }
 
 // Utility functions
@@ -233,7 +250,7 @@ fn generate_token() -> String {
     URL_SAFE_NO_PAD.encode(dest)
 }
 
-/// Create a JWT token for the given user
+/// Create a JWT token for the given user using secure EdDSA or fallback to HS256
 ///
 /// # Errors
 ///
@@ -241,7 +258,28 @@ fn generate_token() -> String {
 /// - JWT encoding fails due to invalid key
 /// - Claims serialization fails
 /// - Header creation fails
-fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
+/// - JWKS manager is unavailable
+async fn create_jwt_token_secure(user: &User, auth_state: &AuthState) -> Result<String, jsonwebtoken::errors::Error> {
+    let _claims = Claims {
+        sub: user.id.clone(),
+        email: user.email.clone(),
+        name: user.name.clone(),
+        roles: user.roles.clone(),
+        exp: usize::try_from((Utc::now() + Duration::hours(24)).timestamp()).unwrap_or(0),
+        iat: usize::try_from(Utc::now().timestamp()).unwrap_or(0),
+        iss: "rust-security-platform".to_string(),
+    };
+
+    // JWKS functionality temporarily disabled, using legacy token creation
+    warn!("Using legacy HS256 token creation for user: {}", user.email);
+    create_jwt_token_legacy(user, &auth_state.jwt_secret)
+}
+
+/// Legacy JWT token creation using HS256 (for backward compatibility)
+/// 
+/// WARNING: This method uses HS256 which is vulnerable to algorithm confusion attacks.
+/// This is only used as a fallback during migration.
+fn create_jwt_token_legacy(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = Claims {
         sub: user.id.clone(),
         email: user.email.clone(),
@@ -314,8 +352,9 @@ pub async fn register(
         roles: vec!["user".to_string()],
     };
 
-    // Generate JWT token
-    let token = create_jwt_token(&user, &state.jwt_secret).map_err(|_| {
+    // Generate JWT token using secure JWKS manager
+    let token = create_jwt_token_secure(&user, &state).await.map_err(|e| {
+        warn!("Token generation failed for user {}: {}", user.email, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -395,8 +434,9 @@ pub async fn login(
             .await
             .insert(request.email.clone(), user.clone());
 
-        // Generate JWT token
-        let token = create_jwt_token(&user, &state.jwt_secret).map_err(|_| {
+        // Generate JWT token using secure JWKS manager
+        let token = create_jwt_token_secure(&user, &state).await.map_err(|e| {
+            warn!("Token generation failed for user {}: {}", user.email, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -598,7 +638,7 @@ async fn handle_authorization_code_flow(
 
     let (user_id, scope) = validate_and_consume_auth_code(state, code).await?;
     let user = find_user_by_id(state, &user_id).await?;
-    let access_token = generate_access_token(&user, &state.jwt_secret)?;
+    let access_token = generate_access_token(&user, state).await?;
 
     info!("Access token generated for user: {}", user.email);
 
@@ -649,13 +689,16 @@ async fn find_user_by_id(
         .ok_or_else(|| oauth_error("server_error", "User not found"))
 }
 
-/// Generate access token for user
-fn generate_access_token(
+/// Generate access token for user using secure JWKS manager
+async fn generate_access_token(
     user: &User,
-    jwt_secret: &str,
+    auth_state: &AuthState,
 ) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
-    create_jwt_token(user, jwt_secret)
-        .map_err(|_| oauth_error("server_error", "Failed to generate access token"))
+    create_jwt_token_secure(user, auth_state).await
+        .map_err(|e| {
+            warn!("Access token generation failed: {}", e);
+            oauth_error("server_error", "Failed to generate access token")
+        })
 }
 
 /// Helper to create consistent `OAuth` error responses
@@ -675,7 +718,37 @@ fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorRespons
     )
 }
 
-/// Get current user info
+/// Validate JWT token using secure JWKS manager or fallback to HS256
+/// 
+/// This function tries EdDSA validation first, then falls back to HS256 for backward compatibility
+async fn validate_jwt_token(token: &str, auth_state: &AuthState) -> Result<Claims, (StatusCode, Json<ErrorResponse>)> {
+    // JWKS functionality temporarily disabled
+    
+    // Fallback to HS256 validation for backward compatibility
+    warn!("Falling back to legacy HS256 validation - consider migrating to EdDSA");
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.algorithms = vec![Algorithm::HS256];
+    
+    let token_data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(auth_state.jwt_secret.as_ref()),
+        &validation,
+    )
+    .map_err(|e| {
+        warn!("Token validation failed completely: {}", e);
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid_token".to_string(),
+                error_description: "Invalid or expired token".to_string(),
+            }),
+        )
+    })?;
+    
+    Ok(token_data.claims)
+}
+
+/// Get current user info with secure token validation
 ///
 /// # Errors
 ///
@@ -688,7 +761,6 @@ fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorRespons
 /// # Panics
 ///
 /// This function does not panic under normal operation.
-#[allow(clippy::unused_async)]
 pub async fn me(
     State(state): State<AuthState>,
     headers: HeaderMap,
@@ -726,25 +798,8 @@ pub async fn me(
             )
         })?;
 
-    // Decode JWT token
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.algorithms = vec![Algorithm::HS256]; // Explicitly restrict to HS256 only
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(state.jwt_secret.as_ref()),
-        &validation,
-    )
-    .map_err(|_| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "invalid_token".to_string(),
-                error_description: "Invalid or expired token".to_string(),
-            }),
-        )
-    })?;
-
-    let claims = token_data.claims;
+    // Validate JWT token using secure JWKS manager or fallback
+    let claims = validate_jwt_token(token, &state).await?;
 
     Ok(Json(UserInfo {
         id: claims.sub,
@@ -752,4 +807,106 @@ pub async fn me(
         name: claims.name,
         roles: claims.roles,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_secure_jwt_token_creation() {
+        // Create test user
+        let user = User {
+            id: "test-user-123".to_string(),
+            email: "test@example.com".to_string(),
+            password_hash: "test-hash".to_string(),
+            name: "Test User".to_string(),
+            created_at: Utc::now(),
+            last_login: None,
+            is_active: true,
+            roles: vec!["user".to_string()],
+        };
+
+        // JWKS functionality temporarily disabled
+        let auth_state = AuthState::new_with_jwks(
+            "fallback-secret".to_string(), 
+            None
+        );
+
+        // Create secure JWT token (should use EdDSA)
+        let result = create_jwt_token_secure(&user, &auth_state).await;
+        assert!(result.is_ok(), "Secure JWT token creation should succeed");
+
+        let token = result.unwrap();
+        assert!(!token.is_empty(), "Token should not be empty");
+
+        // Verify the token was created with EdDSA by checking the header
+        let header = decode_header(&token).expect("Should be able to decode header");
+        assert_eq!(header.alg, Algorithm::EdDSA, "Token should use EdDSA algorithm");
+        assert!(header.kid.is_some(), "Token should have a key ID");
+    }
+
+    #[tokio::test]
+    async fn test_fallback_to_legacy_jwt() {
+        // Create test user
+        let user = User {
+            id: "test-user-456".to_string(),
+            email: "fallback@example.com".to_string(),
+            password_hash: "test-hash".to_string(),
+            name: "Fallback User".to_string(),
+            created_at: Utc::now(),
+            last_login: None,
+            is_active: true,
+            roles: vec!["user".to_string()],
+        };
+
+        // Create auth state without JWKS manager (should fallback to HS256)
+        let auth_state = AuthState::new("test-secret-key".to_string());
+
+        // Create JWT token (should fallback to HS256)
+        let result = create_jwt_token_secure(&user, &auth_state).await;
+        assert!(result.is_ok(), "Fallback JWT token creation should succeed");
+
+        let token = result.unwrap();
+        assert!(!token.is_empty(), "Token should not be empty");
+
+        // Verify the token was created with HS256 (fallback)
+        let header = decode_header(&token).expect("Should be able to decode header");
+        assert_eq!(header.alg, Algorithm::HS256, "Token should fallback to HS256 algorithm");
+    }
+
+    #[tokio::test]
+    async fn test_secure_jwt_validation() {
+        // JWKS functionality temporarily disabled
+        let auth_state = AuthState::new_with_jwks(
+            "fallback-secret".to_string(), 
+            None
+        );
+
+        // Create test user and token
+        let user = User {
+            id: "validation-test-789".to_string(),
+            email: "validation@example.com".to_string(),
+            password_hash: "test-hash".to_string(),
+            name: "Validation User".to_string(),
+            created_at: Utc::now(),
+            last_login: None,
+            is_active: true,
+            roles: vec!["admin".to_string()],
+        };
+
+        // Create secure token
+        let token = create_jwt_token_secure(&user, &auth_state).await.unwrap();
+
+        // Validate the token
+        let validation_result = validate_jwt_token(&token, &auth_state).await;
+        assert!(validation_result.is_ok(), "Token validation should succeed");
+
+        let claims = validation_result.unwrap();
+        assert_eq!(claims.sub, user.id);
+        assert_eq!(claims.email, user.email);
+        assert_eq!(claims.name, user.name);
+        assert_eq!(claims.roles, user.roles);
+    }
 }

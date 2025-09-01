@@ -826,15 +826,21 @@ impl PipelineExecutor {
             PipelineStatus::Passed
         };
 
-        let total_execution_time_ms = start_time.elapsed().as_millis() as u64;
+        // Safe casting to prevent potential truncation
+        let total_execution_time_ms = start_time.elapsed().as_millis().min(u64::MAX as u128) as u64;
 
-        // Calculate overall quality score
-        let quality_score = stage_results
-            .iter()
-            .filter_map(|r| r.quality_metrics.as_ref())
-            .filter_map(|m| m.code_quality_score)
-            .sum::<f64>()
-            / stage_results.len() as f64;
+        // Calculate overall quality score with safe casting
+        let quality_score = if !stage_results.is_empty() {
+            let score_sum = stage_results
+                .iter()
+                .filter_map(|r| r.quality_metrics.as_ref())
+                .filter_map(|m| m.code_quality_score)
+                .sum::<f64>();
+            let num_results = f64::from(u32::try_from(stage_results.len()).unwrap_or(u32::MAX));
+            score_sum / num_results
+        } else {
+            0.0
+        };
 
         let quality_score = if quality_score > 0.0 {
             Some(quality_score)

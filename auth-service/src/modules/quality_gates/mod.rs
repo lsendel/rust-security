@@ -137,7 +137,8 @@ impl QualityGateOrchestrator {
             .await?;
 
         // Generate final result
-        let execution_time_ms = start_time.elapsed().as_millis() as u64;
+        // Safe casting to prevent potential truncation
+        let execution_time_ms = start_time.elapsed().as_millis().min(u64::MAX as u128) as u64;
         let overall_status = self.determine_overall_status(
             &check_results,
             &threshold_evaluation,

@@ -20,10 +20,43 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
+// IMPORTANT: Machine learning dependencies temporarily disabled due to smartcore dependency issues.
+// 
+// TO RE-ENABLE SMARTCORE FUNCTIONALITY:
+// 1. Uncomment the following imports:
+//    #[cfg(feature = "ml-enhanced")]
+//    use smartcore::linalg::basic::matrix::DenseMatrix;
+//    #[cfg(feature = "ml-enhanced")]
+//    use smartcore::linear::logistic_regression::LogisticRegression;
+// 2. Remove the stub types below
+// 3. Update MLCorrelator implementation to use actual ML models
+// 4. Implement feature extraction and model training in predict_correlation method
+//
+// TODO: Re-enable when smartcore is added to workspace dependencies
+// #[cfg(feature = "ml-enhanced")]
+// use smartcore::linalg::basic::matrix::DenseMatrix;
+// #[cfg(feature = "ml-enhanced")]
+// use smartcore::linear::logistic_regression::LogisticRegression;
+
+// TEMPORARY STUB TYPES FOR COMPILATION - REMOVE WHEN SMARTCORE IS RE-ENABLED
 #[cfg(feature = "ml-enhanced")]
-use smartcore::linalg::basic::matrix::DenseMatrix;
+type DenseMatrix<T> = Vec<Vec<T>>; // Stub for compilation - replace with smartcore::linalg::basic::matrix::DenseMatrix
+
 #[cfg(feature = "ml-enhanced")]
-use smartcore::linear::logistic_regression::LogisticRegression;
+#[derive(Debug, Clone)]
+pub struct LogisticRegression<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
+
+#[cfg(feature = "ml-enhanced")]
+impl<T> LogisticRegression<T> {
+    #[allow(dead_code)] // Stub method to prevent compilation errors
+    pub fn new() -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
 
 /// Alert correlation engine with advanced pattern detection
 pub struct AlertCorrelationEngine {
@@ -326,7 +359,7 @@ pub struct MLCorrelationModel {
     /// Model type
     pub model_type: MLModelType,
 
-    /// Trained model
+    /// Trained model (stubbed)
     pub model: LogisticRegression<f64>,
 
     /// Feature names
@@ -661,7 +694,7 @@ impl AlertCorrelationEngine {
         // Store correlation results
         for result in &correlation_results {
             self.correlation_results
-                .insert(operation_result.id.clone(), operation_result.clone());
+                .insert(result.id.clone(), result.clone());
 
             // Publish correlation event
             if let Some(ref publisher) = self.event_publisher {

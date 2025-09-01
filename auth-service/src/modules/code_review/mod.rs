@@ -440,9 +440,11 @@ impl CodeMetricsCollector {
             + code.matches("while ").count()
             + functions; // +1 for each function
 
-        // Calculate comment ratio
+        // Calculate comment ratio with safe casting
         let comment_ratio = if lines_of_code > 0 {
-            comments as f64 / lines_of_code as f64 * 100.0
+            let comments_f64 = f64::from(u32::try_from(comments).unwrap_or(u32::MAX));
+            let lines_f64 = f64::from(u32::try_from(lines_of_code).unwrap_or(u32::MAX));
+            comments_f64 / lines_f64 * 100.0
         } else {
             0.0
         };

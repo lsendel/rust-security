@@ -10,6 +10,14 @@ pub struct Email(String);
 
 impl Email {
     /// Create a new email with validation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The email is empty
+    /// - The email is longer than 254 characters
+    /// - The email format is invalid according to RFC 5322 standards
+    /// - The regex compilation fails (should not happen under normal circumstances)
     pub fn new(email: String) -> Result<Self, String> {
         Self::validate(&email)?;
         Ok(Self(email))

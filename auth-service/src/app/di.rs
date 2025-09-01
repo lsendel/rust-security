@@ -20,6 +20,12 @@ pub struct AppContainer {
 
 impl AppContainer {
     /// Create a new application container with mock repositories (for testing)
+    ///
+    /// # Panics
+    /// 
+    /// Panics because mock repositories are not yet implemented. This function
+    /// always panics with a message indicating that mock repositories are not
+    /// available and suggesting to use `new_postgres` instead.
     #[must_use] pub fn new_mock() -> Self {
         // TODO: Implement proper mock repositories
         // For now, we'll return an error indicating this is not implemented
