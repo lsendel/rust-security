@@ -37,7 +37,6 @@ pub fn parse_iso8601(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_now() {
         let before = Utc::now();

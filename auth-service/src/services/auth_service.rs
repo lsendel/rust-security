@@ -261,8 +261,7 @@ impl AuthServiceTrait for AuthService {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::mocks::MockUserRepository;
-    use crate::domain::value_objects::Email;
+
 
     // Mock implementations would go here for comprehensive testing
 

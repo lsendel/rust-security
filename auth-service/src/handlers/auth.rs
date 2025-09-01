@@ -130,7 +130,7 @@ pub async fn logout(
 
 #[cfg(test)]
 mod tests {
-    use crate::app::AppContainer;
+
 
     #[tokio::test]
     async fn test_handler_creation() {

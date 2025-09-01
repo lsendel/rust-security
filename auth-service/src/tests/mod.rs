@@ -9,10 +9,7 @@ pub mod performance_tests;
 pub mod security_tests;
 
 // Re-export all test modules
-pub use integration_tests::*;
-pub use performance_tests::*;
 // pub use property_tests::*; // Temporarily disabled due to proptest syntax issues
-pub use security_tests::*;
 
 /// Test utilities and helpers
 pub mod utils {

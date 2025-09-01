@@ -720,7 +720,6 @@ impl KeyManagementService {
 mod tests {
     use super::*;
 
-
     #[tokio::test]
     async fn test_key_generation() {
         let config = KeyManagementConfig::default();

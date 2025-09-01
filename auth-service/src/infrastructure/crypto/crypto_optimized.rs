@@ -2,6 +2,8 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine as _;
 use dashmap::DashMap;
+#[allow(unused_imports)]
+use rayon::prelude::*;
 
 use ring::rand::SecureRandom;
 use ring::{aead, digest, hmac, rand, signature};

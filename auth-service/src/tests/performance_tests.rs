@@ -244,7 +244,7 @@ async fn test_authentication_latency() {
 }
 */
 
-/// Memory usage test (disabled - AsyncOptimizer module not available)
+// /// Memory usage test (disabled - AsyncOptimizer module not available)
 /*
 #[tokio::test]
 async fn test_memory_usage() {
@@ -505,7 +505,7 @@ async fn test_concurrent_load() {
 }
 */
 
-/// Stress test for system limits (disabled - AsyncOptimizer module not available)
+// /// Stress test for system limits (disabled - AsyncOptimizer module not available)
 /*
 #[tokio::test]
 async fn test_stress_limits() {
