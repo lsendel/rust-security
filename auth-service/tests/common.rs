@@ -5,6 +5,10 @@ use sha2::Sha256;
 type HmacSha256 = Hmac<Sha256>;
 
 /// Sign a request using the same scheme as the service middleware
+///
+/// # Panics
+///
+/// Panics if HMAC initialization fails.
 /// message = method + "\n" + path + "\n" + body + "\n" + timestamp
 #[must_use]
 pub fn sign_request(method: &str, path: &str, body: &str) -> (String, String) {
