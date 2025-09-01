@@ -16,7 +16,7 @@ use axum::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
 use common::hash_password_sha256;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -252,8 +252,9 @@ fn create_jwt_token(user: &User, jwt_secret: &str) -> Result<String, jsonwebtoke
         iss: "rust-security-platform".to_string(),
     };
 
+    let header = Header::new(Algorithm::HS256);
     encode(
-        &Header::default(),
+        &header,
         &claims,
         &EncodingKey::from_secret(jwt_secret.as_ref()),
     )
@@ -726,10 +727,12 @@ pub async fn me(
         })?;
 
     // Decode JWT token
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.algorithms = vec![Algorithm::HS256]; // Explicitly restrict to HS256 only
     let token_data = decode::<Claims>(
         token,
         &DecodingKey::from_secret(state.jwt_secret.as_ref()),
-        &Validation::default(),
+        &validation,
     )
     .map_err(|_| {
         (

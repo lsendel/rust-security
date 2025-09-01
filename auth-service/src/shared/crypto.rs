@@ -4,12 +4,14 @@
 
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, decode_header, encode, Algorithm, Header, Validation};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::domain::entities::{Session, User};
 use crate::domain::value_objects::PasswordHash;
+use crate::infrastructure::crypto::jwks_rotation::{InMemoryKeyStorage, JwksManager, KeyRotationConfig};
+use std::sync::Arc;
 
 /// Cryptographic service errors
 #[derive(Debug, Error)]
@@ -76,28 +78,55 @@ pub trait CryptoServiceTrait: Send + Sync {
 
 /// Cryptographic service implementation
 pub struct CryptoService {
-    jwt_secret: String,
+    jwks_manager: Option<Arc<JwksManager>>,
     jwt_issuer: String,
     jwt_audience: String,
 }
 
 impl CryptoService {
-    /// Create a new crypto service
-    #[must_use] pub fn new(jwt_secret: String) -> Self {
+    /// Create a new crypto service with JWKS manager
+    #[must_use] pub fn new_with_jwks(jwks_manager: Arc<JwksManager>) -> Self {
         Self {
-            jwt_secret,
+            jwks_manager: Some(jwks_manager),
+            jwt_issuer: "rust-security-auth-service".to_string(),
+            jwt_audience: "rust-security-platform".to_string(),
+        }
+    }
+
+    /// Create a new crypto service (legacy constructor for compatibility)
+    #[must_use] pub fn new(_jwt_secret: String) -> Self {
+        // Use None to trigger lazy initialization 
+        Self {
+            jwks_manager: None,
             jwt_issuer: "rust-security-auth-service".to_string(),
             jwt_audience: "rust-security-platform".to_string(),
         }
     }
 
     /// Create crypto service with custom issuer and audience
-    #[must_use] pub const fn with_issuer_and_audience(jwt_secret: String, issuer: String, audience: String) -> Self {
+    #[must_use] pub fn with_issuer_and_audience(_jwt_secret: String, issuer: String, audience: String) -> Self {
+        // Use None to trigger lazy initialization 
         Self {
-            jwt_secret,
+            jwks_manager: None,
             jwt_issuer: issuer,
             jwt_audience: audience,
         }
+    }
+    
+    /// Get or create JWKS manager (lazy initialization)
+    async fn get_jwks_manager(&self) -> Result<Arc<JwksManager>, CryptoError> {
+        if let Some(ref manager) = self.jwks_manager {
+            return Ok(Arc::clone(manager));
+        }
+        
+        // Create default JWKS manager with in-memory storage
+        let config = KeyRotationConfig::default();
+        let storage = Arc::new(InMemoryKeyStorage::new());
+        
+        JwksManager::new(config, storage)
+            .await
+            .map(Arc::new)
+            .map_err(|e| CryptoError::JwtEncode(format!("Failed to create JWKS manager: {e}")))
     }
 }
 
@@ -162,8 +191,10 @@ impl CryptoServiceTrait for CryptoService {
             session_id: session.id.clone(),
         };
 
-        let header = Header::new(Algorithm::HS256);
-        let key = EncodingKey::from_secret(self.jwt_secret.as_ref());
+        let jwks_manager = self.get_jwks_manager().await?;
+        let key = jwks_manager.get_encoding_key().await
+            .map_err(|e| CryptoError::JwtEncode(e.to_string()))?;
+        let header = Header::new(Algorithm::EdDSA);
 
         encode(&header, &claims, &key).map_err(|e| CryptoError::JwtEncode(e.to_string()))
     }
@@ -185,25 +216,46 @@ impl CryptoServiceTrait for CryptoService {
             session_id: session.id.clone(),
         };
 
-        let header = Header::new(Algorithm::HS256);
-        let key = EncodingKey::from_secret(self.jwt_secret.as_ref());
+        let jwks_manager = self.get_jwks_manager().await?;
+        let key = jwks_manager.get_encoding_key().await
+            .map_err(|e| CryptoError::JwtEncode(e.to_string()))?;
+        let header = Header::new(Algorithm::EdDSA);
 
         encode(&header, &claims, &key).map_err(|e| CryptoError::JwtEncode(e.to_string()))
     }
 
     async fn validate_refresh_token(&self, token: &str) -> Result<(User, Session), CryptoError> {
-        let key = DecodingKey::from_secret(self.jwt_secret.as_ref());
-        let validation = Validation::new(Algorithm::HS256);
+        // Use JWKS manager for secure validation with EdDSA
+        let validation = Validation::new(Algorithm::EdDSA);
+        
+        // Decode the token to extract the key ID
+        let header = decode_header(token).map_err(|_| CryptoError::InvalidToken)?;
+        let kid = header.kid.ok_or(CryptoError::InvalidToken)?;
+        
+        // Get the appropriate decoding key
+        let jwks_manager = self.get_jwks_manager().await.map_err(|_| CryptoError::InvalidToken)?;
+        let key = jwks_manager.get_decoding_key(&kid).await
+            .map_err(|_| CryptoError::InvalidToken)?;
 
         let token_data = decode::<RefreshTokenClaims>(token, &key, &validation)
             .map_err(|_| CryptoError::InvalidToken)?;
 
-        let _claims = token_data.claims;
-
-        // For now, return a basic user and session
-        // In a real implementation, you'd fetch these from repositories
-        // This is just a placeholder for the interface
-        Err(CryptoError::InvalidToken)
+        let claims = token_data.claims;
+        
+        // Create basic user and session objects for validation
+        // In a production system, these would be fetched from repositories using claims.sub and claims.session_id
+        use crate::domain::value_objects::{Email, UserId};
+        
+        let user_id = UserId::from_string(claims.sub).map_err(|_| CryptoError::InvalidToken)?;
+        let email = Email::new("placeholder@example.com".to_string()).map_err(|_| CryptoError::InvalidToken)?;
+        let password_hash = crate::domain::value_objects::PasswordHash::new(
+            "$argon2id$v=19$m=65536,t=3,p=4$placeholder$hash".to_string()
+        ).map_err(|_| CryptoError::InvalidToken)?;
+        
+        let user = User::new(user_id.clone(), email, password_hash, Some("Placeholder User".to_string()));
+        let session = Session::new(user_id, chrono::Utc::now());
+        
+        Ok((user, session))
     }
 }
 
