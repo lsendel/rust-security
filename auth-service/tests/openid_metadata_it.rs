@@ -16,9 +16,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {
@@ -38,14 +41,14 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
 async fn openid_metadata_and_jwks() {
     let base = spawn_app().await;
 
-    let res = reqwest::get(format!("{}/.well-known/openid-configuration", base))
+    let res = reqwest::get(format!("{base}/.well-known/openid-configuration"))
         .await
         .unwrap();
     assert!(res.status().is_success());
@@ -54,7 +57,7 @@ async fn openid_metadata_and_jwks() {
     assert!(body.get("jwks_uri").is_some());
     assert!(body.get("token_endpoint").is_some());
 
-    let res = reqwest::get(format!("{}/jwks.json", base)).await.unwrap();
+    let res = reqwest::get(format!("{base}/jwks.json")).await.unwrap();
     assert!(res.status().is_success());
     let jwks: serde_json::Value = res.json().await.unwrap();
     assert!(jwks.get("keys").is_some());

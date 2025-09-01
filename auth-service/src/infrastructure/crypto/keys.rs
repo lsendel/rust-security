@@ -256,14 +256,14 @@ impl KeyManager {
 
         // Create jsonwebtoken keys
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| AppError::internal(&format!("Failed to create encoding key: {e}")))?;
+            .map_err(|e| AppError::internal(format!("Failed to create encoding key: {e}")))?;
         let decoding_key = DecodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| AppError::internal(&format!("Failed to create decoding key: {e}")))?;
+            .map_err(|e| AppError::internal(format!("Failed to create decoding key: {e}")))?;
 
         // Extract public key components for JWK (from the generated key)
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex)
-            .map_err(|e| AppError::internal(&format!("Failed to decode modulus hex: {e}")))?;
+            .map_err(|e| AppError::internal(format!("Failed to decode modulus hex: {e}")))?;
 
         let n = Self::base64url(&modulus_bytes);
         let e = Self::base64url(&[0x01, 0x00, 0x01]); // Standard RSA exponent (65537)

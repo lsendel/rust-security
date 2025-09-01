@@ -531,20 +531,20 @@ mod tests {
 
     #[test]
     fn test_env_bool() {
-        assert_eq!(env_bool("NONEXISTENT_VAR", true), true);
-        assert_eq!(env_bool("NONEXISTENT_VAR", false), false);
+        assert!(env_bool("NONEXISTENT_VAR", true));
+        assert!(!env_bool("NONEXISTENT_VAR", false));
 
         env::set_var("TEST_BOOL_TRUE", "true");
-        assert_eq!(env_bool("TEST_BOOL_TRUE", false), true);
+        assert!(env_bool("TEST_BOOL_TRUE", false));
 
         env::set_var("TEST_BOOL_FALSE", "false");
-        assert_eq!(env_bool("TEST_BOOL_FALSE", true), false);
+        assert!(!env_bool("TEST_BOOL_FALSE", true));
 
         env::set_var("TEST_BOOL_ONE", "1");
-        assert_eq!(env_bool("TEST_BOOL_ONE", false), true);
+        assert!(env_bool("TEST_BOOL_ONE", false));
 
         env::set_var("TEST_BOOL_ZERO", "0");
-        assert_eq!(env_bool("TEST_BOOL_ZERO", true), false);
+        assert!(!env_bool("TEST_BOOL_ZERO", true));
 
         // Cleanup
         env::remove_var("TEST_BOOL_TRUE");

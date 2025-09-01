@@ -24,9 +24,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {
@@ -50,7 +53,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -60,7 +63,7 @@ async fn refresh_token_reuse_is_rejected() {
 
     // Step 1: Mint tokens (client_credentials)
     let res = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#&scope=openid")
         .send()
@@ -80,14 +83,13 @@ async fn refresh_token_reuse_is_rejected() {
 
     // Step 2: Use refresh token once (should succeed)
     let res_ok = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(
             reqwest::header::CONTENT_TYPE,
             "application/x-www-form-urlencoded",
         )
         .body(format!(
-            "grant_type=refresh_token&refresh_token={}",
-            refresh_token
+            "grant_type=refresh_token&refresh_token={refresh_token}"
         ))
         .send()
         .await
@@ -100,14 +102,13 @@ async fn refresh_token_reuse_is_rejected() {
 
     // Step 3: Reuse the same refresh token (should be rejected)
     let res_reuse = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(
             reqwest::header::CONTENT_TYPE,
             "application/x-www-form-urlencoded",
         )
         .body(format!(
-            "grant_type=refresh_token&refresh_token={}",
-            refresh_token
+            "grant_type=refresh_token&refresh_token={refresh_token}"
         ))
         .send()
         .await

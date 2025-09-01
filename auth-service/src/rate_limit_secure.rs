@@ -429,8 +429,11 @@ mod tests {
     #[tokio::test]
     async fn test_ip_banning() {
         let mut config = RateLimitConfig::default();
-        config.ip_requests_per_minute = 1;
-        config.ban_threshold = 2;
+        config = RateLimitConfig {
+            ip_requests_per_minute: 1,
+            ban_threshold: 2,
+            ..config
+        };
 
         let limiter = SecureRateLimiter::new(config);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));

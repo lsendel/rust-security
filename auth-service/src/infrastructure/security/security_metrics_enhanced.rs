@@ -1,7 +1,7 @@
 //! Enhanced Security Metrics for Service Identity and JIT Token Management
 //!
 //! Provides comprehensive Prometheus metrics for monitoring the new security features
-//! and detecting potential OAuth token compromise attempts.
+//! and detecting potential `OAuth` token compromise attempts.
 
 #[cfg(feature = "monitoring")]
 use prometheus::{
@@ -545,57 +545,57 @@ impl BaselineAnalysisTimer {
 
 // Stub implementations for when monitoring feature is disabled
 #[cfg(not(feature = "monitoring"))]
-pub fn record_identity_registration(_identity_type: &str, _environment: Option<&str>) {}
+pub const fn record_identity_registration(_identity_type: &str, _environment: Option<&str>) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn update_active_identities(_identity_type: &str, _status: &str, _count: i64) {}
+pub const fn update_active_identities(_identity_type: &str, _status: &str, _count: i64) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_identity_suspension(_identity_type: &str, _reason: &str) {}
+pub const fn record_identity_suspension(_identity_type: &str, _reason: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_credential_rotation(_identity_type: &str, _trigger: &str) {}
+pub const fn record_credential_rotation(_identity_type: &str, _trigger: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_jit_token_issued(_identity_type: &str, _scopes_count: usize, _lifetime_seconds: u64) {
+pub const fn record_jit_token_issued(_identity_type: &str, _scopes_count: usize, _lifetime_seconds: u64) {
 }
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_jit_token_validation(_identity_type: &str, _success: bool) {}
+pub const fn record_jit_token_validation(_identity_type: &str, _success: bool) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_token_binding_failure(_identity_type: &str, _binding_type: &str) {}
+pub const fn record_token_binding_failure(_identity_type: &str, _binding_type: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_behavioral_anomaly(_identity_type: &str, _anomaly_type: &str, _severity: &str) {}
+pub const fn record_behavioral_anomaly(_identity_type: &str, _anomaly_type: &str, _severity: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn update_risk_score(_identity_id: &str, _identity_type: &str, _score: f64) {}
+pub const fn update_risk_score(_identity_id: &str, _identity_type: &str, _score: f64) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_baseline_established(_identity_type: &str, _confidence: f32) {}
+pub const fn record_baseline_established(_identity_type: &str, _confidence: f32) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_policy_violation(_identity_type: &str, _policy_type: &str, _violation_type: &str) {}
+pub const fn record_policy_violation(_identity_type: &str, _policy_type: &str, _violation_type: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_auto_suspension(_identity_type: &str, _trigger_reason: &str) {}
+pub const fn record_auto_suspension(_identity_type: &str, _trigger_reason: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_geographic_anomaly(_identity_type: &str, _source_country: &str, _suspicious: bool) {}
+pub const fn record_geographic_anomaly(_identity_type: &str, _source_country: &str, _suspicious: bool) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub fn record_request_rate_anomaly(_identity_type: &str, _rate_change_factor: f64) {}
+pub const fn record_request_rate_anomaly(_identity_type: &str, _rate_change_factor: f64) {}
 
 #[cfg(not(feature = "monitoring"))]
 pub struct TokenRequestTimer;
 
 #[cfg(not(feature = "monitoring"))]
 impl TokenRequestTimer {
-    pub fn start(_identity_type: String) -> Self {
+    #[must_use] pub fn start(_identity_type: String) -> Self {
         Self
     }
-    pub fn finish(self, _success: bool) {}
+    pub const fn finish(self, _success: bool) {}
 }
 
 #[cfg(not(feature = "monitoring"))]
@@ -603,10 +603,10 @@ pub struct BaselineAnalysisTimer;
 
 #[cfg(not(feature = "monitoring"))]
 impl BaselineAnalysisTimer {
-    pub fn start(_identity_type: String, _analysis_type: String) -> Self {
+    #[must_use] pub fn start(_identity_type: String, _analysis_type: String) -> Self {
         Self
     }
-    pub fn finish(self) {}
+    pub const fn finish(self) {}
 }
 
 #[cfg(test)]

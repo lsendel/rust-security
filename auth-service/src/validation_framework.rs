@@ -146,8 +146,8 @@ pub fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
         return Err(ValidationError::new("Invalid phone number format"));
     }
 
-    let digit_count = phone.chars().filter(|c| c.is_ascii_digit()).count();
-    if digit_count < 10 || digit_count > 15 {
+    let digit_count = phone.chars().filter(char::is_ascii_digit).count();
+    if !(10..=15).contains(&digit_count) {
         return Err(ValidationError::new("Phone number must have 10-15 digits"));
     }
 

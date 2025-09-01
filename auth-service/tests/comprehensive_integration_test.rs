@@ -42,9 +42,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {

@@ -51,7 +51,7 @@ pub struct Token {
 
 impl Token {
     /// Create a new access token
-    pub fn new_access_token(
+    #[must_use] pub fn new_access_token(
         user_id: UserId,
         token_hash: String,
         expires_at: DateTime<Utc>,
@@ -71,7 +71,7 @@ impl Token {
     }
 
     /// Create a new refresh token
-    pub fn new_refresh_token(
+    #[must_use] pub fn new_refresh_token(
         user_id: UserId,
         token_hash: String,
         expires_at: DateTime<Utc>,
@@ -92,12 +92,12 @@ impl Token {
     }
 
     /// Check if the token is expired
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
     }
 
     /// Check if the token is active (not expired and not revoked)
-    pub fn is_active(&self) -> bool {
+    #[must_use] pub fn is_active(&self) -> bool {
         !self.is_expired() && !self.is_revoked
     }
 
@@ -107,13 +107,13 @@ impl Token {
     }
 
     /// Set the IP address
-    pub fn with_ip(mut self, ip: String) -> Self {
+    #[must_use] pub fn with_ip(mut self, ip: String) -> Self {
         self.created_ip = Some(ip);
         self
     }
 
     /// Set the user agent
-    pub fn with_user_agent(mut self, user_agent: String) -> Self {
+    #[must_use] pub fn with_user_agent(mut self, user_agent: String) -> Self {
         self.user_agent = Some(user_agent);
         self
     }

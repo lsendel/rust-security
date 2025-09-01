@@ -3,7 +3,7 @@
 //! This module provides derive macros to automatically generate
 //! From implementations for error types, reducing boilerplate code.
 
-/// Macro to generate From implementations for crate::shared::error::AppError
+/// Macro to generate From implementations for `crate::shared::error::AppError`
 ///
 /// Usage:
 /// ```rust

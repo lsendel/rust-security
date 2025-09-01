@@ -20,7 +20,10 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -47,7 +50,7 @@ async fn spawn_app() -> String {
 
     let router = app(app_state);
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -57,7 +60,7 @@ async fn token_binding_mismatch_denied() {
 
     // Obtain access token via client_credentials (will be bound with unknown/unknown placeholder in current impl)
     let resp = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=openid")
         .send()
@@ -69,8 +72,8 @@ async fn token_binding_mismatch_denied() {
 
     // Call userinfo with a different IP/UA to simulate mismatch
     let resp2 = client
-        .get(format!("{}/oauth/userinfo", base))
-        .header("Authorization", format!("Bearer {}", access_token))
+        .get(format!("{base}/oauth/userinfo"))
+        .header("Authorization", format!("Bearer {access_token}"))
         .header("x-forwarded-for", "203.0.113.10")
         .header("user-agent", "Different-UA/1.0")
         .send()

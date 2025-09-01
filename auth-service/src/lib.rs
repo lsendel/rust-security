@@ -177,7 +177,7 @@ pub struct AppState {
     pub jwks_manager: Arc<crate::infrastructure::crypto::jwks_rotation::JwksManager>,
 }
 
-/// Create the application router from AppState (for test compatibility)
+/// Create the application router from `AppState` (for test compatibility)
 pub fn app(_state: AppState) -> axum::Router {
     use axum::{routing::get, Router};
 
@@ -198,6 +198,10 @@ pub fn app(_state: AppState) -> axum::Router {
 }
 
 /// Mint access and refresh tokens for a subject with proper JWT implementation
+///
+/// # Errors
+///
+/// Returns [`crate::shared::error::AppError`] if signing key retrieval or token encoding fails.
 pub async fn mint_local_tokens_for_subject(
     state: &AppState,
     subject: String,
@@ -210,8 +214,8 @@ pub async fn mint_local_tokens_for_subject(
     let refresh_token = create_jwt_token(&signing_key, &token_params.refresh_claims())?;
 
     Ok(build_token_response(
-        access_token,
-        refresh_token,
+        &access_token,
+        &refresh_token,
         &token_params,
     ))
 }
@@ -297,8 +301,8 @@ fn create_jwt_token(
 
 /// Build the final token response
 fn build_token_response(
-    access_token: String,
-    refresh_token: String,
+    access_token: &str,
+    refresh_token: &str,
     params: &TokenCreationParams,
 ) -> serde_json::Value {
     serde_json::json!({

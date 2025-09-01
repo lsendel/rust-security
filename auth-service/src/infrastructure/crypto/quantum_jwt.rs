@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 use anyhow::{anyhow, Result};
 use base64::Engine as _;
 use chrono::{DateTime, Utc};
@@ -57,7 +58,7 @@ pub struct QuantumJwtPayload {
     pub custom: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum HybridAlgorithm {
     /// RSA-2048 + ML-DSA-44 (Security Level 1)
     Rs256MlDsa44,
@@ -110,7 +111,7 @@ pub struct PostQuantumKeyPair {
     pub algorithm: PostQuantumAlgorithm,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClassicalAlgorithm {
     Rsa2048,
     Rsa3072,
@@ -120,7 +121,7 @@ pub enum ClassicalAlgorithm {
     EcdsaP521,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PostQuantumAlgorithm {
     MlDsa44, // Security Level 1
     MlDsa65, // Security Level 3
@@ -369,7 +370,7 @@ impl QuantumJwtManager {
         let header = QuantumJwtHeader {
             alg: self.get_hybrid_algorithm(key_pair.security_level)?,
             kid: current_key_id.clone(),
-            pq_kid: format!("pq_{}", current_key_id),
+            pq_kid: format!("pq_{current_key_id}"),
             typ: "JWT".to_string(),
             qsl: key_pair.security_level,
         };
@@ -410,7 +411,7 @@ impl QuantumJwtManager {
             .await?;
 
         // Combined hash for integrity
-        let combined_data = format!("{}:{}", classical_sig, pq_sig);
+        let combined_data = format!("{classical_sig}:{pq_sig}");
         let combined_hash = digest::digest(&digest::SHA256, combined_data.as_bytes());
         let combined_hash_b64 =
             base64::engine::general_purpose::STANDARD.encode(combined_hash.as_ref());

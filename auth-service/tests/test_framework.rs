@@ -146,7 +146,7 @@ pub struct TestReport {
 }
 
 impl TestReport {
-    pub fn success_rate(&self) -> f64 {
+    #[must_use] pub fn success_rate(&self) -> f64 {
         if self.total_tests == 0 {
             0.0
         } else {
@@ -154,7 +154,7 @@ impl TestReport {
         }
     }
 
-    pub fn has_failures(&self) -> bool {
+    #[must_use] pub const fn has_failures(&self) -> bool {
         self.failed > 0 || self.timed_out > 0
     }
 
@@ -191,8 +191,14 @@ pub struct TestResources {
     cleanup_fns: Vec<Box<dyn FnOnce() + Send + Sync>>,
 }
 
+impl Default for TestResources {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestResources {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             cleanup_fns: Vec::new(),
         }
@@ -220,10 +226,10 @@ pub mod test_utils {
     use super::*;
 
     /// Create a test token record with default values
-    pub fn create_test_token(user_id: &str, scope: Option<&str>) -> common::TokenRecord {
+    #[must_use] pub fn create_test_token(user_id: &str, scope: Option<&str>) -> common::TokenRecord {
         common::TokenRecord {
             active: true,
-            scope: scope.map(|s| s.to_string()),
+            scope: scope.map(std::string::ToString::to_string),
             client_id: Some("test_client".to_string()),
             exp: None,
             iat: None,
@@ -234,7 +240,7 @@ pub mod test_utils {
     }
 
     /// Create a test session with default values
-    pub fn create_test_session(user_id: &str, session_id: &str) -> HashMap<String, String> {
+    #[must_use] pub fn create_test_session(user_id: &str, session_id: &str) -> HashMap<String, String> {
         let mut session = HashMap::new();
         session.insert("user_id".to_string(), user_id.to_string());
         session.insert("session_id".to_string(), session_id.to_string());
@@ -258,11 +264,7 @@ pub mod test_utils {
     ) {
         assert!(
             actual >= min && actual <= max,
-            "{}: value {:?} not within bounds [{:?}, {:?}]",
-            description,
-            actual,
-            min,
-            max
+            "{description}: value {actual:?} not within bounds [{min:?}, {max:?}]"
         );
     }
 
@@ -353,7 +355,7 @@ pub mod load_test {
         for handle in handles {
             match handle.await {
                 Ok(task_results) => results.extend(task_results),
-                Err(e) => return Err(format!("Task panicked: {}", e)),
+                Err(e) => return Err(format!("Task panicked: {e}")),
             }
         }
 
@@ -380,7 +382,7 @@ pub mod load_test {
     }
 
     impl LoadTestResults {
-        pub fn success_rate(&self) -> f64 {
+        #[must_use] pub fn success_rate(&self) -> f64 {
             if self.total_operations == 0 {
                 0.0
             } else {
@@ -388,7 +390,7 @@ pub mod load_test {
             }
         }
 
-        pub fn operations_per_second(&self) -> f64 {
+        #[must_use] pub fn operations_per_second(&self) -> f64 {
             self.total_operations as f64 / self.total_duration.as_secs_f64()
         }
     }
@@ -453,9 +455,9 @@ pub mod security {
     }
 
     /// Generate security test vectors
-    pub fn generate_security_test_vectors() -> Vec<String> {
+    #[must_use] pub fn generate_security_test_vectors() -> Vec<String> {
         vec![
-            "".to_string(),                              // Empty string
+            String::new(),                              // Empty string
             "a".repeat(10000),                           // Very long string
             "🚀🔒🛡️".to_string(),                        // Unicode
             "<script>alert('xss')</script>".to_string(), // XSS attempt
@@ -527,7 +529,7 @@ mod tests {
         assert!(!vectors.is_empty());
 
         // Verify some expected vectors are present
-        assert!(vectors.contains(&"".to_string()));
+        assert!(vectors.contains(&String::new()));
         assert!(vectors.contains(&"<script>alert('xss')</script>".to_string()));
         assert!(vectors.contains(&"../../../etc/passwd".to_string()));
     }

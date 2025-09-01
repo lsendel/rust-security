@@ -525,7 +525,7 @@ mod tests {
 
         // Test retrieval
         let retrieved = store.get_record("test_token").await.unwrap();
-        assert_eq!(retrieved.active, true);
+        assert!(retrieved.active);
         assert_eq!(retrieved.client_id, Some("test-client".to_string()));
 
         // Test batch storage
@@ -541,7 +541,7 @@ mod tests {
             .await
             .unwrap();
         let revoked = store.get_record("batch_token_1").await.unwrap();
-        assert_eq!(revoked.active, false);
+        assert!(!revoked.active);
 
         // Test stats
         let stats = store.get_stats().await.unwrap();

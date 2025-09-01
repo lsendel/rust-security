@@ -1,11 +1,11 @@
-//! OAuth Client Entity
+//! `OAuth` Client Entity
 //!
-//! Represents OAuth 2.0 clients in the system.
+//! Represents `OAuth` 2.0 clients in the system.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// OAuth client entity
+/// `OAuth` client entity
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuthClient {
     /// Unique client identifier
@@ -43,8 +43,8 @@ pub struct OAuthClient {
 }
 
 impl OAuthClient {
-    /// Create a new OAuth client
-    pub fn new(
+    /// Create a new `OAuth` client
+    #[must_use] pub fn new(
         client_id: String,
         client_secret_hash: String,
         name: String,
@@ -67,24 +67,24 @@ impl OAuthClient {
     }
 
     /// Check if a redirect URI is allowed
-    pub fn is_redirect_uri_allowed(&self, uri: &str) -> bool {
+    #[must_use] pub fn is_redirect_uri_allowed(&self, uri: &str) -> bool {
         self.redirect_uris.iter().any(|allowed| allowed == uri)
     }
 
     /// Check if a grant type is allowed
-    pub fn is_grant_type_allowed(&self, grant_type: &str) -> bool {
+    #[must_use] pub fn is_grant_type_allowed(&self, grant_type: &str) -> bool {
         self.grant_types.iter().any(|allowed| allowed == grant_type)
     }
 
     /// Check if a response type is allowed
-    pub fn is_response_type_allowed(&self, response_type: &str) -> bool {
+    #[must_use] pub fn is_response_type_allowed(&self, response_type: &str) -> bool {
         self.response_types
             .iter()
             .any(|allowed| allowed == response_type)
     }
 
     /// Check if a scope is allowed
-    pub fn is_scope_allowed(&self, scope: &str) -> bool {
+    #[must_use] pub fn is_scope_allowed(&self, scope: &str) -> bool {
         self.scopes.iter().any(|allowed| allowed == scope)
     }
 

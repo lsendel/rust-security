@@ -15,12 +15,12 @@ impl PasswordHash {
     }
 
     /// Get the hash as a string
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the hash algorithm type
-    pub fn algorithm(&self) -> Option<&str> {
+    #[must_use] pub fn algorithm(&self) -> Option<&str> {
         if let Some(dollar_pos) = self.0.find('$') {
             let algorithm_part = &self.0[1..dollar_pos];
             if let Some(second_dollar) = algorithm_part.find('$') {
@@ -34,7 +34,7 @@ impl PasswordHash {
     }
 
     /// Verify if the hash uses a secure algorithm
-    pub fn is_secure_algorithm(&self) -> bool {
+    #[must_use] pub fn is_secure_algorithm(&self) -> bool {
         match self.algorithm() {
             Some("argon2id" | "argon2i" | "scrypt" | "bcrypt") => true,
             _ => false,

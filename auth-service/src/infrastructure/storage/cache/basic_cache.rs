@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

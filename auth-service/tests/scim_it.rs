@@ -21,7 +21,10 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -43,7 +46,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -144,11 +147,11 @@ async fn scim_users_pagination_and_filter() {
     for i in 0..10 {
         let u = ScimUser {
             id: String::new(),
-            user_name: format!("user{}", i),
+            user_name: format!("user{i}"),
             active: true,
         };
         let res = client
-            .post(format!("{}/scim/v2/Users", base))
+            .post(format!("{base}/scim/v2/Users"))
             .json(&u)
             .send()
             .await
@@ -158,7 +161,7 @@ async fn scim_users_pagination_and_filter() {
 
     // page 1
     let page1: ListResponse<ScimUser> = client
-        .get(format!("{}/scim/v2/Users?startIndex=1&count=3", base))
+        .get(format!("{base}/scim/v2/Users?startIndex=1&count=3"))
         .send()
         .await
         .unwrap()
@@ -172,7 +175,7 @@ async fn scim_users_pagination_and_filter() {
 
     // page 2
     let page2: ListResponse<ScimUser> = client
-        .get(format!("{}/scim/v2/Users?startIndex=4&count=3", base))
+        .get(format!("{base}/scim/v2/Users?startIndex=4&count=3"))
         .send()
         .await
         .unwrap()
@@ -185,8 +188,7 @@ async fn scim_users_pagination_and_filter() {
     // filter contains
     let filtered: ListResponse<ScimUser> = client
         .get(format!(
-            "{}/scim/v2/Users?filter=userName%20co%20%22user1%22",
-            base
+            "{base}/scim/v2/Users?filter=userName%20co%20%22user1%22"
         ))
         .send()
         .await
@@ -210,11 +212,11 @@ async fn scim_groups_pagination_and_filter() {
     for i in 0..5 {
         let g = ScimGroup {
             id: String::new(),
-            display_name: format!("group{}", i),
+            display_name: format!("group{i}"),
             members: vec![],
         };
         let res = client
-            .post(format!("{}/scim/v2/Groups", base))
+            .post(format!("{base}/scim/v2/Groups"))
             .json(&g)
             .send()
             .await
@@ -224,8 +226,7 @@ async fn scim_groups_pagination_and_filter() {
 
     let filtered: ListResponse<ScimGroup> = client
         .get(format!(
-            "{}/scim/v2/Groups?filter=displayName%20co%20%22group",
-            base
+            "{base}/scim/v2/Groups?filter=displayName%20co%20%22group"
         ))
         .send()
         .await
@@ -275,7 +276,7 @@ async fn test_bulk_create_users() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -344,7 +345,7 @@ async fn test_bulk_create_groups() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -375,7 +376,7 @@ async fn test_bulk_mixed_operations() {
         active: true,
     };
     let create_response = client
-        .post(format!("{}/scim/v2/Users", base))
+        .post(format!("{base}/scim/v2/Users"))
         .json(&user)
         .send()
         .await
@@ -421,7 +422,7 @@ async fn test_bulk_mixed_operations() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -497,7 +498,7 @@ async fn test_bulk_error_handling() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -550,7 +551,7 @@ async fn test_bulk_fail_on_errors() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -585,7 +586,7 @@ async fn test_bulk_invalid_schema() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -610,7 +611,7 @@ async fn test_bulk_empty_operations() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -656,7 +657,7 @@ async fn test_bulk_duplicate_bulk_ids() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -690,7 +691,7 @@ async fn test_bulk_update_nonexistent_resource() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -714,7 +715,7 @@ async fn test_bulk_large_operation_count() {
     for i in 0..1001 {
         operations.push(BulkOperation {
             method: BulkOperationMethod::Post,
-            bulk_id: Some(format!("user_{}", i)),
+            bulk_id: Some(format!("user_{i}")),
             path: "/Users".to_string(),
             data: Some(serde_json::json!({
                 "userName": format!("user_{}", i),
@@ -731,7 +732,7 @@ async fn test_bulk_large_operation_count() {
     };
 
     let response = client
-        .post(format!("{}/scim/v2/Bulk", base))
+        .post(format!("{base}/scim/v2/Bulk"))
         .json(&bulk_request)
         .send()
         .await
@@ -754,7 +755,7 @@ async fn scim_security_headers_present() {
 
     // Ensure at least one user exists so list returns JSON with content-type
     let _ = client
-        .post(format!("{}/scim/v2/Users", base))
+        .post(format!("{base}/scim/v2/Users"))
         .json(&ScimUser {
             id: String::new(),
             user_name: "sec.user".into(),
@@ -765,7 +766,7 @@ async fn scim_security_headers_present() {
         .unwrap();
 
     let resp = client
-        .get(format!("{}/scim/v2/Users?startIndex=1&count=1", base))
+        .get(format!("{base}/scim/v2/Users?startIndex=1&count=1"))
         .send()
         .await
         .unwrap();

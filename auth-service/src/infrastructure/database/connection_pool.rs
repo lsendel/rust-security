@@ -51,7 +51,7 @@ impl Default for ConnectionPoolConfig {
     }
 }
 
-/// Advanced PostgreSQL connection pool with performance optimizations
+/// Advanced `PostgreSQL` connection pool with performance optimizations
 pub struct OptimizedPgPool {
     pool: PgPool,
     config: ConnectionPoolConfig,
@@ -87,7 +87,7 @@ impl Default for PoolStats {
 }
 
 impl OptimizedPgPool {
-    /// Create a new optimized PostgreSQL connection pool
+    /// Create a new optimized `PostgreSQL` connection pool
     pub async fn new(config: ConnectionPoolConfig) -> Result<Self, AppError> {
         info!(
             "Creating optimized PostgreSQL connection pool with {} max connections",
@@ -144,10 +144,10 @@ impl OptimizedPgPool {
         let mut stats = self.stats.write().await;
         stats.connections_acquired += 1;
         let avg_nanos = ((stats.acquire_time_avg.as_nanos()
-            * (stats.connections_acquired - 1) as u128)
+            * u128::from(stats.connections_acquired - 1))
             + acquire_time.as_nanos())
-            / stats.connections_acquired as u128;
-        stats.acquire_time_avg = Duration::from_nanos(avg_nanos.min(u64::MAX as u128) as u64);
+            / u128::from(stats.connections_acquired);
+        stats.acquire_time_avg = Duration::from_nanos(avg_nanos.min(u128::from(u64::MAX)) as u64);
         stats.acquire_time_max = stats.acquire_time_max.max(acquire_time);
 
         debug!("Database connection acquired in {:?}", acquire_time);
@@ -155,7 +155,7 @@ impl OptimizedPgPool {
     }
 
     /// Get the underlying pool for direct access (use sparingly)
-    pub fn pool(&self) -> &PgPool {
+    #[must_use] pub const fn pool(&self) -> &PgPool {
         &self.pool
     }
 
@@ -172,7 +172,7 @@ impl OptimizedPgPool {
 
         let mut conn = self.acquire().await?;
         conn.prepare(query).await.map_err(|e| {
-            AppError::Internal(format!("Failed to prepare statement '{}': {e}", name))
+            AppError::Internal(format!("Failed to prepare statement '{name}': {e}"))
         })?;
 
         // Cache the prepared statement name
@@ -227,8 +227,7 @@ impl OptimizedPgPool {
         for optimization in optimizations {
             sqlx::query(optimization).execute(pool).await.map_err(|e| {
                 AppError::Internal(format!(
-                    "Failed to apply optimization '{}': {e}",
-                    optimization
+                    "Failed to apply optimization '{optimization}': {e}"
                 ))
             })?;
         }
@@ -279,7 +278,7 @@ impl OptimizedPgPool {
     }
 
     /// Get pool configuration for monitoring
-    pub fn config(&self) -> &ConnectionPoolConfig {
+    #[must_use] pub const fn config(&self) -> &ConnectionPoolConfig {
         &self.config
     }
 }
@@ -336,17 +335,17 @@ impl DatabaseConnectionManager {
     }
 
     /// Get auth database pool
-    pub fn auth_pool(&self) -> &OptimizedPgPool {
+    #[must_use] pub const fn auth_pool(&self) -> &OptimizedPgPool {
         &self.auth_pool
     }
 
     /// Get session database pool
-    pub fn session_pool(&self) -> &OptimizedPgPool {
+    #[must_use] pub const fn session_pool(&self) -> &OptimizedPgPool {
         &self.session_pool
     }
 
     /// Get audit database pool
-    pub fn audit_pool(&self) -> &OptimizedPgPool {
+    #[must_use] pub const fn audit_pool(&self) -> &OptimizedPgPool {
         &self.audit_pool
     }
 
@@ -425,14 +424,14 @@ pub struct DatabaseStats {
 
 impl DatabaseStats {
     /// Get total connections across all pools
-    pub fn total_connections(&self) -> u64 {
+    #[must_use] pub const fn total_connections(&self) -> u64 {
         self.auth_stats.connections_created
             + self.session_stats.connections_created
             + self.audit_stats.connections_created
     }
 
     /// Get average acquire time across all pools
-    pub fn avg_acquire_time(&self) -> Duration {
+    #[must_use] pub fn avg_acquire_time(&self) -> Duration {
         let total_acquires = self.auth_stats.connections_acquired
             + self.session_stats.connections_acquired
             + self.audit_stats.connections_acquired;

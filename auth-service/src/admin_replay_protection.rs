@@ -146,7 +146,7 @@ impl ReplayProtection {
         nonce: &str,
     ) -> Result<bool, redis::RedisError> {
         let mut conn = client.get_multiplexed_async_connection().await?;
-        let key = format!("admin:nonce:{}", nonce);
+        let key = format!("admin:nonce:{nonce}");
         let exists: bool = conn.exists(&key).await?;
         Ok(exists)
     }
@@ -192,7 +192,7 @@ impl ReplayProtection {
         expiry: u64,
     ) -> Result<(), redis::RedisError> {
         let mut conn = client.get_multiplexed_async_connection().await?;
-        let key = format!("admin:nonce:{}", nonce);
+        let key = format!("admin:nonce:{nonce}");
 
         // Store with expiry
         conn.set_ex::<_, _, ()>(&key, timestamp, expiry).await?;
@@ -237,7 +237,7 @@ impl ReplayProtection {
         use crate::infrastructure::crypto::crypto_unified::UnifiedHmac;
         use base64::{engine::general_purpose, Engine as _};
 
-        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
+        let message = format!("{method}:{path}:{nonce}:{timestamp}");
         let hmac_result = UnifiedHmac::hmac_sha256(secret.as_bytes(), message.as_bytes());
 
         general_purpose::STANDARD.encode(hmac_result)
@@ -256,7 +256,7 @@ impl ReplayProtection {
         use crate::infrastructure::crypto::crypto_unified::UnifiedHmac;
         use base64::{engine::general_purpose, Engine as _};
 
-        let message = format!("{}:{}:{}:{}", method, path, nonce, timestamp);
+        let message = format!("{method}:{path}:{nonce}:{timestamp}");
 
         // Decode the provided signature
         let Ok(provided_bytes) = general_purpose::STANDARD.decode(provided_signature) else {

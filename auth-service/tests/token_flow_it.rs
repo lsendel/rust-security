@@ -21,7 +21,10 @@ async fn spawn_app(store: Arc<HybridStore>) -> String {
     let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -48,7 +51,7 @@ async fn spawn_app(store: Arc<HybridStore>) -> String {
 
     let app = app(app_state);
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 async fn token_issue_and_revoke_flow_test(store: Arc<HybridStore>) {
@@ -56,7 +59,7 @@ async fn token_issue_and_revoke_flow_test(store: Arc<HybridStore>) {
 
     // Issue a token
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
         .send()
@@ -74,7 +77,7 @@ async fn token_issue_and_revoke_flow_test(store: Arc<HybridStore>) {
 
     // Introspect -> active=true and matching exp/iat
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/introspect", base))
+        .post(format!("{base}/oauth/introspect"))
         .json(&IntrospectRequest {
             token: token.clone(),
             token_type_hint: None,
@@ -89,9 +92,9 @@ async fn token_issue_and_revoke_flow_test(store: Arc<HybridStore>) {
 
     // Revoke token
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/revoke", base))
+        .post(format!("{base}/oauth/revoke"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(format!("token={}", token))
+        .body(format!("token={token}"))
         .send()
         .await
         .unwrap();
@@ -99,7 +102,7 @@ async fn token_issue_and_revoke_flow_test(store: Arc<HybridStore>) {
 
     // Introspect -> active=false
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/introspect", base))
+        .post(format!("{base}/oauth/introspect"))
         .json(&IntrospectRequest {
             token,
             token_type_hint: None,

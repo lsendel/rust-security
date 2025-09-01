@@ -6,9 +6,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::domain::entities::Token;
-use crate::domain::repositories::{
-    DynSessionRepository, DynTokenRepository,
-};
+use crate::domain::repositories::{DynSessionRepository, DynTokenRepository};
 use crate::domain::value_objects::UserId;
 use crate::shared::crypto::CryptoService;
 
@@ -121,6 +119,6 @@ mod tests {
         ));
 
         let _service = TokenService::new(token_repo, session_repo, crypto);
-        assert!(true); // Basic smoke test
+        // Basic smoke test removed
     }
 }

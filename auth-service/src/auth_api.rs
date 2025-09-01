@@ -567,21 +567,22 @@ fn validate_token_request(request: &TokenRequest) -> Result<(), (StatusCode, Jso
     Ok(())
 }
 
-/// Authenticate OAuth client credentials
+/// Authenticate `OAuth` client credentials
 async fn authenticate_oauth_client(
     state: &AuthState,
     request: &TokenRequest,
 ) -> Result<OAuthClient, (StatusCode, Json<ErrorResponse>)> {
-    let oauth_clients = state.oauth_clients.read().await;
-    let client = oauth_clients
-        .get(&request.client_id)
-        .ok_or_else(|| oauth_error("invalid_client", "Invalid client credentials"))?;
+    let client = {
+        let oauth_clients = state.oauth_clients.read().await;
+        oauth_clients.get(&request.client_id).cloned()
+    }
+    .ok_or_else(|| oauth_error("invalid_client", "Invalid client credentials"))?;
 
     if client.client_secret != request.client_secret {
         return Err(oauth_error("invalid_client", "Invalid client credentials"));
     }
 
-    Ok(client.clone())
+    Ok(client)
 }
 
 /// Handle authorization code grant flow
@@ -652,7 +653,7 @@ fn generate_access_token(
         .map_err(|_| oauth_error("server_error", "Failed to generate access token"))
 }
 
-/// Helper to create consistent OAuth error responses
+/// Helper to create consistent `OAuth` error responses
 fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorResponse>) {
     let status = match error {
         "invalid_client" => StatusCode::UNAUTHORIZED,

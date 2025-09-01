@@ -40,7 +40,10 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -65,13 +68,13 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
 async fn health_check_works() {
     let base = spawn_app().await;
-    let res = reqwest::get(format!("{}/health", base)).await.unwrap();
+    let res = reqwest::get(format!("{base}/health")).await.unwrap();
     assert!(res.status().is_success());
     let body: serde_json::Value = res.json().await.unwrap();
     assert_eq!(body.get("status").unwrap().as_str().unwrap(), "ok");
@@ -81,7 +84,7 @@ async fn health_check_works() {
 async fn introspect_valid_token() {
     let base = spawn_app().await;
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/introspect", base))
+        .post(format!("{base}/oauth/introspect"))
         .json(&IntrospectRequest {
             token: "valid_token".to_string(),
             token_type_hint: None,
@@ -114,7 +117,7 @@ async fn introspect_valid_token() {
 async fn introspect_invalid_token() {
     let base = spawn_app().await;
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/introspect", base))
+        .post(format!("{base}/oauth/introspect"))
         .json(&IntrospectRequest {
             token: "invalid_token".to_string(),
             token_type_hint: None,

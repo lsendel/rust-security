@@ -26,9 +26,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {
@@ -52,7 +55,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -60,7 +63,7 @@ async fn test_valid_scope_accepted() {
     let base = spawn_app().await;
 
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=read write")
         .send()
@@ -78,7 +81,7 @@ async fn test_invalid_scope_rejected() {
     let base = spawn_app().await;
 
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=invalid_scope")
         .send()
@@ -95,7 +98,7 @@ async fn test_mixed_valid_invalid_scope_rejected() {
     let base = spawn_app().await;
 
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=read invalid_scope")
         .send()
@@ -112,7 +115,7 @@ async fn test_no_scope_accepted() {
     let base = spawn_app().await;
 
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret")
         .send()
@@ -131,7 +134,7 @@ async fn test_all_allowed_scopes() {
     let base = spawn_app().await;
 
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=test_secret&scope=read write admin")
         .send()

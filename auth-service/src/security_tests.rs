@@ -1,7 +1,5 @@
 #[cfg(test)]
-mod security_tests {
-    use crate::jwt_secure::create_secure_jwt_validation;
-    use crate::rate_limit_secure::{RateLimitConfig, SecureRateLimiter};
+mod tests_internal_security {
     use crate::infrastructure::security::security::{
         generate_code_challenge, generate_code_verifier, generate_request_signature,
         generate_token_binding, verify_code_challenge, verify_request_signature,
@@ -9,6 +7,8 @@ mod security_tests {
     use crate::infrastructure::storage::session::secure::{
         SecureSessionConfig, SecureSessionManager, SessionError,
     };
+    use crate::jwt_secure::create_secure_jwt_validation;
+    use crate::rate_limit_secure::{RateLimitConfig, SecureRateLimiter};
     use crate::validation_secure::*;
 
     use base64::Engine;
@@ -231,7 +231,11 @@ mod security_tests {
     #[tokio::test]
     async fn test_rate_limiting_security() {
         let mut config = RateLimitConfig::default();
-        config.ip_requests_per_minute = 3; // Lower limit for testing
+        config = RateLimitConfig {
+            ip_requests_per_minute: 3,
+            ban_threshold: 2,
+            ..config
+        };
         config.ban_threshold = 2;
 
         let limiter = SecureRateLimiter::new(config);
@@ -310,8 +314,7 @@ mod security_tests {
         // Should not have significant timing difference (within 1ms)
         assert!(
             time_diff.as_millis() < 1,
-            "Timing difference too large: {:?}",
-            time_diff
+            "Timing difference too large: {time_diff:?}"
         );
     }
 
@@ -408,8 +411,7 @@ mod security_tests {
         );
 
         let result = load_secure_config();
-        if result.is_ok() {
-            let config = result.unwrap();
+        if let Ok(config) = result {
             assert!(!config.security.allowed_origins.contains(&"*".to_string()));
         }
     }
@@ -446,7 +448,7 @@ mod security_tests {
         let _ = verify_code_challenge(&verifier, &challenge);
 
         // If we get here without crashes, memory safety is maintained
-        assert!(true);
+        // removed redundant assertion on constant
     }
 
     /// Security utilities for testing

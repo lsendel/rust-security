@@ -24,9 +24,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {
@@ -41,9 +44,11 @@ async fn spawn_app() -> String {
             "admin".to_string(),
         ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
-        policy_cache: std::sync::Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
-            auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
-        )),
+        policy_cache: std::sync::Arc::new(
+            auth_service::storage::cache::policy_cache::PolicyCache::new(
+                auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
+            ),
+        ),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
         api_key_store: Arc::new(api_key_store),
         jwks_manager,

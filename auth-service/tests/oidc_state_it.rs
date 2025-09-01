@@ -24,7 +24,7 @@ async fn spawn_app() -> String {
 
     let jwks_manager = Arc::new(
         auth_service::jwks_rotation::JwksManager::new(
-            Default::default(),
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
             Arc::new(auth_service::jwks_rotation::InMemoryKeyStorage::new()),
         )
         .await
@@ -54,7 +54,7 @@ async fn spawn_app() -> String {
 
     let router = app(app_state);
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    format!("http://{}", addr) // Using HTTP for local test server
+    format!("http://{addr}") // Using HTTP for local test server
 }
 
 #[tokio::test]
@@ -64,8 +64,7 @@ async fn google_callback_invalid_state_returns_400_like_error() {
 
     let resp = client
         .get(format!(
-            "{}/oauth/google/callback?code=dummy&state=unknown_state",
-            base
+            "{base}/oauth/google/callback?code=dummy&state=unknown_state"
         ))
         .send()
         .await
@@ -88,8 +87,7 @@ async fn microsoft_callback_invalid_state_returns_400_like_error() {
 
     let resp = client
         .get(format!(
-            "{}/oauth/microsoft/callback?code=dummy&state=unknown_state",
-            base
+            "{base}/oauth/microsoft/callback?code=dummy&state=unknown_state"
         ))
         .send()
         .await

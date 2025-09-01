@@ -46,7 +46,7 @@ async fn spawn_app() -> String {
         ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -56,7 +56,7 @@ async fn request_id_propagation() {
     let test_id = "test-request-id-123";
 
     let res = client
-        .get(format!("{}/health", base))
+        .get(format!("{base}/health"))
         .header("x-request-id", test_id)
         .send()
         .await
@@ -74,7 +74,7 @@ async fn request_id_generation() {
     let base = spawn_app().await;
     let client = reqwest::Client::new();
 
-    let res = client.get(format!("{}/health", base)).send().await.unwrap();
+    let res = client.get(format!("{base}/health")).send().await.unwrap();
 
     assert!(res.status().is_success());
     let request_id = res.headers().get("x-request-id");

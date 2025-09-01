@@ -20,7 +20,10 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -45,7 +48,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -54,7 +57,7 @@ async fn test_missing_client_credentials_returns_400() {
 
     // Try to get token without client credentials
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials")
         .send()
@@ -70,7 +73,7 @@ async fn test_invalid_client_credentials_returns_401() {
 
     // Try to get token with invalid credentials
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=invalid_client&client_secret=wrong_secret")
         .send()
@@ -90,7 +93,7 @@ async fn test_invalid_grant_type_returns_400() {
 
     // Try to get token with invalid grant type
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=invalid_grant&client_id=valid_client&client_secret=valid_secret")
         .send()
@@ -112,7 +115,7 @@ async fn test_valid_client_credentials_returns_token() {
 
     // Get token with valid credentials
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=valid_client&client_secret=valid_secret")
         .send()
@@ -137,7 +140,7 @@ async fn test_no_error_details_exposed() {
 
     // Try to trigger an internal error by sending malformed refresh token request
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=refresh_token&refresh_token=nonexistent_token")
         .send()

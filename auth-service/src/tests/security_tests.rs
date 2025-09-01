@@ -67,9 +67,7 @@ async fn test_timing_attack_resistance() {
 
     assert!(
         time_diff < Duration::from_micros(10),
-        "Timing difference too large for equal length strings: {:?} vs {:?}",
-        time1,
-        time2
+        "Timing difference too large for equal length strings: {time1:?} vs {time2:?}",
     );
 
     // Different length strings should also have similar timing
@@ -85,9 +83,7 @@ async fn test_timing_attack_resistance() {
 
     assert!(
         time_diff2 < Duration::from_micros(50),
-        "Timing difference too large for different length strings: {:?} vs {:?}",
-        time1,
-        time3
+        "Timing difference too large for different length strings: {time1:?} vs {time3:?}",
     );
 }
 
@@ -102,8 +98,7 @@ async fn test_rate_limiting_security() {
     for i in 0..5 {
         assert!(
             !limiter.is_rate_limited(ip).await,
-            "Request {} should not be rate limited",
-            i
+            "Request {i} should not be rate limited",
         );
     }
 
@@ -169,8 +164,7 @@ async fn test_input_validation_security() {
         // with actual input validation rules
         assert!(
             !malicious_input.is_empty(),
-            "Malicious input should be validated: {}",
-            malicious_input
+            "Malicious input should be validated: {malicious_input}",
         );
     }
 }

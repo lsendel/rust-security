@@ -71,11 +71,11 @@ impl Default for SecureKeyManager {
     }
 }
 
-static KEY_MANAGER: LazyLock<SecureKeyManager> = LazyLock::new(|| SecureKeyManager::default());
+static KEY_MANAGER: LazyLock<SecureKeyManager> = LazyLock::new(SecureKeyManager::default);
 static ACTIVE_KEYS: LazyLock<RwLock<Vec<SecureKeyMaterial>>> = LazyLock::new(|| RwLock::new(Vec::new()));
 
 impl SecureKeyManager {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 
@@ -85,7 +85,7 @@ impl SecureKeyManager {
         self
     }
 
-    pub fn with_rotation_interval(mut self, interval_seconds: u64) -> Self {
+    #[must_use] pub const fn with_rotation_interval(mut self, interval_seconds: u64) -> Self {
         self.key_rotation_interval = interval_seconds;
         self
     }
@@ -155,7 +155,7 @@ impl SecureKeyManager {
 
         tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| KeyError::FileError(format!("Failed to read key file {}: {}", path, e)))
+            .map_err(|e| KeyError::FileError(format!("Failed to read key file {path}: {e}")))
     }
 
     fn validate_file_security(&self, path: &str) -> Result<(), KeyError> {
@@ -164,7 +164,7 @@ impl SecureKeyManager {
             use std::os::unix::fs::PermissionsExt;
 
             let metadata = std::fs::metadata(path)
-                .map_err(|e| KeyError::FileError(format!("Cannot access file metadata: {}", e)))?;
+                .map_err(|e| KeyError::FileError(format!("Cannot access file metadata: {e}")))?;
 
             let permissions = metadata.permissions();
             let mode = permissions.mode();
@@ -195,7 +195,7 @@ impl SecureKeyManager {
 
         // If no dev key provided, fail with informative error
         // This forces developers to explicitly set development keys
-        return Err(KeyError::NoSecureKeySource);
+        Err(KeyError::NoSecureKeySource)
     }
 
     async fn create_key_material(
@@ -216,9 +216,9 @@ impl SecureKeyManager {
 
         // Create jsonwebtoken keys
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| KeyError::LoadingFailed(format!("Invalid encoding key: {}", e)))?;
+            .map_err(|e| KeyError::LoadingFailed(format!("Invalid encoding key: {e}")))?;
         let decoding_key = DecodingKey::from_rsa_pem(private_key_pem.as_bytes())
-            .map_err(|e| KeyError::LoadingFailed(format!("Invalid decoding key: {}", e)))?;
+            .map_err(|e| KeyError::LoadingFailed(format!("Invalid decoding key: {e}")))?;
 
         // Extract public key components for JWK
         let (n, e) = self.extract_public_key_components(&private_key_pem)?;
@@ -234,7 +234,7 @@ impl SecureKeyManager {
         });
 
         Ok(SecureKeyMaterial {
-            kid: kid.clone(),
+            kid,
             encoding_key,
             decoding_key,
             public_jwk,
@@ -251,7 +251,7 @@ impl SecureKeyManager {
         // In production, this should extract components from the actual key
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex)
-            .map_err(|e| KeyError::ValidationFailed(format!("Failed to decode modulus: {}", e)))?;
+            .map_err(|e| KeyError::ValidationFailed(format!("Failed to decode modulus: {e}")))?;
 
         let n = base64url(&modulus_bytes);
         let e = base64url(&[0x01, 0x00, 0x01]); // Standard RSA exponent (65537)
@@ -422,7 +422,7 @@ pub async fn validate_security_posture() -> Result<(), Vec<String>> {
     // Check file permissions if using file-based keys
     if let Ok(path) = std::env::var("RSA_PRIVATE_KEY_PATH") {
         if let Err(e) = KEY_MANAGER.validate_file_security(&path) {
-            issues.push(format!("Key file security issue: {}", e));
+            issues.push(format!("Key file security issue: {e}"));
         }
     }
 

@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 //! Observability System Initialization and Integration
 //!
 //! This module provides initialization and integration for the comprehensive
@@ -20,11 +21,19 @@ pub struct EnhancedObservability {
     // Placeholder fields
 }
 
+impl Default for EnhancedObservability {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EnhancedObservability {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {}
     }
 
+    #[must_use]
     pub fn new_minimal(
         _observability_config: ObservabilityConfig,
         _sli_config: SliConfig,
@@ -33,18 +42,22 @@ impl EnhancedObservability {
         Self {}
     }
 
+    #[must_use]
     pub fn get_health_status(&self) -> serde_json::Value {
         serde_json::json!({"status": "healthy"})
     }
 
+    #[must_use]
     pub fn get_slo_status(&self) -> serde_json::Value {
         serde_json::json!({"slo_status": "ok"})
     }
 
+    #[must_use]
     pub fn get_performance_profiles(&self) -> serde_json::Value {
         serde_json::json!({"profiles": []})
     }
 
+    #[must_use]
     pub fn get_active_alerts(&self) -> serde_json::Value {
         serde_json::json!({"alerts": []})
     }
@@ -53,7 +66,7 @@ impl EnhancedObservability {
         Ok(serde_json::json!({"metrics": {}}))
     }
 
-    pub fn record_operation_performance(
+    pub const fn record_operation_performance(
         &self,
         _operation: &str,
         _duration: std::time::Duration,
@@ -62,7 +75,7 @@ impl EnhancedObservability {
         // Stub implementation
     }
 
-    pub fn record_security_event(&self, _event: &str) {
+    pub const fn record_security_event(&self, _event: &str) {
         // Stub implementation
     }
 }
@@ -73,8 +86,15 @@ pub struct BusinessMetricsRegistry {
     // Placeholder fields
 }
 
+impl Default for BusinessMetricsRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BusinessMetricsRegistry {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {}
     }
 }
@@ -282,9 +302,7 @@ pub async fn performance_profiles_handler(
 pub async fn alerts_handler(
     axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    let alerts = observability
-        .enhanced_observability
-        .get_active_alerts();
+    let alerts = observability.enhanced_observability.get_active_alerts();
     (axum::http::StatusCode::OK, axum::Json(alerts))
 }
 
@@ -296,11 +314,7 @@ pub async fn grafana_dashboard_handler(
         .enhanced_observability
         .export_metrics_for_grafana()
     {
-        Ok(dashboard) => (
-            axum::http::StatusCode::OK,
-            Json(dashboard)
-        )
-            .into_response(),
+        Ok(dashboard) => (axum::http::StatusCode::OK, Json(dashboard)).into_response(),
         Err(e) => {
             tracing::warn!("Failed to export Grafana dashboard: {}", e);
             (
@@ -324,8 +338,11 @@ impl ObservabilitySystem {
         client_ip: Option<&str>,
     ) {
         // Record in enhanced observability
-        self.enhanced_observability
-            .record_operation_performance("authentication", duration, success);
+        self.enhanced_observability.record_operation_performance(
+            "authentication",
+            duration,
+            success,
+        );
 
         // Record business metrics
         // Note: This would need to be implemented based on the actual BusinessMetricsRegistry interface
@@ -347,7 +364,7 @@ impl ObservabilitySystem {
             );
 
             self.enhanced_observability
-                .record_security_event(&format!("{:?}", security_event));
+                .record_security_event(&format!("{security_event:?}"));
         }
     }
 
@@ -360,8 +377,11 @@ impl ObservabilitySystem {
         duration: std::time::Duration,
     ) {
         // Record in enhanced observability
-        self.enhanced_observability
-            .record_operation_performance(&format!("token_{operation}"), duration, success);
+        self.enhanced_observability.record_operation_performance(
+            &format!("token_{operation}"),
+            duration,
+            success,
+        );
 
         // Record in metrics registry
         // TODO: Implement get_metrics_helper method for MetricsRegistry

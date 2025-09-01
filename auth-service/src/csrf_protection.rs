@@ -478,8 +478,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_cleanup() {
-        let mut config = CsrfConfig::default();
-        config.token_lifetime = Duration::from_millis(1); // Very short lifetime
+        let config = CsrfConfig {
+            token_lifetime: Duration::from_millis(1), // Very short lifetime
+            ..CsrfConfig::default()
+        };
 
         let csrf = CsrfProtection::new(config);
 

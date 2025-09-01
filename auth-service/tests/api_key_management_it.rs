@@ -20,7 +20,10 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -33,7 +36,9 @@ async fn spawn_app() -> String {
         allowed_scopes: Arc::new(std::sync::RwLock::new(HashSet::from(["admin".to_string()]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
         policy_cache: Arc::new(
-            auth_service::storage::cache::policy_cache::PolicyCache::new(Default::default()),
+            auth_service::storage::cache::policy_cache::PolicyCache::new(
+                auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
+            ),
         ),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
         api_key_store: Arc::new(api_key_store),
@@ -42,13 +47,13 @@ async fn spawn_app() -> String {
 
     tokio::spawn(async move { axum::serve(listener, app(app_state)).await.unwrap() });
 
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 async fn get_admin_token(base_url: &str) -> String {
     let client = reqwest::Client::new();
     let response = client
-        .post(&format!("{}/oauth/token", base_url))
+        .post(format!("{base_url}/oauth/token"))
         .form(&[
             ("grant_type", "client_credentials"),
             ("client_id", "test_client"),
@@ -70,7 +75,7 @@ async fn test_create_api_key() {
 
     let client = reqwest::Client::new();
     let response = client
-        .post(&format!("{}/admin/api-keys", base_url))
+        .post(format!("{base_url}/admin/api-keys"))
         .header("Authorization", &admin_token)
         .json(&serde_json::json!({
             "client_id": "api_client_1",

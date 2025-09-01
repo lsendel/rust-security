@@ -53,6 +53,7 @@ pub mod config {
     use std::time::Duration;
 
     /// Create test security configuration
+    #[must_use]
     pub fn test_security_config() -> SecurityConfig {
         SecurityConfig {
             csrf_enabled: true,
@@ -79,6 +80,7 @@ pub mod config {
     }*/
 
     /// Create test database configuration
+    #[must_use]
     pub fn test_db_config() -> ConnectionPoolConfig {
         ConnectionPoolConfig {
             max_connections: 5, // Lower for tests
@@ -124,6 +126,9 @@ pub mod async_helpers {
     use tokio::time;
 
     /// Wait for a condition to become true with timeout
+    /// # Errors
+    ///
+    /// Returns an error string if the condition does not become true before `timeout`.
     pub async fn wait_for_condition<F, Fut>(
         condition: F,
         timeout: Duration,
@@ -142,10 +147,13 @@ pub mod async_helpers {
             time::sleep(interval).await;
         }
 
-        Err(format!("Condition not met within {:?}", timeout))
+        Err(format!("Condition not met within {timeout:?}"))
     }
 
     /// Retry an operation with exponential backoff
+    /// # Errors
+    ///
+    /// Returns the last error if all attempts fail.
     pub async fn retry_with_backoff<F, Fut, T, E>(
         mut operation: F,
         max_attempts: u32,
@@ -184,9 +192,7 @@ pub mod mocks {
     use crate::domain::entities::{Session, Token, TokenType, User};
     use crate::domain::repositories::session_repository::SessionRepositoryError;
     use crate::domain::repositories::token_repository::TokenRepositoryError;
-    use crate::domain::repositories::{
-        DynSessionRepository, DynUserRepository,
-    };
+    use crate::domain::repositories::{DynSessionRepository, DynUserRepository};
     use crate::domain::repositories::{
         RepositoryError, SessionRepository, TokenRepository, UserRepository,
     };
@@ -199,7 +205,14 @@ pub mod mocks {
         emails: Arc<RwLock<HashMap<String, String>>>,
     }
 
+    impl Default for MockUserRepository {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl MockUserRepository {
+        #[must_use]
         pub fn new() -> Self {
             Self {
                 users: Arc::new(RwLock::new(HashMap::new())),
@@ -207,16 +220,20 @@ pub mod mocks {
             }
         }
 
+        #[must_use]
         pub fn with_user(self, user: User) -> Self {
             let users = Arc::clone(&self.users);
             let emails = Arc::clone(&self.emails);
 
             tokio::spawn(async move {
-                let mut users_guard = users.write().await;
-                let mut emails_guard = emails.write().await;
-
-                users_guard.insert(user.id.to_string(), user.clone());
-                emails_guard.insert(user.email.as_str().to_string(), user.id.to_string());
+                users
+                    .write()
+                    .await
+                    .insert(user.id.to_string(), user.clone());
+                emails
+                    .write()
+                    .await
+                    .insert(user.email.as_str().to_string(), user.id.to_string());
             });
 
             self
@@ -226,15 +243,9 @@ pub mod mocks {
     #[async_trait::async_trait]
     impl UserRepository for MockUserRepository {
         async fn find_by_email(&self, email: &Email) -> Result<Option<User>, RepositoryError> {
-            let emails = self.emails.read().await;
-            let users = self.users.read().await;
-
-            if let Some(user_id) = emails.get(email.as_str()) {
-                if let Some(user) = users.get(user_id) {
-                    return Ok(Some(user.clone()));
-                }
+            if let Some(user_id) = self.emails.read().await.get(email.as_str()).cloned() {
+                return Ok(self.users.read().await.get(&user_id).cloned());
             }
-
             Ok(None)
         }
 
@@ -287,14 +298,21 @@ pub mod mocks {
             limit: Option<i64>,
             offset: Option<i64>,
         ) -> Result<Vec<User>, RepositoryError> {
-            let users = self.users.read().await;
-            let mut all_users: Vec<User> = users.values().cloned().collect();
+            let mut all_users: Vec<User> = self.users.read().await.values().cloned().collect();
 
             // Apply offset
             if let Some(offset) = offset {
-                if offset > 0 && (offset as usize) < all_users.len() {
-                    all_users = all_users.into_iter().skip(offset as usize).collect();
-                } else if offset >= all_users.len() as i64 {
+                if offset > 0 {
+                    let offset_usize = match usize::try_from(offset) {
+                        Ok(v) => v,
+                        Err(_) => return Ok(vec![]),
+                    };
+                    if offset_usize < all_users.len() {
+                        all_users = all_users.into_iter().skip(offset_usize).collect();
+                    } else {
+                        return Ok(vec![]);
+                    }
+                } else if usize::try_from(all_users.len() as i64).is_err() {
                     return Ok(vec![]);
                 }
             }
@@ -302,7 +320,9 @@ pub mod mocks {
             // Apply limit
             if let Some(limit) = limit {
                 if limit > 0 {
-                    all_users.truncate(limit as usize);
+                    if let Ok(limit_usize) = usize::try_from(limit) {
+                        all_users.truncate(limit_usize);
+                    }
                 }
             }
 
@@ -364,8 +384,7 @@ pub mod mocks {
         }
 
         async fn count(&self) -> Result<i64, RepositoryError> {
-            let users = self.users.read().await;
-            Ok(users.len() as i64)
+            Ok(self.users.read().await.len() as i64)
         }
 
         async fn find_created_between(
@@ -373,8 +392,10 @@ pub mod mocks {
             start: chrono::DateTime<chrono::Utc>,
             end: chrono::DateTime<chrono::Utc>,
         ) -> Result<Vec<User>, RepositoryError> {
-            let users = self.users.read().await;
-            let filtered_users = users
+            let filtered_users = self
+                .users
+                .read()
+                .await
                 .values()
                 .filter(|u| u.created_at >= start && u.created_at <= end)
                 .cloned()
@@ -386,8 +407,10 @@ pub mod mocks {
             &self,
             since: chrono::DateTime<chrono::Utc>,
         ) -> Result<Vec<User>, RepositoryError> {
-            let users = self.users.read().await;
-            let inactive_users = users
+            let inactive_users = self
+                .users
+                .read()
+                .await
                 .values()
                 .filter(|u| u.last_login.map_or(true, |last_login| last_login < since))
                 .cloned()
@@ -401,7 +424,14 @@ pub mod mocks {
         sessions: Arc<RwLock<HashMap<String, Session>>>,
     }
 
+    impl Default for MockSessionRepository {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl MockSessionRepository {
+        #[must_use]
         pub fn new() -> Self {
             Self {
                 sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -416,13 +446,14 @@ pub mod mocks {
             Ok(sessions.get(id).cloned())
         }
 
-
         async fn find_by_user_id(
             &self,
             user_id: &UserId,
         ) -> Result<Vec<Session>, SessionRepositoryError> {
-            let sessions = self.sessions.read().await;
-            let user_sessions: Vec<Session> = sessions
+            let user_sessions: Vec<Session> = self
+                .sessions
+                .read()
+                .await
                 .values()
                 .filter(|s| s.user_id == *user_id)
                 .cloned()
@@ -431,31 +462,33 @@ pub mod mocks {
         }
 
         async fn save(&self, session: &Session) -> Result<(), SessionRepositoryError> {
-            let mut sessions = self.sessions.write().await;
-            sessions.insert(session.id.clone(), session.clone());
+            self.sessions
+                .write()
+                .await
+                .insert(session.id.clone(), session.clone());
             Ok(())
         }
 
         async fn update(&self, session: &Session) -> Result<(), SessionRepositoryError> {
-            let mut sessions = self.sessions.write().await;
-            sessions.insert(session.id.clone(), session.clone());
+            self.sessions
+                .write()
+                .await
+                .insert(session.id.clone(), session.clone());
             Ok(())
         }
 
         async fn delete(&self, id: &str) -> Result<(), SessionRepositoryError> {
-            let mut sessions = self.sessions.write().await;
-            sessions.remove(id);
+            self.sessions.write().await.remove(id);
             Ok(())
         }
 
         async fn delete_expired(&self) -> Result<i64, SessionRepositoryError> {
             let mut sessions = self.sessions.write().await;
             let now = chrono::Utc::now();
-            let expired_count = sessions.len();
-
+            let before = sessions.len();
             sessions.retain(|_, session| session.expires_at > now);
-
-            Ok((expired_count - sessions.len()) as i64)
+            let after = sessions.len();
+            Ok(i64::try_from(before.saturating_sub(after)).unwrap_or(0))
         }
 
         async fn delete_by_user_id(&self, user_id: &UserId) -> Result<(), SessionRepositoryError> {
@@ -465,8 +498,13 @@ pub mod mocks {
         }
 
         async fn count_by_user_id(&self, user_id: &UserId) -> Result<i64, SessionRepositoryError> {
-            let sessions = self.sessions.read().await;
-            let count = sessions.values().filter(|s| s.user_id == *user_id).count();
+            let count = self
+                .sessions
+                .read()
+                .await
+                .values()
+                .filter(|s| s.user_id == *user_id)
+                .count();
             Ok(count as i64)
         }
 
@@ -488,13 +526,15 @@ pub mod mocks {
             &self,
             session_id: &str,
         ) -> Result<bool, SessionRepositoryError> {
-            let sessions = self.sessions.read().await;
-            if let Some(session) = sessions.get(session_id) {
-                let now = chrono::Utc::now();
-                Ok(session.is_active && session.expires_at > now)
-            } else {
-                Ok(false)
-            }
+            Ok(self
+                .sessions
+                .read()
+                .await
+                .get(session_id)
+                .map_or(false, |session| {
+                    let now = chrono::Utc::now();
+                    session.is_active && session.expires_at > now
+                }))
         }
     }
 
@@ -504,7 +544,14 @@ pub mod mocks {
         user_tokens: Arc<RwLock<HashMap<String, Vec<String>>>>, // user_id -> token_hashes
     }
 
+    impl Default for MockTokenRepository {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl MockTokenRepository {
+        #[must_use]
         pub fn new() -> Self {
             Self {
                 tokens: Arc::new(RwLock::new(HashMap::new())),
@@ -529,16 +576,14 @@ pub mod mocks {
         ) -> Result<Vec<Token>, TokenRepositoryError> {
             let user_tokens_map = self.user_tokens.read().await;
             let tokens_map = self.tokens.read().await;
-
-            if let Some(token_hashes) = user_tokens_map.get(user_id.as_str()) {
-                let tokens: Vec<Token> = token_hashes
-                    .iter()
-                    .filter_map(|hash| tokens_map.get(hash).cloned())
-                    .collect();
-                Ok(tokens)
-            } else {
-                Ok(vec![])
-            }
+            Ok(user_tokens_map
+                .get(user_id.as_str())
+                .map_or_else(Vec::new, |token_hashes| {
+                    token_hashes
+                        .iter()
+                        .filter_map(|hash| tokens_map.get(hash).cloned())
+                        .collect()
+                }))
         }
 
         async fn find_by_user_and_type(
@@ -555,49 +600,46 @@ pub mod mocks {
         }
 
         async fn save(&self, token: &Token) -> Result<(), TokenRepositoryError> {
-            let mut tokens = self.tokens.write().await;
+            self.tokens
+                .write()
+                .await
+                .insert(token.token_hash.clone(), token.clone());
+
             let mut user_tokens_map = self.user_tokens.write().await;
-
-            tokens.insert(token.token_hash.clone(), token.clone());
-
-            let user_id_str = token.user_id.as_str();
             user_tokens_map
-                .entry(user_id_str.to_string())
+                .entry(token.user_id.as_str().to_string())
                 .or_insert_with(Vec::new)
                 .push(token.token_hash.clone());
-
             Ok(())
         }
 
         async fn update(&self, token: &Token) -> Result<(), TokenRepositoryError> {
-            let mut tokens = self.tokens.write().await;
-            tokens.insert(token.token_hash.clone(), token.clone());
+            self.tokens
+                .write()
+                .await
+                .insert(token.token_hash.clone(), token.clone());
             Ok(())
         }
 
         async fn delete_by_hash(&self, token_hash: &str) -> Result<(), TokenRepositoryError> {
-            let mut tokens = self.tokens.write().await;
-            tokens.remove(token_hash);
+            self.tokens.write().await.remove(token_hash);
 
             // Also remove from user_tokens mapping
             let mut user_tokens_map = self.user_tokens.write().await;
             for token_hashes in user_tokens_map.values_mut() {
                 token_hashes.retain(|h| h != token_hash);
             }
-
             Ok(())
         }
 
         async fn delete_by_user_id(&self, user_id: &UserId) -> Result<(), TokenRepositoryError> {
-            let mut tokens = self.tokens.write().await;
             let mut user_tokens_map = self.user_tokens.write().await;
-
             if let Some(token_hashes) = user_tokens_map.remove(user_id.as_str()) {
+                let mut tokens = self.tokens.write().await;
                 for hash in token_hashes {
                     tokens.remove(&hash);
                 }
             }
-
             Ok(())
         }
 
@@ -614,8 +656,7 @@ pub mod mocks {
         }
 
         async fn revoke_by_hash(&self, token_hash: &str) -> Result<(), TokenRepositoryError> {
-            let mut tokens = self.tokens.write().await;
-            if let Some(token) = tokens.get_mut(token_hash) {
+            if let Some(token) = self.tokens.write().await.get_mut(token_hash) {
                 token.revoke();
             }
             Ok(())
@@ -649,12 +690,12 @@ pub mod mocks {
         }
 
         async fn exists_and_active(&self, token_hash: &str) -> Result<bool, TokenRepositoryError> {
-            let tokens = self.tokens.read().await;
-            if let Some(token) = tokens.get(token_hash) {
-                Ok(token.is_active())
-            } else {
-                Ok(false)
-            }
+            Ok(self
+                .tokens
+                .read()
+                .await
+                .get(token_hash)
+                .map_or(false, Token::is_active))
         }
 
         async fn count_active_by_user(
@@ -663,15 +704,13 @@ pub mod mocks {
         ) -> Result<i64, TokenRepositoryError> {
             let user_tokens = self.find_by_user_id(user_id).await?;
             let _now = Utc::now();
-            let active_count = user_tokens
-                .iter()
-                .filter(|t| t.is_active())
-                .count() as i64;
+            let active_count = user_tokens.iter().filter(|t| t.is_active()).count() as i64;
             Ok(active_count)
         }
     }
 
     /// Create mock repositories for testing
+    #[must_use]
     pub fn create_mock_repositories() -> (DynUserRepository, DynSessionRepository) {
         let user_repo: DynUserRepository = Arc::new(MockUserRepository::new());
         let session_repo: DynSessionRepository = Arc::new(MockSessionRepository::new());

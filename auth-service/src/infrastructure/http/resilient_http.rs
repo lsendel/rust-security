@@ -73,7 +73,7 @@ impl ResilientHttpClient {
             .build()
             .map_err(|e| {
                 crate::shared::error::AppError::ServiceUnavailable {
-                    reason: format!("Failed to create HTTP client: {}", e)
+                    reason: format!("Failed to create HTTP client: {e}")
                 }
             })?;
 
@@ -86,23 +86,23 @@ impl ResilientHttpClient {
         })
     }
 
-    pub fn get(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use] pub fn get(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.get(url), &self.circuit_breaker, &self.config)
     }
 
-    pub fn post(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use] pub fn post(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.post(url), &self.circuit_breaker, &self.config)
     }
 
-    pub fn put(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use] pub fn put(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.put(url), &self.circuit_breaker, &self.config)
     }
 
-    pub fn delete(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use] pub fn delete(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.delete(url), &self.circuit_breaker, &self.config)
     }
 
-    pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
+    #[must_use] pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
         self.circuit_breaker.stats()
     }
 }
@@ -230,22 +230,22 @@ pub struct ResilientResponse {
 }
 
 impl ResilientResponse {
-    pub fn status(&self) -> reqwest::StatusCode {
+    #[must_use] pub fn status(&self) -> reqwest::StatusCode {
         self.response.status()
     }
 
-    pub fn headers(&self) -> &reqwest::header::HeaderMap {
+    #[must_use] pub fn headers(&self) -> &reqwest::header::HeaderMap {
         self.response.headers()
     }
 
-    pub fn url(&self) -> &reqwest::Url {
+    #[must_use] pub fn url(&self) -> &reqwest::Url {
         self.response.url()
     }
 
     pub async fn text(self) -> Result<String, crate::shared::error::AppError> {
         self.response.text().await.map_err(|e| {
             crate::shared::error::AppError::ServiceUnavailable {
-                reason: format!("Failed to read response text: {}", e)
+                reason: format!("Failed to read response text: {e}")
             }
         })
     }
@@ -253,7 +253,7 @@ impl ResilientResponse {
     pub async fn bytes(self) -> Result<Bytes, crate::shared::error::AppError> {
         self.response.bytes().await.map_err(|e| {
             crate::shared::error::AppError::ServiceUnavailable {
-                reason: format!("Failed to read response bytes: {}", e)
+                reason: format!("Failed to read response bytes: {e}")
             }
         })
     }
@@ -263,8 +263,7 @@ impl ResilientResponse {
     ) -> Result<T, crate::shared::error::AppError> {
         self.response.json().await.map_err(|e| {
             crate::shared::error::AppError::Validation(format!(
-                "Failed to parse JSON response: {}",
-                e
+                "Failed to parse JSON response: {e}"
             ))
         })
     }
@@ -309,23 +308,23 @@ impl OidcHttpClient {
                 max_delay: Duration::from_secs(10),
                 ..Default::default()
             },
-            user_agent: format!("auth-service/1.0 (OIDC-{})", provider),
+            user_agent: format!("auth-service/1.0 (OIDC-{provider})"),
             ..Default::default()
         };
 
-        let client = ResilientHttpClient::new(format!("oidc-{}", provider), config)?;
+        let client = ResilientHttpClient::new(format!("oidc-{provider}"), config)?;
         Ok(Self { client })
     }
 
-    pub fn get(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use] pub fn get(&self, url: &str) -> ResilientRequestBuilder {
         self.client.get(url)
     }
 
-    pub fn post(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use] pub fn post(&self, url: &str) -> ResilientRequestBuilder {
         self.client.post(url)
     }
 
-    pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
+    #[must_use] pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
         self.client.stats()
     }
 }

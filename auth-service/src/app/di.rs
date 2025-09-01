@@ -20,7 +20,7 @@ pub struct AppContainer {
 
 impl AppContainer {
     /// Create a new application container with mock repositories (for testing)
-    pub fn new_mock() -> Self {
+    #[must_use] pub fn new_mock() -> Self {
         // TODO: Implement proper mock repositories
         // For now, we'll return an error indicating this is not implemented
         panic!("Mock repositories not yet implemented - use new_postgres instead (redis temporarily disabled)");
@@ -138,7 +138,7 @@ pub enum AppError {
     Config(String),
 }
 
-/// Helper function to create PostgreSQL connection pool
+/// Helper function to create `PostgreSQL` connection pool
 #[allow(dead_code)] // TODO: Will be used when PostgreSQL implementation is completed
 fn create_postgres_pool(_config: &DatabaseConfig) -> Result<sqlx::PgPool, AppError> {
     // TODO: Implement PostgreSQL connection pool creation

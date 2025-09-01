@@ -1,6 +1,6 @@
-use base64;
+use base64::Engine as _;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use rand;
+use rand::{rngs::OsRng, Rng as _};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -67,18 +67,19 @@ mod mock_policy_service {
     pub struct MockPolicyService;
 
     impl MockPolicyService {
-        pub fn new() -> Self {
+        pub const fn new() -> Self {
             Self
         }
 
         pub async fn evaluate_policy(&self, request: &Value) -> bool {
             // Simple mock policy evaluation
-            if let Some(action) = request.get("action").and_then(|a| a.as_str()) {
-                // Allow read operations, deny write operations for benchmarking
-                !action.contains("write") && !action.contains("delete")
-            } else {
-                false
-            }
+            request
+                .get("action")
+                .and_then(|a| a.as_str())
+                .map_or(false, |action| {
+                    // Allow read operations, deny write operations for benchmarking
+                    !action.contains("write") && !action.contains("delete")
+                })
         }
     }
 }
@@ -93,7 +94,7 @@ fn bench_token_generation(c: &mut Criterion) {
     // Setup runtime and service once outside the benchmark loop
     let rt = Arc::new(Runtime::new().unwrap());
 
-    for concurrent_requests in [1, 10, 50, 100].iter() {
+    for concurrent_requests in &[1, 10, 50, 100] {
         group.throughput(Throughput::Elements(*concurrent_requests as u64));
         group.bench_with_input(
             BenchmarkId::new("concurrent", concurrent_requests),
@@ -105,7 +106,7 @@ fn bench_token_generation(c: &mut Criterion) {
                         let mut handles = Vec::new();
 
                         for i in 0..concurrent_requests {
-                            let client_id = format!("client_{}", i);
+                            let client_id = format!("client_{i}");
                             let scope = "read write".to_string();
 
                             let handle = tokio::spawn(async move {
@@ -118,7 +119,7 @@ fn bench_token_generation(c: &mut Criterion) {
                         for handle in handles {
                             black_box(handle.await.unwrap());
                         }
-                    })
+                    });
                 });
             },
         );
@@ -143,7 +144,7 @@ fn bench_token_introspection(c: &mut Criterion) {
 
             for i in 0..1000 {
                 let token = service
-                    .generate_token(&format!("client_{}", i), "read write")
+                    .generate_token(&format!("client_{i}"), "read write")
                     .await;
                 tokens.push(token);
             }
@@ -151,7 +152,7 @@ fn bench_token_introspection(c: &mut Criterion) {
             (tokens, Arc::new(RwLock::new(service)))
         });
 
-    for batch_size in [1, 10, 50, 100].iter() {
+    for batch_size in &[1, 10, 50, 100] {
         group.throughput(Throughput::Elements(*batch_size as u64));
         group.bench_with_input(
             BenchmarkId::new("batch", batch_size),
@@ -178,7 +179,7 @@ fn bench_token_introspection(c: &mut Criterion) {
                         for handle in handles {
                             black_box(handle.await.unwrap());
                         }
-                    })
+                    });
                 });
             },
         );
@@ -213,7 +214,7 @@ fn bench_policy_evaluation(c: &mut Criterion) {
     // Setup runtime once outside benchmark loop
     let rt = Arc::new(Runtime::new().unwrap());
 
-    for request_count in [1, 10, 50, 100].iter() {
+    for request_count in &[1, 10, 50, 100] {
         group.throughput(Throughput::Elements(*request_count as u64));
         group.bench_with_input(
             BenchmarkId::new("requests", request_count),
@@ -237,7 +238,7 @@ fn bench_policy_evaluation(c: &mut Criterion) {
                         for handle in handles {
                             black_box(handle.await.unwrap());
                         }
-                    })
+                    });
                 });
             },
         );
@@ -263,13 +264,12 @@ fn bench_jwt_operations(c: &mut Criterion) {
     group.bench_function("jwt_encode", |b| {
         b.iter(|| {
             // Mock JWT encoding
-            use base64::Engine;
             let header =
                 base64::engine::general_purpose::STANDARD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
             let payload = base64::engine::general_purpose::STANDARD.encode(claims.to_string());
             let signature = base64::engine::general_purpose::STANDARD.encode("mock_signature");
-            black_box(format!("{}.{}.{}", header, payload, signature))
-        })
+            black_box(format!("{header}.{payload}.{signature}"))
+        });
     });
 
     let mock_jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwiaWF0IjoxMjM0NTY3ODkwLCJleHAiOjEyMzQ1NzE0OTAsInNjb3BlIjoicmVhZCB3cml0ZSJ9.mock_signature";
@@ -279,7 +279,6 @@ fn bench_jwt_operations(c: &mut Criterion) {
             // Mock JWT decoding
             let parts: Vec<&str> = mock_jwt.split('.').collect();
             if parts.len() == 3 {
-                use base64::Engine;
                 let _header = base64::engine::general_purpose::STANDARD
                     .decode(parts[0])
                     .unwrap_or_default();
@@ -293,7 +292,7 @@ fn bench_jwt_operations(c: &mut Criterion) {
             } else {
                 black_box(String::new())
             }
-        })
+        });
     });
 
     group.finish();
@@ -311,14 +310,13 @@ fn bench_security_operations(c: &mut Criterion) {
             let password = "test_password_123";
             // Mock bcrypt hashing (simplified)
             let salt = "mock_salt_value";
-            use base64::Engine;
             let hash = format!(
                 "$2b$12${}${}",
                 salt,
                 base64::engine::general_purpose::STANDARD.encode(password)
             );
             black_box(hash)
-        })
+        });
     });
 
     // Benchmark HMAC generation
@@ -329,7 +327,7 @@ fn bench_security_operations(c: &mut Criterion) {
             // Mock HMAC (simplified)
             let hash = format!("hmac_{}_{}", secret.len(), message.len());
             black_box(hash)
-        })
+        });
     });
 
     // Benchmark token binding
@@ -340,7 +338,7 @@ fn bench_security_operations(c: &mut Criterion) {
             // Mock token binding generation
             let binding = format!("binding_{}_{}", client_ip.len(), user_agent.len());
             black_box(binding)
-        })
+        });
     });
 
     group.finish();
@@ -361,7 +359,7 @@ fn bench_cache_operations(c: &mut Criterion) {
     rt.block_on(async {
         let mut cache_write = cache.write().await;
         for i in 0..1000 {
-            cache_write.insert(format!("key_{}", i), format!("value_{}", i));
+            cache_write.insert(format!("key_{i}"), format!("value_{i}"));
         }
     });
 
@@ -371,12 +369,12 @@ fn bench_cache_operations(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let cache_read = cache.read().await;
-                let key = format!("key_{}", rand::random::<usize>() % 1000);
+                let key = format!("key_{}", OsRng.gen::<usize>() % 1000);
                 // Clone the value to avoid lifetime issues with the lock guard
                 let result = cache_read.get(&key).cloned();
                 black_box(result)
             })
-        })
+        });
     });
 
     group.bench_function("cache_write", |b| {
@@ -385,11 +383,11 @@ fn bench_cache_operations(c: &mut Criterion) {
         b.iter(|| {
             rt.block_on(async {
                 let mut cache_write = cache.write().await;
-                let key = format!("new_key_{}", rand::random::<usize>());
-                let value = format!("new_value_{}", rand::random::<usize>());
+                let key = format!("new_key_{}", OsRng.gen::<usize>());
+                let value = format!("new_value_{}", OsRng.gen::<usize>());
                 black_box(cache_write.insert(key, value))
             })
-        })
+        });
     });
 
     group.finish();

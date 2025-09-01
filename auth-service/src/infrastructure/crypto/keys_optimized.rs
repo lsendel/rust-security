@@ -37,8 +37,14 @@ pub struct OptimizedSecureKeyManager {
     status: Arc<RwLock<KeyGenerationStatus>>,
 }
 
+impl Default for OptimizedSecureKeyManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OptimizedSecureKeyManager {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             keys: Arc::new(RwLock::new(Vec::new())),
             generation_semaphore: Arc::new(Semaphore::new(1)), // Only one key generation at a time
@@ -70,7 +76,7 @@ impl OptimizedSecureKeyManager {
         });
 
         Ok(OptimizedSecureKeyMaterial {
-            kid: kid.clone(),
+            kid,
             keypair: Arc::new(keypair),
             public_jwk,
             created_at: self.now_unix(),

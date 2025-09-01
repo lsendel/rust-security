@@ -568,7 +568,8 @@ pub enum SecurityEventType {
 
 impl SecurityEvent {
     /// Check if this event represents a security failure
-    #[must_use] pub const fn is_security_failure(&self) -> bool {
+    #[must_use]
+    pub const fn is_security_failure(&self) -> bool {
         matches!(
             self.event_type,
             SecurityEventType::AuthenticationFailure
@@ -596,7 +597,7 @@ mod tests {
         assert_eq!(context.client_ip, ip);
         assert_eq!(context.user_agent, user_agent);
         assert_eq!(context.security_level, SecurityLevel::Standard);
-        assert_eq!(context.risk_score, 0.0);
+        assert!((context.risk_score - 0.0).abs() < f64::EPSILON);
         assert!(!context.is_high_risk());
     }
 
@@ -606,7 +607,7 @@ mod tests {
             signature_id: "test".to_string(),
             attack_type: "test".to_string(),
         };
-        assert_eq!(indicator.severity_score(), 9.0);
+        assert!((indicator.severity_score() - 9.0).abs() < f64::EPSILON);
         assert_eq!(indicator.category(), "signature");
     }
 

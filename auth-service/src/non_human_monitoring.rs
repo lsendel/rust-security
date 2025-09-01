@@ -163,6 +163,10 @@ impl NonHumanIdentityMonitor {
     }
 
     /// Log authentication attempt
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if anomaly checks or alerting fail.
     pub async fn log_authentication(
         &self,
         identity: &ServiceIdentity,
@@ -217,6 +221,10 @@ impl NonHumanIdentityMonitor {
     }
 
     /// Log API request
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if metrics update or calculations fail downstream.
     pub async fn log_request(
         &self,
         identity_id: Uuid,
@@ -264,8 +272,7 @@ impl NonHumanIdentityMonitor {
 
             // Calculate request rate
             let config = self.config.read().await;
-            let rate = self
-                .calculate_request_rate(identity_logs, config.rate_window_minutes);
+            let rate = self.calculate_request_rate(identity_logs, config.rate_window_minutes);
             identity_metrics.request_rate_per_minute = rate;
         }
 
@@ -309,6 +316,10 @@ impl NonHumanIdentityMonitor {
     }
 
     /// Establish behavioral baseline for an identity
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when insufficient data is available to build a baseline.
     pub async fn establish_baseline(
         &self,
         identity_id: Uuid,
@@ -442,6 +453,10 @@ impl NonHumanIdentityMonitor {
     }
 
     /// Automated response to critical anomalies
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending alerts fails.
     pub async fn respond_to_anomaly(
         &self,
         identity: &ServiceIdentity,
@@ -552,11 +567,7 @@ impl NonHumanIdentityMonitor {
         Ok(())
     }
 
-    fn calculate_request_rate(
-        &self,
-        logs: &VecDeque<ActivityLog>,
-        window_minutes: u64,
-    ) -> f64 {
+    fn calculate_request_rate(&self, logs: &VecDeque<ActivityLog>, window_minutes: u64) -> f64 {
         let cutoff = Utc::now() - Duration::minutes(window_minutes as i64);
         let recent_count = logs.iter().filter(|log| log.timestamp > cutoff).count();
 
@@ -638,7 +649,7 @@ mod tests {
                     &RequestContext {
                         source_ip: "10.0.0.1".to_string(),
                         user_agent: Some("test-agent".to_string()),
-                        request_id: format!("req-{}", i),
+                        request_id: format!("req-{i}"),
                         parent_span_id: None,
                         attestation_data: None,
                     },

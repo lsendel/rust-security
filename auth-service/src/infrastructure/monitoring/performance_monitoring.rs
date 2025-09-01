@@ -1,3 +1,4 @@
+#![allow(clippy::unused_async)]
 // Performance Monitoring and SLO Implementation
 // Comprehensive performance tracking with automated regression detection
 
@@ -136,6 +137,7 @@ pub struct RequestTiming {
 }
 
 impl RequestTiming {
+    #[must_use]
     pub fn new(endpoint: String, method: String) -> Self {
         Self {
             endpoint,
@@ -153,7 +155,8 @@ impl RequestTiming {
         self.error = error;
     }
 
-    pub fn is_successful(&self) -> bool {
+    #[must_use]
+    pub const fn is_successful(&self) -> bool {
         self.status_code < 400 && self.error.is_none()
     }
 }
@@ -169,6 +172,7 @@ pub struct PerformanceMonitor {
 
 impl PerformanceMonitor {
     /// Create new performance monitor
+    #[must_use]
     pub fn new(config: MonitoringConfig, slo: PerformanceSLO) -> Self {
         Self {
             config,
@@ -186,6 +190,7 @@ impl PerformanceMonitor {
     }
 
     /// Start timing a request
+    #[must_use]
     pub fn start_timing(&self, endpoint: String, method: String) -> RequestTiming {
         RequestTiming::new(endpoint, method)
     }
@@ -233,14 +238,14 @@ impl PerformanceMonitor {
 
         latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-        let (p50, p95, p99, mean) = if !latencies.is_empty() {
+        let (p50, p95, p99, mean) = if latencies.is_empty() {
+            (0.0, 0.0, 0.0, 0.0)
+        } else {
             let p50 = percentile(&latencies, 0.5);
             let p95 = percentile(&latencies, 0.95);
             let p99 = percentile(&latencies, 0.99);
             let mean = latencies.iter().sum::<f64>() / latencies.len() as f64;
             (p50, p95, p99, mean)
-        } else {
-            (0.0, 0.0, 0.0, 0.0)
         };
 
         let error_rate = if total_requests > 0 {
@@ -275,7 +280,9 @@ impl PerformanceMonitor {
                 .filter_map(|t| t.duration.map(|d| d.as_secs_f64() * 1000.0))
                 .collect();
 
-            let (mean_latency, p95_latency, slowest, fastest) = if !endpoint_latencies.is_empty() {
+            let (mean_latency, p95_latency, slowest, fastest) = if endpoint_latencies.is_empty() {
+                (0.0, 0.0, 0.0, 0.0)
+            } else {
                 let mean = endpoint_latencies.iter().sum::<f64>() / endpoint_latencies.len() as f64;
                 let p95 = percentile(&endpoint_latencies, 0.95);
                 let slowest = endpoint_latencies.iter().fold(0.0f64, |a, &b| a.max(b));
@@ -283,8 +290,6 @@ impl PerformanceMonitor {
                     .iter()
                     .fold(f64::INFINITY, |a, &b| a.min(b));
                 (mean, p95, slowest, fastest)
-            } else {
-                (0.0, 0.0, 0.0, 0.0)
             };
 
             endpoint_metrics.insert(
@@ -512,10 +517,10 @@ impl PerformanceMonitor {
             ));
         }
 
-        if !violations.is_empty() {
-            warn!("SLO violations detected: {}", violations.join(", "));
-        } else {
+        if violations.is_empty() {
             info!("All SLOs met for current window");
+        } else {
+            warn!("SLO violations detected: {}", violations.join(", "));
         }
     }
 

@@ -46,7 +46,7 @@ async fn spawn_app() -> String {
         ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -55,9 +55,9 @@ async fn token_with_basic_auth_header() {
 
     let creds = base64::engine::general_purpose::STANDARD.encode("basic_client:basic_secret");
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .header(AUTHORIZATION, format!("Basic {}", creds))
+        .header(AUTHORIZATION, format!("Basic {creds}"))
         .body("grant_type=client_credentials")
         .send()
         .await

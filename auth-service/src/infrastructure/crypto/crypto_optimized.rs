@@ -39,8 +39,8 @@ pub struct CryptoOptimized {
 #[derive(Debug)]
 pub struct HardwareAccelerated;
 
-impl aead::BoundKey<HardwareAccelerated> for HardwareAccelerated {
-    fn new(_unbound_key: aead::UnboundKey, nonce_sequence: HardwareAccelerated) -> Self {
+impl aead::BoundKey<Self> for HardwareAccelerated {
+    fn new(_unbound_key: aead::UnboundKey, nonce_sequence: Self) -> Self {
         nonce_sequence
     }
 
@@ -60,10 +60,16 @@ impl aead::NonceSequence for HardwareAccelerated {
     }
 }
 
-static CRYPTO_ENGINE: LazyLock<CryptoOptimized> = LazyLock::new(|| CryptoOptimized::new());
+static CRYPTO_ENGINE: LazyLock<CryptoOptimized> = LazyLock::new(CryptoOptimized::new);
+
+impl Default for CryptoOptimized {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CryptoOptimized {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         let argon2 = Argon2::default();
 
         Self {
@@ -99,7 +105,7 @@ impl CryptoOptimized {
 
         // Update cache hit rate (simple moving average)
         let hit_value = if cache_hit { 1.0 } else { 0.0 };
-        metrics.cache_hit_rate = (metrics.cache_hit_rate * 0.9) + (hit_value * 0.1);
+        metrics.cache_hit_rate = metrics.cache_hit_rate.mul_add(0.9, hit_value * 0.1);
     }
 
     /// Get current performance metrics
@@ -219,12 +225,9 @@ impl CryptoOptimized {
         let start = Instant::now();
 
         // Parse the stored hash
-        let parsed_hash = match PasswordHash::new(hash) {
-            Ok(hash) => hash,
-            Err(_) => {
-                self.update_metrics(start.elapsed(), false).await;
-                return false;
-            }
+        let parsed_hash = if let Ok(hash) = PasswordHash::new(hash) { hash } else {
+            self.update_metrics(start.elapsed(), false).await;
+            return false;
         };
 
         // Verify password in constant time
@@ -262,8 +265,8 @@ impl CryptoOptimized {
         let mut random_bytes = [0u8; 32];
         self.rng.fill(&mut random_bytes)?;
 
-        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&random_bytes);
-        Ok(format!("{}_{}", prefix, encoded))
+        let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(random_bytes);
+        Ok(format!("{prefix}_{encoded}"))
     }
 
     /// Batch hash operations for password verification
@@ -386,12 +389,12 @@ impl CryptoOptimized {
 }
 
 /// Public API for optimized cryptographic operations
-pub fn get_crypto_engine() -> &'static CryptoOptimized {
+#[must_use] pub fn get_crypto_engine() -> &'static CryptoOptimized {
     &CRYPTO_ENGINE
 }
 
 /// Hardware-accelerated JWT signature verification
-pub fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
+#[must_use] pub fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
     #[cfg(feature = "simd")]
     {
         CRYPTO_ENGINE.batch_validate_tokens(tokens)
@@ -410,7 +413,7 @@ pub fn generate_optimized_token_binding(
     client_ip: &str,
     user_agent: &str,
 ) -> Result<String, ring::error::Unspecified> {
-    let combined = format!("{}|{}", client_ip, user_agent);
+    let combined = format!("{client_ip}|{user_agent}");
     let hash = digest::digest(&digest::SHA256, combined.as_bytes());
     Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hash.as_ref()))
 }
@@ -431,7 +434,7 @@ pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
 }
 
 #[cfg(not(feature = "simd"))]
-pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
+#[must_use] pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
     use constant_time_eq::constant_time_eq;
     constant_time_eq(a, b)
 }

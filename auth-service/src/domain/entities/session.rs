@@ -38,7 +38,7 @@ pub struct Session {
 
 impl Session {
     /// Create a new session for a user
-    pub fn new(user_id: UserId, created_at: DateTime<Utc>) -> Self {
+    #[must_use] pub fn new(user_id: UserId, created_at: DateTime<Utc>) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             user_id,
@@ -52,7 +52,7 @@ impl Session {
     }
 
     /// Create a session with custom expiration
-    pub fn with_expiration(
+    #[must_use] pub fn with_expiration(
         user_id: UserId,
         created_at: DateTime<Utc>,
         expires_at: DateTime<Utc>,
@@ -70,30 +70,30 @@ impl Session {
     }
 
     /// Set the IP address for this session
-    pub fn with_ip_address(mut self, ip: String) -> Self {
+    #[must_use] pub fn with_ip_address(mut self, ip: String) -> Self {
         self.ip_address = Some(ip);
         self
     }
 
     /// Set the user agent for this session
-    pub fn with_user_agent(mut self, user_agent: String) -> Self {
+    #[must_use] pub fn with_user_agent(mut self, user_agent: String) -> Self {
         self.user_agent = Some(user_agent);
         self
     }
 
     /// Set the device fingerprint for this session
-    pub fn with_device_fingerprint(mut self, fingerprint: String) -> Self {
+    #[must_use] pub fn with_device_fingerprint(mut self, fingerprint: String) -> Self {
         self.device_fingerprint = Some(fingerprint);
         self
     }
 
     /// Check if the session is expired
-    pub fn is_expired(&self) -> bool {
+    #[must_use] pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
     }
 
     /// Check if the session is active
-    pub fn is_active(&self) -> bool {
+    #[must_use] pub fn is_active(&self) -> bool {
         self.is_active && !self.is_expired()
     }
 
@@ -108,7 +108,7 @@ impl Session {
     }
 
     /// Get the time remaining until expiration
-    pub fn time_remaining(&self) -> Duration {
+    #[must_use] pub fn time_remaining(&self) -> Duration {
         if self.is_expired() {
             Duration::zero()
         } else {

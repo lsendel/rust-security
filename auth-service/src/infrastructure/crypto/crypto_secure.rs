@@ -102,7 +102,7 @@ impl SecureCryptoManager {
     ///
     /// # Errors
     ///
-    /// Returns `CryptoError::KeyGenerationFailed` if the MASTER_ENCRYPTION_KEY environment variable
+    /// Returns `CryptoError::KeyGenerationFailed` if the `MASTER_ENCRYPTION_KEY` environment variable
     /// is invalid or contains non-hexadecimal characters
     pub fn from_env() -> Result<Self, CryptoError> {
         if let Ok(key_hex) = std::env::var("MASTER_ENCRYPTION_KEY") {

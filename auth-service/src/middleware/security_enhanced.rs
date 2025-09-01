@@ -163,34 +163,31 @@ impl SecurityMiddleware {
         let cookie_token = self.extract_csrf_cookie(req);
 
         // Validate tokens match
-        match (header_token, cookie_token) {
-            (Some(header), Some(cookie)) => {
-                if !constant_time_compare(header, &cookie) {
-                    warn!("CSRF token mismatch");
-                    return Err(Self::csrf_error_response());
-                }
-
-                // Validate token exists and is not expired
-                let tokens = self.csrf_tokens.read().await;
-                if let Some((stored_token, created)) = tokens.get(&cookie) {
-                    if !constant_time_compare(header, stored_token) {
-                        warn!("Invalid CSRF token");
-                        return Err(Self::csrf_error_response());
-                    }
-
-                    if created.elapsed() > self.config.csrf_ttl {
-                        warn!("Expired CSRF token");
-                        return Err(Self::csrf_error_response());
-                    }
-                } else {
-                    warn!("Unknown CSRF token");
-                    return Err(Self::csrf_error_response());
-                }
-            }
-            _ => {
-                warn!("Missing CSRF token");
+        if let (Some(header), Some(cookie)) = (header_token, cookie_token) {
+            if !constant_time_compare(header, &cookie) {
+                warn!("CSRF token mismatch");
                 return Err(Self::csrf_error_response());
             }
+
+            // Validate token exists and is not expired
+            let tokens = self.csrf_tokens.read().await;
+            if let Some((stored_token, created)) = tokens.get(&cookie) {
+                if !constant_time_compare(header, stored_token) {
+                    warn!("Invalid CSRF token");
+                    return Err(Self::csrf_error_response());
+                }
+
+                if created.elapsed() > self.config.csrf_ttl {
+                    warn!("Expired CSRF token");
+                    return Err(Self::csrf_error_response());
+                }
+            } else {
+                warn!("Unknown CSRF token");
+                return Err(Self::csrf_error_response());
+            }
+        } else {
+            warn!("Missing CSRF token");
+            return Err(Self::csrf_error_response());
         }
 
         Ok(())
@@ -262,10 +259,10 @@ impl SecurityMiddleware {
             .and_then(|cookie_str| {
                 cookie_str
                     .split(';')
-                    .map(|s| s.trim())
+                    .map(str::trim)
                     .find(|s| s.starts_with(&format!("{}=", self.config.csrf_cookie)))
                     .and_then(|cookie| cookie.split('=').nth(1))
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
             })
     }
 
@@ -304,7 +301,7 @@ pub struct RateLimiter {
 }
 
 impl RateLimiter {
-    pub fn new(max_requests: u32, window: Duration) -> Self {
+    #[must_use] pub fn new(max_requests: u32, window: Duration) -> Self {
         Self {
             requests: Arc::new(RwLock::new(HashMap::new())),
             max_requests,
@@ -335,7 +332,7 @@ impl RateLimiter {
     /// Get current request count for a key
     pub async fn request_count(&self, key: &str) -> usize {
         let requests = self.requests.read().await;
-        requests.get(key).map(|r| r.len()).unwrap_or(0)
+        requests.get(key).map_or(0, std::vec::Vec::len)
     }
 }
 
@@ -345,7 +342,7 @@ pub struct InputValidator {
 }
 
 impl InputValidator {
-    pub fn new(max_body_size: usize) -> Self {
+    #[must_use] pub const fn new(max_body_size: usize) -> Self {
         Self { max_body_size }
     }
 
@@ -397,7 +394,7 @@ impl InputValidator {
 
 /// Security monitoring and alerting
 pub mod monitoring {
-    use super::*;
+    use super::HashMap;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     #[derive(Debug)]
@@ -409,8 +406,14 @@ pub mod monitoring {
         pub suspicious_requests: AtomicU64,
     }
 
+    impl Default for SecurityMetrics {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl SecurityMetrics {
-        pub fn new() -> Self {
+        #[must_use] pub const fn new() -> Self {
             Self {
                 csrf_attempts: AtomicU64::new(0),
                 csrf_failures: AtomicU64::new(0),

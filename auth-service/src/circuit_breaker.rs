@@ -456,13 +456,13 @@ mod tests {
 
         // First failure
         let _ = cb
-            .call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) })
+            .call(async { Err::<(), _>(std::io::Error::other("fail")) })
             .await;
         assert_eq!(cb.state(), CircuitState::Closed);
 
         // Second failure should open circuit
         let _ = cb
-            .call(async { Err::<(), _>(std::io::Error::new(std::io::ErrorKind::Other, "fail")) })
+            .call(async { Err::<(), _>(std::io::Error::other("fail")) })
             .await;
         assert_eq!(cb.state(), CircuitState::Open);
 

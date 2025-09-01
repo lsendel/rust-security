@@ -1,3 +1,4 @@
+#![allow(clippy::significant_drop_tightening)]
 //! Service Account and Non-Human Identity Management
 //!
 //! Implements secure management for service accounts, API keys, and AI agents
@@ -201,6 +202,11 @@ impl ServiceIdentityManager {
     }
 
     /// Register a new service identity
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if internal state updates fail or policy evaluation later
+    /// in the flow encounters an unexpected error.
     pub async fn register_identity(
         &self,
         identity_type: IdentityType,
@@ -235,16 +241,23 @@ impl ServiceIdentityManager {
     }
 
     /// Request JIT access token
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the identity is not found, suspended, an anomaly is
+    /// detected, policy denies access, approval is required, or internal
+    /// operations fail.
     pub async fn request_jit_access(
         &self,
         request: JitAccessRequest,
     ) -> Result<JitToken, crate::shared::error::AppError> {
         // Validate identity exists and is active
-        let identities = self.identities.read().await;
-        let identity = identities.get(&request.identity_id).ok_or_else(|| {
-            crate::shared::error::AppError::InvalidRequest {
-                reason: format!("Identity not found: {}", request.identity_id),
-            }
+        let identity = {
+            let identities = self.identities.read().await;
+            identities.get(&request.identity_id).cloned()
+        }
+        .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
+            reason: format!("Identity not found: {}", request.identity_id),
         })?;
 
         if identity.status != IdentityStatus::Active {
@@ -256,7 +269,7 @@ impl ServiceIdentityManager {
         // Check for anomalies
         if self
             .monitoring
-            .check_anomaly(identity, &request.request_context)
+            .check_anomaly(&identity, &request.request_context)
             .await
         {
             self.monitoring
@@ -282,7 +295,7 @@ impl ServiceIdentityManager {
         }
 
         // Apply policy engine
-        let policy_decision = self.policy_engine.evaluate(identity, &request).await?;
+        let policy_decision = self.policy_engine.evaluate(&identity, &request).await?;
 
         if policy_decision == PolicyEffect::Deny {
             return Err(crate::shared::error::AppError::PolicyDenied);
@@ -317,25 +330,31 @@ impl ServiceIdentityManager {
             max_usage: Some(100), // Limit usage to prevent abuse
         };
 
-        let mut tokens = self.jit_tokens.write().await;
-        tokens.insert(token.token_id, token.clone());
+        self.jit_tokens
+            .write()
+            .await
+            .insert(token.token_id, token.clone());
 
         info!("Issued JIT token for identity {:?}", identity.id);
         Ok(token)
     }
 
     /// Validate and track token usage
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if internal storage access fails.
     pub async fn validate_token(
         &self,
         token_id: Uuid,
         context: &RequestContext,
     ) -> Result<bool, crate::shared::error::AppError> {
-        let mut tokens = self.jit_tokens.write().await;
-
-        if let Some(token) = tokens.get_mut(&token_id) {
+        let result = if let Some(token) = self.jit_tokens.write().await.get_mut(&token_id) {
             // Check expiration
             if Utc::now() > token.expires_at {
-                tokens.remove(&token_id);
+                // Drop and remove in a new write scope
+                let _ = token;
+                self.jit_tokens.write().await.remove(&token_id);
                 return Ok(false);
             }
 
@@ -344,7 +363,9 @@ impl ServiceIdentityManager {
             if let Some(max) = token.max_usage {
                 if token.usage_count > max {
                     warn!("Token {:?} exceeded usage limit", token_id);
-                    tokens.remove(&token_id);
+                    // Drop and remove in a new write scope
+                    let _ = token;
+                    self.jit_tokens.write().await.remove(&token_id);
                     return Ok(false);
                 }
             }
@@ -354,29 +375,35 @@ impl ServiceIdentityManager {
                 warn!("Token {:?} used from different IP", token_id);
                 return Ok(false);
             }
-
-            Ok(true)
+            true
         } else {
-            Ok(false)
-        }
+            false
+        };
+        Ok(result)
     }
 
     /// Revoke all tokens for a compromised identity
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if internal storage updates fail.
     pub async fn revoke_identity_tokens(
         &self,
         identity_id: Uuid,
     ) -> Result<u32, crate::shared::error::AppError> {
-        let mut tokens = self.jit_tokens.write().await;
-        let mut revoked = 0;
-
-        tokens.retain(|_, token| {
-            if token.identity_id == identity_id {
-                revoked += 1;
-                false
-            } else {
-                true
-            }
-        });
+        let revoked = {
+            let mut tokens = self.jit_tokens.write().await;
+            let mut revoked_local = 0u32;
+            tokens.retain(|_, token| {
+                if token.identity_id == identity_id {
+                    revoked_local += 1;
+                    false
+                } else {
+                    true
+                }
+            });
+            revoked_local
+        };
 
         // Update identity status
         let mut identities = self.identities.write().await;
@@ -393,6 +420,10 @@ impl ServiceIdentityManager {
     }
 
     /// Rotate credentials for an identity
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the identity is not found or token revocation fails.
     pub async fn rotate_credentials(
         &self,
         identity_id: Uuid,
@@ -474,6 +505,12 @@ impl PolicyEngine {
         }
     }
 
+    /// Evaluate access policies for a JIT access request
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if policy evaluation fails or required identity/request
+    /// attributes are missing or invalid.
     pub async fn evaluate(
         &self,
         identity: &ServiceIdentity,

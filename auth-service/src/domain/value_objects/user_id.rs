@@ -8,9 +8,15 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct UserId(String);
 
+impl Default for UserId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserId {
     /// Create a new user ID from a UUID
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self(Uuid::new_v4().to_string())
     }
 
@@ -21,12 +27,12 @@ impl UserId {
     }
 
     /// Get the ID as a string
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the ID as a UUID (if valid)
-    pub fn as_uuid(&self) -> Option<Uuid> {
+    #[must_use] pub fn as_uuid(&self) -> Option<Uuid> {
         Uuid::from_str(&self.0).ok()
     }
 

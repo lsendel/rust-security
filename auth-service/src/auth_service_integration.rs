@@ -73,7 +73,7 @@ mod tests {
         ));
 
         #[cfg(not(feature = "threat-hunting"))]
-        let threat_processor = Arc::new(ThreatProcessor::default());
+        let threat_processor = Arc::new(ThreatProcessor);
         let auth_service = AuthServiceWithThreatProcessing::new(threat_processor);
 
         let event = SecurityEvent {
@@ -86,7 +86,7 @@ mod tests {
                 security_level: SecurityLevel::High,
                 risk_score: 0.8,
                 threat_indicators: vec![],
-                flags: Default::default(),
+                flags: SecurityFlags::default(),
                 metadata: HashMap::new(),
             },
             auth_context: None,

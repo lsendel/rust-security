@@ -486,8 +486,10 @@ mod tests {
 
         checker.update_metrics(metrics.clone()).await;
 
-        let stored_metrics = checker.metrics.read().await;
-        assert_eq!(stored_metrics.memory_usage_mb, 256);
-        assert_eq!(stored_metrics.cpu_usage_percent, 25.0);
+        {
+            let stored_metrics = checker.metrics.read().await;
+            assert_eq!(stored_metrics.memory_usage_mb, 256);
+            assert!((stored_metrics.cpu_usage_percent - 25.0).abs() < f64::EPSILON);
+        }
     }
 }

@@ -3,9 +3,9 @@
 //! Tests the complete flow of service identity registration,
 //! JIT token issuance, and security monitoring.
 
+use auth_service::infrastructure::security::security_monitoring::SecurityAlert;
 use std::sync::Arc;
 use uuid::Uuid;
-use auth_service::infrastructure::security::security_monitoring::SecurityAlert;
 
 use auth_service::{
     jit_token_manager::{JitConfig, JitTokenManager, TokenBindingContext},
@@ -71,10 +71,7 @@ struct MockAlertHandler;
 
 #[async_trait]
 impl auth_service::non_human_monitoring::AlertHandler for MockAlertHandler {
-    async fn send_alert(
-        &self,
-        _alert: SecurityAlert,
-    ) -> Result<(), auth_service::AppError> {
+    async fn send_alert(&self, _alert: SecurityAlert) -> Result<(), auth_service::AppError> {
         Ok(())
     }
 
@@ -140,7 +137,7 @@ async fn test_service_account_registration_flow() {
     let config = IdentityConfig {
         allowed_scopes: ["payment:read", "payment:write"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).to_string())
             .collect(),
         allowed_ips: Some(vec!["10.0.1.0/24".to_string()]),
         allowed_hours: Some((9, 17)), // Business hours
@@ -172,7 +169,7 @@ async fn test_ai_agent_registration_with_strict_limits() {
     };
 
     let config = IdentityConfig {
-        allowed_scopes: ["read:documents".to_string()].into_iter().collect(),
+        allowed_scopes: std::iter::once("read:documents".to_string()).collect(),
         allowed_ips: None,
         allowed_hours: None,
     };
@@ -203,7 +200,7 @@ async fn test_jit_token_request_flow() {
     let config = IdentityConfig {
         allowed_scopes: ["data:read", "data:process"]
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (*s).to_string())
             .collect(),
         allowed_ips: None,
         allowed_hours: None,
@@ -250,7 +247,7 @@ async fn test_jit_token_scope_filtering() {
     };
 
     let config = IdentityConfig {
-        allowed_scopes: ["webhook:receive".to_string()].into_iter().collect(),
+        allowed_scopes: std::iter::once("webhook:receive".to_string()).collect(),
         allowed_ips: None,
         allowed_hours: None,
     };
@@ -298,7 +295,7 @@ async fn test_token_lifetime_enforcement() {
     };
 
     let config = IdentityConfig {
-        allowed_scopes: ["read:data".to_string()].into_iter().collect(),
+        allowed_scopes: std::iter::once("read:data".to_string()).collect(),
         allowed_ips: None,
         allowed_hours: None,
     };
@@ -327,7 +324,10 @@ async fn test_token_lifetime_enforcement() {
     let token = manager.request_jit_access(jit_request).await.unwrap();
 
     // Should be limited to AI agent max (5 minutes = 300 seconds)
-    let actual_lifetime = (token.expires_at.timestamp() - token.issued_at.timestamp()) as u64;
+    let actual_lifetime: u64 = (token.expires_at - token.issued_at)
+        .num_seconds()
+        .try_into()
+        .unwrap_or(0);
     assert_eq!(actual_lifetime, 300);
 }
 
@@ -384,7 +384,7 @@ async fn test_anomaly_detection_and_response() {
         last_authenticated: None,
         last_rotated: None,
         max_token_lifetime_seconds: 3600,
-        allowed_scopes: ["test:read".to_string()].into_iter().collect(),
+        allowed_scopes: std::iter::once("test:read".to_string()).collect(),
         allowed_ips: None,
         allowed_hours: None,
         risk_score: 0.0,
@@ -396,7 +396,7 @@ async fn test_anomaly_detection_and_response() {
             common_endpoints: vec!["/api/v1/normal".to_string()],
             typical_request_sizes: (1000, 2000),
             typical_hours: vec![9, 10, 11, 14, 15, 16],
-            typical_source_ips: ["10.0.1.100".to_string()].into_iter().collect(),
+            typical_source_ips: std::iter::once("10.0.1.100".to_string()).collect(),
             established_at: chrono::Utc::now() - chrono::Duration::hours(24),
             confidence_score: 0.8,
         }),
@@ -431,7 +431,7 @@ async fn test_token_revocation_flow() {
     };
 
     let config = IdentityConfig {
-        allowed_scopes: ["test:read".to_string()].into_iter().collect(),
+        allowed_scopes: std::iter::once("test:read".to_string()).collect(),
         allowed_ips: None,
         allowed_hours: None,
     };
@@ -446,12 +446,12 @@ async fn test_token_revocation_flow() {
         let jit_request = JitAccessRequest {
             identity_id: identity.id,
             requested_scopes: vec!["test:read".to_string()],
-            justification: format!("Test request {}", i),
+            justification: format!("Test request {i}"),
             duration_seconds: 600,
             request_context: RequestContext {
                 source_ip: "10.0.1.1".to_string(),
                 user_agent: Some("test-client".to_string()),
-                request_id: format!("req-{}", i),
+                request_id: format!("req-{i}"),
                 parent_span_id: None,
                 attestation_data: None,
             },
@@ -480,11 +480,7 @@ async fn test_api_endpoint_registration() {
         allowed_scopes: vec!["read:data".to_string(), "write:logs".to_string()],
         allowed_ips: Some(vec!["10.0.0.0/8".to_string()]),
         allowed_hours: Some((8, 18)),
-        metadata: Some(
-            [("version".to_string(), "1.0".to_string())]
-                .into_iter()
-                .collect(),
-        ),
+        metadata: Some(std::iter::once(("version".to_string(), "1.0".to_string())).collect()),
     };
 
     // Verify conversion works
@@ -514,9 +510,7 @@ async fn test_jit_token_api_request() {
         source_ip: Some("10.0.1.50".to_string()),
         user_agent: Some("data-processor/2.0".to_string()),
         attestation_data: Some(
-            [("workload_id".to_string(), "pod-123".to_string())]
-                .into_iter()
-                .collect(),
+            std::iter::once(("workload_id".to_string(), "pod-123".to_string())).collect(),
         ),
     };
 
@@ -539,7 +533,7 @@ async fn test_high_volume_token_requests() {
     };
 
     let config = IdentityConfig {
-        allowed_scopes: ["api:call".to_string()].into_iter().collect(),
+        allowed_scopes: std::iter::once("api:call".to_string()).collect(),
         allowed_ips: None,
         allowed_hours: None,
     };
@@ -562,12 +556,12 @@ async fn test_high_volume_token_requests() {
             let jit_request = JitAccessRequest {
                 identity_id,
                 requested_scopes: vec!["api:call".to_string()],
-                justification: format!("Bulk request {}", i),
+                justification: format!("Bulk request {i}"),
                 duration_seconds: 300,
                 request_context: RequestContext {
                     source_ip: "10.0.1.100".to_string(),
                     user_agent: Some("bulk-client/1.0".to_string()),
-                    request_id: format!("bulk-req-{}", i),
+                    request_id: format!("bulk-req-{i}"),
                     parent_span_id: None,
                     attestation_data: None,
                 },
@@ -584,11 +578,7 @@ async fn test_high_volume_token_requests() {
     let results = futures::future::join_all(handles).await;
 
     // All should succeed
-    let success_count = results
-        .into_iter()
-        .map(|r| r.unwrap())
-        .filter(|r| r.is_ok())
-        .count();
+    let success_count = results.into_iter().flat_map(|r| r.unwrap()).count();
 
     assert_eq!(success_count, 100, "All token requests should succeed");
 }

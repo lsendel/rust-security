@@ -92,7 +92,7 @@ impl ErrorHandler {
 
         // Attempt recovery
         if let Some(recovery) = self.recovery_strategies.get(&error_type) {
-            if let Ok(()) = recovery(&error) {
+            if matches!(recovery(&error), Ok(())) {
                 info!("Successfully recovered from error: {}", error_type);
                 return AppError::Internal("Error recovered automatically".to_string());
             }
@@ -138,7 +138,7 @@ impl ErrorHandler {
     }
 
     /// Classify error severity
-    fn classify_error_severity(&self, error: &AppError) -> ErrorSeverity {
+    const fn classify_error_severity(&self, error: &AppError) -> ErrorSeverity {
         match error {
             AppError::RateLimitExceeded => ErrorSeverity::Low,
             AppError::Validation(_) | AppError::InvalidRequest { .. } => ErrorSeverity::Low,
@@ -245,7 +245,7 @@ where
 
 /// Error recovery strategies
 pub mod recovery {
-    use super::*;
+    use super::{warn, info, AppError, Arc, RwLock};
 
     /// Retry strategy with exponential backoff
     pub struct RetryStrategy {
@@ -255,7 +255,7 @@ pub mod recovery {
     }
 
     impl RetryStrategy {
-        pub fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
+        #[must_use] pub const fn new(max_attempts: u32, base_delay: std::time::Duration) -> Self {
             Self {
                 max_attempts,
                 base_delay,
@@ -315,7 +315,7 @@ pub mod recovery {
     }
 
     impl CircuitBreaker {
-        pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
+        #[must_use] pub fn new(failure_threshold: u32, recovery_timeout: std::time::Duration) -> Self {
             Self {
                 failure_count: Arc::new(RwLock::new(0)),
                 last_failure_time: Arc::new(RwLock::new(None)),
@@ -398,7 +398,7 @@ pub mod recovery {
 
 /// Error monitoring and alerting
 pub mod monitoring {
-    use super::*;
+    use super::{error, Arc, ErrorHandler, RwLock, HashMap};
 
     /// Error alert configuration
     #[derive(Debug, Clone)]
@@ -417,7 +417,7 @@ pub mod monitoring {
     }
 
     impl ErrorMonitor {
-        pub fn new(error_handler: Arc<ErrorHandler>, alerts: Vec<ErrorAlertConfig>) -> Self {
+        #[must_use] pub fn new(error_handler: Arc<ErrorHandler>, alerts: Vec<ErrorAlertConfig>) -> Self {
             Self {
                 error_handler,
                 alerts,

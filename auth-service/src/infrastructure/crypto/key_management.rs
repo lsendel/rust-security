@@ -17,7 +17,7 @@ use crate::pii_protection::redact_log;
 use crate::shared::error::AppError;
 
 /// Key lifecycle states
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KeyState {
     /// Key generated but not yet active
     Pending,
@@ -32,7 +32,7 @@ pub enum KeyState {
 }
 
 /// Key algorithms supported
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KeyAlgorithm {
     Rs256,
     Es256,
@@ -161,7 +161,7 @@ pub struct KeyManagementService {
 
 impl KeyManagementService {
     /// Create new key management service
-    pub fn new(config: KeyManagementConfig) -> Self {
+    #[must_use] pub fn new(config: KeyManagementConfig) -> Self {
         Self {
             keys: Arc::new(RwLock::new(HashMap::new())),
             active_key_id: Arc::new(RwLock::new(None)),
@@ -275,7 +275,7 @@ impl KeyManagementService {
         let mut keys = self.keys.write().await;
         let key = keys
             .get_mut(kid)
-            .ok_or_else(|| AppError::internal(&format!("Key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(format!("Key not found: {kid}")))?;
 
         // Validate key can be activated
         if key.state == KeyState::Revoked {
@@ -368,7 +368,7 @@ impl KeyManagementService {
         let mut keys = self.keys.write().await;
         let key = keys
             .get_mut(kid)
-            .ok_or_else(|| AppError::internal(&format!("Key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(format!("Key not found: {kid}")))?;
 
         key.state = KeyState::Revoked;
         key.revoked_at = Some((Self::current_timestamp(), reason.to_string()));
@@ -399,7 +399,7 @@ impl KeyManagementService {
             SecurityEventType::SuspiciousActivity,
             SecuritySeverity::High,
             "auth-service".to_string(),
-            format!("Key revoked: {}", reason),
+            format!("Key revoked: {reason}"),
         )
         .with_actor(actor.to_string())
         .with_action("key_revoke".to_string())
@@ -485,7 +485,7 @@ impl KeyManagementService {
         let keys = self.keys.read().await;
         let key = keys
             .get(kid)
-            .ok_or_else(|| AppError::internal(&format!("Active key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(format!("Active key not found: {kid}")))?;
 
         if key.state != KeyState::Active {
             return Err(AppError::internal("Active key is not in active state"));
@@ -518,7 +518,7 @@ impl KeyManagementService {
         let keys = self.keys.read().await;
         let key = keys
             .get(kid)
-            .ok_or_else(|| AppError::internal(&format!("Key not found: {}", kid)))?;
+            .ok_or_else(|| AppError::internal(format!("Key not found: {kid}")))?;
 
         // Allow verification with any non-revoked key
         if key.state == KeyState::Revoked {
@@ -529,8 +529,7 @@ impl KeyManagementService {
 
         key.decoding_key
             .as_ref()
-            .ok_or_else(|| AppError::internal("Decoding key not available"))
-            .map(|k| k.clone())
+            .ok_or_else(|| AppError::internal("Decoding key not available")).cloned()
     }
 
     /// Get JWKS document
@@ -612,14 +611,14 @@ impl KeyManagementService {
         let private_key_pem = self.generate_rsa_key_pem()?;
 
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes()).map_err(|e| {
-            AppError::internal(&format!(
+            AppError::internal(format!(
                 "Failed to create encoding key: {}",
                 redact_log(&e.to_string())
             ))
         })?;
 
         let decoding_key = DecodingKey::from_rsa_pem(private_key_pem.as_bytes()).map_err(|e| {
-            AppError::internal(&format!(
+            AppError::internal(format!(
                 "Failed to create decoding key: {}",
                 redact_log(&e.to_string())
             ))
@@ -628,14 +627,14 @@ impl KeyManagementService {
         // Create JWK (using hardcoded values for now)
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
         let modulus_bytes = hex::decode(modulus_hex).map_err(|e| {
-            AppError::internal(&format!(
+            AppError::internal(format!(
                 "Failed to decode modulus: {}",
                 redact_log(&e.to_string())
             ))
         })?;
 
         let n = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&modulus_bytes);
-        let e = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&[0x01, 0x00, 0x01]);
+        let e = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0x01, 0x00, 0x01]);
 
         let public_jwk = serde_json::json!({
             "kty": "RSA",
@@ -668,10 +667,10 @@ impl KeyManagementService {
             timestamp: Self::current_timestamp(),
             event_type,
             key_id: key_id.to_string(),
-            actor: actor.map(|s| s.to_string()),
+            actor: actor.map(std::string::ToString::to_string),
             details: HashMap::new(),
             success,
-            error_message: error_message.map(|s| s.to_string()),
+            error_message: error_message.map(std::string::ToString::to_string),
         };
 
         let mut audit_events = self.audit_events.write().await;

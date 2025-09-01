@@ -75,7 +75,7 @@ impl ClientAuthenticator {
         let password_hash = self
             .argon2
             .hash_password(client_secret.as_bytes(), &salt)
-            .map_err(|e| AppError::internal(&format!("Failed to hash client secret: {e}")))?;
+            .map_err(|e| AppError::internal(format!("Failed to hash client secret: {e}")))?;
 
         // Store hashed secret and metadata
         self.client_secrets
@@ -103,7 +103,7 @@ impl ClientAuthenticator {
             if metadata.is_active {
                 // Verify password hash
                 let parsed_hash = PasswordHash::new(hash)
-                    .map_err(|e| AppError::internal(&format!("Invalid stored hash: {e}")))?;
+                    .map_err(|e| AppError::internal(format!("Invalid stored hash: {e}")))?;
 
                 let verification_result = self
                     .argon2
@@ -291,7 +291,7 @@ impl ClientAuthenticator {
                             .argon2
                             .hash_password(client_secret.as_bytes(), &salt)
                             .map_err(|e| {
-                                AppError::internal(&format!("Failed to hash client secret: {e}"))
+                                AppError::internal(format!("Failed to hash client secret: {e}"))
                             })?;
                         self.client_secrets
                             .insert(client_id.to_string(), password_hash.to_string());
@@ -353,7 +353,7 @@ pub async fn authenticate_client(
         if let Ok(Some(api_key)) = api_key_store.get_api_key_by_prefix(&prefix).await {
             let argon2 = Argon2::default();
             let parsed_hash = PasswordHash::new(&api_key.hashed_key)
-                .map_err(|e| AppError::internal(&format!("Invalid stored hash: {e}")))?;
+                .map_err(|e| AppError::internal(format!("Invalid stored hash: {e}")))?;
 
             if argon2
                 .verify_password(client_secret.as_bytes(), &parsed_hash)

@@ -20,9 +20,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app_state = AppState {
@@ -44,7 +47,7 @@ async fn spawn_app() -> String {
 
     let router = app(app_state);
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -54,7 +57,7 @@ async fn scim_requires_basic_auth() {
 
     // Missing auth
     let resp = client
-        .get(format!("{}/scim/v2/Users", base))
+        .get(format!("{base}/scim/v2/Users"))
         .send()
         .await
         .unwrap();
@@ -63,8 +66,8 @@ async fn scim_requires_basic_auth() {
     // Valid auth
     let creds = base64::engine::general_purpose::STANDARD.encode("scimuser:scimpass");
     let resp2 = client
-        .get(format!("{}/scim/v2/Users", base))
-        .header("Authorization", format!("Basic {}", creds))
+        .get(format!("{base}/scim/v2/Users"))
+        .header("Authorization", format!("Basic {creds}"))
         .send()
         .await
         .unwrap();

@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use crate::domain::value_objects::{Email, PasswordHash, UserId};
 
 /// User entity representing a registered user in the system.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, sqlx::FromRow)]
 pub struct User {
     pub id: UserId,
     pub email: Email,
@@ -26,7 +26,7 @@ pub struct User {
 
 impl User {
     /// Create a new user
-    pub fn new(
+    #[must_use] pub fn new(
         id: UserId,
         email: Email,
         password_hash: PasswordHash,
@@ -65,12 +65,12 @@ impl User {
     }
 
     /// Check if user has a specific role
-    pub fn has_role(&self, role: &str) -> bool {
+    #[must_use] pub fn has_role(&self, role: &str) -> bool {
         self.roles.contains(role)
     }
 
     /// Check if user has any of the specified roles
-    pub fn has_any_role(&self, roles: &[&str]) -> bool {
+    #[must_use] pub fn has_any_role(&self, roles: &[&str]) -> bool {
         roles.iter().any(|role| self.has_role(role))
     }
 
@@ -103,7 +103,7 @@ impl User {
     }
 
     /// Check if password reset token is valid
-    pub fn is_password_reset_token_valid(&self) -> bool {
+    #[must_use] pub fn is_password_reset_token_valid(&self) -> bool {
         if let (Some(_), Some(expires)) = (&self.password_reset_token, self.password_reset_expires)
         {
             Utc::now() < expires

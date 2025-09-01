@@ -1,6 +1,6 @@
 //! JWKS (JSON Web Key Set) endpoint implementation with hardening
 //!
-//! Provides secure JWKS endpoint with ETag support, caching headers,
+//! Provides secure JWKS endpoint with `ETag` support, caching headers,
 //! and CDN compatibility for efficient key distribution.
 
 use axum::{
@@ -59,14 +59,14 @@ pub struct JwksCache {
 }
 
 impl JwksCache {
-    pub fn new(ttl_seconds: i64) -> Self {
+    #[must_use] pub fn new(ttl_seconds: i64) -> Self {
         Self {
             entries: Arc::new(RwLock::new(HashMap::new())),
             default_ttl: Duration::seconds(ttl_seconds),
         }
     }
 
-    /// Get cached JWKS with ETag validation
+    /// Get cached JWKS with `ETag` validation
     pub async fn get(&self, key: &str, if_none_match: Option<&str>) -> Option<JwksCacheEntry> {
         let entries = self.entries.read().await;
 
@@ -92,7 +92,7 @@ impl JwksCache {
         None
     }
 
-    /// Store JWKS in cache with calculated ETag
+    /// Store JWKS in cache with calculated `ETag`
     pub async fn set(&self, key: String, jwks: JwksResponse) -> JwksCacheEntry {
         let jwks_json = serde_json::to_string(&jwks).unwrap_or_default();
         let etag = calculate_etag(&jwks_json);
@@ -127,12 +127,12 @@ impl JwksCache {
     }
 }
 
-/// Calculate ETag for content
+/// Calculate `ETag` for content
 fn calculate_etag(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     let result = hasher.finalize();
-    format!("W/\"{:x}\"", result)
+    format!("W/\"{result:x}\"")
 }
 
 /// JWKS query parameters

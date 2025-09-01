@@ -1,4 +1,4 @@
-//! Comprehensive OpenAPI Endpoints Test Suite
+//! Comprehensive `OpenAPI` Endpoints Test Suite
 //! Tests all discovered API endpoints in the Rust Security Platform
 
 use axum::http::StatusCode;
@@ -470,7 +470,7 @@ async fn test_all_endpoints_comprehensive() {
     for (method, url, body) in endpoints {
         let start = std::time::Instant::now();
 
-        let result = match timeout(TEST_TIMEOUT, client.request(&method, &url, body.clone())).await
+        let result = match timeout(TEST_TIMEOUT, client.request(method, &url, body.clone())).await
         {
             Ok(Ok(response)) => {
                 let status = response.status();
@@ -525,7 +525,7 @@ async fn test_all_endpoints_comprehensive() {
     }
 
     println!("\n=== Summary ===");
-    println!("Total: {}", total);
+    println!("Total: {total}");
     println!(
         "Successful: {} ({:.1}%)",
         successful,
@@ -566,8 +566,8 @@ async fn test_endpoint_performance() {
     let max_time = response_times.iter().max().unwrap();
 
     println!("Health endpoint performance:");
-    println!("  Average response time: {}ms", avg_time);
-    println!("  Max response time: {}ms", max_time);
+    println!("  Average response time: {avg_time}ms");
+    println!("  Max response time: {max_time}ms");
 
     // Assert reasonable performance
     assert!(avg_time < 100, "Average response time too high");
@@ -600,7 +600,7 @@ async fn test_concurrent_requests() {
         }
     }
 
-    println!("Concurrent requests: {}/10 successful", successes);
+    println!("Concurrent requests: {successes}/10 successful");
     assert!(successes >= 8, "Too many concurrent requests failed");
 }
 

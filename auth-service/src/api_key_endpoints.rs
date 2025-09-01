@@ -78,7 +78,7 @@ async fn list_api_keys(
         .api_key_store
         .list_api_keys()
         .await
-        .map_err(|e| AppError::internal(&format!("Failed to list API keys: {e}")))?;
+        .map_err(|e| AppError::internal(format!("Failed to list API keys: {e}")))?;
 
     Ok(Json(keys))
 }
@@ -101,7 +101,7 @@ async fn get_api_key(
         .api_key_store
         .get_api_key_by_prefix(&prefix)
         .await
-        .map_err(|e| AppError::internal(&format!("Failed to get API key: {e}")))?
+        .map_err(|e| AppError::internal(format!("Failed to get API key: {e}")))?
         .ok_or(crate::shared::error::AppError::NotFound("API Key".to_string()))?;
 
     let details = ApiKeyDetails {
@@ -148,7 +148,7 @@ async fn create_api_key(
     let argon2 = Argon2::default();
     let hashed_key = argon2
         .hash_password(api_key_string.as_bytes(), &salt)
-        .map_err(|e| AppError::internal(&format!("Failed to hash API key: {e}")))?
+        .map_err(|e| AppError::internal(format!("Failed to hash API key: {e}")))?
         .to_string();
 
     // 4. Store the hashed key, prefix, client_id, and other metadata in the database.
@@ -162,7 +162,7 @@ async fn create_api_key(
             payload.expires_at,
         )
         .await
-        .map_err(|e| AppError::internal(&format!("Failed to create API key: {e}")))?;
+        .map_err(|e| AppError::internal(format!("Failed to create API key: {e}")))?;
 
     // 5. Return the full, unhashed key to the user.
     Ok(Json(CreateApiKeyResponse {

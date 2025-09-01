@@ -12,7 +12,7 @@ use rand::Rng;
 /// Configuration for password hashing parameters
 #[derive(Debug, Clone)]
 pub struct PasswordHashConfig {
-    /// Memory cost parameter (in KiB)
+    /// Memory cost parameter (in `KiB`)
     pub memory_cost: u32,
     /// Time cost parameter (iterations)
     pub time_cost: u32,
@@ -43,14 +43,20 @@ pub struct PasswordService {
     argon2: Argon2<'static>,
 }
 
+impl Default for PasswordService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PasswordService {
     /// Create a new password service with default configuration
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::with_config(PasswordHashConfig::default())
     }
 
     /// Create a new password service with custom configuration
-    pub fn with_config(config: PasswordHashConfig) -> Self {
+    #[must_use] pub fn with_config(config: PasswordHashConfig) -> Self {
         let params = Params::new(
             config.memory_cost,
             config.time_cost,
@@ -138,7 +144,7 @@ impl PasswordService {
     }
 
     /// Check if a password hash needs rehashing (e.g., due to parameter changes)
-    pub fn needs_rehash(&self, hash: &PasswordHash) -> bool {
+    #[must_use] pub fn needs_rehash(&self, hash: &PasswordHash) -> bool {
         let hash_str = hash.as_str();
 
         // Check if it uses the current algorithm and parameters
@@ -156,7 +162,7 @@ impl PasswordService {
 }
 
 /// Constant-time string comparison for security-sensitive operations
-pub fn constant_time_compare(a: &str, b: &str) -> bool {
+#[must_use] pub fn constant_time_compare(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }

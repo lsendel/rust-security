@@ -3,25 +3,23 @@
 //! End-to-end tests covering the full authentication flow,
 //! including user registration, login, session management, and security features.
 
-
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 
-
-use crate::domain::value_objects::{Email, UserId};
-use crate::services::{AuthService, TokenService, UserService};
-use crate::services::auth_service::{AuthServiceTrait, LoginRequest};
-use crate::services::token_service::TokenServiceTrait;
-use crate::services::user_service::{UserServiceTrait, RegisterRequest};
-use crate::shared::error::AppError;
-use crate::shared::crypto::CryptoService;
-use crate::tests::{mocks, utils};
 use crate::domain::entities::{Token, TokenType};
 use crate::domain::repositories::token_repository::{TokenRepository, TokenRepositoryError};
+use crate::domain::value_objects::{Email, UserId};
+use crate::services::auth_service::{AuthServiceTrait, LoginRequest};
+use crate::services::token_service::TokenServiceTrait;
+use crate::services::user_service::{RegisterRequest, UserServiceTrait};
+use crate::services::{AuthService, TokenService, UserService};
+use crate::shared::crypto::CryptoService;
+use crate::shared::error::AppError;
+use crate::tests::{mocks, utils};
+use crate::{assert_err, assert_ok};
 use std::collections::HashMap;
 use std::sync::RwLock;
-use crate::{assert_err, assert_ok};
 
 /// Simple in-memory token repository for testing
 struct InMemoryTokenRepository {
@@ -45,12 +43,24 @@ impl TokenRepository for InMemoryTokenRepository {
 
     async fn find_by_user_id(&self, user_id: &UserId) -> Result<Vec<Token>, TokenRepositoryError> {
         let tokens = self.tokens.read().unwrap();
-        Ok(tokens.values().filter(|t| t.user_id == *user_id).cloned().collect())
+        Ok(tokens
+            .values()
+            .filter(|t| t.user_id == *user_id)
+            .cloned()
+            .collect())
     }
 
-    async fn find_by_user_and_type(&self, user_id: &UserId, token_type: &TokenType) -> Result<Vec<Token>, TokenRepositoryError> {
+    async fn find_by_user_and_type(
+        &self,
+        user_id: &UserId,
+        token_type: &TokenType,
+    ) -> Result<Vec<Token>, TokenRepositoryError> {
         let tokens = self.tokens.read().unwrap();
-        Ok(tokens.values().filter(|t| t.user_id == *user_id && t.token_type == *token_type).cloned().collect())
+        Ok(tokens
+            .values()
+            .filter(|t| t.user_id == *user_id && t.token_type == *token_type)
+            .cloned()
+            .collect())
     }
 
     async fn save(&self, token: &Token) -> Result<(), TokenRepositoryError> {
@@ -77,7 +87,11 @@ impl TokenRepository for InMemoryTokenRepository {
         Ok(())
     }
 
-    async fn delete_by_user_and_type(&self, user_id: &UserId, token_type: &TokenType) -> Result<(), TokenRepositoryError> {
+    async fn delete_by_user_and_type(
+        &self,
+        user_id: &UserId,
+        token_type: &TokenType,
+    ) -> Result<(), TokenRepositoryError> {
         let mut tokens = self.tokens.write().unwrap();
         tokens.retain(|_, token| !(token.user_id == *user_id && token.token_type == *token_type));
         Ok(())
@@ -110,12 +124,17 @@ impl TokenRepository for InMemoryTokenRepository {
 
     async fn exists_and_active(&self, token_hash: &str) -> Result<bool, TokenRepositoryError> {
         let tokens = self.tokens.read().unwrap();
-        Ok(tokens.get(token_hash).map_or(false, |t| t.is_active()))
+        Ok(tokens
+            .get(token_hash)
+            .is_some_and(super::super::domain::entities::token::Token::is_active))
     }
 
     async fn count_active_by_user(&self, user_id: &UserId) -> Result<i64, TokenRepositoryError> {
         let tokens = self.tokens.read().unwrap();
-        let count = tokens.values().filter(|t| t.user_id == *user_id && t.is_active()).count();
+        let count = tokens
+            .values()
+            .filter(|t| t.user_id == *user_id && t.is_active())
+            .count();
         Ok(count as i64)
     }
 }
@@ -127,7 +146,9 @@ async fn test_full_authentication_flow() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_integration_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_integration_tests".to_string(),
+    ));
 
     // Create services
     let auth_service = Arc::new(AuthService::new(
@@ -142,7 +163,8 @@ async fn test_full_authentication_flow() {
     ));
 
     // Create token repository for TokenService
-    let token_repo: crate::domain::repositories::DynTokenRepository = Arc::new(InMemoryTokenRepository::new());
+    let token_repo: crate::domain::repositories::DynTokenRepository =
+        Arc::new(InMemoryTokenRepository::new());
     let token_service = Arc::new(TokenService::new(
         token_repo,
         session_repo,
@@ -159,9 +181,7 @@ async fn test_full_authentication_flow() {
         password: password.to_string(),
         name: name.to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -170,9 +190,7 @@ async fn test_full_authentication_flow() {
         email: email.as_str().to_string(),
         password: password.to_string(),
     };
-    let login_result = auth_service
-        .login(login_request)
-        .await;
+    let login_result = auth_service.login(login_request).await;
 
     assert_ok!(login_result);
     let login_response = login_result.unwrap();
@@ -218,7 +236,9 @@ async fn test_full_authentication_flow() {
     assert_ok!(logout_result);
 
     // Verify session is invalidated by attempting to validate it
-    let session_validation = auth_service.validate_session(&login_response.session_id).await;
+    let session_validation = auth_service
+        .validate_session(&login_response.session_id)
+        .await;
 
     assert_err!(session_validation);
 }
@@ -233,7 +253,9 @@ async fn test_concurrent_authentication_load() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_load_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_load_tests".to_string(),
+    ));
 
     // Create services
     let auth_service = Arc::new(AuthService::new(
@@ -245,23 +267,18 @@ async fn test_concurrent_authentication_load() {
     // Pre-register users
     let mut users = Vec::new();
     for i in 0..CONCURRENT_USERS {
-        let email = Email::new(format!("loadtest{}@example.com", i)).unwrap();
-        let password = format!("Password123!{}", i);
-        let name = format!("Load Test User {}", i);
+        let email = Email::new(format!("loadtest{i}@example.com")).unwrap();
+        let password = format!("Password123!{i}");
+        let name = format!("Load Test User {i}");
 
-        let user_service = UserService::new(
-            Arc::clone(&user_repo),
-            Arc::clone(&crypto_service),
-        );
+        let user_service = UserService::new(Arc::clone(&user_repo), Arc::clone(&crypto_service));
 
         let register_request = RegisterRequest {
             email: email.as_str().to_string(),
             password: password.clone(),
             name,
         };
-        let register_result = user_service
-            .register(register_request)
-            .await;
+        let register_result = user_service.register(register_request).await;
 
         assert_ok!(register_result);
 
@@ -286,9 +303,7 @@ async fn test_concurrent_authentication_load() {
                         email: email.as_str().to_string(),
                         password: password.clone(),
                     };
-                    let auth_result = auth_svc
-                        .login(login_request)
-                        .await;
+                    let auth_result = auth_svc.login(login_request).await;
 
                     match auth_result {
                         Ok(login_response) => {
@@ -324,8 +339,7 @@ async fn test_concurrent_authentication_load() {
         // Each user should have successful authentications
         assert!(
             success > 0,
-            "User {} had no successful authentications",
-            user_idx
+            "User {user_idx} had no successful authentications"
         );
     }
 
@@ -334,17 +348,16 @@ async fn test_concurrent_authentication_load() {
     let requests_per_second = total_requests as f64 / total_time.as_secs_f64();
 
     println!("Load test results:");
-    println!("Total requests: {}", total_requests);
-    println!("Successful: {}", total_success);
-    println!("Errors: {}", total_error);
-    println!("Total time: {:?}", total_time);
-    println!("Requests/sec: {:.2}", requests_per_second);
+    println!("Total requests: {total_requests}");
+    println!("Successful: {total_success}");
+    println!("Errors: {total_error}");
+    println!("Total time: {total_time:?}");
+    println!("Requests/sec: {requests_per_second:.2}");
 
     // Verify performance requirements
     assert!(
         requests_per_second > 100.0,
-        "Throughput too low: {:.2} req/sec",
-        requests_per_second
+        "Throughput too low: {requests_per_second:.2} req/sec",
     );
     assert!(
         total_success > total_error * 10,
@@ -361,7 +374,9 @@ async fn test_security_integration() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service and services
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_security_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_security_tests".to_string(),
+    ));
     let auth_service = Arc::new(AuthService::new(
         Arc::clone(&user_repo),
         Arc::clone(&session_repo),
@@ -373,19 +388,14 @@ async fn test_security_integration() {
     let wrong_password = "WrongPassword123!";
 
     // Register user first
-    let user_service = UserService::new(
-        Arc::clone(&user_repo),
-        Arc::clone(&crypto_service),
-    );
+    let user_service = UserService::new(Arc::clone(&user_repo), Arc::clone(&crypto_service));
 
     let register_request = RegisterRequest {
         email: email.as_str().to_string(),
         password: "CorrectPassword123!".to_string(),
         name: "Security Test".to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -396,9 +406,7 @@ async fn test_security_integration() {
             email: email.as_str().to_string(),
             password: wrong_password.to_string(),
         };
-        let auth_result = auth_service
-            .login(login_request)
-            .await;
+        let auth_result = auth_service.login(login_request).await;
 
         if auth_result.is_err() {
             failure_count += 1;
@@ -413,16 +421,14 @@ async fn test_security_integration() {
         email: email.as_str().to_string(),
         password: "CorrectPassword123!".to_string(),
     };
-    let success_result = auth_service
-        .login(login_request)
-        .await;
+    let success_result = auth_service.login(login_request).await;
 
     // This should succeed (depending on rate limiting implementation)
     // Note: In a real system, this might be rate limited after failures
     match success_result {
         Ok(_) => println!("Successful login after failures"),
         Err(AppError::RateLimitExceeded) => println!("Rate limited after brute force attempts"),
-        Err(e) => panic!("Unexpected error: {:?}", e),
+        Err(e) => panic!("Unexpected error: {e:?}"),
     }
 }
 
@@ -433,7 +439,9 @@ async fn test_session_management_integration() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service and services
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_session_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_session_tests".to_string(),
+    ));
     let auth_service = Arc::new(AuthService::new(
         Arc::clone(&user_repo),
         Arc::clone(&session_repo),
@@ -441,7 +449,8 @@ async fn test_session_management_integration() {
     ));
 
     // Create token repository for TokenService
-    let token_repo: crate::domain::repositories::DynTokenRepository = Arc::new(InMemoryTokenRepository::new());
+    let token_repo: crate::domain::repositories::DynTokenRepository =
+        Arc::new(InMemoryTokenRepository::new());
     let token_service = Arc::new(TokenService::new(
         token_repo,
         session_repo,
@@ -462,9 +471,7 @@ async fn test_session_management_integration() {
         password: password.to_string(),
         name: "Session Test".to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -472,9 +479,7 @@ async fn test_session_management_integration() {
         email: email.as_str().to_string(),
         password: password.to_string(),
     };
-    let login_result = auth_service
-        .login(login_request)
-        .await;
+    let login_result = auth_service.login(login_request).await;
 
     assert_ok!(login_result);
     let login_response = login_result.unwrap();
@@ -484,18 +489,14 @@ async fn test_session_management_integration() {
     let user_id = UserId::from_string(login_response.user.id.clone()).unwrap();
 
     // Test token service functionality
-    let _user_tokens = token_service
-        .get_user_tokens(&user_id)
-        .await
-        .unwrap();
+    let _user_tokens = token_service.get_user_tokens(&user_id).await.unwrap();
 
     // Test session cleanup (token service doesn't have get_user_sessions)
     let cleanup_result = token_service.cleanup_expired_tokens().await;
 
     assert_ok!(cleanup_result);
     let cleaned_count = cleanup_result.unwrap();
-    println!("Cleaned up {} expired tokens", cleaned_count);
-
+    println!("Cleaned up {cleaned_count} expired tokens");
 
     // Test concurrent session limit (if implemented)
     // This would test that a user can't have too many active sessions
@@ -506,7 +507,9 @@ async fn test_session_management_integration() {
     assert_ok!(logout_result);
 
     // Verify session is invalidated
-    let session_validation = auth_service.validate_session(&login_response.session_id).await;
+    let session_validation = auth_service
+        .validate_session(&login_response.session_id)
+        .await;
 
     assert_err!(session_validation);
 }
@@ -518,7 +521,9 @@ async fn test_token_lifecycle_integration() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service and services
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_token_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_token_tests".to_string(),
+    ));
     let auth_service = Arc::new(AuthService::new(
         Arc::clone(&user_repo),
         Arc::clone(&session_repo),
@@ -526,7 +531,8 @@ async fn test_token_lifecycle_integration() {
     ));
 
     // Create token repository for TokenService
-    let token_repo: crate::domain::repositories::DynTokenRepository = Arc::new(InMemoryTokenRepository::new());
+    let token_repo: crate::domain::repositories::DynTokenRepository =
+        Arc::new(InMemoryTokenRepository::new());
     let token_service = Arc::new(TokenService::new(
         token_repo,
         Arc::clone(&session_repo),
@@ -537,19 +543,14 @@ async fn test_token_lifecycle_integration() {
     let email = utils::random_email();
     let password = "TokenTest123!";
 
-    let user_service = UserService::new(
-        Arc::clone(&user_repo),
-        Arc::clone(&crypto_service),
-    );
+    let user_service = UserService::new(Arc::clone(&user_repo), Arc::clone(&crypto_service));
 
     let register_request = RegisterRequest {
         email: email.as_str().to_string(),
         password: password.to_string(),
         name: "Token Test".to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -557,9 +558,7 @@ async fn test_token_lifecycle_integration() {
         email: email.as_str().to_string(),
         password: password.to_string(),
     };
-    let login_result = auth_service
-        .login(login_request)
-        .await;
+    let login_result = auth_service.login(login_request).await;
 
     assert_ok!(login_result);
     let login_response = login_result.unwrap();
@@ -588,7 +587,7 @@ async fn test_token_lifecycle_integration() {
     let cleanup_result = token_service.cleanup_expired_tokens().await;
     assert_ok!(cleanup_result);
     let cleaned_count = cleanup_result.unwrap();
-    println!("Cleaned up {} expired tokens", cleaned_count);
+    println!("Cleaned up {cleaned_count} expired tokens");
 }
 
 /// Error handling integration test
@@ -598,7 +597,9 @@ async fn test_error_handling_integration() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service and services
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_error_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_error_tests".to_string(),
+    ));
     let auth_service = Arc::new(AuthService::new(
         Arc::clone(&user_repo),
         Arc::clone(&session_repo),
@@ -610,9 +611,7 @@ async fn test_error_handling_integration() {
         email: "invalid-email".to_string(),
         password: "password".to_string(),
     };
-    let invalid_email_result = auth_service
-        .login(invalid_login_request)
-        .await;
+    let invalid_email_result = auth_service.login(invalid_login_request).await;
 
     assert_err!(invalid_email_result);
 
@@ -621,27 +620,20 @@ async fn test_error_handling_integration() {
         email: utils::random_email().as_str().to_string(),
         password: "password".to_string(),
     };
-    let nonexistent_user_result = auth_service
-        .login(nonexistent_login_request)
-        .await;
+    let nonexistent_user_result = auth_service.login(nonexistent_login_request).await;
 
     assert_err!(nonexistent_user_result);
 
     // Test wrong password
     let email = utils::random_email();
-    let user_service = UserService::new(
-        Arc::clone(&user_repo),
-        Arc::clone(&crypto_service),
-    );
+    let user_service = UserService::new(Arc::clone(&user_repo), Arc::clone(&crypto_service));
 
     let register_request = RegisterRequest {
         email: email.as_str().to_string(),
         password: "CorrectPassword123!".to_string(),
         name: "Error Test".to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -649,23 +641,20 @@ async fn test_error_handling_integration() {
         email: email.as_str().to_string(),
         password: "WrongPassword123!".to_string(),
     };
-    let wrong_password_result = auth_service
-        .login(wrong_password_request)
-        .await;
+    let wrong_password_result = auth_service.login(wrong_password_request).await;
 
     assert_err!(wrong_password_result);
 
     // Test malformed tokens
-    let token_repo: crate::domain::repositories::DynTokenRepository = Arc::new(InMemoryTokenRepository::new());
+    let token_repo: crate::domain::repositories::DynTokenRepository =
+        Arc::new(InMemoryTokenRepository::new());
     let token_service = TokenService::new(
         token_repo,
         Arc::clone(&session_repo),
         Arc::clone(&crypto_service),
     );
 
-    let malformed_token_result = token_service
-        .validate_token("malformed.jwt.token")
-        .await;
+    let malformed_token_result = token_service.validate_token("malformed.jwt.token").await;
 
     assert_err!(malformed_token_result);
 
@@ -680,7 +669,9 @@ async fn test_performance_baselines() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service and services
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_perf_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_perf_tests".to_string(),
+    ));
     let auth_service = Arc::new(AuthService::new(
         Arc::clone(&user_repo),
         Arc::clone(&session_repo),
@@ -691,19 +682,14 @@ async fn test_performance_baselines() {
     let email = utils::random_email();
     let password = "PerfTest123!";
 
-    let user_service = UserService::new(
-        Arc::clone(&user_repo),
-        Arc::clone(&crypto_service),
-    );
+    let user_service = UserService::new(Arc::clone(&user_repo), Arc::clone(&crypto_service));
 
     let register_request = RegisterRequest {
         email: email.as_str().to_string(),
         password: password.to_string(),
         name: "Performance Test".to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -716,9 +702,7 @@ async fn test_performance_baselines() {
             email: email.as_str().to_string(),
             password: password.to_string(),
         };
-        let auth_result = auth_service
-            .login(login_request)
-            .await;
+        let auth_result = auth_service.login(login_request).await;
 
         assert_ok!(auth_result);
     }
@@ -727,21 +711,19 @@ async fn test_performance_baselines() {
     let avg_time = total_time / iterations;
 
     println!("Performance test results:");
-    println!("Iterations: {}", iterations);
-    println!("Total time: {:?}", total_time);
-    println!("Average time per authentication: {:?}", avg_time);
+    println!("Iterations: {iterations}");
+    println!("Total time: {total_time:?}");
+    println!("Average time per authentication: {avg_time:?}");
 
     // Performance assertions (adjust based on system capabilities)
     assert!(
         avg_time < Duration::from_millis(50),
-        "Authentication too slow: {:?}",
-        avg_time
+        "Authentication too slow: {avg_time:?}",
     );
 
     assert!(
         total_time < Duration::from_secs(10),
-        "Total authentication time too high: {:?}",
-        total_time
+        "Total authentication time too high: {total_time:?}",
     );
 }
 
@@ -755,7 +737,9 @@ async fn test_http_api_integration() {
     let (user_repo, session_repo) = mocks::create_mock_repositories();
 
     // Create crypto service and services
-    let crypto_service = Arc::new(CryptoService::new("test_jwt_secret_for_http_tests".to_string()));
+    let crypto_service = Arc::new(CryptoService::new(
+        "test_jwt_secret_for_http_tests".to_string(),
+    ));
     let auth_service = Arc::new(AuthService::new(
         Arc::clone(&user_repo),
         Arc::clone(&session_repo),
@@ -767,19 +751,14 @@ async fn test_http_api_integration() {
     let password = "HttpTest123!";
 
     // Register user (simulates POST /api/v1/auth/register)
-    let user_service = UserService::new(
-        Arc::clone(&user_repo),
-        Arc::clone(&crypto_service),
-    );
+    let user_service = UserService::new(Arc::clone(&user_repo), Arc::clone(&crypto_service));
 
     let register_request = RegisterRequest {
         email: email.as_str().to_string(),
         password: password.to_string(),
         name: "HTTP Test".to_string(),
     };
-    let register_result = user_service
-        .register(register_request)
-        .await;
+    let register_result = user_service.register(register_request).await;
 
     assert_ok!(register_result);
 
@@ -788,9 +767,7 @@ async fn test_http_api_integration() {
         email: email.as_str().to_string(),
         password: password.to_string(),
     };
-    let login_result = auth_service
-        .login(login_request)
-        .await;
+    let login_result = auth_service.login(login_request).await;
 
     assert_ok!(login_result);
     let tokens = login_result.unwrap();
@@ -802,7 +779,8 @@ async fn test_http_api_integration() {
     // Note: LoginResponse doesn't have token_type field
 
     // Simulate token validation (simulates middleware)
-    let token_repo: crate::domain::repositories::DynTokenRepository = Arc::new(InMemoryTokenRepository::new());
+    let token_repo: crate::domain::repositories::DynTokenRepository =
+        Arc::new(InMemoryTokenRepository::new());
     let token_service = TokenService::new(
         token_repo,
         Arc::clone(&session_repo),
@@ -818,7 +796,7 @@ async fn test_http_api_integration() {
     let token = validation_result.unwrap();
     let user_id = &token.user_id;
 
-    let profile_result = user_service.get_profile(&user_id).await;
+    let profile_result = user_service.get_profile(user_id).await;
 
     assert_ok!(profile_result);
 

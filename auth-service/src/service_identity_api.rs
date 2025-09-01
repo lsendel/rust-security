@@ -134,6 +134,10 @@ pub struct ServiceIdentityApiState {
 // API Handlers
 
 /// POST /api/v1/identities - Register new service identity
+///
+/// # Errors
+///
+/// Returns an [`ApiError`] when validation fails or the underlying manager returns an error.
 pub async fn register_identity(
     State(state): State<Arc<ServiceIdentityApiState>>,
     Json(request): Json<RegisterIdentityRequest>,
@@ -174,6 +178,10 @@ pub async fn register_identity(
 }
 
 /// POST /api/v1/tokens/jit - Request JIT token
+///
+/// # Errors
+///
+/// Returns an [`ApiError`] if the identity is not found, suspended, anomalous, or on internal errors.
 pub async fn request_jit_token(
     State(state): State<Arc<ServiceIdentityApiState>>,
     Json(request): Json<JitTokenRequest>,
@@ -226,6 +234,10 @@ pub async fn request_jit_token(
 }
 
 /// GET /api/v1/identities/:id - Get identity details
+///
+/// # Errors
+///
+/// Always returns [`ApiError::NotImplemented`] in the current stub implementation.
 pub async fn get_identity(
     State(_state): State<Arc<ServiceIdentityApiState>>,
     Path(_id): Path<Uuid>,
@@ -235,6 +247,10 @@ pub async fn get_identity(
 }
 
 /// GET /api/v1/identities - List identities
+///
+/// # Errors
+///
+/// Always returns [`ApiError::NotImplemented`] in the current stub implementation.
 pub async fn list_identities(
     State(_state): State<Arc<ServiceIdentityApiState>>,
     Query(_query): Query<ListIdentitiesQuery>,
@@ -244,6 +260,10 @@ pub async fn list_identities(
 }
 
 /// POST /api/v1/identities/:id/rotate - Rotate credentials
+///
+/// # Errors
+///
+/// Returns [`ApiError`] on rotation or token revocation failures.
 pub async fn rotate_credentials(
     State(state): State<Arc<ServiceIdentityApiState>>,
     Path(id): Path<Uuid>,
@@ -273,6 +293,10 @@ pub async fn rotate_credentials(
 }
 
 /// DELETE /api/v1/identities/:id/tokens - Revoke all tokens
+///
+/// # Errors
+///
+/// Returns [`ApiError`] if token revocation fails.
 pub async fn revoke_tokens(
     State(state): State<Arc<ServiceIdentityApiState>>,
     Path(id): Path<Uuid>,
@@ -301,6 +325,10 @@ pub struct RevokeTokensResponse {
 }
 
 /// GET /api/v1/identities/:id/metrics - Get identity metrics
+///
+/// # Errors
+///
+/// Always returns [`ApiError::NotImplemented`] in the current stub implementation.
 pub async fn get_identity_metrics(
     State(_state): State<Arc<ServiceIdentityApiState>>,
     Path(_id): Path<Uuid>,
@@ -310,6 +338,10 @@ pub async fn get_identity_metrics(
 }
 
 /// POST /api/v1/identities/:id/baseline - Establish behavioral baseline
+///
+/// # Errors
+///
+/// Returns [`ApiError`] when baseline establishment fails or is insufficient.
 pub async fn establish_baseline(
     State(state): State<Arc<ServiceIdentityApiState>>,
     Path(id): Path<Uuid>,
@@ -326,6 +358,11 @@ pub async fn establish_baseline(
 
 // Helper functions
 
+/// Convert a DTO into a domain `IdentityType`.
+///
+/// # Errors
+///
+/// Returns [`ApiError::ValidationError`] if the environment is invalid.
 pub fn convert_identity_type(dto: IdentityTypeDto) -> Result<IdentityType, ApiError> {
     match dto {
         IdentityTypeDto::ServiceAccount {
@@ -374,9 +411,10 @@ pub fn convert_identity_type(dto: IdentityTypeDto) -> Result<IdentityType, ApiEr
 }
 
 fn generate_secure_api_key() -> String {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let key_bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    use rand::rngs::OsRng;
+    use rand::RngCore;
+    let mut key_bytes = vec![0u8; 32];
+    OsRng.fill_bytes(&mut key_bytes);
     format!(
         "sk_{}",
         base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(&key_bytes)

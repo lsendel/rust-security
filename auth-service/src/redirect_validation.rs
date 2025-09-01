@@ -166,9 +166,7 @@ impl RedirectUriValidator {
         redirect_uri: &str,
     ) -> Result<(), crate::shared::error::AppError> {
         let client_uris = self.client_redirect_uris.get(client_id).ok_or_else(|| {
-            crate::shared::error::AppError::UnauthorizedClient(
-                "Client not registered".to_string()
-            )
+            crate::shared::error::AppError::UnauthorizedClient("Client not registered".to_string())
         })?;
 
         // Exact match required for security
@@ -533,7 +531,7 @@ mod tests {
         for attack_path in attack_paths {
             let result =
                 validator.register_client_uris("test_client", vec![attack_path.to_string()]);
-            assert!(result.is_err(), "Should reject path: {}", attack_path);
+            assert!(result.is_err(), "Should reject path: {attack_path}");
         }
     }
 
@@ -559,11 +557,7 @@ mod tests {
 
         for attempt in redirect_attempts {
             let result = validator.validate_redirect_uri("test_client", attempt);
-            assert!(
-                result.is_err(),
-                "Should reject redirect attempt: {}",
-                attempt
-            );
+            assert!(result.is_err(), "Should reject redirect attempt: {attempt}");
         }
     }
 
@@ -582,7 +576,7 @@ mod tests {
             let result = validator.register_client_uris("test_client", vec![domain.to_string()]);
             // These might pass basic validation but should be caught by TLD validation
             // or manual review processes
-            println!("Testing spoofed domain: {} - Result: {:?}", domain, result);
+            println!("Testing spoofed domain: {domain} - Result: {result:?}");
         }
     }
 
@@ -597,7 +591,7 @@ mod tests {
         );
 
         // This should pass if the TLD is valid
-        println!("Punycode domain result: {:?}", result);
+        println!("Punycode domain result: {result:?}");
     }
 
     #[test]
@@ -617,9 +611,9 @@ mod tests {
             let result = validator.register_client_uris("test_client", vec![uri.to_string()]);
 
             if should_pass {
-                assert!(result.is_ok(), "Should allow URI: {}", uri);
+                assert!(result.is_ok(), "Should allow URI: {uri}");
             } else {
-                assert!(result.is_err(), "Should reject URI: {}", uri);
+                assert!(result.is_err(), "Should reject URI: {uri}");
             }
         }
     }
@@ -636,7 +630,7 @@ mod tests {
 
         for domain in shortener_domains {
             let result = validator.register_client_uris("test_client", vec![domain.to_string()]);
-            assert!(result.is_err(), "Should block URL shortener: {}", domain);
+            assert!(result.is_err(), "Should block URL shortener: {domain}");
         }
     }
 }
@@ -719,7 +713,7 @@ mod integration_tests {
 
         for attack in attack_vectors {
             let result = validator.register_client_uris("attack_client", vec![attack.to_string()]);
-            assert!(result.is_err(), "Should block attack vector: {}", attack);
+            assert!(result.is_err(), "Should block attack vector: {attack}");
         }
     }
 
@@ -738,7 +732,7 @@ mod integration_tests {
 
         for uri in legitimate_uris {
             let result = validator.register_client_uris("legit_client", vec![uri.to_string()]);
-            assert!(result.is_ok(), "Should allow legitimate URI: {}", uri);
+            assert!(result.is_ok(), "Should allow legitimate URI: {uri}");
         }
     }
 }

@@ -7,11 +7,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 // Import our storage modules
 use auth_service::storage::cache::{LruTokenCache, TokenCacheConfig};
-use auth_service::storage::session::store::RedisSessionStore;
 
 // Import test framework (currently not available)
 // use crate::tests::test_framework::*;
@@ -54,8 +53,14 @@ pub struct PerformanceTestSuite {
     baseline_results: Arc<RwLock<HashMap<String, PerformanceBenchmark>>>,
 }
 
+impl Default for PerformanceTestSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PerformanceTestSuite {
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self {
             benchmarks: Arc::new(RwLock::new(Vec::new())),
             baseline_results: Arc::new(RwLock::new(HashMap::new())),
@@ -83,11 +88,11 @@ impl PerformanceTestSuite {
                 client_id: Some("client".to_string()),
                 exp: None,
                 iat: None,
-                sub: Some(format!("user_{}", i)),
+                sub: Some(format!("user_{i}")),
                 token_binding: None,
                 mfa_verified: false,
             };
-            cache.insert(format!("token_{}", i), token).await;
+            cache.insert(format!("token_{i}"), token).await;
         }
 
         // Run concurrent benchmark
@@ -111,12 +116,12 @@ impl PerformanceTestSuite {
                             client_id: Some("client".to_string()),
                             exp: None,
                             iat: None,
-                            sub: Some(format!("user_{}_{}", user_id, op)),
+                            sub: Some(format!("user_{user_id}_{op}")),
                             token_binding: None,
                             mfa_verified: false,
                         };
-                        let _ = cache
-                            .insert(format!("token_{}_{}", user_id, op), token)
+                        let () = cache
+                            .insert(format!("token_{user_id}_{op}"), token)
                             .await;
                     } else {
                         // Read operation
@@ -136,7 +141,7 @@ impl PerformanceTestSuite {
         for handle in handles {
             match handle.await {
                 Ok(latencies) => all_latencies.extend(latencies),
-                Err(e) => return Err(format!("Benchmark task failed: {}", e)),
+                Err(e) => return Err(format!("Benchmark task failed: {e}")),
             }
         }
 
@@ -174,7 +179,7 @@ impl PerformanceTestSuite {
                     "operations_per_user".to_string(),
                     operations_per_user.to_string(),
                 ),
-                ("cache_config".to_string(), format!("{:?}", config)),
+                ("cache_config".to_string(), format!("{config:?}")),
             ]),
         };
 
@@ -214,8 +219,8 @@ impl PerformanceTestSuite {
                                 // Create session
                                 let session_data =
                                     auth_service::infrastructure::storage::session::secure::SecureSessionData {
-                                        user_id: format!("user_{}", session_id),
-                                        client_id: Some(format!("client_{}", session_id)),
+                                        user_id: format!("user_{session_id}"),
+                                        client_id: Some(format!("client_{session_id}")),
                                         created_at: chrono::Utc::now(),
                                         last_accessed: chrono::Utc::now(),
                                         expires_at: chrono::Utc::now(),
@@ -259,7 +264,7 @@ impl PerformanceTestSuite {
         for handle in handles {
             match handle.await {
                 Ok(latencies) => all_latencies.extend(latencies),
-                Err(e) => return Err(format!("Session benchmark task failed: {}", e)),
+                Err(e) => return Err(format!("Session benchmark task failed: {e}")),
             }
         }
 
@@ -503,14 +508,14 @@ impl PerformanceReport {
         }
 
         if let Some((name, ops_per_sec)) = &self.summary.fastest_benchmark {
-            println!("Fastest benchmark: {} ({:.2} ops/sec)", name, ops_per_sec);
+            println!("Fastest benchmark: {name} ({ops_per_sec:.2} ops/sec)");
         }
     }
 }
 
 /// Memory profiling utilities
 pub mod memory_profiling {
-    use super::*;
+    
 
     /// Track memory usage during benchmark
     pub async fn track_memory_usage<F, Fut, T>(f: F) -> (T, MemoryStats)
@@ -537,7 +542,7 @@ pub mod memory_profiling {
     }
 
     /// Get current memory statistics
-    pub fn get_memory_stats() -> MemoryStats {
+    #[must_use] pub const fn get_memory_stats() -> MemoryStats {
         // In a real implementation, this would read from /proc/self/statm or similar
         // For now, return placeholder values
         MemoryStats {
@@ -613,7 +618,7 @@ pub mod load_testing {
                     latencies.extend(lats);
                     total_latency += total_lat;
                 }
-                Err(e) => return Err(format!("Load test task failed: {}", e)),
+                Err(e) => return Err(format!("Load test task failed: {e}")),
             }
         }
 

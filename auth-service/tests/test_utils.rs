@@ -27,6 +27,10 @@ pub struct TestFixture {
 
 impl TestFixture {
     /// Create a new test fixture with a spawned test server
+    ///
+    /// # Panics
+    ///
+    /// Panics if binding the test TCP listener or spawning the server fails.
     pub async fn new() -> Self {
         std::env::set_var("TEST_MODE", "1");
         std::env::set_var("REQUEST_SIGNING_SECRET", "test_secret");
@@ -51,9 +55,12 @@ impl TestFixture {
         let store = Arc::new(HybridStore::new().await);
         let session_store = Arc::new(RedisSessionStore::new(None));
         let jwks_manager = Arc::new(
-            JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-                .await
-                .unwrap(),
+            JwksManager::new(
+                auth_service::jwks_rotation::KeyRotationConfig::default(),
+                Arc::new(InMemoryKeyStorage::new()),
+            )
+            .await
+            .unwrap(),
         );
 
         let app_state = AppState {
@@ -86,7 +93,7 @@ impl TestFixture {
 
         Self {
             client: Client::new(),
-            base_url: format!("http://{}", addr),
+            base_url: format!("http://{addr}"),
             valid_client_id: "test_client".to_string(),
             valid_client_secret: "test_secret".to_string(),
             invalid_client_id: "invalid_client".to_string(),
@@ -95,10 +102,11 @@ impl TestFixture {
     }
 
     /// Create HTTP Basic Auth header
+    #[must_use]
     pub fn basic_auth_header(&self, client_id: &str, client_secret: &str) -> String {
-        let credentials = format!("{}:{}", client_id, client_secret);
+        let credentials = format!("{client_id}:{client_secret}");
         let encoded = STANDARD.encode(credentials.as_bytes());
-        format!("Basic {}", encoded)
+        format!("Basic {encoded}")
     }
 
     /// Get a valid access token for testing
@@ -110,12 +118,13 @@ impl TestFixture {
     pub async fn get_access_token_with_scope(&self, scope: Option<&str>) -> String {
         let mut body = "grant_type=client_credentials".to_string();
         if let Some(s) = scope {
-            body.push_str(&format!("&scope={}", s));
+            use std::fmt::Write as _;
+            let _ = write!(body, "&scope={s}");
         }
 
         let response = self
             .client
-            .post(&format!("{}/oauth/token", self.base_url))
+            .post(format!("{}/oauth/token", self.base_url))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header(
                 "Authorization",
@@ -136,10 +145,14 @@ impl TestFixture {
     }
 
     /// Create a request with proper signature for critical operations
+    /// # Panics
+    ///
+    /// Panics if HMAC key initialization fails or hashing fails unexpectedly.
+    #[must_use]
     pub fn sign_request(&self, method: &str, path: &str, body: &str) -> (String, String) {
         let secret = "test_secret";
         let timestamp = chrono::Utc::now().timestamp();
-        let message = format!("{}\n{}\n{}\n{}", method, path, body, timestamp);
+        let message = format!("{method}\n{path}\n{body}\n{timestamp}");
 
         use hmac::{Hmac, Mac};
         use sha2::Sha256;
@@ -158,16 +171,15 @@ impl TestFixture {
     }
 
     /// Generate test PKCE challenge
+    #[must_use]
     pub fn generate_pkce_challenge() -> (String, String) {
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
         use sha2::{Digest, Sha256};
 
-        // Generate code verifier
+        // Generate code verifier using secure RNG
+        use rand::{distributions::Alphanumeric, rngs::OsRng, Rng as _};
         let verifier: String = (0..43)
-            .map(|_| {
-                let charset = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-                charset[rand::random::<usize>() % charset.len()] as char
-            })
+            .map(|_| OsRng.sample(Alphanumeric) as char)
             .collect();
 
         // Generate code challenge
@@ -184,7 +196,14 @@ pub struct MockRedis {
     store: Arc<RwLock<HashMap<String, String>>>,
 }
 
+impl Default for MockRedis {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockRedis {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             store: Arc::new(RwLock::new(HashMap::new())),
@@ -217,6 +236,10 @@ pub struct TestDataGenerator;
 
 impl TestDataGenerator {
     /// Generate valid test JWT token
+    /// # Panics
+    ///
+    /// Panics if JWT encoding fails.
+    #[must_use]
     pub fn generate_test_jwt() -> String {
         use jsonwebtoken::{encode, EncodingKey, Header};
         use serde::Serialize;
@@ -228,7 +251,7 @@ impl TestDataGenerator {
             iat: usize,
         }
 
-        let now = chrono::Utc::now().timestamp() as usize;
+        let now = usize::try_from(chrono::Utc::now().timestamp()).unwrap_or(0);
         let claims = Claims {
             sub: "test_user".to_string(),
             exp: now + 3600,
@@ -240,6 +263,7 @@ impl TestDataGenerator {
     }
 
     /// Generate malicious payloads for security testing
+    #[must_use]
     pub fn malicious_payloads() -> Vec<&'static str> {
         vec![
             "'; DROP TABLE users; --",
@@ -256,9 +280,10 @@ impl TestDataGenerator {
     }
 
     /// Generate boundary test values
+    #[must_use]
     pub fn boundary_values() -> Vec<String> {
         vec![
-            "".to_string(),        // Empty
+            String::new(),         // Empty
             " ".repeat(1000),      // Very long spaces
             "x".repeat(10000),     // Very long string
             "\n\r\t".to_string(),  // Control characters
@@ -268,8 +293,9 @@ impl TestDataGenerator {
     }
 
     /// Generate concurrent test users
+    #[must_use]
     pub fn generate_test_users(count: usize) -> Vec<String> {
-        (0..count).map(|i| format!("test_user_{}", i)).collect()
+        (0..count).map(|i| format!("test_user_{i}")).collect()
     }
 }
 
@@ -314,18 +340,11 @@ impl SecurityTestUtils {
     }
 
     /// Generate cryptographically secure random string
+    #[must_use]
     pub fn generate_secure_random(length: usize) -> String {
-        use rand::Rng;
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
-                                 abcdefghijklmnopqrstuvwxyz\
-                                 0123456789";
-        let mut rng = rand::thread_rng();
-
+        use rand::{distributions::Alphanumeric, rngs::OsRng, Rng as _};
         (0..length)
-            .map(|_| {
-                let idx = rng.gen_range(0..CHARSET.len());
-                CHARSET[idx] as char
-            })
+            .map(|_| OsRng.sample(Alphanumeric) as char)
             .collect()
     }
 }
@@ -335,6 +354,9 @@ pub struct PerformanceTestUtils;
 
 impl PerformanceTestUtils {
     /// Measure operation latency
+    /// # Panics
+    ///
+    /// Panics if a partial comparison between floats unexpectedly fails.
     pub async fn measure_latency<F, Fut>(operation: F, iterations: usize) -> (f64, f64, f64)
     where
         F: Fn() -> Fut,
@@ -352,12 +374,16 @@ impl PerformanceTestUtils {
 
         let avg = times.iter().sum::<f64>() / times.len() as f64;
         let p50 = times[times.len() / 2];
-        let p95 = times[(times.len() as f64 * 0.95) as usize];
+        let p95_index = ((times.len() as f64) * 0.95).floor() as usize;
+        let p95 = times[p95_index.min(times.len() - 1)];
 
         (avg / 1_000_000.0, p50 / 1_000_000.0, p95 / 1_000_000.0) // Convert to milliseconds
     }
 
     /// Test concurrent operations
+    /// # Panics
+    ///
+    /// Panics if a spawned task join fails.
     pub async fn test_concurrent_operations<F, Fut>(
         operation: F,
         concurrent_count: usize,
@@ -393,7 +419,7 @@ impl PerformanceTestUtils {
         let total_time = start_time.elapsed().as_millis() as f64;
         let throughput = (concurrent_count * iterations_per_task) as f64 / (total_time / 1000.0);
 
-        println!("Concurrent test completed: {} ops/sec", throughput);
+        println!("Concurrent test completed: {throughput} ops/sec");
 
         all_times.into_iter().map(|t| t / 1_000_000.0).collect() // Convert to milliseconds
     }
@@ -418,7 +444,7 @@ impl TestAssertions for Response {
         // This would need to be implemented based on the actual response body
         // For now, we'll just check headers don't contain sensitive info
         let headers = self.headers();
-        for (_name, value) in headers.iter() {
+        for (_name, value) in headers {
             let value_str = value.to_str().unwrap_or("");
             assert!(!value_str.contains("password"));
             assert!(!value_str.contains("secret"));
@@ -437,6 +463,7 @@ pub struct PropertyTestUtils;
 
 impl PropertyTestUtils {
     /// Generate random valid tokens for property testing
+    #[must_use]
     pub fn generate_valid_tokens(count: usize) -> Vec<String> {
         (0..count)
             .map(|_| format!("tk_{}", uuid::Uuid::new_v4()))
@@ -444,13 +471,15 @@ impl PropertyTestUtils {
     }
 
     /// Generate random invalid tokens for property testing
+    #[must_use]
     pub fn generate_invalid_tokens(count: usize) -> Vec<String> {
         let mut tokens = Vec::new();
 
+        use rand::{rngs::OsRng, Rng as _};
         for _ in 0..count {
             // Generate various types of invalid tokens
-            match rand::random::<u8>() % 5 {
-                0 => tokens.push("".to_string()),               // Empty
+            match OsRng.gen::<u8>() % 5 {
+                0 => tokens.push(String::new()),                // Empty
                 1 => tokens.push("invalid_format".to_string()), // Wrong format
                 2 => tokens.push("rt_".repeat(100)),            // Too long
                 3 => tokens.push("tk_\0\0\0".to_string()),      // Contains nulls

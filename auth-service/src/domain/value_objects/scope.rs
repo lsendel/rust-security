@@ -1,11 +1,11 @@
 //! Scope Value Object
 //!
-//! Represents OAuth 2.0 scopes.
+//! Represents `OAuth` 2.0 scopes.
 
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-/// OAuth 2.0 scope value object
+/// `OAuth` 2.0 scope value object
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Scope(String);
 
@@ -34,22 +34,22 @@ impl Scope {
     }
 
     /// Get the scope as a string
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the scope as a string (consuming self)
-    pub fn into_string(self) -> String {
+    #[must_use] pub fn into_string(self) -> String {
         self.0
     }
 
     /// Check if this scope includes read access
-    pub fn has_read(&self) -> bool {
+    #[must_use] pub fn has_read(&self) -> bool {
         self.0 == "read" || self.0 == "read:write"
     }
 
     /// Check if this scope includes write access
-    pub fn has_write(&self) -> bool {
+    #[must_use] pub fn has_write(&self) -> bool {
         self.0 == "write" || self.0 == "read:write"
     }
 }

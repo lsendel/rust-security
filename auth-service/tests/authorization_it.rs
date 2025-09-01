@@ -57,7 +57,7 @@ async fn spawn_auth_app() -> String {
         ),
         jwks_manager: Arc::new(
             auth_service::jwks_rotation::JwksManager::new(
-                Default::default(),
+                auth_service::jwks_rotation::KeyRotationConfig::default(),
                 Arc::new(auth_service::jwks_rotation::InMemoryKeyStorage::new()),
             )
             .await
@@ -65,7 +65,7 @@ async fn spawn_auth_app() -> String {
         ),
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 async fn spawn_mock_policy(_decision: &'static str) -> String {
@@ -78,7 +78,7 @@ async fn spawn_mock_policy(_decision: &'static str) -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -89,7 +89,7 @@ async fn authorize_allows_via_policy_service() {
 
     // Mint a token
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#")
         .send()
@@ -98,7 +98,7 @@ async fn authorize_allows_via_policy_service() {
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        panic!("/oauth/token failed: {} body={} ", status, text);
+        panic!("/oauth/token failed: {status} body={text} ");
     }
     let v: serde_json::Value = res.json().await.unwrap();
     let token = v
@@ -109,7 +109,7 @@ async fn authorize_allows_via_policy_service() {
 
     // Call authorize
     let res = reqwest::Client::new()
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .bearer_auth(token)
         .header("x-policy-enforcement", "strict")
         .json(&AuthorizeReq {
@@ -123,7 +123,7 @@ async fn authorize_allows_via_policy_service() {
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        panic!("/v1/authorize failed: {} body={}", status, text);
+        panic!("/v1/authorize failed: {status} body={text}");
     }
     let body: AuthorizeResp = res.json().await.unwrap();
     assert_eq!(body.decision, "Allow");
@@ -137,7 +137,7 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
 
     // Mint a token
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#")
         .send()
@@ -146,7 +146,7 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        panic!("/oauth/token failed: {} body={} ", status, text);
+        panic!("/oauth/token failed: {status} body={text} ");
     }
     let v: serde_json::Value = res.json().await.unwrap();
     let token = v
@@ -156,7 +156,7 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
         .to_string();
 
     let res = reqwest::Client::new()
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .bearer_auth(token)
         .header("x-policy-url", "http://invalid.invalid")
         .json(&AuthorizeReq {
@@ -170,7 +170,7 @@ async fn authorize_permissive_fallback_when_service_unavailable() {
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        panic!("/v1/authorize failed: {} body={}", status, text);
+        panic!("/v1/authorize failed: {status} body={text}");
     }
     let body: AuthorizeResp = res.json().await.unwrap();
     assert_eq!(body.decision, "Allow");
@@ -184,7 +184,7 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
 
     // Mint a token
     let res = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body("grant_type=client_credentials&client_id=test_client&client_secret=very_strong_secret_with_mixed_chars_123!@#")
         .send()
@@ -193,7 +193,7 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        panic!("/oauth/token failed: {} body={} ", status, text);
+        panic!("/oauth/token failed: {status} body={text} ");
     }
     let v: serde_json::Value = res.json().await.unwrap();
     let token = v
@@ -203,7 +203,7 @@ async fn authorize_strict_mode_errors_when_service_unavailable() {
         .to_string();
 
     let res = reqwest::Client::new()
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .bearer_auth(token)
         .header("x-policy-enforcement", "strict")
         .header("x-policy-url", "http://invalid.invalid")

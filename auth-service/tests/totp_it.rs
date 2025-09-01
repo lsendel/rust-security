@@ -23,9 +23,12 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
-            .await
-            .unwrap(),
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {
@@ -45,7 +48,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -85,10 +88,10 @@ fn hotp(secret: &[u8], counter: u64) -> u32 {
     mac.update(&msg);
     let hash = mac.finalize().into_bytes();
     let offset = (hash[19] & 0x0f) as usize;
-    let bin_code: u32 = ((hash[offset] as u32 & 0x7f) << 24)
-        | ((hash[offset + 1] as u32) << 16)
-        | ((hash[offset + 2] as u32) << 8)
-        | (hash[offset + 3] as u32);
+    let bin_code: u32 = ((u32::from(hash[offset]) & 0x7f) << 24)
+        | (u32::from(hash[offset + 1]) << 16)
+        | (u32::from(hash[offset + 2]) << 8)
+        | u32::from(hash[offset + 3]);
     bin_code
 }
 
@@ -98,7 +101,7 @@ fn totp(secret: &[u8], time: u64, period: u64, digits: u32) -> String {
     let code = hotp(secret, counter) % modulo;
     let mut s = code.to_string();
     while s.len() < digits as usize {
-        s = format!("0{}", s);
+        s = format!("0{s}");
     }
     s
 }
@@ -110,7 +113,7 @@ async fn totp_register_and_verify() {
     let client = reqwest::Client::new();
 
     let reg: TotpRegisterResponse = client
-        .post(format!("{}/mfa/totp/register", base))
+        .post(format!("{base}/mfa/totp/register"))
         .json(&TotpRegisterRequest {
             user_id: user_id.clone(),
         })
@@ -129,7 +132,7 @@ async fn totp_register_and_verify() {
 
     let code = totp(&secret, now_unix(), 30, 6);
     let verified: TotpVerifyResponse = client
-        .post(format!("{}/mfa/totp/verify", base))
+        .post(format!("{base}/mfa/totp/verify"))
         .json(&TotpVerifyRequest {
             user_id: user_id.clone(),
             code,
@@ -151,7 +154,7 @@ async fn totp_backup_codes_flow() {
 
     // register to create entry
     let _ = client
-        .post(format!("{}/mfa/totp/register", base))
+        .post(format!("{base}/mfa/totp/register"))
         .json(&TotpRegisterRequest {
             user_id: user_id.clone(),
         })
@@ -161,7 +164,7 @@ async fn totp_backup_codes_flow() {
 
     // generate backup codes
     let codes: BackupCodesResponse = client
-        .post(format!("{}/mfa/totp/backup-codes/generate", base))
+        .post(format!("{base}/mfa/totp/backup-codes/generate"))
         .json(&TotpRegisterRequest {
             user_id: user_id.clone(),
         })
@@ -176,7 +179,7 @@ async fn totp_backup_codes_flow() {
 
     // verify using backup code should succeed once
     let res: TotpVerifyResponse = client
-        .post(format!("{}/mfa/totp/verify", base))
+        .post(format!("{base}/mfa/totp/verify"))
         .json(&TotpVerifyRequest {
             user_id: user_id.clone(),
             code: code.clone(),
@@ -191,7 +194,7 @@ async fn totp_backup_codes_flow() {
 
     // reusing same backup code should fail
     let res2: TotpVerifyResponse = client
-        .post(format!("{}/mfa/totp/verify", base))
+        .post(format!("{base}/mfa/totp/verify"))
         .json(&TotpVerifyRequest { user_id, code })
         .send()
         .await

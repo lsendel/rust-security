@@ -71,9 +71,9 @@ pub async fn register(
             roles: vec!["user".to_string()],
             verified: response.verified,
         },
-        session_id: "".to_string(),
-        access_token: "".to_string(),
-        refresh_token: "".to_string(),
+        session_id: String::new(),
+        access_token: String::new(),
+        refresh_token: String::new(),
         expires_in: 0,
     }))
 }

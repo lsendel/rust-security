@@ -18,7 +18,7 @@ pub struct SamlService {
 }
 
 impl SamlService {
-    pub fn new(key: [u8; 32]) -> Self {
+    #[must_use] pub const fn new(key: [u8; 32]) -> Self {
         Self {
             encryption_key: key,
         }
@@ -34,6 +34,6 @@ impl SamlService {
         // TODO: Implement AES-GCM decryption when aes_gcm dependency is added
         // For now, assume data is just base64-encoded
         let decoded_bytes = STANDARD.decode(encrypted)?;
-        String::from_utf8(decoded_bytes).map_err(|e| e.into())
+        String::from_utf8(decoded_bytes).map_err(std::convert::Into::into)
     }
 }

@@ -66,7 +66,10 @@ async fn spawn_auth_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -91,7 +94,7 @@ async fn spawn_auth_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 async fn spawn_policy() -> String {
@@ -99,19 +102,19 @@ async fn spawn_policy() -> String {
         let mfa_verified = body
             .get("context")
             .and_then(|c| c.get("mfa_verified"))
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         // Support both string and cedar-EntityUid action encodings
         let action = body
             .get("action")
             .and_then(|a| a.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .or_else(|| {
                 body.get("action")
                     .and_then(|a| a.as_object())
                     .and_then(|o| o.get("id"))
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
             })
             .unwrap_or_default();
         let decision = if action == "orders:refund" && !mfa_verified {
@@ -127,7 +130,7 @@ async fn spawn_policy() -> String {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[tokio::test]
@@ -138,7 +141,7 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
 
     // Mint a token
     let tok_body: serde_json::Value = reqwest::Client::new()
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(
             reqwest::header::CONTENT_TYPE,
             "application/x-www-form-urlencoded",
@@ -158,7 +161,7 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
 
     // Call authorize for a sensitive action: expect Deny
     let res1 = reqwest::Client::new()
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .bearer_auth(&token)
         .json(&AuthorizeReq {
             action: "orders:refund".to_string(),
@@ -174,7 +177,7 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
 
     // Mark session mfa verified (skip factor verification for test brevity)
     let _ack: serde_json::Value = reqwest::Client::new()
-        .post(format!("{}/mfa/session/verify", base))
+        .post(format!("{base}/mfa/session/verify"))
         .bearer_auth(&token)
         .json(&MfaSessionVerifyRequest {
             user_id: "user1".to_string(),
@@ -188,7 +191,7 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
 
     // Call authorize again: expect Allow
     let res2 = reqwest::Client::new()
-        .post(format!("{}/v1/authorize", base))
+        .post(format!("{base}/v1/authorize"))
         .bearer_auth(&token)
         .json(&AuthorizeReq {
             action: "orders:refund".to_string(),

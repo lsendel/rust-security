@@ -16,17 +16,17 @@ impl Email {
     }
 
     /// Get the email as a string
-    pub fn as_str(&self) -> &str {
+    #[must_use] pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the email domain
-    pub fn domain(&self) -> &str {
+    #[must_use] pub fn domain(&self) -> &str {
         self.0.split('@').nth(1).unwrap_or("")
     }
 
     /// Get the email username (part before @)
-    pub fn username(&self) -> &str {
+    #[must_use] pub fn username(&self) -> &str {
         self.0.split('@').next().unwrap_or("")
     }
 

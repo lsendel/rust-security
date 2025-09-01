@@ -83,7 +83,7 @@ pub struct CryptoService {
 
 impl CryptoService {
     /// Create a new crypto service
-    pub fn new(jwt_secret: String) -> Self {
+    #[must_use] pub fn new(jwt_secret: String) -> Self {
         Self {
             jwt_secret,
             jwt_issuer: "rust-security-auth-service".to_string(),
@@ -92,7 +92,7 @@ impl CryptoService {
     }
 
     /// Create crypto service with custom issuer and audience
-    pub fn with_issuer_and_audience(jwt_secret: String, issuer: String, audience: String) -> Self {
+    #[must_use] pub const fn with_issuer_and_audience(jwt_secret: String, issuer: String, audience: String) -> Self {
         Self {
             jwt_secret,
             jwt_issuer: issuer,
@@ -118,7 +118,7 @@ impl CryptoServiceTrait for CryptoService {
             .map_err(|e| CryptoError::PasswordHash(e.to_string()))?;
 
         PasswordHash::new(password_hash.to_string())
-            .map_err(|e| CryptoError::PasswordHash(e.to_string()))
+            .map_err(CryptoError::PasswordHash)
     }
 
     async fn verify_password(

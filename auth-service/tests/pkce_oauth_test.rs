@@ -4,7 +4,6 @@ use auth_service::storage::store::hybrid::HybridStore;
 use auth_service::{api_key_store::ApiKeyStore, app, AppState};
 use common::TokenRecord;
 use reqwest::header::{CONTENT_TYPE, LOCATION};
-use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -33,7 +32,10 @@ async fn spawn_app() -> String {
     let store = Arc::new(HybridStore::new().await);
     let session_store = Arc::new(RedisSessionStore::new(None));
     let jwks_manager = Arc::new(
-        JwksManager::new(Default::default(), Arc::new(InMemoryKeyStorage::new()))
+        JwksManager::new(
+            auth_service::jwks_rotation::KeyRotationConfig::default(),
+            Arc::new(InMemoryKeyStorage::new()),
+        )
             .await
             .unwrap(),
     );
@@ -60,7 +62,7 @@ async fn spawn_app() -> String {
         jwks_manager,
     });
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 /*
@@ -249,7 +251,7 @@ async fn test_authorization_without_pkce() {
 
     // Exchange without PKCE (should work for non-PKCE flow)
     let token_response = client
-        .post(format!("{}/oauth/token", base))
+        .post(format!("{base}/oauth/token"))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body(format!(
             "grant_type=authorization_code&code={}&redirect_uri={}&client_id=test_client",
