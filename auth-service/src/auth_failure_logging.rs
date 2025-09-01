@@ -1,4 +1,6 @@
-use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_logging::{
+    SecurityEvent, SecurityEventType, SecuritySeverity,
+};
 use dashmap::DashMap;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -261,7 +263,7 @@ impl AuthFailureTracker {
         }
 
         // Log the event
-        let mut event = event
+        let event = event
             .with_actor(if is_suspicious { "attacker" } else { "user" }.to_string())
             .with_action("authenticate".to_string())
             .with_target("auth_service".to_string())
@@ -326,7 +328,7 @@ impl AuthFailureTracker {
             event = event.with_detail_string("user_agent".to_string(), ua.to_string());
         }
 
-        let mut event = event
+        let event = event
             .with_actor("system".to_string())
             .with_action("detect_attack".to_string())
             .with_target("user_account".to_string())

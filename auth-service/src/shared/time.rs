@@ -2,7 +2,7 @@
 //!
 //! Common time-related utilities and helpers.
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 
 /// Get current UTC timestamp
 pub fn now() -> DateTime<Utc> {

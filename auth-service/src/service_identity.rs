@@ -12,9 +12,10 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::shared::error::AppError;
 // Security monitoring types are now part of the security_monitoring module
-use crate::infrastructure::security::security_monitoring::{AlertSeverity, SecurityAlert, SecurityAlertType};
+use crate::infrastructure::security::security_monitoring::{
+    AlertSeverity, SecurityAlert, SecurityAlertType,
+};
 
 /// Identity type classification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -44,14 +45,14 @@ pub enum IdentityType {
         orchestrator: String,
         namespace: String,
     },
-)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Environment {
     Development,
     Staging,
     Production,
-)
+}
 
 /// Service identity with enhanced security controls
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,7 +81,7 @@ pub struct ServiceIdentity {
     /// Status
     pub status: IdentityStatus,
     pub suspension_reason: Option<String>,
-)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehavioralBaseline {
@@ -91,7 +92,7 @@ pub struct BehavioralBaseline {
     pub typical_source_ips: HashSet<String>,
     pub established_at: DateTime<Utc>,
     pub confidence_score: f32,
-)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IdentityStatus {
@@ -100,7 +101,7 @@ pub enum IdentityStatus {
     PendingRotation,
     Compromised,
     Decommissioned,
-)
+}
 
 /// Just-In-Time (JIT) access request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,7 +112,7 @@ pub struct JitAccessRequest {
     pub duration_seconds: u64,
     pub request_context: RequestContext,
     pub approval_required: bool,
-)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequestContext {
@@ -120,7 +121,7 @@ pub struct RequestContext {
     pub request_id: String,
     pub parent_span_id: Option<String>,
     pub attestation_data: Option<HashMap<String, String>>,
-)
+}
 
 /// JIT access token with minimal privileges
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,7 +135,7 @@ pub struct JitToken {
     pub revocable: bool,
     pub usage_count: u32,
     pub max_usage: Option<u32>,
-)
+}
 
 /// Service identity manager with comprehensive security controls
 #[derive(Clone)]
@@ -143,7 +144,7 @@ pub struct ServiceIdentityManager {
     jit_tokens: Arc<RwLock<HashMap<Uuid, JitToken>>>,
     monitoring: Arc<dyn SecurityMonitoring>,
     policy_engine: Arc<PolicyEngine>,
-)
+}
 
 /// Security monitoring trait for service accounts
 #[async_trait]
@@ -152,12 +153,12 @@ pub trait SecurityMonitoring: Send + Sync {
     async fn check_anomaly(&self, identity: &ServiceIdentity, context: &RequestContext) -> bool;
     async fn raise_alert(&self, alert: SecurityAlert);
     async fn update_baseline(&self, identity_id: Uuid, metrics: BehavioralBaseline);
-)
+}
 
 /// Policy engine for access control decisions
 pub struct PolicyEngine {
     policies: Arc<RwLock<Vec<AccessPolicy>>>,
-)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccessPolicy {
@@ -167,7 +168,7 @@ pub struct AccessPolicy {
     pub conditions: Vec<PolicyCondition>,
     pub effect: PolicyEffect,
     pub priority: i32,
-)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PolicyCondition {
@@ -180,14 +181,14 @@ pub enum PolicyCondition {
     RiskScoreThreshold(f32),
     RequireMfa,
     RequireAttestation,
-)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PolicyEffect {
     Allow,
     Deny,
     RequireApproval,
-)
+}
 
 impl ServiceIdentityManager {
     pub fn new(monitoring: Arc<dyn SecurityMonitoring>) -> Self {
@@ -196,8 +197,8 @@ impl ServiceIdentityManager {
             jit_tokens: Arc::new(RwLock::new(HashMap::new())),
             monitoring,
             policy_engine: Arc::new(PolicyEngine::new()),
-        )
-    )
+        }
+    }
 
     /// Register a new service identity
     pub async fn register_identity(
@@ -231,7 +232,7 @@ impl ServiceIdentityManager {
 
         info!("Registered new service identity: {:?}", identity_id);
         Ok(identity)
-    )
+    }
 
     /// Request JIT access token
     pub async fn request_jit_access(
@@ -240,18 +241,17 @@ impl ServiceIdentityManager {
     ) -> Result<JitToken, crate::shared::error::AppError> {
         // Validate identity exists and is active
         let identities = self.identities.read().await;
-        let identity =
-            identities
-                .get(&request.identity_id)
-                .ok_or_else(|| crate::shared::error::AppError::InvalidRequest {
-                    reason: format!("Identity not found: {}", request.identity_id),
-                })?;
+        let identity = identities.get(&request.identity_id).ok_or_else(|| {
+            crate::shared::error::AppError::InvalidRequest {
+                reason: format!("Identity not found: {}", request.identity_id),
+            }
+        })?;
 
         if identity.status != IdentityStatus::Active {
             return Err(crate::shared::error::AppError::Forbidden {
                 reason: format!("Identity suspended: {}", request.identity_id),
             });
-        )
+        }
 
         // Check for anomalies
         if self
@@ -279,18 +279,18 @@ impl ServiceIdentityManager {
                 .await;
 
             return Err(crate::shared::error::AppError::AnomalyDetected);
-        )
+        }
 
         // Apply policy engine
         let policy_decision = self.policy_engine.evaluate(identity, &request).await?;
 
         if policy_decision == PolicyEffect::Deny {
             return Err(crate::shared::error::AppError::PolicyDenied);
-        )
+        }
 
         if policy_decision == PolicyEffect::RequireApproval && !request.approval_required {
             return Err(crate::shared::error::AppError::ApprovalRequired);
-        )
+        }
 
         // Calculate token lifetime (minimum of requested and max allowed)
         let lifetime = std::cmp::min(
@@ -322,7 +322,7 @@ impl ServiceIdentityManager {
 
         info!("Issued JIT token for identity {:?}", identity.id);
         Ok(token)
-    )
+    }
 
     /// Validate and track token usage
     pub async fn validate_token(
@@ -337,7 +337,7 @@ impl ServiceIdentityManager {
             if Utc::now() > token.expires_at {
                 tokens.remove(&token_id);
                 return Ok(false);
-            )
+            }
 
             // Check usage limit
             token.usage_count += 1;
@@ -346,23 +346,26 @@ impl ServiceIdentityManager {
                     warn!("Token {:?} exceeded usage limit", token_id);
                     tokens.remove(&token_id);
                     return Ok(false);
-                )
-            )
+                }
+            }
 
             // Validate context matches (IP, etc.)
             if token.request_context.source_ip != context.source_ip {
                 warn!("Token {:?} used from different IP", token_id);
                 return Ok(false);
-            )
+            }
 
             Ok(true)
         } else {
             Ok(false)
-        )
-    )
+        }
+    }
 
     /// Revoke all tokens for a compromised identity
-    pub async fn revoke_identity_tokens(&self, identity_id: Uuid) -> Result<u32, crate::shared::error::AppError> {
+    pub async fn revoke_identity_tokens(
+        &self,
+        identity_id: Uuid,
+    ) -> Result<u32, crate::shared::error::AppError> {
         let mut tokens = self.jit_tokens.write().await;
         let mut revoked = 0;
 
@@ -372,7 +375,7 @@ impl ServiceIdentityManager {
                 false
             } else {
                 true
-            )
+            }
         });
 
         // Update identity status
@@ -380,17 +383,20 @@ impl ServiceIdentityManager {
         if let Some(identity) = identities.get_mut(&identity_id) {
             identity.status = IdentityStatus::Compromised;
             identity.suspension_reason = Some("Tokens revoked due to compromise".to_string());
-        )
+        }
 
         warn!(
             "Revoked {} tokens for compromised identity {:?}",
             revoked, identity_id
         );
         Ok(revoked)
-    )
+    }
 
     /// Rotate credentials for an identity
-    pub async fn rotate_credentials(&self, identity_id: Uuid) -> Result<(), crate::shared::error::AppError> {
+    pub async fn rotate_credentials(
+        &self,
+        identity_id: Uuid,
+    ) -> Result<(), crate::shared::error::AppError> {
         let mut identities = self.identities.write().await;
 
         if let Some(identity) = identities.get_mut(&identity_id) {
@@ -407,8 +413,8 @@ impl ServiceIdentityManager {
             Ok(())
         } else {
             Err(crate::shared::error::AppError::IdentityNotFound)
-        )
-    )
+        }
+    }
 
     /// Helper: Determine max token lifetime based on identity type
     const fn get_max_lifetime(&self, identity_type: &IdentityType) -> u64 {
@@ -422,8 +428,8 @@ impl ServiceIdentityManager {
             IdentityType::ApiKey { .. } => 1800, // 30 minutes
             IdentityType::AiAgent { .. } => 300, // 5 minutes - highest risk
             IdentityType::MachineWorkload { .. } => 600, // 10 minutes
-        )
-    )
+        }
+    }
 
     /// Helper: Check if identity requires attestation
     const fn requires_attestation(&self, identity_type: &IdentityType) -> bool {
@@ -431,7 +437,7 @@ impl ServiceIdentityManager {
             identity_type,
             IdentityType::AiAgent { .. } | IdentityType::MachineWorkload { .. }
         )
-    )
+    }
 
     /// Helper: Check if identity requires continuous auth
     const fn requires_continuous_auth(&self, identity_type: &IdentityType) -> bool {
@@ -441,10 +447,10 @@ impl ServiceIdentityManager {
                 | IdentityType::ServiceAccount {
                     environment: Environment::Production,
                     ..
-                )
+                }
         )
-    )
-)
+    }
+}
 
 /// Configuration for creating a service identity
 #[derive(Debug, Clone)]
@@ -452,21 +458,21 @@ pub struct IdentityConfig {
     pub allowed_scopes: HashSet<String>,
     pub allowed_ips: Option<Vec<String>>,
     pub allowed_hours: Option<(u8, u8)>,
-)
+}
 
 impl Default for PolicyEngine {
     fn default() -> Self {
         Self::new()
-    )
-)
+    }
+}
 
 impl PolicyEngine {
     #[must_use]
     pub fn new() -> Self {
         Self {
             policies: Arc::new(RwLock::new(Vec::new())),
-        )
-    )
+        }
+    }
 
     pub async fn evaluate(
         &self,
@@ -487,12 +493,12 @@ impl PolicyEngine {
         for policy in applicable {
             if self.conditions_met(policy, identity, request) {
                 return Ok(policy.effect.clone());
-            )
-        )
+            }
+        }
 
         // Default allow if no policies match
         Ok(PolicyEffect::Allow)
-    )
+    }
 
     fn applies_to_identity(&self, policy: &AccessPolicy, identity_type: &IdentityType) -> bool {
         // Check if policy applies to this identity type
@@ -500,7 +506,7 @@ impl PolicyEngine {
             .applies_to
             .iter()
             .any(|t| std::mem::discriminant(t) == std::mem::discriminant(identity_type))
-    )
+    }
 
     fn conditions_met(
         &self,
@@ -512,15 +518,15 @@ impl PolicyEngine {
             PolicyCondition::RiskScoreThreshold(threshold) => identity.risk_score <= *threshold,
             PolicyCondition::ScopeRestriction(allowed) => {
                 request.requested_scopes.iter().all(|s| allowed.contains(s))
-            )
+            }
             PolicyCondition::IpWhitelist(ips) => ips.contains(&request.request_context.source_ip),
             PolicyCondition::RequireAttestation => {
                 request.request_context.attestation_data.is_some()
-            )
+            }
             _ => true,
         })
-    )
-)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -538,7 +544,7 @@ mod tests {
         };
 
         assert_eq!(manager.get_max_lifetime(&ai_type), 300); // 5 minutes
-    )
+    }
 
     struct MockMonitoring;
 
@@ -547,8 +553,8 @@ mod tests {
         async fn log_authentication(&self, _: &ServiceIdentity, _: bool) {}
         async fn check_anomaly(&self, _: &ServiceIdentity, _: &RequestContext) -> bool {
             false
-        )
+        }
         async fn raise_alert(&self, _: SecurityAlert) {}
         async fn update_baseline(&self, _: Uuid, _: BehavioralBaseline) {}
-    )
-)
+    }
+}

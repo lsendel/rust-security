@@ -1,16 +1,16 @@
 // Optimized key management implementation using ring for security
 // This provides non-blocking RSA key generation and better caching
 
+use base64::Engine as _;
+use once_cell::sync::Lazy;
 use ring::{
+    error::Unspecified,
     rand::SystemRandom,
     signature::{Ed25519KeyPair, KeyPair},
-    error::Unspecified,
 };
-use base64::Engine as _;
-use std::sync::Arc;
-use once_cell::sync::Lazy;
-use tokio::sync::{RwLock, Semaphore};
 use serde_json::Value;
+use std::sync::Arc;
+use tokio::sync::{RwLock, Semaphore};
 
 #[derive(Clone)]
 pub struct OptimizedSecureKeyMaterial {
@@ -52,16 +52,17 @@ impl OptimizedSecureKeyManager {
         // Generate Ed25519 key pair using Ring
         let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&self.rng)?;
         let keypair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-        
+
         let kid = format!("opt-key-{}", self.now_unix());
 
         // Create JWK for Ed25519
         let public_key_bytes = keypair.public_key().as_ref();
-        let public_key_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public_key_bytes);
+        let public_key_b64 =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public_key_bytes);
 
         let public_jwk = serde_json::json!({
             "kty": "OKP",
-            "crv": "Ed25519", 
+            "crv": "Ed25519",
             "use": "sig",
             "kid": kid,
             "x": public_key_b64,
@@ -78,10 +79,12 @@ impl OptimizedSecureKeyManager {
     }
 
     /// Non-blocking key generation with status tracking
-    pub async fn ensure_key_available(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn ensure_key_available(
+        &self,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.keys.read().await;
-        let needs_new_key = keys.is_empty() ||
-            keys.iter().any(|k| self.now_unix() - k.created_at > 3600);
+        let needs_new_key =
+            keys.is_empty() || keys.iter().any(|k| self.now_unix() - k.created_at > 3600);
 
         if !needs_new_key {
             return Ok(());
@@ -136,12 +139,17 @@ impl OptimizedSecureKeyManager {
     }
 
     /// Sign JWT with usage tracking
-    pub async fn sign_jwt(&self, payload: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn sign_jwt(
+        &self,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.keys.read().await;
 
         if let Some(key_material) = keys.first() {
             // Increment usage counter
-            key_material.usage_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            key_material
+                .usage_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             // Ed25519 signing is simpler and more secure
             let signature = key_material.keypair.sign(payload);
@@ -165,10 +173,12 @@ impl OptimizedSecureKeyManager {
     /// Get key usage statistics
     pub async fn get_key_stats(&self) -> Vec<(String, u64, u64)> {
         let keys = self.keys.read().await;
-        keys.iter().map(|k| {
-            let usage = k.usage_count.load(std::sync::atomic::Ordering::Relaxed);
-            (k.kid.clone(), k.created_at, usage)
-        }).collect()
+        keys.iter()
+            .map(|k| {
+                let usage = k.usage_count.load(std::sync::atomic::Ordering::Relaxed);
+                (k.kid.clone(), k.created_at, usage)
+            })
+            .collect()
     }
 
     // Helper methods
@@ -193,11 +203,14 @@ pub async fn get_optimized_jwks() -> Value {
     OPTIMIZED_KEY_MANAGER.get_jwks().await
 }
 
-pub async fn sign_jwt_optimized(payload: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn sign_jwt_optimized(
+    payload: &[u8],
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     OPTIMIZED_KEY_MANAGER.sign_jwt(payload).await
 }
 
-pub async fn ensure_optimized_key_available() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn ensure_optimized_key_available() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+{
     OPTIMIZED_KEY_MANAGER.ensure_key_available().await
 }
 

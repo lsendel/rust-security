@@ -656,9 +656,9 @@ pub async fn verify_enhanced_jwt(token: &str) -> Result<HashMap<String, Value>, 
                 .with_detail("error".to_string(), e.to_string()),
             );
 
-            Err(crate::shared::error::AppError::InvalidToken { 
-                reason: e.to_string() 
-            })
+            Err(crate::shared::error::AppError::InvalidToken(
+                e.to_string()
+            ))
         )
     )
 )

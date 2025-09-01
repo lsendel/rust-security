@@ -77,10 +77,17 @@ impl PerformanceTestSuite {
 
         // Pre-populate cache
         for i in 0..1000 {
-            let token = common::TokenRecord { active: true, scope: Some("read write".to_string()), client_id: Some("client".to_string()), exp: None, iat: None, sub: Some(format!("user_{}", i)), token_binding: None, mfa_verified: false };
-            cache
-                .insert(format!("token_{}", i), token)
-                .await;
+            let token = common::TokenRecord {
+                active: true,
+                scope: Some("read write".to_string()),
+                client_id: Some("client".to_string()),
+                exp: None,
+                iat: None,
+                sub: Some(format!("user_{}", i)),
+                token_binding: None,
+                mfa_verified: false,
+            };
+            cache.insert(format!("token_{}", i), token).await;
         }
 
         // Run concurrent benchmark
@@ -98,7 +105,16 @@ impl PerformanceTestSuite {
                     // Mix of read and write operations
                     if op % 3 == 0 {
                         // Write operation
-                        let token = common::TokenRecord { active: true, scope: Some("read write".to_string()), client_id: Some("client".to_string()), exp: None, iat: None, sub: Some(format!("user_{}_{}", user_id, op)), token_binding: None, mfa_verified: false };
+                        let token = common::TokenRecord {
+                            active: true,
+                            scope: Some("read write".to_string()),
+                            client_id: Some("client".to_string()),
+                            exp: None,
+                            iat: None,
+                            sub: Some(format!("user_{}_{}", user_id, op)),
+                            token_binding: None,
+                            mfa_verified: false,
+                        };
                         let _ = cache
                             .insert(format!("token_{}_{}", user_id, op), token)
                             .await;
@@ -196,22 +212,23 @@ impl PerformanceTestSuite {
                         match op % 4 {
                             0 => {
                                 // Create session
-                                let session_data = auth_service::storage::session::secure::SecureSessionData {
-                                    user_id: format!("user_{}", session_id),
-                                    client_id: Some(format!("client_{}", session_id)),
-                                    created_at: chrono::Utc::now(),
-                                    last_accessed: chrono::Utc::now(),
-                                    expires_at: chrono::Utc::now(),
-                                    ip_address: "127.0.0.1".to_string(),
-                                    user_agent_hash: "ua".to_string(),
-                                    is_authenticated: true,
-                                    requires_mfa: false,
-                                    mfa_completed: true,
-                                    csrf_token: "csrf".to_string(),
-                                    session_version: 1,
-                                    access_count: 0,
-                                    last_rotation: chrono::Utc::now(),
-                                };
+                                let session_data =
+                                    auth_service::storage::session::secure::SecureSessionData {
+                                        user_id: format!("user_{}", session_id),
+                                        client_id: Some(format!("client_{}", session_id)),
+                                        created_at: chrono::Utc::now(),
+                                        last_accessed: chrono::Utc::now(),
+                                        expires_at: chrono::Utc::now(),
+                                        ip_address: "127.0.0.1".to_string(),
+                                        user_agent_hash: "ua".to_string(),
+                                        is_authenticated: true,
+                                        requires_mfa: false,
+                                        mfa_completed: true,
+                                        csrf_token: "csrf".to_string(),
+                                        session_version: 1,
+                                        access_count: 0,
+                                        last_rotation: chrono::Utc::now(),
+                                    };
                                 // Simulate storage operation
                                 tokio::time::sleep(Duration::from_micros(50)).await;
                             }
@@ -370,7 +387,11 @@ impl PerformanceTestSuite {
 
         let fastest = benchmarks
             .iter()
-            .max_by(|a, b| a.operations_per_second.partial_cmp(&b.operations_per_second).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.operations_per_second
+                    .partial_cmp(&b.operations_per_second)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|b| (b.name.clone(), b.operations_per_second));
 
         PerformanceSummary {

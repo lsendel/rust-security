@@ -129,7 +129,11 @@ mod tests {
 
         for invalid_email in invalid_emails {
             let email = Email::new(invalid_email.to_string());
-            assert!(email.is_err(), "Email '{}' should be invalid", invalid_email);
+            assert!(
+                email.is_err(),
+                "Email '{}' should be invalid",
+                invalid_email
+            );
         }
     }
 

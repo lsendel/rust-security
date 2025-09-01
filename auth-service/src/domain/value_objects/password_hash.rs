@@ -57,8 +57,13 @@ impl PasswordHash {
         }
 
         // Check for suspicious patterns (all same character)
-        if hash.chars().all(|c| c == hash.chars().next().unwrap_or(' ')) {
-            return Err("Password hash appears to be invalid (same character repeated)".to_string());
+        if hash
+            .chars()
+            .all(|c| c == hash.chars().next().unwrap_or(' '))
+        {
+            return Err(
+                "Password hash appears to be invalid (same character repeated)".to_string(),
+            );
         }
 
         Ok(())
@@ -115,7 +120,8 @@ mod tests {
 
     #[test]
     fn test_algorithm_detection() {
-        let argon2_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let argon2_hash =
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
         assert_eq!(argon2_hash.algorithm(), Some("argon2id"));
 
         let bcrypt_hash = PasswordHash::new("$2b$12$LQH7rPZCXqOQKj7JTzZPue".to_string()).unwrap();
@@ -136,7 +142,11 @@ mod tests {
 
         for hash_str in secure_hashes {
             let hash = PasswordHash::new(hash_str.to_string()).unwrap();
-            assert!(hash.is_secure_algorithm(), "Hash {} should be considered secure", hash_str);
+            assert!(
+                hash.is_secure_algorithm(),
+                "Hash {} should be considered secure",
+                hash_str
+            );
         }
 
         let insecure_hashes = vec![
@@ -148,7 +158,11 @@ mod tests {
 
         for hash_str in insecure_hashes {
             let hash = PasswordHash::new(hash_str.to_string()).unwrap();
-            assert!(!hash.is_secure_algorithm(), "Hash {} should NOT be considered secure", hash_str);
+            assert!(
+                !hash.is_secure_algorithm(),
+                "Hash {} should NOT be considered secure",
+                hash_str
+            );
         }
     }
 
@@ -168,11 +182,7 @@ mod tests {
 
     #[test]
     fn test_invalid_format() {
-        let invalid_hashes = vec![
-            "plaintext",
-            "md5hash",
-            "no-dollar-sign-hash",
-        ];
+        let invalid_hashes = vec!["plaintext", "md5hash", "no-dollar-sign-hash"];
 
         for invalid_hash in invalid_hashes {
             let hash = PasswordHash::new(invalid_hash.to_string());
@@ -190,7 +200,11 @@ mod tests {
 
         for suspicious_hash in suspicious_hashes {
             let hash = PasswordHash::new(suspicious_hash.to_string());
-            assert!(hash.is_err(), "Hash '{}' should be considered suspicious", suspicious_hash);
+            assert!(
+                hash.is_err(),
+                "Hash '{}' should be considered suspicious",
+                suspicious_hash
+            );
             assert!(hash.unwrap_err().contains("same character"));
         }
     }
@@ -199,7 +213,8 @@ mod tests {
     fn test_hash_equality() {
         let hash1 = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
         let hash2 = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
-        let hash3 = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$different".to_string()).unwrap();
+        let hash3 =
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$different".to_string()).unwrap();
 
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);

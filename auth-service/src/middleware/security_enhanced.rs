@@ -3,19 +3,19 @@
 //! Comprehensive security middleware with CSRF protection, advanced rate limiting,
 //! input validation, and security headers enforcement.
 
+use crate::services::constant_time_compare;
+use axum::{
+    extract::Request,
+    http::{Method, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use axum::{
-    extract::{FromRequest, Request},
-    http::{HeaderMap, Method, StatusCode},
-    middleware::Next,
-    response::{IntoResponse, Response},
-};
 use tracing::{info, warn};
 use uuid::Uuid;
-use crate::services::constant_time_compare;
 
 /// Configuration for enhanced security middleware
 #[derive(Debug, Clone)]
@@ -77,7 +77,10 @@ impl SecurityMiddleware {
 
         Self {
             csrf_tokens: Arc::new(RwLock::new(HashMap::new())),
-            rate_limiter: Arc::new(RateLimiter::new(config.rate_limit_requests, config.rate_limit_window)),
+            rate_limiter: Arc::new(RateLimiter::new(
+                config.rate_limit_requests,
+                config.rate_limit_window,
+            )),
             input_validator: Arc::new(InputValidator::new(config.max_body_size)),
             config,
         }
@@ -118,7 +121,10 @@ impl SecurityMiddleware {
 
     /// Check if request is state-changing (requires CSRF protection)
     fn is_state_changing_request(&self, req: &Request) -> bool {
-        matches!(req.method(), &Method::POST | &Method::PUT | &Method::PATCH | &Method::DELETE)
+        matches!(
+            req.method(),
+            &Method::POST | &Method::PUT | &Method::PATCH | &Method::DELETE
+        )
     }
 
     /// Check rate limiting
@@ -135,7 +141,8 @@ impl SecurityMiddleware {
                     "error": "Rate limit exceeded",
                     "retry_after": 60
                 })),
-            ).into_response();
+            )
+                .into_response();
 
             Err(response)
         } else {
@@ -165,7 +172,7 @@ impl SecurityMiddleware {
 
                 // Validate token exists and is not expired
                 let tokens = self.csrf_tokens.read().await;
-                if let Some((stored_token, created)) = tokens.get(cookie) {
+                if let Some((stored_token, created)) = tokens.get(&cookie) {
                     if !constant_time_compare(header, stored_token) {
                         warn!("Invalid CSRF token");
                         return Err(Self::csrf_error_response());
@@ -202,14 +209,26 @@ impl SecurityMiddleware {
         headers.insert("X-Content-Type-Options", "nosniff".parse().unwrap());
         headers.insert("X-Frame-Options", "DENY".parse().unwrap());
         headers.insert("X-XSS-Protection", "1; mode=block".parse().unwrap());
-        headers.insert("Referrer-Policy", "strict-origin-when-cross-origin".parse().unwrap());
-        headers.insert("Permissions-Policy", "geolocation=(), microphone=(), camera=()".parse().unwrap());
+        headers.insert(
+            "Referrer-Policy",
+            "strict-origin-when-cross-origin".parse().unwrap(),
+        );
+        headers.insert(
+            "Permissions-Policy",
+            "geolocation=(), microphone=(), camera=()".parse().unwrap(),
+        );
 
         // Content Security Policy
-        headers.insert("Content-Security-Policy", self.config.csp_policy.parse().unwrap());
+        headers.insert(
+            "Content-Security-Policy",
+            self.config.csp_policy.parse().unwrap(),
+        );
 
         // HSTS (HTTP Strict Transport Security)
-        headers.insert("Strict-Transport-Security", "max-age=31536000; includeSubDomains".parse().unwrap());
+        headers.insert(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains".parse().unwrap(),
+        );
     }
 
     /// Extract client IP from request
@@ -258,7 +277,8 @@ impl SecurityMiddleware {
                 "error": "CSRF token validation failed",
                 "message": "Invalid or missing CSRF token"
             })),
-        ).into_response()
+        )
+            .into_response()
     }
 
     /// Generate a new CSRF token
@@ -340,7 +360,8 @@ impl InputValidator {
                             "error": "Request body too large",
                             "max_size": self.max_body_size
                         })),
-                    ).into_response());
+                    )
+                        .into_response());
                 }
             }
         }
@@ -349,14 +370,17 @@ impl InputValidator {
         if matches!(req.method(), &Method::POST | &Method::PUT | &Method::PATCH) {
             if let Some(content_type) = req.headers().get("content-type") {
                 let ct_str = content_type.to_str().unwrap_or("");
-                if !ct_str.contains("application/json") && !ct_str.contains("application/x-www-form-urlencoded") {
+                if !ct_str.contains("application/json")
+                    && !ct_str.contains("application/x-www-form-urlencoded")
+                {
                     return Err((
                         StatusCode::UNSUPPORTED_MEDIA_TYPE,
                         axum::Json(serde_json::json!({
                             "error": "Unsupported content type",
                             "supported": ["application/json", "application/x-www-form-urlencoded"]
                         })),
-                    ).into_response());
+                    )
+                        .into_response());
                 }
             }
         }
@@ -418,11 +442,26 @@ pub mod monitoring {
 
         pub fn get_stats(&self) -> HashMap<String, u64> {
             let mut stats = HashMap::new();
-            stats.insert("csrf_attempts".to_string(), self.csrf_attempts.load(Ordering::Relaxed));
-            stats.insert("csrf_failures".to_string(), self.csrf_failures.load(Ordering::Relaxed));
-            stats.insert("rate_limit_hits".to_string(), self.rate_limit_hits.load(Ordering::Relaxed));
-            stats.insert("validation_failures".to_string(), self.validation_failures.load(Ordering::Relaxed));
-            stats.insert("suspicious_requests".to_string(), self.suspicious_requests.load(Ordering::Relaxed));
+            stats.insert(
+                "csrf_attempts".to_string(),
+                self.csrf_attempts.load(Ordering::Relaxed),
+            );
+            stats.insert(
+                "csrf_failures".to_string(),
+                self.csrf_failures.load(Ordering::Relaxed),
+            );
+            stats.insert(
+                "rate_limit_hits".to_string(),
+                self.rate_limit_hits.load(Ordering::Relaxed),
+            );
+            stats.insert(
+                "validation_failures".to_string(),
+                self.validation_failures.load(Ordering::Relaxed),
+            );
+            stats.insert(
+                "suspicious_requests".to_string(),
+                self.suspicious_requests.load(Ordering::Relaxed),
+            );
             stats
         }
     }
@@ -526,4 +565,3 @@ mod tests {
         assert_eq!(ip, "198.51.100.2");
     }
 }
-

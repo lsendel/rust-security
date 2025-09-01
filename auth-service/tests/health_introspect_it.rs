@@ -55,9 +55,11 @@ async fn spawn_app() -> String {
             "write".to_string(),
         ]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
-        policy_cache: std::sync::Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
-            auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
-        )),
+        policy_cache: std::sync::Arc::new(
+            auth_service::storage::cache::policy_cache::PolicyCache::new(
+                auth_service::storage::cache::policy_cache::PolicyCacheConfig::default(),
+            ),
+        ),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
         api_key_store: Arc::new(api_key_store),
         jwks_manager,

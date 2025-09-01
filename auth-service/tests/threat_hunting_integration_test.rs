@@ -1,15 +1,15 @@
 #[cfg(feature = "threat-hunting")]
 mod threat_hunting_tests {
+    use auth_service::core::security::{SecurityEvent, SecurityEventType};
     use auth_service::threat_hunting_orchestrator::{
         ThreatHuntingConfig, ThreatHuntingOrchestrator,
     };
     use auth_service::threat_types::*;
-    use auth_service::core::security::{SecurityEvent, SecurityEventType};
+    use chrono::Timelike;
     use chrono::Utc;
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr};
     use tokio;
-    use chrono::Timelike;
 
     /// Test the complete threat hunting pipeline
     #[tokio::test]
@@ -69,7 +69,10 @@ mod threat_hunting_tests {
         };
 
         // Process the event through the threat hunting pipeline
-        match orchestrator.process_event(SecurityEvent::from(&suspicious_event)).await {
+        match orchestrator
+            .process_event(SecurityEvent::from(&suspicious_event))
+            .await
+        {
             Ok(result) => {
                 println!("Threat hunting analysis completed:");
                 println!("- Processing time: {}ms", result.processing_time_ms);
@@ -177,7 +180,10 @@ mod threat_hunting_tests {
                 token_binding_info: None,
             };
 
-            if let Ok(result) = orchestrator.process_event(SecurityEvent::from(&event)).await {
+            if let Ok(result) = orchestrator
+                .process_event(SecurityEvent::from(&event))
+                .await
+            {
                 if !result.threats_detected.is_empty() {
                     println!(
                         "Detected potential credential stuffing after {} attempts",
@@ -286,7 +292,10 @@ mod threat_hunting_tests {
             token_binding_info: None,
         };
 
-        match orchestrator.process_event(SecurityEvent::from(&suspicious_event)).await {
+        match orchestrator
+            .process_event(SecurityEvent::from(&suspicious_event))
+            .await
+        {
             Ok(result) => {
                 println!("Account takeover analysis completed:");
                 println!("- Threats detected: {}", result.threats_detected.len());
@@ -423,7 +432,10 @@ mod threat_hunting_tests {
             .with_second(0)
             .unwrap();
 
-        match orchestrator.process_event(SecurityEvent::from(&anomalous_event)).await {
+        match orchestrator
+            .process_event(SecurityEvent::from(&anomalous_event))
+            .await
+        {
             Ok(result) => {
                 println!("Behavioral profiling analysis completed:");
 
@@ -507,7 +519,9 @@ mod threat_hunting_tests {
                     token_binding_info: None,
                 };
 
-                orchestrator.process_event(SecurityEvent::from(&event)).await
+                orchestrator
+                    .process_event(SecurityEvent::from(&event))
+                    .await
             });
 
             handles.push(handle);

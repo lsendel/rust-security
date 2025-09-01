@@ -546,7 +546,7 @@ impl QuantumJwtManager {
         &self,
         data: &[u8],
         signature: &str,
-        key_pair: &ClassicalKeyPair,
+        _key_pair: &ClassicalKeyPair,
     ) -> Result<()> {
         // Simulate ECDSA verification (would use actual crypto library)
         let expected_signature_data = format!("classical_sig_{}", hex::encode(data));
@@ -567,7 +567,7 @@ impl QuantumJwtManager {
         &self,
         data: &[u8],
         signature: &str,
-        key_pair: &PostQuantumKeyPair,
+        _key_pair: &PostQuantumKeyPair,
     ) -> Result<()> {
         // Simulate ML-DSA verification (would use actual PQ crypto library)
         let expected_signature_data = format!("pq_sig_{}", hex::encode(data));

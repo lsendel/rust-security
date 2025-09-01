@@ -6,7 +6,7 @@ use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::app::AppContainer;
-use crate::services::auth_service::{LoginRequest, LoginResponse};
+use crate::services::auth_service::LoginRequest;
 use crate::services::user_service::RegisterRequest;
 use crate::shared::error::AppResult;
 
@@ -56,7 +56,10 @@ pub async fn register(
         name: request.name,
     };
 
-    let response = container.user_service.register(register_req).await
+    let response = container
+        .user_service
+        .register(register_req)
+        .await
         .map_err(|e| crate::shared::error::AppError::Internal(e.to_string()))?;
 
     // For now, return a basic response (would need to login after registration)
@@ -64,7 +67,7 @@ pub async fn register(
         user: UserDto {
             id: response.id,
             email: response.email,
-            name: response.name,
+            name: response.name.unwrap_or_default(),
             roles: vec!["user".to_string()],
             verified: response.verified,
         },

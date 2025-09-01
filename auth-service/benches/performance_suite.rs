@@ -136,19 +136,20 @@ fn bench_token_introspection(c: &mut Criterion) {
     let rt = Arc::new(Runtime::new().unwrap());
 
     // Pre-generate tokens and create a shared service with all tokens
-    let (tokens, service): (Vec<String>, Arc<RwLock<mock_auth_service::MockAuthService>>) = rt.block_on(async {
-        let mut service = mock_auth_service::MockAuthService::new();
-        let mut tokens = Vec::new();
+    let (tokens, service): (Vec<String>, Arc<RwLock<mock_auth_service::MockAuthService>>) = rt
+        .block_on(async {
+            let mut service = mock_auth_service::MockAuthService::new();
+            let mut tokens = Vec::new();
 
-        for i in 0..1000 {
-            let token = service
-                .generate_token(&format!("client_{}", i), "read write")
-                .await;
-            tokens.push(token);
-        }
+            for i in 0..1000 {
+                let token = service
+                    .generate_token(&format!("client_{}", i), "read write")
+                    .await;
+                tokens.push(token);
+            }
 
-        (tokens, Arc::new(RwLock::new(service)))
-    });
+            (tokens, Arc::new(RwLock::new(service)))
+        });
 
     for batch_size in [1, 10, 50, 100].iter() {
         group.throughput(Throughput::Elements(*batch_size as u64));

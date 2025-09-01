@@ -3,7 +3,6 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine as _;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
-use rayon::prelude::*;
 use ring::rand::SecureRandom;
 use ring::{aead, digest, hmac, rand, signature};
 use std::sync::Arc;

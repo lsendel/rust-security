@@ -12,7 +12,8 @@ use tokio::time;
 use crate::infrastructure::cache::advanced_cache::{AdvancedCache, AdvancedCacheConfig};
 use crate::infrastructure::database::connection_pool::DatabaseConnectionManager;
 use crate::middleware::security_enhanced::RateLimiter;
-use crate::services::{AsyncOptimizer, AsyncOptimizerConfig, PasswordService};
+// use crate::services::{AsyncOptimizer, AsyncOptimizerConfig, PasswordService};  // AsyncOptimizer disabled
+use crate::services::PasswordService;
 use crate::tests::mocks;
 
 /// Performance benchmark for password hashing
@@ -611,4 +612,3 @@ async fn test_performance_regression() {
         baseline_p95.saturating_sub(current_p95)
     );
 }
-

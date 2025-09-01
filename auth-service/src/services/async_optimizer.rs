@@ -7,12 +7,12 @@
 //! - Memory-efficient stream processing
 //! - Request deduplication and caching
 
+use futures::stream::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, Semaphore};
 use tokio::task::JoinHandle;
-use futures::stream::{StreamExt, TryStreamExt};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -71,7 +71,10 @@ pub struct AsyncMetrics {
 impl AsyncOptimizer {
     /// Create a new async optimizer
     pub fn new(config: AsyncOptimizerConfig) -> Self {
-        info!("Creating async optimizer with max concurrent ops: {}", config.max_concurrent_ops);
+        info!(
+            "Creating async optimizer with max concurrent ops: {}",
+            config.max_concurrent_ops
+        );
 
         Self {
             semaphore: Arc::new(Semaphore::new(config.max_concurrent_ops)),
@@ -86,9 +89,12 @@ impl AsyncOptimizer {
     pub async fn execute_operation<F, Fut, T, E>(&self, operation: F) -> Result<T, E>
     where
         F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = Result<T, E>>,
+        Fut: std::future::Future<Output = Result<T, E>>, E: std::convert::From<std::string::String>
     {
-        let _permit = self.semaphore.acquire().await
+        let _permit = self
+            .semaphore
+            .acquire()
+            .await
             .map_err(|_| "Failed to acquire semaphore permit".to_string())?;
 
         let start_time = Instant::now();
@@ -100,9 +106,9 @@ impl AsyncOptimizer {
         // Update metrics
         let mut metrics = self.metrics.write().await;
         metrics.total_operations += 1;
-        metrics.concurrent_operations = metrics.concurrent_operations.max(
-            (self.config.max_concurrent_ops - self.semaphore.available_permits()) as u64
-        );
+        metrics.concurrent_operations = metrics
+            .concurrent_operations
+            .max((self.config.max_concurrent_ops - self.semaphore.available_permits()) as u64);
 
         if result.is_err() {
             metrics.failed_operations += 1;
@@ -110,8 +116,9 @@ impl AsyncOptimizer {
 
         // Update timing metrics
         metrics.avg_operation_time = Duration::from_nanos(
-            ((metrics.avg_operation_time.as_nanos() * (metrics.total_operations - 1) as u128)
-             + operation_time.as_nanos()) / metrics.total_operations as u128
+            (((metrics.avg_operation_time.as_nanos() * (metrics.total_operations - 1) as u128)
+                + operation_time.as_nanos())
+                / metrics.total_operations as u128).try_into().unwrap(),
         );
         metrics.max_operation_time = metrics.max_operation_time.max(operation_time);
 
@@ -119,40 +126,41 @@ impl AsyncOptimizer {
     }
 
     /// Execute multiple operations concurrently with bounded parallelism
-    pub async fn execute_concurrent<F, Fut, T, E>(
-        &self,
-        operations: Vec<F>,
-    ) -> Vec<Result<T, E>>
+    pub async fn execute_concurrent<F, Fut, T, E>(&self, operations: Vec<F>) -> Vec<Result<T, E>>
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<T, E>> + Send,
         T: Send + 'static,
-        E: Send + 'static,
+        E: Send + 'static + std::convert::From<std::string::String>,
     {
         let semaphore = Arc::clone(&self.semaphore);
 
-        let tasks: Vec<_> = operations.into_iter().enumerate().map(|(i, op)| {
-            let sem = Arc::clone(&semaphore);
-            let metrics = Arc::clone(&self.metrics);
+        let tasks: Vec<_> = operations
+            .into_iter()
+            .enumerate()
+            .map(|(i, op)| {
+                let sem = Arc::clone(&semaphore);
+                let metrics = Arc::clone(&self.metrics);
 
-            tokio::spawn(async move {
-                let _permit = sem.acquire().await.unwrap();
+                tokio::spawn(async move {
+                    let _permit = sem.acquire().await.unwrap();
 
-                let start_time = Instant::now();
-                let result = op().await;
-                let operation_time = start_time.elapsed();
+                    let start_time = Instant::now();
+                    let result = op().await;
+                    let operation_time = start_time.elapsed();
 
-                // Update metrics
-                let mut metrics = metrics.write().await;
-                metrics.total_operations += 1;
+                    // Update metrics
+                    let mut metrics = metrics.write().await;
+                    metrics.total_operations += 1;
 
-                if result.is_err() {
-                    metrics.failed_operations += 1;
-                }
+                    if result.is_err() {
+                        metrics.failed_operations += 1;
+                    }
 
-                (i, result, operation_time)
+                    (i, result, operation_time)
+                })
             })
-        }).collect();
+            .collect();
 
         let mut results = vec![None; tasks.len()];
 
@@ -173,10 +181,7 @@ impl AsyncOptimizer {
     }
 
     /// Execute operations in batches for better performance
-    pub async fn execute_batched<F, Fut, T, E>(
-        &self,
-        operations: Vec<F>,
-    ) -> Result<Vec<T>, E>
+    pub async fn execute_batched<F, Fut, T, E>(&self, operations: Vec<F>) -> Result<Vec<T>, E>
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<T, E>> + Send,
@@ -187,14 +192,10 @@ impl AsyncOptimizer {
     }
 
     /// Deduplicate requests to prevent redundant operations
-    pub async fn deduplicate_request<F, Fut, T, E>(
-        &self,
-        key: String,
-        operation: F,
-    ) -> Result<T, E>
+    pub async fn deduplicate_request<F, Fut, T, E>(&self, key: String, operation: F) -> Result<T, E>
     where
         F: FnOnce() -> Fut,
-        Fut: std::future::Future<Output = Result<T, E>>,
+        Fut: std::future::Future<Output = Result<T, E>>, E: for<'de> <_>::_serde::Deserialize<'de>
     {
         if let Some(result) = self.request_deduplicator.get_cached_result(&key).await {
             let mut metrics = self.metrics.write().await;
@@ -203,15 +204,14 @@ impl AsyncOptimizer {
         }
 
         let result = self.execute_operation(operation).await?;
-        self.request_deduplicator.cache_result(key, Ok(result.clone())).await;
+        self.request_deduplicator
+            .cache_result(key, Ok(result.clone()))
+            .await;
         Ok(result)
     }
 
     /// Process a stream of operations efficiently
-    pub async fn process_stream<F, Fut, T, E, S>(
-        &self,
-        stream: S,
-    ) -> Vec<Result<T, E>>
+    pub async fn process_stream<F, Fut, T, E, S>(&self, stream: S) -> Vec<Result<T, E>>
     where
         S: futures::Stream<Item = F> + Send,
         F: FnOnce() -> Fut,
@@ -243,13 +243,13 @@ struct BatchProcessor {
 
 impl BatchProcessor {
     fn new(batch_size: usize, timeout: Duration) -> Self {
-        Self { batch_size, timeout }
+        Self {
+            batch_size,
+            timeout,
+        }
     }
 
-    async fn process_batch<F, Fut, T, E>(
-        &self,
-        operations: Vec<F>,
-    ) -> Result<Vec<T>, E>
+    async fn process_batch<F, Fut, T, E>(&self, operations: Vec<F>) -> Result<Vec<T>, E>
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<T, E>> + Send,
@@ -263,9 +263,7 @@ impl BatchProcessor {
             let batch_start = Instant::now();
 
             // Execute batch concurrently
-            let batch_results = futures::future::join_all(
-                chunk.iter().map(|op| op())
-            ).await;
+            let batch_results = futures::future::join_all(chunk.iter().map(|op| op())).await;
 
             // Process results
             for result in batch_results {
@@ -276,7 +274,11 @@ impl BatchProcessor {
             }
 
             let batch_time = batch_start.elapsed();
-            debug!("Processed batch of {} operations in {:?}", chunk.len(), batch_time);
+            debug!(
+                "Processed batch of {} operations in {:?}",
+                chunk.len(),
+                batch_time
+            );
 
             // Small delay between batches to prevent overwhelming the system
             if batch_time < self.timeout {
@@ -351,32 +353,46 @@ impl OptimizedAuthService {
     }
 
     /// Authenticate user with optimizations
-    pub async fn authenticate_user(&self, username: &str, password: &str) -> Result<bool, AppError> {
+    pub async fn authenticate_user(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<bool, AppError> {
         let cache_key = format!("auth:{}:{}", username, Uuid::new_v4()); // Add nonce to prevent timing attacks
 
-        self.optimizer.deduplicate_request(cache_key, || async {
-            // Simulate authentication logic
-            tokio::time::sleep(Duration::from_millis(10)).await; // Simulate DB lookup
-            Ok(username.len() > 3 && password.len() > 6) // Simple validation
-        }).await
+        self.optimizer
+            .deduplicate_request(cache_key, || async {
+                // Simulate authentication logic
+                tokio::time::sleep(Duration::from_millis(10)).await; // Simulate DB lookup
+                Ok(username.len() > 3 && password.len() > 6) // Simple validation
+            })
+            .await
     }
 
     /// Batch authenticate multiple users
-    pub async fn batch_authenticate(&self, credentials: Vec<(String, String)>) -> Result<Vec<bool>, AppError> {
-        let operations: Vec<_> = credentials.into_iter().map(|(username, password)| {
-            let optimizer = Arc::clone(&self.optimizer);
-            move || {
-                let username = username.clone();
-                let password = password.clone();
-                async move {
-                    optimizer.execute_operation(|| async {
-                        // Simulate authentication
-                        tokio::time::sleep(Duration::from_millis(5)).await;
-                        Ok(username.len() > 3 && password.len() > 6)
-                    }).await
+    pub async fn batch_authenticate(
+        &self,
+        credentials: Vec<(String, String)>,
+    ) -> Result<Vec<bool>, AppError> {
+        let operations: Vec<_> = credentials
+            .into_iter()
+            .map(|(username, password)| {
+                let optimizer = Arc::clone(&self.optimizer);
+                move || {
+                    let username = username.clone();
+                    let password = password.clone();
+                    async move {
+                        optimizer
+                            .execute_operation(|| async {
+                                // Simulate authentication
+                                tokio::time::sleep(Duration::from_millis(5)).await;
+                                Ok(username.len() > 3 && password.len() > 6)
+                            })
+                            .await
+                    }
                 }
-            }
-        }).collect();
+            })
+            .collect();
 
         self.optimizer.execute_batched(operations).await
     }
@@ -397,8 +413,8 @@ pub mod stream_utils {
         optimizer: Arc<AsyncOptimizer>,
         requests: impl Stream<Item = (String, String)> + Send,
     ) -> Vec<Result<bool, AppError>> {
-        optimizer.process_stream(
-            requests.map(move |(username, password)| {
+        optimizer
+            .process_stream(requests.map(move |(username, password)| {
                 let opt = Arc::clone(&optimizer);
                 move || {
                     let username = username.clone();
@@ -409,12 +425,13 @@ pub mod stream_utils {
                             || async {
                                 tokio::time::sleep(Duration::from_millis(5)).await;
                                 Ok(username.len() > 3 && password.len() > 6)
-                            }
-                        ).await
+                            },
+                        )
+                        .await
                     }
                 }
-            })
-        ).await
+            }))
+            .await
     }
 
     /// Create a buffered stream processor
@@ -431,7 +448,10 @@ pub mod stream_utils {
         let (tx, rx) = tokio::sync::mpsc::channel(buffer_size);
 
         tokio::spawn(async move {
-            rx.map(|item| processor(item)).buffered(buffer_size).collect::<Vec<_>>().await
+            rx.map(|item| processor(item))
+                .buffered(buffer_size)
+                .collect::<Vec<_>>()
+                .await
         });
 
         move |item: T| {
@@ -456,10 +476,12 @@ mod tests {
 
         let optimizer = AsyncOptimizer::new(config);
 
-        let result = optimizer.execute_operation(|| async {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            Ok::<_, String>("success".to_string())
-        }).await;
+        let result = optimizer
+            .execute_operation(|| async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                Ok::<_, String>("success".to_string())
+            })
+            .await;
 
         assert_eq!(result, Ok("success".to_string()));
 
@@ -477,12 +499,14 @@ mod tests {
 
         let optimizer = AsyncOptimizer::new(config);
 
-        let operations: Vec<_> = (0..10).map(|i| {
-            move || async move {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-                Ok::<_, String>(format!("result_{}", i))
-            }
-        }).collect();
+        let operations: Vec<_> = (0..10)
+            .map(|i| {
+                move || async move {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                    Ok::<_, String>(format!("result_{}", i))
+                }
+            })
+            .collect();
 
         let results = optimizer.execute_concurrent(operations).await;
 
@@ -501,17 +525,21 @@ mod tests {
         let mut call_count = 0;
 
         // First call
-        let result1 = optimizer.deduplicate_request(key.clone(), || async {
-            call_count += 1;
-            tokio::time::sleep(Duration::from_millis(5)).await;
-            Ok::<_, String>("result".to_string())
-        }).await;
+        let result1 = optimizer
+            .deduplicate_request(key.clone(), || async {
+                call_count += 1;
+                tokio::time::sleep(Duration::from_millis(5)).await;
+                Ok::<_, String>("result".to_string())
+            })
+            .await;
 
         // Second call (should be deduplicated)
-        let result2 = optimizer.deduplicate_request(key.clone(), || async {
-            call_count += 1;
-            Ok::<_, String>("result2".to_string())
-        }).await;
+        let result2 = optimizer
+            .deduplicate_request(key.clone(), || async {
+                call_count += 1;
+                Ok::<_, String>("result2".to_string())
+            })
+            .await;
 
         assert_eq!(result1, Ok("result".to_string()));
         assert_eq!(result2, Ok("result".to_string()));
@@ -530,12 +558,14 @@ mod tests {
 
         let optimizer = AsyncOptimizer::new(config);
 
-        let operations: Vec<_> = (0..9).map(|i| {
-            move || async move {
-                tokio::time::sleep(Duration::from_millis(5)).await;
-                Ok::<_, String>(format!("batch_result_{}", i))
-            }
-        }).collect();
+        let operations: Vec<_> = (0..9)
+            .map(|i| {
+                move || async move {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                    Ok::<_, String>(format!("batch_result_{}", i))
+                }
+            })
+            .collect();
 
         let results = optimizer.execute_batched(operations).await.unwrap();
 
@@ -560,12 +590,14 @@ mod tests {
         // Test that concurrency is limited
         let start_time = Instant::now();
 
-        let operations: Vec<_> = (0..4).map(|_| {
-            || async {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                Ok::<_, String>("done".to_string())
-            }
-        }).collect();
+        let operations: Vec<_> = (0..4)
+            .map(|_| {
+                || async {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                    Ok::<_, String>("done".to_string())
+                }
+            })
+            .collect();
 
         let _results = optimizer.execute_concurrent(operations).await;
 

@@ -8,7 +8,6 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tracing::{error, info, instrument, warn};
 
-use crate::shared::error::AppError;
 #[cfg(feature = "monitoring")]
 use crate::metrics::METRICS;
 

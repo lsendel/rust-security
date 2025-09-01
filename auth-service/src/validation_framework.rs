@@ -138,28 +138,35 @@ macro_rules! validated_field {
 /// Common validation functions
 pub fn validate_phone_number(phone: &str) -> Result<(), ValidationError> {
     // Basic phone number validation - digits, spaces, dashes, parentheses, plus
-    let allowed_chars = phone.chars().all(|c| {
-        c.is_ascii_digit() || c == ' ' || c == '-' || c == '(' || c == ')' || c == '+'
-    });
-    
+    let allowed_chars = phone
+        .chars()
+        .all(|c| c.is_ascii_digit() || c == ' ' || c == '-' || c == '(' || c == ')' || c == '+');
+
     if !allowed_chars {
         return Err(ValidationError::new("Invalid phone number format"));
     }
-    
+
     let digit_count = phone.chars().filter(|c| c.is_ascii_digit()).count();
     if digit_count < 10 || digit_count > 15 {
         return Err(ValidationError::new("Phone number must have 10-15 digits"));
     }
-    
+
     Ok(())
 }
 
 pub fn validate_country_code(code: &str) -> Result<(), ValidationError> {
     if code.len() != 2 {
-        return Err(ValidationError::new("Country code must be exactly 2 characters"));
+        return Err(ValidationError::new(
+            "Country code must be exactly 2 characters",
+        ));
     }
-    if !code.chars().all(|c| c.is_ascii_alphabetic() && c.is_uppercase()) {
-        return Err(ValidationError::new("Country code must be uppercase letters"));
+    if !code
+        .chars()
+        .all(|c| c.is_ascii_alphabetic() && c.is_uppercase())
+    {
+        return Err(ValidationError::new(
+            "Country code must be uppercase letters",
+        ));
     }
     Ok(())
 }

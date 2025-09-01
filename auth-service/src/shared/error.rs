@@ -34,12 +34,6 @@ pub enum AppError {
     #[error("Bad request: {0}")]
     BadRequest(String),
 
-    #[error("Invalid request: {0}")]
-    InvalidRequest(String),
-
-    #[error("Service unavailable: {0}")]
-    ServiceUnavailable(String),
-
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
 

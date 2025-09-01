@@ -1,4 +1,6 @@
-use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_logging::{
+    SecurityEvent, SecurityEventType, SecuritySeverity,
+};
 use crate::shared::error::AppError;
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
@@ -173,7 +175,10 @@ impl ClientAuthenticator {
     /// - Secret contains only digits or only letters
     /// - Secret has too many repeated characters
     /// - Secret matches common weak patterns
-    fn validate_client_secret_strength(&self, secret: &str) -> Result<(), crate::shared::error::AppError> {
+    fn validate_client_secret_strength(
+        &self,
+        secret: &str,
+    ) -> Result<(), crate::shared::error::AppError> {
         // Minimum length requirement
         if secret.len() < 32 {
             return Err(crate::shared::error::AppError::InvalidRequest {
@@ -430,33 +435,33 @@ mod tests {
         // Too short
         assert!(auth
             .register_client(
-                "test_client".to_string(},
-                "short".to_string(},
+                "test_client".to_string(),
+                "short".to_string(),
                 metadata.clone()
             )
-            .is_err(});
+            .is_err());
 
         // All digits
         assert!(auth
             .register_client(
-                "test_client".to_string(},
-                "12345678901234567890123456789012".to_string(},
+                "test_client".to_string(),
+                "12345678901234567890123456789012".to_string(),
                 metadata.clone()
             )
-            .is_err(});
+            .is_err());
 
         // All letters
         assert!(auth
             .register_client(
-                "test_client".to_string(},
-                "abcdefghijklmnopqrstuvwxyzabcdef".to_string(},
+                "test_client".to_string(),
+                "abcdefghijklmnopqrstuvwxyzabcdef".to_string(),
                 metadata
             )
-            .is_err(});
-    )
+            .is_err());
+    }
 
     #[test]
-    fn test_client_authentication(} {
+    fn test_client_authentication() {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
         let secret = "very_strong_secret_with_mixed_chars_123!@#";
@@ -467,27 +472,27 @@ mod tests {
         // Correct credentials
         assert!(auth
             .authenticate_client("test_client", secret, None)
-            .unwrap(});
+            .unwrap());
 
         // Wrong credentials
         assert!(!auth
             .authenticate_client("test_client", "wrong_secret", None)
-            .unwrap(});
+            .unwrap());
 
         // Non-existent client
         assert!(!auth
             .authenticate_client("unknown_client", secret, None)
-            .unwrap(});
-    )
+            .unwrap());
+    }
 
     #[test]
-    fn test_timing_consistency(} {
+    fn test_timing_consistency() {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
 
         auth.register_client(
-            "test_client".to_string(},
-            "very_strong_secret_with_mixed_chars_123!@#".to_string(},
+            "test_client".to_string(),
+            "very_strong_secret_with_mixed_chars_123!@#".to_string(),
             metadata,
         )
         .unwrap();
@@ -513,6 +518,6 @@ mod tests {
             time_diff.as_millis() < 50,
             "Timing difference too large: {}ms",
             time_diff.as_millis()
-        };
-    )
-)
+        );
+    }
+}

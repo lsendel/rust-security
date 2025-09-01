@@ -11,7 +11,7 @@ use tracing::{error, info, instrument, warn};
 use uuid::Uuid;
 
 use crate::infrastructure::security::security_logging::{
-    SecurityEvent, SecurityEventType, SecurityLogger, SecuritySeverity,
+    SecurityEvent, SecurityEventType, SecuritySeverity,
 };
 use crate::pii_protection::redact_log;
 use crate::shared::error::AppError;
@@ -239,7 +239,7 @@ impl KeyManagementService {
             .await;
 
         // Log security event
-        let mut event = SecurityEvent::new(
+        let event = SecurityEvent::new(
             SecurityEventType::KeyManagement,
             SecuritySeverity::Info,
             "auth-service".to_string(),
@@ -251,7 +251,10 @@ impl KeyManagementService {
         .with_outcome("success".to_string())
         .with_reason("New key generated for JWT signing operations".to_string())
         .with_resource(kid.clone())
-        .with_detail_string("key_algorithm".to_string(), format!("{:?}", self.config.algorithm))
+        .with_detail_string(
+            "key_algorithm".to_string(),
+            format!("{:?}", self.config.algorithm),
+        )
         .with_detail_string("key_size".to_string(), self.config.key_size.to_string());
 
         crate::infrastructure::security::security_logging::log_event(&event);
@@ -304,7 +307,7 @@ impl KeyManagementService {
             .await;
 
         // Log security event
-        let mut event = SecurityEvent::new(
+        let event = SecurityEvent::new(
             SecurityEventType::KeyManagement,
             SecuritySeverity::Info,
             "auth-service".to_string(),
@@ -392,7 +395,7 @@ impl KeyManagementService {
         .await;
 
         // Log security event
-        let mut event = SecurityEvent::new(
+        let event = SecurityEvent::new(
             SecurityEventType::SuspiciousActivity,
             SecuritySeverity::High,
             "auth-service".to_string(),
@@ -449,7 +452,7 @@ impl KeyManagementService {
         .await;
 
         // Log security event
-        let mut event = SecurityEvent::new(
+        let event = SecurityEvent::new(
             SecurityEventType::SuspiciousActivity,
             SecuritySeverity::Critical,
             "auth-service".to_string(),
@@ -595,7 +598,8 @@ impl KeyManagementService {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing
         Err(crate::shared::error::AppError::KeyGenerationError {
-            message: "RSA key generation not implemented - use HMAC keys for development".to_string(),
+            message: "RSA key generation not implemented - use HMAC keys for development"
+                .to_string(),
         })
     }
 

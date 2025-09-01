@@ -23,7 +23,6 @@ use crate::{
         Environment, IdentityConfig, IdentityType, JitAccessRequest, RequestContext,
         ServiceIdentity, ServiceIdentityManager,
     },
-    shared::error::AppError,
 };
 
 /// Register a new service identity

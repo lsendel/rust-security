@@ -1,8 +1,7 @@
 // TODO: Add aes_gcm dependency to Cargo.toml if encryption is needed
 // use aes_gcm::{Aes256Gcm, Key, Nonce};
 // use aes_gcm::aead::{Aead, KeyInit};
-use base64::{Engine as _, engine::general_purpose::STANDARD};
-use rand::RngCore;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,7 +18,9 @@ pub struct SamlService {
 
 impl SamlService {
     pub fn new(key: [u8; 32]) -> Self {
-        Self { encryption_key: key }
+        Self {
+            encryption_key: key,
+        }
     }
 
     pub fn encrypt_assertion(&self, assertion: &str) -> Result<String, Box<dyn std::error::Error>> {

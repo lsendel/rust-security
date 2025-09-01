@@ -78,7 +78,9 @@ impl OAuthClient {
 
     /// Check if a response type is allowed
     pub fn is_response_type_allowed(&self, response_type: &str) -> bool {
-        self.response_types.iter().any(|allowed| allowed == response_type)
+        self.response_types
+            .iter()
+            .any(|allowed| allowed == response_type)
     }
 
     /// Check if a scope is allowed

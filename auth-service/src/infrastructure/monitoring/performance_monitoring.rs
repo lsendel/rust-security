@@ -1,13 +1,13 @@
 // Performance Monitoring and SLO Implementation
 // Comprehensive performance tracking with automated regression detection
 
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{info, warn, error};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
+use tracing::{error, info, warn};
 
 /// Service Level Objective (SLO) configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,8 +116,8 @@ impl Default for MonitoringConfig {
     fn default() -> Self {
         Self {
             collection_window: Duration::from_secs(60), // 1 minute windows
-            history_size: 1440, // 24 hours of 1-minute windows
-            regression_threshold: 0.15, // 15% degradation threshold
+            history_size: 1440,                         // 24 hours of 1-minute windows
+            regression_threshold: 0.15,                 // 15% degradation threshold
             enable_alerting: true,
             alert_webhook: None,
         }
@@ -197,12 +197,12 @@ impl PerformanceMonitor {
         drop(window);
 
         let metrics = self.calculate_metrics(timings).await;
-        
+
         // Store in history
         {
             let mut history = self.historical_metrics.write().await;
             history.push(metrics.clone());
-            
+
             // Keep only recent history
             if history.len() > self.config.history_size {
                 history.remove(0);
@@ -230,7 +230,7 @@ impl PerformanceMonitor {
             .iter()
             .filter_map(|t| t.duration.map(|d| d.as_secs_f64() * 1000.0))
             .collect();
-        
+
         latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let (p50, p95, p99, mean) = if !latencies.is_empty() {
@@ -255,15 +255,21 @@ impl PerformanceMonitor {
         // Calculate per-endpoint metrics
         let mut endpoint_metrics = HashMap::new();
         let mut endpoint_groups: HashMap<String, Vec<&RequestTiming>> = HashMap::new();
-        
+
         for timing in &timings {
-            endpoint_groups.entry(timing.endpoint.clone()).or_default().push(timing);
+            endpoint_groups
+                .entry(timing.endpoint.clone())
+                .or_default()
+                .push(timing);
         }
 
         for (endpoint, endpoint_timings) in endpoint_groups {
             let requests = endpoint_timings.len() as u64;
-            let errors = endpoint_timings.iter().filter(|t| !t.is_successful()).count() as u64;
-            
+            let errors = endpoint_timings
+                .iter()
+                .filter(|t| !t.is_successful())
+                .count() as u64;
+
             let endpoint_latencies: Vec<f64> = endpoint_timings
                 .iter()
                 .filter_map(|t| t.duration.map(|d| d.as_secs_f64() * 1000.0))
@@ -273,20 +279,25 @@ impl PerformanceMonitor {
                 let mean = endpoint_latencies.iter().sum::<f64>() / endpoint_latencies.len() as f64;
                 let p95 = percentile(&endpoint_latencies, 0.95);
                 let slowest = endpoint_latencies.iter().fold(0.0f64, |a, &b| a.max(b));
-                let fastest = endpoint_latencies.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+                let fastest = endpoint_latencies
+                    .iter()
+                    .fold(f64::INFINITY, |a, &b| a.min(b));
                 (mean, p95, slowest, fastest)
             } else {
                 (0.0, 0.0, 0.0, 0.0)
             };
 
-            endpoint_metrics.insert(endpoint, EndpointMetrics {
-                requests,
-                errors,
-                mean_latency,
-                p95_latency,
-                slowest_request: slowest,
-                fastest_request: fastest,
-            });
+            endpoint_metrics.insert(
+                endpoint,
+                EndpointMetrics {
+                    requests,
+                    errors,
+                    mean_latency,
+                    p95_latency,
+                    slowest_request: slowest,
+                    fastest_request: fastest,
+                },
+            );
         }
 
         PerformanceMetrics {
@@ -332,10 +343,14 @@ impl PerformanceMonitor {
         None
     }
 
-    fn check_latency_regression(&self, baseline: &PerformanceMetrics, current: &PerformanceMetrics) -> Option<RegressionAnalysis> {
+    fn check_latency_regression(
+        &self,
+        baseline: &PerformanceMetrics,
+        current: &PerformanceMetrics,
+    ) -> Option<RegressionAnalysis> {
         let baseline_p95 = baseline.p95_latency;
         let current_p95 = current.p95_latency;
-        
+
         if baseline_p95 > 0.0 {
             let change = (current_p95 - baseline_p95) / baseline_p95;
             if change > self.config.regression_threshold {
@@ -353,10 +368,14 @@ impl PerformanceMonitor {
         None
     }
 
-    fn check_throughput_regression(&self, baseline: &PerformanceMetrics, current: &PerformanceMetrics) -> Option<RegressionAnalysis> {
+    fn check_throughput_regression(
+        &self,
+        baseline: &PerformanceMetrics,
+        current: &PerformanceMetrics,
+    ) -> Option<RegressionAnalysis> {
         let baseline_throughput = baseline.throughput;
         let current_throughput = current.throughput;
-        
+
         if baseline_throughput > 0.0 {
             let change = (baseline_throughput - current_throughput) / baseline_throughput;
             if change > self.config.regression_threshold {
@@ -374,12 +393,17 @@ impl PerformanceMonitor {
         None
     }
 
-    fn check_error_rate_regression(&self, baseline: &PerformanceMetrics, current: &PerformanceMetrics) -> Option<RegressionAnalysis> {
+    fn check_error_rate_regression(
+        &self,
+        baseline: &PerformanceMetrics,
+        current: &PerformanceMetrics,
+    ) -> Option<RegressionAnalysis> {
         let baseline_error_rate = baseline.error_rate;
         let current_error_rate = current.error_rate;
-        
+
         let change = current_error_rate - baseline_error_rate;
-        if change > 0.01 { // 1% absolute increase in error rate
+        if change > 0.01 {
+            // 1% absolute increase in error rate
             return Some(RegressionAnalysis {
                 has_regression: true,
                 regression_type: Some(RegressionType::ErrorRateIncrease),
@@ -409,16 +433,28 @@ impl PerformanceMonitor {
     async fn handle_regression(&self, regression: RegressionAnalysis) {
         match regression.severity {
             RegressionSeverity::Critical => {
-                error!("CRITICAL performance regression detected: {}", regression.description);
+                error!(
+                    "CRITICAL performance regression detected: {}",
+                    regression.description
+                );
             }
             RegressionSeverity::Major => {
-                error!("MAJOR performance regression detected: {}", regression.description);
+                error!(
+                    "MAJOR performance regression detected: {}",
+                    regression.description
+                );
             }
             RegressionSeverity::Moderate => {
-                warn!("MODERATE performance regression detected: {}", regression.description);
+                warn!(
+                    "MODERATE performance regression detected: {}",
+                    regression.description
+                );
             }
             RegressionSeverity::Minor => {
-                info!("Minor performance regression detected: {}", regression.description);
+                info!(
+                    "Minor performance regression detected: {}",
+                    regression.description
+                );
             }
         }
 
@@ -433,27 +469,47 @@ impl PerformanceMonitor {
         let mut violations = Vec::new();
 
         if metrics.p50_latency > self.slo.p50_latency_ms {
-            violations.push(format!("P50 latency: {:.1}ms > {:.1}ms", metrics.p50_latency, self.slo.p50_latency_ms));
+            violations.push(format!(
+                "P50 latency: {:.1}ms > {:.1}ms",
+                metrics.p50_latency, self.slo.p50_latency_ms
+            ));
         }
 
         if metrics.p95_latency > self.slo.p95_latency_ms {
-            violations.push(format!("P95 latency: {:.1}ms > {:.1}ms", metrics.p95_latency, self.slo.p95_latency_ms));
+            violations.push(format!(
+                "P95 latency: {:.1}ms > {:.1}ms",
+                metrics.p95_latency, self.slo.p95_latency_ms
+            ));
         }
 
         if metrics.p99_latency > self.slo.p99_latency_ms {
-            violations.push(format!("P99 latency: {:.1}ms > {:.1}ms", metrics.p99_latency, self.slo.p99_latency_ms));
+            violations.push(format!(
+                "P99 latency: {:.1}ms > {:.1}ms",
+                metrics.p99_latency, self.slo.p99_latency_ms
+            ));
         }
 
         if metrics.error_rate > self.slo.error_rate_threshold {
-            violations.push(format!("Error rate: {:.3}% > {:.3}%", metrics.error_rate * 100.0, self.slo.error_rate_threshold * 100.0));
+            violations.push(format!(
+                "Error rate: {:.3}% > {:.3}%",
+                metrics.error_rate * 100.0,
+                self.slo.error_rate_threshold * 100.0
+            ));
         }
 
         if metrics.availability < self.slo.availability_target {
-            violations.push(format!("Availability: {:.3}% < {:.3}%", metrics.availability * 100.0, self.slo.availability_target * 100.0));
+            violations.push(format!(
+                "Availability: {:.3}% < {:.3}%",
+                metrics.availability * 100.0,
+                self.slo.availability_target * 100.0
+            ));
         }
 
         if metrics.throughput < self.slo.throughput_target {
-            violations.push(format!("Throughput: {:.1} RPS < {:.1} RPS", metrics.throughput, self.slo.throughput_target));
+            violations.push(format!(
+                "Throughput: {:.1} RPS < {:.1} RPS",
+                metrics.throughput, self.slo.throughput_target
+            ));
         }
 
         if !violations.is_empty() {
@@ -467,7 +523,10 @@ impl PerformanceMonitor {
     async fn send_regression_alert(&self, regression: &RegressionAnalysis) {
         if let Some(webhook_url) = &self.config.alert_webhook {
             // In a real implementation, send HTTP POST to webhook
-            info!("Would send alert to {}: {}", webhook_url, regression.description);
+            info!(
+                "Would send alert to {}: {}",
+                webhook_url, regression.description
+            );
         }
     }
 
@@ -482,7 +541,7 @@ impl PerformanceMonitor {
     pub async fn get_performance_summary(&self) -> PerformanceSummary {
         let history = self.historical_metrics.read().await;
         let recent_metrics = history.last().cloned();
-        
+
         let slo_compliance = if let Some(ref metrics) = recent_metrics {
             SloCompliance {
                 p50_compliant: metrics.p50_latency <= self.slo.p50_latency_ms,
@@ -530,7 +589,7 @@ fn percentile(sorted_values: &[f64], p: f64) -> f64 {
     if sorted_values.is_empty() {
         return 0.0;
     }
-    
+
     let index = (p * (sorted_values.len() - 1) as f64).round() as usize;
     sorted_values[index.min(sorted_values.len() - 1)]
 }
@@ -542,8 +601,8 @@ mod tests {
     #[test]
     fn test_percentile_calculation() {
         let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
-        
-        assert_eq!(percentile(&values, 0.5), 5.0);  // P50
+
+        assert_eq!(percentile(&values, 0.5), 5.0); // P50
         assert_eq!(percentile(&values, 0.95), 10.0); // P95
         assert_eq!(percentile(&values, 0.99), 10.0); // P99
     }
@@ -558,7 +617,7 @@ mod tests {
         let mut timing = monitor.start_timing("/test".to_string(), "GET".to_string());
         tokio::time::sleep(Duration::from_millis(10)).await;
         timing.finish(200, None);
-        
+
         monitor.record_request(timing).await;
 
         // Process window
@@ -573,9 +632,21 @@ mod tests {
         let slo = PerformanceSLO::default();
         let monitor = PerformanceMonitor::new(config, slo);
 
-        assert!(matches!(monitor.classify_severity(0.05), RegressionSeverity::Minor));
-        assert!(matches!(monitor.classify_severity(0.15), RegressionSeverity::Moderate));
-        assert!(matches!(monitor.classify_severity(0.35), RegressionSeverity::Major));
-        assert!(matches!(monitor.classify_severity(0.75), RegressionSeverity::Critical));
+        assert!(matches!(
+            monitor.classify_severity(0.05),
+            RegressionSeverity::Minor
+        ));
+        assert!(matches!(
+            monitor.classify_severity(0.15),
+            RegressionSeverity::Moderate
+        ));
+        assert!(matches!(
+            monitor.classify_severity(0.35),
+            RegressionSeverity::Major
+        ));
+        assert!(matches!(
+            monitor.classify_severity(0.75),
+            RegressionSeverity::Critical
+        ));
     }
 }

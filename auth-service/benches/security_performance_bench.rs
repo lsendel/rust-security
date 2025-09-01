@@ -55,9 +55,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
     // Benchmark token binding generation
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
-            rt.block_on(async {
-                black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0"))
-            })
+            rt.block_on(async { black_box(generate_token_binding("192.168.1.1", "Mozilla/5.0")) })
         })
     });
 
@@ -199,9 +197,9 @@ fn bench_concurrent_operations(c: &mut Criterion) {
                         let tasks: Vec<_> = (0..concurrent_users)
                             .map(|i| {
                                 let ip = format!("192.168.1.{}", (i % 254) + 1);
-                                tokio::spawn(async move {
-                                    generate_token_binding(&ip, "Mozilla/5.0")
-                                })
+                                tokio::spawn(
+                                    async move { generate_token_binding(&ip, "Mozilla/5.0") },
+                                )
                             })
                             .collect();
 

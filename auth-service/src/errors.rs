@@ -112,15 +112,33 @@ mod tests {
 
     #[test]
     fn test_error_status_codes() {
-        assert_eq!(AppError::not_found("user").status_code(), axum::http::StatusCode::NOT_FOUND);
-        assert_eq!(AppError::unauthorized("access").status_code(), axum::http::StatusCode::UNAUTHORIZED);
-        assert_eq!(AppError::bad_request("input").status_code(), axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(
+            AppError::not_found("user").status_code(),
+            axum::http::StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            AppError::unauthorized("access").status_code(),
+            axum::http::StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            AppError::bad_request("input").status_code(),
+            axum::http::StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]
     fn test_error_user_messages() {
-        assert_eq!(AppError::not_found("user").user_message(), "Resource not found");
-        assert_eq!(AppError::unauthorized("access").user_message(), "Unauthorized access");
-        assert_eq!(AppError::bad_request("input").user_message(), "Invalid request");
+        assert_eq!(
+            AppError::not_found("user").user_message(),
+            "Resource not found"
+        );
+        assert_eq!(
+            AppError::unauthorized("access").user_message(),
+            "Unauthorized access"
+        );
+        assert_eq!(
+            AppError::bad_request("input").user_message(),
+            "Invalid request"
+        );
     }
 }

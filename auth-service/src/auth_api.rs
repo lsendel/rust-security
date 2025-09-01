@@ -546,7 +546,10 @@ pub async fn token(
 
     match request.grant_type.as_str() {
         "authorization_code" => handle_authorization_code_flow(&state, &request).await,
-        _ => Err(oauth_error("unsupported_grant_type", "Grant type not supported")),
+        _ => Err(oauth_error(
+            "unsupported_grant_type",
+            "Grant type not supported",
+        )),
     }
 }
 
@@ -566,11 +569,12 @@ fn validate_token_request(request: &TokenRequest) -> Result<(), (StatusCode, Jso
 
 /// Authenticate OAuth client credentials
 async fn authenticate_oauth_client(
-    state: &AuthState, 
-    request: &TokenRequest
+    state: &AuthState,
+    request: &TokenRequest,
 ) -> Result<OAuthClient, (StatusCode, Json<ErrorResponse>)> {
     let oauth_clients = state.oauth_clients.read().await;
-    let client = oauth_clients.get(&request.client_id)
+    let client = oauth_clients
+        .get(&request.client_id)
         .ok_or_else(|| oauth_error("invalid_client", "Invalid client credentials"))?;
 
     if client.client_secret != request.client_secret {
@@ -585,7 +589,9 @@ async fn handle_authorization_code_flow(
     state: &AuthState,
     request: &TokenRequest,
 ) -> Result<Json<TokenResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let code = request.code.as_ref()
+    let code = request
+        .code
+        .as_ref()
         .ok_or_else(|| oauth_error("invalid_request", "Missing authorization code"))?;
 
     let (user_id, scope) = validate_and_consume_auth_code(state, code).await?;
@@ -609,13 +615,14 @@ async fn validate_and_consume_auth_code(
     code: &str,
 ) -> Result<(String, String), (StatusCode, Json<ErrorResponse>)> {
     let mut authorization_codes = state.authorization_codes.write().await;
-    let auth_code = authorization_codes.get_mut(code)
+    let auth_code = authorization_codes
+        .get_mut(code)
         .ok_or_else(|| oauth_error("invalid_grant", "Invalid authorization code"))?;
 
     if auth_code.used || Utc::now() > auth_code.expires_at {
         return Err(oauth_error(
-            "invalid_grant", 
-            "Authorization code expired or already used"
+            "invalid_grant",
+            "Authorization code expired or already used",
         ));
     }
 
@@ -641,9 +648,8 @@ fn generate_access_token(
     user: &User,
     jwt_secret: &str,
 ) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
-    create_jwt_token(user, jwt_secret).map_err(|_| {
-        oauth_error("server_error", "Failed to generate access token")
-    })
+    create_jwt_token(user, jwt_secret)
+        .map_err(|_| oauth_error("server_error", "Failed to generate access token"))
 }
 
 /// Helper to create consistent OAuth error responses
@@ -653,7 +659,7 @@ fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorRespons
         "server_error" => StatusCode::INTERNAL_SERVER_ERROR,
         _ => StatusCode::BAD_REQUEST,
     };
-    
+
     (
         status,
         Json(ErrorResponse {

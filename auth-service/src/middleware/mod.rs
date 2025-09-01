@@ -9,4 +9,4 @@ pub use crate::rate_limit_secure::*;
 
 // Enhanced security middleware
 pub mod security_enhanced;
-pub use security_enhanced::{SecurityMiddleware, SecurityConfig, RateLimiter, InputValidator};
+pub use security_enhanced::{InputValidator, RateLimiter, SecurityConfig, SecurityMiddleware};

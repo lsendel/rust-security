@@ -3,13 +3,12 @@
 //! Provides cryptographic operations for the application.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc, Duration};
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use thiserror::Error;
 
-use crate::domain::entities::{User, Session};
+use crate::domain::entities::{Session, User};
 use crate::domain::value_objects::PasswordHash;
 
 /// Cryptographic service errors
@@ -34,11 +33,11 @@ pub struct AccessTokenClaims {
     pub email: String,      // User email
     pub name: String,       // User name
     pub roles: Vec<String>, // User roles
-    pub exp: i64,          // Expiration time
-    pub iat: i64,          // Issued at time
-    pub iss: String,       // Issuer
-    pub aud: String,       // Audience
-    pub jti: String,       // JWT ID
+    pub exp: i64,           // Expiration time
+    pub iat: i64,           // Issued at time
+    pub iss: String,        // Issuer
+    pub aud: String,        // Audience
+    pub jti: String,        // JWT ID
     pub session_id: String, // Session ID
 }
 
@@ -46,10 +45,10 @@ pub struct AccessTokenClaims {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RefreshTokenClaims {
     pub sub: String,        // User ID
-    pub exp: i64,          // Expiration time
-    pub iat: i64,          // Issued at time
-    pub iss: String,       // Issuer
-    pub jti: String,       // JWT ID
+    pub exp: i64,           // Expiration time
+    pub iat: i64,           // Issued at time
+    pub iss: String,        // Issuer
+    pub jti: String,        // JWT ID
     pub session_id: String, // Session ID
 }
 
@@ -57,9 +56,21 @@ pub struct RefreshTokenClaims {
 #[async_trait]
 pub trait CryptoServiceTrait: Send + Sync {
     async fn hash_password(&self, password: &str) -> Result<PasswordHash, CryptoError>;
-    async fn verify_password(&self, password: &str, hash: &PasswordHash) -> Result<bool, CryptoError>;
-    async fn generate_access_token(&self, user: &User, session: &Session) -> Result<String, CryptoError>;
-    async fn generate_refresh_token(&self, user: &User, session: &Session) -> Result<String, CryptoError>;
+    async fn verify_password(
+        &self,
+        password: &str,
+        hash: &PasswordHash,
+    ) -> Result<bool, CryptoError>;
+    async fn generate_access_token(
+        &self,
+        user: &User,
+        session: &Session,
+    ) -> Result<String, CryptoError>;
+    async fn generate_refresh_token(
+        &self,
+        user: &User,
+        session: &Session,
+    ) -> Result<String, CryptoError>;
     async fn validate_refresh_token(&self, token: &str) -> Result<(User, Session), CryptoError>;
 }
 
@@ -81,11 +92,7 @@ impl CryptoService {
     }
 
     /// Create crypto service with custom issuer and audience
-    pub fn with_issuer_and_audience(
-        jwt_secret: String,
-        issuer: String,
-        audience: String,
-    ) -> Self {
+    pub fn with_issuer_and_audience(jwt_secret: String, issuer: String, audience: String) -> Self {
         Self {
             jwt_secret,
             jwt_issuer: issuer,
@@ -110,11 +117,15 @@ impl CryptoServiceTrait for CryptoService {
             .hash_password(password.as_bytes(), &salt)
             .map_err(|e| CryptoError::PasswordHash(e.to_string()))?;
 
-        PasswordHash::new(&password_hash.to_string())
+        PasswordHash::new(password_hash.to_string())
             .map_err(|e| CryptoError::PasswordHash(e.to_string()))
     }
 
-    async fn verify_password(&self, password: &str, hash: &PasswordHash) -> Result<bool, CryptoError> {
+    async fn verify_password(
+        &self,
+        password: &str,
+        hash: &PasswordHash,
+    ) -> Result<bool, CryptoError> {
         use argon2::{
             password_hash::{PasswordHash as ArgonPasswordHash, PasswordVerifier},
             Argon2,
@@ -130,15 +141,19 @@ impl CryptoServiceTrait for CryptoService {
             .is_ok())
     }
 
-    async fn generate_access_token(&self, user: &User, session: &Session) -> Result<String, CryptoError> {
+    async fn generate_access_token(
+        &self,
+        user: &User,
+        session: &Session,
+    ) -> Result<String, CryptoError> {
         let now = Utc::now();
         let expires_at = now + Duration::hours(1); // 1 hour
 
         let claims = AccessTokenClaims {
             sub: user.id.as_str().to_string(),
             email: user.email.as_str().to_string(),
-            name: user.name.clone(),
-            roles: user.roles.clone(),
+            name: user.name.clone().unwrap_or_default(),
+            roles: user.roles.iter().cloned().collect(),
             exp: expires_at.timestamp(),
             iat: now.timestamp(),
             iss: self.jwt_issuer.clone(),
@@ -150,11 +165,14 @@ impl CryptoServiceTrait for CryptoService {
         let header = Header::new(Algorithm::HS256);
         let key = EncodingKey::from_secret(self.jwt_secret.as_ref());
 
-        encode(&header, &claims, &key)
-            .map_err(|e| CryptoError::JwtEncode(e.to_string()))
+        encode(&header, &claims, &key).map_err(|e| CryptoError::JwtEncode(e.to_string()))
     }
 
-    async fn generate_refresh_token(&self, user: &User, session: &Session) -> Result<String, CryptoError> {
+    async fn generate_refresh_token(
+        &self,
+        user: &User,
+        session: &Session,
+    ) -> Result<String, CryptoError> {
         let now = Utc::now();
         let expires_at = now + Duration::days(30); // 30 days
 
@@ -170,8 +188,7 @@ impl CryptoServiceTrait for CryptoService {
         let header = Header::new(Algorithm::HS256);
         let key = EncodingKey::from_secret(self.jwt_secret.as_ref());
 
-        encode(&header, &claims, &key)
-            .map_err(|e| CryptoError::JwtEncode(e.to_string()))
+        encode(&header, &claims, &key).map_err(|e| CryptoError::JwtEncode(e.to_string()))
     }
 
     async fn validate_refresh_token(&self, token: &str) -> Result<(User, Session), CryptoError> {
@@ -181,7 +198,7 @@ impl CryptoServiceTrait for CryptoService {
         let token_data = decode::<RefreshTokenClaims>(token, &key, &validation)
             .map_err(|_| CryptoError::InvalidToken)?;
 
-        let claims = token_data.claims;
+        let _claims = token_data.claims;
 
         // For now, return a basic user and session
         // In a real implementation, you'd fetch these from repositories
@@ -202,7 +219,10 @@ mod tests {
         let hash = crypto.hash_password(password).await.unwrap();
 
         assert!(crypto.verify_password(password, &hash).await.unwrap());
-        assert!(!crypto.verify_password("wrong-password", &hash).await.unwrap());
+        assert!(!crypto
+            .verify_password("wrong-password", &hash)
+            .await
+            .unwrap());
     }
 
     #[tokio::test]
@@ -220,7 +240,10 @@ mod tests {
         let access_token = crypto.generate_access_token(&user, &session).await.unwrap();
         assert!(!access_token.is_empty());
 
-        let refresh_token = crypto.generate_refresh_token(&user, &session).await.unwrap();
+        let refresh_token = crypto
+            .generate_refresh_token(&user, &session)
+            .await
+            .unwrap();
         assert!(!refresh_token.is_empty());
     }
 }

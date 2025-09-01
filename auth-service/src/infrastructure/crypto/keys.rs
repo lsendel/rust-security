@@ -83,9 +83,9 @@ impl KeyManager {
                         "Key management initialized successfully on attempt {}",
                         attempt
                     );
-                    self.initialized
-                        .set(true)
-                        .map_err(|_| AppError::internal("Failed to mark key manager as initialized"))?;
+                    self.initialized.set(true).map_err(|_| {
+                        AppError::internal("Failed to mark key manager as initialized")
+                    })?;
                     return Ok(());
                 }
                 Err(e) => {
@@ -112,7 +112,10 @@ impl KeyManager {
 
     /// Generate and store a new key with atomic operations
     #[instrument(skip(self))]
-    async fn generate_and_store_key(&self, is_initialization: bool) -> Result<String, crate::shared::error::AppError> {
+    async fn generate_and_store_key(
+        &self,
+        is_initialization: bool,
+    ) -> Result<String, crate::shared::error::AppError> {
         let key_material = Self::generate_secure_key_material()?;
         let kid = key_material.kid.clone();
 
@@ -202,7 +205,9 @@ impl KeyManager {
     }
 
     /// Get current signing key with fallback handling
-    async fn get_signing_key(&self) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
+    async fn get_signing_key(
+        &self,
+    ) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
         // Ensure we have an available key first
         self.ensure_key_available().await?;
 
@@ -313,7 +318,8 @@ pub async fn jwks_document() -> Value {
 /// - No active signing key is available
 /// - Key management system is not initialized
 /// - Key loading or decoding fails
-pub async fn current_signing_key() -> Result<(String, EncodingKey), crate::shared::error::AppError> {
+pub async fn current_signing_key() -> Result<(String, EncodingKey), crate::shared::error::AppError>
+{
     KEY_MANAGER.get_signing_key().await
 }
 

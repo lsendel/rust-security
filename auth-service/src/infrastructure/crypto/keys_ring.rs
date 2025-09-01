@@ -1,9 +1,9 @@
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ring::{
-    rand::SystemRandom,
-    signature::{Ed25519KeyPair, ED25519, KeyPair},
     error::Unspecified,
+    rand::SystemRandom,
+    signature::{Ed25519KeyPair, KeyPair},
 };
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -63,9 +63,7 @@ impl SecureKeyManager {
             e: None,
         };
 
-        Ok(JwkSet {
-            keys: vec![jwk],
-        })
+        Ok(JwkSet { keys: vec![jwk] })
     }
 
     pub async fn sign_jwt(&self, payload: &[u8]) -> Result<Vec<u8>, Unspecified> {
@@ -78,7 +76,7 @@ impl SecureKeyManager {
         // Generate new Ed25519 key pair
         let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&self.rng)?;
         let new_keypair = Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
-        
+
         let mut current = self.current_keypair.write().await;
         *current = new_keypair;
         Ok(())

@@ -5,8 +5,7 @@
 use std::sync::Arc;
 
 use crate::domain::repositories::{
-    DynSessionRepository, DynTokenRepository, DynUserRepository, SessionRepository,
-    TokenRepository, UserRepository,
+    DynSessionRepository, DynTokenRepository, DynUserRepository,
 };
 use crate::infrastructure::monitoring::MetricsCollector;
 use crate::health_check::HealthChecker;
@@ -28,10 +27,12 @@ impl AppContainer {
     pub async fn new_mock() -> Self {
         // TODO: Implement proper mock repositories
         // For now, we'll return an error indicating this is not implemented
-        panic!("Mock repositories not yet implemented - use new_postgres or new_redis instead");
+        panic!("Mock repositories not yet implemented - use new_postgres instead (redis temporarily disabled)");
     }
 
+    /*
     /// Create a new application container with PostgreSQL repositories
+    #[cfg(feature = "postgres")]
     pub async fn new_postgres(config: &DatabaseConfig) -> Result<Self, AppError> {
         use crate::infrastructure::database::postgres;
 
@@ -72,7 +73,9 @@ impl AppContainer {
             health_checker,
         })
     }
+    */
 
+    /*
     /// Create a new application container with Redis repositories
     pub async fn new_redis(config: &DatabaseConfig) -> Result<Self, AppError> {
         use crate::infrastructure::database::redis;
@@ -116,6 +119,7 @@ impl AppContainer {
             health_checker,
         })
     }
+    */
 }
 
 /// Database configuration
@@ -132,8 +136,8 @@ pub struct DatabaseConfig {
 pub enum AppError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
-    #[error("Redis error: {0}")]
-    Redis(#[from] redis::RedisError),
+    // #[error("Redis error: {0}")]
+    // Redis(#[from] redis::RedisError),
     #[error("Configuration error: {0}")]
     Config(String),
 }
@@ -147,10 +151,10 @@ async fn create_postgres_pool(_config: &DatabaseConfig) -> Result<sqlx::PgPool, 
 }
 
 /// Helper function to create Redis client
-async fn create_redis_client(_redis_url: &str) -> Result<redis::Client, AppError> {
-    // TODO: Implement Redis client creation
-    Err(AppError::Config("Redis not yet implemented".to_string()))
-}
+// async fn create_redis_client(_redis_url: &str) -> Result<redis::Client, AppError> {
+//     // TODO: Implement Redis client creation
+//     Err(AppError::Config("Redis not yet implemented".to_string()))
+// }
 
 #[cfg(test)]
 mod tests {

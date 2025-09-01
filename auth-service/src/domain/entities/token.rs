@@ -129,11 +129,7 @@ mod tests {
     fn test_access_token_creation() {
         let user_id = UserId::new();
         let expires_at = Utc::now() + Duration::hours(1);
-        let token = Token::new_access_token(
-            user_id,
-            "hash123".to_string(),
-            expires_at,
-        );
+        let token = Token::new_access_token(user_id, "hash123".to_string(), expires_at);
 
         assert_eq!(token.token_type, TokenType::Access);
         assert!(!token.is_revoked);
@@ -161,11 +157,7 @@ mod tests {
     fn test_token_expiration() {
         let user_id = UserId::new();
         let expires_at = Utc::now() - Duration::hours(1); // Already expired
-        let token = Token::new_access_token(
-            user_id,
-            "hash123".to_string(),
-            expires_at,
-        );
+        let token = Token::new_access_token(user_id, "hash123".to_string(), expires_at);
 
         assert!(token.is_expired());
         assert!(!token.is_active());
@@ -175,11 +167,7 @@ mod tests {
     fn test_token_revocation() {
         let user_id = UserId::new();
         let expires_at = Utc::now() + Duration::hours(1);
-        let mut token = Token::new_access_token(
-            user_id,
-            "hash123".to_string(),
-            expires_at,
-        );
+        let mut token = Token::new_access_token(user_id, "hash123".to_string(), expires_at);
 
         assert!(token.is_active());
         token.revoke();

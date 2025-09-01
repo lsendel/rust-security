@@ -23,7 +23,10 @@ impl Scope {
         }
 
         // Validate scope format (alphanumeric, underscore, hyphen)
-        if !scope.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+        if !scope
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(ScopeError::InvalidFormat);
         }
 

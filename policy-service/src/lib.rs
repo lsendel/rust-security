@@ -326,7 +326,9 @@ pub fn app(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-async fn check_policy_conflicts(State(state): State<Arc<AppState>>) -> Result<Json<Vec<PolicyConflict>>, AppError> {
+async fn check_policy_conflicts(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<PolicyConflict>>, AppError> {
     let conflicts = detect_policy_conflicts(&state.policies);
     Ok(Json(conflicts))
 }

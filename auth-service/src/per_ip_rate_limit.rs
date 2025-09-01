@@ -1,4 +1,6 @@
-use crate::infrastructure::security::security_logging::{SecurityEvent, SecurityEventType, SecuritySeverity};
+use crate::infrastructure::security::security_logging::{
+    SecurityEvent, SecurityEventType, SecuritySeverity,
+};
 use axum::http::StatusCode;
 use axum::{extract::Request, middleware::Next, response::Response};
 use dashmap::DashMap;

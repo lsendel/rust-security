@@ -1,4 +1,3 @@
-use crate::shared::error::AppError;
 use data_encoding::BASE64URL_NOPAD;
 use rand::RngCore;
 
@@ -30,7 +29,10 @@ impl SecureRandomGenerator {
     /// # Errors
     ///
     /// Returns `crate::shared::error::AppError` if random byte generation fails
-    pub fn generate_string(&self, byte_length: usize) -> Result<String, crate::shared::error::AppError> {
+    pub fn generate_string(
+        &self,
+        byte_length: usize,
+    ) -> Result<String, crate::shared::error::AppError> {
         let bytes = self.generate_bytes(byte_length)?;
         Ok(BASE64URL_NOPAD.encode(&bytes))
     }
@@ -99,7 +101,10 @@ impl SecureRandomGenerator {
     /// # Errors
     ///
     /// Returns `crate::shared::error::AppError` if random byte generation fails
-    pub fn generate_backup_codes(&self, count: usize) -> Result<Vec<String>, crate::shared::error::AppError> {
+    pub fn generate_backup_codes(
+        &self,
+        count: usize,
+    ) -> Result<Vec<String>, crate::shared::error::AppError> {
         let mut codes = Vec::with_capacity(count);
         for _ in 0..count {
             // Generate 8-digit backup codes
@@ -224,7 +229,9 @@ pub fn generate_secure_totp_secret() -> Result<Vec<u8>, crate::shared::error::Ap
 /// # Errors
 ///
 /// Returns `crate::shared::error::AppError` if random byte generation fails
-pub fn generate_secure_backup_codes(count: usize) -> Result<Vec<String>, crate::shared::error::AppError> {
+pub fn generate_secure_backup_codes(
+    count: usize,
+) -> Result<Vec<String>, crate::shared::error::AppError> {
     SECURE_RNG.generate_backup_codes(count)
 }
 

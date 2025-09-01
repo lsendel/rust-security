@@ -4,7 +4,7 @@
 //! From implementations for error types, reducing boilerplate code.
 
 /// Macro to generate From implementations for crate::shared::error::AppError
-/// 
+///
 /// Usage:
 /// ```rust
 /// auth_error_from! {
@@ -27,7 +27,7 @@ macro_rules! auth_error_from {
 }
 
 /// Macro for simple error conversions with context
-/// 
+///
 /// Usage:
 /// ```rust
 /// auth_error_from_with_context! {
@@ -52,7 +52,7 @@ macro_rules! auth_error_from_with_context {
 }
 
 /// Macro for boxed error conversions
-/// 
+///
 /// Usage:
 /// ```rust
 /// auth_error_from_boxed! {
@@ -80,7 +80,7 @@ macro_rules! auth_error_from_boxed {
 }
 
 /// Macro for SOAR error conversions
-/// 
+///
 /// Usage:
 /// ```rust
 /// soar_error_from! {
@@ -103,7 +103,7 @@ macro_rules! soar_error_from {
 
 /// Comprehensive error conversion generator
 /// Generates multiple From implementations at once
-/// 
+///
 /// Usage:
 /// ```rust
 /// generate_error_conversions! {
@@ -129,13 +129,13 @@ macro_rules! generate_error_conversions {
 
 #[cfg(test)]
 mod tests {
-    
+
     // Mock error types for testing
     #[derive(Debug, thiserror::Error)]
     #[error("Test error")]
     #[allow(dead_code)]
     struct TestError;
-    
+
     #[derive(Debug, thiserror::Error)]
     #[allow(dead_code)]
     enum MockAppError {
@@ -144,19 +144,19 @@ mod tests {
         #[error("Serialization error")]
         SerializationError { source: TestError },
         #[error("Internal error: {context}")]
-        InternalError { 
+        InternalError {
             error_id: uuid::Uuid,
             context: String,
         },
     }
-    
+
     // This would generate the From implementations:
     // generate_error_conversions! {
     //     Mockcrate::shared::error::AppError {
     //         TestError => RedisConnectionError,
     //     }
     // }
-    
+
     #[test]
     fn test_macro_syntax() {
         // Just testing that the macro syntax compiles

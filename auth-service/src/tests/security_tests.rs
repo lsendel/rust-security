@@ -3,13 +3,13 @@
 //! Comprehensive security testing including vulnerability detection,
 //! attack vector testing, and security control validation.
 
+use crate::infrastructure::cache::advanced_cache::{AdvancedCache, AdvancedCacheConfig};
+use crate::middleware::security_enhanced::{RateLimiter, SecurityConfig, SecurityMiddleware};
+use crate::services::{constant_time_compare, PasswordService};
+use crate::shared::error::AppError;
+use crate::tests::{assert_err, assert_ok};
 use std::collections::HashMap;
 use std::time::Duration;
-use crate::services::{PasswordService, constant_time_compare};
-use crate::middleware::security_enhanced::{RateLimiter, SecurityConfig, SecurityMiddleware};
-use crate::infrastructure::cache::advanced_cache::{AdvancedCache, AdvancedCacheConfig};
-use crate::shared::error::AppError;
-use crate::tests::{assert_ok, assert_err};
 
 /// Test password security properties
 #[tokio::test]
@@ -38,7 +38,9 @@ async fn test_password_security_properties() {
     assert!(service.verify_password(password, &hash2).unwrap_or(false));
 
     // Wrong password should fail
-    assert!(!service.verify_password("WrongPassword123!", &hash1).unwrap_or(true));
+    assert!(!service
+        .verify_password("WrongPassword123!", &hash1)
+        .unwrap_or(true));
 }
 
 /// Test timing attack resistance
@@ -64,8 +66,12 @@ async fn test_timing_attack_resistance() {
         time2 - time1
     };
 
-    assert!(time_diff < Duration::from_micros(10),
-        "Timing difference too large for equal length strings: {:?} vs {:?}", time1, time2);
+    assert!(
+        time_diff < Duration::from_micros(10),
+        "Timing difference too large for equal length strings: {:?} vs {:?}",
+        time1,
+        time2
+    );
 
     // Different length strings should also have similar timing
     let start3 = std::time::Instant::now();
@@ -78,8 +84,12 @@ async fn test_timing_attack_resistance() {
         time3 - time1
     };
 
-    assert!(time_diff2 < Duration::from_micros(50),
-        "Timing difference too large for different length strings: {:?} vs {:?}", time1, time3);
+    assert!(
+        time_diff2 < Duration::from_micros(50),
+        "Timing difference too large for different length strings: {:?} vs {:?}",
+        time1,
+        time3
+    );
 }
 
 /// Test rate limiting security
@@ -91,17 +101,24 @@ async fn test_rate_limiting_security() {
 
     // Exhaust the rate limit
     for i in 0..5 {
-        assert!(!limiter.is_rate_limited(ip).await,
-            "Request {} should not be rate limited", i);
+        assert!(
+            !limiter.is_rate_limited(ip).await,
+            "Request {} should not be rate limited",
+            i
+        );
     }
 
     // Next request should be limited
-    assert!(limiter.is_rate_limited(ip).await,
-        "Request should be rate limited after exhausting quota");
+    assert!(
+        limiter.is_rate_limited(ip).await,
+        "Request should be rate limited after exhausting quota"
+    );
 
     // Different IP should not be affected
-    assert!(!limiter.is_rate_limited("192.168.1.101").await,
-        "Different IP should not be rate limited");
+    assert!(
+        !limiter.is_rate_limited("192.168.1.101").await,
+        "Different IP should not be rate limited"
+    );
 }
 
 /// Test CSRF protection
@@ -144,15 +161,18 @@ async fn test_input_validation_security() {
         "'; DROP TABLE users; --",
         "<img src=x onerror=alert(1)>",
         "javascript:alert('xss')",
-        "{{7*7}}",  // Template injection
-        "${7*7}",   // Expression injection
+        "{{7*7}}", // Template injection
+        "${7*7}",  // Expression injection
     ];
 
     for malicious_input in malicious_inputs {
         // These tests would be more comprehensive in a real system
         // with actual input validation rules
-        assert!(!malicious_input.is_empty(),
-            "Malicious input should be validated: {}", malicious_input);
+        assert!(
+            !malicious_input.is_empty(),
+            "Malicious input should be validated: {}",
+            malicious_input
+        );
     }
 }
 
@@ -171,23 +191,41 @@ async fn test_cache_security_properties() {
     let key1 = "user:123:profile";
     let key2 = "user:124:profile";
 
-    cache.insert(key1.to_string(), "data1".to_string(), None).await.unwrap();
-    cache.insert(key2.to_string(), "data2".to_string(), None).await.unwrap();
+    cache
+        .insert(key1.to_string(), "data1".to_string(), None)
+        .await
+        .unwrap();
+    cache
+        .insert(key2.to_string(), "data2".to_string(), None)
+        .await
+        .unwrap();
 
     // Keys should remain distinct
-    assert_eq!(cache.get(&key1.to_string()).await, Some("data1".to_string()));
-    assert_eq!(cache.get(&key2.to_string()).await, Some("data2".to_string()));
+    assert_eq!(
+        cache.get(&key1.to_string()).await,
+        Some("data1".to_string())
+    );
+    assert_eq!(
+        cache.get(&key2.to_string()).await,
+        Some("data2".to_string())
+    );
 
     // Test dependency tracking
-    cache.insert_with_dependencies(
-        "user:123:permissions".to_string(),
-        "perms_data".to_string(),
-        vec!["user:123:profile".to_string()],
-        None,
-    ).await.unwrap();
+    cache
+        .insert_with_dependencies(
+            "user:123:permissions".to_string(),
+            "perms_data".to_string(),
+            vec!["user:123:profile".to_string()],
+            None,
+        )
+        .await
+        .unwrap();
 
     // Invalidating dependency should invalidate dependent entries
-    cache.invalidate(&"user:123:profile".to_string()).await.unwrap();
+    cache
+        .invalidate(&"user:123:profile".to_string())
+        .await
+        .unwrap();
 
     // Dependent entry should be gone
     assert_eq!(cache.get(&"user:123:permissions".to_string()).await, None);
@@ -218,7 +256,10 @@ async fn test_jwt_security_properties() {
     for part in parts {
         assert!(!part.contains('+'), "JWT parts should not contain '+'");
         assert!(!part.contains('/'), "JWT parts should not contain '/'");
-        assert!(!part.contains('='), "JWT parts should not contain padding '='");
+        assert!(
+            !part.contains('='),
+            "JWT parts should not contain padding '='"
+        );
     }
 }
 
@@ -257,17 +298,24 @@ async fn test_brute_force_protection() {
 
     // Simulate multiple failed login attempts
     for i in 0..3 {
-        assert!(!limiter.is_rate_limited(ip).await,
-            "Login attempt {} should not be blocked", i);
+        assert!(
+            !limiter.is_rate_limited(ip).await,
+            "Login attempt {} should not be blocked",
+            i
+        );
     }
 
     // Next attempt should be blocked
-    assert!(limiter.is_rate_limited(ip).await,
-        "Brute force attempt should be blocked");
+    assert!(
+        limiter.is_rate_limited(ip).await,
+        "Brute force attempt should be blocked"
+    );
 
     // Simulate successful login from different IP
-    assert!(!limiter.is_rate_limited("10.0.0.2").await,
-        "Different IP should not be affected by brute force protection");
+    assert!(
+        !limiter.is_rate_limited("10.0.0.2").await,
+        "Different IP should not be affected by brute force protection"
+    );
 }
 
 /// Test data sanitization
@@ -277,18 +325,24 @@ async fn test_data_sanitization() {
     let malicious_html = "<script>alert('xss')</script><p>Safe content</p>";
     // In a real system, you'd have an HTML sanitizer
     // For now, we'll test that dangerous tags are detected
-    assert!(malicious_html.contains("<script>"),
-        "Malicious script tags should be detected");
+    assert!(
+        malicious_html.contains("<script>"),
+        "Malicious script tags should be detected"
+    );
 
     // Test SQL injection patterns
     let sql_injection = "'; DROP TABLE users; --";
-    assert!(sql_injection.contains(";"),
-        "SQL injection patterns should be detected");
+    assert!(
+        sql_injection.contains(";"),
+        "SQL injection patterns should be detected"
+    );
 
     // Test path traversal
     let path_traversal = "../../../etc/passwd";
-    assert!(path_traversal.contains("../"),
-        "Path traversal patterns should be detected");
+    assert!(
+        path_traversal.contains("../"),
+        "Path traversal patterns should be detected"
+    );
 }
 
 /// Test encryption key security
@@ -330,13 +384,17 @@ async fn test_audit_logging_security() {
 
     // In a real system, you'd have log sanitization
     // For now, test that sensitive patterns are detectable
-    assert!(log_entry.contains("password="),
-        "Sensitive data should be detectable in logs for sanitization");
+    assert!(
+        log_entry.contains("password="),
+        "Sensitive data should be detectable in logs for sanitization"
+    );
 
     // Test log injection prevention
     let malicious_log = "User login\n[INFO] Fake log entry\n";
-    assert!(malicious_log.contains('\n'),
-        "Log injection attempts should be detectable");
+    assert!(
+        malicious_log.contains('\n'),
+        "Log injection attempts should be detectable"
+    );
 }
 
 /// Test secure random number generation
@@ -359,12 +417,17 @@ async fn test_secure_random_generation() {
 
     // Check for reasonable distribution (basic statistical test)
     let mean: f64 = random_nums.iter().map(|&x| x as f64).sum::<f64>() / random_nums.len() as f64;
-    let variance: f64 = random_nums.iter()
+    let variance: f64 = random_nums
+        .iter()
         .map(|&x| (x as f64 - mean).powi(2))
-        .sum::<f64>() / random_nums.len() as f64;
+        .sum::<f64>()
+        / random_nums.len() as f64;
 
     // Variance should be reasonable for uniform distribution
-    assert!(variance > 1e10, "Random numbers should have reasonable variance");
+    assert!(
+        variance > 1e10,
+        "Random numbers should have reasonable variance"
+    );
 
     // Test UUID generation
     let uuid1 = uuid::Uuid::new_v4();
@@ -387,16 +450,22 @@ async fn test_certificate_security() {
 
     // For now, test basic certificate properties
     let test_cert_subject = "CN=example.com,O=Example Corp,C=US";
-    assert!(test_cert_subject.contains("CN="),
-        "Certificate should have common name");
+    assert!(
+        test_cert_subject.contains("CN="),
+        "Certificate should have common name"
+    );
 
     let test_cert_expiry = chrono::Utc::now() + chrono::Duration::days(365);
-    assert!(test_cert_expiry > chrono::Utc::now(),
-        "Certificate should not be expired");
+    assert!(
+        test_cert_expiry > chrono::Utc::now(),
+        "Certificate should not be expired"
+    );
 
     let test_cert_serial = "123456789ABCDEF";
-    assert!(test_cert_serial.len() >= 8,
-        "Certificate serial should be sufficiently long");
+    assert!(
+        test_cert_serial.len() >= 8,
+        "Certificate serial should be sufficiently long"
+    );
 }
 
 /// Test API security headers
@@ -422,13 +491,22 @@ async fn test_api_security_headers() {
     for (header_name, expected_value) in test_headers {
         // Verify header format is correct
         assert!(!header_name.is_empty(), "Header name should not be empty");
-        assert!(!expected_value.is_empty(), "Header value should not be empty");
+        assert!(
+            !expected_value.is_empty(),
+            "Header value should not be empty"
+        );
 
         // Headers should not contain control characters
-        assert!(!header_name.chars().any(|c| c.is_control()),
-            "Header name should not contain control characters: {}", header_name);
-        assert!(!expected_value.chars().any(|c| c.is_control()),
-            "Header value should not contain control characters: {}", expected_value);
+        assert!(
+            !header_name.chars().any(|c| c.is_control()),
+            "Header name should not contain control characters: {}",
+            header_name
+        );
+        assert!(
+            !expected_value.chars().any(|c| c.is_control()),
+            "Header value should not contain control characters: {}",
+            expected_value
+        );
     }
 }
 
@@ -450,13 +528,18 @@ async fn test_dos_protection() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 
-    assert!(blocked_requests > 0,
-        "DoS protection should block some requests: {} blocked out of 20", blocked_requests);
+    assert!(
+        blocked_requests > 0,
+        "DoS protection should block some requests: {} blocked out of 20",
+        blocked_requests
+    );
 
     // Normal user should not be affected
     let normal_user_ip = "192.168.1.101";
-    assert!(!limiter.is_rate_limited(normal_user_ip).await,
-        "Normal users should not be affected by DoS protection");
+    assert!(
+        !limiter.is_rate_limited(normal_user_ip).await,
+        "Normal users should not be affected by DoS protection"
+    );
 }
 
 /// Test memory safety and bounds checking
@@ -478,12 +561,20 @@ async fn test_memory_safety() {
 
         // In a real system, this would test input validation
         // For now, just verify the data size is correct
-        assert_eq!(data.len(), size,
-            "Data size should match requested size: {} vs {}", data.len(), size);
+        assert_eq!(
+            data.len(),
+            size,
+            "Data size should match requested size: {} vs {}",
+            data.len(),
+            size
+        );
 
         // Verify no buffer overflows (this would be caught by Rust's safety guarantees)
-        assert!(data.len() <= 2048,
-            "Large data should be handled safely: size {}", size);
+        assert!(
+            data.len() <= 2048,
+            "Large data should be handled safely: size {}",
+            size
+        );
     }
 }
 
@@ -498,20 +589,25 @@ async fn test_race_condition_protection() {
     let cache = AdvancedCache::<String, String>::new(cache_config, None, None);
 
     // Test concurrent cache operations
-    let tasks: Vec<_> = (0..10).map(|i| {
-        let cache = cache.clone();
-        tokio::spawn(async move {
-            let key = format!("concurrent_key_{}", i);
-            let value = format!("concurrent_value_{}", i);
+    let tasks: Vec<_> = (0..10)
+        .map(|i| {
+            let cache = cache.clone();
+            tokio::spawn(async move {
+                let key = format!("concurrent_key_{}", i);
+                let value = format!("concurrent_value_{}", i);
 
-            // Concurrent insert
-            cache.insert(key.clone(), value.clone(), None).await.unwrap();
+                // Concurrent insert
+                cache
+                    .insert(key.clone(), value.clone(), None)
+                    .await
+                    .unwrap();
 
-            // Concurrent read
-            let retrieved = cache.get(&key).await;
-            assert_eq!(retrieved, Some(value));
+                // Concurrent read
+                let retrieved = cache.get(&key).await;
+                assert_eq!(retrieved, Some(value));
+            })
         })
-    }).collect();
+        .collect();
 
     // Wait for all concurrent operations to complete
     for task in tasks {
@@ -525,4 +621,3 @@ async fn test_race_condition_protection() {
         assert_eq!(cache.get(&key).await, Some(value));
     }
 }
-

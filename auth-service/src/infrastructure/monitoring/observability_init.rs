@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use axum::response::IntoResponse;
+use axum::Json;
 use std::sync::Arc;
 use tracing::info;
 
@@ -18,7 +19,7 @@ impl EnhancedObservability {
     pub fn new() -> Self {
         Self {}
     }
-    
+
     pub fn new_minimal(
         _observability_config: ObservabilityConfig,
         _sli_config: SliConfig,
@@ -26,31 +27,36 @@ impl EnhancedObservability {
     ) -> Self {
         Self {}
     }
-    
+
     pub fn get_health_status(&self) -> serde_json::Value {
         serde_json::json!({"status": "healthy"})
     }
-    
+
     pub async fn get_slo_status(&self) -> serde_json::Value {
         serde_json::json!({"slo_status": "ok"})
     }
-    
+
     pub async fn get_performance_profiles(&self) -> serde_json::Value {
         serde_json::json!({"profiles": []})
     }
-    
+
     pub async fn get_active_alerts(&self) -> serde_json::Value {
         serde_json::json!({"alerts": []})
     }
-    
+
     pub async fn export_metrics_for_grafana(&self) -> Result<serde_json::Value, String> {
         Ok(serde_json::json!({"metrics": {}}))
     }
-    
-    pub async fn record_operation_performance(&self, _operation: &str, _duration: std::time::Duration, _success: bool) {
+
+    pub async fn record_operation_performance(
+        &self,
+        _operation: &str,
+        _duration: std::time::Duration,
+        _success: bool,
+    ) {
         // Stub implementation
     }
-    
+
     pub async fn record_security_event(&self, _event: &str) {
         // Stub implementation
     }
@@ -71,24 +77,44 @@ impl BusinessMetricsRegistry {
 /// Observability configuration (stub implementation)
 #[derive(Debug, Clone)]
 pub struct ObservabilityConfig {
-    // Placeholder fields
+    pub service_name: String,
+    pub enable_profiling: bool,
+    pub enable_alerting: bool,
+    pub health_check_interval_seconds: u64,
+    pub slo_calculation_interval_seconds: u64,
+    pub metrics_retention_hours: u64,
 }
 
 impl Default for ObservabilityConfig {
     fn default() -> Self {
-        Self {}
+        Self {
+            service_name: "auth-service".to_string(),
+            enable_profiling: true,
+            enable_alerting: true,
+            health_check_interval_seconds: 30,
+            slo_calculation_interval_seconds: 60,
+            metrics_retention_hours: 24,
+        }
     }
 }
 
 /// SLI configuration (stub implementation)
 #[derive(Debug, Clone)]
 pub struct SliConfig {
-    // Placeholder fields
+    pub availability_target: f64,
+    pub latency_target_ms: u64,
+    pub error_rate_target: f64,
+    pub measurement_window_minutes: u64,
 }
 
 impl Default for SliConfig {
     fn default() -> Self {
-        Self {}
+        Self {
+            availability_target: 99.9,
+            latency_target_ms: 100,
+            error_rate_target: 0.1,
+            measurement_window_minutes: 5,
+        }
     }
 }
 
@@ -97,7 +123,6 @@ impl Default for SliConfig {
 #[cfg(not(feature = "monitoring"))]
 // Temporarily simplified imports to fix compilation
 // TODO: Fix import paths after architecture migration is complete
-
 #[cfg(feature = "monitoring")]
 use crate::{metrics::MetricsRegistry, security_metrics::SecurityMetrics};
 
@@ -145,7 +170,11 @@ impl ObservabilitySystem {
                     Arc::clone(&business_metrics),
                 )
                 .await
-                .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to initialize enhanced observability: {e}")))?,
+                .map_err(|e| {
+                    crate::shared::error::AppError::Internal(format!(
+                        "Failed to initialize enhanced observability: {e}"
+                    ))
+                })?,
             );
 
             (metrics_registry, security_metrics, enhanced_observability)
@@ -158,8 +187,6 @@ impl ObservabilitySystem {
                 sli_config,
                 Arc::clone(&business_metrics),
             )
-            .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to initialize enhanced observability: {e}")))?,
         );
 
         info!("Observability system initialized successfully");
@@ -230,9 +257,7 @@ impl ObservabilitySystem {
 pub async fn health_check_handler(
     axum::extract::State(observability): axum::extract::State<Arc<ObservabilitySystem>>,
 ) -> impl axum::response::IntoResponse {
-    let health_status = observability
-        .enhanced_observability
-        .get_health_status();
+    let health_status = observability.enhanced_observability.get_health_status();
 
     let status_code = axum::http::StatusCode::OK; // Simplified - enhanced_observability not available
 
@@ -291,8 +316,7 @@ pub async fn grafana_dashboard_handler(
     {
         Ok(dashboard) => (
             axum::http::StatusCode::OK,
-            [(axum::http::header::CONTENT_TYPE, "application/json")],
-            dashboard,
+            Json(dashboard)
         )
             .into_response(),
         Err(e) => {
@@ -342,7 +366,7 @@ impl ObservabilitySystem {
             );
 
             self.enhanced_observability
-                .record_security_event(&security_event)
+                .record_security_event(&format!("{:?}", security_event))
                 .await;
         }
     }
@@ -397,8 +421,8 @@ pub fn add_observability_routes(
             axum::routing::get(grafana_dashboard_handler),
         )
         .with_state(observability)
-        // TODO: Implement observability_middleware
-        // .layer(axum::middleware::from_fn(observability_middleware))
+    // TODO: Implement observability_middleware
+    // .layer(axum::middleware::from_fn(observability_middleware))
 }
 
 /// Helper trait for adding observability to services

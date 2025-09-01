@@ -47,7 +47,10 @@ impl UserId {
 
         // Allow other ID formats (like database auto-increment IDs)
         // Basic validation: alphanumeric, hyphens, underscores only
-        if !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        if !id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
             return Err("User ID contains invalid characters".to_string());
         }
 
@@ -124,12 +127,12 @@ mod tests {
         let valid_ids = vec![
             "550e8400-e29b-41d4-a716-446655440000", // UUID v4
             "123e4567-e89b-12d3-a456-426614174000", // UUID v3
-            "user_123", // alphanumeric with underscore
-            "user-123", // alphanumeric with hyphen
-            "USER123", // uppercase
-            "user123", // lowercase
-            "123", // numeric only
-            "a", // single character
+            "user_123",                             // alphanumeric with underscore
+            "user-123",                             // alphanumeric with hyphen
+            "USER123",                              // uppercase
+            "user123",                              // lowercase
+            "123",                                  // numeric only
+            "a",                                    // single character
         ];
 
         for valid_id in valid_ids {
@@ -141,17 +144,17 @@ mod tests {
     #[test]
     fn test_invalid_user_id_formats() {
         let invalid_ids = vec![
-            "", // empty
-            " ", // space only
+            "",                // empty
+            " ",               // space only
             "user@domain.com", // email format
-            "user name", // space
-            "user.name", // dot
-            "user/name", // slash
-            "user\\name", // backslash
-            "user:name", // colon
-            "user;name", // semicolon
-            "user\"name", // quote
-            "user'name", // apostrophe
+            "user name",       // space
+            "user.name",       // dot
+            "user/name",       // slash
+            "user\\name",      // backslash
+            "user:name",       // colon
+            "user;name",       // semicolon
+            "user\"name",      // quote
+            "user'name",       // apostrophe
         ];
 
         for invalid_id in invalid_ids {

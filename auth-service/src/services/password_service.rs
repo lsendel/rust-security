@@ -5,8 +5,8 @@
 
 use crate::domain::value_objects::PasswordHash;
 use crate::shared::error::AppError;
-use argon2::{Argon2, Params, Algorithm, Version};
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use argon2::{Algorithm, Argon2, Params, Version};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use rand::Rng;
 
 /// Configuration for password hashing parameters
@@ -28,11 +28,11 @@ impl Default for PasswordHashConfig {
     fn default() -> Self {
         Self {
             // OWASP recommended parameters for 2024
-            memory_cost: 65536,  // 64 MiB
-            time_cost: 3,        // 3 iterations
-            parallelism: 4,      // 4 threads
-            output_length: 32,   // 32 bytes output
-            salt_length: 32,     // 32 bytes salt
+            memory_cost: 65536, // 64 MiB
+            time_cost: 3,       // 3 iterations
+            parallelism: 4,     // 4 threads
+            output_length: 32,  // 32 bytes output
+            salt_length: 32,    // 32 bytes salt
         }
     }
 }
@@ -56,13 +56,10 @@ impl PasswordService {
             config.time_cost,
             config.parallelism,
             Some(config.output_length),
-        ).expect("Invalid Argon2 parameters");
+        )
+        .expect("Invalid Argon2 parameters");
 
-        let argon2 = Argon2::new(
-            Algorithm::Argon2id,
-            Version::V0x13,
-            params,
-        );
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
         Self { config, argon2 }
     }
@@ -74,7 +71,9 @@ impl PasswordService {
         }
 
         if password.len() < 8 {
-            return Err(AppError::Validation("Password must be at least 8 characters long".to_string()));
+            return Err(AppError::Validation(
+                "Password must be at least 8 characters long".to_string(),
+            ));
         }
 
         // Generate random salt
@@ -114,7 +113,9 @@ impl PasswordService {
         // Parse the hash string to extract parameters and verify
         let hash_str = hash.as_str();
         if !hash_str.starts_with("$argon2id$") {
-            return Err(AppError::Validation("Unsupported hash algorithm".to_string()));
+            return Err(AppError::Validation(
+                "Unsupported hash algorithm".to_string(),
+            ));
         }
 
         // For verification, we'll use constant-time comparison after hashing
@@ -127,7 +128,9 @@ impl PasswordService {
         let mut computed_hash = vec![0u8; self.config.output_length];
         self.argon2
             .hash_password_into(password.as_bytes(), &salt, &mut computed_hash)
-            .map_err(|e| AppError::CryptographicError(format!("Password verification failed: {e}")))?;
+            .map_err(|e| {
+                AppError::CryptographicError(format!("Password verification failed: {e}"))
+            })?;
 
         // For now, return false for verification (simplified)
         // In production, you would parse the stored hash and compare properly
@@ -145,10 +148,10 @@ impl PasswordService {
 
         // Parse parameters from hash string
         // This is a simplified check - in production you'd parse the full PHC format
-        !hash_str.contains(&format!("m={},t={},p={}",
-            self.config.memory_cost,
-            self.config.time_cost,
-            self.config.parallelism))
+        !hash_str.contains(&format!(
+            "m={},t={},p={}",
+            self.config.memory_cost, self.config.time_cost, self.config.parallelism
+        ))
     }
 }
 
@@ -208,7 +211,7 @@ mod tests {
     #[test]
     fn test_custom_config() {
         let config = PasswordHashConfig {
-            memory_cost: 32768,  // 32 MiB
+            memory_cost: 32768, // 32 MiB
             time_cost: 2,
             parallelism: 2,
             output_length: 32,
@@ -227,7 +230,8 @@ mod tests {
         let service = PasswordService::new();
 
         // Current format should not need rehash
-        let current_hash = PasswordHash::new("$argon2id$v=19$m=65536,t=3,p=4$test$hash".to_string()).unwrap();
+        let current_hash =
+            PasswordHash::new("$argon2id$v=19$m=65536,t=3,p=4$test$hash".to_string()).unwrap();
         assert!(!service.needs_rehash(&current_hash));
 
         // Different algorithm should need rehash
@@ -235,7 +239,8 @@ mod tests {
         assert!(service.needs_rehash(&old_hash));
 
         // Different parameters should need rehash
-        let different_params = PasswordHash::new("$argon2id$v=19$m=32768,t=2,p=2$test$hash".to_string()).unwrap();
+        let different_params =
+            PasswordHash::new("$argon2id$v=19$m=32768,t=2,p=2$test$hash".to_string()).unwrap();
         assert!(service.needs_rehash(&different_params));
     }
 }

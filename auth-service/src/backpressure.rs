@@ -1,4 +1,3 @@
-use crate::shared::error::AppError;
 use axum::{extract::Request, middleware::Next, response::Response};
 #[cfg(feature = "monitoring")]
 use prometheus::{
@@ -442,9 +441,7 @@ pub async fn backpressure_middleware(
 
     match result {
         Ok(response) => Ok(response),
-        Err(_) => Err(crate::shared::error::AppError::TimeoutError {
-            operation: "request_processing".to_string(),
-        }),
+        Err(_) => Err(crate::shared::error::AppError::TimeoutError),
     }
 }
 
@@ -492,12 +489,7 @@ pub async fn adaptive_body_limit_middleware(
         if let Ok(size_str) = content_length.to_str() {
             if let Ok(size) = size_str.parse::<usize>() {
                 if size > limit {
-                    return Err(crate::shared::error::AppError::ValidationError {
-                        field: "request_body".to_string(),
-                        reason: format!(
-                            "Request body too large: {size} bytes (limit: {limit} bytes)"
-                        ),
-                    });
+                    return Err(crate::shared::error::AppError::ValidationError);
                 }
             }
         }

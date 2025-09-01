@@ -3,18 +3,18 @@
 //! End-to-end tests covering the full authentication flow,
 //! including user registration, login, session management, and security features.
 
+use reqwest::Client;
+use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
-use reqwest::Client;
-use serde_json::json;
 
 use crate::app::di::AppContainer;
 use crate::domain::entities::User;
 use crate::domain::value_objects::{Email, UserId};
-use crate::services::{AuthService, UserService, TokenService};
-use crate::tests::{mocks, utils, assert_ok, assert_err};
+use crate::services::{AuthService, TokenService, UserService};
 use crate::shared::error::AppError;
+use crate::tests::{assert_err, assert_ok, mocks, utils};
 
 /// Full authentication flow integration test
 #[tokio::test]
@@ -65,17 +65,13 @@ async fn test_full_authentication_flow() {
 
     // Test token validation
     let access_token = tokens.access_token.unwrap();
-    let token_validation = token_service
-        .validate_token(&access_token, "access")
-        .await;
+    let token_validation = token_service.validate_token(&access_token, "access").await;
 
     assert_ok!(token_validation);
 
     // Test user profile retrieval
     let user_id = token_validation.unwrap().sub;
-    let profile_result = user_service
-        .get_user_profile(&user_id)
-        .await;
+    let profile_result = user_service.get_user_profile(&user_id).await;
 
     assert_ok!(profile_result);
     let user = profile_result.unwrap();
@@ -84,9 +80,7 @@ async fn test_full_authentication_flow() {
     assert_eq!(user.name, Some(name.to_string()));
 
     // Test session management
-    let sessions_result = token_service
-        .get_user_sessions(&user_id)
-        .await;
+    let sessions_result = token_service.get_user_sessions(&user_id).await;
 
     assert_ok!(sessions_result);
     let sessions = sessions_result.unwrap();
@@ -94,9 +88,7 @@ async fn test_full_authentication_flow() {
 
     // Test token refresh
     let refresh_token = tokens.refresh_token.unwrap();
-    let refresh_result = token_service
-        .refresh_tokens(&refresh_token)
-        .await;
+    let refresh_result = token_service.refresh_tokens(&refresh_token).await;
 
     assert_ok!(refresh_result);
     let new_tokens = refresh_result.unwrap();
@@ -106,16 +98,12 @@ async fn test_full_authentication_flow() {
     assert_ne!(new_tokens.refresh_token, Some(refresh_token));
 
     // Test logout
-    let logout_result = auth_service
-        .logout(&access_token)
-        .await;
+    let logout_result = auth_service.logout(&access_token).await;
 
     assert_ok!(logout_result);
 
     // Verify token is invalidated
-    let validation_after_logout = token_service
-        .validate_token(&access_token, "access")
-        .await;
+    let validation_after_logout = token_service.validate_token(&access_token, "access").await;
 
     assert_err!(validation_after_logout);
 }
@@ -160,38 +148,42 @@ async fn test_concurrent_authentication_load() {
     // Run concurrent authentication requests
     let start_time = std::time::Instant::now();
 
-    let tasks: Vec<_> = users.into_iter().enumerate().map(|(user_idx, (email, password))| {
-        let auth_svc = Arc::clone(&auth_service);
+    let tasks: Vec<_> = users
+        .into_iter()
+        .enumerate()
+        .map(|(user_idx, (email, password))| {
+            let auth_svc = Arc::clone(&auth_service);
 
-        tokio::spawn(async move {
-            let mut success_count = 0;
-            let mut error_count = 0;
+            tokio::spawn(async move {
+                let mut success_count = 0;
+                let mut error_count = 0;
 
-            for req_idx in 0..REQUESTS_PER_USER {
-                let auth_result = auth_svc
-                    .authenticate_user(email.clone(), password.clone())
-                    .await;
+                for req_idx in 0..REQUESTS_PER_USER {
+                    let auth_result = auth_svc
+                        .authenticate_user(email.clone(), password.clone())
+                        .await;
 
-                match auth_result {
-                    Ok(tokens) => {
-                        if tokens.access_token.is_some() {
-                            success_count += 1;
-                        } else {
+                    match auth_result {
+                        Ok(tokens) => {
+                            if tokens.access_token.is_some() {
+                                success_count += 1;
+                            } else {
+                                error_count += 1;
+                            }
+                        }
+                        Err(_) => {
                             error_count += 1;
                         }
                     }
-                    Err(_) => {
-                        error_count += 1;
-                    }
+
+                    // Small delay between requests to simulate real usage
+                    time::sleep(Duration::from_millis(1)).await;
                 }
 
-                // Small delay between requests to simulate real usage
-                time::sleep(Duration::from_millis(1)).await;
-            }
-
-            (user_idx, success_count, error_count)
+                (user_idx, success_count, error_count)
+            })
         })
-    }).collect();
+        .collect();
 
     // Wait for all tasks to complete
     let mut total_success = 0;
@@ -203,7 +195,11 @@ async fn test_concurrent_authentication_load() {
         total_error += error;
 
         // Each user should have successful authentications
-        assert!(success > 0, "User {} had no successful authentications", user_idx);
+        assert!(
+            success > 0,
+            "User {} had no successful authentications",
+            user_idx
+        );
     }
 
     let total_time = start_time.elapsed();
@@ -218,8 +214,17 @@ async fn test_concurrent_authentication_load() {
     println!("Requests/sec: {:.2}", requests_per_second);
 
     // Verify performance requirements
-    assert!(requests_per_second > 100.0, "Throughput too low: {:.2} req/sec", requests_per_second);
-    assert!(total_success > total_error * 10, "Too many errors: {} success, {} error", total_success, total_error);
+    assert!(
+        requests_per_second > 100.0,
+        "Throughput too low: {:.2} req/sec",
+        requests_per_second
+    );
+    assert!(
+        total_success > total_error * 10,
+        "Too many errors: {} success, {} error",
+        total_success,
+        total_error
+    );
 }
 
 /// Security integration test
@@ -246,7 +251,11 @@ async fn test_security_integration() {
     );
 
     let register_result = user_service
-        .register_user(email.clone(), "CorrectPassword123!".to_string(), Some("Security Test".to_string()))
+        .register_user(
+            email.clone(),
+            "CorrectPassword123!".to_string(),
+            Some("Security Test".to_string()),
+        )
         .await;
 
     assert_ok!(register_result);
@@ -309,7 +318,11 @@ async fn test_session_management_integration() {
     );
 
     let register_result = user_service
-        .register_user(email.clone(), password.to_string(), Some("Session Test".to_string()))
+        .register_user(
+            email.clone(),
+            password.to_string(),
+            Some("Session Test".to_string()),
+        )
         .await;
 
     assert_ok!(register_result);
@@ -330,18 +343,14 @@ async fn test_session_management_integration() {
 
     let user_id = token_claims.sub;
 
-    let sessions_result = token_service
-        .get_user_sessions(&user_id)
-        .await;
+    let sessions_result = token_service.get_user_sessions(&user_id).await;
 
     assert_ok!(sessions_result);
     let sessions = sessions_result.unwrap();
     assert!(!sessions.is_empty());
 
     // Test session cleanup
-    let cleanup_result = token_service
-        .cleanup_expired_sessions()
-        .await;
+    let cleanup_result = token_service.cleanup_expired_sessions().await;
 
     assert_ok!(cleanup_result);
     let cleaned_count = cleanup_result.unwrap();
@@ -351,16 +360,12 @@ async fn test_session_management_integration() {
     // This would test that a user can't have too many active sessions
 
     // Test session invalidation
-    let logout_result = auth_service
-        .logout(&access_token)
-        .await;
+    let logout_result = auth_service.logout(&access_token).await;
 
     assert_ok!(logout_result);
 
     // Verify session is invalidated
-    let validation_after_logout = token_service
-        .validate_token(&access_token, "access")
-        .await;
+    let validation_after_logout = token_service.validate_token(&access_token, "access").await;
 
     assert_err!(validation_after_logout);
 }
@@ -394,7 +399,11 @@ async fn test_token_lifecycle_integration() {
     );
 
     let register_result = user_service
-        .register_user(email.clone(), password.to_string(), Some("Token Test".to_string()))
+        .register_user(
+            email.clone(),
+            password.to_string(),
+            Some("Token Test".to_string()),
+        )
         .await;
 
     assert_ok!(register_result);
@@ -410,9 +419,7 @@ async fn test_token_lifecycle_integration() {
     let refresh_token = tokens.refresh_token.unwrap();
 
     // Test access token validation
-    let access_validation = token_service
-        .validate_token(&access_token, "access")
-        .await;
+    let access_validation = token_service.validate_token(&access_token, "access").await;
 
     assert_ok!(access_validation);
     let access_claims = access_validation.unwrap();
@@ -428,9 +435,7 @@ async fn test_token_lifecycle_integration() {
     assert_eq!(refresh_claims.token_type, Some("Refresh".to_string()));
 
     // Test token refresh
-    let refresh_result = token_service
-        .refresh_tokens(&refresh_token)
-        .await;
+    let refresh_result = token_service.refresh_tokens(&refresh_token).await;
 
     assert_ok!(refresh_result);
     let new_tokens = refresh_result.unwrap();
@@ -440,17 +445,13 @@ async fn test_token_lifecycle_integration() {
     assert_ne!(new_tokens.refresh_token, Some(refresh_token));
 
     // Test that old access token is invalidated
-    let old_token_validation = token_service
-        .validate_token(&access_token, "access")
-        .await;
+    let old_token_validation = token_service.validate_token(&access_token, "access").await;
 
     // This might succeed or fail depending on implementation
     // Some systems keep old tokens valid for a grace period
 
     // Test refresh token reuse detection (if implemented)
-    let refresh_again_result = token_service
-        .refresh_tokens(&refresh_token)
-        .await;
+    let refresh_again_result = token_service.refresh_tokens(&refresh_token).await;
 
     // This might fail if refresh token reuse is detected
     match refresh_again_result {
@@ -475,7 +476,10 @@ async fn test_error_handling_integration() {
 
     // Test invalid email format
     let invalid_email_result = auth_service
-        .authenticate_user(Email::new("invalid-email".to_string()).unwrap(), "password".to_string())
+        .authenticate_user(
+            Email::new("invalid-email".to_string()).unwrap(),
+            "password".to_string(),
+        )
         .await;
 
     assert_err!(invalid_email_result);
@@ -495,7 +499,11 @@ async fn test_error_handling_integration() {
     );
 
     let register_result = user_service
-        .register_user(email.clone(), "CorrectPassword123!".to_string(), Some("Error Test".to_string()))
+        .register_user(
+            email.clone(),
+            "CorrectPassword123!".to_string(),
+            Some("Error Test".to_string()),
+        )
         .await;
 
     assert_ok!(register_result);
@@ -546,7 +554,11 @@ async fn test_performance_baselines() {
     );
 
     let register_result = user_service
-        .register_user(email.clone(), password.to_string(), Some("Performance Test".to_string()))
+        .register_user(
+            email.clone(),
+            password.to_string(),
+            Some("Performance Test".to_string()),
+        )
         .await;
 
     assert_ok!(register_result);
@@ -572,11 +584,17 @@ async fn test_performance_baselines() {
     println!("Average time per authentication: {:?}", avg_time);
 
     // Performance assertions (adjust based on system capabilities)
-    assert!(avg_time < Duration::from_millis(50),
-        "Authentication too slow: {:?}", avg_time);
+    assert!(
+        avg_time < Duration::from_millis(50),
+        "Authentication too slow: {:?}",
+        avg_time
+    );
 
-    assert!(total_time < Duration::from_secs(10),
-        "Total authentication time too high: {:?}", total_time);
+    assert!(
+        total_time < Duration::from_secs(10),
+        "Total authentication time too high: {:?}",
+        total_time
+    );
 }
 
 /// HTTP API integration test (mock)
@@ -606,7 +624,11 @@ async fn test_http_api_integration() {
     );
 
     let register_result = user_service
-        .register_user(email.clone(), password.to_string(), Some("HTTP Test".to_string()))
+        .register_user(
+            email.clone(),
+            password.to_string(),
+            Some("HTTP Test".to_string()),
+        )
         .await;
 
     assert_ok!(register_result);
@@ -633,9 +655,7 @@ async fn test_http_api_integration() {
     );
 
     let access_token = tokens.access_token.unwrap();
-    let validation_result = token_service
-        .validate_token(&access_token, "access")
-        .await;
+    let validation_result = token_service.validate_token(&access_token, "access").await;
 
     assert_ok!(validation_result);
 
@@ -643,12 +663,9 @@ async fn test_http_api_integration() {
     let claims = validation_result.unwrap();
     let user_id = claims.sub;
 
-    let profile_result = user_service
-        .get_user_profile(&user_id)
-        .await;
+    let profile_result = user_service.get_user_profile(&user_id).await;
 
     assert_ok!(profile_result);
 
     println!("HTTP API integration test passed");
 }
-

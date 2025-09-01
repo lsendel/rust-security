@@ -53,10 +53,12 @@ impl MetricsCollector {
     }
 
     /// Gather all metrics in a format suitable for monitoring
-    pub async fn gather_metrics(&self) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn gather_metrics(
+        &self,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let counters = self.counters.read().await;
         let gauges = self.gauges.read().await;
-        
+
         Ok(serde_json::json!({
             "counters": *counters,
             "gauges": *gauges

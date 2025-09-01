@@ -452,16 +452,15 @@ fn apply_production_timeouts(config: &mut SecureAppConfig) {
 }
 
 fn validate_production_secrets(config: &mut SecureAppConfig) -> Result<(), ConfigError> {
-    let secret = env::var("REQUEST_SIGNING_SECRET").map_err(|_| {
-        ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET".to_string())
-    })?;
-    
+    let secret = env::var("REQUEST_SIGNING_SECRET")
+        .map_err(|_| ConfigError::MissingRequiredField("REQUEST_SIGNING_SECRET".to_string()))?;
+
     if secret.len() < 32 {
         return Err(ConfigError::WeakSecret(
             "REQUEST_SIGNING_SECRET must be at least 32 characters".to_string(),
         ));
     }
-    
+
     config.security.request_signing_secret = Some(secret);
     Ok(())
 }
@@ -482,13 +481,13 @@ fn configure_production_cors(config: &mut SecureAppConfig) -> Result<(), ConfigE
             "ALLOWED_ORIGINS must be explicitly set in production".to_string(),
         ));
     }
-    
+
     config.security.allowed_origins = cors_origins
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    
+
     Ok(())
 }
 

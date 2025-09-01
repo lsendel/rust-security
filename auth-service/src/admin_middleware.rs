@@ -4,7 +4,7 @@ use crate::infrastructure::security::security_logging::{
     SecurityEvent, SecurityEventType, SecuritySeverity,
 };
 use crate::pii_protection::redact_log;
-use crate::{shared::error::AppError, AppState};
+use crate::AppState;
 use axum::{
     body::Body,
     extract::{Request, State},
@@ -226,23 +226,19 @@ async fn extract_admin_key(
         .unwrap_or("");
 
     let token = auth.strip_prefix("Bearer ").ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken {
-            reason: "Missing or malformed authorization header".to_string(),
-        }
+        crate::shared::error::AppError::InvalidToken("Missing or malformed authorization header".to_string())
     })?;
 
     if token.is_empty() {
-        return Err(crate::shared::error::AppError::InvalidToken {
-            reason: "Empty bearer token".to_string(),
-        });
+        return Err(crate::shared::error::AppError::InvalidToken("Empty bearer token".to_string()));
     }
 
     // Validate token and extract record
     #[cfg(feature = "enhanced-session-store")]
     let record = state.store.get_token_record(token).await?.ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken {
-            reason: "Token not found or invalid".to_string(),
-        }
+        crate::shared::error::AppError::InvalidToken(
+            "Token not found or invalid".to_string()
+        )
     })?;
 
     #[cfg(not(feature = "enhanced-session-store"))]
@@ -260,9 +256,9 @@ async fn extract_admin_key(
 
     // Check if token is active
     if !record.active {
-        return Err(crate::shared::error::AppError::InvalidToken {
-            reason: "Token is inactive".to_string(),
-        });
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Token is inactive".to_string()
+        ));
     }
 
     // Check for admin scope
@@ -293,23 +289,23 @@ async fn require_admin_scope(
         .unwrap_or("");
 
     let token = auth.strip_prefix("Bearer ").ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken {
-            reason: "Missing or malformed authorization header".to_string(),
-        }
+        crate::shared::error::AppError::InvalidToken(
+            "Missing or malformed authorization header".to_string()
+        )
     })?;
 
     if token.is_empty() {
-        return Err(crate::shared::error::AppError::InvalidToken {
-            reason: "Empty bearer token".to_string(),
-        });
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Empty bearer token".to_string()
+        ));
     }
 
     // Validate token and extract record
     #[cfg(feature = "enhanced-session-store")]
     let record = state.store.get_token_record(token).await?.ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken {
-            reason: "Token not found or invalid".to_string(),
-        }
+        crate::shared::error::AppError::InvalidToken(
+            "Token not found or invalid".to_string()
+        )
     })?;
 
     #[cfg(not(feature = "enhanced-session-store"))]
@@ -327,9 +323,9 @@ async fn require_admin_scope(
 
     // Check if token is active
     if !record.active {
-        return Err(crate::shared::error::AppError::InvalidToken {
-            reason: "Token is inactive".to_string(),
-        });
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Token is inactive".to_string()
+        ));
     }
 
     // Check for admin scope
@@ -352,10 +348,9 @@ async fn validate_request_with_replay_protection(
     path: &str,
 ) -> Result<(), crate::shared::error::AppError> {
     let Some(signing_secret) = &config.signing_secret else {
-        return Err(crate::shared::error::AppError::ConfigurationError {
-            field: "signing_secret".to_string(),
-            reason: "Request signing is required but no signing secret is configured".to_string(),
-        });
+        return Err(crate::shared::error::AppError::ConfigurationError(
+            "Request signing is required but no signing secret is configured".to_string()
+        ));
     };
 
     // Extract new headers for replay protection
@@ -421,10 +416,9 @@ fn validate_request_signature(
     path: &str,
 ) -> Result<(), crate::shared::error::AppError> {
     let Some(signing_secret) = &config.signing_secret else {
-        return Err(crate::shared::error::AppError::ConfigurationError {
-            field: "signing_secret".to_string(),
-            reason: "Request signing is required but no signing secret is configured".to_string(),
-        });
+        return Err(crate::shared::error::AppError::ConfigurationError(
+            "Request signing is required but no signing secret is configured".to_string()
+        ));
     };
 
     // Extract signature and timestamp headers
@@ -612,13 +606,9 @@ fn calculate_hmac_sha256(
     type HmacSha256 = Hmac<Sha256>;
 
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
-        crate::shared::error::AppError::CryptographicError {
-            operation: "hmac_initialization".to_string(),
-            source: Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid HMAC key",
-            )),
-        }
+        crate::shared::error::AppError::CryptographicError(
+            "HMAC initialization failed: Invalid HMAC key".to_string()
+        )
     })?;
 
     mac.update(payload.as_bytes());

@@ -8,8 +8,8 @@ use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOr
 use crate::threat_types::{
     AttackPhase, BusinessImpact, ThreatContext, ThreatSeverity, ThreatSignature, ThreatType,
 };
-use std::sync::LazyLock;
 use crate::threat_user_profiler::{AdvancedUserBehaviorProfiler, UserProfilingConfig};
+use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use flume::{unbounded, Receiver, Sender};

@@ -123,9 +123,11 @@ async fn test_auth_service_integration() {
                 auth_service::threat_behavioral_analyzer::BehavioralAnalysisConfig::default(),
             ),
         ),
-        Arc::new(auth_service::threat_intelligence::ThreatIntelligenceCorrelator::new(
-            auth_service::threat_intelligence::ThreatIntelligenceConfig::default(),
-        )),
+        Arc::new(
+            auth_service::threat_intelligence::ThreatIntelligenceCorrelator::new(
+                auth_service::threat_intelligence::ThreatIntelligenceConfig::default(),
+            ),
+        ),
         Arc::new(
             auth_service::threat_response_orchestrator::ThreatResponseOrchestrator::new(
                 auth_service::threat_response_orchestrator::ThreatResponseConfig::default(),

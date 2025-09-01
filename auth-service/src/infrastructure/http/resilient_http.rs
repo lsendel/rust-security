@@ -2,7 +2,6 @@ use crate::circuit_breaker::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, RetryBackoff, RetryConfig,
     TimeoutConfig,
 };
-use crate::shared::error::AppError;
 use axum::body::Bytes;
 use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
@@ -60,7 +59,10 @@ impl ResilientHttpClient {
     ///
     /// Returns `crate::shared::error::AppError::ServiceUnavailable` if HTTP client creation fails due to
     /// invalid configuration or TLS setup issues
-    pub fn new(name: impl Into<String>, config: ResilientHttpConfig) -> Result<Self, crate::shared::error::AppError> {
+    pub fn new(
+        name: impl Into<String>,
+        config: ResilientHttpConfig,
+    ) -> Result<Self, crate::shared::error::AppError> {
         let client = Client::builder()
             .timeout(config.timeouts.request_timeout)
             .connect_timeout(config.timeouts.connect_timeout)
@@ -69,9 +71,11 @@ impl ResilientHttpClient {
             // Enable secure TLS settings
             .https_only(true)
             .build()
-            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable(
-                format!("Failed to create HTTP client: {}", e)
-            ))?;
+            .map_err(|e| {
+                crate::shared::error::AppError::ServiceUnavailable {
+                    reason: format!("Failed to create HTTP client: {}", e)
+                }
+            })?;
 
         let circuit_breaker = CircuitBreaker::new(name, config.circuit_breaker.clone());
 
@@ -170,12 +174,11 @@ impl ResilientRequestBuilder {
 
         loop {
             // Clone request builder for retry attempts
-            let request =
-                self.request_builder
-                    .try_clone()
-                    .ok_or_else(|| crate::shared::error::AppError::ServiceUnavailable(
-                        "Cannot retry request with streaming body".to_string(),
-                    ))?;
+            let request = self.request_builder.try_clone().ok_or_else(|| {
+                crate::shared::error::AppError::ServiceUnavailable {
+                    reason: "Cannot retry request with streaming body".to_string()
+                }
+            })?;
 
             let result = self
                 .circuit_breaker
@@ -187,9 +190,9 @@ impl ResilientRequestBuilder {
                     return Ok(ResilientResponse { response });
                 }
                 Err(CircuitBreakerError::Open) => {
-                    return Err(crate::shared::error::AppError::ServiceUnavailable(
-                        "HTTP circuit breaker is open".to_string()
-                    ));
+                    return Err(crate::shared::error::AppError::ServiceUnavailable {
+                        reason: "HTTP circuit breaker is open".to_string()
+                    });
                 }
                 Err(CircuitBreakerError::Timeout { timeout }) => {
                     tracing::warn!(
@@ -206,17 +209,17 @@ impl ResilientRequestBuilder {
                     );
                 }
                 Err(CircuitBreakerError::TooManyRequests) => {
-                    return Err(crate::shared::error::AppError::ServiceUnavailable(
-                        "HTTP circuit breaker: too many requests".to_string()
-                    ));
+                    return Err(crate::shared::error::AppError::ServiceUnavailable {
+                        reason: "HTTP circuit breaker: too many requests".to_string()
+                    });
                 }
             }
 
             // Try to get next delay for retry
             if backoff.next_delay().await.is_none() {
-                return Err(crate::shared::error::AppError::ServiceUnavailable(
-                    "HTTP request failed after all retries".to_string()
-                ));
+                return Err(crate::shared::error::AppError::ServiceUnavailable {
+                    reason: "HTTP request failed after all retries".to_string()
+                });
             }
         }
     }
@@ -240,43 +243,40 @@ impl ResilientResponse {
     }
 
     pub async fn text(self) -> Result<String, crate::shared::error::AppError> {
-        self.response
-            .text()
-            .await
-            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable(
-                format!("Failed to read response text: {}", e)
-            ))
+        self.response.text().await.map_err(|e| {
+            crate::shared::error::AppError::ServiceUnavailable {
+                reason: format!("Failed to read response text: {}", e)
+            }
+        })
     }
 
     pub async fn bytes(self) -> Result<Bytes, crate::shared::error::AppError> {
-        self.response
-            .bytes()
-            .await
-            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable(
-                format!("Failed to read response bytes: {}", e)
-            ))
+        self.response.bytes().await.map_err(|e| {
+            crate::shared::error::AppError::ServiceUnavailable {
+                reason: format!("Failed to read response bytes: {}", e)
+            }
+        })
     }
 
-    pub async fn json<T: for<'de> Deserialize<'de>>(self) -> Result<T, crate::shared::error::AppError> {
-        self.response
-            .json()
-            .await
-            .map_err(|e| crate::shared::error::AppError::Validation(
-                format!("Failed to parse JSON response: {}", e)
+    pub async fn json<T: for<'de> Deserialize<'de>>(
+        self,
+    ) -> Result<T, crate::shared::error::AppError> {
+        self.response.json().await.map_err(|e| {
+            crate::shared::error::AppError::Validation(format!(
+                "Failed to parse JSON response: {}",
+                e
             ))
+        })
     }
 
     pub fn error_for_status(self) -> Result<Self, crate::shared::error::AppError> {
         let status = self.response.status();
 
         if status.is_client_error() || status.is_server_error() {
-            Err(crate::shared::error::AppError::ServiceUnavailable(
-                format!(
-                    "HTTP error {}: {}",
-                    status.as_u16(),
-                    status.canonical_reason().unwrap_or("Unknown")
-                )
-            ))
+            Err(crate::shared::error::AppError::ServiceUnavailable {
+                reason: format!("HTTP error {}: {}", status.as_u16(),
+                status.canonical_reason().unwrap_or("Unknown"))
+            })
         } else {
             Ok(self)
         }

@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use crate::domain::value_objects::{Email, PasswordHash, UserId};
 
 /// User entity representing a registered user in the system.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
 pub struct User {
     pub id: UserId,
     pub email: Email,
@@ -104,7 +104,8 @@ impl User {
 
     /// Check if password reset token is valid
     pub fn is_password_reset_token_valid(&self) -> bool {
-        if let (Some(_), Some(expires)) = (&self.password_reset_token, self.password_reset_expires) {
+        if let (Some(_), Some(expires)) = (&self.password_reset_token, self.password_reset_expires)
+        {
             Utc::now() < expires
         } else {
             false
@@ -129,8 +130,8 @@ mod tests {
 
     fn create_test_password_hash() -> PasswordHash {
         use argon2::{Argon2, Params};
-        use rand::Rng;
         use base64::Engine;
+        use rand::Rng;
 
         let mut salt = [0u8; 32];
         rand::thread_rng().fill(&mut salt);
@@ -142,7 +143,9 @@ mod tests {
         );
 
         let mut hash = [0u8; 32];
-        argon2.hash_password_into(b"test_password_123", &salt, &mut hash).unwrap();
+        argon2
+            .hash_password_into(b"test_password_123", &salt, &mut hash)
+            .unwrap();
 
         let salt_b64 = base64::engine::general_purpose::STANDARD.encode(salt);
         let hash_b64 = base64::engine::general_purpose::STANDARD.encode(hash);
@@ -157,7 +160,12 @@ mod tests {
         let email = Email::new("test@example.com".to_string()).unwrap();
         let password_hash = create_test_password_hash();
 
-        let user = User::new(user_id.clone(), email.clone(), password_hash.clone(), Some("Test User".to_string()));
+        let user = User::new(
+            user_id.clone(),
+            email.clone(),
+            password_hash.clone(),
+            Some("Test User".to_string()),
+        );
 
         assert_eq!(user.id, user_id);
         assert_eq!(user.email, email);
@@ -269,7 +277,10 @@ mod tests {
         assert!(user.name.is_none());
         assert!(user.avatar_url.is_none());
 
-        user.update_profile(Some("Updated Name".to_string()), Some("avatar.jpg".to_string()));
+        user.update_profile(
+            Some("Updated Name".to_string()),
+            Some("avatar.jpg".to_string()),
+        );
 
         assert_eq!(user.name, Some("Updated Name".to_string()));
         assert_eq!(user.avatar_url, Some("avatar.jpg".to_string()));

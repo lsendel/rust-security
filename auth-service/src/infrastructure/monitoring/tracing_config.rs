@@ -27,11 +27,12 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
         .unwrap_or_else(|_| "http://localhost:14268/api/traces".to_string());
 
     let environment = env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string());
-    let service_version = env::var("SERVICE_VERSION").unwrap_or_else(|_| "0.1.0".to_string());
+    let _service_version = env::var("SERVICE_VERSION").unwrap_or_else(|_| "0.1.0".to_string());
 
     // Configure OpenTelemetry tracer
     #[allow(deprecated)]
-    let _tracer = new_agent_pipeline()
+    // let _tracer = new_agent_pipeline()  // Temporarily disabled
+    /*
         .with_service_name(service_name)
         .with_endpoint(&jaeger_endpoint)
         .with_trace_config(
@@ -50,6 +51,7 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
                 ])),
         )
         .install_simple()?;
+    */
 
     // Configure tracing subscriber with multiple layers
     // Temporarily disabled due to OpenTelemetry version conflicts
@@ -575,7 +577,7 @@ pub fn current_request_context() -> RequestContext {
 /// Graceful shutdown for tracing
 pub fn shutdown_tracing() {
     info!("Shutting down tracing...");
-    global::shutdown_tracer_provider();
+    // global::shutdown_tracer_provider();  // Temporarily disabled
 }
 
 #[cfg(test)]

@@ -32,9 +32,9 @@ async fn spawn_app() -> String {
         client_credentials: Arc::new(std::sync::RwLock::new(HashMap::new())),
         allowed_scopes: Arc::new(std::sync::RwLock::new(HashSet::from(["admin".to_string()]))),
         authorization_codes: Arc::new(std::sync::RwLock::new(HashMap::<String, String>::new())),
-        policy_cache: Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
-            Default::default(),
-        )),
+        policy_cache: Arc::new(
+            auth_service::storage::cache::policy_cache::PolicyCache::new(Default::default()),
+        ),
         backpressure_state: Arc::new(std::sync::RwLock::new(false)),
         api_key_store: Arc::new(api_key_store),
         jwks_manager,

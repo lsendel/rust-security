@@ -608,4 +608,3 @@ mod performance_tests {
         );
     }
 }
-

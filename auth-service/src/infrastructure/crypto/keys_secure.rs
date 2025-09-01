@@ -1,9 +1,9 @@
 use base64::Engine as _;
-use tokio::sync::RwLock;
-use serde_json::Value;
-use jsonwebtoken::{EncodingKey, DecodingKey};
-use thiserror::Error;
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use once_cell::sync::Lazy;
+use serde_json::Value;
+use thiserror::Error;
+use tokio::sync::RwLock;
 
 #[cfg(feature = "vault")]
 use vaultrs::{client::VaultClient, kv2};
@@ -108,14 +108,17 @@ impl SecureKeyManager {
         }
 
         // 4. Production safety check - NEVER use embedded keys in production
-        if std::env::var("RUST_ENV").unwrap_or_default() == "production" ||
-           std::env::var("ENVIRONMENT").unwrap_or_default() == "production" {
+        if std::env::var("RUST_ENV").unwrap_or_default() == "production"
+            || std::env::var("ENVIRONMENT").unwrap_or_default() == "production"
+        {
             return Err(KeyError::NoSecureKeySource);
         }
 
         // 5. Development fallback only (when not in production)
         tracing::warn!("Using development fallback key - NOT suitable for production");
-        self.generate_development_key().await.map(|k| (k, KeySource::Development))
+        self.generate_development_key()
+            .await
+            .map(|k| (k, KeySource::Development))
     }
 
     #[cfg(feature = "vault")]
@@ -127,10 +130,13 @@ impl SecureKeyManager {
             .await
             .map_err(|e| KeyError::VaultError(format!("Failed to read from Vault: {}", e)))?;
 
-        secret.get("private_key")
+        secret
+            .get("private_key")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| KeyError::VaultError("private_key field not found in Vault secret".to_string()))
+            .ok_or_else(|| {
+                KeyError::VaultError("private_key field not found in Vault secret".to_string())
+            })
     }
 
     async fn load_from_secure_file(&self, path: &str) -> Result<String, KeyError> {
@@ -155,9 +161,11 @@ impl SecureKeyManager {
 
             // File should be readable only by owner (0o600 or 0o400)
             if mode & 0o077 != 0 {
-                return Err(KeyError::ValidationFailed(
-                    format!("Insecure file permissions for {}: {:o}. Should be 0o600 or 0o400", path, mode & 0o777)
-                ));
+                return Err(KeyError::ValidationFailed(format!(
+                    "Insecure file permissions for {}: {:o}. Should be 0o600 or 0o400",
+                    path,
+                    mode & 0o777
+                )));
             }
         }
 
@@ -167,26 +175,34 @@ impl SecureKeyManager {
     async fn generate_development_key(&self) -> Result<String, KeyError> {
         // For development, load from environment or generate ephemeral key
         // NEVER use hardcoded keys in production
-        
+
         // Try to load from DEV_PRIVATE_KEY environment variable first
         if let Ok(dev_key) = std::env::var("DEV_PRIVATE_KEY") {
             if !dev_key.trim().is_empty() {
                 return Ok(dev_key);
             }
         }
-        
+
         // If no dev key provided, fail with informative error
         // This forces developers to explicitly set development keys
         return Err(KeyError::NoSecureKeySource);
     }
 
-    async fn create_key_material(&self, private_key_pem: String, source: KeySource) -> Result<SecureKeyMaterial, KeyError> {
-        let kid = format!("key-{}-{}", now_unix(), match source {
-            KeySource::Environment => "env",
-            KeySource::Vault => "vault",
-            KeySource::SecureFile => "file",
-            KeySource::Development => "dev",
-        });
+    async fn create_key_material(
+        &self,
+        private_key_pem: String,
+        source: KeySource,
+    ) -> Result<SecureKeyMaterial, KeyError> {
+        let kid = format!(
+            "key-{}-{}",
+            now_unix(),
+            match source {
+                KeySource::Environment => "env",
+                KeySource::Vault => "vault",
+                KeySource::SecureFile => "file",
+                KeySource::Development => "dev",
+            }
+        );
 
         // Create jsonwebtoken keys
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
@@ -217,7 +233,10 @@ impl SecureKeyManager {
         })
     }
 
-    fn extract_public_key_components(&self, _private_key_pem: &str) -> Result<(String, String), KeyError> {
+    fn extract_public_key_components(
+        &self,
+        _private_key_pem: &str,
+    ) -> Result<(String, String), KeyError> {
         // For development, use hardcoded components that match the dev key
         // In production, this should extract components from the actual key
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
@@ -233,8 +252,10 @@ impl SecureKeyManager {
     pub async fn ensure_key_available(&self) -> Result<(), KeyError> {
         let keys = ACTIVE_KEYS.read().await;
 
-        let needs_new_key = keys.is_empty() ||
-            keys.iter().any(|k| now_unix() - k.created_at > self.key_rotation_interval);
+        let needs_new_key = keys.is_empty()
+            || keys
+                .iter()
+                .any(|k| now_unix() - k.created_at > self.key_rotation_interval);
 
         if needs_new_key {
             drop(keys); // Release read lock
@@ -286,7 +307,10 @@ pub async fn current_signing_key() -> (String, EncodingKey) {
     if let Err(e) = KEY_MANAGER.ensure_key_available().await {
         tracing::error!("Failed to ensure key available: {}", e);
         // Return emergency fallback - this should trigger alerts in production
-        return ("emergency-fallback".to_string(), EncodingKey::from_secret(b"emergency-secret"));
+        return (
+            "emergency-fallback".to_string(),
+            EncodingKey::from_secret(b"emergency-secret"),
+        );
     }
 
     let keys = ACTIVE_KEYS.read().await;
@@ -294,7 +318,10 @@ pub async fn current_signing_key() -> (String, EncodingKey) {
         (key_material.kid.clone(), key_material.encoding_key.clone())
     } else {
         tracing::error!("No keys available after ensure_key_available succeeded");
-        ("emergency-fallback".to_string(), EncodingKey::from_secret(b"emergency-secret"))
+        (
+            "emergency-fallback".to_string(),
+            EncodingKey::from_secret(b"emergency-secret"),
+        )
     }
 }
 
@@ -315,7 +342,9 @@ pub async fn get_current_jwks() -> Value {
 ///
 /// This function does not panic under normal operation.
 pub async fn ensure_key_available() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    KEY_MANAGER.ensure_key_available().await
+    KEY_MANAGER
+        .ensure_key_available()
+        .await
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
 }
 
@@ -363,8 +392,8 @@ pub async fn validate_security_posture() -> Result<(), Vec<String>> {
     let mut issues = Vec::new();
 
     // Check if we're in production with insecure keys
-    let is_production = std::env::var("RUST_ENV").unwrap_or_default() == "production" ||
-                       std::env::var("ENVIRONMENT").unwrap_or_default() == "production";
+    let is_production = std::env::var("RUST_ENV").unwrap_or_default() == "production"
+        || std::env::var("ENVIRONMENT").unwrap_or_default() == "production";
 
     if is_production {
         let sources = get_key_sources().await;
@@ -372,8 +401,9 @@ pub async fn validate_security_posture() -> Result<(), Vec<String>> {
             issues.push("Development keys detected in production environment".to_string());
         }
 
-        if std::env::var("RSA_PRIVATE_KEY").is_err() &&
-           std::env::var("RSA_PRIVATE_KEY_PATH").is_err() {
+        if std::env::var("RSA_PRIVATE_KEY").is_err()
+            && std::env::var("RSA_PRIVATE_KEY_PATH").is_err()
+        {
             #[cfg(not(feature = "vault"))]
             issues.push("No secure key source configured for production".to_string());
         }

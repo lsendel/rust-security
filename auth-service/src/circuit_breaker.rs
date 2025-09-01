@@ -1,4 +1,4 @@
-use crate::shared::error::AppError;
+// Circuit breaker implementation
 use std::sync::{
     atomic::{AtomicU32, AtomicU64, Ordering},
     Arc, Mutex,

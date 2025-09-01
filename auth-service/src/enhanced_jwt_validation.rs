@@ -185,9 +185,9 @@ impl EnhancedJwtValidator {
             .as_secs() as i64;
 
         // Step 1: Decode header and perform algorithm validation
-        let header = jsonwebtoken::decode_header(token).map_err(|e| crate::shared::error::AppError::InvalidToken {
-            reason: format!("Invalid JWT header: {}", e),
-        })?;
+        let header = jsonwebtoken::decode_header(token).map_err(|e| crate::shared::error::AppError::InvalidToken(
+            format!("Invalid JWT header: {}", e)
+        ))?;
 
         self.validate_algorithm(&header.alg)?;
         self.validate_token_type(&header)?;
@@ -199,9 +199,9 @@ impl EnhancedJwtValidator {
         let token_data =
             jsonwebtoken::decode::<Value>(token, decoding_key, &validation).map_err(|e| {
                 self.log_validation_failure("JWT decode failed", &e.to_string());
-                crate::shared::error::AppError::InvalidToken {
-                    reason: format!("JWT validation failed: {}", e),
-                }
+                crate::shared::error::AppError::InvalidToken(
+                    format!("JWT validation failed: {}", e)
+                )
             })?;
 
         // Step 4: Perform additional custom validations
@@ -231,7 +231,7 @@ impl EnhancedJwtValidator {
                 algorithm, self.config.allowed_algorithms
             );
             self.log_validation_failure("Algorithm not allowed", &error_msg);
-            return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
+            return Err(crate::shared::error::AppError::InvalidToken(error_msg));
         }
         Ok(())
     }
@@ -247,7 +247,7 @@ impl EnhancedJwtValidator {
                     token_type, required_type
                 );
                 self.log_validation_failure("Invalid token type", &error_msg);
-                return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
+                return Err(crate::shared::error::AppError::InvalidToken(error_msg));
             }
         }
         Ok(())
@@ -290,7 +290,7 @@ impl EnhancedJwtValidator {
             if !claims.get(required_claim).is_some() {
                 let error_msg = format!("Missing required claim: {}", required_claim);
                 self.log_validation_failure("Missing required claim", &error_msg);
-                return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
+                return Err(crate::shared::error::AppError::InvalidToken(error_msg));
             }
         }
         Ok(())
@@ -307,7 +307,7 @@ impl EnhancedJwtValidator {
                         token_age, max_age
                     );
                     self.log_validation_failure("Token too old", &error_msg);
-                    return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
+                    return Err(crate::shared::error::AppError::InvalidToken(error_msg));
                 }
             }
         }
@@ -324,7 +324,7 @@ impl EnhancedJwtValidator {
                         validator.claim_name, error
                     );
                     self.log_validation_failure("Custom validation failed", &error_msg);
-                    return Err(crate::shared::error::AppError::InvalidToken { reason: error_msg });
+                    return Err(crate::shared::error::AppError::InvalidToken(error_msg));
                 }
             }
         }

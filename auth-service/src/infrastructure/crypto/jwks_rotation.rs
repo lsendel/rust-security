@@ -1,6 +1,4 @@
-use crate::shared::error::AppError;
 use chrono::{DateTime, Duration, Utc};
-use std::str::FromStr;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header};
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
@@ -98,7 +96,11 @@ pub trait KeyStorage: Send + Sync {
     async fn delete_key(&self, kid: &str) -> Result<(), crate::shared::error::AppError>;
 
     /// Update key status
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), crate::shared::error::AppError>;
+    async fn update_key_status(
+        &self,
+        kid: &str,
+        status: KeyStatus,
+    ) -> Result<(), crate::shared::error::AppError>;
 }
 
 impl JwksManager {
@@ -334,10 +336,9 @@ impl JwksManager {
     ///
     /// Returns an error if no active key is available
     pub async fn create_jwt_header(&self) -> Result<Header, crate::shared::error::AppError> {
-        let active_key = self
-            .get_active_key()
-            .await
-            .ok_or_else(|| crate::shared::error::AppError::Internal("No active signing key".to_string()))?;
+        let active_key = self.get_active_key().await.ok_or_else(|| {
+            crate::shared::error::AppError::Internal("No active signing key".to_string())
+        })?;
         let mut header = Header::new(self.config.algorithm);
         header.kid = Some(active_key.kid);
         Ok(header)
@@ -352,29 +353,33 @@ impl JwksManager {
     /// - Private key is missing from the active key
     /// - Private key is invalid or corrupted
     pub async fn get_encoding_key(&self) -> Result<EncodingKey, crate::shared::error::AppError> {
-        let active_key = self
-            .get_active_key()
-            .await
-            .ok_or_else(|| crate::shared::error::AppError::Internal("No active signing key".to_string()))?;
-        let private_key = active_key
-            .private_key
-            .ok_or_else(|| crate::shared::error::AppError::Internal("Private key not available".to_string()))?;
+        let active_key = self.get_active_key().await.ok_or_else(|| {
+            crate::shared::error::AppError::Internal("No active signing key".to_string())
+        })?;
+        let private_key = active_key.private_key.ok_or_else(|| {
+            crate::shared::error::AppError::Internal("Private key not available".to_string())
+        })?;
 
-        EncodingKey::from_rsa_pem(private_key.as_bytes())
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid private key: {e}")))
+        EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Invalid private key: {e}"))
+        })
     }
 
     /// Get decoding key for validation
     ///
     /// - The key is expired or revoked
     /// - Public key is invalid or corrupted
-    pub async fn get_decoding_key(&self, kid: &str) -> Result<DecodingKey, crate::shared::error::AppError> {
-        let key = self
-            .get_key(kid)
-            .await
-            .ok_or_else(|| crate::shared::error::AppError::InvalidToken(format!("Unknown kid: {kid}")))?;
+    pub async fn get_decoding_key(
+        &self,
+        kid: &str,
+    ) -> Result<DecodingKey, crate::shared::error::AppError> {
+        let key = self.get_key(kid).await.ok_or_else(|| {
+            crate::shared::error::AppError::InvalidToken(format!("Unknown kid: {kid}"))
+        })?;
 
-        DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| crate::shared::error::AppError::Internal(format!("Invalid public key: {e}")))
+        DecodingKey::from_rsa_pem(key.public_key.as_bytes()).map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Invalid public key: {e}"))
+        })
     }
 
     /// Check if rotation is needed
@@ -490,7 +495,11 @@ impl KeyStorage for InMemoryKeyStorage {
         Ok(())
     }
 
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), crate::shared::error::AppError> {
+    async fn update_key_status(
+        &self,
+        kid: &str,
+        status: KeyStatus,
+    ) -> Result<(), crate::shared::error::AppError> {
         if let Some(key) = self.keys.write().await.iter_mut().find(|k| k.kid == kid) {
             key.status = status;
         }
@@ -511,7 +520,9 @@ impl RedisKeyStorage {
     ///
     /// Returns an error if Redis client creation fails
     pub fn new(redis_url: &str) -> Result<Self, crate::shared::error::AppError> {
-        let client = redis::Client::open(redis_url).map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to create Redis client: {e}")))?;
+        let client = redis::Client::open(redis_url).map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to create Redis client: {e}"))
+        })?;
         Ok(Self {
             client,
             key_prefix: "jwks:keys:".to_string(),
@@ -526,11 +537,14 @@ impl KeyStorage for RedisKeyStorage {
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}")))?;
+            .map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}"))
+            })?;
 
         let redis_key = format!("{}{}", self.key_prefix, key.kid);
-        let key_json = serde_json::to_string(key)
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to serialize key: {e}")))?;
+        let key_json = serde_json::to_string(key).map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to serialize key: {e}"))
+        })?;
 
         // Store with expiration based on key expiry
         let ttl = (key.expires_at.timestamp() - chrono::Utc::now().timestamp()).max(60);
@@ -540,7 +554,11 @@ impl KeyStorage for RedisKeyStorage {
             .expire(&redis_key, ttl)
             .query_async::<()>(&mut conn)
             .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to store key in Redis: {e}")))?;
+            .map_err(|e| {
+                crate::shared::error::AppError::Internal(format!(
+                    "Failed to store key in Redis: {e}"
+                ))
+            })?;
 
         Ok(())
     }
@@ -550,23 +568,26 @@ impl KeyStorage for RedisKeyStorage {
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}")))?;
+            .map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}"))
+            })?;
 
         let pattern = format!("{}*", self.key_prefix);
-        let keys: Vec<String> = conn
-            .keys(pattern)
-            .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to get keys from Redis: {e}")))?;
+        let keys: Vec<String> = conn.keys(pattern).await.map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to get keys from Redis: {e}"))
+        })?;
 
         let mut crypto_keys = Vec::new();
         for redis_key in keys {
-            let key_json: String = conn
-                .get(&redis_key)
-                .await
-                .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to get key from Redis: {e}")))?;
+            let key_json: String = conn.get(&redis_key).await.map_err(|e| {
+                crate::shared::error::AppError::Internal(format!(
+                    "Failed to get key from Redis: {e}"
+                ))
+            })?;
 
-            let crypto_key: CryptoKey = serde_json::from_str(&key_json)
-                .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to deserialize key: {e}")))?;
+            let crypto_key: CryptoKey = serde_json::from_str(&key_json).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Failed to deserialize key: {e}"))
+            })?;
 
             crypto_keys.push(crypto_key);
         }
@@ -579,41 +600,59 @@ impl KeyStorage for RedisKeyStorage {
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}")))?;
+            .map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}"))
+            })?;
         let redis_key = format!("{}{}", self.key_prefix, kid);
-        conn.del::<_, ()>(&redis_key)
-            .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to delete key {kid}: {e}")))?;
+        conn.del::<_, ()>(&redis_key).await.map_err(|e| {
+            crate::shared::error::AppError::Internal(format!("Failed to delete key {kid}: {e}"))
+        })?;
+        Ok(())
     }
 
-    async fn update_key_status(&self, kid: &str, status: KeyStatus) -> Result<(), crate::shared::error::AppError> {
+    async fn update_key_status(
+        &self,
+        kid: &str,
+        status: KeyStatus,
+    ) -> Result<(), crate::shared::error::AppError> {
         let mut conn = self
             .client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}")))?;
+            .map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Redis connection failed: {e}"))
+            })?;
 
         let redis_key = format!("{}{}", self.key_prefix, kid);
-        let key_json: Option<String> =
-            conn.get(&redis_key)
-                .await
-                .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to get key for status update: {e}")))?;
+        let key_json: Option<String> = conn.get(&redis_key).await.map_err(|e| {
+            crate::shared::error::AppError::Internal(format!(
+                "Failed to get key for status update: {e}"
+            ))
+        })?;
 
         if let Some(json) = key_json {
-            let mut key: CryptoKey =
-                serde_json::from_str(&json).map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to deserialize key: {e}")))?;
+            let mut key: CryptoKey = serde_json::from_str(&json).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!("Failed to deserialize key: {e}"))
+            })?;
 
             key.status = status;
             if status != KeyStatus::Active {
                 key.is_active = false;
             }
 
-            let updated_json =
-                serde_json::to_string(&key).map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to serialize updated key: {e}")))?;
+            let updated_json = serde_json::to_string(&key).map_err(|e| {
+                crate::shared::error::AppError::Internal(format!(
+                    "Failed to serialize updated key: {e}"
+                ))
+            })?;
 
             conn.set::<_, _, ()>(&redis_key, updated_json)
                 .await
-                .map_err(|e| crate::shared::error::AppError::Internal(format!("Failed to update key status: {e}")))?;
+                .map_err(|e| {
+                    crate::shared::error::AppError::Internal(format!(
+                        "Failed to update key status: {e}"
+                    ))
+                })?;
         }
 
         Ok(())

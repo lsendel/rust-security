@@ -50,9 +50,9 @@ async fn revoke_api_key(
         .revoke_api_key(&prefix)
         .await
         .map_err(|e| match e {
-            crate::api_key_store::ApiKeyError::NotFound => crate::shared::error::AppError::NotFound {
-                resource: "API Key".to_string(),
-            },
+            crate::api_key_store::ApiKeyError::NotFound => {
+                crate::shared::error::AppError::NotFound("API Key".to_string())
+            }
             _ => AppError::internal("Failed to revoke API key"),
         })?;
 
@@ -102,9 +102,7 @@ async fn get_api_key(
         .get_api_key_by_prefix(&prefix)
         .await
         .map_err(|e| AppError::internal(&format!("Failed to get API key: {e}")))?
-        .ok_or(crate::shared::error::AppError::NotFound {
-            resource: "API Key".to_string(),
-        })?;
+        .ok_or(crate::shared::error::AppError::NotFound("API Key".to_string()))?;
 
     let details = ApiKeyDetails {
         id: api_key.id,

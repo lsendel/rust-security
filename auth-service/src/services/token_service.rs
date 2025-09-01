@@ -5,8 +5,10 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::domain::entities::{Token, TokenType};
-use crate::domain::repositories::{TokenRepository, SessionRepository, DynTokenRepository, DynSessionRepository};
+use crate::domain::entities::Token;
+use crate::domain::repositories::{
+    DynSessionRepository, DynTokenRepository,
+};
 use crate::domain::value_objects::UserId;
 use crate::shared::crypto::CryptoService;
 
@@ -23,6 +25,8 @@ pub enum TokenError {
     Invalid,
     #[error("Repository error: {0}")]
     Repository(#[from] crate::domain::repositories::RepositoryError),
+    #[error("Token repository error: {0}")]
+    TokenRepository(#[from] crate::domain::repositories::TokenRepositoryError),
     #[error("Crypto error: {0}")]
     Crypto(String),
 }
@@ -72,7 +76,8 @@ impl TokenServiceTrait for TokenService {
     }
 
     async fn validate_token(&self, token_hash: &str) -> Result<Token, TokenError> {
-        let token = self.token_repo
+        let token = self
+            .token_repo
             .find_by_hash(token_hash)
             .await?
             .ok_or(TokenError::NotFound)?;
@@ -102,15 +107,17 @@ impl TokenServiceTrait for TokenService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::repositories::token_repository::MockTokenRepository;
     use crate::domain::repositories::session_repository::MockSessionRepository;
+    use crate::domain::repositories::token_repository::MockTokenRepository;
     use std::sync::Arc;
 
     #[tokio::test]
     async fn test_token_service_creation() {
         let token_repo = Arc::new(MockTokenRepository::new());
         let session_repo = Arc::new(MockSessionRepository::new());
-        let crypto = Arc::new(crate::shared::crypto::CryptoService::new("test".to_string()));
+        let crypto = Arc::new(crate::shared::crypto::CryptoService::new(
+            "test".to_string(),
+        ));
 
         let service = TokenService::new(token_repo, session_repo, crypto);
         assert!(true); // Basic smoke test

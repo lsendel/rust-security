@@ -1234,8 +1234,11 @@ impl ThreatIntelligenceCorrelator {
         match format.to_lowercase().as_str() {
             "json" => {
                 // Parse JSON format feed
-                let json_data: serde_json::Value = serde_json::from_str(data)
-                    .map_err(|e| crate::shared::error::AppError::ExternalService(format!("JSON parse error: {e}")))?;
+                let json_data: serde_json::Value = serde_json::from_str(data).map_err(|e| {
+                    crate::shared::error::AppError::ExternalService(format!(
+                        "JSON parse error: {e}"
+                    ))
+                })?;
 
                 if let Some(array) = json_data.as_array() {
                     for item in array {

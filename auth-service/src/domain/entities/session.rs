@@ -2,7 +2,7 @@
 //!
 //! Represents a user session in the authentication system.
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -52,7 +52,11 @@ impl Session {
     }
 
     /// Create a session with custom expiration
-    pub fn with_expiration(user_id: UserId, created_at: DateTime<Utc>, expires_at: DateTime<Utc>) -> Self {
+    pub fn with_expiration(
+        user_id: UserId,
+        created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             user_id,

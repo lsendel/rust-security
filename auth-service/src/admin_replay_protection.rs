@@ -1,4 +1,3 @@
-use crate::shared::error::AppError;
 use dashmap::DashMap;
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
@@ -94,10 +93,9 @@ impl ReplayProtection {
     fn validate_timestamp(&self, timestamp: u64) -> Result<(), crate::shared::error::AppError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| crate::shared::error::AppError::Internal {
-                error_id: uuid::Uuid::new_v4(),
-                context: "Time error".to_string(),
-            })?
+            .map_err(|_| crate::shared::error::AppError::Internal(
+                "Time error".to_string()
+            ))?
             .as_secs();
 
         // Check if timestamp is too old
@@ -197,7 +195,7 @@ impl ReplayProtection {
         let key = format!("admin:nonce:{}", nonce);
 
         // Store with expiry
-        conn.set_ex(&key, timestamp, expiry).await?;
+        conn.set_ex::<_, _, ()>(&key, timestamp, expiry).await?;
         Ok(())
     }
 

@@ -41,10 +41,11 @@ impl TestFixture {
         client_credentials.insert("read_client".to_string(), "read_secret".to_string());
         client_credentials.insert("write_client".to_string(), "write_secret".to_string());
 
-        let policy_cache_config = auth_service::storage::cache::policy_cache::PolicyCacheConfig::default();
-        let policy_cache = Arc::new(auth_service::storage::cache::policy_cache::PolicyCache::new(
-            policy_cache_config,
-        ));
+        let policy_cache_config =
+            auth_service::storage::cache::policy_cache::PolicyCacheConfig::default();
+        let policy_cache = Arc::new(
+            auth_service::storage::cache::policy_cache::PolicyCache::new(policy_cache_config),
+        );
 
         let api_key_store = ApiKeyStore::new("sqlite::memory:").await.unwrap();
         let store = Arc::new(HybridStore::new().await);

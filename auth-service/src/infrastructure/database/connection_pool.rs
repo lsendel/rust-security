@@ -59,7 +59,7 @@ pub struct OptimizedPgPool {
     prepared_statements: Arc<RwLock<std::collections::HashMap<String, String>>>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PoolStats {
     pub connections_created: u64,
     pub connections_acquired: u64,
@@ -69,6 +69,21 @@ pub struct PoolStats {
     pub acquire_time_avg: Duration,
     pub acquire_time_max: Duration,
     pub last_health_check: Instant,
+}
+
+impl Default for PoolStats {
+    fn default() -> Self {
+        Self {
+            connections_created: 0,
+            connections_acquired: 0,
+            connections_released: 0,
+            connections_idle: 0,
+            connections_active: 0,
+            acquire_time_avg: Duration::default(),
+            acquire_time_max: Duration::default(),
+            last_health_check: std::time::Instant::now(),
+        }
+    }
 }
 
 impl OptimizedPgPool {
@@ -128,8 +143,10 @@ impl OptimizedPgPool {
         // Update stats
         let mut stats = self.stats.write().await;
         stats.connections_acquired += 1;
-        let avg_nanos = ((stats.acquire_time_avg.as_nanos() * (stats.connections_acquired - 1) as u128)
-                + acquire_time.as_nanos()) / stats.connections_acquired as u128;
+        let avg_nanos = ((stats.acquire_time_avg.as_nanos()
+            * (stats.connections_acquired - 1) as u128)
+            + acquire_time.as_nanos())
+            / stats.connections_acquired as u128;
         stats.acquire_time_avg = Duration::from_nanos(avg_nanos.min(u64::MAX as u128) as u64);
         stats.acquire_time_max = stats.acquire_time_max.max(acquire_time);
 
@@ -171,7 +188,7 @@ impl OptimizedPgPool {
         &self,
         executor: E,
         query: &'q str,
-        params: &[T],
+        _params: &[T],
     ) -> Result<sqlx::postgres::PgQueryResult, AppError>
     where
         E: Executor<'q, Database = sqlx::Postgres>,

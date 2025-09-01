@@ -3,35 +3,31 @@
 //! High-coverage test suite including unit tests, integration tests,
 //! property-based tests, and performance benchmarks.
 
-pub mod property_tests;
 pub mod integration_tests;
-pub mod security_tests;
 pub mod performance_tests;
+pub mod property_tests;
+pub mod security_tests;
 
 // Re-export all test modules
-pub use property_tests::*;
 pub use integration_tests::*;
-pub use security_tests::*;
 pub use performance_tests::*;
+pub use property_tests::*;
+pub use security_tests::*;
 
 /// Test utilities and helpers
 pub mod utils {
     use crate::domain::entities::User;
-    use crate::domain::value_objects::{Email, UserId, PasswordHash};
+    use crate::domain::value_objects::{Email, PasswordHash, UserId};
     use crate::services::PasswordService;
 
     /// Create a test user with valid data
     pub fn create_test_user() -> User {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let password_hash =
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
 
-        User::new(
-            user_id,
-            email,
-            password_hash,
-            Some("Test User".to_string()),
-        )
+        User::new(user_id, email, password_hash, Some("Test User".to_string()))
     }
 
     /// Create a test password hash
@@ -54,9 +50,9 @@ pub mod utils {
 
 /// Test configuration helpers
 pub mod config {
-    use crate::middleware::security_enhanced::SecurityConfig;
     use crate::infrastructure::cache::advanced_cache::AdvancedCacheConfig;
     use crate::infrastructure::database::connection_pool::ConnectionPoolConfig;
+    use crate::middleware::security_enhanced::SecurityConfig;
     use std::time::Duration;
 
     /// Create test security configuration
@@ -76,9 +72,9 @@ pub mod config {
     pub fn test_cache_config() -> AdvancedCacheConfig {
         AdvancedCacheConfig {
             l1_max_size: 1000,
-            l2_ttl: Duration::from_secs(300), // 5 minutes for tests
+            l2_ttl: Duration::from_secs(300),  // 5 minutes for tests
             l3_ttl: Duration::from_secs(3600), // 1 hour for tests
-            warming_enabled: false, // Disable for tests
+            warming_enabled: false,            // Disable for tests
             compression_threshold: 1024,
             adaptive_ttl: true,
             dependency_tracking: true,
@@ -119,7 +115,7 @@ macro_rules! assert_err {
 macro_rules! assert_matches {
     ($expression:expr, $pattern:pat) => {
         match $expression {
-            $pattern => {},
+            $pattern => {}
             ref e => panic!("Expected pattern {}, got {:?}", stringify!($pattern), e),
         }
     };
@@ -184,16 +180,14 @@ pub mod async_helpers {
 
 /// Mock implementations for testing
 pub mod mocks {
+    use std::collections::HashMap;
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use std::collections::HashMap;
 
-    use crate::domain::entities::{User, Session};
-    use crate::domain::repositories::{
-        RepositoryError, SessionRepository, UserRepository,
-    };
+    use crate::domain::entities::{Session, User};
+    use crate::domain::repositories::{DynSessionRepository, DynUserRepository};
+    use crate::domain::repositories::{RepositoryError, SessionRepository, UserRepository};
     use crate::domain::value_objects::{Email, UserId};
-    use crate::domain::repositories::{DynUserRepository, DynSessionRepository};
 
     /// In-memory user repository for testing
     pub struct MockUserRepository {
@@ -352,4 +346,3 @@ pub mod mocks {
         (user_repo, session_repo)
     }
 }
-

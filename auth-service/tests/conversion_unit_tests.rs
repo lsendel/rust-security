@@ -110,9 +110,9 @@ fn test_no_feature_compilation() {
 fn test_conversion_preserves_data() {
     use auth_service::core::auth::AuthContext;
     use auth_service::core::security::{SecurityContext, SecurityEvent, SecurityLevel};
+    use chrono::Utc;
     use std::collections::HashMap;
     use std::net::IpAddr;
-    use chrono::Utc;
     use std::time::SystemTime;
 
     let security_event = SecurityEvent {

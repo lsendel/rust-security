@@ -3,14 +3,16 @@
 //! Core business logic for authentication operations.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 
-use crate::domain::entities::{User, Session};
-use crate::domain::repositories::{UserRepository, SessionRepository, DynUserRepository, DynSessionRepository};
-use crate::domain::value_objects::{Email, UserId};
+use crate::domain::entities::Session;
+use crate::domain::repositories::{
+    DynSessionRepository, DynUserRepository,
+};
+use crate::domain::Email;
 use crate::shared::crypto::{CryptoService, CryptoServiceTrait};
 
 /// Authentication service errors
@@ -63,10 +65,19 @@ pub struct UserInfo {
 /// Authentication service trait
 #[async_trait]
 pub trait AuthServiceTrait: Send + Sync {
-    async fn login(&self, request: LoginRequest) -> Result<LoginResponse, crate::shared::error::AppError>;
+    async fn login(
+        &self,
+        request: LoginRequest,
+    ) -> Result<LoginResponse, crate::shared::error::AppError>;
     async fn logout(&self, session_id: &str) -> Result<(), crate::shared::error::AppError>;
-    async fn validate_session(&self, session_id: &str) -> Result<UserInfo, crate::shared::error::AppError>;
-    async fn refresh_token(&self, refresh_token: &str) -> Result<LoginResponse, crate::shared::error::AppError>;
+    async fn validate_session(
+        &self,
+        session_id: &str,
+    ) -> Result<UserInfo, crate::shared::error::AppError>;
+    async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<LoginResponse, crate::shared::error::AppError>;
 }
 
 /// Authentication service implementation
@@ -93,13 +104,17 @@ impl AuthService {
 
 #[async_trait]
 impl AuthServiceTrait for AuthService {
-    async fn login(&self, request: LoginRequest) -> Result<LoginResponse, crate::shared::error::AppError> {
+    async fn login(
+        &self,
+        request: LoginRequest,
+    ) -> Result<LoginResponse, crate::shared::error::AppError> {
         // 1. Validate input
         let email = Email::new(request.email)
             .map_err(|_| crate::shared::error::AppError::InvalidCredentials)?;
 
         // 2. Find user
-        let user = self.user_repo
+        let user = self
+            .user_repo
             .find_by_email(&email)
             .await?
             .ok_or(crate::shared::error::AppError::InvalidCredentials)?;
@@ -109,15 +124,16 @@ impl AuthServiceTrait for AuthService {
             return Err(crate::shared::error::AppError::UserInactive);
         }
 
-        if !user.is_verified {
+        if !user.email_verified {
             return Err(crate::shared::error::AppError::UserNotVerified);
         }
 
         // 4. Verify password
-        let is_valid_password = self.crypto_service
+        let is_valid_password = self
+            .crypto_service
             .verify_password(&request.password, &user.password_hash)
             .await
-            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Crypto)?;
 
         if !is_valid_password {
             return Err(crate::shared::error::AppError::InvalidCredentials);
@@ -125,33 +141,34 @@ impl AuthServiceTrait for AuthService {
 
         // 5. Update last login
         let now = Utc::now();
-        self.user_repo
-            .update_last_login(&user.id, now)
-            .await?;
+        self.user_repo.update_last_login(&user.id, now).await?;
 
         // 6. Create session
         let session = Session::new(user.id.clone(), now);
-        self.session_repo.save(&session).await?;
+        self.session_repo.save(&session).await
+            .map_err(|e| crate::shared::error::AppError::Internal(format!("Session error: {e}")))?;
 
         // 7. Generate tokens
-        let access_token = self.crypto_service
+        let access_token = self
+            .crypto_service
             .generate_access_token(&user, &session)
             .await
-            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Crypto)?;
 
-        let refresh_token = self.crypto_service
+        let refresh_token = self
+            .crypto_service
             .generate_refresh_token(&user, &session)
             .await
-            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Crypto)?;
 
         // 8. Return response
         Ok(LoginResponse {
             user: UserInfo {
-                id: user.id.into_string(),
-                email: user.email.into_string(),
-                name: user.name,
-                roles: user.roles,
-                verified: user.is_verified,
+                id: user.id.as_str().to_string(),
+                email: user.email.as_str().to_string(),
+                name: user.name.unwrap_or_default(),
+                roles: user.roles.into_iter().collect(),
+                verified: user.email_verified,
                 last_login: user.last_login,
             },
             session_id: session.id,
@@ -165,15 +182,19 @@ impl AuthServiceTrait for AuthService {
         self.session_repo
             .delete(session_id)
             .await
-            .map_err(|e| crate::shared::error::AppError::Session(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Session)?;
         Ok(())
     }
 
-    async fn validate_session(&self, session_id: &str) -> Result<UserInfo, crate::shared::error::AppError> {
-        let session = self.session_repo
+    async fn validate_session(
+        &self,
+        session_id: &str,
+    ) -> Result<UserInfo, crate::shared::error::AppError> {
+        let session = self
+            .session_repo
             .find_by_id(session_id)
             .await
-            .map_err(|e| crate::shared::error::AppError::Session(e.to_string()))?
+            .map_err(|_e| crate::shared::error::AppError::Session)?
             .ok_or(crate::shared::error::AppError::InvalidCredentials)?;
 
         // Check if session is expired
@@ -181,46 +202,53 @@ impl AuthServiceTrait for AuthService {
             return Err(crate::shared::error::AppError::InvalidCredentials);
         }
 
-        let user = self.user_repo
+        let user = self
+            .user_repo
             .find_by_id(&session.user_id)
             .await?
             .ok_or(crate::shared::error::AppError::UserNotFound)?;
 
         Ok(UserInfo {
-            id: user.id.into_string(),
-            email: user.email.into_string(),
-            name: user.name,
-            roles: user.roles,
-            verified: user.is_verified,
+            id: user.id.as_str().to_string(),
+            email: user.email.as_str().to_string(),
+            name: user.name.unwrap_or_default(),
+            roles: user.roles.into_iter().collect(),
+            verified: user.email_verified,
             last_login: user.last_login,
         })
     }
 
-    async fn refresh_token(&self, refresh_token: &str) -> Result<LoginResponse, crate::shared::error::AppError> {
+    async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<LoginResponse, crate::shared::error::AppError> {
         // Validate refresh token and get user/session info
-        let (user, session) = self.crypto_service
+        let (user, session) = self
+            .crypto_service
             .validate_refresh_token(refresh_token)
             .await
-            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Crypto)?;
 
         // Generate new tokens
-        let access_token = self.crypto_service
+        let access_token = self
+            .crypto_service
             .generate_access_token(&user, &session)
             .await
-            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Crypto)?;
 
-        let new_refresh_token = self.crypto_service
+        let new_refresh_token = self
+            .crypto_service
             .generate_refresh_token(&user, &session)
             .await
-            .map_err(|e| crate::shared::error::AppError::Crypto(e.to_string()))?;
+            .map_err(|_e| crate::shared::error::AppError::Crypto)?;
 
         Ok(LoginResponse {
             user: UserInfo {
-                id: user.id.into_string(),
-                email: user.email.into_string(),
-                name: user.name,
-                roles: user.roles,
-                verified: user.is_verified,
+                id: user.id.as_str().to_string(),
+                email: user.email.as_str().to_string(),
+                name: user.name.unwrap_or_default(),
+                roles: user.roles.into_iter().collect(),
+                verified: user.email_verified,
                 last_login: user.last_login,
             },
             session_id: session.id,

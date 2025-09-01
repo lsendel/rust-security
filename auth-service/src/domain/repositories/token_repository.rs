@@ -3,7 +3,6 @@
 //! Defines the contract for token data access operations.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 
 use crate::domain::entities::{Token, TokenType};
 use crate::domain::value_objects::UserId;
@@ -31,7 +30,11 @@ pub trait TokenRepository: Send + Sync {
     async fn find_by_user_id(&self, user_id: &UserId) -> Result<Vec<Token>, TokenRepositoryError>;
 
     /// Find tokens by type for a user
-    async fn find_by_user_and_type(&self, user_id: &UserId, token_type: &TokenType) -> Result<Vec<Token>, TokenRepositoryError>;
+    async fn find_by_user_and_type(
+        &self,
+        user_id: &UserId,
+        token_type: &TokenType,
+    ) -> Result<Vec<Token>, TokenRepositoryError>;
 
     /// Save a new token
     async fn save(&self, token: &Token) -> Result<(), TokenRepositoryError>;
@@ -46,7 +49,11 @@ pub trait TokenRepository: Send + Sync {
     async fn delete_by_user_id(&self, user_id: &UserId) -> Result<(), TokenRepositoryError>;
 
     /// Delete all tokens for a user of a specific type
-    async fn delete_by_user_and_type(&self, user_id: &UserId, token_type: &TokenType) -> Result<(), TokenRepositoryError>;
+    async fn delete_by_user_and_type(
+        &self,
+        user_id: &UserId,
+        token_type: &TokenType,
+    ) -> Result<(), TokenRepositoryError>;
 
     /// Revoke a token by hash
     async fn revoke_by_hash(&self, token_hash: &str) -> Result<(), TokenRepositoryError>;
@@ -90,23 +97,35 @@ mod tests {
 
     #[async_trait]
     impl TokenRepository for MockTokenRepository {
-        async fn find_by_hash(&self, token_hash: &str) -> Result<Option<Token>, TokenRepositoryError> {
+        async fn find_by_hash(
+            &self,
+            token_hash: &str,
+        ) -> Result<Option<Token>, TokenRepositoryError> {
             let tokens = self.tokens.read().unwrap();
             Ok(tokens.get(token_hash).cloned())
         }
 
-        async fn find_by_user_id(&self, user_id: &UserId) -> Result<Vec<Token>, TokenRepositoryError> {
+        async fn find_by_user_id(
+            &self,
+            user_id: &UserId,
+        ) -> Result<Vec<Token>, TokenRepositoryError> {
             let tokens = self.tokens.read().unwrap();
-            let user_tokens = tokens.values()
+            let user_tokens = tokens
+                .values()
                 .filter(|t| t.user_id == *user_id)
                 .cloned()
                 .collect();
             Ok(user_tokens)
         }
 
-        async fn find_by_user_and_type(&self, user_id: &UserId, token_type: &TokenType) -> Result<Vec<Token>, TokenRepositoryError> {
+        async fn find_by_user_and_type(
+            &self,
+            user_id: &UserId,
+            token_type: &TokenType,
+        ) -> Result<Vec<Token>, TokenRepositoryError> {
             let tokens = self.tokens.read().unwrap();
-            let user_tokens = tokens.values()
+            let user_tokens = tokens
+                .values()
                 .filter(|t| t.user_id == *user_id && t.token_type == *token_type)
                 .cloned()
                 .collect();
@@ -145,9 +164,14 @@ mod tests {
             Ok(())
         }
 
-        async fn delete_by_user_and_type(&self, user_id: &UserId, token_type: &TokenType) -> Result<(), TokenRepositoryError> {
+        async fn delete_by_user_and_type(
+            &self,
+            user_id: &UserId,
+            token_type: &TokenType,
+        ) -> Result<(), TokenRepositoryError> {
             let mut tokens = self.tokens.write().unwrap();
-            tokens.retain(|_, token| !(token.user_id == *user_id && token.token_type == *token_type));
+            tokens
+                .retain(|_, token| !(token.user_id == *user_id && token.token_type == *token_type));
             Ok(())
         }
 
@@ -189,9 +213,13 @@ mod tests {
             }
         }
 
-        async fn count_active_by_user(&self, user_id: &UserId) -> Result<i64, TokenRepositoryError> {
+        async fn count_active_by_user(
+            &self,
+            user_id: &UserId,
+        ) -> Result<i64, TokenRepositoryError> {
             let tokens = self.tokens.read().unwrap();
-            let count = tokens.values()
+            let count = tokens
+                .values()
                 .filter(|t| t.user_id == *user_id && t.is_active())
                 .count();
             Ok(count as i64)

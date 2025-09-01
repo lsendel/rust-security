@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::domain::entities::User;
-use crate::domain::repositories::{UserRepository, DynUserRepository};
-use crate::domain::value_objects::{Email, PasswordHash, UserId};
+use crate::domain::repositories::DynUserRepository;
+use crate::domain::value_objects::{Email, UserId};
 use crate::shared::crypto::{CryptoService, CryptoServiceTrait};
 
 /// User service errors
@@ -48,7 +48,7 @@ pub struct UpdateProfileRequest {
 pub struct UserResponse {
     pub id: String,
     pub email: String,
-    pub name: String,
+    pub name: Option<String>,
     pub verified: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -101,16 +101,17 @@ impl UserServiceTrait for UserService {
             .map_err(|e| UserError::Crypto(e.to_string()))?;
 
         // Create user
-        let user = User::new(email, password_hash, request.name);
+        let user_id = UserId::new();
+        let user = User::new(user_id, email, password_hash, Some(request.name));
 
         // Save user
         self.user_repo.save(&user).await?;
 
         Ok(UserResponse {
-            id: user.id.into_string(),
-            email: user.email.into_string(),
+            id: user.id.as_str().to_string(),
+            email: user.email.as_str().to_string(),
             name: user.name,
-            verified: user.is_verified,
+            verified: user.email_verified,
             created_at: user.created_at,
         })
     }
@@ -123,10 +124,10 @@ impl UserServiceTrait for UserService {
             .ok_or(UserError::NotFound)?;
 
         Ok(UserResponse {
-            id: user.id.into_string(),
-            email: user.email.into_string(),
+            id: user.id.as_str().to_string(),
+            email: user.email.as_str().to_string(),
             name: user.name,
-            verified: user.is_verified,
+            verified: user.email_verified,
             created_at: user.created_at,
         })
     }
@@ -145,7 +146,7 @@ impl UserServiceTrait for UserService {
 
         // Update fields
         if let Some(name) = request.name {
-            user.name = name;
+            user.name = Some(name);
         }
 
         if let Some(email_str) = request.email {
@@ -165,10 +166,10 @@ impl UserServiceTrait for UserService {
         self.user_repo.save(&user).await?;
 
         Ok(UserResponse {
-            id: user.id.into_string(),
-            email: user.email.into_string(),
+            id: user.id.as_str().to_string(),
+            email: user.email.as_str().to_string(),
             name: user.name,
-            verified: user.is_verified,
+            verified: user.email_verified,
             created_at: user.created_at,
         })
     }

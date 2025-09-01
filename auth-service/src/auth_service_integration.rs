@@ -60,9 +60,11 @@ mod tests {
                     crate::threat_behavioral_analyzer::BehavioralAnalysisConfig::default(),
                 ),
             ),
-            Arc::new(crate::threat_intelligence::ThreatIntelligenceCorrelator::new(
-                crate::threat_intelligence::ThreatIntelligenceConfig::default(),
-            )),
+            Arc::new(
+                crate::threat_intelligence::ThreatIntelligenceCorrelator::new(
+                    crate::threat_intelligence::ThreatIntelligenceConfig::default(),
+                ),
+            ),
             Arc::new(
                 crate::threat_response_orchestrator::ThreatResponseOrchestrator::new(
                     crate::threat_response_orchestrator::ThreatResponseConfig::default(),

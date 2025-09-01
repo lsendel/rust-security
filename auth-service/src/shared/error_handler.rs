@@ -3,11 +3,11 @@
 //! Unified error handling with proper error conversion, logging, and monitoring.
 //! Implements error boundaries, error recovery strategies, and comprehensive error tracking.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn, instrument};
-use serde::{Deserialize, Serialize};
+use tracing::{error, info, instrument, warn};
 
 use crate::shared::error::AppError;
 
@@ -36,7 +36,8 @@ pub struct ErrorHandler {
     error_counts: Arc<RwLock<HashMap<String, u64>>>,
     recent_errors: Arc<RwLock<Vec<ErrorContext>>>,
     max_recent_errors: usize,
-    recovery_strategies: HashMap<String, Box<dyn Fn(&AppError) -> Result<(), AppError> + Send + Sync>>,
+    recovery_strategies:
+        HashMap<String, Box<dyn Fn(&AppError) -> Result<(), AppError> + Send + Sync>>,
 }
 
 impl ErrorHandler {
@@ -47,12 +48,14 @@ impl ErrorHandler {
         // Register recovery strategies
         recovery_strategies.insert(
             "database_connection".to_string(),
-            Box::new(Self::database_connection_recovery) as Box<dyn Fn(&AppError) -> Result<(), AppError> + Send + Sync>
+            Box::new(Self::database_connection_recovery)
+                as Box<dyn Fn(&AppError) -> Result<(), AppError> + Send + Sync>,
         );
 
         recovery_strategies.insert(
             "rate_limit".to_string(),
-            Box::new(Self::rate_limit_recovery) as Box<dyn Fn(&AppError) -> Result<(), AppError> + Send + Sync>
+            Box::new(Self::rate_limit_recovery)
+                as Box<dyn Fn(&AppError) -> Result<(), AppError> + Send + Sync>,
         );
 
         Self {
@@ -138,9 +141,9 @@ impl ErrorHandler {
     fn classify_error_severity(&self, error: &AppError) -> ErrorSeverity {
         match error {
             AppError::RateLimitExceeded => ErrorSeverity::Low,
-            AppError::Validation(_) | AppError::InvalidRequest(_) => ErrorSeverity::Low,
+            AppError::Validation(_) | AppError::InvalidRequest { .. } => ErrorSeverity::Low,
             AppError::NotFound(_) | AppError::Unauthorized(_) => ErrorSeverity::Medium,
-            AppError::Repository(_) | AppError::ServiceUnavailable(_) => ErrorSeverity::High,
+            AppError::Repository(_) | AppError::ServiceUnavailable { .. } => ErrorSeverity::High,
             AppError::Internal(_) | AppError::CryptographicError(_) => ErrorSeverity::High,
             AppError::Auth(_) | AppError::TokenStoreError { .. } => ErrorSeverity::Critical,
             _ => ErrorSeverity::Medium,
@@ -151,7 +154,7 @@ impl ErrorHandler {
     fn error_type_key(&self, error: &AppError) -> String {
         match error {
             AppError::Repository(_) => "database".to_string(),
-            AppError::ServiceUnavailable(_) => "service_unavailable".to_string(),
+            AppError::ServiceUnavailable { .. } => "service_unavailable".to_string(),
             AppError::RateLimitExceeded => "rate_limit".to_string(),
             AppError::Auth(_) => "authentication".to_string(),
             AppError::Validation(_) => "validation".to_string(),
@@ -165,7 +168,10 @@ impl ErrorHandler {
     /// Database connection recovery strategy
     fn database_connection_recovery(error: &AppError) -> Result<(), AppError> {
         // Implement exponential backoff retry logic
-        warn!("Attempting database connection recovery for error: {}", error);
+        warn!(
+            "Attempting database connection recovery for error: {}",
+            error
+        );
         // In a real implementation, this would retry the connection
         Ok(())
     }
@@ -191,11 +197,7 @@ where
     T: Send + Sync,
 {
     /// Create a new error boundary
-    pub fn new<F>(
-        operation: F,
-        error_handler: Arc<ErrorHandler>,
-        operation_name: &str,
-    ) -> Self
+    pub fn new<F>(operation: F, error_handler: Arc<ErrorHandler>, operation_name: &str) -> Self
     where
         F: Fn() -> Result<T, AppError> + Send + Sync + 'static,
     {
@@ -211,13 +213,9 @@ where
         match (self.operation)() {
             Ok(result) => Ok(result),
             Err(error) => {
-                let handled_error = self.error_handler
-                    .handle_error_auto(
-                        error,
-                        &self.operation_name,
-                        None,
-                        None,
-                    )
+                let handled_error = self
+                    .error_handler
+                    .handle_error_auto(error, &self.operation_name, None, None)
                     .await;
 
                 Err(handled_error)
@@ -234,13 +232,9 @@ where
         match (self.operation)() {
             Ok(result) => Ok(result),
             Err(error) => {
-                let handled_error = self.error_handler
-                    .handle_error_auto(
-                        error,
-                        &self.operation_name,
-                        user_id,
-                        session_id,
-                    )
+                let handled_error = self
+                    .error_handler
+                    .handle_error_auto(error, &self.operation_name, user_id, session_id)
                     .await;
 
                 Err(handled_error)
@@ -271,7 +265,9 @@ pub mod recovery {
 
         pub async fn execute<F, T>(&self, mut operation: F) -> Result<T, AppError>
         where
-            F: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, AppError>> + Send>>,
+            F: FnMut() -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<T, AppError>> + Send>,
+            >,
         {
             let mut attempt = 0;
 
@@ -291,7 +287,10 @@ pub mod recovery {
                             self.max_delay,
                         );
 
-                        warn!("Operation failed (attempt {}/{}), retrying in {:?}", attempt, self.max_attempts, delay);
+                        warn!(
+                            "Operation failed (attempt {}/{}), retrying in {:?}",
+                            attempt, self.max_attempts, delay
+                        );
                         tokio::time::sleep(delay).await;
                     }
                 }
@@ -328,7 +327,9 @@ pub mod recovery {
 
         pub async fn call<F, T>(&self, operation: F) -> Result<T, AppError>
         where
-            F: FnOnce() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, AppError>> + Send>>,
+            F: FnOnce() -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<T, AppError>> + Send>,
+            >,
         {
             let state = *self.state.read().await;
 
@@ -340,7 +341,9 @@ pub mod recovery {
                             *self.state.write().await = CircuitState::HalfOpen;
                             info!("Circuit breaker transitioning to half-open state");
                         } else {
-                            return Err(AppError::ServiceUnavailable("Circuit breaker is open".to_string()));
+                            return Err(AppError::ServiceUnavailable {
+                                reason: "Circuit breaker is open".to_string()
+                            });
                         }
                     }
                 }
@@ -380,7 +383,10 @@ pub mod recovery {
                     if *failures >= self.failure_threshold {
                         *self.state.write().await = CircuitState::Open;
                         *self.last_failure_time.write().await = Some(std::time::Instant::now());
-                        warn!("Circuit breaker opened due to {} consecutive failures", *failures);
+                        warn!(
+                            "Circuit breaker opened due to {} consecutive failures",
+                            *failures
+                        );
                     }
 
                     Err(error)
@@ -451,8 +457,10 @@ pub mod monitoring {
 
         /// Trigger an alert
         async fn trigger_alert(&self, alert: &ErrorAlertConfig) {
-            error!("🚨 ERROR ALERT: {} - Threshold: {}, Current: ?",
-                   alert.alert_message, alert.threshold);
+            error!(
+                "🚨 ERROR ALERT: {} - Threshold: {}, Current: ?",
+                alert.alert_message, alert.threshold
+            );
 
             // In a real system, this would:
             // - Send notifications to monitoring systems
@@ -491,7 +499,7 @@ mod tests {
 
         // Error should be returned as-is (since we can't recover from validation errors)
         match result {
-            AppError::Validation(_) => {},
+            AppError::Validation(_) => {}
             _ => panic!("Expected validation error"),
         }
 
@@ -527,17 +535,21 @@ mod tests {
 
         let retry = recovery::RetryStrategy::new(3, std::time::Duration::from_millis(10));
 
-        let result = retry.execute(|| {
-            let attempts = Arc::clone(&attempts_clone);
-            Box::pin(async move {
-                let current = attempts.fetch_add(1, Ordering::Relaxed);
-                if current < 2 {
-                    Err(AppError::ServiceUnavailable("Temporary failure".to_string()))
-                } else {
-                    Ok("success".to_string())
-                }
+        let result = retry
+            .execute(|| {
+                let attempts = Arc::clone(&attempts_clone);
+                Box::pin(async move {
+                    let current = attempts.fetch_add(1, Ordering::Relaxed);
+                    if current < 2 {
+                        Err(AppError::ServiceUnavailable {
+                            reason: "Temporary failure".to_string()
+                        })
+                    } else {
+                        Ok("success".to_string())
+                    }
+                })
             })
-        }).await;
+            .await;
 
         assert_eq!(result, Ok("success".to_string()));
         assert_eq!(attempts.load(Ordering::Relaxed), 3);
@@ -548,22 +560,21 @@ mod tests {
         let breaker = recovery::CircuitBreaker::new(2, std::time::Duration::from_millis(100));
 
         // First failure
-        let result1 = breaker.call(|| {
-            Box::pin(async { Err(AppError::ServiceUnavailable("Failure 1".to_string())) })
-        }).await;
+        let result1 = breaker
+            .call(|| Box::pin(async { Err(AppError::ServiceUnavailable { reason: "Failure 1".to_string() }) }))
+            .await;
         assert!(result1.is_err());
 
         // Second failure - should open circuit
-        let result2 = breaker.call(|| {
-            Box::pin(async { Err(AppError::ServiceUnavailable("Failure 2".to_string())) })
-        }).await;
+        let result2 = breaker
+            .call(|| Box::pin(async { Err(AppError::ServiceUnavailable { reason: "Failure 2".to_string() }) }))
+            .await;
         assert!(result2.is_err());
 
         // Third call should be rejected due to open circuit
-        let result3 = breaker.call(|| {
-            Box::pin(async { Ok("should not execute".to_string()) })
-        }).await;
-        assert!(matches!(result3, Err(AppError::ServiceUnavailable(_))));
+        let result3 = breaker
+            .call(|| Box::pin(async { Ok("should not execute".to_string()) }))
+            .await;
+        assert!(matches!(result3, Err(AppError::ServiceUnavailable { .. })));
     }
 }
-

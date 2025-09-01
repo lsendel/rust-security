@@ -20,7 +20,7 @@ pub fn create_router(container: AppContainer) -> Router {
         .allow_headers(Any);
 
     // Create metrics middleware
-    let metrics_middleware = MetricsMiddleware::new(container.metrics_collector.clone());
+    // let metrics_middleware = MetricsMiddleware::new(container.metrics_collector.clone());  // Temporarily disabled
 
     Router::new()
         .route("/api/v1/auth/register", post(handlers::auth::register))
@@ -30,7 +30,7 @@ pub fn create_router(container: AppContainer) -> Router {
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health_check))
         .route("/metrics", get(metrics_endpoint))
-        .layer(metrics_middleware)
+        // .layer(metrics_middleware)  // Temporarily disabled
         .layer(cors)
         .with_state(container)
 }

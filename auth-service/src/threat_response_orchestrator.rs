@@ -1356,7 +1356,10 @@ impl ThreatResponseOrchestrator {
     }
 
     /// Execute response actions for a given threat context
-    pub async fn execute_response(&self, threat_context: &ThreatContext) -> Result<(), crate::shared::error::AppError> {
+    pub async fn execute_response(
+        &self,
+        threat_context: &ThreatContext,
+    ) -> Result<(), crate::shared::error::AppError> {
         info!(
             "Executing response for threat: {}",
             threat_context.threat_id

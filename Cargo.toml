@@ -331,6 +331,3 @@ vulnerability_tolerance = "none"
 dependency_review_required = true
 security_contact = "security@company.com"
 
-# Development tools dependencies
-[workspace.dependencies.dev-tools]
-regex = "1.10"
