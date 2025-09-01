@@ -3,7 +3,6 @@
 //! Defines the contract for token data access operations.
 
 use async_trait::async_trait;
-use chrono::Utc;
 
 use crate::domain::entities::{Token, TokenType};
 use crate::domain::value_objects::UserId;
@@ -199,7 +198,6 @@ mod tests {
         async fn delete_expired(&self) -> Result<i64, TokenRepositoryError> {
             let mut tokens = self.tokens.write().unwrap();
             let before_count = tokens.len();
-            let now = Utc::now();
             tokens.retain(|_, token| !token.is_expired());
             let deleted_count = before_count - tokens.len();
             Ok(deleted_count as i64)
