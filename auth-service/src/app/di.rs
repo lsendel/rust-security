@@ -147,7 +147,7 @@ fn create_postgres_pool(_config: &DatabaseConfig) -> Result<sqlx::PgPool, AppErr
     ))
 }
 
-/// Helper function to create Redis client
+// /// Helper function to create Redis client
 // async fn create_redis_client(_redis_url: &str) -> Result<redis::Client, AppError> {
 //     // TODO: Implement Redis client creation
 //     Err(AppError::Config("Redis not yet implemented".to_string()))
@@ -159,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_container_creation() {
-        let container = AppContainer::new_mock();
+        let _container = AppContainer::new_mock();
 
         // Verify services are created
         assert!(true); // Basic smoke test

@@ -68,7 +68,7 @@ pub mod config {
         }
     }
 
-    /// Create test cache configuration
+    // /// Create test cache configuration
     /*pub fn test_cache_config() -> AdvancedCacheConfig {
         AdvancedCacheConfig {
             l1_max_size: 1000,
@@ -188,7 +188,7 @@ pub mod mocks {
     use crate::domain::repositories::session_repository::SessionRepositoryError;
     use crate::domain::repositories::token_repository::TokenRepositoryError;
     use crate::domain::repositories::{
-        DynSessionRepository, DynTokenRepository, DynUserRepository,
+        DynSessionRepository, DynUserRepository,
     };
     use crate::domain::repositories::{
         RepositoryError, SessionRepository, TokenRepository, UserRepository,
@@ -210,7 +210,7 @@ pub mod mocks {
             }
         }
 
-        pub fn with_user(mut self, user: User) -> Self {
+        pub fn with_user(self, user: User) -> Self {
             let users = Arc::clone(&self.users);
             let emails = Arc::clone(&self.emails);
 
@@ -665,7 +665,7 @@ pub mod mocks {
             user_id: &UserId,
         ) -> Result<i64, TokenRepositoryError> {
             let user_tokens = self.find_by_user_id(user_id).await?;
-            let now = Utc::now();
+            let _now = Utc::now();
             let active_count = user_tokens
                 .iter()
                 .filter(|t| t.is_active())

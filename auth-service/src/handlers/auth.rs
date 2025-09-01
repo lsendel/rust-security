@@ -130,7 +130,6 @@ pub async fn logout(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::app::AppContainer;
 
     #[tokio::test]

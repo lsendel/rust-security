@@ -71,7 +71,7 @@ pub trait TokenRepository: Send + Sync {
     async fn count_active_by_user(&self, user_id: &UserId) -> Result<i64, TokenRepositoryError>;
 }
 
-/// Type alias for token repository trait object  
+/// Type alias for token repository trait object
 pub type DynTokenRepository = std::sync::Arc<dyn TokenRepository>;
 
 #[cfg(test)]

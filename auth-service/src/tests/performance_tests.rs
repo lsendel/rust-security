@@ -4,17 +4,17 @@
 //! the ambitious targets: 1K→4.5K req/sec, P95 <45ms, 92% cache hit rate.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use std::sync::Arc;
+
 use std::time::{Duration, Instant};
-use tokio::sync::RwLock;
+
 use tokio::time;
 
 // use crate::infrastructure::cache::advanced_cache::{AdvancedCache, AdvancedCacheConfig}; // Module temporarily disabled
-use crate::infrastructure::database::connection_pool::DatabaseConnectionManager;
+
 use crate::middleware::security_enhanced::RateLimiter;
 // use crate::services::{AsyncOptimizer, AsyncOptimizerConfig, PasswordService};  // AsyncOptimizer disabled
 use crate::services::PasswordService;
-use crate::tests::mocks;
+
 
 /// Performance benchmark for password hashing
 pub fn bench_password_hashing(c: &mut Criterion) {
@@ -45,7 +45,7 @@ pub fn bench_password_verification(c: &mut Criterion) {
     });
 }
 
-/// Performance benchmark for cache operations (disabled - AdvancedCache module not available)
+// /// Performance benchmark for cache operations (disabled - AdvancedCache module not available)
 /*
 pub fn bench_cache_operations(c: &mut Criterion) {
     let config = AdvancedCacheConfig {
@@ -100,7 +100,7 @@ criterion_group!(
 );
 criterion_main!(benches);
 
-/// Throughput test for authentication operations (disabled - AsyncOptimizer module not available)
+// /// Throughput test for authentication operations (disabled - AsyncOptimizer module not available)
 /*
 #[tokio::test]
 async fn test_authentication_throughput() {
@@ -424,7 +424,7 @@ async fn test_database_connection_performance() {
     );
 }
 
-/// Concurrent load test (disabled - AsyncOptimizer module not available)
+// /// Concurrent load test (disabled - AsyncOptimizer module not available)
 /*
 #[tokio::test]
 async fn test_concurrent_load() {

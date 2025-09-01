@@ -120,7 +120,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let service = TokenService::new(token_repo, session_repo, crypto);
+        let _service = TokenService::new(token_repo, session_repo, crypto);
         assert!(true); // Basic smoke test
     }
 }

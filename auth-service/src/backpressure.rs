@@ -570,12 +570,12 @@ mod tests {
         state.on_request_start("192.168.1.1");
         state.on_request_start("192.168.1.2");
 
-        let stats = state.stats();
-        assert_eq!(stats.concurrent_requests, 2);
-        assert_eq!(stats.per_ip_active_connections, 2);
+        let backpressure_stats = state.stats();
+        assert_eq!(backpressure_stats.concurrent_requests, 2);
+        assert_eq!(backpressure_stats.per_ip_active_connections, 2);
 
         state.on_request_end("192.168.1.1");
-        let updated_stats = state.stats();
-        assert_eq!(updated_stats.concurrent_requests, 1);
+        let updated_backpressure_stats = state.stats();
+        assert_eq!(updated_backpressure_stats.concurrent_requests, 1);
     }
 }

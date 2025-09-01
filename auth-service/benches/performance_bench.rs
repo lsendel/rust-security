@@ -77,7 +77,7 @@ fn bench_jwt_operations(c: &mut Criterion) {
 
 // Benchmark cryptographic operations
 fn bench_crypto_operations(c: &mut Criterion) {
-    use auth_service::security::*;
+    use auth_service::infrastructure::security::security::*;
 
     let mut group = c.benchmark_group("crypto_operations");
 

@@ -36,8 +36,7 @@ pub fn parse_iso8601(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread;
-    use std::time::Duration as StdDuration;
+
 
     #[test]
     fn test_now() {

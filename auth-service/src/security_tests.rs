@@ -10,7 +10,7 @@ mod security_tests {
         SecureSessionConfig, SecureSessionManager, SessionError,
     };
     use crate::validation_secure::*;
-    use crate::redirect_validation::*;
+
     use base64::Engine;
     use std::net::{IpAddr, Ipv4Addr};
 

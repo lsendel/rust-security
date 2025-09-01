@@ -8,8 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 
-use crate::app::di::AppContainer;
-use crate::domain::entities::User;
+
 use crate::domain::value_objects::{Email, UserId};
 use crate::services::{AuthService, TokenService, UserService};
 use crate::services::auth_service::{AuthServiceTrait, LoginRequest};
@@ -198,7 +197,7 @@ async fn test_full_authentication_flow() {
     let tokens_result = token_service.get_user_tokens(&user_id).await;
 
     assert_ok!(tokens_result);
-    let user_tokens = tokens_result.unwrap();
+    let _user_tokens = tokens_result.unwrap();
     // Note: May be empty since tokens are JWT and not stored in token repository
 
     // Test auth service refresh_token method (using auth service since JWT-based)
@@ -258,7 +257,7 @@ async fn test_concurrent_authentication_load() {
         let register_request = RegisterRequest {
             email: email.as_str().to_string(),
             password: password.clone(),
-            name: name,
+            name,
         };
         let register_result = user_service
             .register(register_request)
@@ -282,7 +281,7 @@ async fn test_concurrent_authentication_load() {
                 let mut success_count = 0;
                 let mut error_count = 0;
 
-                for req_idx in 0..REQUESTS_PER_USER {
+                for _req_idx in 0..REQUESTS_PER_USER {
                     let login_request = LoginRequest {
                         email: email.as_str().to_string(),
                         password: password.clone(),
@@ -479,13 +478,13 @@ async fn test_session_management_integration() {
 
     assert_ok!(login_result);
     let login_response = login_result.unwrap();
-    let access_token = login_response.access_token.clone();
+    let _access_token = login_response.access_token.clone();
 
     // Get user ID from login response for session management
     let user_id = UserId::from_string(login_response.user.id.clone()).unwrap();
 
     // Test token service functionality
-    let user_tokens = token_service
+    let _user_tokens = token_service
         .get_user_tokens(&user_id)
         .await
         .unwrap();

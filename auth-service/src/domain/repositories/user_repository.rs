@@ -96,7 +96,7 @@ pub trait UserRepository: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::value_objects::{Email, PasswordHash};
+    use crate::domain::value_objects::Email;
 
     // Mock implementation for testing
     pub(crate) struct MockUserRepository {

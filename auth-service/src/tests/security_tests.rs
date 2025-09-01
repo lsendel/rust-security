@@ -7,7 +7,7 @@
 use crate::middleware::security_enhanced::{RateLimiter, SecurityConfig, SecurityMiddleware};
 use crate::services::{constant_time_compare, PasswordService};
 use crate::{assert_err, assert_ok};
-use std::collections::HashMap;
+
 use std::time::Duration;
 
 /// Test password security properties
@@ -151,7 +151,7 @@ async fn test_input_validation_security() {
         ..Default::default()
     };
 
-    let middleware = SecurityMiddleware::new(config);
+    let _middleware = SecurityMiddleware::new(config);
 
     // Test various malicious inputs that should be caught
     let malicious_inputs = vec![

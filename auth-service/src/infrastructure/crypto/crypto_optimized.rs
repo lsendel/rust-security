@@ -2,7 +2,7 @@ use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine as _;
 use dashmap::DashMap;
-// use rayon::prelude::*; // Unused - parallel processing not implemented yet
+
 use ring::rand::SecureRandom;
 use ring::{aead, digest, hmac, rand, signature};
 use std::sync::{Arc, LazyLock};
