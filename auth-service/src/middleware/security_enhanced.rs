@@ -152,46 +152,56 @@ impl SecurityMiddleware {
     }
 
     /// Check CSRF token
-    async fn check_csrf_token(&self, req: &Request) -> Result<(), Response> {
+    /// Extract and validate CSRF tokens from request
+    fn extract_csrf_tokens<'a>(&self, req: &'a Request) -> (Option<&'a str>, Option<String>) {
         let headers = req.headers();
-
-        // Get token from header
         let header_token = headers
             .get(&self.config.csrf_header)
             .and_then(|h| h.to_str().ok());
-
-        // Get token from cookies
         let cookie_token = self.extract_csrf_cookie(req);
+        (header_token, cookie_token)
+    }
 
-        // Validate tokens match
-        if let (Some(header), Some(cookie)) = (header_token, cookie_token) {
-            if !constant_time_compare(header, &cookie) {
-                warn!("CSRF token mismatch");
-                return Err(Self::csrf_error_response());
-            }
-
-            // Validate token exists and is not expired
-            let tokens = self.csrf_tokens.read().await;
-            if let Some((stored_token, created)) = tokens.get(&cookie) {
-                if !constant_time_compare(header, stored_token) {
-                    warn!("Invalid CSRF token");
-                    return Err(Self::csrf_error_response());
-                }
-
-                if created.elapsed() > self.config.csrf_ttl {
-                    warn!("Expired CSRF token");
-                    return Err(Self::csrf_error_response());
-                }
-            } else {
-                warn!("Unknown CSRF token");
-                return Err(Self::csrf_error_response());
-            }
-        } else {
-            warn!("Missing CSRF token");
+    /// Validate tokens match between header and cookie
+    fn validate_token_match(header_token: &str, cookie_token: &str) -> Result<(), Response> {
+        if !constant_time_compare(header_token, cookie_token) {
+            warn!("CSRF token mismatch");
             return Err(Self::csrf_error_response());
         }
-
         Ok(())
+    }
+
+    /// Validate stored token and expiration
+    async fn validate_stored_token(&self, header_token: &str, cookie_token: &str) -> Result<(), Response> {
+        let tokens = self.csrf_tokens.read().await;
+        if let Some((stored_token, created)) = tokens.get(cookie_token) {
+            if !constant_time_compare(header_token, stored_token) {
+                warn!("Invalid CSRF token");
+                return Err(Self::csrf_error_response());
+            }
+
+            if created.elapsed() > self.config.csrf_ttl {
+                warn!("Expired CSRF token");
+                return Err(Self::csrf_error_response());
+            }
+            Ok(())
+        } else {
+            warn!("Unknown CSRF token");
+            Err(Self::csrf_error_response())
+        }
+    }
+
+    async fn check_csrf_token(&self, req: &Request) -> Result<(), Response> {
+        let (header_token, cookie_token) = self.extract_csrf_tokens(req);
+
+        if let (Some(header), Some(cookie)) = (header_token, cookie_token) {
+            Self::validate_token_match(header, &cookie)?;
+            self.validate_stored_token(header, &cookie).await?;
+            Ok(())
+        } else {
+            warn!("Missing CSRF token");
+            Err(Self::csrf_error_response())
+        }
     }
 
     /// Validate input data

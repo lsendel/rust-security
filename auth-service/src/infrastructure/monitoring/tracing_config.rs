@@ -423,7 +423,7 @@ pub async fn inject_request_context(
 
     // Record span attributes
     span.record("http.status_code", status_code);
-    span.record("request.duration_ms", duration.as_millis() as u64);
+    span.record("request.duration_ms", u64::try_from(duration.as_millis()).unwrap_or(u64::MAX));
 
     // Set OpenTelemetry status
     if status_code >= 400 {

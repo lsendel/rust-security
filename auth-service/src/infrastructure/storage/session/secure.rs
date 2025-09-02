@@ -427,7 +427,7 @@ impl SecureSessionManager {
             self.cleanup_user_session(user_id, session_id).await;
         }
 
-        let count = expired_sessions.len() as u32;
+        let count = u32::try_from(expired_sessions.len()).unwrap_or(u32::MAX);
         if count > 0 {
             tracing::info!(count = count, "Expired sessions cleaned up");
         }

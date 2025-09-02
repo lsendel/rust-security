@@ -175,6 +175,13 @@ impl KeyManagementService {
     }
 
     /// Initialize key management service
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Initial key generation fails
+    /// - Database connection or storage operations fail
+    /// - Cryptographic operations fail during key generation
     #[instrument(skip(self))]
     pub async fn initialize(&self) -> Result<(), crate::shared::error::AppError> {
         info!("Initializing key management service");
@@ -196,6 +203,14 @@ impl KeyManagementService {
     }
 
     /// Generate a new key pair
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - RSA key generation fails due to insufficient entropy
+    /// - Key encoding or serialization fails
+    /// - Storage operations fail when persisting the key
+    /// - ECDSA algorithm is requested (not yet implemented)
     #[instrument(skip(self))]
     pub async fn generate_new_key(
         &self,
@@ -266,6 +281,13 @@ impl KeyManagementService {
     }
 
     /// Activate a key for signing
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - The specified key ID does not exist
+    /// - The key is in a revoked state and cannot be activated
+    /// - Storage operations fail during key state updates
     #[instrument(skip(self))]
     pub async fn activate_key(
         &self,
@@ -330,6 +352,14 @@ impl KeyManagementService {
     }
 
     /// Perform key rotation
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - New key generation fails
+    /// - Key activation fails during the rotation process
+    /// - Cleanup of expired keys fails
+    /// - Storage operations fail during the rotation
     #[instrument(skip(self))]
     pub async fn rotate_keys(&self, actor: &str) -> Result<(), crate::shared::error::AppError> {
         info!("Starting key rotation");
@@ -358,6 +388,13 @@ impl KeyManagementService {
     }
 
     /// Revoke a key immediately
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - The specified key ID does not exist
+    /// - Storage operations fail when updating key state
+    /// - Emergency rotation fails if the revoked key was active
     #[instrument(skip(self))]
     pub async fn revoke_key(
         &self,
@@ -432,6 +469,13 @@ impl KeyManagementService {
     }
 
     /// Emergency key rotation
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - New key generation fails during emergency rotation
+    /// - Key activation fails for the newly generated key
+    /// - Storage operations fail during the emergency rotation process
     #[instrument(skip(self))]
     pub async fn emergency_rotation(
         &self,
@@ -476,6 +520,14 @@ impl KeyManagementService {
     }
 
     /// Get current signing key
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - No active signing key is available
+    /// - The active key is not found in storage
+    /// - The active key is not in the expected active state
+    /// - The encoding key is not available for the active key
     pub async fn get_signing_key(
         &self,
     ) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
@@ -513,6 +565,13 @@ impl KeyManagementService {
     }
 
     /// Get decoding key for verification
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - The specified key ID does not exist
+    /// - The key is in a revoked state and cannot be used for verification
+    /// - The decoding key is not available for the specified key
     pub async fn get_decoding_key(
         &self,
         kid: &str,
@@ -573,6 +632,12 @@ impl KeyManagementService {
     }
 
     /// Clean up expired keys
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Storage operations fail during key cleanup
+    /// - Lock acquisition fails for the keys storage
     async fn cleanup_expired_keys(&self) -> Result<(), crate::shared::error::AppError> {
         let mut keys = self.keys.write().await;
         let now = Self::current_timestamp();
@@ -596,6 +661,13 @@ impl KeyManagementService {
     }
 
     /// Generate RSA key PEM string dynamically
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - RSA key generation fails due to insufficient entropy
+    /// - Key serialization to PEM format fails
+    /// - The configured key size is invalid or unsupported
     fn generate_rsa_key_pem(&self) -> Result<String, crate::shared::error::AppError> {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing

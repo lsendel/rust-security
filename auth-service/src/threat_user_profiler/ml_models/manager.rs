@@ -67,10 +67,9 @@ impl MLModelManager {
         features: &BehavioralFeatureVector,
     ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         let models = self.models.read().await;
-        if let Some(model) = models.get(model_name) {
-            model.predict(features)
-        } else {
-            Err(format!("Model {model_name} not found").into())
-        }
+        models.get(model_name).map_or_else(
+            || Err(format!("Model {model_name} not found").into()),
+            |model| model.predict(features),
+        )
     }
 }

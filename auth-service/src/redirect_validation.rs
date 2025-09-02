@@ -270,12 +270,13 @@ impl RedirectUriValidator {
             return true;
         }
 
-        if let Some(tld) = host.split('.').next_back() {
-            self.allowed_tlds.contains(&tld.to_lowercase())
-        } else {
-            // Single word hosts like "localhost" are allowed
-            host.to_lowercase() == "localhost"
-        }
+        host.split('.').next_back().map_or_else(
+            || {
+                // Single word hosts like "localhost" are allowed
+                host.to_lowercase() == "localhost"
+            },
+            |tld| self.allowed_tlds.contains(&tld.to_lowercase()),
+        )
     }
 
     /// Check for encoded attack patterns

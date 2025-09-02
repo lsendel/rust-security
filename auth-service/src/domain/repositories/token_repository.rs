@@ -179,12 +179,13 @@ mod tests {
 
         async fn revoke_by_hash(&self, token_hash: &str) -> Result<(), TokenRepositoryError> {
             let mut tokens = self.tokens.write().unwrap();
-            if let Some(token) = tokens.get_mut(token_hash) {
-                token.revoke();
-                Ok(())
-            } else {
-                Err(TokenRepositoryError::NotFound)
-            }
+            tokens.get_mut(token_hash).map_or_else(
+                || Err(TokenRepositoryError::NotFound),
+                |token| {
+                    token.revoke();
+                    Ok(())
+                },
+            )
         }
 
         async fn revoke_by_user_id(&self, user_id: &UserId) -> Result<(), TokenRepositoryError> {
@@ -207,11 +208,7 @@ mod tests {
 
         async fn exists_and_active(&self, token_hash: &str) -> Result<bool, TokenRepositoryError> {
             let tokens = self.tokens.read().unwrap();
-            if let Some(token) = tokens.get(token_hash) {
-                Ok(token.is_active())
-            } else {
-                Ok(false)
-            }
+            tokens.get(token_hash).map_or_else(|| Ok(false), |token| Ok(token.is_active()))
         }
 
         async fn count_active_by_user(

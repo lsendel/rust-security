@@ -812,7 +812,7 @@ pub async fn me(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use jsonwebtoken::decode_header;
 
     #[tokio::test]
     async fn test_secure_jwt_token_creation() {

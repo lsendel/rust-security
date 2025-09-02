@@ -34,6 +34,14 @@ pub struct SecureKeyManager {
 }
 
 impl SecureKeyManager {
+    /// Create a new secure key manager with an Ed25519 key pair
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Ed25519 key pair generation fails due to insufficient entropy
+    /// - PKCS#8 encoding of the generated key pair fails
+    /// - Key pair construction from PKCS#8 data fails
     pub fn new() -> Result<Self, Unspecified> {
         let rng = SystemRandom::new();
         let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng)?;
@@ -47,6 +55,14 @@ impl SecureKeyManager {
         })
     }
 
+    /// Get the JSON Web Key Set containing the public key
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Base64 encoding of the public key fails
+    /// - JSON serialization of the JWKS structure fails
+    /// - Lock acquisition for the key pair fails
     pub async fn get_jwks(&self) -> Result<JwkSet, Box<dyn std::error::Error + Send + Sync>> {
         let keypair = self.current_keypair.read().await;
         let public_key_bytes = keypair.public_key().as_ref();
@@ -66,12 +82,27 @@ impl SecureKeyManager {
         Ok(JwkSet { keys: vec![jwk] })
     }
 
+    /// Sign a JWT payload using Ed25519
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - The signing operation fails
+    /// - Lock acquisition for the key pair fails
     pub async fn sign_jwt(&self, payload: &[u8]) -> Result<Vec<u8>, Unspecified> {
         let keypair = self.current_keypair.read().await;
         let signature = keypair.sign(payload);
         Ok(signature.as_ref().to_vec())
     }
 
+    /// Rotate the current Ed25519 key pair
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - New Ed25519 key pair generation fails
+    /// - PKCS#8 encoding operations fail
+    /// - Lock acquisition fails during key rotation
     pub async fn rotate_key(&self) -> Result<(), Unspecified> {
         // Generate new Ed25519 key pair
         let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&self.rng)?;

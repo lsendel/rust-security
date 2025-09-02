@@ -1,6 +1,7 @@
 #![cfg(feature = "benchmarks")]
 use auth_service::storage::store::hybrid::TokenStore;
-use auth_service::*;
+use auth_service::{BackpressureConfig, Error, TokenCache, UserRole};
+use auth_service::infrastructure::crypto::keys;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use jsonwebtoken::EncodingKey;
 use std::collections::HashMap;
@@ -56,7 +57,7 @@ fn bench_jwt_operations(c: &mut Criterion) {
     group.bench_function("rsa_key_generation", |b| {
         b.iter(|| {
             // Handle Result return type properly
-            match rt.block_on(auth_service::keys::current_signing_key()) {
+            match rt.block_on(keys::current_signing_key()) {
                 Ok(key_pair) => black_box(key_pair),
                 Err(_) => black_box((
                     "error".to_string(),
@@ -68,7 +69,7 @@ fn bench_jwt_operations(c: &mut Criterion) {
 
     group.bench_function("jwks_document_generation", |b| {
         b.iter(|| {
-            black_box(rt.block_on(async { auth_service::keys::jwks_document().await }));
+            black_box(rt.block_on(async { keys::jwks_document().await }));
         });
     });
 
@@ -166,8 +167,6 @@ fn bench_scim_operations(c: &mut Criterion) {
 
 // Benchmark rate limiting
 fn bench_rate_limiting(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
-
     let mut group = c.benchmark_group("rate_limiting");
 
     group.bench_function("rate_limit_check", |b| {

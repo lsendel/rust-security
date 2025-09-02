@@ -6,12 +6,10 @@
 
 use proptest::prelude::*;
 use proptest::strategy::Strategy;
-use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // Import our storage modules for testing
 use auth_service::storage::cache::{LruTokenCache, TokenCacheConfig};
-use auth_service::storage::session::store::RedisSessionStore;
 
 // Import common types
 use common::TokenRecord;
@@ -198,7 +196,7 @@ proptest! {
 #[cfg(test)]
 mod session_store_tests {
     use super::*;
-    use auth_service::storage::session::manager::SessionConfig;
+    use auth_service::infrastructure::storage::session::manager::SessionConfig;
 
     proptest! {
         #![proptest_config(ProptestConfig {

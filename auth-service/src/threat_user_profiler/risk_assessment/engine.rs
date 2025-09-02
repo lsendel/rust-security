@@ -606,6 +606,7 @@ impl RiskAssessmentEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::threat_user_profiler::types::{BehavioralFeatureVector, PeerComparisons};
 
     #[tokio::test]
     async fn test_risk_assessment() {

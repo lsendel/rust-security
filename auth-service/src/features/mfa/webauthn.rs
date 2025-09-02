@@ -269,7 +269,7 @@ impl WebAuthnMfa {
                     alg: -257,
                 },
             ],
-            timeout: Some(self.challenge_timeout.as_millis() as u64),
+            timeout: Some(u64::try_from(self.challenge_timeout.as_millis()).unwrap_or(u64::MAX)),
             exclude_credentials,
             authenticator_selection: Some(AuthenticatorSelectionCriteria {
                 authenticator_attachment: None, // Allow both platform and cross-platform
@@ -347,7 +347,7 @@ impl WebAuthnMfa {
 
         let options = PublicKeyCredentialRequestOptions {
             challenge: challenge.clone(),
-            timeout: Some(self.challenge_timeout.as_millis() as u64),
+            timeout: Some(u64::try_from(self.challenge_timeout.as_millis()).unwrap_or(u64::MAX)),
             rp_id: Some(self.rp_id.clone()),
             allow_credentials,
             user_verification: UserVerificationRequirement::Preferred,

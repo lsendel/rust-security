@@ -158,68 +158,106 @@ impl SecureRateLimiter {
         endpoint: &str,
         user_agent: Option<&str>,
     ) -> Result<(), RateLimitError> {
-        // Check if IP is banned first
+        // Perform all rate limit checks in sequence
         self.check_ip_ban(&ip).await?;
+        self.check_global_limit().await?;
+        self.check_ip_limit(ip, endpoint, user_agent).await?;
+        self.check_client_limit(client_id, endpoint).await?;
+        self.check_endpoint_limit(ip, endpoint).await?;
+        
+        Ok(())
+    }
 
-        // Check global rate limit
-        {
-            let mut global = self.global_bucket.write().await;
-            if !global.try_consume(1.0) {
-                tracing::warn!("Global rate limit exceeded");
-                return Err(RateLimitError::GlobalLimitExceeded);
-            }
+    /// Check global rate limit
+    async fn check_global_limit(&self) -> Result<(), RateLimitError> {
+        let mut global = self.global_bucket.write().await;
+        if !global.try_consume(1.0) {
+            tracing::warn!("Global rate limit exceeded");
+            return Err(RateLimitError::GlobalLimitExceeded);
         }
+        Ok(())
+    }
 
-        // Check IP-based rate limit with enhanced tracking
-        {
-            let mut ip_buckets = self.ip_buckets.write().await;
-            let ip_bucket = ip_buckets.entry(ip).or_insert_with(|| {
-                IpTokenBucket::new(self.config.ip_requests_per_minute, self.config.burst_size)
-            });
+    /// Check IP-based rate limit with enhanced tracking
+    async fn check_ip_limit(
+        &self,
+        ip: IpAddr,
+        endpoint: &str,
+        user_agent: Option<&str>,
+    ) -> Result<(), RateLimitError> {
+        let mut ip_buckets = self.ip_buckets.write().await;
+        let ip_bucket = ip_buckets.entry(ip).or_insert_with(|| {
+            IpTokenBucket::new(self.config.ip_requests_per_minute, self.config.burst_size)
+        });
 
-            // Detect suspicious patterns
-            self.detect_suspicious_activity(ip_bucket, user_agent, ip)?;
+        // Detect suspicious patterns
+        self.detect_suspicious_activity(ip_bucket, user_agent, ip)?;
 
-            if !ip_bucket.bucket.try_consume(1.0) {
-                // Track violation
-                ip_bucket.violation_count += 1;
-                ip_bucket.last_violation = Some(Utc::now());
-
-                tracing::warn!(
-                    ip = %ip,
-                    violations = ip_bucket.violation_count,
-                    endpoint = %endpoint,
-                    "IP rate limit exceeded"
-                );
-
-                // Check if IP should be banned
-                if ip_bucket.violation_count >= self.config.ban_threshold {
-                    let ban_expiry =
-                        Utc::now() + Duration::minutes(i64::from(self.config.ban_duration_minutes));
-
-                    let mut banned_ips = self.banned_ips.write().await;
-                    banned_ips.insert(ip, ban_expiry);
-
-                    tracing::warn!(
-                        ip = %ip,
-                        violations = ip_bucket.violation_count,
-                        ban_expiry = %ban_expiry,
-                        "IP temporarily banned for repeated violations"
-                    );
-
-                    return Err(RateLimitError::IpBanned { ip });
-                }
-
-                return Err(RateLimitError::IpLimitExceeded { ip });
-            }
-
-            // Reset violation count on successful request
-            if ip_bucket.violation_count > 0 {
-                ip_bucket.violation_count = 0;
-            }
+        if !ip_bucket.bucket.try_consume(1.0) {
+            self.handle_ip_rate_limit_violation(ip_bucket, ip, endpoint).await
+        } else {
+            self.reset_ip_violation_count(ip_bucket);
+            Ok(())
         }
+    }
 
-        // Check client-based rate limit
+    /// Handle IP rate limit violation and potential banning
+    async fn handle_ip_rate_limit_violation(
+        &self,
+        ip_bucket: &mut IpTokenBucket,
+        ip: IpAddr,
+        endpoint: &str,
+    ) -> Result<(), RateLimitError> {
+        // Track violation
+        ip_bucket.violation_count += 1;
+        ip_bucket.last_violation = Some(Utc::now());
+
+        tracing::warn!(
+            ip = %ip,
+            violations = ip_bucket.violation_count,
+            endpoint = %endpoint,
+            "IP rate limit exceeded"
+        );
+
+        // Check if IP should be banned
+        if ip_bucket.violation_count >= self.config.ban_threshold {
+            self.ban_ip(ip, ip_bucket.violation_count).await?;
+            Err(RateLimitError::IpBanned { ip })
+        } else {
+            Err(RateLimitError::IpLimitExceeded { ip })
+        }
+    }
+
+    /// Ban an IP address for repeated violations
+    async fn ban_ip(&self, ip: IpAddr, violation_count: u32) -> Result<(), RateLimitError> {
+        let ban_expiry = Utc::now() + Duration::minutes(i64::from(self.config.ban_duration_minutes));
+        
+        let mut banned_ips = self.banned_ips.write().await;
+        banned_ips.insert(ip, ban_expiry);
+
+        tracing::warn!(
+            ip = %ip,
+            violations = violation_count,
+            ban_expiry = %ban_expiry,
+            "IP temporarily banned for repeated violations"
+        );
+        
+        Ok(())
+    }
+
+    /// Reset IP violation count on successful request
+    fn reset_ip_violation_count(&self, ip_bucket: &mut IpTokenBucket) {
+        if ip_bucket.violation_count > 0 {
+            ip_bucket.violation_count = 0;
+        }
+    }
+
+    /// Check client-based rate limit
+    async fn check_client_limit(
+        &self,
+        client_id: Option<&str>,
+        endpoint: &str,
+    ) -> Result<(), RateLimitError> {
         if let Some(client_id) = client_id {
             let mut client_buckets = self.client_buckets.write().await;
             let bucket = client_buckets
@@ -242,8 +280,15 @@ impl SecureRateLimiter {
                 });
             }
         }
+        Ok(())
+    }
 
-        // Check endpoint-specific limits
+    /// Check endpoint-specific rate limits
+    async fn check_endpoint_limit(
+        &self,
+        ip: IpAddr,
+        endpoint: &str,
+    ) -> Result<(), RateLimitError> {
         if let Some(&limit) = self.config.endpoint_limits.get(endpoint) {
             let mut endpoint_buckets = self.endpoint_buckets.write().await;
             let endpoint_map = endpoint_buckets
@@ -265,7 +310,6 @@ impl SecureRateLimiter {
                 });
             }
         }
-
         Ok(())
     }
 

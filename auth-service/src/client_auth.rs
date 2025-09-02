@@ -143,9 +143,10 @@ impl ClientAuthenticator {
 
         // Ensure consistent timing (minimum duration to prevent timing attacks)
         let elapsed = start_time.elapsed();
-        if elapsed.as_millis() < u128::from(MIN_AUTH_DURATION_MS) {
+        let elapsed_millis = elapsed.as_millis().min(u64::MAX as u128) as u64;
+        if elapsed_millis < MIN_AUTH_DURATION_MS {
             std::thread::sleep(std::time::Duration::from_millis(
-                MIN_AUTH_DURATION_MS - elapsed.as_millis() as u64,
+                MIN_AUTH_DURATION_MS - elapsed_millis,
             ));
         }
 

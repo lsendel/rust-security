@@ -417,7 +417,7 @@ impl PiiSpiRedactor {
         let mut counts = HashMap::new();
 
         for (data_type, pattern) in SENSITIVE_PATTERNS.iter() {
-            let count = pattern.find_iter(text).count() as u32;
+            let count = u32::try_from(pattern.find_iter(text).count()).unwrap_or(u32::MAX);
             if count > 0 {
                 counts.insert(data_type.clone(), count);
             }

@@ -181,11 +181,7 @@ mod tests {
             session_id: &str,
         ) -> Result<bool, SessionRepositoryError> {
             let sessions = self.sessions.read().unwrap();
-            if let Some(session) = sessions.get(session_id) {
-                Ok(session.is_active())
-            } else {
-                Ok(false)
-            }
+            sessions.get(session_id).map_or_else(|| Ok(false), |session| Ok(session.is_active()))
         }
     }
 }

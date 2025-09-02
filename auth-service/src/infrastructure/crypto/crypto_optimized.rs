@@ -318,7 +318,7 @@ impl CryptoOptimized {
         // Use argon2 for secure password verification
         use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
-        PasswordHash::new(hash).map_or(false, |parsed_hash| Argon2::default()
+        PasswordHash::new(hash).is_ok_and(|parsed_hash| Argon2::default()
                 .verify_password(password.as_bytes(), &parsed_hash)
                 .is_ok())
     }
@@ -528,10 +528,10 @@ mod tests {
 
     #[test]
     fn test_token_format_validation() {
-        let engine = get_crypto_engine();
-        assert!(engine.validate_token_format("tk_valid_token_format_12345"));
-        assert!(!engine.validate_token_format("invalid"));
-        assert!(!engine.validate_token_format(""));
+        let _engine = get_crypto_engine();
+        assert!(CryptoOptimized::validate_token_format("tk_valid_token_format_12345"));
+        assert!(!CryptoOptimized::validate_token_format("invalid"));
+        assert!(!CryptoOptimized::validate_token_format(""));
     }
 
     #[test]

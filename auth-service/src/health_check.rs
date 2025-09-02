@@ -152,7 +152,7 @@ impl HealthChecker {
 
             let health = ComponentHealth {
                 status: HealthStatus::Healthy,
-                response_time_ms: start.elapsed().as_millis() as u64,
+                response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -168,7 +168,7 @@ impl HealthChecker {
 
             let health = ComponentHealth {
                 status: HealthStatus::Unhealthy,
-                response_time_ms: start.elapsed().as_millis() as u64,
+                response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -194,7 +194,7 @@ impl HealthChecker {
 
             let health = ComponentHealth {
                 status: HealthStatus::Healthy,
-                response_time_ms: start.elapsed().as_millis() as u64,
+                response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -210,7 +210,7 @@ impl HealthChecker {
 
             let health = ComponentHealth {
                 status: HealthStatus::Unhealthy,
-                response_time_ms: start.elapsed().as_millis() as u64,
+                response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -236,7 +236,7 @@ impl HealthChecker {
 
             let health = ComponentHealth {
                 status: HealthStatus::Healthy,
-                response_time_ms: start.elapsed().as_millis() as u64,
+                response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -252,7 +252,7 @@ impl HealthChecker {
 
             let health = ComponentHealth {
                 status: HealthStatus::Degraded,
-                response_time_ms: start.elapsed().as_millis() as u64,
+                response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
                 last_check: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -290,7 +290,7 @@ impl HealthChecker {
 
         let health = ComponentHealth {
             status,
-            response_time_ms: start.elapsed().as_millis() as u64,
+            response_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
             last_check: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()

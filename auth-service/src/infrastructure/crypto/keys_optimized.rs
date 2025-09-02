@@ -87,6 +87,13 @@ impl OptimizedSecureKeyManager {
     }
 
     /// Non-blocking key generation with status tracking
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - RSA key generation fails due to insufficient entropy
+    /// - Key serialization or encoding fails
+    /// - Internal storage operations fail
     pub async fn ensure_key_available(
         &self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -147,24 +154,32 @@ impl OptimizedSecureKeyManager {
     }
 
     /// Sign JWT with usage tracking
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - No keys are available for signing
+    /// - Ed25519 signing operation fails
+    /// - Cryptographic operations encounter errors
     pub async fn sign_jwt(
         &self,
         payload: &[u8],
     ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.keys.read().await;
 
-        if let Some(key_material) = keys.first() {
-            // Increment usage counter
-            key_material
-                .usage_count
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        keys.first().map_or_else(
+            || Err("No signing key available".into()),
+            |key_material| {
+                // Increment usage counter
+                key_material
+                    .usage_count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-            // Ed25519 signing is simpler and more secure
-            let signature = key_material.keypair.sign(payload);
-            Ok(signature.as_ref().to_vec())
-        } else {
-            Err("No signing key available".into())
-        }
+                // Ed25519 signing is simpler and more secure
+                let signature = key_material.keypair.sign(payload);
+                Ok(signature.as_ref().to_vec())
+            },
+        )
     }
 
     /// Get current key ID
@@ -212,12 +227,27 @@ pub async fn get_optimized_jwks() -> Value {
     OPTIMIZED_KEY_MANAGER.get_jwks().await
 }
 
+/// Sign JWT using the global optimized key manager
+/// 
+/// # Errors
+/// 
+/// Returns an error if:
+/// - The global key manager is not available
+/// - JWT signing operations fail
+/// - Cryptographic operations encounter errors
 pub async fn sign_jwt_optimized(
     payload: &[u8],
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     OPTIMIZED_KEY_MANAGER.sign_jwt(payload).await
 }
 
+/// Ensure optimized key is available globally
+/// 
+/// # Errors
+/// 
+/// Returns an error if:
+/// - The underlying key manager fails to ensure key availability
+/// - Key generation operations fail
 pub async fn ensure_optimized_key_available() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 {
     OPTIMIZED_KEY_MANAGER.ensure_key_available().await
@@ -236,6 +266,12 @@ pub async fn get_optimized_key_stats() -> Vec<(String, u64, u64)> {
 }
 
 /// Initialize optimized keys on startup
+/// 
+/// # Errors
+/// 
+/// Returns an error if:
+/// - Initial key generation or availability checks fail
+/// - Cryptographic operations fail during startup
 pub async fn initialize_optimized_keys() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ensure_optimized_key_available().await
 }

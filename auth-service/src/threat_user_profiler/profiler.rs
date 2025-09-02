@@ -141,23 +141,45 @@ impl AdvancedUserBehaviorProfiler {
     /// Initialize the user behavior profiler
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing Advanced User Behavior Profiler");
-
-        // Initialize Redis connection
+        
+        self.initialize_components().await?;
+        self.start_background_tasks().await;
+        
+        info!("Advanced User Behavior Profiler initialized successfully");
+        Ok(())
+    }
+    
+    /// Initialize core profiler components
+    async fn initialize_components(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Initialize Redis connection with optional failure
+        self.initialize_redis_with_fallback().await;
+        
+        // Load existing profiles (required step)
+        self.load_existing_profiles().await?;
+        
+        Ok(())
+    }
+    
+    /// Initialize Redis connection with graceful fallback on failure
+    async fn initialize_redis_with_fallback(&self) {
         if let Err(e) = self.initialize_redis().await {
             warn!("Failed to initialize Redis connection: {}", e);
+            warn!("Profiler will continue without Redis persistence");
+        } else {
+            info!("Redis connection established for user profiling");
         }
-
-        // Load existing profiles
-        self.load_existing_profiles().await?;
-
-        // Start background processing tasks
+    }
+    
+    /// Start all background processing tasks
+    async fn start_background_tasks(&self) {
+        info!("Starting background processing tasks");
+        
         self.start_profile_processor().await;
         self.start_time_series_analyzer_task().await;
         self.start_anomaly_detector().await;
         self.start_risk_assessor().await;
-
-        info!("Advanced User Behavior Profiler initialized successfully");
-        Ok(())
+        
+        info!("All background tasks started successfully");
     }
 
     /// Process user security events and update behavioral profile

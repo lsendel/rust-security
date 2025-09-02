@@ -741,7 +741,7 @@ impl ThreatHuntingOrchestrator {
         
         // Record processing time
         if let Ok(duration) = start_time.elapsed() {
-            operation_result.processing_time_ms = duration.as_millis() as u64;
+            operation_result.processing_time_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
         }
         
         // Update metrics

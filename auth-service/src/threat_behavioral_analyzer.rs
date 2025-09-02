@@ -345,25 +345,40 @@ impl AdvancedBehavioralThreatDetector {
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing Advanced Behavioral Threat Detector");
 
-        // Initialize Redis connection
+        // Initialize core components
+        self.initialize_core_components().await?;
+        
+        // Initialize data and models
+        self.initialize_data_and_models().await?;
+        
+        // Start background tasks
+        self.start_background_tasks().await;
+
+        info!("Advanced Behavioral Threat Detector initialized successfully");
+        Ok(())
+    }
+    
+    /// Initialize core system components
+    async fn initialize_core_components(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Err(e) = self.initialize_redis().await {
             warn!("Failed to initialize Redis connection: {}", e);
         }
-
-        // Load existing user profiles
+        Ok(())
+    }
+    
+    /// Initialize data and ML models
+    async fn initialize_data_and_models(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.load_user_profiles().await?;
-
-        // Initialize ML models
         self.initialize_ml_models().await?;
-
-        // Start background processing tasks
+        Ok(())
+    }
+    
+    /// Start all background processing tasks
+    async fn start_background_tasks(&self) {
         self.start_event_processor().await;
         self.start_profile_updater().await;
         self.start_threat_correlator().await;
         self.start_model_trainer().await;
-
-        info!("Advanced Behavioral Threat Detector initialized successfully");
-        Ok(())
     }
 
     /// Initialize Redis connection
@@ -469,7 +484,7 @@ impl AdvancedBehavioralThreatDetector {
         metrics.threats_detected += threats_detected.len() as u64;
 
         if let Ok(duration) = start_time.elapsed() {
-            metrics.processing_time_ms += duration.as_millis() as u64;
+            metrics.processing_time_ms += u64::try_from(duration.as_millis()).unwrap_or(u64::MAX);
         }
 
         // Update Prometheus metrics

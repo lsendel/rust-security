@@ -449,10 +449,10 @@ impl OptimizedConnectionPool {
         // Update average response time
         let total_ops = stats.successful_requests + stats.failed_requests;
         if total_ops > 0 {
+            let avg_nanos = stats.avg_response_time.as_nanos().min(u64::MAX as u128) as u64;
+            let duration_nanos = duration.as_nanos().min(u64::MAX as u128) as u64;
             stats.avg_response_time = Duration::from_nanos(
-                ((stats.avg_response_time.as_nanos() as u64 * (total_ops - 1))
-                    + duration.as_nanos() as u64)
-                    / total_ops,
+                ((avg_nanos * (total_ops - 1)) + duration_nanos) / total_ops,
             );
         }
     }
@@ -466,10 +466,10 @@ impl OptimizedConnectionPool {
         // Update average response time (include failed operations)
         let total_ops = stats.successful_requests + stats.failed_requests;
         if total_ops > 0 {
+            let avg_nanos = stats.avg_response_time.as_nanos().min(u64::MAX as u128) as u64;
+            let duration_nanos = duration.as_nanos().min(u64::MAX as u128) as u64;
             stats.avg_response_time = Duration::from_nanos(
-                ((stats.avg_response_time.as_nanos() as u64 * (total_ops - 1))
-                    + duration.as_nanos() as u64)
-                    / total_ops,
+                ((avg_nanos * (total_ops - 1)) + duration_nanos) / total_ops,
             );
         }
     }

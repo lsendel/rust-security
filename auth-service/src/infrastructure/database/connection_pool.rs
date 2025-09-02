@@ -441,10 +441,10 @@ impl DatabaseStats {
         }
 
         let total_time = self.auth_stats.acquire_time_avg
-            * self.auth_stats.connections_acquired as u32
-            + self.session_stats.acquire_time_avg * self.session_stats.connections_acquired as u32
-            + self.audit_stats.acquire_time_avg * self.audit_stats.connections_acquired as u32;
+            * u32::try_from(self.auth_stats.connections_acquired).unwrap_or(u32::MAX)
+            + self.session_stats.acquire_time_avg * u32::try_from(self.session_stats.connections_acquired).unwrap_or(u32::MAX)
+            + self.audit_stats.acquire_time_avg * u32::try_from(self.audit_stats.connections_acquired).unwrap_or(u32::MAX);
 
-        total_time / total_acquires as u32
+        total_time / u32::try_from(total_acquires).unwrap_or(u32::MAX)
     }
 }

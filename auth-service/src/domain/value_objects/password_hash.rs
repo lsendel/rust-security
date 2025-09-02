@@ -29,7 +29,7 @@ impl PasswordHash {
 
     /// Get the hash algorithm type
     #[must_use] pub fn algorithm(&self) -> Option<&str> {
-        self.0.find('$').map_or(None, |dollar_pos| {
+        self.0.find('$').and_then(|dollar_pos| {
             let algorithm_part = &self.0[1..dollar_pos];
             algorithm_part.find('$').map_or(Some(algorithm_part), |second_dollar| Some(&algorithm_part[..second_dollar]))
         })

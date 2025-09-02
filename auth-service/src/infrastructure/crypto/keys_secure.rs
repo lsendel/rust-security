@@ -147,7 +147,7 @@ impl SecureKeyManager {
         secret
             .get("private_key")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .ok_or_else(|| {
                 KeyError::VaultError("private_key field not found in Vault secret".to_string())
             })
@@ -263,6 +263,15 @@ impl SecureKeyManager {
         Ok((n, e))
     }
 
+    /// Ensure a valid key is available, generating one if needed
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - Key loading from storage fails
+    /// - Key generation operations fail
+    /// - Key material creation fails
+    /// - Key validation fails
     pub async fn ensure_key_available(&self) -> Result<(), KeyError> {
         let keys = ACTIVE_KEYS.read().await;
 
@@ -328,15 +337,16 @@ pub async fn current_signing_key() -> (String, EncodingKey) {
     }
 
     let keys = ACTIVE_KEYS.read().await;
-    if let Some(key_material) = keys.first() {
-        (key_material.kid.clone(), key_material.encoding_key.clone())
-    } else {
-        tracing::error!("No keys available after ensure_key_available succeeded");
-        (
-            "emergency-fallback".to_string(),
-            EncodingKey::from_secret(b"emergency-secret"),
-        )
-    }
+    keys.first().map_or_else(
+        || {
+            tracing::error!("No keys available after ensure_key_available succeeded");
+            (
+                "emergency-fallback".to_string(),
+                EncodingKey::from_secret(b"emergency-secret"),
+            )
+        },
+        |key_material| (key_material.kid.clone(), key_material.encoding_key.clone()),
+    )
 }
 
 pub async fn get_current_jwks() -> Value {

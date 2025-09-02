@@ -328,6 +328,76 @@ pub mod recovery {
             }
         }
 
+        /// Handle circuit breaker in open state
+        async fn handle_open_state(&self) -> Result<(), AppError> {
+            if let Some(last_failure) = *self.last_failure_time.read().await {
+                if last_failure.elapsed() >= self.recovery_timeout {
+                    *self.state.write().await = CircuitState::HalfOpen;
+                    info!("Circuit breaker transitioning to half-open state");
+                    Ok(())
+                } else {
+                    Err(AppError::ServiceUnavailable {
+                        reason: "Circuit breaker is open".to_string(),
+                    })
+                }
+            } else {
+                Ok(())
+            }
+        }
+
+        /// Handle circuit breaker in half-open state
+        async fn handle_half_open_state<F, T>(&self, operation: F) -> Result<T, AppError>
+        where
+            F: FnOnce() -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<T, AppError>> + Send>,
+            >,
+        {
+            match operation().await {
+                Ok(result) => {
+                    *self.state.write().await = CircuitState::Closed;
+                    *self.failure_count.write().await = 0;
+                    info!("Circuit breaker closed - operation succeeded");
+                    Ok(result)
+                }
+                Err(error) => {
+                    *self.state.write().await = CircuitState::Open;
+                    *self.last_failure_time.write().await = Some(std::time::Instant::now());
+                    Err(error)
+                }
+            }
+        }
+
+        /// Handle operation execution and failure tracking
+        async fn execute_operation<F, T>(&self, operation: F) -> Result<T, AppError>
+        where
+            F: FnOnce() -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<T, AppError>> + Send>,
+            >,
+        {
+            match operation().await {
+                Ok(result) => {
+                    *self.failure_count.write().await = 0;
+                    Ok(result)
+                }
+                Err(error) => {
+                    self.handle_operation_failure().await;
+                    Err(error)
+                }
+            }
+        }
+
+        /// Handle operation failure and circuit breaker state updates
+        async fn handle_operation_failure(&self) {
+            let mut failures = self.failure_count.write().await;
+            *failures += 1;
+
+            if *failures >= self.failure_threshold {
+                *self.state.write().await = CircuitState::Open;
+                *self.last_failure_time.write().await = Some(std::time::Instant::now());
+                warn!("Circuit breaker opened due to {} consecutive failures", *failures);
+            }
+        }
+
         pub async fn call<F, T>(&self, operation: F) -> Result<T, AppError>
         where
             F: FnOnce() -> std::pin::Pin<
@@ -338,63 +408,17 @@ pub mod recovery {
 
             match state {
                 CircuitState::Open => {
-                    // Check if recovery timeout has passed
-                    if let Some(last_failure) = *self.last_failure_time.read().await {
-                        if last_failure.elapsed() >= self.recovery_timeout {
-                            *self.state.write().await = CircuitState::HalfOpen;
-                            info!("Circuit breaker transitioning to half-open state");
-                        } else {
-                            return Err(AppError::ServiceUnavailable {
-                                reason: "Circuit breaker is open".to_string(),
-                            });
-                        }
-                    }
+                    self.handle_open_state().await?;
                 }
                 CircuitState::HalfOpen => {
-                    // Allow one request through
-                    match operation().await {
-                        Ok(result) => {
-                            *self.state.write().await = CircuitState::Closed;
-                            *self.failure_count.write().await = 0;
-                            info!("Circuit breaker closed - operation succeeded");
-                            return Ok(result);
-                        }
-                        Err(error) => {
-                            *self.state.write().await = CircuitState::Open;
-                            *self.last_failure_time.write().await = Some(std::time::Instant::now());
-                            return Err(error);
-                        }
-                    }
+                    return self.handle_half_open_state(operation).await;
                 }
                 CircuitState::Closed => {
-                    // Normal operation
+                    // Normal operation - proceed to execute
                 }
             }
 
-            // Execute operation
-            match operation().await {
-                Ok(result) => {
-                    // Reset failure count on success
-                    *self.failure_count.write().await = 0;
-                    Ok(result)
-                }
-                Err(error) => {
-                    // Increment failure count
-                    let mut failures = self.failure_count.write().await;
-                    *failures += 1;
-
-                    if *failures >= self.failure_threshold {
-                        *self.state.write().await = CircuitState::Open;
-                        *self.last_failure_time.write().await = Some(std::time::Instant::now());
-                        warn!(
-                            "Circuit breaker opened due to {} consecutive failures",
-                            *failures
-                        );
-                    }
-
-                    Err(error)
-                }
-            }
+            self.execute_operation(operation).await
         }
     }
 }

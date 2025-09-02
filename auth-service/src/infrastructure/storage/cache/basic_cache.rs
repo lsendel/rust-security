@@ -117,6 +117,65 @@ impl Cache {
         })
     }
 
+    /// Helper method to try getting data from Redis with monitoring
+    async fn try_redis_get<T>(&self, key: &str, full_key: &str) -> Option<Option<T>>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        if let Some(ref _client) = self.redis_client {
+            match self.get_from_redis(full_key).await {
+                Ok(Some(data)) => {
+                    debug!(key = %key, "Cache hit (Redis)");
+                    #[cfg(feature = "monitoring")]
+                    {
+                        let _duration = std::time::Instant::now().elapsed();
+                        MetricsHelper::record_cache_operation("redis", "get", "hit", _duration);
+                    }
+                    Some(Some(data))
+                }
+                Ok(None) => {
+                    debug!(key = %key, "Cache miss (Redis)");
+                    Some(None)
+                }
+                Err(e) => {
+                    warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
+                    #[cfg(feature = "monitoring")]
+                    {
+                        let _duration = std::time::Instant::now().elapsed();
+                        MetricsHelper::record_cache_operation("redis", "get", "error", _duration);
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Helper method to try getting data from memory with monitoring
+    async fn try_memory_get<T>(&self, key: &str, full_key: &str) -> Option<T>
+    where
+        T: for<'de> Deserialize<'de>,
+    {
+        if let Some(data) = self.get_from_memory(full_key).await {
+            debug!(key = %key, "Cache hit (Memory)");
+            #[cfg(feature = "monitoring")]
+            {
+                let duration = std::time::Instant::now().elapsed();
+                MetricsHelper::record_cache_operation("memory", "get", "hit", duration);
+            }
+            Some(data)
+        } else {
+            debug!(key = %key, "Cache miss (Memory)");
+            #[cfg(feature = "monitoring")]
+            {
+                let duration = std::time::Instant::now().elapsed();
+                MetricsHelper::record_cache_operation("memory", "get", "miss", duration);
+            }
+            None
+        }
+    }
+
     /// Get a value from the cache
     ///
     /// This method attempts to retrieve a value from the cache using a hierarchical lookup:
@@ -144,54 +203,17 @@ impl Cache {
     where
         T: for<'de> Deserialize<'de>,
     {
-        #[cfg(feature = "monitoring")]
-        let start_time = Instant::now();
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
         // Try Redis first if available
-        if let Some(ref _client) = self.redis_client {
-            match self.get_from_redis(&full_key).await {
-                Ok(Some(data)) => {
-                    debug!(key = %key, "Cache hit (Redis)");
-                    #[cfg(feature = "monitoring")]
-                    {
-                        let _duration = start_time.elapsed();
-                        MetricsHelper::record_cache_operation("redis", "get", "hit", _duration);
-                    }
-                    return Some(data);
-                }
-                Ok(None) => {
-                    debug!(key = %key, "Cache miss (Redis)");
-                }
-                Err(e) => {
-                    warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
-                    #[cfg(feature = "monitoring")]
-                    {
-                        let _duration = start_time.elapsed();
-                        MetricsHelper::record_cache_operation("redis", "get", "error", _duration);
-                    }
-                }
+        if let Some(redis_result) = self.try_redis_get(key, &full_key).await {
+            if let Some(data) = redis_result {
+                return Some(data);
             }
         }
 
         // Fall back to memory cache
-        if let Some(data) = self.get_from_memory(&full_key).await {
-            debug!(key = %key, "Cache hit (Memory)");
-            #[cfg(feature = "monitoring")]
-            {
-                let duration = start_time.elapsed();
-                MetricsHelper::record_cache_operation("memory", "get", "hit", duration);
-            }
-            Some(data)
-        } else {
-            debug!(key = %key, "Cache miss (Memory)");
-            #[cfg(feature = "monitoring")]
-            {
-                let duration = start_time.elapsed();
-                MetricsHelper::record_cache_operation("memory", "get", "miss", duration);
-            }
-            None
-        }
+        self.try_memory_get(key, &full_key).await
     }
 
     /// Set a value in the cache

@@ -65,7 +65,17 @@ impl MetricsCollector {
     pub async fn collect_all_metrics(&self) -> ComplianceResult<Vec<SecurityMetric>> {
         let mut all_metrics = Vec::new();
 
-        // Collect Prometheus metrics
+        // Collect from different sources
+        self.collect_prometheus_metrics(&mut all_metrics).await;
+        self.collect_audit_log_metrics(&mut all_metrics).await;
+        self.collect_system_metrics_wrapper(&mut all_metrics).await;
+
+        info!("Total metrics collected: {}", all_metrics.len());
+        Ok(all_metrics)
+    }
+
+    /// Collect Prometheus metrics
+    async fn collect_prometheus_metrics(&self, all_metrics: &mut Vec<SecurityMetric>) {
         if let Some(prometheus) = &self.prometheus_client {
             match prometheus.collect_security_metrics().await {
                 Ok(mut metrics) => {
@@ -77,8 +87,10 @@ impl MetricsCollector {
                 }
             }
         }
+    }
 
-        // Collect audit log metrics
+    /// Collect audit log metrics wrapper
+    async fn collect_audit_log_metrics(&self, all_metrics: &mut Vec<SecurityMetric>) {
         match self.collect_audit_metrics().await {
             Ok(mut metrics) => {
                 info!("Collected {} metrics from audit logs", metrics.len());
@@ -88,8 +100,10 @@ impl MetricsCollector {
                 error!("Failed to collect audit metrics: {}", e);
             }
         }
+    }
 
-        // Collect system metrics
+    /// Collect system metrics wrapper
+    async fn collect_system_metrics_wrapper(&self, all_metrics: &mut Vec<SecurityMetric>) {
         match self.collect_system_metrics().await {
             Ok(mut metrics) => {
                 info!("Collected {} system metrics", metrics.len());
@@ -99,9 +113,6 @@ impl MetricsCollector {
                 error!("Failed to collect system metrics: {}", e);
             }
         }
-
-        info!("Total metrics collected: {}", all_metrics.len());
-        Ok(all_metrics)
     }
 
     /// Collect metrics from audit logs

@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 #[cfg(feature = "threat-hunting")]
 use auth_service::{
-    event_conversion::convert_security_events, threat_adapter::process_with_conversion,
+    event_conversion::convert_security_events,
 };
 
 fn create_benchmark_event() -> SecurityEvent {

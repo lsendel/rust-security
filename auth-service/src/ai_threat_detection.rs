@@ -155,7 +155,7 @@ impl AiThreatDetector {
         let confidence =
             self.calculate_confidence(&features, anomaly_score, &threat_classification);
 
-        let processing_time = start_time.elapsed().as_millis() as u64;
+        let processing_time = start_time.elapsed().as_millis().min(u64::MAX as u128) as u64;
 
         let threat_types = threat_classification.threat_types.clone();
 
