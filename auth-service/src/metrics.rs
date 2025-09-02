@@ -120,6 +120,19 @@ impl MetricsRegistry {
     #[must_use]
     pub fn new() -> Self {
         let registry = Registry::new();
+        Self::create_and_register_metrics(registry)
+    }
+
+    /// Create all metrics groups and register them with the provided registry
+    ///
+    /// This is a helper method that encapsulates the complex metric creation and registration process.
+    ///
+    /// # Arguments
+    /// * `registry` - The Prometheus registry to register metrics with
+    ///
+    /// # Returns
+    /// A new `MetricsRegistry` instance with all metrics initialized and registered.
+    fn create_and_register_metrics(registry: Registry) -> Self {
         let metrics_groups = Self::create_all_metric_groups();
         Self::register_all_metrics(&registry, &metrics_groups);
         Self::build_registry(registry, metrics_groups)
@@ -673,18 +686,90 @@ impl MetricsRegistry {
         security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
         system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
     ) -> Vec<Box<dyn prometheus::core::Collector>> {
-        let mut all_metrics = Vec::new();
+        Self::aggregate_all_metric_groups(
+            token_metrics,
+            policy_metrics,
+            cache_metrics,
+            http_metrics,
+            rate_limit_metrics,
+            security_metrics,
+            system_metrics,
+        )
+    }
+
+    /// Aggregate all metric groups into a single collection
+    ///
+    /// This helper method reduces the cognitive complexity of metric collection
+    /// by delegating to specific collection functions.
+    ///
+    /// # Arguments
+    /// * All metric group tuples
+    ///
+    /// # Returns
+    /// A vector containing all metrics as boxed collectors.
+    #[allow(clippy::too_many_arguments)]
+    fn aggregate_all_metric_groups(
+        token_metrics: &(
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            HistogramVec,
+            IntCounterVec,
+        ),
+        policy_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+        cache_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
+        security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+        system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+    ) -> Vec<Box<dyn prometheus::core::Collector>> {
+        let mut all_metrics = Vec::with_capacity(28); // Pre-allocate based on known metric count
         
-        // Collect each metric group separately
+        Self::collect_core_metrics(&mut all_metrics, token_metrics, policy_metrics, cache_metrics);
+        Self::collect_web_metrics(&mut all_metrics, http_metrics, rate_limit_metrics);
+        Self::collect_security_system_metrics(&mut all_metrics, security_metrics, system_metrics);
+        
+        all_metrics
+    }
+
+    /// Collect core business logic metrics (token, policy, cache)
+    fn collect_core_metrics(
+        all_metrics: &mut Vec<Box<dyn prometheus::core::Collector>>,
+        token_metrics: &(
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            IntCounterVec,
+            HistogramVec,
+            IntCounterVec,
+        ),
+        policy_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
+        cache_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
+    ) {
         all_metrics.extend(Self::collect_token_metrics(token_metrics));
         all_metrics.extend(Self::collect_policy_metrics(policy_metrics));
         all_metrics.extend(Self::collect_cache_metrics(cache_metrics));
+    }
+
+    /// Collect web-related metrics (HTTP requests, rate limiting)
+    fn collect_web_metrics(
+        all_metrics: &mut Vec<Box<dyn prometheus::core::Collector>>,
+        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
+    ) {
         all_metrics.extend(Self::collect_http_metrics(http_metrics));
         all_metrics.extend(Self::collect_rate_limit_metrics(rate_limit_metrics));
+    }
+
+    /// Collect security and system health metrics
+    fn collect_security_system_metrics(
+        all_metrics: &mut Vec<Box<dyn prometheus::core::Collector>>,
+        security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+        system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
+    ) {
         all_metrics.extend(Self::collect_security_metrics(security_metrics));
         all_metrics.extend(Self::collect_system_metrics(system_metrics));
-        
-        all_metrics
     }
 
     /// Collect token metrics into boxed collectors
@@ -1071,7 +1156,8 @@ impl MetricsHelper {
     /// Update cache hit ratio
     pub fn update_cache_hit_ratio(cache_type: &str, hits: u64, total: u64) {
         if total > 0 {
-            let ratio = hits as f64 / total as f64;
+            let ratio = f64::from(u32::try_from(hits).unwrap_or(u32::MAX)) 
+                / f64::from(u32::try_from(total).unwrap_or(u32::MAX));
             METRICS
                 .cache_hit_ratio
                 .with_label_values(&[cache_type])
@@ -1094,16 +1180,18 @@ impl MetricsHelper {
 
     /// Update system resource usage
     pub fn update_system_resources(resource_type: &str, unit: &str, value: i64) {
-        METRICS
+        let gauge = METRICS
             .system_resources_gauge
-            .with_label_values(&[resource_type, unit])
-            .reset();
-
-        for _ in 0..value {
-            METRICS
-                .system_resources_gauge
-                .with_label_values(&[resource_type, unit])
-                .inc();
+            .with_label_values(&[resource_type, unit]);
+        
+        gauge.reset();
+        
+        // Avoid potential loop issues with very large values
+        if value > 0 {
+            let safe_value = i64::min(value, i64::from(i32::MAX));
+            for _ in 0..safe_value {
+                gauge.inc();
+            }
         }
     }
 

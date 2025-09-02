@@ -1065,8 +1065,8 @@ impl ThreatIntelligenceCorrelator {
                 interval.tick().await;
 
                 let mut stats = statistics.lock().await;
-                let indicators_count = indicators.read().await.len() as u64;
-                let feeds_active = feed_status.read().await.len() as u32;
+                let indicators_count = u64::try_from(indicators.read().await.len()).unwrap_or(u64::MAX);
+                let feeds_active = u32::try_from(feed_status.read().await.len()).unwrap_or(u32::MAX);
 
                 stats.indicators_loaded = indicators_count;
                 stats.feeds_active = feeds_active;
@@ -1146,33 +1146,52 @@ impl ThreatIntelligenceCorrelator {
 
         info!("Starting synchronization for feed: {}", feed.name);
 
-        // Download feed data
-        let feed_data = match self.download_feed_data(feed).await {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to download feed {}: {}", feed.name, e);
-                return Err(crate::shared::error::AppError::ExternalService);
-            }
-        };
-
-        // Parse indicators from feed data
-        let new_indicators = match self.parse_feed_indicators(&feed_data, &feed.format).await {
-            Ok(indicators) => indicators,
-            Err(e) => {
-                error!("Failed to parse feed {}: {}", feed.name, e);
-                return Err(crate::shared::error::AppError::ExternalService);
-            }
-        };
-
-        // Get existing indicators for this feed
+        // Download and parse feed data
+        let new_indicators = self.download_and_parse_feed(feed).await?;
+        
+        // Get existing indicators for comparison
         let existing_indicators = self.get_feed_indicators(&feed.name).await?;
-
-        // Process new indicators
+        
+        // Process all new indicators
+        self.process_indicators(new_indicators, &feed.name, &existing_indicators, &mut sync_result).await;
+        
+        // Clean up stale indicators
+        self.perform_cleanup(&feed.name, &existing_indicators, &mut sync_result).await?;
+        
+        // Finalize sync results
+        self.finalize_sync_results(feed, start_time, &mut sync_result);
+        
+        Ok(sync_result)
+    }
+    
+    /// Download and parse feed data in one operation
+    async fn download_and_parse_feed(
+        &self,
+        feed: &ThreatFeedConfig,
+    ) -> Result<Vec<ThreatIndicator>, crate::shared::error::AppError> {
+        let feed_data = self.download_feed_data(feed).await
+            .map_err(|e| {
+                error!("Failed to download feed {}: {}", feed.name, e);
+                crate::shared::error::AppError::ExternalService
+            })?;
+        
+        self.parse_feed_indicators(&feed_data, &feed.format).await
+            .map_err(|e| {
+                error!("Failed to parse feed {}: {}", feed.name, e);
+                e
+            })
+    }
+    
+    /// Process all new indicators and update sync result
+    async fn process_indicators(
+        &self,
+        new_indicators: Vec<ThreatIndicator>,
+        feed_name: &str,
+        existing_indicators: &std::collections::HashSet<String>,
+        sync_result: &mut FeedSyncResult,
+    ) {
         for indicator in new_indicators {
-            match self
-                .process_feed_indicator(&indicator, &feed.name, &existing_indicators)
-                .await
-            {
+            match self.process_feed_indicator(&indicator, feed_name, existing_indicators).await {
                 Ok(ProcessResult::Added) => sync_result.added += 1,
                 Ok(ProcessResult::Updated) => sync_result.updated += 1,
                 Ok(ProcessResult::Skipped) => sync_result.skipped += 1,
@@ -1182,15 +1201,28 @@ impl ThreatIntelligenceCorrelator {
                 }
             }
         }
-
-        // Remove indicators that are no longer in the feed
-        let removed = self
-            .cleanup_stale_indicators(&feed.name, &existing_indicators)
-            .await?;
+    }
+    
+    /// Perform cleanup of stale indicators
+    async fn perform_cleanup(
+        &self,
+        feed_name: &str,
+        existing_indicators: &std::collections::HashSet<String>,
+        sync_result: &mut FeedSyncResult,
+    ) -> Result<(), crate::shared::error::AppError> {
+        let removed = self.cleanup_stale_indicators(feed_name, existing_indicators).await?;
         sync_result.removed = removed;
-
-        sync_result.total_indicators =
-            sync_result.added + sync_result.updated + sync_result.skipped;
+        Ok(())
+    }
+    
+    /// Finalize sync results and log completion
+    fn finalize_sync_results(
+        &self,
+        feed: &ThreatFeedConfig,
+        start_time: std::time::Instant,
+        sync_result: &mut FeedSyncResult,
+    ) {
+        sync_result.total_indicators = sync_result.added + sync_result.updated + sync_result.skipped;
         sync_result.duration_ms = start_time.elapsed().as_millis() as u64;
 
         info!(
@@ -1198,8 +1230,6 @@ impl ThreatIntelligenceCorrelator {
             feed.name, sync_result.duration_ms, sync_result.added, sync_result.updated,
             sync_result.removed, sync_result.skipped, sync_result.errors
         );
-
-        Ok(sync_result)
     }
 
     async fn download_feed_data(&self, feed: &ThreatFeedConfig) -> Result<String, reqwest::Error> {

@@ -382,7 +382,7 @@ impl SessionManager {
     /// - Session deletion fails for any session
     pub async fn invalidate_user_sessions(&self, user_id: &str) -> Result<u32, SessionError> {
         let sessions = self.get_user_sessions(user_id).await?;
-        let count = sessions.len() as u32;
+        let count = u32::try_from(sessions.len()).unwrap_or(u32::MAX);
 
         for session in sessions {
             self.delete_session(&session.id).await?;
@@ -432,7 +432,7 @@ impl SessionManager {
                     && !session.is_inactive(self.config.inactivity_timeout, Some(now))
             });
             let after_count = store.len();
-            cleaned_count += (before_count - after_count) as u32;
+            cleaned_count += u32::try_from(before_count - after_count).unwrap_or(u32::MAX);
         }
 
         // Redis cleanup would need a background task with cursor iteration

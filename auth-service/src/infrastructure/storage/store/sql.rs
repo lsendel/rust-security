@@ -47,46 +47,83 @@ impl SqlStore {
 
     pub async fn run_migrations(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
         info!("Running database migrations");
-
-        // Create migration tracking table first
+        
         self.create_migration_table().await?;
-
-        let migrations = self.get_migrations();
         let applied_migrations = self.get_applied_migrations().await?;
-
-        for migration in migrations {
-            if applied_migrations.contains(&migration.version) {
-                info!("Migration {} already applied, skipping", migration.version);
-            } else {
-                info!(
-                    "Applying migration {}: {}",
-                    migration.version, migration.description
-                );
-
-                let mut tx = self.pool.begin().await?;
-
-                // Execute migration SQL
-                for query in &migration.queries {
-                    sqlx::query(query).execute(&mut *tx).await.map_err(|e| {
-                        error!("Migration {} failed: {}", migration.version, e);
-                        e
-                    })?;
-                }
-
-                // Record migration as applied
-                sqlx::query("INSERT INTO schema_migrations (version, description, applied_at) VALUES ($1, $2, NOW())")
-                    .bind(&migration.version)
-                    .bind(&migration.description)
-                    .execute(&mut *tx)
-                    .await?;
-
-                tx.commit().await?;
-                info!("Migration {} applied successfully", migration.version);
-            }
+        let pending_migrations = self.get_pending_migrations(&applied_migrations);
+        
+        for migration in pending_migrations {
+            self.apply_single_migration(&migration).await?;
         }
-
+        
         info!("All migrations completed successfully");
         Ok(())
+    }
+    
+    /// Get list of migrations that haven't been applied yet
+    fn get_pending_migrations(&self, applied_migrations: &[String]) -> Vec<Migration> {
+        self.get_migrations()
+            .into_iter()
+            .filter(|migration| !applied_migrations.contains(&migration.version))
+            .collect()
+    }
+    
+    /// Apply a single migration within a transaction
+    async fn apply_single_migration(&self, migration: &Migration) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        if self.is_migration_applied(&migration.version).await? {
+            info!("Migration {} already applied, skipping", migration.version);
+            return Ok(());
+        }
+        
+        info!("Applying migration {}: {}", migration.version, migration.description);
+        
+        let mut tx = self.pool.begin().await?;
+        
+        self.execute_migration_queries(&mut tx, migration).await?;
+        self.record_migration_applied(&mut tx, migration).await?;
+        
+        tx.commit().await?;
+        
+        info!("Migration {} applied successfully", migration.version);
+        Ok(())
+    }
+    
+    /// Execute all queries for a migration
+    async fn execute_migration_queries(
+        &self,
+        tx: &mut sqlx::Transaction<'_, Postgres>,
+        migration: &Migration,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        for query in &migration.queries {
+            sqlx::query(query).execute(&mut **tx).await.map_err(|e| {
+                error!("Migration {} failed on query: {}", migration.version, e);
+                e
+            })?;
+        }
+        Ok(())
+    }
+    
+    /// Record that a migration has been applied
+    async fn record_migration_applied(
+        &self,
+        tx: &mut sqlx::Transaction<'_, Postgres>,
+        migration: &Migration,
+    ) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        sqlx::query("INSERT INTO schema_migrations (version, description, applied_at) VALUES ($1, $2, NOW())")
+            .bind(&migration.version)
+            .bind(&migration.description)
+            .execute(&mut **tx)
+            .await?;
+        Ok(())
+    }
+    
+    /// Check if a specific migration has been applied
+    async fn is_migration_applied(&self, version: &str) -> Result<bool, Box<dyn StdError + Send + Sync>> {
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM schema_migrations WHERE version = $1")
+            .bind(version)
+            .fetch_one(&*self.pool)
+            .await?;
+        Ok(count.0 > 0)
     }
 
     async fn create_migration_table(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
@@ -759,11 +796,11 @@ impl Store for SqlStore {
             .await?;
 
         Ok(common::StoreMetrics {
-            users_total: users_total.0 as u64,
-            groups_total: groups_total.0 as u64,
-            tokens_total: tokens_total.0 as u64,
-            active_tokens: active_tokens.0 as u64,
-            auth_codes_total: auth_codes_total.0 as u64,
+            users_total: users_total.0.max(0) as u64,
+            groups_total: groups_total.0.max(0) as u64,
+            tokens_total: tokens_total.0.max(0) as u64,
+            active_tokens: active_tokens.0.max(0) as u64,
+            auth_codes_total: auth_codes_total.0.max(0) as u64,
         })
     }
 }

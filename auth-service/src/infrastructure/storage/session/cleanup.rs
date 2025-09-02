@@ -138,91 +138,17 @@ impl SessionCleanupScheduler {
     ///
     /// Returns `CleanupError::AlreadyRunning` if the cleanup scheduler is already running.
     pub async fn start(&self) -> Result<(), CleanupError> {
-        if self.is_running.swap(true, Ordering::SeqCst) {
-            return Err(CleanupError::AlreadyRunning);
-        }
-
-        let (shutdown_sender, mut shutdown_receiver) = broadcast::channel(16);
-        {
-            let mut sender_guard = self.shutdown_sender.write().await;
-            *sender_guard = Some(shutdown_sender);
-        }
-
-        info!("Starting session cleanup scheduler");
-
-        // Log scheduler startup
+        self.initialize_scheduler().await?;
+        
+        let mut shutdown_receiver = self.setup_shutdown_channel().await;
         self.log_scheduler_startup().await;
-
+        
         let mut cleanup_interval = self.create_jittered_interval();
         cleanup_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        loop {
-            tokio::select! {
-                _ = cleanup_interval.tick() => {
-                    if let Err(e) = self.run_cleanup_cycle().await {
-                        error!(error = %e, "Cleanup cycle failed");
-                        self.increment_failed_runs().await;
-                    }
-                }
-
-                signal = shutdown_receiver.recv() => {
-                    match signal {
-                        Ok(ShutdownSignal::Graceful) => {
-                            info!("Received graceful shutdown signal, finishing current cleanup");
-                            self.graceful_shutdown().await;
-                            break;
-                        }
-                        Ok(ShutdownSignal::DrainAndStop) => {
-                            info!("Received drain signal, completing all pending operations");
-                            self.drain_and_stop().await;
-                            break;
-                        }
-                        Ok(ShutdownSignal::Immediate) => {
-                            warn!("Received immediate shutdown signal, stopping cleanup");
-                            break;
-                        }
-                        Err(_) => {
-                            // Shutdown sender dropped, normal shutdown
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        self.is_running.store(false, Ordering::SeqCst);
-        info!("Session cleanup scheduler stopped");
-
-        // Log scheduler shutdown
-        let stats = self.stats.read().await;
-        let shutdown_event = SecurityEvent::new(
-            SecurityEventType::SystemEvent,
-            SecuritySeverity::Low,
-            "auth-service".to_string(),
-            "Session cleanup scheduler stopped".to_string(),
-        )
-        .with_detail(
-            "total_runs".to_string(),
-            serde_json::Value::Number(stats.total_runs.into()),
-        )
-        .with_detail(
-            "successful_runs".to_string(),
-            serde_json::Value::Number(stats.successful_runs.into()),
-        )
-        .with_detail(
-            "failed_runs".to_string(),
-            serde_json::Value::Number(stats.failed_runs.into()),
-        )
-        .with_detail(
-            "total_sessions_cleaned".to_string(),
-            serde_json::Value::Number(stats.total_sessions_cleaned.into()),
-        );
-
-        let logger = crate::infrastructure::security::security_logging::SecurityLogger::new(
-            crate::infrastructure::security::security_logging::SecurityLoggerConfig::default(),
-        );
-        logger.log_event(shutdown_event);
-
+        self.run_scheduler_loop(&mut cleanup_interval, &mut shutdown_receiver).await;
+        self.finalize_scheduler_shutdown().await;
+        
         Ok(())
     }
 
@@ -310,7 +236,7 @@ impl SessionCleanupScheduler {
         let mut rng = rand::thread_rng();
         let jitter = rng.gen_range(-jitter_amount..=jitter_amount);
 
-        let jittered_secs = (base_duration.as_secs() as f64 + jitter).max(0.0) as u64;
+        let jittered_secs = (base_duration.as_secs() as f64 + jitter).max(0.0).min(u64::MAX as f64) as u64;
         let clamped_secs = jittered_secs
             .max(self.config.min_interval_secs)
             .min(self.config.max_interval_secs);
@@ -515,6 +441,124 @@ impl SessionCleanupScheduler {
         let mut stats = self.stats.write().await;
         stats.total_runs += 1;
         stats.failed_runs += 1;
+    }
+
+    /// Initialize the scheduler and check if it's already running
+    async fn initialize_scheduler(&self) -> Result<(), CleanupError> {
+        if self.is_running.swap(true, Ordering::SeqCst) {
+            return Err(CleanupError::AlreadyRunning);
+        }
+        info!("Starting session cleanup scheduler");
+        Ok(())
+    }
+
+    /// Set up the shutdown channel and store the sender
+    async fn setup_shutdown_channel(&self) -> broadcast::Receiver<ShutdownSignal> {
+        let (shutdown_sender, shutdown_receiver) = broadcast::channel(16);
+        {
+            let mut sender_guard = self.shutdown_sender.write().await;
+            *sender_guard = Some(shutdown_sender);
+        }
+        shutdown_receiver
+    }
+
+    /// Run the main scheduler loop with cleanup ticks and shutdown handling
+    async fn run_scheduler_loop(
+        &self,
+        cleanup_interval: &mut tokio::time::Interval,
+        shutdown_receiver: &mut broadcast::Receiver<ShutdownSignal>,
+    ) {
+        loop {
+            tokio::select! {
+                _ = cleanup_interval.tick() => {
+                    self.handle_cleanup_tick().await;
+                }
+                signal = shutdown_receiver.recv() => {
+                    if self.handle_shutdown_signal(signal).await {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Handle a cleanup interval tick
+    async fn handle_cleanup_tick(&self) {
+        if let Err(e) = self.run_cleanup_cycle().await {
+            error!(error = %e, "Cleanup cycle failed");
+            self.increment_failed_runs().await;
+        }
+    }
+
+    /// Handle shutdown signals and return true if scheduler should stop
+    async fn handle_shutdown_signal(
+        &self,
+        signal: Result<ShutdownSignal, broadcast::error::RecvError>,
+    ) -> bool {
+        match signal {
+            Ok(ShutdownSignal::Graceful) => {
+                info!("Received graceful shutdown signal, finishing current cleanup");
+                self.graceful_shutdown().await;
+                true
+            }
+            Ok(ShutdownSignal::DrainAndStop) => {
+                info!("Received drain signal, completing all pending operations");
+                self.drain_and_stop().await;
+                true
+            }
+            Ok(ShutdownSignal::Immediate) => {
+                warn!("Received immediate shutdown signal, stopping cleanup");
+                true
+            }
+            Err(_) => {
+                // Shutdown sender dropped, normal shutdown
+                true
+            }
+        }
+    }
+
+    /// Finalize scheduler shutdown with logging and cleanup
+    async fn finalize_scheduler_shutdown(&self) {
+        self.is_running.store(false, Ordering::SeqCst);
+        info!("Session cleanup scheduler stopped");
+        self.log_scheduler_shutdown().await;
+    }
+
+    /// Log scheduler shutdown event with statistics
+    async fn log_scheduler_shutdown(&self) {
+        let stats = self.stats.read().await;
+        let shutdown_event = self.create_shutdown_event(&stats);
+        
+        let logger = crate::infrastructure::security::security_logging::SecurityLogger::new(
+            crate::infrastructure::security::security_logging::SecurityLoggerConfig::default(),
+        );
+        logger.log_event(shutdown_event);
+    }
+
+    /// Create shutdown security event with statistics
+    fn create_shutdown_event(&self, stats: &CleanupStats) -> SecurityEvent {
+        SecurityEvent::new(
+            SecurityEventType::SystemEvent,
+            SecuritySeverity::Low,
+            "auth-service".to_string(),
+            "Session cleanup scheduler stopped".to_string(),
+        )
+        .with_detail(
+            "total_runs".to_string(),
+            serde_json::Value::Number(stats.total_runs.into()),
+        )
+        .with_detail(
+            "successful_runs".to_string(),
+            serde_json::Value::Number(stats.successful_runs.into()),
+        )
+        .with_detail(
+            "failed_runs".to_string(),
+            serde_json::Value::Number(stats.failed_runs.into()),
+        )
+        .with_detail(
+            "total_sessions_cleaned".to_string(),
+            serde_json::Value::Number(stats.total_sessions_cleaned.into()),
+        )
     }
 
     /// Gracefully shutdown, finishing current operation

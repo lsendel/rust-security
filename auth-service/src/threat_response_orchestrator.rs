@@ -537,23 +537,34 @@ impl ThreatResponseOrchestrator {
     pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Initializing Threat Response Orchestrator");
 
-        // Initialize Redis connection
+        // Initialize core infrastructure
+        self.initialize_infrastructure().await?;
+        
+        // Initialize external integrations
+        self.initialize_external_integrations().await?;
+        
+        // Start background processing tasks
+        self.start_all_background_processors().await;
+
+        info!("Threat Response Orchestrator initialized successfully");
+        Ok(())
+    }
+    
+    /// Initialize core infrastructure components
+    async fn initialize_infrastructure(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Err(e) = self.initialize_redis().await {
             warn!("Failed to initialize Redis connection: {}", e);
         }
-
-        // Initialize external integrations
-        self.initialize_external_integrations().await?;
-
-        // Start background processing tasks
+        Ok(())
+    }
+    
+    /// Start all background processors
+    async fn start_all_background_processors(&self) {
         self.start_response_processor().await;
         self.start_notification_processor().await;
         self.start_approval_monitor().await;
         self.start_escalation_monitor().await;
         self.start_health_monitor().await;
-
-        info!("Threat Response Orchestrator initialized successfully");
-        Ok(())
     }
 
     /// Initialize Redis connection
@@ -576,14 +587,32 @@ impl ThreatResponseOrchestrator {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = self.config.read().await;
         let mut _clients = self.external_clients.write().await;
-
-        // Initialize SIEM integration
+        
+        self.initialize_siem_integration(&config).await?;
+        self.initialize_firewall_integration(&config).await?;
+        self.initialize_idp_integration(&config).await?;
+        self.initialize_ticket_system_integration(&config).await?;
+        
+        Ok(())
+    }
+    
+    /// Initialize SIEM integration if configured
+    async fn initialize_siem_integration(
+        &self,
+        config: &ThreatResponseConfig,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(siem_config) = &config.external_integrations.siem_integration {
             // TODO: Create SIEM client based on configuration
             info!("SIEM integration configured: {:?}", siem_config.siem_type);
         }
-
-        // Initialize firewall integration
+        Ok(())
+    }
+    
+    /// Initialize firewall integration if configured
+    async fn initialize_firewall_integration(
+        &self,
+        config: &ThreatResponseConfig,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(firewall_config) = &config.external_integrations.firewall_integration {
             // TODO: Create firewall client based on configuration
             info!(
@@ -591,8 +620,14 @@ impl ThreatResponseOrchestrator {
                 firewall_config.firewall_type
             );
         }
-
-        // Initialize IDP integration
+        Ok(())
+    }
+    
+    /// Initialize identity provider integration if configured
+    async fn initialize_idp_integration(
+        &self,
+        config: &ThreatResponseConfig,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(idp_config) = &config.external_integrations.identity_provider_integration {
             // TODO: Create IDP client based on configuration
             info!(
@@ -600,8 +635,14 @@ impl ThreatResponseOrchestrator {
                 idp_config.idp_type
             );
         }
-
-        // Initialize ticket system integration
+        Ok(())
+    }
+    
+    /// Initialize ticket system integration if configured
+    async fn initialize_ticket_system_integration(
+        &self,
+        config: &ThreatResponseConfig,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(ticket_config) = &config.external_integrations.ticket_system_integration {
             // TODO: Create ticket system client based on configuration
             info!(
@@ -609,7 +650,6 @@ impl ThreatResponseOrchestrator {
                 ticket_config.system_type
             );
         }
-
         Ok(())
     }
 

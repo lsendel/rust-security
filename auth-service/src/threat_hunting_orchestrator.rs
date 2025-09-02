@@ -1,9 +1,9 @@
 use crate::core::security::SecurityEvent;
-use crate::threat_attack_patterns::{AttackPatternConfig, AttackPatternDetector};
+use crate::threat_attack_patterns::{AttackPatternConfig, AttackPatternDetector, DetectedAttackSequence};
 use crate::threat_behavioral_analyzer::{
     AdvancedBehavioralThreatDetector, BehavioralAnalysisConfig,
 };
-use crate::threat_intelligence::{ThreatIntelligenceConfig, ThreatIntelligenceCorrelator};
+use crate::threat_intelligence::{ThreatIntelligenceConfig, ThreatIntelligenceCorrelator, ThreatIntelligenceMatch};
 use crate::threat_response_orchestrator::{ThreatResponseConfig, ThreatResponseOrchestrator};
 use crate::threat_types::{
     AttackPhase, BusinessImpact, ThreatContext, ThreatSeverity, ThreatSignature, ThreatType,
@@ -457,27 +457,46 @@ impl ThreatHuntingOrchestrator {
             warn!("Failed to initialize Redis connection: {}", e);
         }
 
-        // Initialize all subsystems
+        // Initialize all subsystems and engines
+        self.initialize_subsystems().await?;
+        self.initialize_correlation_engine().await?;
+        
+        // Start all processing tasks
+        self.start_background_tasks().await;
+        
+        // Finalize initialization
+        self.finalize_initialization();
+
+        info!("Threat Hunting Orchestrator initialized successfully");
+        Ok(())
+    }
+    
+    /// Initialize all threat hunting subsystems
+    async fn initialize_subsystems(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.behavioral_analyzer.initialize().await?;
         self.threat_intelligence.initialize().await?;
         self.attack_pattern_detector.initialize().await?;
         self.user_profiler.initialize().await?;
         self.response_orchestrator.initialize().await?;
-
-        // Initialize correlation engine
-        self.correlation_engine.initialize().await?;
-
-        // Start processing tasks
+        Ok(())
+    }
+    
+    /// Initialize the correlation engine
+    async fn initialize_correlation_engine(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.correlation_engine.initialize().await
+    }
+    
+    /// Start all background processing tasks
+    async fn start_background_tasks(&self) {
         self.start_event_processors().await;
         self.start_correlation_engine().await;
         self.start_system_monitor().await;
-
-        // Set initial health status
+    }
+    
+    /// Finalize initialization and set health status
+    fn finalize_initialization(&self) {
         #[cfg(feature = "monitoring")]
         THREAT_HUNTING_SYSTEM_HEALTH.set(1.0);
-
-        info!("Threat Hunting Orchestrator initialized successfully");
-        Ok(())
     }
 
     /// Initialize Redis connection with cluster support
@@ -514,13 +533,41 @@ impl ThreatHuntingOrchestrator {
         let timer = || {}; // No-op timer when monitoring is disabled
 
         // Send event to processing queue
+        self.queue_event_for_processing(&event)?;
+        
+        // Initialize result structure
+        let mut operation_result = self.initialize_result_structure();
+        
+        // Run parallel threat analysis
+        self.run_parallel_analysis(&event, &mut operation_result).await;
+        
+        // Perform threat correlation
+        self.perform_threat_correlation(&mut operation_result).await;
+        
+        // Create response plans
+        self.create_response_plans(&mut operation_result).await;
+        
+        // Finalize results
+        self.finalize_processing_results(start_time, &mut operation_result, timer);
+        
+        Ok(operation_result)
+    }
+    
+    /// Queue event for processing
+    fn queue_event_for_processing(
+        &self,
+        event: &SecurityEvent,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Err(e) = self.event_ingestion_queue.send(event.clone()) {
             error!("Failed to queue event for processing: {}", e);
             return Err("Event processing queue full".into());
         }
-
-        // Perform immediate analysis
-        let mut operation_result = ThreatHuntingResult {
+        Ok(())
+    }
+    
+    /// Initialize the result structure
+    fn initialize_result_structure(&self) -> ThreatHuntingResult {
+        ThreatHuntingResult {
             event_id: uuid::Uuid::new_v4().to_string(),
             processing_time_ms: 0,
             threats_detected: Vec::new(),
@@ -529,33 +576,63 @@ impl ThreatHuntingOrchestrator {
             response_plans_created: Vec::new(),
             recommendations: Vec::new(),
             confidence_score: 0.0,
-        };
-
-        // Run parallel analysis across subsystems
+        }
+    }
+    
+    /// Run parallel analysis across all subsystems
+    async fn run_parallel_analysis(
+        &self,
+        event: &SecurityEvent,
+        operation_result: &mut ThreatHuntingResult,
+    ) {
         let (behavioral_threats, intel_matches, attack_sequences, user_analysis) = tokio::join!(
             self.behavioral_analyzer.analyze_event(event.clone()),
-            self.threat_intelligence.check_indicators(&event),
+            self.threat_intelligence.check_indicators(event),
             self.attack_pattern_detector.process_event(event.clone()),
-            self.analyze_user_behavior(&event)
+            self.analyze_user_behavior(event)
         );
-
-        // Collect threat signatures
+        
+        self.process_behavioral_threats(behavioral_threats, operation_result);
+        self.process_intelligence_matches(intel_matches, operation_result);
+        self.process_attack_sequences(attack_sequences, operation_result);
+        self.process_user_analysis(user_analysis, operation_result);
+    }
+    
+    /// Process behavioral threat analysis results
+    fn process_behavioral_threats(
+        &self,
+        behavioral_threats: Result<Vec<ThreatSignature>, Box<dyn std::error::Error + Send + Sync>>,
+        operation_result: &mut ThreatHuntingResult,
+    ) {
         if let Ok(threats) = behavioral_threats {
             operation_result.threats_detected.extend(threats);
         }
-
+    }
+    
+    /// Process threat intelligence matches
+    fn process_intelligence_matches(
+        &self,
+        intel_matches: Result<Vec<ThreatIntelligenceMatch>, Box<dyn std::error::Error + Send + Sync>>,
+        operation_result: &mut ThreatHuntingResult,
+    ) {
         if let Ok(matches) = intel_matches {
             for threat_match in matches {
-                // Convert threat intelligence match to threat signature
                 let threat_signature = ThreatSignature::new(
-                    ThreatType::MaliciousBot, // Simplified mapping
+                    ThreatType::MaliciousBot,
                     threat_match.indicator.severity.clone(),
                     threat_match.confidence,
                 );
                 operation_result.threats_detected.push(threat_signature);
             }
         }
-
+    }
+    
+    /// Process attack sequence detections
+    fn process_attack_sequences(
+        &self,
+        attack_sequences: Result<Vec<DetectedAttackSequence>, Box<dyn std::error::Error + Send + Sync>>,
+        operation_result: &mut ThreatHuntingResult,
+    ) {
         if let Ok(sequences) = attack_sequences {
             for sequence in sequences {
                 operation_result.threats_detected.push(ThreatSignature::new(
@@ -565,8 +642,14 @@ impl ThreatHuntingOrchestrator {
                 ));
             }
         }
-
-        // Analyze user behavior
+    }
+    
+    /// Process user behavioral analysis results
+    fn process_user_analysis(
+        &self,
+        user_analysis: Result<crate::threat_user_profiler::BehavioralAnalysisResult, Box<dyn std::error::Error + Send + Sync>>,
+        operation_result: &mut ThreatHuntingResult,
+    ) {
         if let Ok(user_result) = user_analysis {
             operation_result.user_risk_assessment = Some(UserRiskAssessment {
                 user_id: user_result.user_id.clone(),
@@ -578,12 +661,14 @@ impl ThreatHuntingOrchestrator {
                     .iter()
                     .map(|a| a.description.clone())
                     .collect(),
-                peer_comparison_percentile: 0.5, // Placeholder
+                peer_comparison_percentile: 0.5,
                 recommended_actions: user_result.recommendations.clone(),
             });
         }
-
-        // Perform threat correlation
+    }
+    
+    /// Perform threat correlation analysis
+    async fn perform_threat_correlation(&self, operation_result: &mut ThreatHuntingResult) {
         if !operation_result.threats_detected.is_empty() {
             let correlations = self
                 .correlation_engine
@@ -591,37 +676,60 @@ impl ThreatHuntingOrchestrator {
                 .await;
             operation_result.correlations_found = correlations;
         }
-
-        // Create response plans for high-severity threats
-        for threat in &operation_result.threats_detected {
-            if threat.severity >= ThreatSeverity::High {
-                match self
-                    .response_orchestrator
-                    .create_response_plan(
-                        threat.clone(),
-                        ThreatContext::new(
-                            uuid::Uuid::new_v4().to_string(),
-                            "authentication_threat".to_string(),
-                            ThreatSeverity::Medium,
-                            "threat_hunting".to_string(),
-                            Utc::now(),
-                        ),
-                    )
-                    .await
-                {
-                    Ok(plan) => {
-                        operation_result.response_plans_created.push(plan.plan_id);
-                        #[cfg(feature = "monitoring")]
-                        THREAT_HUNTING_RESPONSE_PLANS_EXECUTED.inc();
-                    }
-                    Err(e) => {
-                        error!("Failed to create response plan: {}", e);
-                    }
-                }
+    }
+    
+    /// Create response plans for high-severity threats
+    async fn create_response_plans(&self, operation_result: &mut ThreatHuntingResult) {
+        let high_severity_threats: Vec<_> = operation_result.threats_detected
+            .iter()
+            .filter(|threat| threat.severity >= ThreatSeverity::High)
+            .cloned()
+            .collect();
+        
+        for threat in high_severity_threats {
+            self.create_individual_response_plan(&threat, operation_result).await;
+        }
+    }
+    
+    /// Create response plan for individual threat
+    async fn create_individual_response_plan(
+        &self,
+        threat: &ThreatSignature,
+        operation_result: &mut ThreatHuntingResult,
+    ) {
+        match self
+            .response_orchestrator
+            .create_response_plan(
+                threat.clone(),
+                ThreatContext::new(
+                    uuid::Uuid::new_v4().to_string(),
+                    "authentication_threat".to_string(),
+                    ThreatSeverity::Medium,
+                    "threat_hunting".to_string(),
+                    Utc::now(),
+                ),
+            )
+            .await
+        {
+            Ok(plan) => {
+                operation_result.response_plans_created.push(plan.plan_id);
+                #[cfg(feature = "monitoring")]
+                THREAT_HUNTING_RESPONSE_PLANS_EXECUTED.inc();
+            }
+            Err(e) => {
+                error!("Failed to create response plan: {}", e);
             }
         }
-
-        // Calculate overall confidence
+    }
+    
+    /// Finalize processing results and update metrics
+    fn finalize_processing_results(
+        &self,
+        start_time: SystemTime,
+        operation_result: &mut ThreatHuntingResult,
+        #[allow(unused_variables)] timer: impl Drop,
+    ) {
+        // Calculate confidence score
         if !operation_result.threats_detected.is_empty() {
             operation_result.confidence_score = operation_result
                 .threats_detected
@@ -630,23 +738,28 @@ impl ThreatHuntingOrchestrator {
                 .sum::<f64>()
                 / operation_result.threats_detected.len() as f64;
         }
-
+        
         // Record processing time
         if let Ok(duration) = start_time.elapsed() {
             operation_result.processing_time_ms = duration.as_millis() as u64;
         }
-
+        
         // Update metrics
+        self.update_processing_metrics(operation_result);
+        
+        #[cfg(feature = "monitoring")]
+        drop(timer);
+    }
+    
+    /// Update processing metrics
+    fn update_processing_metrics(&self, operation_result: &ThreatHuntingResult) {
         #[cfg(feature = "monitoring")]
         THREAT_HUNTING_EVENTS_PROCESSED.inc();
+        
         if !operation_result.threats_detected.is_empty() {
             #[cfg(feature = "monitoring")]
             THREAT_HUNTING_THREATS_DETECTED.inc_by(operation_result.threats_detected.len() as f64);
         }
-
-        #[cfg(feature = "monitoring")]
-        drop(timer);
-        Ok(operation_result)
     }
 
     /// Analyze user behavior for the event
@@ -831,30 +944,44 @@ impl ThreatHuntingOrchestrator {
         // Signal shutdown to all tasks
         self.shutdown_signal.notify_waiters();
 
-        // Wait for all processing tasks to complete
+        // Shutdown all components
+        self.shutdown_processing_tasks().await;
+        self.shutdown_subsystems().await;
+        self.cleanup_resources().await;
+        self.finalize_shutdown();
+
+        info!("Threat Hunting Orchestrator shutdown complete");
+    }
+    
+    /// Shutdown all processing tasks
+    async fn shutdown_processing_tasks(&self) {
         let mut tasks = self.processing_tasks.lock().await;
         for task in tasks.drain(..) {
             if let Err(e) = task.await {
                 error!("Error shutting down processing task: {}", e);
             }
         }
-
-        // Shutdown subsystems
+    }
+    
+    /// Shutdown all subsystems
+    async fn shutdown_subsystems(&self) {
         self.behavioral_analyzer.shutdown().await;
         self.threat_intelligence.shutdown().await;
         self.attack_pattern_detector.shutdown();
         let _ = self.user_profiler.shutdown().await;
         self.response_orchestrator.shutdown().await;
-
-        // Close Redis connection
+    }
+    
+    /// Clean up external resources
+    async fn cleanup_resources(&self) {
         let mut redis_client = self.redis_client.lock().await;
         *redis_client = None;
-
-        // Update health status
+    }
+    
+    /// Finalize shutdown process
+    fn finalize_shutdown(&self) {
         #[cfg(feature = "monitoring")]
         THREAT_HUNTING_SYSTEM_HEALTH.set(0.0);
-
-        info!("Threat Hunting Orchestrator shutdown complete");
     }
 }
 
