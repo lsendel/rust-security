@@ -668,7 +668,7 @@ impl KeyManagementService {
     /// - RSA key generation fails due to insufficient entropy
     /// - Key serialization to PEM format fails
     /// - The configured key size is invalid or unsupported
-    fn generate_rsa_key_pem(&self) -> Result<String, crate::shared::error::AppError> {
+    fn generate_rsa_key_pem() -> Result<String, crate::shared::error::AppError> {
         // For development, we'll skip RSA and use HMAC-based signing
         // This avoids the complexity of RSA key generation for compilation testing
         Err(crate::shared::error::AppError::KeyGenerationError {
@@ -683,7 +683,7 @@ impl KeyManagementService {
         kid: &str,
     ) -> Result<(EncodingKey, DecodingKey, Value), crate::shared::error::AppError> {
         // Generate a new RSA key dynamically for security
-        let private_key_pem = self.generate_rsa_key_pem()?;
+        let private_key_pem = Self::generate_rsa_key_pem()?;
 
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes()).map_err(|e| {
             AppError::internal(format!(

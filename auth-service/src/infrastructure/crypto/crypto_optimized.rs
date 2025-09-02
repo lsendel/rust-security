@@ -140,13 +140,15 @@ impl CryptoOptimized {
         key_id: &str,
         data: &[u8],
     ) -> Result<Vec<u8>, ring::error::Unspecified> {
-        let key = self.hmac_keys.entry(key_id.to_string()).or_insert_with(|| {
-            let mut key_bytes = [0u8; 32];
-            self.rng.fill(&mut key_bytes).unwrap();
-            hmac::Key::new(hmac::HMAC_SHA256, &key_bytes)
-        });
+        let tag = {
+            let key = self.hmac_keys.entry(key_id.to_string()).or_insert_with(|| {
+                let mut key_bytes = [0u8; 32];
+                self.rng.fill(&mut key_bytes).unwrap();
+                hmac::Key::new(hmac::HMAC_SHA256, &key_bytes)
+            });
 
-        let tag = hmac::sign(&key, data);
+            hmac::sign(&key, data)
+        };
         Ok(tag.as_ref().to_vec())
     }
 

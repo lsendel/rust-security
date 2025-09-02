@@ -546,10 +546,10 @@ impl AttackPatternDetector {
         self.load_detection_rules().await?;
 
         // Start background analysis tasks
-        self.start_graph_analyzer().await;
-        self.start_sequence_detector().await;
-        self.start_behavioral_clustering().await;
-        self.start_temporal_analyzer().await;
+        self.start_graph_analyzer();
+        self.start_sequence_detector();
+        self.start_behavioral_clustering();
+        self.start_temporal_analyzer();
 
         info!("Attack Pattern Detector initialized successfully");
         Ok(())
@@ -1255,7 +1255,7 @@ impl AttackPatternDetector {
     }
 
     /// Start graph analyzer background task
-    async fn start_graph_analyzer(&self) {
+    fn start_graph_analyzer(&self) {
         let attack_graph = self.attack_graph.clone();
         let config = self.config.clone();
         let _active_sequences = self.active_sequences.clone();
@@ -1288,7 +1288,7 @@ impl AttackPatternDetector {
     }
 
     /// Start sequence detector background task
-    async fn start_sequence_detector(&self) {
+    fn start_sequence_detector(&self) {
         let active_sequences = self.active_sequences.clone();
         let config = self.config.clone();
 
@@ -1313,7 +1313,7 @@ impl AttackPatternDetector {
     }
 
     /// Start behavioral clustering background task
-    async fn start_behavioral_clustering(&self) {
+    fn start_behavioral_clustering(&self) {
         let _behavioral_clusters = self.behavioral_clusters.clone();
         let event_buffer = self.event_buffer.clone();
         let config = self.config.clone();
@@ -1340,7 +1340,7 @@ impl AttackPatternDetector {
     }
 
     /// Start temporal analyzer background task
-    async fn start_temporal_analyzer(&self) {
+    fn start_temporal_analyzer(&self) {
         let temporal_windows = self.temporal_windows.clone();
         let config = self.config.clone();
 

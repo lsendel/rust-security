@@ -61,7 +61,7 @@ impl OptimizedSecureKeyManager {
         let pkcs8_bytes = ring::signature::Ed25519KeyPair::generate_pkcs8(&self.rng)?;
         let keypair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
 
-        let kid = format!("opt-key-{}", self.now_unix());
+        let kid = format!("opt-key-{}", Self::now_unix());
 
         // Create JWK for Ed25519
         let public_key_bytes = keypair.public_key().as_ref();
@@ -81,7 +81,7 @@ impl OptimizedSecureKeyManager {
             kid,
             keypair: Arc::new(keypair),
             public_jwk,
-            created_at: self.now_unix(),
+            created_at: Self::now_unix(),
             usage_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
@@ -99,7 +99,7 @@ impl OptimizedSecureKeyManager {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let keys = self.keys.read().await;
         let needs_new_key =
-            keys.is_empty() || keys.iter().any(|k| self.now_unix() - k.created_at > 3600);
+            keys.is_empty() || keys.iter().any(|k| Self::now_unix() - k.created_at > 3600);
 
         if !needs_new_key {
             return Ok(());
@@ -120,7 +120,7 @@ impl OptimizedSecureKeyManager {
                     let mut keys = self.keys.write().await;
 
                     // Keep only recent keys for rotation
-                    keys.retain(|k| self.now_unix() - k.created_at < 7200);
+                    keys.retain(|k| Self::now_unix() - k.created_at < 7200);
                     keys.push(new_key);
 
                     // Limit to 3 keys maximum
@@ -206,11 +206,11 @@ impl OptimizedSecureKeyManager {
 
     // Helper methods
     #[allow(dead_code)] // TODO: Will be used when JWT encoding/decoding is implemented
-    fn base64url(&self, data: &[u8]) -> String {
+    fn base64url(data: &[u8]) -> String {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
     }
 
-    fn now_unix(&self) -> u64 {
+    fn now_unix() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

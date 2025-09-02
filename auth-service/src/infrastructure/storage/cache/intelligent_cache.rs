@@ -244,63 +244,65 @@ where
     /// Get value from cache
     pub async fn get(&self, key: &K) -> Option<V> {
         let start_time = Instant::now();
+        let value = {
+            // Scope the storage lock tightly
+            let mut storage = self.storage.write().await;
 
-        // Check cache
-        let mut storage = self.storage.write().await;
-        let mut metrics = self.metrics.write().await;
+            if let Some(entry) = storage.entries.get(key) {
+                // Check if entry is expired
+                if self.is_expired(&entry.metadata).await {
+                    storage.entries.remove(key);
+                    return None;
+                }
 
-        if let Some(entry) = storage.entries.get(key) {
-            // Check if entry is expired
-            if self.is_expired(&entry.metadata).await {
-                storage.entries.remove(key);
+                let value = entry.value.clone();
+
+                // Update access metadata (get mutable reference after cloning value)
+                if let Some(entry) = storage.entries.get_mut(key) {
+                    entry.metadata.last_accessed = SystemTime::now();
+                    entry.metadata.access_count += 1;
+                }
+
+                // Update LRU order and frequency without aliasing
+                let pos_opt = storage.lru_order.iter().position(|k| k == key);
+                if let Some(pos) = pos_opt {
+                    storage.lru_order.remove(pos);
+                }
+                storage.lru_order.push_back(key.clone());
+                let freq = storage.frequency.entry(key.clone()).or_insert(0);
+                *freq += 1;
+
+                Some(value)
+            } else {
+                None
+            }
+        };
+
+        // Update metrics after releasing storage lock
+        {
+            let mut metrics = self.metrics.write().await;
+            if value.is_some() {
+                metrics.hits += 1;
+            } else {
                 metrics.misses += 1;
-                return None;
             }
-
-            let value = entry.value.clone();
-
-            // Update access metadata (get mutable reference after cloning value)
-            if let Some(entry) = storage.entries.get_mut(key) {
-                entry.metadata.last_accessed = SystemTime::now();
-                entry.metadata.access_count += 1;
-            }
-
-            // Update LRU order and frequency without aliasing
-            let pos_opt = storage.lru_order.iter().position(|k| k == key);
-            if let Some(pos) = pos_opt {
-                storage.lru_order.remove(pos);
-            }
-            storage.lru_order.push_back(key.clone());
-            let freq = storage.frequency.entry(key.clone()).or_insert(0);
-            *freq += 1;
-
-            // Update metrics
-            metrics.hits += 1;
             metrics.hit_rate = metrics.hits as f64 / (metrics.hits + metrics.misses) as f64;
             metrics.avg_access_time = start_time.elapsed();
-
-            // Record access event
-            drop(storage); // Release storage lock
-            drop(metrics); // Release metrics lock
-            let mut analyzer = self.analyzer.write().await;
-            analyzer.record_access(key.clone(), AccessType::Hit).await;
-
-            // Trigger predictive prefetching
-            self.trigger_prefetch(key).await;
-
-            Some(value)
-        } else {
-            metrics.misses += 1;
-            metrics.hit_rate = metrics.hits as f64 / (metrics.hits + metrics.misses) as f64;
-
-            // Record miss event
-            drop(storage); // Release storage lock
-            drop(metrics); // Release metrics lock
-            let mut analyzer = self.analyzer.write().await;
-            analyzer.record_access(key.clone(), AccessType::Miss).await;
-
-            None
         }
+
+        // Record access event after releasing both locks
+        {
+            let mut analyzer = self.analyzer.write().await;
+            let access_type = if value.is_some() { AccessType::Hit } else { AccessType::Miss };
+            analyzer.record_access(key.clone(), access_type).await;
+        }
+
+        // Trigger predictive prefetching if hit
+        if value.is_some() {
+            self.trigger_prefetch(key).await;
+        }
+
+        value
     }
 
     /// Put value into cache
@@ -312,81 +314,99 @@ where
     /// - Memory allocation fails
     /// - Cache size limits are exceeded and eviction cannot free space
     pub async fn put(&self, key: K, value: V, ttl: Option<Duration>) -> Result<(), CacheError> {
-        let mut storage = self.storage.write().await;
-        let config = self.config.read().await;
-
-        // Calculate entry size (simplified)
-        let entry_size = std::mem::size_of::<V>();
-
-        // Check if we need to evict entries
-        while storage.current_size + entry_size > config.max_size
-            || storage.entries.len() >= config.max_entries
-        {
-            self.evict_entry(&mut storage, &config).await?;
-        }
-
-        // Create cache entry
-        let entry = CacheEntry {
-            value,
-            metadata: EntryMetadata {
-                created_at: SystemTime::now(),
-                last_accessed: SystemTime::now(),
-                access_count: 1,
-                size: entry_size,
-                ttl: ttl.unwrap_or(config.default_ttl),
-                priority: CachePriority::Normal,
-                tags: Vec::new(),
-            },
+        let (entry_size, default_ttl) = {
+            let config = self.config.read().await;
+            (std::mem::size_of::<V>(), config.default_ttl)
         };
 
-        // Insert entry
-        storage.entries.insert(key.clone(), entry);
-        storage.lru_order.push_back(key.clone());
-        storage.current_size += entry_size;
+        let (current_entries, current_size) = {
+            let mut storage = self.storage.write().await;
+            let config = self.config.read().await;
 
-        // Update metrics
-        let mut metrics = self.metrics.write().await;
-        metrics.current_entries = storage.entries.len();
-        metrics.current_size = storage.current_size;
+            // Check if we need to evict entries
+            while storage.current_size + entry_size > config.max_size
+                || storage.entries.len() >= config.max_entries
+            {
+                self.evict_entry(&mut storage, &config).await?;
+            }
+
+            // Create cache entry
+            let entry = CacheEntry {
+                value,
+                metadata: EntryMetadata {
+                    created_at: SystemTime::now(),
+                    last_accessed: SystemTime::now(),
+                    access_count: 1,
+                    size: entry_size,
+                    ttl: ttl.unwrap_or(default_ttl),
+                    priority: CachePriority::Normal,
+                    tags: Vec::new(),
+                },
+            };
+
+            // Insert entry
+            storage.entries.insert(key.clone(), entry);
+            storage.lru_order.push_back(key);
+            storage.current_size += entry_size;
+
+            (storage.entries.len(), storage.current_size)
+        };
+
+        // Update metrics after releasing storage lock
+        {
+            let mut metrics = self.metrics.write().await;
+            metrics.current_entries = current_entries;
+            metrics.current_size = current_size;
+        }
 
         Ok(())
     }
 
     /// Remove entry from cache
     pub async fn remove(&self, key: &K) -> Option<V> {
-        let mut storage = self.storage.write().await;
+        let (value, current_entries, current_size) = {
+            let mut storage = self.storage.write().await;
 
-        if let Some(entry) = storage.entries.remove(key) {
-            // Update LRU order
-            if let Some(pos) = storage.lru_order.iter().position(|k| k == key) {
-                storage.lru_order.remove(pos);
+            if let Some(entry) = storage.entries.remove(key) {
+                // Update LRU order
+                if let Some(pos) = storage.lru_order.iter().position(|k| k == key) {
+                    storage.lru_order.remove(pos);
+                }
+
+                // Update size
+                storage.current_size -= entry.metadata.size;
+
+                (Some(entry.value), storage.entries.len(), storage.current_size)
+            } else {
+                (None, storage.entries.len(), storage.current_size)
             }
+        };
 
-            // Update size
-            storage.current_size -= entry.metadata.size;
-
-            // Update metrics
+        if value.is_some() {
+            // Update metrics after releasing storage lock
             let mut metrics = self.metrics.write().await;
-            metrics.current_entries = storage.entries.len();
-            metrics.current_size = storage.current_size;
-
-            Some(entry.value)
-        } else {
-            None
+            metrics.current_entries = current_entries;
+            metrics.current_size = current_size;
         }
+
+        value
     }
 
     /// Clear all entries
     pub async fn clear(&self) {
-        let mut storage = self.storage.write().await;
-        storage.entries.clear();
-        storage.lru_order.clear();
-        storage.frequency.clear();
-        storage.current_size = 0;
+        {
+            let mut storage = self.storage.write().await;
+            storage.entries.clear();
+            storage.lru_order.clear();
+            storage.frequency.clear();
+            storage.current_size = 0;
+        }
 
-        let mut metrics = self.metrics.write().await;
-        metrics.current_entries = 0;
-        metrics.current_size = 0;
+        {
+            let mut metrics = self.metrics.write().await;
+            metrics.current_entries = 0;
+            metrics.current_size = 0;
+        }
     }
 
     /// Get cache statistics

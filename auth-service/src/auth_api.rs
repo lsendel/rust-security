@@ -250,7 +250,7 @@ fn generate_token() -> String {
     URL_SAFE_NO_PAD.encode(dest)
 }
 
-/// Create a JWT token for the given user using secure EdDSA or fallback to HS256
+/// Create a JWT token for the given user using secure `EdDSA` or fallback to `HS256`
 ///
 /// # Errors
 ///
@@ -259,7 +259,7 @@ fn generate_token() -> String {
 /// - Claims serialization fails
 /// - Header creation fails
 /// - JWKS manager is unavailable
-async fn create_jwt_token_secure(user: &User, auth_state: &AuthState) -> Result<String, jsonwebtoken::errors::Error> {
+fn create_jwt_token_secure(user: &User, auth_state: &AuthState) -> Result<String, jsonwebtoken::errors::Error> {
     let _claims = Claims {
         sub: user.id.clone(),
         email: user.email.clone(),
@@ -353,7 +353,7 @@ pub async fn register(
     };
 
     // Generate JWT token using secure JWKS manager
-    let token = create_jwt_token_secure(&user, &state).await.map_err(|e| {
+    let token = create_jwt_token_secure(&user, &state).map_err(|e| {
         warn!("Token generation failed for user {}: {}", user.email, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -435,7 +435,7 @@ pub async fn login(
             .insert(request.email.clone(), user.clone());
 
         // Generate JWT token using secure JWKS manager
-        let token = create_jwt_token_secure(&user, &state).await.map_err(|e| {
+        let token = create_jwt_token_secure(&user, &state).map_err(|e| {
             warn!("Token generation failed for user {}: {}", user.email, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -694,7 +694,7 @@ async fn generate_access_token(
     user: &User,
     auth_state: &AuthState,
 ) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
-    create_jwt_token_secure(user, auth_state).await
+    create_jwt_token_secure(user, auth_state)
         .map_err(|e| {
             warn!("Access token generation failed: {}", e);
             oauth_error("server_error", "Failed to generate access token")
@@ -720,8 +720,8 @@ fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorRespons
 
 /// Validate JWT token using secure JWKS manager or fallback to HS256
 /// 
-/// This function tries EdDSA validation first, then falls back to HS256 for backward compatibility
-async fn validate_jwt_token(token: &str, auth_state: &AuthState) -> Result<Claims, (StatusCode, Json<ErrorResponse>)> {
+/// This function tries `EdDSA` validation first, then falls back to `HS256` for backward compatibility
+fn validate_jwt_token(token: &str, auth_state: &AuthState) -> Result<Claims, (StatusCode, Json<ErrorResponse>)> {
     // JWKS functionality temporarily disabled
     
     // Fallback to HS256 validation for backward compatibility
@@ -799,7 +799,7 @@ pub async fn me(
         })?;
 
     // Validate JWT token using secure JWKS manager or fallback
-    let claims = validate_jwt_token(token, &state).await?;
+    let claims = validate_jwt_token(token, &state)?;
 
     Ok(Json(UserInfo {
         id: claims.sub,
@@ -835,7 +835,7 @@ mod tests {
         );
 
         // Create secure JWT token (should use EdDSA)
-        let result = create_jwt_token_secure(&user, &auth_state).await;
+        let result = create_jwt_token_secure(&user, &auth_state);
         assert!(result.is_ok(), "Secure JWT token creation should succeed");
 
         let token = result.unwrap();
@@ -865,7 +865,7 @@ mod tests {
         let auth_state = AuthState::new("test-secret-key".to_string());
 
         // Create JWT token (should fallback to HS256)
-        let result = create_jwt_token_secure(&user, &auth_state).await;
+        let result = create_jwt_token_secure(&user, &auth_state);
         assert!(result.is_ok(), "Fallback JWT token creation should succeed");
 
         let token = result.unwrap();
@@ -897,10 +897,10 @@ mod tests {
         };
 
         // Create secure token
-        let token = create_jwt_token_secure(&user, &auth_state).await.unwrap();
+        let token = create_jwt_token_secure(&user, &auth_state).unwrap();
 
         // Validate the token
-        let validation_result = validate_jwt_token(&token, &auth_state).await;
+        let validation_result = validate_jwt_token(&token, &auth_state);
         assert!(validation_result.is_ok(), "Token validation should succeed");
 
         let claims = validation_result.unwrap();

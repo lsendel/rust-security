@@ -148,41 +148,30 @@ impl AppError {
     /// Get the HTTP status code for this error
     #[must_use] pub const fn status_code(&self) -> axum::http::StatusCode {
         match self {
-            Self::Auth(_) => axum::http::StatusCode::UNAUTHORIZED,
-            Self::NotFound(_) => axum::http::StatusCode::NOT_FOUND,
-            Self::Unauthorized(_) => axum::http::StatusCode::UNAUTHORIZED,
-            Self::UnauthorizedClient(_) => axum::http::StatusCode::UNAUTHORIZED,
-            Self::BadRequest(_) => axum::http::StatusCode::BAD_REQUEST,
-            Self::InvalidRequest { .. } => axum::http::StatusCode::BAD_REQUEST,
-            Self::Validation(_) => axum::http::StatusCode::BAD_REQUEST,
-            Self::RateLimitExceeded => axum::http::StatusCode::TOO_MANY_REQUESTS,
-            Self::ServiceUnavailable { .. } => axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            Self::Repository(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Config(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::ConfigurationError(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Internal(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::CryptographicError(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::TokenStoreError { .. } => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::KeyGenerationError { .. } => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidToken(_) => axum::http::StatusCode::UNAUTHORIZED,
-            Self::AnomalyDetected => axum::http::StatusCode::TOO_MANY_REQUESTS,
-            Self::PolicyDenied => axum::http::StatusCode::FORBIDDEN,
-            Self::ApprovalRequired => axum::http::StatusCode::ACCEPTED,
-            Self::IdentityNotFound => axum::http::StatusCode::NOT_FOUND,
-            Self::IdentitySuspended => axum::http::StatusCode::FORBIDDEN,
-            Self::Forbidden { .. } => axum::http::StatusCode::FORBIDDEN,
-            Self::CircuitBreakerOpen => axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            Self::TimeoutError => axum::http::StatusCode::REQUEST_TIMEOUT,
+            Self::Auth(_) | Self::Unauthorized(_) | Self::UnauthorizedClient(_) | 
+            Self::InvalidToken(_) | Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
+            
+            Self::NotFound(_) | Self::IdentityNotFound | Self::UserNotFound => axum::http::StatusCode::NOT_FOUND,
+            
+            Self::BadRequest(_) | Self::InvalidRequest { .. } | Self::Validation(_) | 
             Self::ValidationError => axum::http::StatusCode::BAD_REQUEST,
-            Self::InternalError => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            
+            Self::Repository(_) | Self::Config(_) | Self::ConfigurationError(_) | 
+            Self::Internal(_) | Self::CryptographicError(_) | Self::TokenStoreError { .. } | 
+            Self::KeyGenerationError { .. } | Self::InternalError | Self::Crypto | 
+            Self::Session => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            
+            Self::PolicyDenied | Self::IdentitySuspended | Self::Forbidden { .. } | 
+            Self::UserInactive | Self::UserNotVerified => axum::http::StatusCode::FORBIDDEN,
+            
+            Self::RateLimitExceeded | Self::AnomalyDetected => axum::http::StatusCode::TOO_MANY_REQUESTS,
+            
+            Self::ServiceUnavailable { .. } | Self::CircuitBreakerOpen => axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            
+            Self::ApprovalRequired => axum::http::StatusCode::ACCEPTED,
+            Self::TimeoutError => axum::http::StatusCode::REQUEST_TIMEOUT,
             Self::InsufficientDataForBaseline => axum::http::StatusCode::PRECONDITION_FAILED,
             Self::ExternalService => axum::http::StatusCode::BAD_GATEWAY,
-            Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
-            Self::UserNotFound => axum::http::StatusCode::NOT_FOUND,
-            Self::UserInactive => axum::http::StatusCode::FORBIDDEN,
-            Self::UserNotVerified => axum::http::StatusCode::FORBIDDEN,
-            Self::Crypto => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Session => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

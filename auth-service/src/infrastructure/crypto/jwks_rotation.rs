@@ -379,7 +379,7 @@ impl JwksManager {
         Ok(header)
     }
 
-    /// Get encoding key for signing (EdDSA)
+    /// Get encoding key for signing (`EdDSA`)
     ///
     /// # Errors
     ///
@@ -408,7 +408,7 @@ impl JwksManager {
         }
     }
 
-    /// Get decoding key for validation (EdDSA)
+    /// Get decoding key for validation (`EdDSA`)
     ///
     /// # Errors
     ///

@@ -159,10 +159,10 @@ pub struct BehavioralAnomalyThresholds {
 /// When re-enabling:
 /// 1. Uncomment smartcore imports at the top of the file
 /// 2. Replace stub types with actual smartcore types:
-///    - classifier: Option<RandomForestClassifier<f64, i32, DenseMatrix<f64>, Vec<i32>>>
-///    - scaler: Option<StandardScaler<f64>>
-/// 3. Update ML training and prediction methods in start_model_trainer
-/// 4. Update extract_ml_features method to work with actual ML models
+///    - classifier: Option<`RandomForestClassifier<f64, i32, DenseMatrix<f64>, Vec<i32>`>
+///    - scaler: Option<`StandardScaler<f64>`>
+/// 3. Update ML training and prediction methods in `start_model_trainer`
+/// 4. Update `extract_ml_features` method to work with actual ML models
 #[derive(Debug)]
 pub struct BehavioralMLModel {
     // Machine learning components temporarily disabled
@@ -375,20 +375,24 @@ impl AdvancedBehavioralThreatDetector {
     
     /// Start all background processing tasks
     async fn start_background_tasks(&self) {
-        self.start_event_processor().await;
-        self.start_profile_updater().await;
-        self.start_threat_correlator().await;
-        self.start_model_trainer().await;
+        self.start_event_processor();
+        self.start_profile_updater();
+        self.start_threat_correlator();
+        self.start_model_trainer();
     }
 
     /// Initialize Redis connection
     async fn initialize_redis(&self) -> Result<(), redis::RedisError> {
-        let config = self.config.read().await;
-        let client = redis::Client::open(config.redis_config.url.as_str())?;
-        let manager = ConnectionManager::new(client).await?;
+        let manager = {
+            let config = self.config.read().await;
+            let client = redis::Client::open(config.redis_config.url.as_str())?;
+            ConnectionManager::new(client).await?
+        };
 
-        let mut redis_client = self.redis_client.lock().await;
-        *redis_client = Some(manager);
+        {
+            let mut redis_client = self.redis_client.lock().await;
+            *redis_client = Some(manager);
+        }
 
         info!("Redis connection established for threat hunting");
         Ok(())
@@ -396,34 +400,56 @@ impl AdvancedBehavioralThreatDetector {
 
     /// Load existing user profiles from Redis
     async fn load_user_profiles(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let redis_client = self.redis_client.lock().await;
-        if let Some(ref client) = *redis_client {
-            let config = self.config.read().await;
-            let pattern = format!("{}user_profile:*", config.redis_config.key_prefix);
+        let keys = {
+            let redis_client = self.redis_client.lock().await;
+            if let Some(ref client) = *redis_client {
+                let config = self.config.read().await;
+                let pattern = format!("{}user_profile:*", config.redis_config.key_prefix);
 
-            let keys: Vec<String> = redis::cmd("KEYS")
-                .arg(&pattern)
-                .query_async(&mut client.clone())
-                .await
-                .unwrap_or_default();
-
-            let mut profiles = self.user_profiles.write().await;
-            for key in keys {
-                let profile_data: Option<String> = redis::cmd("GET")
-                    .arg(&key)
+                let keys: Vec<String> = redis::cmd("KEYS")
+                    .arg(&pattern)
                     .query_async(&mut client.clone())
                     .await
                     .unwrap_or_default();
 
-                if let Some(data) = profile_data {
-                    if let Ok(profile) = serde_json::from_str::<UserBehaviorProfile>(&data) {
-                        profiles.insert(profile.user_id.clone(), profile);
-                    }
+                keys
+            } else {
+                return Ok(());
+            }
+        };
+
+        // Load profile data without holding redis lock
+        let mut profile_data_list = Vec::new();
+        {
+            let redis_client = self.redis_client.lock().await;
+            if let Some(ref client) = *redis_client {
+                for key in &keys {
+                    let profile_data: Option<String> = redis::cmd("GET")
+                        .arg(key)
+                        .query_async(&mut client.clone())
+                        .await
+                        .unwrap_or_default();
+                    profile_data_list.push(profile_data);
                 }
             }
+        }
 
+        // Process profiles without holding any locks
+        let parsed_profiles: Vec<UserBehaviorProfile> = profile_data_list
+            .into_iter()
+            .filter_map(|data| data)
+            .filter_map(|data| serde_json::from_str::<UserBehaviorProfile>(&data).ok())
+            .collect();
+
+        // Update profiles map with minimal lock scope
+        {
+            let mut profiles = self.user_profiles.write().await;
+            for profile in parsed_profiles {
+                profiles.insert(profile.user_id.clone(), profile);
+            }
             info!("Loaded {} user behavior profiles", profiles.len());
         }
+        
         Ok(())
     }
 
@@ -996,7 +1022,7 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Start event processing background task
-    async fn start_event_processor(&self) {
+    fn start_event_processor(&self) {
         let event_receiver = self.event_receiver.clone();
         let event_buffer = self.event_buffer.clone();
         let user_profiles = self.user_profiles.clone();
@@ -1076,7 +1102,7 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Start profile updater background task
-    async fn start_profile_updater(&self) {
+    fn start_profile_updater(&self) {
         let user_profiles = self.user_profiles.clone();
         let redis_client = self.redis_client.clone();
         let config = self.config.clone();
@@ -1114,7 +1140,7 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Start threat correlator background task
-    async fn start_threat_correlator(&self) {
+    fn start_threat_correlator(&self) {
         let active_threats = self.active_threats.clone();
         let threat_correlations = self.threat_correlations.clone();
 
@@ -1149,7 +1175,7 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Start ML model trainer background task
-    async fn start_model_trainer(&self) {
+    fn start_model_trainer(&self) {
         let _ml_models = self.ml_models.clone();
         let _event_buffer = self.event_buffer.clone();
 

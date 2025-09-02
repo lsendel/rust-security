@@ -259,16 +259,22 @@ impl SecureCryptoManager {
     /// - Key ID generation fails (`CryptoError::RandomGenerationFailed`)
     /// - New secure key generation fails (`CryptoError::KeyGenerationFailed`)
     pub async fn rotate_key(&self) -> Result<(), CryptoError> {
-        let mut current_key = self.current_key.write().await;
-        let mut old_keys = self.old_keys.write().await;
-
-        // Move current key to old keys
-        let old_key = current_key.clone();
-        old_keys.insert(old_key.id.clone(), old_key);
-
-        // Generate new key
+        // Generate new key first (outside of locks)
         let new_key_id = Self::generate_key_id()?;
-        *current_key = Self::generate_secure_key(new_key_id)?;
+        let new_key = Self::generate_secure_key(new_key_id)?;
+
+        // Atomically swap keys with minimal lock scope
+        {
+            let mut current_key = self.current_key.write().await;
+            let mut old_keys = self.old_keys.write().await;
+
+            // Move current key to old keys
+            let old_key = current_key.clone();
+            old_keys.insert(old_key.id.clone(), old_key);
+
+            // Set new key
+            *current_key = new_key;
+        }
 
         tracing::info!("Encryption key rotated successfully");
         Ok(())
@@ -276,16 +282,17 @@ impl SecureCryptoManager {
 
     /// Check if key should be rotated
     pub async fn should_rotate_key(&self) -> bool {
-        let current_key = self.current_key.read().await;
-        let age = chrono::Utc::now() - current_key.created_at;
+        let age = {
+            let current_key = self.current_key.read().await;
+            chrono::Utc::now() - current_key.created_at
+        };
         age > self.key_rotation_interval
     }
 
     /// Clean up old keys
     pub async fn cleanup_old_keys(&self, max_age: chrono::Duration) {
-        let mut old_keys = self.old_keys.write().await;
         let cutoff = chrono::Utc::now() - max_age;
-
+        let mut old_keys = self.old_keys.write().await;
         old_keys.retain(|_, key| key.created_at > cutoff);
         tracing::info!("Cleaned up old encryption keys");
     }

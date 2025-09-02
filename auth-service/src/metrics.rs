@@ -195,7 +195,7 @@ impl MetricsRegistry {
         Self::register_metrics(registry, all_metrics);
     }
 
-    /// Build the final MetricsRegistry struct
+    /// Build the final `MetricsRegistry` struct
     ///
     /// Constructs the MetricsRegistry with all metrics from the groups.
     ///

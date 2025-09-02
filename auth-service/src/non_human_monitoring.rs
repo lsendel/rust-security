@@ -173,48 +173,58 @@ impl NonHumanIdentityMonitor {
         success: bool,
         context: &RequestContext,
     ) -> Result<(), crate::shared::error::AppError> {
-        let mut metrics = self.metrics.write().await;
+        let country = self.geo_resolver.resolve_country(&context.source_ip).await;
 
-        let identity_metrics = metrics
-            .entry(identity.id)
-            .or_insert_with(|| NonHumanMetrics {
-                identity_id: identity.id,
-                identity_type: self.get_identity_type_string(&identity.identity_type),
-                total_requests: 0,
-                unique_endpoints: HashSet::new(),
-                request_rate_per_minute: 0.0,
-                avg_request_size: 0,
-                error_rate: 0.0,
-                geographic_distribution: HashMap::new(),
-                temporal_pattern: vec![],
-                last_activity: Utc::now(),
-                anomaly_score: 0.0,
-                risk_factors: vec![],
-            });
+        let should_check_anomalies;
+        {
+            let mut metrics = self.metrics.write().await;
 
-        // Update metrics
-        identity_metrics.total_requests += 1;
-        identity_metrics.last_activity = Utc::now();
+            let identity_metrics = metrics
+                .entry(identity.id)
+                .or_insert_with(|| NonHumanMetrics {
+                    identity_id: identity.id,
+                    identity_type: self.get_identity_type_string(&identity.identity_type),
+                    total_requests: 0,
+                    unique_endpoints: HashSet::new(),
+                    request_rate_per_minute: 0.0,
+                    avg_request_size: 0,
+                    error_rate: 0.0,
+                    geographic_distribution: HashMap::new(),
+                    temporal_pattern: vec![],
+                    last_activity: Utc::now(),
+                    anomaly_score: 0.0,
+                    risk_factors: vec![],
+                });
 
-        if !success {
-            identity_metrics.error_rate = identity_metrics
-                .error_rate
-                .mul_add(identity_metrics.total_requests as f64 - 1.0, 1.0)
-                / identity_metrics.total_requests as f64;
+            // Update metrics
+            identity_metrics.total_requests += 1;
+            identity_metrics.last_activity = Utc::now();
+
+            if !success {
+                identity_metrics.error_rate = identity_metrics
+                    .error_rate
+                    .mul_add(identity_metrics.total_requests as f64 - 1.0, 1.0)
+                    / identity_metrics.total_requests as f64;
+            }
+
+            // Update geographic distribution
+            if let Some(country) = country {
+                *identity_metrics
+                    .geographic_distribution
+                    .entry(country)
+                    .or_insert(0) += 1;
+            }
+
+            should_check_anomalies = identity.baseline_established;
         }
 
-        // Update geographic distribution
-        if let Some(country) = self.geo_resolver.resolve_country(&context.source_ip).await {
-            *identity_metrics
-                .geographic_distribution
-                .entry(country)
-                .or_insert(0) += 1;
-        }
-
-        // Check for anomalies
-        if identity.baseline_established {
-            self.check_authentication_anomalies(identity, identity_metrics, context)
-                .await?;
+        // Check for anomalies after releasing the metrics lock
+        if should_check_anomalies {
+            let mut metrics = self.metrics.write().await;
+            if let Some(identity_metrics) = metrics.get_mut(&identity.id) {
+                self.check_authentication_anomalies(identity, identity_metrics, context)
+                    .await?;
+            }
         }
 
         Ok(())
@@ -247,33 +257,41 @@ impl NonHumanIdentityMonitor {
             latency_ms,
         };
 
-        // Store activity log
-        let mut logs = self.activity_logs.write().await;
-        let identity_logs = logs
-            .entry(identity_id)
-            .or_insert_with(|| VecDeque::with_capacity(1000));
-
-        // Keep only recent logs
-        if identity_logs.len() >= 1000 {
-            identity_logs.pop_front();
-        }
-        identity_logs.push_back(activity.clone());
-
-        // Update metrics
-        let mut metrics = self.metrics.write().await;
-        if let Some(identity_metrics) = metrics.get_mut(&identity_id) {
-            identity_metrics
-                .unique_endpoints
-                .insert(endpoint.to_string());
-            identity_metrics.avg_request_size = ((identity_metrics.avg_request_size
-                * (identity_metrics.total_requests as usize - 1))
-                + request_size)
-                / identity_metrics.total_requests as usize;
-
-            // Calculate request rate
+        let rate_window_minutes = {
             let config = self.config.read().await;
-            let rate = self.calculate_request_rate(identity_logs, config.rate_window_minutes);
-            identity_metrics.request_rate_per_minute = rate;
+            config.rate_window_minutes
+        };
+
+        // Store activity log and get reference for rate calculation
+        let rate = {
+            let mut logs = self.activity_logs.write().await;
+            let identity_logs = logs
+                .entry(identity_id)
+                .or_insert_with(|| VecDeque::with_capacity(1000));
+
+            // Keep only recent logs
+            if identity_logs.len() >= 1000 {
+                identity_logs.pop_front();
+            }
+            identity_logs.push_back(activity.clone());
+
+            // Calculate request rate while we have the logs
+            self.calculate_request_rate(identity_logs, rate_window_minutes)
+        };
+
+        // Update metrics after releasing logs lock
+        {
+            let mut metrics = self.metrics.write().await;
+            if let Some(identity_metrics) = metrics.get_mut(&identity_id) {
+                identity_metrics
+                    .unique_endpoints
+                    .insert(endpoint.to_string());
+                identity_metrics.avg_request_size = ((identity_metrics.avg_request_size
+                    * (identity_metrics.total_requests as usize - 1))
+                    + request_size)
+                    / identity_metrics.total_requests as usize;
+                identity_metrics.request_rate_per_minute = rate;
+            }
         }
 
         Ok(())
@@ -324,20 +342,25 @@ impl NonHumanIdentityMonitor {
         &self,
         identity_id: Uuid,
     ) -> Result<BehavioralBaseline, crate::shared::error::AppError> {
-        let logs = self.activity_logs.read().await;
-        let metrics = self.metrics.read().await;
+        let (identity_logs, identity_metrics, min_requests_for_baseline) = {
+            let logs = self.activity_logs.read().await;
+            let metrics = self.metrics.read().await;
+            let config = self.config.read().await;
 
-        let identity_logs = logs
-            .get(&identity_id)
-            .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?;
+            let identity_logs = logs
+                .get(&identity_id)
+                .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?
+                .clone();
 
-        let identity_metrics = metrics
-            .get(&identity_id)
-            .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?;
+            let identity_metrics = metrics
+                .get(&identity_id)
+                .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?
+                .clone();
 
-        let config = self.config.read().await;
+            (identity_logs, identity_metrics, config.min_requests_for_baseline)
+        };
 
-        if identity_logs.len() < config.min_requests_for_baseline {
+        if identity_logs.len() < min_requests_for_baseline {
             return Err(crate::shared::error::AppError::InsufficientDataForBaseline);
         }
 
@@ -357,7 +380,7 @@ impl NonHumanIdentityMonitor {
 
         // Calculate typical hours
         let mut hour_counts = [0u32; 24];
-        for log in identity_logs {
+        for log in &identity_logs {
             let hour = log.timestamp.hour() as usize;
             hour_counts[hour] += 1;
         }
@@ -371,7 +394,7 @@ impl NonHumanIdentityMonitor {
 
         // Get typical source IPs
         let mut ip_counts: HashMap<String, u32> = HashMap::new();
-        for log in identity_logs {
+        for log in &identity_logs {
             *ip_counts.entry(log.source_ip.clone()).or_insert(0) += 1;
         }
 
