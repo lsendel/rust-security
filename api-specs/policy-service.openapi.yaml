@@ -312,13 +312,14 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
 
-  /v1/evaluate/batch:
+  /v1/authorize:
     post:
       tags:
         - Evaluation
-      summary: Batch evaluate
-      description: Evaluate multiple access requests in batch
-      operationId: batchEvaluate
+      summary: Authorize a single request using Cedar policies
+      description: |
+        Authorize a request. The `action` field expects a compact identifier describing the action to evaluate. Preferred format is "Domain::verb" (for example, "Document::read"). The service will attempt to parse the Action into a Cedar Action entity; parse failures return HTTP 400 with an error_type of "authorization_error".
+      operationId: authorize
       security:
         - bearerAuth: []
       requestBody:
@@ -326,45 +327,38 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BatchEvaluationRequest'
+              $ref: '#/components/schemas/AuthorizeRequest'
+            examples:
+              basic:
+                summary: Basic authorize example
+                value:
+                  request_id: "req-123"
+                  principal:
+                    type: "User"
+                    id: "user:alice"
+                  action: "Document::read"
+                  resource: "doc:42"
+                  context:
+                    client_id: "service-x"
       responses:
         '200':
-          description: Batch evaluation results
+          description: Authorization decision
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BatchEvaluationResponse'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /v1/evaluate/simulate:
-    post:
-      tags:
-        - Evaluation
-      summary: Simulate evaluation
-      description: Simulate policy evaluation for testing
-      operationId: simulateEvaluation
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SimulationRequest'
-      responses:
-        '200':
-          description: Simulation results
+                $ref: '#/components/schemas/AuthorizeResponse'
+        '400':
+          description: Invalid request parameters (e.g., action parse/validation failure)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimulationResponse'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /v1/templates:
     get:
@@ -717,54 +711,41 @@ components:
           type: object
           additionalProperties: true
 
-    EvaluationResponse:
-      type: object
-      properties:
-        allowed:
-          type: boolean
-        decision:
-          type: string
-          enum: [permit, deny, indeterminate, not_applicable]
-        reasons:
-          type: array
-          items:
-            type: string
-        applied_policies:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                format: uuid
-              name:
-                type: string
-              effect:
-                type: string
-                enum: [allow, deny]
-        evaluation_time_ms:
-          type: number
-
-    BatchEvaluationRequest:
+    AuthorizeRequest:
       type: object
       required:
-        - requests
+        - request_id
+        - principal
+        - action
+        - resource
       properties:
-        requests:
-          type: array
-          maxItems: 100
-          items:
-            $ref: '#/components/schemas/EvaluationRequest'
+        request_id:
+          type: string
+          description: Unique request identifier for tracing
+        principal:
+          type: object
+          description: Cedar entity describing the principal (type & id)
+          additionalProperties: true
+        action:
+          type: string
+          description: |
+            Action identifier. Preferred format is "Domain::verb" (e.g., "Document::read"). The service will accept simple values like "read" but recommends the namespaced form for clarity.
+          example: "Document::read"
+        resource:
+          type: object
+          description: Cedar entity or identifier for the resource being accessed
+          additionalProperties: true
+        context:
+          type: object
+          description: Additional contextual attributes (e.g., client_id, ip address)
+          additionalProperties: true
 
-    BatchEvaluationResponse:
+    AuthorizeResponse:
       type: object
       properties:
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/EvaluationResponse'
-        total_time_ms:
-          type: number
+        decision:
+          type: string
+          description: Decision string ("Allow" or "Deny")
 
     SimulationRequest:
       type: object

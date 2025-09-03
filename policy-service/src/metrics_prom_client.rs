@@ -155,7 +155,11 @@ pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
         let mut http_counts = REGISTRY.http_counts.lock().unwrap();
         *http_counts.entry(count_key).or_insert(0) += 1;
     }
-    let dur_key = format!("method=\"{}\",path=\"{}\"", escape(&method_label), escape(&path_label));
+    let dur_key = format!(
+        "method=\"{}\",path=\"{}\"",
+        escape(&method_label),
+        escape(&path_label)
+    );
     {
         let mut sum = REGISTRY.http_dur_sum.lock().unwrap();
         let mut cnt = REGISTRY.http_dur_count.lock().unwrap();
@@ -165,7 +169,11 @@ pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
 
     // record request size (sum/count) if known
     if req_size > 0 {
-        let key = format!("method=\\\"{}\\\",path=\\\"{}\\\"", escape(&method_label), escape(&path_label));
+        let key = format!(
+            "method=\\\"{}\\\",path=\\\"{}\\\"",
+            escape(&method_label),
+            escape(&path_label)
+        );
         let mut rsum = REGISTRY.http_req_size_sum.lock().unwrap();
         let mut rcnt = REGISTRY.http_req_size_count.lock().unwrap();
         *rsum.entry(key.clone()).or_insert(0.0) += req_size as f64;
@@ -179,7 +187,11 @@ pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok())
     {
-        let key = format!("method=\\\"{}\\\",path=\\\"{}\\\"", escape(&method_label), escape(&path_label));
+        let key = format!(
+            "method=\\\"{}\\\",path=\\\"{}\\\"",
+            escape(&method_label),
+            escape(&path_label)
+        );
         let mut ssum = REGISTRY.http_resp_size_sum.lock().unwrap();
         let mut scnt = REGISTRY.http_resp_size_count.lock().unwrap();
         *ssum.entry(key.clone()).or_insert(0.0) += len as f64;
@@ -214,7 +226,11 @@ pub async fn policy_metrics_handler() -> impl IntoResponse {
     out.push_str("# HELP policies_evaluated_total Policies evaluated per request\n");
     out.push_str("# TYPE policies_evaluated_total counter\n");
     for (ctx, val) in pe.iter() {
-        let _ = writeln!(out, "policies_evaluated_total{{context=\"{}\"}} {val}", escape(ctx));
+        let _ = writeln!(
+            out,
+            "policies_evaluated_total{{context=\"{}\"}} {val}",
+            escape(ctx)
+        );
     }
     drop(pe);
 
@@ -236,7 +252,10 @@ pub async fn policy_metrics_handler() -> impl IntoResponse {
     for (labels, sumv) in http_sum.iter() {
         let cntv = http_cnt.get(labels).copied().unwrap_or(0);
         let _ = writeln!(out, "http_request_duration_seconds_sum{{{labels}}} {sumv}");
-        let _ = writeln!(out, "http_request_duration_seconds_count{{{labels}}} {cntv}");
+        let _ = writeln!(
+            out,
+            "http_request_duration_seconds_count{{{labels}}} {cntv}"
+        );
     }
     drop(http_cnt);
     drop(http_sum);

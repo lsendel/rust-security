@@ -2,7 +2,14 @@
 //!
 //! A Rust-based replacement for the Python `compliance_report_generator.py`
 
-#![allow(clippy::cast_possible_truncation, clippy::unnecessary_wraps, clippy::unused_async, clippy::needless_pass_by_ref_mut, clippy::case_sensitive_file_extension_comparisons, clippy::too_many_lines)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::unnecessary_wraps,
+    clippy::unused_async,
+    clippy::needless_pass_by_ref_mut,
+    clippy::case_sensitive_file_extension_comparisons,
+    clippy::too_many_lines
+)]
 //! Generates comprehensive compliance reports for SOC 2, ISO 27001, GDPR, and other frameworks
 
 use anyhow::Result;
@@ -11,12 +18,15 @@ use clap::{Arg, Command};
 use compliance_tools::{
     prometheus_client::PrometheusClient,
     reporting::{AuditSummary, ComplianceReportData, ReportRenderer},
-    ClassificationLevel, ComplianceConfig, ComplianceFramework, ReportFormat, MetricsCollector, ImplementationStatus, EffectivenessLevel, SecurityMetric, ComplianceControl, SecurityIncident, RiskLevel,
+    ClassificationLevel, ComplianceConfig, ComplianceControl, ComplianceFramework,
+    EffectivenessLevel, ImplementationStatus, MetricsCollector, ReportFormat, RiskLevel,
+    SecurityIncident, SecurityMetric,
 };
 use std::path::PathBuf;
 use tracing::{error, info, warn};
 
 // Unused dependencies (required by workspace but not used in this binary)
+// These are kept for workspace consistency and potential future use
 use calamine as _;
 use common as _;
 use config as _;
@@ -40,7 +50,13 @@ use uuid as _;
 use walkdir as _;
 
 #[tokio::main]
-#[allow(clippy::cast_possible_truncation, clippy::unnecessary_wraps, clippy::unused_async, clippy::needless_pass_by_ref_mut, clippy::case_sensitive_file_extension_comparisons)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::unnecessary_wraps,
+    clippy::unused_async,
+    clippy::needless_pass_by_ref_mut,
+    clippy::case_sensitive_file_extension_comparisons
+)]
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()

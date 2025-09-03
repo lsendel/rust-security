@@ -1,0 +1,489 @@
+//! Integration security tests for auth-core
+//!
+//! End-to-end security testing including:
+//! - OWASP Top 10 vulnerability testing
+//! - Authentication bypass attempts
+//! - Protocol-level security validation
+
+/* Integration tests temporarily disabled
+use auth_core::prelude::*;
+use serde_json::Value;
+use std::collections::HashMap;
+use tokio::test;
+
+#[tokio::test]
+async fn test_owasp_a1_injection_attacks() {
+    // OWASP A1: Injection - Test various injection attack vectors
+    let server = AuthServer::minimal()
+        .with_client("test_client", "test_secret")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test SQL injection attempts
+    let sql_injection_payloads = vec![
+        "'; DROP TABLE clients; --",
+        "' OR '1'='1",
+        "'; UPDATE clients SET client_secret = 'hacked'; --",
+        "admin'/*",
+        "' UNION SELECT * FROM clients --",
+    ];
+
+    for payload in sql_injection_payloads {
+        let response = client
+            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", payload),
+                ("client_secret", "test_secret"),
+            ])
+            .send()
+            .await
+            .expect("Failed to send SQL injection test");
+
+        // Should return 401 (invalid client), never succeed or crash
+        assert!(response.status() == 401, "SQL injection vulnerability with payload: {}", payload);
+
+        // Should return proper error response
+        let response_text = response.text().await.unwrap_or_default();
+        let error_json: Result<Value, _> = serde_json::from_str(&response_text);
+        assert!(error_json.is_ok(), "Invalid JSON response to injection: {}", payload);
+    }
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_owasp_a2_broken_authentication() {
+    // OWASP A2: Broken Authentication - Test authentication bypass attempts
+    let server = AuthServer::minimal()
+        .with_client("valid_client", "secure_secret")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test authentication bypass attempts
+    let bypass_attempts = vec![
+        // Empty credentials
+        ("", ""),
+        // Null bytes
+        ("valid_client\0", "secure_secret"),
+        ("valid_client", "secure_secret\0"),
+        // Case sensitivity bypass
+        ("VALID_CLIENT", "secure_secret"),
+        ("valid_client", "SECURE_SECRET"),
+        // Unicode normalization attacks
+        ("valid_client", "secure_secret"),
+        // Length extension attempts
+        ("valid_client", "secure_secret_extended"),
+        // Timing attack setup (same length wrong password)
+        ("valid_client", "different_secret"),
+    ];
+
+    for (client_id, client_secret) in bypass_attempts {
+        let response = client
+            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+            ])
+            .send()
+            .await
+            .expect("Failed to send authentication bypass test");
+
+        // All should fail authentication
+        assert_eq!(
+            response.status(),
+            401,
+            "Authentication bypass with: '{}'/'{}'",
+            client_id,
+            client_secret
+        );
+    }
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_owasp_a3_sensitive_data_exposure() {
+    // OWASP A3: Sensitive Data Exposure - Ensure no sensitive data leaks
+    let server = AuthServer::minimal()
+        .with_client("test_client", "super_secret_password_123")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test information disclosure through error messages
+    let error_inducing_requests = vec![
+        // Invalid grant type
+        vec![("grant_type", "invalid"), ("client_id", "test_client"), ("client_secret", "wrong")],
+        // Missing parameters
+        vec![("grant_type", "client_credentials")],
+        // Invalid client
+        vec![
+            ("grant_type", "client_credentials"),
+            ("client_id", "nonexistent"),
+            ("client_secret", "super_secret_password_123"),
+        ],
+    ];
+
+    for form_data in error_inducing_requests {
+        let response = client
+            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+            .form(&form_data)
+            .send()
+            .await
+            .expect("Failed to send error test");
+
+        let response_text = response.text().await.unwrap_or_default();
+
+        // Should not expose sensitive data in errors
+        assert!(
+            !response_text.contains("super_secret_password_123"),
+            "Client secret leaked in error response: {}",
+            response_text
+        );
+        assert!(
+            !response_text.contains("password"),
+            "Password reference in error response: {}",
+            response_text
+        );
+        assert!(
+            !response_text.contains("secret"),
+            "Secret reference in error response: {}",
+            response_text
+        );
+
+        // Should not expose internal paths or stack traces
+        assert!(!response_text.contains("/src/"), "Source path leaked: {}", response_text);
+        assert!(!response_text.contains("panic"), "Panic information leaked: {}", response_text);
+    }
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_owasp_a5_broken_access_control() {
+    // OWASP A5: Broken Access Control - Test privilege escalation attempts
+    let server = AuthServer::minimal()
+        .with_client("client_a", "secret_a")
+        .with_client("client_b", "secret_b")
+        .with_scope("read")
+        .with_scope("write")
+        .with_scope("admin")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test scope escalation attempts
+    let escalation_attempts = vec![
+        "admin",                 // Try to get admin scope
+        "read write admin",      // Try to get all scopes
+        "read admin write",      // Different order
+        "*",                     // Wildcard attempt
+        "read,write,admin",      // Comma separated
+        "read;write;admin",      // Semicolon separated
+        "../admin",              // Path traversal in scope
+        "scope injection admin", // Injection attempt
+    ];
+
+    for scope_attempt in escalation_attempts {
+        let response = client
+            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", "client_a"),
+                ("client_secret", "secret_a"),
+                ("scope", scope_attempt),
+            ])
+            .send()
+            .await
+            .expect("Failed to send scope escalation test");
+
+        if response.status() == 200 {
+            let token_data: Value = response.json().await.unwrap();
+            if let Some(granted_scope) = token_data.get("scope") {
+                let granted_str = granted_scope.as_str().unwrap();
+
+                // Should not grant unauthorized admin scope
+                assert!(
+                    !granted_str.contains("admin"),
+                    "Unauthorized admin scope granted for: {}",
+                    scope_attempt
+                );
+            }
+        }
+    }
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_owasp_a6_security_misconfiguration() {
+    // OWASP A6: Security Misconfiguration - Test for insecure defaults
+    let server = AuthServer::minimal()
+        .with_client("test_client", "test_secret")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test security headers
+    let response = client
+        .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+        .form(&[
+            ("grant_type", "client_credentials"),
+            ("client_id", "test_client"),
+            ("client_secret", "test_secret"),
+        ])
+        .send()
+        .await
+        .expect("Failed to send security header test");
+
+    let headers = response.headers();
+
+    // Check for security headers
+    assert!(headers.contains_key("content-type"), "Missing Content-Type header");
+
+    // Test that server doesn't expose version info
+    assert!(
+        !headers.contains_key("server")
+            || !headers.get("server").unwrap().to_str().unwrap().contains("auth-core"),
+        "Server version information exposed"
+    );
+
+    // Test various HTTP methods are properly restricted
+    let methods = vec!["GET", "PUT", "DELETE", "PATCH", "HEAD"];
+
+    for method in methods {
+        let response = match method {
+            "GET" => {
+                client.get(format!("http://127.0.0.1:{}/oauth/token", addr.port())).send().await
+            }
+            "PUT" => {
+                client.put(format!("http://127.0.0.1:{}/oauth/token", addr.port())).send().await
+            }
+            "DELETE" => {
+                client.delete(format!("http://127.0.0.1:{}/oauth/token", addr.port())).send().await
+            }
+            "PATCH" => {
+                client.patch(format!("http://127.0.0.1:{}/oauth/token", addr.port())).send().await
+            }
+            "HEAD" => {
+                client.head(format!("http://127.0.0.1:{}/oauth/token", addr.port())).send().await
+            }
+            _ => continue,
+        };
+
+        if let Ok(resp) = response {
+            assert_eq!(
+                resp.status(),
+                405, // Method Not Allowed
+                "{} method should not be allowed",
+                method
+            );
+        }
+    }
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_owasp_a10_insufficient_logging() {
+    // OWASP A10: Insufficient Logging & Monitoring
+    // Test that security events would be logged (we can't test actual logging without setup)
+    let server = AuthServer::minimal()
+        .with_client("test_client", "test_secret")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Generate events that should be logged
+    let security_events = vec![
+        // Failed authentication attempts
+        ("client_credentials", "invalid_client", "wrong_secret"),
+        ("client_credentials", "test_client", "wrong_secret"),
+        ("client_credentials", "test_client", "test_secret"), // Success
+        ("invalid_grant", "test_client", "test_secret"),      // Invalid grant type
+    ];
+
+    for (grant_type, client_id, client_secret) in security_events {
+        let response = client
+            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+            .form(&[
+                ("grant_type", grant_type),
+                ("client_id", client_id),
+                ("client_secret", client_secret),
+            ])
+            .send()
+            .await
+            .expect("Failed to send logging test");
+
+        // All requests should be handled (no crashes)
+        assert!(
+            response.status().as_u16() < 500,
+            "Server error during security event: {} {} {}",
+            grant_type,
+            client_id,
+            client_secret
+        );
+    }
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_protocol_compliance_security() {
+    // Test OAuth 2.0 protocol-level security requirements
+    let server = AuthServer::minimal()
+        .with_client("protocol_client", "protocol_secret")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test client_id parameter handling
+    let response = client
+        .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+        .form(&[
+            ("grant_type", "client_credentials"),
+            ("client_id", "protocol_client"),
+            ("client_secret", "protocol_secret"),
+        ])
+        .send()
+        .await
+        .expect("Failed to send protocol test");
+
+    assert_eq!(response.status(), 200);
+
+    let token_data: Value = response.json().await.unwrap();
+
+    // RFC 6749: access_token is REQUIRED
+    assert!(token_data.get("access_token").is_some(), "access_token is required per RFC 6749");
+
+    // RFC 6749: token_type is REQUIRED
+    assert_eq!(
+        token_data.get("token_type").unwrap(),
+        "Bearer",
+        "token_type must be Bearer per RFC 6750"
+    );
+
+    // RFC 6749: expires_in is RECOMMENDED
+    assert!(token_data.get("expires_in").is_some(), "expires_in should be provided per RFC 6749");
+
+    // Token must not contain sensitive information
+    let access_token = token_data.get("access_token").unwrap().as_str().unwrap();
+    assert!(
+        !access_token.contains("protocol_secret"),
+        "Access token must not contain client secret"
+    );
+    assert!(
+        !access_token.contains("protocol_client"),
+        "Access token should not contain client_id directly"
+    );
+
+    server_handle.abort();
+}
+
+#[tokio::test]
+async fn test_denial_of_service_protection() {
+    // Test DoS attack resistance
+    let server = AuthServer::minimal()
+        .with_client("dos_client", "dos_secret")
+        .build()
+        .expect("Failed to build server");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, server.into_make_service()).await.unwrap();
+    });
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let client = reqwest::Client::new();
+
+    // Test rapid sequential requests
+    let start = std::time::Instant::now();
+    for _ in 0..50 {
+        let response = client
+            .post(format!("http://127.0.0.1:{}/oauth/token", addr.port()))
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", "dos_client"),
+                ("client_secret", "dos_secret"),
+            ])
+            .send()
+            .await;
+
+        // Server should handle all requests without crashing
+        match response {
+            Ok(resp) => assert!(resp.status().as_u16() < 500, "Server error during DoS test"),
+            Err(_) => {
+                // Connection errors are acceptable under load
+                break;
+            }
+        }
+    }
+    let duration = start.elapsed();
+
+    // Should complete within reasonable time (not hang indefinitely)
+    assert!(duration.as_secs() < 30, "DoS test took too long: {:?}", duration);
+
+    server_handle.abort();
+}
+*/

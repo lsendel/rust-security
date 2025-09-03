@@ -2,7 +2,6 @@
 use auth_service::infrastructure::crypto::keys;
 use auth_service::storage::store::hybrid::TokenStore;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use jsonwebtoken::EncodingKey;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +10,7 @@ use tokio::sync::RwLock;
 
 // Benchmark token store operations
 fn bench_token_store_operations(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = Runtime::new().expect("Failed to create tokio runtime for benchmarks");
 
     // Setup in-memory store
     let in_memory_store = TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new())));
@@ -25,7 +24,7 @@ fn bench_token_store_operations(c: &mut Criterion) {
         b.iter(|| {
             let token = format!("token_{}", 42u64);
             rt.block_on(in_memory_store.set_active(&token, true, Some(3600)))
-                .unwrap();
+                .expect("Failed to set token active in benchmark");
             black_box(());
         });
     });
@@ -39,7 +38,10 @@ fn bench_token_store_operations(c: &mut Criterion) {
                 let _ = rt.block_on(in_memory_store.set_active(&token, true, Some(3600)));
             }
             let token = "bench_token_50".to_string();
-            black_box(rt.block_on(in_memory_store.get_active(&token)).unwrap());
+            black_box(
+                rt.block_on(in_memory_store.get_active(&token))
+                    .expect("Failed to get token active status in benchmark"),
+            );
         });
     });
 
@@ -48,24 +50,17 @@ fn bench_token_store_operations(c: &mut Criterion) {
 
 // Benchmark JWT operations
 fn bench_jwt_operations(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = Runtime::new().expect("Failed to create tokio runtime for JWT benchmarks");
 
     let mut group = c.benchmark_group("jwt_operations");
 
     group.bench_function("rsa_key_generation", |b| {
         b.iter(|| {
             // Handle Result return type properly
-            rt
-                .block_on(keys::current_signing_key())
-                .map_or_else(
-                    |_| {
-                        black_box((
-                            "error".to_string(),
-                            EncodingKey::from_secret("fallback".as_ref()),
-                        ))
-                    },
-                    black_box,
-                );
+            rt.block_on(keys::current_signing_key()).map_or_else(
+                |_| black_box(("error".to_string(), "fallback_key".to_string())),
+                |(key_id, _)| black_box((key_id, "dummy_key".to_string())),
+            );
         });
     });
 
@@ -130,8 +125,35 @@ fn bench_mfa_operations(c: &mut Criterion) {
     // Note: These would need to be adapted based on the actual MFA implementation
     group.bench_function("totp_generation", |b| {
         b.iter(|| {
-            // Simulate TOTP generation - would need actual implementation
-            black_box("123456".to_string());
+            // Generate actual TOTP using HMAC-SHA1
+            use hmac::{Hmac, Mac};
+            use sha1::Sha1;
+            use std::time::{SystemTime, UNIX_EPOCH};
+
+            let secret = "JBSWY3DPEHPK3PXP"; // Standard TOTP test secret
+            let time_step = 30; // Standard TOTP time step
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs();
+            let time_counter = current_time / time_step;
+
+            let mut mac = Hmac::<Sha1>::new_from_slice(secret.as_bytes())
+                .expect("HMAC can take key of any size");
+
+            mac.update(&time_counter.to_be_bytes());
+            let result = mac.finalize();
+            let hash = result.into_bytes();
+
+            // Extract 4 bytes from hash for TOTP (standard algorithm)
+            let offset = (hash[hash.len() - 1] & 0xf) as usize;
+            let code = (u32::from(hash[offset] & 0x7f)) << 24
+                | (u32::from(hash[offset + 1])) << 16
+                | (u32::from(hash[offset + 2])) << 8
+                | u32::from(hash[offset + 3]);
+
+            let totp = format!("{:06}", code % 1_000_000);
+            black_box(totp);
         });
     });
 
@@ -157,8 +179,41 @@ fn bench_scim_operations(c: &mut Criterion) {
             filter,
             |b, filter| {
                 b.iter(|| {
-                    // Would need to expose the parse_scim_filter function
-                    black_box(filter.len());
+                    // Basic SCIM filter parsing simulation
+                    // Parse filter expressions like "userName eq \"john\""
+                    let parts: Vec<&str> = filter.split_whitespace().collect();
+                    let mut result = Vec::new();
+
+                    for &part in &parts {
+                        if part.starts_with('"') && part.ends_with('"') {
+                            // Extract string literal
+                            let literal = &part[1..part.len() - 1];
+                            result.push(literal.to_string());
+                        } else if part == "eq"
+                            || part == "ne"
+                            || part == "co"
+                            || part == "sw"
+                            || part == "ew"
+                            || part == "gt"
+                            || part == "lt"
+                            || part == "ge"
+                            || part == "le"
+                        {
+                            // Operator
+                            result.push(part.to_string());
+                        } else if part == "and" || part == "or" || part == "not" {
+                            // Logical operator
+                            result.push(part.to_string());
+                        } else if part == "pr" {
+                            // Present operator
+                            result.push("present".to_string());
+                        } else {
+                            // Attribute name
+                            result.push(part.to_string());
+                        }
+                    }
+
+                    black_box(result);
                 });
             },
         );
@@ -173,10 +228,36 @@ fn bench_rate_limiting(c: &mut Criterion) {
 
     group.bench_function("rate_limit_check", |b| {
         b.iter(|| {
-            // Simulate rate limiting logic
-            use std::time::Instant;
+            // Simulate token bucket rate limiting algorithm
+            use std::collections::HashMap;
+            use std::time::{Duration, Instant};
+
+            let mut token_buckets: HashMap<&str, (u32, Instant)> = HashMap::new();
+            let rate_limit = 100; // requests per minute
+            let refill_interval = Duration::from_secs(60);
+            let client_id = "test_client";
+
+            // Get or create token bucket
+            let (tokens, last_refill) = token_buckets
+                .entry(client_id)
+                .or_insert_with(|| (rate_limit, Instant::now()));
+
+            // Refill tokens based on time passed
             let now = Instant::now();
-            black_box(now.elapsed().as_millis());
+            let time_passed = now.duration_since(*last_refill);
+            let tokens_to_add =
+                (time_passed.as_secs() * u64::from(rate_limit)) / refill_interval.as_secs();
+
+            *tokens = (*tokens + u32::try_from(tokens_to_add).unwrap_or(u32::MAX)).min(rate_limit);
+            *last_refill = now;
+
+            // Check if request is allowed
+            let allowed = *tokens > 0;
+            if allowed {
+                *tokens -= 1;
+            }
+
+            black_box(allowed);
         });
     });
 
@@ -185,7 +266,7 @@ fn bench_rate_limiting(c: &mut Criterion) {
 
 // Benchmark concurrent operations
 fn bench_concurrent_operations(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = Runtime::new().expect("Failed to create tokio runtime for concurrent benchmarks");
 
     let mut group = c.benchmark_group("concurrent_operations");
     group.measurement_time(Duration::from_secs(10));
@@ -213,7 +294,7 @@ fn bench_concurrent_operations(c: &mut Criterion) {
 
 // Memory usage benchmark
 fn bench_memory_usage(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = Runtime::new().expect("Failed to create tokio runtime for memory benchmarks");
 
     let mut group = c.benchmark_group("memory_usage");
     group.measurement_time(Duration::from_secs(5));

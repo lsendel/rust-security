@@ -64,3 +64,18 @@ fn internal_group_maps_to_500() {
     assert_eq!(e2.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(e3.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
 }
+
+#[test]
+fn rate_limit_and_service_unavailable_map_correctly() {
+    let e1 = AppError::RateLimitExceeded {
+        client_id: "c1".into(),
+    };
+    let e2 = AppError::ServiceUnavailable {
+        reason: "downstream".into(),
+    };
+    assert_eq!(e1.status_code(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(e2.status_code(), StatusCode::SERVICE_UNAVAILABLE);
+
+    assert_eq!(e1.error_type(), "rate_limit_exceeded");
+    assert_eq!(e2.error_type(), "service_unavailable");
+}

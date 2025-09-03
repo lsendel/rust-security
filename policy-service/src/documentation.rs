@@ -27,9 +27,9 @@ use crate::{AuthorizeRequest, AuthorizeResponse};
         (url = "https://api.example.com", description = "Production server")
     ),
     paths(
-        crate::authorize,
-        crate::health_check,
-        crate::get_metrics,
+        crate::handlers::authorize,
+        crate::handlers::health_check,
+        crate::handlers::get_metrics,
     ),
     components(
         schemas(

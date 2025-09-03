@@ -1,0 +1,21 @@
+use crate::threat_user_profiler::config::{RiskAggregationMethod, RiskScoringConfig};
+use crate::threat_user_profiler::types::RiskFactor;
+#[derive(Clone)]
+pub struct RiskScoringAlgorithm;
+impl RiskScoringAlgorithm {
+    #[must_use]
+    pub fn new(_config: RiskScoringConfig) -> Self {
+        Self
+    }
+    pub async fn calculate_overall_risk(
+        &self,
+        risk_factors: &[RiskFactor],
+        _method: &RiskAggregationMethod,
+    ) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
+        let total_score: f64 = risk_factors
+            .iter()
+            .map(|rf| rf.risk_score * rf.weight)
+            .sum();
+        Ok(total_score.min(1.0))
+    }
+}

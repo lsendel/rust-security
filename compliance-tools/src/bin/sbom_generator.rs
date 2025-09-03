@@ -1,4 +1,12 @@
-#![allow(clippy::print_stdout, clippy::missing_errors_doc, clippy::unused_self, clippy::unnecessary_wraps, clippy::struct_field_names, clippy::ref_option, clippy::option_if_let_else)]
+#![allow(
+    clippy::print_stdout,
+    clippy::missing_errors_doc,
+    clippy::unused_self,
+    clippy::unnecessary_wraps,
+    clippy::struct_field_names,
+    clippy::ref_option,
+    clippy::option_if_let_else
+)]
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -508,7 +516,15 @@ impl SbomGenerator {
     }
 }
 
-#[allow(clippy::print_stdout, clippy::missing_errors_doc, clippy::unused_self, clippy::unnecessary_wraps, clippy::struct_field_names, clippy::ref_option, clippy::option_if_let_else)]
+#[allow(
+    clippy::print_stdout,
+    clippy::missing_errors_doc,
+    clippy::unused_self,
+    clippy::unnecessary_wraps,
+    clippy::struct_field_names,
+    clippy::ref_option,
+    clippy::option_if_let_else
+)]
 fn main() -> Result<()> {
     let matches = Command::new("sbom_generator")
         .about("Generate SBOM for Rust project")

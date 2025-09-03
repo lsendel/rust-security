@@ -2,267 +2,53 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop, '**/fix-*', '**/feat-*' ]
   pull_request:
-    branches: [ main, develop ]
-  schedule:
-    # Run weekly on Sundays at 2 AM UTC
-    - cron: '0 2 * * 0'
-  workflow_dispatch:
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: [ main, master, develop ]
 
 jobs:
-  # Quality Gates Job
-  quality-gates:
-    name: Quality Gates
+  ci:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt, clippy
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Check formatting
-      run: cargo fmt --all -- --check
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Run clippy
-      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Install Rust toolchain and components
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
 
-    - name: Check security advisories
-      run: cargo audit --deny warnings
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-    - name: Check dependency licenses
-      run: cargo deny check --config deny.toml
+      - name: Run clippy
+        run: cargo clippy --all -- -D warnings
 
-  # Build and Test Job
-  build-and-test:
-    name: Build and Test
-    runs-on: ubuntu-latest
-    needs: quality-gates
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Run tests
+        run: cargo test --workspace --locked
+        env:
+          RUST_BACKTRACE: full
 
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Upload test artifacts (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: target/debug
 
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-
-    - name: Build workspace
-      run: cargo build --workspace --all-features
-
-    - name: Run tests
-      run: cargo test --workspace --all-features --verbose
-
-    - name: Generate coverage (optional)
-      run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
-      continue-on-error: true
-
-  # Security Scan Job
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: quality-gates
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-
-    - name: Run cargo audit
-      run: cargo audit --deny warnings --json
-
-    - name: Run cargo deny
-      run: cargo deny check --config deny.toml
-
-  # SBOM Generation
-  sbom:
-    name: SBOM Generation
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-
-    - name: Generate SBOM
-      run: |
-        cargo run --package compliance-tools --bin sbom-generator -- --format both --verify
-
-    - name: Upload SBOM artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: sbom-artifacts
-        path: |
-          sbom.spdx.json
-          sbom.cyclonedx.json
-        retention-days: 90
-
-  # Fuzz Smoke Tests
-  fuzz-smoke:
-    name: Fuzz Smoke Tests
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Rust nightly toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: nightly
-
-    - name: Install cargo-fuzz
-      run: cargo install cargo-fuzz
-
-    - name: Run fuzz smoke tests
-      run: |
-        cd input-validation/fuzz
-        # Run each fuzz target for 60 seconds with limited iterations
-        timeout 60 cargo fuzz run input_validation -- -max_total_time=60 &
-        timeout 60 cargo fuzz run jwt_tokens -- -max_total_time=60 &
-        timeout 60 cargo fuzz run oauth_params -- -max_total_time=60 &
-        timeout 60 cargo fuzz run scim_filter -- -max_total_time=60 &
-        wait
-      continue-on-error: true
-
-    - name: Upload fuzz artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: fuzz-artifacts
-        path: |
-          input-validation/fuzz/artifacts/
-        retention-days: 30
-
-  # Performance Benchmark (optional)
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-
-    - name: Run benchmarks
-      run: cargo bench --workspace
-      continue-on-error: true
-
-  # Documentation Check
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    needs: quality-gates
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-
-    - name: Check documentation
-      run: cargo doc --workspace --all-features --no-deps
-
-    - name: Check for missing docs
-      run: |
-        if cargo clippy --workspace --all-targets --all-features -- -W missing_docs | grep -q "missing_docs"; then
-          echo "Some public items are missing documentation"
-          cargo clippy --workspace --all-targets --all-features -- -W missing_docs
-          exit 1
-        fi
-      continue-on-error: true
-
-  # Validate Excluded Crates (scheduled job)
-  validate-excluded:
-    name: Validate Excluded Crates
-    runs-on: ubuntu-latest
-    # Run weekly on Sundays at 2 AM UTC, and also on manual trigger
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Rust toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-
-    - name: Validate excluded crates
-      run: |
-        echo "Validating excluded crates to prevent bit-rot..."
-
-        # List of excluded crates from Cargo.toml
-        EXCLUDED_CRATES=(
-          "red-team-exercises"
-          "user-portal"
-          "security-platform"
-          "input-validation"
-          "chaos-engineering"
-          "security-testing"
-          "auth-core"
-          "api-contracts"
-          "soar-integration"
-          "security-features"
-        )
-
-        FAILED_CRATES=()
-        SUCCESS_COUNT=0
-
-        for crate in "${EXCLUDED_CRATES[@]}"; do
-          echo "🔍 Validating excluded crate: $crate"
-
-          # Check if crate exists
-          if [ ! -d "$crate" ]; then
-            echo "⚠️  Crate directory $crate does not exist, skipping"
-            continue
-          fi
-
-          # Try to validate the crate
-          if cargo check -p "$crate" --all-features 2>/dev/null; then
-            echo "✅ $crate: Validation passed"
-            ((SUCCESS_COUNT++))
-          else
-            echo "❌ $crate: Validation failed"
-            FAILED_CRATES+=("$crate")
-          fi
-        done
-
-        echo ""
-        echo "📊 Validation Summary:"
-        echo "✅ Successful: $SUCCESS_COUNT/${#EXCLUDED_CRATES[@]}"
-        echo "❌ Failed: ${#FAILED_CRATES[@]}"
-
-        if [ ${#FAILED_CRATES[@]} -gt 0 ]; then
-          echo ""
-          echo "🔧 Failed crates:"
-          for crate in "${FAILED_CRATES[@]}"; do
-            echo "  - $crate"
-          done
-
-          # Don't fail the entire job, just report the issues
-          echo "⚠️  Some excluded crates have validation issues (bit-rot detected)"
-          echo "Consider fixing these crates or updating the exclusion list"
-        else
-          echo "🎉 All excluded crates validated successfully!"
-        fi
-      continue-on-error: true

@@ -3,7 +3,14 @@
 //! A Rust-based replacement for the Python `validate_threat_feeds.py`
 //! Validates threat intelligence feeds configuration and accessibility
 
-#![allow(clippy::print_stdout, clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::case_sensitive_file_extension_comparisons, clippy::cast_lossless)]
+#![allow(
+    clippy::print_stdout,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::case_sensitive_file_extension_comparisons,
+    clippy::cast_lossless
+)]
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -39,7 +46,12 @@ use uuid as _;
 use walkdir as _;
 
 #[tokio::main]
-#[allow(clippy::too_many_lines, clippy::print_stdout, clippy::case_sensitive_file_extension_comparisons, clippy::cast_lossless)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::print_stdout,
+    clippy::case_sensitive_file_extension_comparisons,
+    clippy::cast_lossless
+)]
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
@@ -285,7 +297,11 @@ fn output_table_report(report: &ValidationReport, verbose: bool) {
 }
 
 /// Format bytes in human readable format
-#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
     let mut size = bytes as f64;
@@ -390,14 +406,16 @@ impl ThreatFeedValidator {
         }
 
         // Validate URL
-        let url = if let Some(url_str) = &config.url { match Url::parse(url_str) {
-            Ok(url) => url,
-            Err(e) => {
-                result.status = ValidationStatus::Failed;
-                result.errors.push(format!("Invalid URL: {e}"));
-                return result;
+        let url = if let Some(url_str) = &config.url {
+            match Url::parse(url_str) {
+                Ok(url) => url,
+                Err(e) => {
+                    result.status = ValidationStatus::Failed;
+                    result.errors.push(format!("Invalid URL: {e}"));
+                    return result;
+                }
             }
-        } } else {
+        } else {
             result.status = ValidationStatus::Failed;
             result.errors.push("No URL configured".to_string());
             return result;
@@ -447,9 +465,7 @@ impl ThreatFeedValidator {
                     result.response_time_ms = start_time.elapsed().as_millis() as u64;
                 }
                 result.status = ValidationStatus::Failed;
-                result
-                    .errors
-                    .push(format!("Connectivity test failed: {e}"));
+                result.errors.push(format!("Connectivity test failed: {e}"));
             }
         }
 
