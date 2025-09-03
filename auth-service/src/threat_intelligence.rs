@@ -1,5 +1,4 @@
 use crate::core::security::{SecurityEvent, ViolationSeverity};
-#[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
 use crate::threat_types::{
     AttackPhase, IndicatorType, MitigationAction, ThreatIndicator, ThreatSeverity, ThreatType,
@@ -1451,7 +1450,6 @@ impl ThreatIntelligenceCorrelator {
     }
 }
 
-#[cfg(feature = "threat-hunting")]
 #[async_trait::async_trait]
 impl ThreatDetectionAdapter for ThreatIntelligenceCorrelator {
     async fn process_security_event(

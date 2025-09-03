@@ -83,8 +83,7 @@ pub fn sanitize_for_logging(input: &str) -> String {
     for pattern in SECRET_PATTERNS.iter() {
         sanitized = pattern
             .replace_all(&sanitized, |caps: &regex::Captures<'_>| {
-                let full_match = caps.get(0).unwrap().as_str();
-
+                let full_match = caps.get(0).map_or("", |m| m.as_str());
                 // Find the value part (after = or :)
                 full_match.find([':', '=']).map_or_else(
                     || "[REDACTED]".to_string(),
@@ -107,28 +106,29 @@ pub fn sanitize_for_logging(input: &str) -> String {
 
 /// Sanitize Bearer tokens in Authorization headers
 fn sanitize_bearer_tokens(input: &str) -> String {
-    let bearer_regex = regex::Regex::new(r"(?i)bearer\s+[^\s]+").unwrap();
-    bearer_regex
-        .replace_all(input, "Bearer [REDACTED]")
-        .to_string()
+    regex::Regex::new(r"(?i)bearer\s+[^\s]+").map_or_else(
+        |_| input.to_string(),
+        |re| re.replace_all(input, "Bearer [REDACTED]").to_string(),
+    )
 }
 
 /// Sanitize connection strings with credentials
 fn sanitize_connection_strings(input: &str) -> String {
-    let conn_regex = regex::Regex::new(r"(?i)(postgresql|mysql|redis)://([^:]+):([^@]+)@").unwrap();
-    conn_regex
-        .replace_all(input, "$1://[REDACTED]:[REDACTED]@")
-        .to_string()
+    regex::Regex::new(r"(?i)(postgresql|mysql|redis)://([^:]+):([^@]+)@").map_or_else(
+        |_| input.to_string(),
+        |re| {
+            re.replace_all(input, "$1://[REDACTED]:[REDACTED]@")
+                .to_string()
+        },
+    )
 }
 
 /// Sanitize JSON-like fields
 fn sanitize_json_fields(input: &str) -> String {
-    let json_regex =
-        regex::Regex::new(r#""([^"]*(?:password|secret|token|key)[^"]*)"\s*:\s*"([^"]*)""#)
-            .unwrap();
-    json_regex
-        .replace_all(input, r#""$1":"[REDACTED]""#)
-        .to_string()
+    regex::Regex::new(r#""([^"]*(?:password|secret|token|key)[^"]*)"\s*:\s*"([^"]*)""#).map_or_else(
+        |_| input.to_string(),
+        |re| re.replace_all(input, r#""$1":"[REDACTED]""#).to_string(),
+    )
 }
 
 /// Secure logging macros that automatically sanitize input

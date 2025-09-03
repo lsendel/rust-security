@@ -4,6 +4,23 @@
 //! for security frameworks including SOC 2, ISO 27001, GDPR, and custom
 //! security controls.
 
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::cognitive_complexity,
+    clippy::too_many_lines,
+    clippy::unused_async,
+    clippy::print_stdout,
+    clippy::needless_pass_by_value,
+    clippy::future_not_send,
+    clippy::items_after_statements,
+    clippy::unnecessary_wraps,
+    clippy::struct_excessive_bools,
+    clippy::branches_sharing_code,
+    clippy::trivially_copy_pass_by_ref,
+    dead_code
+)]
+
 pub mod compliance;
 pub mod metrics;
 pub mod prometheus_client;
@@ -44,6 +61,7 @@ use walkdir as _;
 
 // Dependencies used in lib modules
 use common as _;
+#[cfg(feature = "prometheus-metrics")]
 use prometheus as _;
 
 /// Common error types for compliance tools

@@ -309,7 +309,7 @@ impl SecureSessionManager {
             let mut user_sessions = self.user_sessions.write().await;
             if let Some(user_session_list) = user_sessions.get_mut(&old_session.user_id) {
                 if let Some(pos) = user_session_list.iter().position(|id| id == old_session_id) {
-                    user_session_list[pos] = new_session_id.clone();
+                    user_session_list[pos].clone_from(&new_session_id);
                 }
             }
         }
@@ -529,8 +529,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_session_limit() {
-        let mut config = SecureSessionConfig::default();
-        config.max_concurrent_sessions = 2;
+        let config = SecureSessionConfig {
+            max_concurrent_sessions: 2,
+            ..Default::default()
+        };
         let manager = SecureSessionManager::new(config);
 
         // Create maximum allowed sessions

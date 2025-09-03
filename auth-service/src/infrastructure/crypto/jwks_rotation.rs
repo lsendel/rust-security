@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header};
+#[cfg(feature = "enhanced-session-store")]
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -278,7 +279,7 @@ impl JwksManager {
             der.extend_from_slice(&signing_key.to_bytes());
             der
         };
-        
+
         let private_pem = format!(
             "-----BEGIN PRIVATE KEY-----\n{}\n-----END PRIVATE KEY-----",
             engine.encode(&private_key_der)
@@ -297,7 +298,7 @@ impl JwksManager {
             der.extend_from_slice(verifying_key.as_bytes());
             der
         };
-        
+
         let public_pem = format!(
             "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
             engine.encode(&public_key_der)
@@ -351,13 +352,35 @@ impl JwksManager {
             let keys = self.keys.read().await;
             keys.values()
                 .filter(|k| k.status == KeyStatus::Active || k.status == KeyStatus::Valid)
-                .map(|k| JwkKey {
-                    kid: k.kid.clone(),
-                    kty: k.kty.clone(),
-                    alg: k.alg.clone(),
-                    use_: k.use_.clone(),
-                    n: extract_modulus(&k.public_key),
-                    e: extract_exponent(&k.public_key),
+                .map(|k| {
+                    if k.alg == "EdDSA" && k.kty == "OKP" {
+                        // EdDSA key - extract public key material
+                        let x_coordinate = extract_eddsa_public_key(&k.public_key);
+                        JwkKey {
+                            kid: k.kid.clone(),
+                            kty: k.kty.clone(),
+                            alg: k.alg.clone(),
+                            use_: k.use_.clone(),
+                            n: None,
+                            e: None,
+                            x: Some(x_coordinate),
+                            y: None,
+                            crv: Some("Ed25519".to_string()),
+                        }
+                    } else {
+                        // RSA key - extract modulus and exponent
+                        JwkKey {
+                            kid: k.kid.clone(),
+                            kty: k.kty.clone(),
+                            alg: k.alg.clone(),
+                            use_: k.use_.clone(),
+                            n: Some(extract_modulus(&k.public_key)),
+                            e: Some(extract_exponent(&k.public_key)),
+                            x: None,
+                            y: None,
+                            crv: None,
+                        }
+                    }
                 })
                 .collect()
         };
@@ -497,17 +520,56 @@ pub struct JwkKey {
     pub alg: String,
     #[serde(rename = "use")]
     pub use_: String,
-    pub n: String, // RSA modulus
-    pub e: String, // RSA exponent
+    /// RSA modulus (for RSA keys)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub n: Option<String>,
+    /// RSA exponent (for RSA keys)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub e: Option<String>,
+    /// EdDSA/ECDSA x coordinate (for OKP/EC keys)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x: Option<String>,
+    /// EdDSA/ECDSA y coordinate (for EC keys)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y: Option<String>,
+    /// Curve name (for OKP/EC keys)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crv: Option<String>,
 }
 
-// Helper functions to extract RSA components
+// Helper functions to extract key components
+
+/// Extract `EdDSA` public key from PEM format
+fn extract_eddsa_public_key(public_key_pem: &str) -> String {
+    use base64::{engine::general_purpose, Engine as _};
+
+    // Remove PEM headers and decode
+    let pem_contents = public_key_pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect::<String>();
+
+    if let Ok(der_bytes) = general_purpose::STANDARD.decode(pem_contents) {
+        // For Ed25519, the public key is the last 32 bytes of the SPKI structure
+        // SPKI structure is: 0x30 0x2A (SEQUENCE) + AlgID (12 bytes) + BIT STRING header (3 bytes) + 32 bytes public key
+        if der_bytes.len() >= 32 {
+            let public_key_bytes = &der_bytes[der_bytes.len() - 32..];
+            return general_purpose::URL_SAFE_NO_PAD.encode(public_key_bytes);
+        }
+    }
+
+    // Fallback: return a safe placeholder for now
+    general_purpose::URL_SAFE_NO_PAD.encode("placeholder_ed25519_key_32_bytes___")
+}
+
+/// Extract RSA modulus from PEM format
 fn extract_modulus(_public_key: &str) -> String {
     // In production, properly parse the PEM and extract modulus
     use base64::{engine::general_purpose, Engine as _};
     general_purpose::STANDARD.encode("placeholder_modulus")
 }
 
+/// Extract RSA exponent from PEM format
 fn extract_exponent(_public_key: &str) -> String {
     // In production, properly parse the PEM and extract exponent
     use base64::{engine::general_purpose, Engine as _};
@@ -722,16 +784,24 @@ mod tests {
     async fn test_key_rotation() {
         let config = KeyRotationConfig::default();
         let storage = Arc::new(InMemoryKeyStorage::new());
-        let manager = JwksManager::new(config, storage).await.unwrap();
+        let manager = JwksManager::new(config, storage)
+            .await
+            .expect("Test JWKS manager creation should succeed");
 
         // Should have one active key
         assert!(manager.get_active_key().await.is_some());
 
         // Rotate keys
-        manager.rotate_keys().await.unwrap();
+        manager
+            .rotate_keys()
+            .await
+            .expect("Test key rotation should succeed");
 
         // Should have new active key
-        let active_key = manager.get_active_key().await.unwrap();
+        let active_key = manager
+            .get_active_key()
+            .await
+            .expect("Test getting active key should succeed");
         assert_eq!(active_key.status, KeyStatus::Active);
 
         // Old key should still be available for validation
@@ -745,7 +815,9 @@ mod tests {
     async fn test_jwks_endpoint() {
         let config = KeyRotationConfig::default();
         let storage = Arc::new(InMemoryKeyStorage::new());
-        let manager = JwksManager::new(config, storage).await.unwrap();
+        let manager = JwksManager::new(config, storage)
+            .await
+            .expect("Test JWKS manager creation should succeed");
 
         let jwks = manager.get_jwks().await;
         assert!(!jwks.keys.is_empty());

@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::time::{sleep, timeout};
 
+// TODO: Refactor to use crate::common_config::{TimeoutConfig, RetryConfig}
+
 #[derive(Error, Debug)]
 pub enum CircuitBreakerError {
     #[error("Circuit breaker is open")]
@@ -406,7 +408,7 @@ impl RetryBackoff {
             let mut bytes = [0u8; 8];
             OsRng.fill_bytes(&mut bytes);
             let random_f64 = f64::from_be_bytes(bytes) / (u64::MAX as f64);
-            let delay_millis_u64 = delay.as_millis().min(u64::MAX as u128) as u64;
+            let delay_millis_u64 = delay.as_millis().min(u128::from(u64::MAX)) as u64;
             let jitter_ms = (delay_millis_u64 as f64 * 0.1 * random_f64) as u64;
             delay = Duration::from_millis(delay_millis_u64 + jitter_ms);
         }

@@ -21,7 +21,7 @@ fuzz_target!(|input: PkceInput| {
     let _ = verify_code_challenge(&input.verifier, &input.challenge);
     
     // Fuzz PKCE validation with S256 method - should never panic
-    let _ = validate_pkce_params(&input.verifier, &input.challenge, CodeChallengeMethod::S256);
+    let _ = validate_pkce_params(&input.verifier, &input.challenge, &CodeChallengeMethod::S256);
 });
 
 // Fuzz code challenge method parsing

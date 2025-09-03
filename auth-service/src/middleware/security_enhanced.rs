@@ -172,7 +172,11 @@ impl SecurityMiddleware {
     }
 
     /// Validate stored token and expiration
-    async fn validate_stored_token(&self, header_token: &str, cookie_token: &str) -> Result<(), Response> {
+    async fn validate_stored_token(
+        &self,
+        header_token: &str,
+        cookie_token: &str,
+    ) -> Result<(), Response> {
         let tokens = self.csrf_tokens.read().await;
         if let Some((stored_token, created)) = tokens.get(cookie_token) {
             if !constant_time_compare(header_token, stored_token) {

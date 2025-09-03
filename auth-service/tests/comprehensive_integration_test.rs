@@ -362,8 +362,7 @@ async fn test_openid_connect_features() {
     let id_token = token_response.get("id_token").unwrap().as_str().unwrap();
 
     // ID token should be a JWT (3 parts separated by dots)
-    let parts: Vec<&str> = id_token.split('.').collect();
-    assert_eq!(parts.len(), 3);
+    assert_eq!(id_token.split('.').count(), 3);
 }
 
 #[tokio::test]

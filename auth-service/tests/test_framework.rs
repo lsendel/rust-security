@@ -24,6 +24,7 @@ pub struct TestResult {
 }
 
 impl TestResult {
+    #[must_use]
     pub fn new(test_name: impl Into<String>) -> Self {
         Self {
             test_name: test_name.into(),
@@ -35,12 +36,14 @@ impl TestResult {
         }
     }
 
+    #[must_use]
     pub fn with_error(mut self, error: impl Into<String>) -> Self {
         self.success = false;
         self.error_message = Some(error.into());
         self
     }
 
+    #[must_use]
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.metadata.insert(key.into(), value.into());
         self
@@ -63,6 +66,12 @@ impl TestSuiteRunner {
         }
     }
 
+    /// Run a single test with timeout and result tracking
+    ///
+    /// # Errors
+    ///
+    /// This function will never return an error - it always returns `Ok(())`.
+    /// Test failures are recorded in the test results but don't cause this function to fail.
     pub async fn run_test<F, Fut>(
         &self,
         test_name: impl Into<String>,
@@ -77,58 +86,87 @@ impl TestSuiteRunner {
 
         debug!("Starting test: {}", test_name);
 
-        let result = match tokio::time::timeout(Duration::from_secs(300), test_fn()).await {
-            Ok(Ok(())) => {
-                let duration = test_start.elapsed();
-                info!("Test passed: {} ({}ms)", test_name, duration.as_millis());
-                TestResult::new(&test_name)
-                    .with_metadata("duration_ms", duration.as_millis().to_string())
-            }
-            Ok(Err(error)) => {
-                let duration = test_start.elapsed();
-                warn!(
-                    "Test failed: {} ({}ms) - {}",
-                    test_name,
-                    duration.as_millis(),
-                    error
-                );
-                TestResult::new(&test_name)
-                    .with_error(error)
-                    .with_metadata("duration_ms", duration.as_millis().to_string())
-            }
-            Err(_) => {
-                warn!("Test timed out: {}", test_name);
-                TestResult::new(&test_name)
-                    .with_error("Test timed out after 5 minutes")
-                    .with_metadata("timed_out", "true")
-            }
-        };
+        let result = self.execute_test(&test_name, test_start, test_fn).await;
 
-        let mut results = self.results.write().await;
-        results.push(result);
+        self.results.write().await.push(result);
 
         Ok(())
     }
 
+    async fn execute_test<F, Fut>(
+        &self,
+        test_name: &str,
+        test_start: Instant,
+        test_fn: F,
+    ) -> TestResult
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<(), String>>,
+    {
+        match tokio::time::timeout(Duration::from_secs(300), test_fn()).await {
+            Ok(Ok(())) => Self::handle_test_success(test_name, test_start),
+            Ok(Err(error)) => Self::handle_test_failure(test_name, test_start, error),
+            Err(_) => Self::handle_test_timeout(test_name),
+        }
+    }
+
+    fn handle_test_success(test_name: &str, test_start: Instant) -> TestResult {
+        let duration = test_start.elapsed();
+        info!("Test passed: {} ({}ms)", test_name, duration.as_millis());
+        TestResult::new(test_name).with_metadata("duration_ms", duration.as_millis().to_string())
+    }
+
+    fn handle_test_failure(test_name: &str, test_start: Instant, error: String) -> TestResult {
+        let duration = test_start.elapsed();
+        warn!(
+            "Test failed: {} ({}ms) - {}",
+            test_name,
+            duration.as_millis(),
+            error
+        );
+        TestResult::new(test_name)
+            .with_error(error)
+            .with_metadata("duration_ms", duration.as_millis().to_string())
+    }
+
+    fn handle_test_timeout(test_name: &str) -> TestResult {
+        warn!("Test timed out: {}", test_name);
+        TestResult::new(test_name)
+            .with_error("Test timed out after 5 minutes")
+            .with_metadata("timed_out", "true")
+    }
+
     pub async fn generate_report(&self) -> TestReport {
-        let results = self.results.read().await;
         let total_duration = self.start_time.elapsed();
 
-        let passed = results.iter().filter(|r| r.success).count();
-        let failed = results.len() - passed;
-        let timed_out = results
-            .iter()
-            .filter(|r| r.metadata.get("timed_out").is_some())
-            .count();
+        let (passed, failed, timed_out, total_tests, results_clone) = {
+            let results = self.results.read().await;
+            let passed_count = results.iter().filter(|r| r.success).count();
+            let failed_count = results.len() - passed_count;
+            let timed_out_count = results
+                .iter()
+                .filter(|r| r.metadata.contains_key("timed_out"))
+                .count();
+            let total = results.len();
+            let results_vec = results.clone();
+            drop(results);
+            (
+                passed_count,
+                failed_count,
+                timed_out_count,
+                total,
+                results_vec,
+            )
+        };
 
         TestReport {
             suite_name: self.suite_name.clone(),
-            total_tests: results.len(),
+            total_tests,
             passed,
             failed,
             timed_out,
             total_duration,
-            results: results.clone(),
+            results: results_clone,
         }
     }
 }
@@ -146,7 +184,9 @@ pub struct TestReport {
 }
 
 impl TestReport {
-    #[must_use] pub fn success_rate(&self) -> f64 {
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn success_rate(&self) -> f64 {
         if self.total_tests == 0 {
             0.0
         } else {
@@ -154,7 +194,8 @@ impl TestReport {
         }
     }
 
-    #[must_use] pub const fn has_failures(&self) -> bool {
+    #[must_use]
+    pub const fn has_failures(&self) -> bool {
         self.failed > 0 || self.timed_out > 0
     }
 
@@ -173,10 +214,7 @@ impl TestReport {
                     println!(
                         "❌ {}: {}",
                         result.test_name,
-                        result
-                            .error_message
-                            .as_ref()
-                            .unwrap_or(&"Unknown error".to_string())
+                        result.error_message.as_deref().unwrap_or("Unknown error")
                     );
                 }
             }
@@ -198,7 +236,8 @@ impl Default for TestResources {
 }
 
 impl TestResources {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             cleanup_fns: Vec::new(),
         }
@@ -226,7 +265,8 @@ pub mod test_utils {
     use super::*;
 
     /// Create a test token record with default values
-    #[must_use] pub fn create_test_token(user_id: &str, scope: Option<&str>) -> common::TokenRecord {
+    #[must_use]
+    pub fn create_test_token(user_id: &str, scope: Option<&str>) -> common::TokenRecord {
         common::TokenRecord {
             active: true,
             scope: scope.map(std::string::ToString::to_string),
@@ -240,7 +280,11 @@ pub mod test_utils {
     }
 
     /// Create a test session with default values
-    #[must_use] pub fn create_test_session(user_id: &str, session_id: &str) -> HashMap<String, String> {
+    ///
+    /// # Panics
+    /// Panics if system time is before `UNIX_EPOCH` when generating timestamps.
+    #[must_use]
+    pub fn create_test_session(user_id: &str, session_id: &str) -> HashMap<String, String> {
         let mut session = HashMap::new();
         session.insert("user_id".to_string(), user_id.to_string());
         session.insert("session_id".to_string(), session_id.to_string());
@@ -256,10 +300,14 @@ pub mod test_utils {
     }
 
     /// Assert that a result is within expected bounds
+    ///
+    /// # Panics
+    ///
+    /// Panics if the actual value is not within the specified bounds (min <= actual <= max).
     pub fn assert_within_bounds<T: PartialOrd + std::fmt::Debug>(
-        actual: T,
-        min: T,
-        max: T,
+        actual: &T,
+        min: &T,
+        max: &T,
         description: &str,
     ) {
         assert!(
@@ -286,7 +334,11 @@ pub mod integration {
     use super::*;
 
     /// Test database connectivity
-    pub async fn test_database_connectivity() -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if database connectivity cannot be established or verified.
+    pub fn test_database_connectivity() -> Result<(), String> {
         // Placeholder for database connectivity tests
         // This would test actual database connections in a real implementation
         debug!("Testing database connectivity...");
@@ -294,7 +346,11 @@ pub mod integration {
     }
 
     /// Test external service connectivity
-    pub async fn test_external_services() -> Result<(), String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if external services (Redis, APIs, etc.) cannot be reached or are unavailable.
+    pub fn test_external_services() -> Result<(), String> {
         // Placeholder for external service tests
         // This would test Redis, external APIs, etc.
         debug!("Testing external service connectivity...");
@@ -302,7 +358,12 @@ pub mod integration {
     }
 
     /// Setup test environment
-    pub async fn setup_test_environment() -> Result<TestResources, String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the test environment cannot be properly initialized,
+    /// such as when required services (database, Redis) are unavailable.
+    pub fn setup_test_environment() -> Result<TestResources, String> {
         let mut resources = TestResources::new();
 
         // Setup test database, Redis, etc.
@@ -322,6 +383,15 @@ pub mod load_test {
     use super::*;
 
     /// Generate concurrent load on a system
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the load test cannot be executed properly,
+    /// such as when task spawning fails or system resources are exhausted.
+    /// Generate concurrent load and collect results
+    ///
+    /// # Errors
+    /// Returns `Err(String)` if any spawned task panics or returns an error.
     pub async fn generate_concurrent_load<F, Fut>(
         concurrency: usize,
         iterations: usize,
@@ -366,7 +436,7 @@ pub mod load_test {
             successful_operations: results.iter().filter(|(r, _)| r.is_ok()).count(),
             failed_operations: results.iter().filter(|(r, _)| r.is_err()).count(),
             total_duration,
-            average_latency: total_duration / results.len() as u32,
+            average_latency: total_duration / u32::try_from(results.len()).unwrap_or(1),
             results,
         })
     }
@@ -382,16 +452,24 @@ pub mod load_test {
     }
 
     impl LoadTestResults {
-        #[must_use] pub fn success_rate(&self) -> f64 {
+        #[must_use]
+        #[allow(clippy::cast_precision_loss)]
+        pub fn success_rate(&self) -> f64 {
             if self.total_operations == 0 {
-                0.0
-            } else {
-                (self.successful_operations as f64 / self.total_operations as f64) * 100.0
+                return 0.0;
             }
+            // Compute using integers first, convert once for the ratio
+            let ok = self.successful_operations as f64;
+            let total = self.total_operations as f64;
+            (ok * 100.0) / total
         }
 
-        #[must_use] pub fn operations_per_second(&self) -> f64 {
-            self.total_operations as f64 / self.total_duration.as_secs_f64()
+        #[must_use]
+        #[allow(clippy::cast_precision_loss)]
+        pub fn operations_per_second(&self) -> f64 {
+            // Avoid repeated casts; convert once
+            let total = self.total_operations as f64;
+            total / self.total_duration.as_secs_f64()
         }
     }
 }
@@ -401,6 +479,11 @@ pub mod security {
     use super::*;
 
     /// Test for timing attack resistance
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the timing analysis cannot be performed,
+    /// such as when operation execution fails or timing measurements are unreliable.
     pub async fn test_timing_attack_resistance<F, Fut>(
         operations: &[F],
         iterations: usize,
@@ -429,20 +512,27 @@ pub mod security {
         })
     }
 
+    #[allow(clippy::cast_precision_loss)]
     fn calculate_timing_variance(timings: &[Vec<Duration>]) -> Vec<f64> {
         timings
             .iter()
             .map(|operation_timings| {
-                let mean = operation_timings
-                    .iter()
-                    .map(|d| d.as_nanos() as f64)
-                    .sum::<f64>()
-                    / operation_timings.len() as f64;
+                // Compute mean using integer nanos first, then convert once
+                let count = operation_timings.len() as u128;
+                if count == 0 {
+                    return 0.0;
+                }
+                let sum_nanos: u128 = operation_timings.iter().map(Duration::as_nanos).sum();
+                let mean = (sum_nanos as f64) / (count as f64);
                 let variance = operation_timings
                     .iter()
-                    .map(|d| (d.as_nanos() as f64 - mean).powi(2))
+                    .map(|d| {
+                        let x = d.as_nanos() as f64;
+                        let diff = x - mean;
+                        diff * diff
+                    })
                     .sum::<f64>()
-                    / operation_timings.len() as f64;
+                    / (count as f64);
                 variance.sqrt()
             })
             .collect()
@@ -455,9 +545,10 @@ pub mod security {
     }
 
     /// Generate security test vectors
-    #[must_use] pub fn generate_security_test_vectors() -> Vec<String> {
+    #[must_use]
+    pub fn generate_security_test_vectors() -> Vec<String> {
         vec![
-            String::new(),                              // Empty string
+            String::new(),                               // Empty string
             "a".repeat(10000),                           // Very long string
             "🚀🔒🛡️".to_string(),                        // Unicode
             "<script>alert('xss')</script>".to_string(), // XSS attempt
@@ -519,7 +610,9 @@ mod tests {
         assert_eq!(results.total_operations, 10);
         assert_eq!(results.successful_operations, 10);
         assert_eq!(results.failed_operations, 0);
-        assert_eq!(results.success_rate(), 100.0);
+        // Allow minimal floating-point tolerance
+        let sr = results.success_rate();
+        assert!((sr - 100.0).abs() < f64::EPSILON);
         assert!(results.operations_per_second() > 0.0);
     }
 

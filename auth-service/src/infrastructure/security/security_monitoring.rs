@@ -516,7 +516,7 @@ pub async fn init_security_monitoring() {
 }
 
 /// Convenience function to create security alerts
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::implicit_hasher)]
 pub async fn create_security_alert(
     alert_type: SecurityAlertType,
     severity: AlertSeverity,

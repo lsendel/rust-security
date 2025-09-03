@@ -9,9 +9,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use crate::domain::entities::Session;
-use crate::domain::repositories::{
-    DynSessionRepository, DynUserRepository,
-};
+use crate::domain::repositories::{DynSessionRepository, DynUserRepository};
 use crate::domain::Email;
 use crate::shared::crypto::{CryptoService, CryptoServiceTrait};
 
@@ -145,7 +143,9 @@ impl AuthServiceTrait for AuthService {
 
         // 6. Create session
         let session = Session::new(user.id.clone(), now);
-        self.session_repo.save(&session).await
+        self.session_repo
+            .save(&session)
+            .await
             .map_err(|e| crate::shared::error::AppError::Internal(format!("Session error: {e}")))?;
 
         // 7. Generate tokens
@@ -261,7 +261,6 @@ impl AuthServiceTrait for AuthService {
 
 #[cfg(test)]
 mod tests {
-
 
     // Mock implementations would go here for comprehensive testing
 

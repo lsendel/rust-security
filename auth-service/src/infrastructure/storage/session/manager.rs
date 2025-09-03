@@ -14,6 +14,22 @@ use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+// Performance constants
+const DEFAULT_SESSION_CAPACITY: usize = 16;
+const SESSION_KEY_PREFIX: &str = "session:";
+const USER_SESSIONS_PREFIX: &str = "user_sessions:";
+
+// Helper functions for key generation
+#[inline]
+fn session_key(session_id: &str) -> String {
+    format!("{SESSION_KEY_PREFIX}{session_id}")
+}
+
+#[inline]
+fn user_sessions_key(user_id: &str) -> String {
+    format!("{USER_SESSIONS_PREFIX}{user_id}")
+}
+
 /// Session configuration
 #[derive(Debug, Clone)]
 pub struct SessionConfig {
@@ -118,7 +134,7 @@ impl Session {
             mfa_verified: false,
             mfa_verified_at: None,
             is_elevated: false,
-            attributes: HashMap::new(),
+            attributes: HashMap::with_capacity(4), // Common attributes count
             csrf_token,
         }
     }
@@ -257,7 +273,7 @@ impl SessionManager {
         }
 
         let logger = SecurityLogger::new(SecurityLoggerConfig::default());
-        logger.log_event(event);
+        logger.log_event(&event);
 
         // Update metrics
         #[cfg(feature = "monitoring")]
@@ -346,26 +362,25 @@ impl SessionManager {
 
             // Log session refresh
             let logger = SecurityLogger::new(SecurityLoggerConfig::default());
-            logger.log_event(
-                SecurityEvent::new(
-                    SecurityEventType::SystemEvent,
-                    SecuritySeverity::Low,
-                    "auth-service".to_string(),
-                    "Session refreshed".to_string(),
-                )
-                .with_actor(session.user_id.clone())
-                .with_action("refresh".to_string())
-                .with_target(format!("session:{}", session.id))
-                .with_outcome("success".to_string())
-                .with_reason("Session lifetime extended successfully".to_string())
-                .with_session_id(session.id.clone())
-                .with_user_id(session.user_id.clone())
-                .with_ip_address(session.ip_address.clone())
-                .with_detail(
-                    "new_expires_at".to_string(),
-                    serde_json::Value::Number(session.expires_at.into()),
-                ),
+            let event = SecurityEvent::new(
+                SecurityEventType::SystemEvent,
+                SecuritySeverity::Low,
+                "auth-service".to_string(),
+                "Session refreshed".to_string(),
+            )
+            .with_actor(session.user_id.clone())
+            .with_action("refresh".to_string())
+            .with_target(format!("session:{}", session.id))
+            .with_outcome("success".to_string())
+            .with_reason("Session lifetime extended successfully".to_string())
+            .with_session_id(session.id.clone())
+            .with_user_id(session.user_id.clone())
+            .with_ip_address(session.ip_address.clone())
+            .with_detail(
+                "new_expires_at".to_string(),
+                serde_json::Value::Number(session.expires_at.into()),
             );
+            logger.log_event(&event);
 
             Ok(Some(session))
         } else {
@@ -390,7 +405,7 @@ impl SessionManager {
             // Log session invalidation
             let logger = SecurityLogger::new(SecurityLoggerConfig::default());
             logger.log_event(
-                SecurityEvent::new(
+                &SecurityEvent::new(
                     SecurityEventType::AuthenticationFailure,
                     SecuritySeverity::Medium,
                     "auth-service".to_string(),
@@ -474,7 +489,7 @@ impl SessionManager {
         session_id: &str,
     ) -> Result<Option<Session>, redis::RedisError> {
         let mut conn = client.get_connection_manager().await?;
-        let key = format!("session:{session_id}");
+        let key = session_key(session_id);
         let session_data: Option<String> =
             redis::cmd("GET").arg(&key).query_async(&mut conn).await?;
 
@@ -551,7 +566,7 @@ impl SessionManager {
                 .await?;
         }
 
-        let key = format!("session:{session_id}");
+        let key = session_key(session_id);
         redis::cmd("DEL")
             .arg(&key)
             .query_async::<()>(&mut conn)
@@ -561,7 +576,7 @@ impl SessionManager {
     }
 
     async fn get_user_sessions(&self, user_id: &str) -> Result<Vec<Session>, SessionError> {
-        let mut sessions = Vec::new();
+        let mut sessions = Vec::with_capacity(DEFAULT_SESSION_CAPACITY);
 
         // Try Redis first
         if let Some(client) = &self.redis_client {
@@ -597,7 +612,7 @@ impl SessionManager {
             .query_async(&mut conn)
             .await?;
 
-        let mut sessions = Vec::new();
+        let mut sessions = Vec::with_capacity(session_ids.len());
         for session_id in session_ids {
             if let Ok(Some(session)) = self.get_session_from_redis(client, &session_id).await {
                 sessions.push(session);
@@ -623,7 +638,7 @@ impl SessionManager {
                 // Log session eviction
                 let logger = SecurityLogger::new(SecurityLoggerConfig::default());
                 logger.log_event(
-                    SecurityEvent::new(
+                    &SecurityEvent::new(
                         SecurityEventType::AuthenticationFailure,
                         SecuritySeverity::Low,
                         "auth-service".to_string(),

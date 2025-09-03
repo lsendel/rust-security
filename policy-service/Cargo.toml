@@ -29,7 +29,7 @@ utoipa-swagger-ui = { workspace = true }
 dotenvy = { workspace = true }
 cedar-policy-core = { workspace = true }
 thiserror = { workspace = true }
-prometheus = { workspace = true }
+prometheus = { workspace = true, optional = true }
 once_cell = { workspace = true }
 
 [dev-dependencies]
@@ -46,3 +46,7 @@ path = "src/lib.rs"
 name = "policy-service"
 path = "src/main.rs"
 
+[features]
+default = ["prom-client"]
+prometheus-backend = ["dep:prometheus"]
+prom-client = []

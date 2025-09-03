@@ -293,7 +293,11 @@ where
         // Record access event after releasing both locks
         {
             let mut analyzer = self.analyzer.write().await;
-            let access_type = if value.is_some() { AccessType::Hit } else { AccessType::Miss };
+            let access_type = if value.is_some() {
+                AccessType::Hit
+            } else {
+                AccessType::Miss
+            };
             analyzer.record_access(key.clone(), access_type).await;
         }
 
@@ -376,7 +380,11 @@ where
                 // Update size
                 storage.current_size -= entry.metadata.size;
 
-                (Some(entry.value), storage.entries.len(), storage.current_size)
+                (
+                    Some(entry.value),
+                    storage.entries.len(),
+                    storage.current_size,
+                )
             } else {
                 (None, storage.entries.len(), storage.current_size)
             }
@@ -707,8 +715,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_eviction() {
-        let mut config = CacheConfig::default();
-        config.max_entries = 2;
+        let config = CacheConfig {
+            max_entries: 2,
+            ..Default::default()
+        };
 
         let cache = IntelligentCache::<String, String>::new(config);
 

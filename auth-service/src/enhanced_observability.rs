@@ -701,9 +701,9 @@ mod tests {
     #[test]
     fn test_sli_config_default() {
         let config = SliConfig::default();
-        assert_eq!(config.availability_target, 99.9);
+        assert!((config.availability_target - 99.9).abs() < f64::EPSILON);
         assert_eq!(config.latency_target_ms, 100);
-        assert_eq!(config.error_rate_target, 0.1);
+        assert!((config.error_rate_target - 0.1).abs() < f64::EPSILON);
     }
 
     #[test]

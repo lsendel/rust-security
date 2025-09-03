@@ -79,14 +79,15 @@ impl KeyRotationService {
     }
 
     /// Start the key rotation service
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Initial key generation or rotation fails
     /// - JWKS document retrieval fails
     /// - Timer or interval setup fails
     /// - Key rotation operations encounter persistent failures
+    #[allow(clippy::cognitive_complexity)]
     pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if !self.config.enabled {
             info!("Key rotation is disabled");
@@ -166,6 +167,7 @@ impl KeyRotationService {
     }
 
     /// Clean up old keys that are past the retention period
+    #[allow(clippy::unnecessary_wraps)]
     fn cleanup_old_keys() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // This is a placeholder - in a real implementation, you would:
         // 1. Get all keys with their creation timestamps
@@ -181,9 +183,9 @@ impl KeyRotationService {
     }
 
     /// Force a key rotation (for manual triggering)
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Key generation or rotation operations fail
     /// - JWKS update operations fail
@@ -231,9 +233,9 @@ pub async fn get_rotation_status() -> axum::Json<serde_json::Value> {
 }
 
 /// HTTP endpoint to force key rotation (admin only)
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns an HTTP error status if:
 /// - Key rotation operations fail
 /// - JSON serialization of response fails

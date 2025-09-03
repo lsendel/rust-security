@@ -17,6 +17,9 @@ pub struct ReportRenderer {
 
 impl ReportRenderer {
     /// Create a new report renderer
+    ///
+    /// # Panics
+    /// Panics if embedded templates cannot be loaded into the template engine.
     #[must_use]
     pub fn new() -> Self {
         let mut tera = Tera::new("templates/**/*").unwrap_or_else(|_| Tera::new("").unwrap());
@@ -40,6 +43,9 @@ impl ReportRenderer {
     }
 
     /// Render HTML report
+    ///
+    /// # Errors
+    /// Returns an error if rendering or writing the file fails.
     pub async fn render_html(
         &self,
         data: &ComplianceReportData,
@@ -62,6 +68,9 @@ impl ReportRenderer {
     }
 
     /// Render JSON report
+    ///
+    /// # Errors
+    /// Returns an error if serialization or writing the file fails.
     pub async fn render_json(
         &self,
         data: &ComplianceReportData,
@@ -73,6 +82,9 @@ impl ReportRenderer {
     }
 
     /// Render CSV report
+    ///
+    /// # Errors
+    /// Returns an error if writing the file fails.
     pub async fn render_csv(
         &self,
         data: &ComplianceReportData,
@@ -83,8 +95,10 @@ impl ReportRenderer {
         // Controls CSV
         csv_content.push_str("Control ID,Framework,Title,Implementation Status,Effectiveness,Risk Level,Last Tested\n");
         for control in &data.compliance_controls {
-            csv_content.push_str(&format!(
-                "{},{:?},{},{:?},{:?},{:?},{}\n",
+            use std::fmt::Write as _;
+            let _ = writeln!(
+                csv_content,
+                "{},{:?},{},{:?},{:?},{:?},{}",
                 control.control_id,
                 control.framework,
                 control.title.replace(',', ";"),
@@ -92,20 +106,22 @@ impl ReportRenderer {
                 control.effectiveness,
                 control.risk_level,
                 control.last_tested.format("%Y-%m-%d")
-            ));
+            );
         }
 
         csv_content.push_str("\n\nSecurity Metrics\n");
         csv_content.push_str("Metric Name,Value,Threshold,Status,Description\n");
         for metric in &data.security_metrics {
-            csv_content.push_str(&format!(
-                "{},{},{},{:?},{}\n",
+            use std::fmt::Write as _;
+            let _ = writeln!(
+                csv_content,
+                "{},{},{},{:?},{}",
                 metric.name,
                 metric.value,
                 metric.threshold,
                 metric.status,
                 metric.description.replace(',', ";")
-            ));
+            );
         }
 
         fs::write(output_path, csv_content).await?;
@@ -113,6 +129,9 @@ impl ReportRenderer {
     }
 
     /// Render Markdown report
+    ///
+    /// # Errors
+    /// Returns an error if rendering or writing the file fails.
     pub async fn render_markdown(
         &self,
         data: &ComplianceReportData,

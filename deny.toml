@@ -6,7 +6,9 @@
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 # The lint level for crates with security notices
-ignore = []
+ignore = [
+    "RUSTSEC-2023-0071", # RSA: Marvin Attack - not using RSA directly, pulled in by sqlx-mysql which we don't use
+]
 
 [licenses]
 # List of explicitly allowed licenses
@@ -23,6 +25,9 @@ allow = [
     "0BSD",
     "Zlib",
     "BSL-1.0",
+    "OpenSSL",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]

@@ -214,7 +214,7 @@ impl std::str::FromStr for CodeChallengeMethod {
 pub fn validate_pkce_params(
     code_verifier: &str,
     code_challenge: &str,
-    method: CodeChallengeMethod,
+    method: &CodeChallengeMethod,
 ) -> Result<bool, &'static str> {
     match method {
         CodeChallengeMethod::S256 => verify_code_challenge(code_verifier, code_challenge),

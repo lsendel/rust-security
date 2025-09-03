@@ -102,7 +102,9 @@ async fn get_api_key(
         .get_api_key_by_prefix(&prefix)
         .await
         .map_err(|e| AppError::internal(format!("Failed to get API key: {e}")))?
-        .ok_or(crate::shared::error::AppError::NotFound("API Key".to_string()))?;
+        .ok_or(crate::shared::error::AppError::NotFound(
+            "API Key".to_string(),
+        ))?;
 
     let details = ApiKeyDetails {
         id: api_key.id,

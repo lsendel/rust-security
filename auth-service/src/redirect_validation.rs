@@ -1,3 +1,4 @@
+use crate::common_config::validation::{is_localhost, is_valid_ip};
 use regex::Regex;
 use std::collections::HashSet;
 use url::Url;
@@ -24,14 +25,19 @@ pub struct RedirectUriValidator {
 // Suspicious patterns to detect in URIs
 static SUSPICIOUS_PATTERNS: std::sync::LazyLock<Vec<Regex>> = std::sync::LazyLock::new(|| {
     vec![
-        Regex::new(r"\.\.[\\/]").unwrap(),         // Path traversal
-        Regex::new(r#"[<>"']"#).unwrap(),          // HTML/JS injection chars
-        Regex::new(r"javascript:").unwrap(),       // JavaScript protocol
-        Regex::new(r"data:").unwrap(),             // Data protocol
-        Regex::new(r"vbscript:").unwrap(),         // VBScript protocol
-        Regex::new(r"file:").unwrap(),             // File protocol
-        Regex::new(r"\\x[0-9a-fA-F]{2}").unwrap(), // Hex encoded chars
-        Regex::new(r"%[0-9a-fA-F]{2}").unwrap(),   // URL encoded suspicious chars
+        Regex::new(r"\.\.[\\/]").expect("Path traversal regex should compile"),
+        Regex::new(r#"[<>"']"#).expect("HTML/JS injection regex should compile"),
+        // The following could be checked via contains(), but we intentionally keep regex for uniformity
+        #[allow(clippy::trivial_regex)]
+        Regex::new(r"javascript:").expect("JavaScript protocol regex should compile"),
+        #[allow(clippy::trivial_regex)]
+        Regex::new(r"data:").expect("Data protocol regex should compile"),
+        #[allow(clippy::trivial_regex)]
+        Regex::new(r"vbscript:").expect("VBScript protocol regex should compile"),
+        #[allow(clippy::trivial_regex)]
+        Regex::new(r"file:").expect("File protocol regex should compile"),
+        Regex::new(r"\\x[0-9a-fA-F]{2}").expect("Hex encoded chars regex should compile"),
+        Regex::new(r"%[0-9a-fA-F]{2}").expect("URL encoded chars regex should compile"),
     ]
 });
 
@@ -76,6 +82,8 @@ impl RedirectUriValidator {
     }
 
     /// Register allowed redirect URIs for a client
+    /// # Errors
+    /// Returns an error if any provided URI fails validation or violates policies.
     pub fn register_client_uris(
         &mut self,
         client_id: &str,
@@ -97,6 +105,8 @@ impl RedirectUriValidator {
     }
 
     /// Comprehensive redirect URI validation
+    /// # Errors
+    /// Returns an error if the redirect URI is invalid, not registered, or violates policies.
     pub fn validate_redirect_uri(
         &self,
         client_id: &str,
@@ -122,6 +132,7 @@ impl RedirectUriValidator {
     }
 
     /// Validate URI format and structure
+    #[allow(clippy::unused_self)]
     fn validate_uri_format(&self, uri: &str) -> Result<(), crate::shared::error::AppError> {
         // Basic string-level path traversal guard prior to parsing (URL parsing may normalize dot segments}
         if uri.contains("/../") || uri.ends_with("/..") {
@@ -184,13 +195,17 @@ impl RedirectUriValidator {
         &self,
         redirect_uri: &str,
     ) -> Result<(), crate::shared::error::AppError> {
-        let parsed_url = Url::parse(redirect_uri).unwrap(); // Already validated above
+        let parsed_url = Url::parse(redirect_uri).map_err(|e| {
+            crate::shared::error::AppError::InvalidRequest {
+                reason: format!("Failed to parse redirect URI for security validation: {e}"),
+            }
+        })?;
 
         // HTTPS enforcement in production
         if self.enforce_https && parsed_url.scheme() != "https" {
             // Allow localhost for development
             if let Some(host) = parsed_url.host_str() {
-                if !self.is_localhost(host) {
+                if !is_localhost(host) {
                     return Err(crate::shared::error::AppError::InvalidRequest {
                         reason: "HTTPS required for redirect URIs in production".to_string(),
                     });
@@ -200,7 +215,7 @@ impl RedirectUriValidator {
 
         // Prevent IP addresses (except localhost}
         if let Some(host) = parsed_url.host_str() {
-            if self.is_ip_address(host) && !self.is_localhost(host) {
+            if is_valid_ip(host) && !is_localhost(host) {
                 return Err(crate::shared::error::AppError::InvalidRequest {
                     reason: "IP addresses not allowed in redirect URIs".to_string(),
                 });
@@ -248,16 +263,6 @@ impl RedirectUriValidator {
         Ok(())
     }
 
-    /// Check if host is localhost
-    fn is_localhost(&self, host: &str) -> bool {
-        matches!(host, "localhost" | "127.0.0.1" | "::1" | "0.0.0.0")
-    }
-
-    /// Check if host is an IP address
-    fn is_ip_address(&self, host: &str) -> bool {
-        host.parse::<std::net::IpAddr>().is_ok()
-    }
-
     /// Check if domain is blocked
     fn is_blocked_domain(&self, host: &str) -> bool {
         self.blocked_domains.contains(&host.to_lowercase())
@@ -266,7 +271,7 @@ impl RedirectUriValidator {
     /// Validate TLD against known good TLDs
     fn is_valid_tld(&self, host: &str) -> bool {
         // Allow localhost and IP addresses
-        if self.is_localhost(host) || self.is_ip_address(host) {
+        if is_localhost(host) || is_valid_ip(host) {
             return true;
         }
 
@@ -280,6 +285,7 @@ impl RedirectUriValidator {
     }
 
     /// Check for encoded attack patterns
+    #[allow(clippy::unused_self)]
     fn contains_encoded_attacks(&self, uri: &str) -> bool {
         let decoded = urlencoding::decode(uri).unwrap_or_default();
 
@@ -352,7 +358,7 @@ mod tests {
                 "test_client",
                 vec!["https://example.com/callback".to_string()],
             )
-            .unwrap();
+            .expect("Test client URI registration should succeed");
 
         assert!(validator
             .validate_redirect_uri("test_client", "https://example.com/callback")

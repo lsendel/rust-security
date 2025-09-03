@@ -462,7 +462,7 @@ pub fn get_request_body_limit(path: &str, config: &BackpressureConfig) -> usize 
 // Create comprehensive backpressure middleware stack
 #[must_use]
 pub fn create_backpressure_middleware(
-    config: BackpressureConfig,
+    config: &BackpressureConfig,
 ) -> (
     ServiceBuilder<tower::layer::util::Stack<TimeoutLayer, tower::layer::util::Identity>>,
     Arc<BackpressureState>,

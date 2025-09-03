@@ -23,21 +23,34 @@ impl PasswordHash {
     }
 
     /// Get the hash as a string
-    #[must_use] pub fn as_str(&self) -> &str {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the hash algorithm type
-    #[must_use] pub fn algorithm(&self) -> Option<&str> {
-        self.0.find('$').and_then(|dollar_pos| {
-            let algorithm_part = &self.0[1..dollar_pos];
-            algorithm_part.find('$').map_or(Some(algorithm_part), |second_dollar| Some(&algorithm_part[..second_dollar]))
+    #[must_use]
+    pub fn algorithm(&self) -> Option<&str> {
+        // Skip the first character if it's '$'
+        let start_pos = usize::from(self.0.starts_with('$'));
+
+        self.0[start_pos..].find('$').and_then(|dollar_pos| {
+            let algorithm_part = &self.0[start_pos..start_pos + dollar_pos];
+            algorithm_part
+                .find('$')
+                .map_or(Some(algorithm_part), |second_dollar| {
+                    Some(&algorithm_part[..second_dollar])
+                })
         })
     }
 
     /// Verify if the hash uses a secure algorithm
-    #[must_use] pub fn is_secure_algorithm(&self) -> bool {
-        matches!(self.algorithm(), Some("argon2id" | "argon2i" | "scrypt" | "bcrypt"))
+    #[must_use]
+    pub fn is_secure_algorithm(&self) -> bool {
+        matches!(
+            self.algorithm(),
+            Some("argon2id" | "argon2i" | "scrypt" | "bcrypt")
+        )
     }
 
     /// Validate password hash format
@@ -55,14 +68,47 @@ impl PasswordHash {
             return Err("Invalid password hash format".to_string());
         }
 
-        // Check for suspicious patterns (all same character)
-        if hash
-            .chars()
-            .all(|c| c == hash.chars().next().unwrap_or(' '))
-        {
-            return Err(
-                "Password hash appears to be invalid (same character repeated)".to_string(),
-            );
+        // Check for suspicious patterns (repeated characters)
+        // Extract the "payload" part (after format prefix)
+        let payload = if let Some(stripped) = hash.strip_prefix('$') {
+            stripped
+        } else if hash.starts_with("pbkdf2") {
+            // For pbkdf2, skip to the part after the first '$'
+            hash.split('$').nth(1).unwrap_or("")
+        } else {
+            hash
+        };
+
+        // Check if payload consists of mostly repeated characters
+        if !payload.is_empty() {
+            let chars: Vec<char> = payload.chars().collect();
+            let total_chars = chars.len();
+
+            // Check if any character is repeated more than 80% of the time
+            for &test_char in &chars {
+                let repeated_chars = chars.iter().filter(|&&c| c == test_char).count();
+                if repeated_chars * 5 >= total_chars * 4 {
+                    return Err(
+                        "Password hash appears to be invalid (same character repeated)".to_string(),
+                    );
+                }
+            }
+
+            // Also check for very long sequences of the same character (10+ in a row)
+            let mut consecutive_count = 1;
+            for i in 1..chars.len() {
+                if chars[i] == chars[i - 1] {
+                    consecutive_count += 1;
+                    if consecutive_count >= 10 {
+                        return Err(
+                            "Password hash appears to be invalid (same character repeated)"
+                                .to_string(),
+                        );
+                    }
+                } else {
+                    consecutive_count = 1;
+                }
+            }
         }
 
         Ok(())
@@ -90,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_argon2_hash_creation() {
-        let hash_str = "$argon2id$v=19$m=4096,t=3,p=1$test".to_string();
+        let hash_str = "$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx".to_string();
         let hash = PasswordHash::new(hash_str.clone());
         assert!(hash.is_ok());
         assert_eq!(hash.unwrap().as_str(), hash_str);
@@ -106,36 +152,43 @@ mod tests {
 
     #[test]
     fn test_password_hash_from_str() {
-        let hash = PasswordHash::from_str("$argon2id$v=19$m=4096,t=3,p=1$test");
+        let hash = PasswordHash::from_str("$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx");
         assert!(hash.is_ok());
-        assert_eq!(hash.unwrap().as_str(), "$argon2id$v=19$m=4096,t=3,p=1$test");
+        assert_eq!(
+            hash.unwrap().as_str(),
+            "$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx"
+        );
     }
 
     #[test]
     fn test_password_hash_display() {
-        let hash = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+        let hash =
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx".to_string())
+                .unwrap();
         assert_eq!(format!("{hash}"), "[REDACTED]");
     }
 
     #[test]
     fn test_algorithm_detection() {
         let argon2_hash =
-            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx".to_string())
+                .unwrap();
         assert_eq!(argon2_hash.algorithm(), Some("argon2id"));
 
         let bcrypt_hash = PasswordHash::new("$2b$12$LQH7rPZCXqOQKj7JTzZPue".to_string()).unwrap();
         assert_eq!(bcrypt_hash.algorithm(), Some("2b"));
 
-        let pbkdf2_hash = PasswordHash::new("pbkdf2_sha256$test".to_string()).unwrap();
-        assert_eq!(pbkdf2_hash.algorithm(), None); // pbkdf2 doesn't follow $ format
+        let pbkdf2_hash =
+            PasswordHash::new("pbkdf2_sha256$abcdefghijklmnopqrstuvwx".to_string()).unwrap();
+        assert_eq!(pbkdf2_hash.algorithm(), Some("pbkdf2_sha256"));
     }
 
     #[test]
     fn test_secure_algorithm_detection() {
         let secure_hashes = vec![
-            "$argon2id$v=19$m=4096,t=3,p=1$test",
-            "$argon2i$v=19$m=4096,t=3,p=1$test",
-            "$scrypt$test",
+            "$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx",
+            "$argon2i$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx",
+            "$scrypt$abcdefghijklmnopqrstuvwx",
             "$2b$12$LQH7rPZCXqOQKj7JTzZPue", // bcrypt
         ];
 
@@ -148,9 +201,9 @@ mod tests {
         }
 
         let insecure_hashes = vec![
-            "$md5$test",
-            "$sha1$test",
-            "$sha256$test",
+            "$md5$abcdefghijklmnopqrstuvwx",
+            "$sha1$abcdefghijklmnopqrstuvwx",
+            "$sha256$abcdefghijklmnopqrstuvwx",
             "plaintext_password",
         ];
 
@@ -190,9 +243,9 @@ mod tests {
     #[test]
     fn test_suspicious_pattern() {
         let suspicious_hashes = vec![
-            "aaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "$$$$$$$$$$$$$$$$$$$$$$$$$$",
-            "11111111111111111111111111",
+            "$aaaaaaaaaaaaaaaaaaaaaaaaa",
+            "$$11111111111111111111111",
+            "pbkdf2_sha256$aaaaaaaaaaaa",
         ];
 
         for suspicious_hash in suspicious_hashes {
@@ -201,16 +254,22 @@ mod tests {
                 hash.is_err(),
                 "Hash '{suspicious_hash}' should be considered suspicious"
             );
-            assert!(hash.unwrap_err().contains("same character"));
+            assert!(hash.unwrap_err().contains("same character repeated"));
         }
     }
 
     #[test]
     fn test_hash_equality() {
-        let hash1 = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
-        let hash2 = PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$test".to_string()).unwrap();
-        let hash3 =
-            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$different".to_string()).unwrap();
+        let hash1 =
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx".to_string())
+                .unwrap();
+        let hash2 =
+            PasswordHash::new("$argon2id$v=19$m=4096,t=3,p=1$abcdefghijklmnopqrstuvwx".to_string())
+                .unwrap();
+        let hash3 = PasswordHash::new(
+            "$argon2id$v=19$m=4096,t=3,p=1$zyxwvutsrqponmlkjihgfedcba".to_string(),
+        )
+        .unwrap();
 
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);

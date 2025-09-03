@@ -8,7 +8,7 @@ mod tests_internal_security {
         SecureSessionConfig, SecureSessionManager, SessionError,
     };
     use crate::jwt_secure::create_secure_jwt_validation;
-    use crate::rate_limit_secure::{RateLimitConfig, SecureRateLimiter};
+    use crate::security::rate_limiting::{RateLimitConfig, UnifiedRateLimiter};
     use crate::validation_secure::*;
 
     use base64::Engine;
@@ -232,13 +232,13 @@ mod tests_internal_security {
     async fn test_rate_limiting_security() {
         let mut config = RateLimitConfig::default();
         config = RateLimitConfig {
-            ip_requests_per_minute: 3,
+            per_ip_requests_per_minute: 3,
             ban_threshold: 2,
             ..config
         };
         config.ban_threshold = 2;
 
-        let limiter = SecureRateLimiter::new(config);
+        let limiter = UnifiedRateLimiter::new(config, None);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
 
         // Should allow initial requests
@@ -247,20 +247,28 @@ mod tests_internal_security {
                 .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
                 .await;
             println!("Request {}: {:?}", i + 1, result);
-            assert!(result.is_ok(), "Request {} should be allowed", i + 1);
+            assert!(
+                matches!(
+                    result,
+                    crate::security::rate_limiting::RateLimitResult::Allowed
+                ),
+                "Request {} should be allowed",
+                i + 1
+            );
         }
 
         // Should start rate limiting on 4th request (implementation may vary)
-        let _ = limiter
+        let result = limiter
             .check_rate_limit(ip, None, "/test", Some("Mozilla/5.0"))
             .await;
+        println!("4th request result: {result:?}");
     }
 
     /// Test suspicious activity detection
     #[tokio::test]
     async fn test_suspicious_activity_detection() {
         let config = RateLimitConfig::default();
-        let limiter = SecureRateLimiter::new(config);
+        let limiter = UnifiedRateLimiter::new(config, None);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));
 
         // Request with suspicious user agent should trigger detection

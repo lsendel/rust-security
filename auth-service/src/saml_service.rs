@@ -18,14 +18,15 @@ pub struct SamlService {
 }
 
 impl SamlService {
-    #[must_use] pub const fn new(key: [u8; 32]) -> Self {
+    #[must_use]
+    pub const fn new(key: [u8; 32]) -> Self {
         Self {
             encryption_key: key,
         }
     }
 
     /// Encrypts a SAML assertion
-    /// 
+    ///
     /// # Errors
     /// Returns an error if:
     /// - Base64 encoding fails
@@ -37,7 +38,7 @@ impl SamlService {
     }
 
     /// Decrypts a SAML assertion
-    /// 
+    ///
     /// # Errors
     /// Returns an error if:
     /// - Base64 decoding fails

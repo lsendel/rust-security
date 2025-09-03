@@ -218,13 +218,13 @@ impl ServiceIdentityManager {
             created_at: Utc::now(),
             last_authenticated: None,
             last_rotated: None,
-            max_token_lifetime_seconds: self.get_max_lifetime(&identity_type),
+            max_token_lifetime_seconds: Self::get_max_lifetime(&identity_type),
             allowed_scopes: config.allowed_scopes,
             allowed_ips: config.allowed_ips,
             allowed_hours: config.allowed_hours,
             risk_score: 0.0,
-            requires_attestation: self.requires_attestation(&identity_type),
-            requires_continuous_auth: self.requires_continuous_auth(&identity_type),
+            requires_attestation: Self::requires_attestation(&identity_type),
+            requires_continuous_auth: Self::requires_continuous_auth(&identity_type),
             baseline_established: false,
             baseline_metrics: None,
             status: IdentityStatus::Active,
@@ -279,7 +279,10 @@ impl ServiceIdentityManager {
                     severity: AlertSeverity::High,
                     title: format!("Anomalous JIT request from {:?}", identity.identity_type),
                     description: "Suspicious JIT access request detected".to_string(),
-                    timestamp: Utc::now().timestamp() as u64,
+                    timestamp: {
+                        let ts = Utc::now().timestamp();
+                        u64::try_from(ts).unwrap_or(0)
+                    },
                     source_ip: Some(request.request_context.source_ip.clone()),
                     destination_ip: None,
                     source: "ServiceIdentityManager".to_string(),
@@ -323,7 +326,11 @@ impl ServiceIdentityManager {
             identity_id: identity.id,
             granted_scopes,
             issued_at: Utc::now(),
-            expires_at: Utc::now() + Duration::seconds(lifetime as i64),
+            expires_at: Utc::now()
+                + Duration::seconds(match i64::try_from(lifetime) {
+                    Ok(v) => v,
+                    Err(_) => i64::MAX,
+                }),
             request_context: request.request_context,
             revocable: true,
             usage_count: 0,
@@ -448,7 +455,7 @@ impl ServiceIdentityManager {
     }
 
     /// Helper: Determine max token lifetime based on identity type
-    const fn get_max_lifetime(&self, identity_type: &IdentityType) -> u64 {
+    const fn get_max_lifetime(identity_type: &IdentityType) -> u64 {
         match identity_type {
             IdentityType::Human { .. } => 900, // 15 minutes
             IdentityType::ServiceAccount {
@@ -463,7 +470,7 @@ impl ServiceIdentityManager {
     }
 
     /// Helper: Check if identity requires attestation
-    const fn requires_attestation(&self, identity_type: &IdentityType) -> bool {
+    const fn requires_attestation(identity_type: &IdentityType) -> bool {
         matches!(
             identity_type,
             IdentityType::AiAgent { .. } | IdentityType::MachineWorkload { .. }
@@ -471,7 +478,7 @@ impl ServiceIdentityManager {
     }
 
     /// Helper: Check if identity requires continuous auth
-    const fn requires_continuous_auth(&self, identity_type: &IdentityType) -> bool {
+    const fn requires_continuous_auth(identity_type: &IdentityType) -> bool {
         matches!(
             identity_type,
             IdentityType::AiAgent { .. }
@@ -521,14 +528,14 @@ impl PolicyEngine {
         // Find applicable policies sorted by priority
         let mut applicable: Vec<_> = policies
             .iter()
-            .filter(|p| self.applies_to_identity(p, &identity.identity_type))
+            .filter(|p| Self::applies_to_identity(p, &identity.identity_type))
             .collect();
 
         applicable.sort_by_key(|p| -p.priority);
 
         // Evaluate policies in priority order
         for policy in applicable {
-            if self.conditions_met(policy, identity, request) {
+            if Self::conditions_met(policy, identity, request) {
                 return Ok(policy.effect.clone());
             }
         }
@@ -537,7 +544,7 @@ impl PolicyEngine {
         Ok(PolicyEffect::Allow)
     }
 
-    fn applies_to_identity(&self, policy: &AccessPolicy, identity_type: &IdentityType) -> bool {
+    fn applies_to_identity(policy: &AccessPolicy, identity_type: &IdentityType) -> bool {
         // Check if policy applies to this identity type
         policy
             .applies_to
@@ -546,7 +553,6 @@ impl PolicyEngine {
     }
 
     fn conditions_met(
-        &self,
         policy: &AccessPolicy,
         identity: &ServiceIdentity,
         request: &JitAccessRequest,
@@ -571,7 +577,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_service_identity_max_lifetime() {
-        let manager = ServiceIdentityManager::new(Arc::new(MockMonitoring));
+        let _manager = ServiceIdentityManager::new(Arc::new(MockMonitoring));
 
         // AI agents should have shortest lifetime
         let ai_type = IdentityType::AiAgent {
@@ -580,7 +586,7 @@ mod tests {
             capabilities: vec!["read".to_string()],
         };
 
-        assert_eq!(manager.get_max_lifetime(&ai_type), 300); // 5 minutes
+        assert_eq!(ServiceIdentityManager::get_max_lifetime(&ai_type), 300); // 5 minutes
     }
 
     struct MockMonitoring;

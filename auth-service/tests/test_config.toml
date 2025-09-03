@@ -5,7 +5,7 @@
 test_mode = true
 rust_backtrace = "1"
 rust_log = "debug"
-request_signing_secret = "test_secret_for_comprehensive_testing"
+request_signing_secret = "${TEST_REQUEST_SIGNING_SECRET:-test_request_secret}"
 disable_rate_limit = true
 parallel_jobs = 4
 

@@ -5,17 +5,20 @@
 use chrono::{DateTime, Duration, Utc};
 
 /// Get current UTC timestamp
-#[must_use] pub fn now() -> DateTime<Utc> {
+#[must_use]
+pub fn now() -> DateTime<Utc> {
     Utc::now()
 }
 
 /// Check if a timestamp is expired
-#[must_use] pub fn is_expired(timestamp: DateTime<Utc>) -> bool {
+#[must_use]
+pub fn is_expired(timestamp: DateTime<Utc>) -> bool {
     Utc::now() > timestamp
 }
 
 /// Calculate time remaining until expiration
-#[must_use] pub fn time_remaining(until: DateTime<Utc>) -> Duration {
+#[must_use]
+pub fn time_remaining(until: DateTime<Utc>) -> Duration {
     if is_expired(until) {
         Duration::zero()
     } else {
@@ -24,7 +27,8 @@ use chrono::{DateTime, Duration, Utc};
 }
 
 /// Add duration to current time
-#[must_use] pub fn add_duration(duration: Duration) -> DateTime<Utc> {
+#[must_use]
+pub fn add_duration(duration: Duration) -> DateTime<Utc> {
     Utc::now() + duration
 }
 

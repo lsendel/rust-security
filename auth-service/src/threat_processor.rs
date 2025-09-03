@@ -2,21 +2,16 @@
 //! Unified threat processing service that coordinates all threat detection modules
 
 use crate::core::security::SecurityEvent;
-#[cfg(feature = "threat-hunting")]
 use crate::threat_adapter::ThreatDetectionAdapter;
-#[cfg(feature = "threat-hunting")]
 use crate::{
     threat_behavioral_analyzer::AdvancedBehavioralThreatDetector as BehavioralAnalyzer,
     threat_intelligence::ThreatIntelligenceCorrelator as ThreatIntelligenceEngine,
     threat_response_orchestrator::ThreatResponseOrchestrator,
 };
-#[cfg(feature = "threat-hunting")]
 use std::sync::Arc;
-#[cfg(feature = "threat-hunting")]
 use tokio::sync::RwLock;
 
 /// Unified threat processing service
-#[cfg(feature = "threat-hunting")]
 pub struct ThreatProcessor {
     behavioral_analyzer: Arc<BehavioralAnalyzer>,
     intelligence_engine: Arc<ThreatIntelligenceEngine>,
@@ -24,7 +19,6 @@ pub struct ThreatProcessor {
     enabled: Arc<RwLock<bool>>,
 }
 
-#[cfg(feature = "threat-hunting")]
 impl ThreatProcessor {
     /// Create a new threat processor
     #[must_use]
@@ -109,64 +103,32 @@ impl ThreatProcessor {
     }
 }
 
-/// No-op implementation when threat-hunting feature is disabled
-#[cfg(not(feature = "threat-hunting"))]
-pub struct ThreatProcessor;
-
-#[cfg(not(feature = "threat-hunting"))]
-impl Default for ThreatProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(not(feature = "threat-hunting"))]
-impl ThreatProcessor {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {}
-    }
-
-    /// Process a security event (no-op implementation for when threat-hunting is disabled)
-    ///
-    /// # Errors
-    ///
-    /// This implementation never returns an error
-    pub async fn process_event(
-        &self,
-        _event: &SecurityEvent,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Ok(())
-    }
-
-    /// Process multiple security events (no-op implementation for when threat-hunting is disabled)
-    ///
-    /// # Errors
-    ///
-    /// This implementation never returns an error
-    pub async fn process_events(
-        &self,
-        _events: &[SecurityEvent],
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Ok(())
-    }
-
-    pub async fn set_enabled(&self, _enabled: bool) {}
-
-    pub async fn is_enabled(&self) -> bool {
-        false
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "threat-hunting")]
+    use super::*;
+    
     #[tokio::test]
-    async fn test_threat_processor_disabled_feature() {
-        #[cfg(not(feature = "threat-hunting"))]
-        {
-            let processor = crate::threat_processor::ThreatProcessor::new();
-            assert!(!processor.is_enabled().await);
-        }
+    async fn test_threat_processor_enabled() {
+        // This test would need mock implementations of the threat modules
+        // For now, we just test basic functionality
+        let config = crate::threat_behavioral_analyzer::BehavioralAnalysisConfig::default();
+        let behavioral_analyzer = Arc::new(BehavioralAnalyzer::new(config));
+        let intelligence_engine = Arc::new(ThreatIntelligenceEngine::new(
+            crate::threat_intelligence::ThreatIntelligenceConfig::default(),
+        ));
+        let response_orchestrator = Arc::new(ThreatResponseOrchestrator::new(
+            crate::threat_response_orchestrator::ThreatResponseConfig::default(),
+        ));
+        
+        let processor = ThreatProcessor::new(
+            behavioral_analyzer,
+            intelligence_engine, 
+            response_orchestrator
+        );
+        
+        assert!(processor.is_enabled().await);
+        
+        processor.set_enabled(false).await;
+        assert!(!processor.is_enabled().await);
     }
 }

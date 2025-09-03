@@ -59,7 +59,8 @@ pub struct JwksCache {
 }
 
 impl JwksCache {
-    #[must_use] pub fn new(ttl_seconds: i64) -> Self {
+    #[must_use]
+    pub fn new(ttl_seconds: i64) -> Self {
         Self {
             entries: Arc::new(RwLock::new(HashMap::new())),
             default_ttl: Duration::seconds(ttl_seconds),
@@ -68,9 +69,12 @@ impl JwksCache {
 
     /// Get cached JWKS with `ETag` validation
     pub async fn get(&self, key: &str, if_none_match: Option<&str>) -> Option<JwksCacheEntry> {
-        let entries = self.entries.read().await;
+        let entry = {
+            let entries = self.entries.read().await;
+            entries.get(key).cloned()
+        }; // entries lock is dropped here
 
-        if let Some(entry) = entries.get(key) {
+        if let Some(entry) = entry {
             // Check if entry is expired
             if entry.expires_at < Utc::now() {
                 debug!("JWKS cache entry expired for key: {}", key);
@@ -81,12 +85,12 @@ impl JwksCache {
             if let Some(client_etag) = if_none_match {
                 if client_etag == entry.etag {
                     debug!("JWKS ETag match, returning 304 for key: {}", key);
-                    return Some(entry.clone());
+                    return Some(entry);
                 }
             }
 
             debug!("Returning cached JWKS for key: {}", key);
-            return Some(entry.clone());
+            return Some(entry);
         }
 
         None
@@ -105,8 +109,10 @@ impl JwksCache {
             expires_at: now + self.default_ttl,
         };
 
-        let mut entries = self.entries.write().await;
-        entries.insert(key, entry.clone());
+        {
+            let mut entries = self.entries.write().await;
+            entries.insert(key, entry.clone());
+        } // entries lock is dropped here
 
         info!("Cached JWKS with ETag: {}", etag);
         entry
@@ -162,7 +168,7 @@ pub async fn jwks_handler(
     if let Some(cached_entry) = cache.get(cache_key, if_none_match).await {
         // If ETag matches, return 304 Not Modified
         if if_none_match.is_some() && if_none_match.unwrap() == cached_entry.etag {
-            return not_modified_response(cached_entry);
+            return not_modified_response(&cached_entry);
         }
 
         // Return cached response with headers
@@ -248,7 +254,7 @@ fn jwks_response(entry: JwksCacheEntry) -> Response {
 }
 
 /// Build 304 Not Modified response
-fn not_modified_response(entry: JwksCacheEntry) -> Response {
+fn not_modified_response(entry: &JwksCacheEntry) -> Response {
     let mut headers = HeaderMap::new();
 
     // ETag header (must be included in 304)

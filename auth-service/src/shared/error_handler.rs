@@ -330,7 +330,8 @@ pub mod recovery {
 
         /// Handle circuit breaker in open state
         async fn handle_open_state(&self) -> Result<(), AppError> {
-            if let Some(last_failure) = *self.last_failure_time.read().await {
+            let last_failure_value = *self.last_failure_time.read().await;
+            if let Some(last_failure) = last_failure_value {
                 if last_failure.elapsed() >= self.recovery_timeout {
                     *self.state.write().await = CircuitState::HalfOpen;
                     info!("Circuit breaker transitioning to half-open state");
@@ -394,7 +395,10 @@ pub mod recovery {
             if *failures >= self.failure_threshold {
                 *self.state.write().await = CircuitState::Open;
                 *self.last_failure_time.write().await = Some(std::time::Instant::now());
-                warn!("Circuit breaker opened due to {} consecutive failures", *failures);
+                warn!(
+                    "Circuit breaker opened due to {} consecutive failures",
+                    *failures
+                );
             }
         }
 

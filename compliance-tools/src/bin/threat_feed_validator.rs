@@ -1,7 +1,9 @@
 //! Threat Feed Validator
 //!
-//! A Rust-based replacement for the Python validate_threat_feeds.py
+//! A Rust-based replacement for the Python `validate_threat_feeds.py`
 //! Validates threat intelligence feeds configuration and accessibility
+
+#![allow(clippy::print_stdout, clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::case_sensitive_file_extension_comparisons, clippy::cast_lossless)]
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -25,6 +27,7 @@ use dotenvy as _;
 use fastrand as _;
 use handlebars as _;
 use moka as _;
+#[cfg(feature = "prometheus-metrics")]
 use prometheus as _;
 use pulldown_cmark as _;
 use regex as _;
@@ -36,6 +39,7 @@ use uuid as _;
 use walkdir as _;
 
 #[tokio::main]
+#[allow(clippy::too_many_lines, clippy::print_stdout, clippy::case_sensitive_file_extension_comparisons, clippy::cast_lossless)]
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
@@ -114,6 +118,7 @@ async fn main() -> Result<()> {
     let validation_results = validator.validate_all_feeds(&feeds_config).await?;
 
     // Generate report
+    #[allow(clippy::cast_possible_truncation)]
     let report = ValidationReport {
         timestamp: Utc::now(),
         total_feeds: feeds_config.feeds.len() as u32,
@@ -145,7 +150,7 @@ async fn main() -> Result<()> {
     }
 
     // Print summary
-    let success_rate = (report.successful_feeds as f64 / report.total_feeds as f64) * 100.0;
+    let success_rate = (f64::from(report.successful_feeds) / f64::from(report.total_feeds)) * 100.0;
 
     if report.failed_feeds == 0 {
         info!(
@@ -280,6 +285,7 @@ fn output_table_report(report: &ValidationReport, verbose: bool) {
 }
 
 /// Format bytes in human readable format
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
 fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
     let mut size = bytes as f64;
@@ -384,20 +390,17 @@ impl ThreatFeedValidator {
         }
 
         // Validate URL
-        let url = match &config.url {
-            Some(url_str) => match Url::parse(url_str) {
-                Ok(url) => url,
-                Err(e) => {
-                    result.status = ValidationStatus::Failed;
-                    result.errors.push(format!("Invalid URL: {}", e));
-                    return result;
-                }
-            },
-            None => {
+        let url = if let Some(url_str) = &config.url { match Url::parse(url_str) {
+            Ok(url) => url,
+            Err(e) => {
                 result.status = ValidationStatus::Failed;
-                result.errors.push("No URL configured".to_string());
+                result.errors.push(format!("Invalid URL: {e}"));
                 return result;
             }
+        } } else {
+            result.status = ValidationStatus::Failed;
+            result.errors.push("No URL configured".to_string());
+            return result;
         };
 
         // Validate URL scheme
@@ -414,7 +417,10 @@ impl ThreatFeedValidator {
 
         match self.test_feed_connectivity(&url, config).await {
             Ok(response_info) => {
-                result.response_time_ms = start_time.elapsed().as_millis() as u64;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    result.response_time_ms = start_time.elapsed().as_millis() as u64;
+                }
                 result.content_size = response_info.content_size;
                 result.content_preview = response_info.content_preview;
                 result.status = ValidationStatus::Success;
@@ -436,11 +442,14 @@ impl ThreatFeedValidator {
                 }
             }
             Err(e) => {
-                result.response_time_ms = start_time.elapsed().as_millis() as u64;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    result.response_time_ms = start_time.elapsed().as_millis() as u64;
+                }
                 result.status = ValidationStatus::Failed;
                 result
                     .errors
-                    .push(format!("Connectivity test failed: {}", e));
+                    .push(format!("Connectivity test failed: {e}"));
             }
         }
 
@@ -456,7 +465,7 @@ impl ThreatFeedValidator {
 
         // Add API key if configured
         if let Some(api_key) = &config.api_key {
-            request = request.header("Authorization", format!("Bearer {}", api_key));
+            request = request.header("Authorization", format!("Bearer {api_key}"));
         }
 
         // Add custom headers

@@ -166,7 +166,7 @@ async fn test_complete_auth_flow_integration() {
 
     // 1. Create user credentials
     let email = Email::new("integration@test.com".to_string()).unwrap();
-    let password = "integration_password_123";
+    let password = "test_integration_password";
     let password_hash = crypto_service.hash_password(password).await.unwrap();
 
     // 2. Create user

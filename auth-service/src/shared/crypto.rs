@@ -10,7 +10,9 @@ use thiserror::Error;
 
 use crate::domain::entities::{Session, User};
 use crate::domain::value_objects::PasswordHash;
-use crate::infrastructure::crypto::jwks_rotation::{InMemoryKeyStorage, JwksManager, KeyRotationConfig};
+use crate::infrastructure::crypto::jwks_rotation::{
+    InMemoryKeyStorage, JwksManager, KeyRotationConfig,
+};
 use std::sync::Arc;
 
 /// Cryptographic service errors
@@ -85,7 +87,8 @@ pub struct CryptoService {
 
 impl CryptoService {
     /// Create a new crypto service with JWKS manager
-    #[must_use] pub fn new_with_jwks(jwks_manager: Arc<JwksManager>) -> Self {
+    #[must_use]
+    pub fn new_with_jwks(jwks_manager: Arc<JwksManager>) -> Self {
         Self {
             jwks_manager: Some(jwks_manager),
             jwt_issuer: "rust-security-auth-service".to_string(),
@@ -94,8 +97,9 @@ impl CryptoService {
     }
 
     /// Create a new crypto service (legacy constructor for compatibility)
-    #[must_use] pub fn new(_jwt_secret: String) -> Self {
-        // Use None to trigger lazy initialization 
+    #[must_use]
+    pub fn new(_jwt_secret: String) -> Self {
+        // Use None to trigger lazy initialization
         Self {
             jwks_manager: None,
             jwt_issuer: "rust-security-auth-service".to_string(),
@@ -104,25 +108,26 @@ impl CryptoService {
     }
 
     /// Create crypto service with custom issuer and audience
-    #[must_use] pub fn with_issuer_and_audience(_jwt_secret: String, issuer: String, audience: String) -> Self {
-        // Use None to trigger lazy initialization 
+    #[must_use]
+    pub fn with_issuer_and_audience(_jwt_secret: String, issuer: String, audience: String) -> Self {
+        // Use None to trigger lazy initialization
         Self {
             jwks_manager: None,
             jwt_issuer: issuer,
             jwt_audience: audience,
         }
     }
-    
+
     /// Get or create JWKS manager (lazy initialization)
     async fn get_jwks_manager(&self) -> Result<Arc<JwksManager>, CryptoError> {
         if let Some(ref manager) = self.jwks_manager {
             return Ok(Arc::clone(manager));
         }
-        
+
         // Create default JWKS manager with in-memory storage
         let config = KeyRotationConfig::default();
         let storage = Arc::new(InMemoryKeyStorage::new());
-        
+
         JwksManager::new(config, storage)
             .await
             .map(Arc::new)
@@ -146,8 +151,7 @@ impl CryptoServiceTrait for CryptoService {
             .hash_password(password.as_bytes(), &salt)
             .map_err(|e| CryptoError::PasswordHash(e.to_string()))?;
 
-        PasswordHash::new(password_hash.to_string())
-            .map_err(CryptoError::PasswordHash)
+        PasswordHash::new(password_hash.to_string()).map_err(CryptoError::PasswordHash)
     }
 
     async fn verify_password(
@@ -192,7 +196,9 @@ impl CryptoServiceTrait for CryptoService {
         };
 
         let jwks_manager = self.get_jwks_manager().await?;
-        let key = jwks_manager.get_encoding_key().await
+        let key = jwks_manager
+            .get_encoding_key()
+            .await
             .map_err(|e| CryptoError::JwtEncode(e.to_string()))?;
         let header = Header::new(Algorithm::EdDSA);
 
@@ -217,7 +223,9 @@ impl CryptoServiceTrait for CryptoService {
         };
 
         let jwks_manager = self.get_jwks_manager().await?;
-        let key = jwks_manager.get_encoding_key().await
+        let key = jwks_manager
+            .get_encoding_key()
+            .await
             .map_err(|e| CryptoError::JwtEncode(e.to_string()))?;
         let header = Header::new(Algorithm::EdDSA);
 
@@ -227,34 +235,46 @@ impl CryptoServiceTrait for CryptoService {
     async fn validate_refresh_token(&self, token: &str) -> Result<(User, Session), CryptoError> {
         // Use JWKS manager for secure validation with EdDSA
         let validation = Validation::new(Algorithm::EdDSA);
-        
+
         // Decode the token to extract the key ID
         let header = decode_header(token).map_err(|_| CryptoError::InvalidToken)?;
         let kid = header.kid.ok_or(CryptoError::InvalidToken)?;
-        
+
         // Get the appropriate decoding key
-        let jwks_manager = self.get_jwks_manager().await.map_err(|_| CryptoError::InvalidToken)?;
-        let key = jwks_manager.get_decoding_key(&kid).await
+        let jwks_manager = self
+            .get_jwks_manager()
+            .await
+            .map_err(|_| CryptoError::InvalidToken)?;
+        let key = jwks_manager
+            .get_decoding_key(&kid)
+            .await
             .map_err(|_| CryptoError::InvalidToken)?;
 
         let token_data = decode::<RefreshTokenClaims>(token, &key, &validation)
             .map_err(|_| CryptoError::InvalidToken)?;
 
         let claims = token_data.claims;
-        
+
         // Create basic user and session objects for validation
         // In a production system, these would be fetched from repositories using claims.sub and claims.session_id
-        use crate::domain::value_objects::{Email, UserId};
-        
-        let user_id = UserId::from_string(claims.sub).map_err(|_| CryptoError::InvalidToken)?;
-        let email = Email::new("placeholder@example.com".to_string()).map_err(|_| CryptoError::InvalidToken)?;
+
+        let user_id = crate::domain::value_objects::UserId::from_string(claims.sub)
+            .map_err(|_| CryptoError::InvalidToken)?;
+        let email = crate::domain::value_objects::Email::new("placeholder@example.com".to_string())
+            .map_err(|_| CryptoError::InvalidToken)?;
         let password_hash = crate::domain::value_objects::PasswordHash::new(
-            "$argon2id$v=19$m=65536,t=3,p=4$placeholder$hash".to_string()
-        ).map_err(|_| CryptoError::InvalidToken)?;
-        
-        let user = User::new(user_id.clone(), email, password_hash, Some("Placeholder User".to_string()));
+            "$argon2id$v=19$m=65536,t=3,p=4$placeholder$hash".to_string(),
+        )
+        .map_err(|_| CryptoError::InvalidToken)?;
+
+        let user = User::new(
+            user_id.clone(),
+            email,
+            password_hash,
+            Some("Placeholder User".to_string()),
+        );
         let session = Session::new(user_id, chrono::Utc::now());
-        
+
         Ok((user, session))
     }
 }
@@ -283,7 +303,8 @@ mod tests {
 
         // Create a test user and session
         let user_id = crate::domain::value_objects::UserId::new();
-        let email = crate::domain::value_objects::Email::new("test@example.com".to_string()).unwrap();
+        let email =
+            crate::domain::value_objects::Email::new("test@example.com".to_string()).unwrap();
         let password_hash = crypto.hash_password("password").await.unwrap();
 
         let user = User::new(user_id, email, password_hash, Some("Test User".to_string()));

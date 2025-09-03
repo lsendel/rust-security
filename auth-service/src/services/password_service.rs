@@ -51,12 +51,14 @@ impl Default for PasswordService {
 
 impl PasswordService {
     /// Create a new password service with default configuration
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::with_config(PasswordHashConfig::default())
     }
 
     /// Create a new password service with custom configuration
-    #[must_use] pub fn with_config(config: PasswordHashConfig) -> Self {
+    #[must_use]
+    pub fn with_config(config: PasswordHashConfig) -> Self {
         let params = Params::new(
             config.memory_cost,
             config.time_cost,
@@ -124,27 +126,68 @@ impl PasswordService {
             ));
         }
 
-        // For verification, we'll use constant-time comparison after hashing
-        // This is a simplified implementation - in production you'd want to parse
-        // the PHC format properly and use the same parameters
+        // Parse PHC format: $argon2id$v=19$m=65536,t=3,p=4$salt_b64$hash_b64
+        let parts: Vec<&str> = hash_str.split('$').collect();
+        if parts.len() != 6 {
+            return Err(AppError::Validation("Invalid hash format".to_string()));
+        }
 
-        let mut salt = [0u8; 32];
-        rand::thread_rng().fill(&mut salt);
+        // Extract parameters
+        let param_str = parts[3];
+        let salt_b64 = parts[4];
+        let stored_hash_b64 = parts[5];
 
-        let mut computed_hash = vec![0u8; self.config.output_length];
-        self.argon2
+        // Parse parameters (m=memory,t=time,p=parallelism)
+        let mut memory_cost = 0u32;
+        let mut time_cost = 0u32;
+        let mut parallelism = 0u32;
+
+        for param in param_str.split(',') {
+            if let Some(value) = param.strip_prefix("m=") {
+                memory_cost = value.parse().map_err(|_| {
+                    AppError::Validation("Invalid memory cost parameter".to_string())
+                })?;
+            } else if let Some(value) = param.strip_prefix("t=") {
+                time_cost = value
+                    .parse()
+                    .map_err(|_| AppError::Validation("Invalid time cost parameter".to_string()))?;
+            } else if let Some(value) = param.strip_prefix("p=") {
+                parallelism = value.parse().map_err(|_| {
+                    AppError::Validation("Invalid parallelism parameter".to_string())
+                })?;
+            }
+        }
+
+        // Decode salt and stored hash
+        let salt = BASE64_STANDARD
+            .decode(salt_b64)
+            .map_err(|_| AppError::Validation("Invalid salt encoding".to_string()))?;
+
+        let stored_hash = BASE64_STANDARD
+            .decode(stored_hash_b64)
+            .map_err(|_| AppError::Validation("Invalid hash encoding".to_string()))?;
+
+        // Create Argon2 instance with the same parameters as the stored hash
+        let params = Params::new(memory_cost, time_cost, parallelism, Some(stored_hash.len()))
+            .map_err(|e| AppError::CryptographicError(format!("Invalid Argon2 parameters: {e}")))?;
+
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+
+        // Hash the provided password with the same salt
+        let mut computed_hash = vec![0u8; stored_hash.len()];
+        argon2
             .hash_password_into(password.as_bytes(), &salt, &mut computed_hash)
             .map_err(|e| {
                 AppError::CryptographicError(format!("Password verification failed: {e}"))
             })?;
 
-        // For now, return false for verification (simplified)
-        // In production, you would parse the stored hash and compare properly
-        Ok(false)
+        // Use constant-time comparison to prevent timing attacks
+        Ok(constant_time_compare_bytes(&computed_hash, &stored_hash))
     }
 
     /// Check if a password hash needs rehashing (e.g., due to parameter changes)
-    #[must_use] pub fn needs_rehash(&self, hash: &PasswordHash) -> bool {
+    #[must_use]
+    pub fn needs_rehash(&self, hash: &PasswordHash) -> bool {
         let hash_str = hash.as_str();
 
         // Check if it uses the current algorithm and parameters
@@ -162,7 +205,8 @@ impl PasswordService {
 }
 
 /// Constant-time string comparison for security-sensitive operations
-#[must_use] pub fn constant_time_compare(a: &str, b: &str) -> bool {
+#[must_use]
+pub fn constant_time_compare(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -178,6 +222,21 @@ impl PasswordService {
     result == 0
 }
 
+/// Constant-time byte slice comparison for hash verification
+#[must_use]
+pub fn constant_time_compare_bytes(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    let mut result = 0u8;
+    for i in 0..a.len() {
+        result |= a[i] ^ b[i];
+    }
+
+    result == 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,7 +244,7 @@ mod tests {
     #[test]
     fn test_password_hashing() {
         let service = PasswordService::new();
-        let password = "secure_password_123!";
+        let password = "test_password_123";
 
         let hash = service.hash_password(password).unwrap();
         assert!(hash.as_str().starts_with("$argon2id$"));
@@ -207,11 +266,41 @@ mod tests {
     }
 
     #[test]
+    fn test_password_verification() {
+        let service = PasswordService::new();
+        let password = "test_password_123";
+        let wrong_password = "wrong_password";
+
+        // Hash the password
+        let hash = service.hash_password(password).unwrap();
+
+        // Verify correct password
+        assert!(service.verify_password(password, &hash).unwrap());
+
+        // Verify incorrect password
+        assert!(!service.verify_password(wrong_password, &hash).unwrap());
+
+        // Verify empty password
+        assert!(!service.verify_password("", &hash).unwrap());
+    }
+
+    #[test]
     fn test_constant_time_compare() {
         assert!(constant_time_compare("test", "test"));
         assert!(!constant_time_compare("test", "different"));
         assert!(!constant_time_compare("test", "test_extra"));
         assert!(!constant_time_compare("test_extra", "test"));
+    }
+
+    #[test]
+    fn test_constant_time_compare_bytes() {
+        let a = b"test_bytes";
+        let b = b"test_bytes";
+        let c = b"different";
+
+        assert!(constant_time_compare_bytes(a, b));
+        assert!(!constant_time_compare_bytes(a, c));
+        assert!(!constant_time_compare_bytes(a, b"test_bytes_extra"));
     }
 
     #[test]

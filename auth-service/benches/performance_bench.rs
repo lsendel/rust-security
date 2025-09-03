@@ -1,7 +1,6 @@
 #![cfg(feature = "benchmarks")]
-use auth_service::storage::store::hybrid::TokenStore;
-use auth_service::{BackpressureConfig, Error, TokenCache, UserRole};
 use auth_service::infrastructure::crypto::keys;
+use auth_service::storage::store::hybrid::TokenStore;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use jsonwebtoken::EncodingKey;
 use std::collections::HashMap;
@@ -25,10 +24,9 @@ fn bench_token_store_operations(c: &mut Criterion) {
     group.bench_function("in_memory_set_active", |b| {
         b.iter(|| {
             let token = format!("token_{}", 42u64);
-            black_box(
-                rt.block_on(in_memory_store.set_active(&token, true, Some(3600)))
-                    .unwrap(),
-            );
+            rt.block_on(in_memory_store.set_active(&token, true, Some(3600)))
+                .unwrap();
+            black_box(());
         });
     });
 
@@ -37,10 +35,10 @@ fn bench_token_store_operations(c: &mut Criterion) {
         b.iter(|| {
             // Pre-populate with some tokens
             for i in 0..100 {
-                let token = format!("bench_token_{}", i);
+                let token = format!("bench_token_{i}");
                 let _ = rt.block_on(in_memory_store.set_active(&token, true, Some(3600)));
             }
-            let token = format!("bench_token_{}", 50usize);
+            let token = "bench_token_50".to_string();
             black_box(rt.block_on(in_memory_store.get_active(&token)).unwrap());
         });
     });
@@ -57,13 +55,17 @@ fn bench_jwt_operations(c: &mut Criterion) {
     group.bench_function("rsa_key_generation", |b| {
         b.iter(|| {
             // Handle Result return type properly
-            match rt.block_on(keys::current_signing_key()) {
-                Ok(key_pair) => black_box(key_pair),
-                Err(_) => black_box((
-                    "error".to_string(),
-                    EncodingKey::from_secret("fallback".as_ref()),
-                )),
-            }
+            rt
+                .block_on(keys::current_signing_key())
+                .map_or_else(
+                    |_| {
+                        black_box((
+                            "error".to_string(),
+                            EncodingKey::from_secret("fallback".as_ref()),
+                        ))
+                    },
+                    black_box,
+                );
         });
     });
 
@@ -89,7 +91,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
                     "POST",
                     "/oauth/token",
                     "grant_type=client_credentials",
-                    1234567890,
+                    1_234_567_890_i64,
                     "test_secret",
                 )
                 .unwrap_or_else(|_| "fallback_signature".to_string()),
@@ -190,14 +192,14 @@ fn bench_concurrent_operations(c: &mut Criterion) {
 
     let in_memory_store = TokenStore::InMemory(Arc::new(RwLock::new(HashMap::new())));
 
-    for concurrent_ops in [1, 10, 50, 100].iter() {
+    for concurrent_ops in &[1, 10, 50, 100] {
         group.bench_with_input(
             BenchmarkId::new("concurrent_token_operations", concurrent_ops),
             concurrent_ops,
             |b, &concurrent_ops| {
                 b.iter(|| {
                     for i in 0..concurrent_ops {
-                        let token = format!("concurrent_token_{}", i);
+                        let token = format!("concurrent_token_{i}");
                         let _ = rt.block_on(in_memory_store.set_active(&token, true, Some(3600)));
                         let _ = rt.block_on(in_memory_store.get_active(&token));
                     }
@@ -222,7 +224,7 @@ fn bench_memory_usage(c: &mut Criterion) {
 
             // Store 1000 tokens and measure memory impact
             for i in 0..1000 {
-                let token = format!("memory_test_token_{}", i);
+                let token = format!("memory_test_token_{i}");
                 let _ = rt.block_on(store.set_active(&token, true, Some(3600)));
                 // Metadata setters removed in this simplified benchmark
             }

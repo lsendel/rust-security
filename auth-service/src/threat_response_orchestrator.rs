@@ -1,5 +1,5 @@
 use crate::core::security::SecurityEvent;
-#[cfg(feature = "threat-hunting")]
+
 use crate::threat_adapter::{process_with_conversion, ThreatDetectionAdapter};
 use crate::threat_types::{
     ActionResult, BusinessImpact, EscalationAction, EscalationRule, EscalationTrigger,
@@ -1422,7 +1422,7 @@ impl ThreatResponseOrchestrator {
     }
 }
 
-#[cfg(feature = "threat-hunting")]
+
 #[async_trait::async_trait]
 impl ThreatDetectionAdapter for ThreatResponseOrchestrator {
     async fn process_security_event(

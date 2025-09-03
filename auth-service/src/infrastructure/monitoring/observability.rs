@@ -24,7 +24,13 @@ pub fn log_auth_success(user_id: &str, auth_method: &str, client_ip: Option<&str
 /// Log failed authentication attempt
 /// Helper function to log auth failure with complete information
 fn log_auth_failure_full(user_id: &str, auth_method: &str, reason: &str, client_ip: &str) {
-    tracing::warn!(user_id, auth_method, reason, client_ip, "Authentication failed");
+    tracing::warn!(
+        user_id,
+        auth_method,
+        reason,
+        client_ip,
+        "Authentication failed"
+    );
 }
 
 /// Helper function to log auth failure with user ID only

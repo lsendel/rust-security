@@ -260,7 +260,7 @@ fn bench_jwt_operations(c: &mut Criterion) {
     group.measurement_time(std::time::Duration::from_secs(3));
 
     // Mock JWT operations
-    let _secret = "test-secret-key-for-benchmarking-purposes-only";
+    let _secret = "benchmark_test_secret";
     let claims = serde_json::json!({
         "sub": "user123",
         "iat": 1234567890,

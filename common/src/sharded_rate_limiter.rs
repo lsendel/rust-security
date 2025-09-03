@@ -143,13 +143,9 @@ impl ShardedRateLimiter {
             "Burst multiplier must be >= 1.0"
         );
 
-        // Create shards array
-        let mut shards = Vec::with_capacity(rate_limiting::RATE_LIMITER_SHARDS);
-        for _ in 0..rate_limiting::RATE_LIMITER_SHARDS {
-            shards.push(RwLock::new(HashMap::new()));
-        }
+        // Create shards array without panicking conversions
         let shards: [RwLock<HashMap<String, RateLimitEntry>>; rate_limiting::RATE_LIMITER_SHARDS] =
-            shards.try_into().expect("Vector has wrong size");
+            std::array::from_fn(|_| RwLock::new(HashMap::new()));
 
         Self {
             shards,

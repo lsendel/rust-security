@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout, clippy::missing_errors_doc, clippy::unused_self, clippy::unnecessary_wraps, clippy::struct_field_names, clippy::ref_option, clippy::option_if_let_else)]
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use clap::{Arg, Command};
@@ -19,6 +21,7 @@ use dotenvy as _;
 use fastrand as _;
 use handlebars as _;
 use moka as _;
+#[cfg(feature = "prometheus-metrics")]
 use prometheus as _;
 use pulldown_cmark as _;
 use regex as _;
@@ -330,7 +333,7 @@ impl SbomGenerator {
 
     fn create_project_package(&self, project_name: &str) -> Result<SpdxPackage> {
         Ok(SpdxPackage {
-            spdx_id: format!("SPDXRef-Package-{}", project_name),
+            spdx_id: format!("SPDXRef-Package-{project_name}"),
             name: project_name.to_string(),
             version_info: Some("0.1.0".to_string()),
             download_location: "git+https://github.com/company/rust-security.git".to_string(),
@@ -395,10 +398,10 @@ impl SbomGenerator {
             license_concluded,
             license_declared,
             copyright_text: None,
-            supplier: if !dep.authors.is_empty() {
-                Some(format!("Person: {}", dep.authors.join(", ")))
-            } else {
+            supplier: if dep.authors.is_empty() {
                 Some("Person: Unknown".to_string())
+            } else {
+                Some(format!("Person: {}", dep.authors.join(", ")))
             },
             description: dep.description.clone(),
         }
@@ -424,14 +427,14 @@ impl SbomGenerator {
         // Hash Rust source files
         for entry in walkdir::WalkDir::new(&self.project_root)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
         {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs")
                 && !path.components().any(|c| {
                     matches!(
                         c.as_os_str().to_str(),
-                        Some("target") | Some(".git") | Some("node_modules")
+                        Some("target" | ".git" | "node_modules")
                     )
                 })
             {
@@ -456,7 +459,7 @@ impl SbomGenerator {
 
     fn generate_purl(&self, name: &str, version: &Option<String>) -> String {
         let version_str = version.as_deref().unwrap_or("unknown");
-        format!("pkg:cargo/{}@{}", name, version_str)
+        format!("pkg:cargo/{name}@{version_str}")
     }
 
     pub fn verify_integrity(&self, sbom: &SpdxDocument) -> Result<()> {
@@ -505,6 +508,7 @@ impl SbomGenerator {
     }
 }
 
+#[allow(clippy::print_stdout, clippy::missing_errors_doc, clippy::unused_self, clippy::unnecessary_wraps, clippy::struct_field_names, clippy::ref_option, clippy::option_if_let_else)]
 fn main() -> Result<()> {
     let matches = Command::new("sbom_generator")
         .about("Generate SBOM for Rust project")
@@ -584,7 +588,7 @@ fn main() -> Result<()> {
                 .ends_with(&generator.get_project_name().unwrap_or_default())
         })
         .count();
-    println!("📊 Generated SBOM with {} dependencies", package_count);
+    println!("📊 Generated SBOM with {package_count} dependencies");
 
     Ok(())
 }

@@ -175,7 +175,9 @@ impl NonHumanIdentityMonitor {
     ) -> Result<(), crate::shared::error::AppError> {
         let country = self.geo_resolver.resolve_country(&context.source_ip).await;
 
-        let should_check_anomalies;
+        // Extract baseline status early to minimize lock duration
+        let should_check_anomalies = identity.baseline_established;
+
         {
             let mut metrics = self.metrics.write().await;
 
@@ -183,7 +185,7 @@ impl NonHumanIdentityMonitor {
                 .entry(identity.id)
                 .or_insert_with(|| NonHumanMetrics {
                     identity_id: identity.id,
-                    identity_type: self.get_identity_type_string(&identity.identity_type),
+                    identity_type: Self::get_identity_type_string(&identity.identity_type),
                     total_requests: 0,
                     unique_endpoints: HashSet::new(),
                     request_rate_per_minute: 0.0,
@@ -214,8 +216,6 @@ impl NonHumanIdentityMonitor {
                     .entry(country)
                     .or_insert(0) += 1;
             }
-
-            should_check_anomalies = identity.baseline_established;
         }
 
         // Check for anomalies after releasing the metrics lock
@@ -235,6 +235,7 @@ impl NonHumanIdentityMonitor {
     /// # Errors
     ///
     /// Returns an error if metrics update or calculations fail downstream.
+    #[allow(clippy::too_many_arguments)]
     pub async fn log_request(
         &self,
         identity_id: Uuid,
@@ -276,7 +277,7 @@ impl NonHumanIdentityMonitor {
             identity_logs.push_back(activity.clone());
 
             // Calculate request rate while we have the logs
-            self.calculate_request_rate(identity_logs, rate_window_minutes)
+            Self::calculate_request_rate(identity_logs, rate_window_minutes)
         };
 
         // Update metrics after releasing logs lock
@@ -286,10 +287,12 @@ impl NonHumanIdentityMonitor {
                 identity_metrics
                     .unique_endpoints
                     .insert(endpoint.to_string());
+                let total_requests_usize =
+                    usize::try_from(identity_metrics.total_requests).unwrap_or(usize::MAX);
                 identity_metrics.avg_request_size = ((identity_metrics.avg_request_size
-                    * (identity_metrics.total_requests as usize - 1))
+                    * (total_requests_usize.saturating_sub(1)))
                     + request_size)
-                    / identity_metrics.total_requests as usize;
+                    / total_requests_usize;
                 identity_metrics.request_rate_per_minute = rate;
             }
         }
@@ -342,10 +345,12 @@ impl NonHumanIdentityMonitor {
         &self,
         identity_id: Uuid,
     ) -> Result<BehavioralBaseline, crate::shared::error::AppError> {
-        let (identity_logs, identity_metrics, min_requests_for_baseline) = {
+        // Extract config value early to minimize lock duration
+        let min_requests_for_baseline = self.config.read().await.min_requests_for_baseline;
+
+        let (identity_logs, identity_metrics) = {
             let logs = self.activity_logs.read().await;
             let metrics = self.metrics.read().await;
-            let config = self.config.read().await;
 
             let identity_logs = logs
                 .get(&identity_id)
@@ -357,7 +362,7 @@ impl NonHumanIdentityMonitor {
                 .ok_or(crate::shared::error::AppError::InsufficientDataForBaseline)?
                 .clone();
 
-            (identity_logs, identity_metrics, config.min_requests_for_baseline)
+            (identity_logs, identity_metrics)
         };
 
         if identity_logs.len() < min_requests_for_baseline {
@@ -389,7 +394,7 @@ impl NonHumanIdentityMonitor {
             .iter()
             .enumerate()
             .filter(|(_, count)| **count > 0)
-            .map(|(hour, _)| hour as u8)
+            .filter_map(|(hour, _)| u8::try_from(hour).ok())
             .collect();
 
         // Get typical source IPs
@@ -411,12 +416,14 @@ impl NonHumanIdentityMonitor {
             typical_hours,
             typical_source_ips,
             established_at: Utc::now(),
-            confidence_score: self.calculate_confidence_score(identity_logs.len()),
+            confidence_score: Self::calculate_confidence_score(identity_logs.len()),
         };
 
         // Store baseline
-        let mut baselines = self.baselines.write().await;
-        baselines.insert(identity_id, baseline.clone());
+        self.baselines
+            .write()
+            .await
+            .insert(identity_id, baseline.clone());
 
         info!("Established baseline for identity {}", identity_id);
         Ok(baseline)
@@ -450,7 +457,7 @@ impl NonHumanIdentityMonitor {
         }
 
         // Check time anomaly
-        let current_hour = Utc::now().hour() as u8;
+        let current_hour = u8::try_from(Utc::now().hour()).unwrap_or(0);
         if let Some(baseline) = identity.baseline_metrics.as_ref() {
             if !baseline.typical_hours.contains(&current_hour) {
                 score += 0.2;
@@ -480,6 +487,7 @@ impl NonHumanIdentityMonitor {
     /// # Errors
     ///
     /// Returns an error if sending alerts fails.
+    #[allow(clippy::cognitive_complexity)]
     pub async fn respond_to_anomaly(
         &self,
         identity: &ServiceIdentity,
@@ -575,7 +583,7 @@ impl NonHumanIdentityMonitor {
 
         // Update metrics
         metrics.risk_factors.extend(risk_factors.clone());
-        metrics.anomaly_score = self.calculate_risk_score(&risk_factors);
+        metrics.anomaly_score = Self::calculate_risk_score(&risk_factors);
 
         // Trigger response if needed
         if metrics.anomaly_score > 0.8 {
@@ -590,19 +598,19 @@ impl NonHumanIdentityMonitor {
         Ok(())
     }
 
-    fn calculate_request_rate(&self, logs: &VecDeque<ActivityLog>, window_minutes: u64) -> f64 {
-        let cutoff = Utc::now() - Duration::minutes(window_minutes as i64);
+    fn calculate_request_rate(logs: &VecDeque<ActivityLog>, window_minutes: u64) -> f64 {
+        let cutoff = Utc::now() - Duration::minutes(window_minutes.min(i64::MAX as u64) as i64);
         let recent_count = logs.iter().filter(|log| log.timestamp > cutoff).count();
 
         recent_count as f64 / window_minutes as f64
     }
 
-    fn calculate_confidence_score(&self, sample_size: usize) -> f32 {
+    fn calculate_confidence_score(sample_size: usize) -> f32 {
         // Confidence increases with sample size
         (1.0 - (1.0 / (sample_size as f32 / 100.0 + 1.0))).min(1.0)
     }
 
-    fn calculate_risk_score(&self, factors: &[RiskFactor]) -> f32 {
+    fn calculate_risk_score(factors: &[RiskFactor]) -> f32 {
         if factors.is_empty() {
             return 0.0;
         }
@@ -611,7 +619,7 @@ impl NonHumanIdentityMonitor {
         (total / factors.len() as f32).min(1.0)
     }
 
-    fn get_identity_type_string(&self, identity_type: &IdentityType) -> String {
+    fn get_identity_type_string(identity_type: &IdentityType) -> String {
         match identity_type {
             IdentityType::Human { .. } => "human".to_string(),
             IdentityType::ServiceAccount { .. } => "service_account".to_string(),

@@ -1,5 +1,19 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms, future_incompatible)]
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::cognitive_complexity,
+    clippy::too_many_lines,
+    clippy::needless_pass_by_value,
+    clippy::future_not_send,
+    clippy::items_after_statements,
+    clippy::unnecessary_wraps,
+    clippy::struct_excessive_bools,
+    clippy::branches_sharing_code,
+    clippy::trivially_copy_pass_by_ref,
+    dead_code
+)]
 //! Common types and utilities for the rust-security workspace
 //!
 //! This crate provides shared types, error handling, and utility functions

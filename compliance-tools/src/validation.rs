@@ -14,6 +14,9 @@ impl Validator {
     }
 
     /// Validate URL format
+    ///
+    /// # Errors
+    /// Returns an error if the URL cannot be parsed.
     pub fn validate_url(url: &str) -> ComplianceResult<()> {
         match url::Url::parse(url) {
             Ok(_) => Ok(()),
@@ -22,6 +25,9 @@ impl Validator {
     }
 
     /// Validate file path exists
+    ///
+    /// # Errors
+    /// Returns an error if the file does not exist.
     pub fn validate_file_path(path: &str) -> ComplianceResult<()> {
         if std::path::Path::new(path).exists() {
             Ok(())
@@ -33,6 +39,9 @@ impl Validator {
     }
 
     /// Validate directory path exists
+    ///
+    /// # Errors
+    /// Returns an error if the directory does not exist or is not a directory.
     pub fn validate_directory_path(path: &str) -> ComplianceResult<()> {
         let path = std::path::Path::new(path);
         if path.exists() && path.is_dir() {
@@ -46,6 +55,9 @@ impl Validator {
     }
 
     /// Validate positive integer
+    ///
+    /// # Errors
+    /// Returns an error if the value is not positive.
     pub fn validate_positive_integer(value: i64) -> ComplianceResult<()> {
         if value > 0 {
             Ok(())
@@ -57,6 +69,9 @@ impl Validator {
     }
 
     /// Validate percentage (0-100)
+    ///
+    /// # Errors
+    /// Returns an error if the percentage is out of range.
     pub fn validate_percentage(value: f64) -> ComplianceResult<()> {
         if (0.0..=100.0).contains(&value) {
             Ok(())

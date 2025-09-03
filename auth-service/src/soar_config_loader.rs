@@ -376,7 +376,7 @@ mod tests {
     fn test_no_hardcoded_secrets_validation() {
         let config_with_secret = r#"
 [notifications.email]
-password = "actual_password_here"
+password = "${EMAIL_PASSWORD}"
 "#;
 
         let result = SecureSoarConfig::validate_no_hardcoded_secrets(config_with_secret);

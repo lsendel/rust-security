@@ -35,9 +35,9 @@ pub struct SecureKeyManager {
 
 impl SecureKeyManager {
     /// Create a new secure key manager with an Ed25519 key pair
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Ed25519 key pair generation fails due to insufficient entropy
     /// - PKCS#8 encoding of the generated key pair fails
@@ -56,49 +56,56 @@ impl SecureKeyManager {
     }
 
     /// Get the JSON Web Key Set containing the public key
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Base64 encoding of the public key fails
     /// - JSON serialization of the JWKS structure fails
     /// - Lock acquisition for the key pair fails
     pub async fn get_jwks(&self) -> Result<JwkSet, Box<dyn std::error::Error + Send + Sync>> {
-        let keypair = self.current_keypair.read().await;
-        let public_key_bytes = keypair.public_key().as_ref();
-
-        let jwk = Jwk {
-            kty: "OKP".to_string(),
-            crv: Some("Ed25519".to_string()),
-            use_: Some("sig".to_string()),
-            key_ops: Some(vec!["verify".to_string()]),
-            alg: Some("EdDSA".to_string()),
-            kid: self.key_id.clone(),
-            x: Some(STANDARD.encode(public_key_bytes)),
-            n: None,
-            e: None,
+        let jwk = {
+            let keypair = self.current_keypair.read().await;
+            let public_key_bytes = keypair.public_key().as_ref();
+            let result = Jwk {
+                kty: "OKP".to_string(),
+                crv: Some("Ed25519".to_string()),
+                use_: Some("sig".to_string()),
+                key_ops: Some(vec!["verify".to_string()]),
+                alg: Some("EdDSA".to_string()),
+                kid: self.key_id.clone(),
+                x: Some(STANDARD.encode(public_key_bytes)),
+                n: None,
+                e: None,
+            };
+            drop(keypair);
+            result
         };
 
         Ok(JwkSet { keys: vec![jwk] })
     }
 
     /// Sign a JWT payload using Ed25519
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - The signing operation fails
     /// - Lock acquisition for the key pair fails
     pub async fn sign_jwt(&self, payload: &[u8]) -> Result<Vec<u8>, Unspecified> {
-        let keypair = self.current_keypair.read().await;
-        let signature = keypair.sign(payload);
+        let signature = {
+            let keypair = self.current_keypair.read().await;
+            let result = keypair.sign(payload);
+            drop(keypair);
+            result
+        };
         Ok(signature.as_ref().to_vec())
     }
 
     /// Rotate the current Ed25519 key pair
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - New Ed25519 key pair generation fails
     /// - PKCS#8 encoding operations fail
@@ -108,8 +115,11 @@ impl SecureKeyManager {
         let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&self.rng)?;
         let new_keypair = Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
 
-        let mut current = self.current_keypair.write().await;
-        *current = new_keypair;
+        {
+            let mut current = self.current_keypair.write().await;
+            *current = new_keypair;
+            drop(current);
+        }
         Ok(())
     }
 }

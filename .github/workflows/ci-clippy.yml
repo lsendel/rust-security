@@ -1,0 +1,28 @@
+name: CI - Lint & Clippy
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  clippy-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Clippy (libs/bins)
+        run: cargo clippy --workspace --all-features -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
+
+  clippy-tests-informational:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Clippy (include tests)
+        run: cargo clippy --workspace --all-features --tests -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic

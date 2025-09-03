@@ -7,6 +7,9 @@ pub struct TemplateManager;
 
 impl TemplateManager {
     /// Load template from file
+    ///
+    /// # Errors
+    /// Returns an error if the template file cannot be read.
     pub async fn load_template(path: &str) -> ComplianceResult<String> {
         tokio::fs::read_to_string(path)
             .await

@@ -1,0 +1,6 @@
+[advisories]
+ignore = [
+  "RUSTSEC-2023-0071" # rsa via sqlx-mysql: mysql driver not used in workspace
+]
+informational_warnings = ["unmaintained", "yanked", "notice"]
+

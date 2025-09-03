@@ -3,7 +3,7 @@
 //! This module provides a complete metrics collection system that builds upon
 //! the existing security metrics to provide comprehensive observability for:
 //! - Token operations (issuance, validation, revocation, introspection)
-//! - Policy evaluation and cache operations  
+//! - Policy evaluation and cache operations
 //! - Request rates, latency, and error rates
 //! - Security events and authentication flows
 //! - System health and performance metrics
@@ -15,6 +15,7 @@
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use tracing::warn;
 
 use axum::{
     extract::{MatchedPath, Request},
@@ -28,6 +29,51 @@ use prometheus::{
 };
 use std::sync::LazyLock;
 use tracing::{debug, error};
+
+/// Type alias for token-related metrics group
+type TokenMetricsGroup = (
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+    HistogramVec,
+    IntCounterVec,
+);
+
+/// Type alias for policy-related metrics group
+type PolicyMetricsGroup = (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec);
+
+/// Type alias for cache-related metrics group
+type CacheMetricsGroup = (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec);
+
+/// Type alias for HTTP-related metrics group
+type HttpMetricsGroup = (
+    IntCounterVec,
+    HistogramVec,
+    HistogramVec,
+    HistogramVec,
+    IntGauge,
+);
+
+/// Type alias for rate limiting metrics group
+type RateLimitMetricsGroup = (IntCounterVec, IntCounterVec, HistogramVec);
+
+/// Type alias for security metrics group
+type SecurityMetricsGroup = (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec);
+
+/// Type alias for system metrics group
+type SystemMetricsGroup = (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec);
+
+/// Type alias for all metrics groups combined
+type AllMetricsGroups = (
+    TokenMetricsGroup,
+    PolicyMetricsGroup,
+    CacheMetricsGroup,
+    HttpMetricsGroup,
+    RateLimitMetricsGroup,
+    SecurityMetricsGroup,
+    SystemMetricsGroup,
+);
 
 /// Core metrics registry and collectors for comprehensive observability
 pub struct MetricsRegistry {
@@ -144,15 +190,7 @@ impl MetricsRegistry {
     ///
     /// # Returns
     /// A tuple containing all metric groups.
-    fn create_all_metric_groups() -> (
-        (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec),
-        (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
-        (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
-        (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
-        (IntCounterVec, IntCounterVec, HistogramVec),
-        (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
-        (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
-    ) {
+    fn create_all_metric_groups() -> AllMetricsGroups {
         (
             Self::create_token_metrics(),
             Self::create_policy_metrics(),
@@ -171,18 +209,7 @@ impl MetricsRegistry {
     /// # Arguments
     /// * `registry` - The Prometheus registry to register metrics with
     /// * `metrics_groups` - Tuple containing all metric groups
-    fn register_all_metrics(
-        registry: &Registry,
-        metrics_groups: &(
-            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec),
-            (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
-            (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
-            (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
-            (IntCounterVec, IntCounterVec, HistogramVec),
-            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
-            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
-        ),
-    ) {
+    fn register_all_metrics(registry: &Registry, metrics_groups: &AllMetricsGroups) {
         let all_metrics = Self::collect_all_metrics(
             &metrics_groups.0,
             &metrics_groups.1,
@@ -197,27 +224,24 @@ impl MetricsRegistry {
 
     /// Build the final `MetricsRegistry` struct
     ///
-    /// Constructs the MetricsRegistry with all metrics from the groups.
+    /// Constructs the `MetricsRegistry` with all metrics from the groups.
     ///
     /// # Arguments
     /// * `registry` - The Prometheus registry
     /// * `metrics_groups` - Tuple containing all metric groups
     ///
     /// # Returns
-    /// A new MetricsRegistry instance
-    fn build_registry(
-        registry: Registry,
-        metrics_groups: (
-            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec),
-            (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
-            (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
-            (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
-            (IntCounterVec, IntCounterVec, HistogramVec),
-            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
-            (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
-        ),
-    ) -> Self {
-        let (token_metrics, policy_metrics, cache_metrics, http_metrics, rate_limit_metrics, security_metrics, system_metrics) = metrics_groups;
+    /// A new `MetricsRegistry` instance
+    fn build_registry(registry: Registry, metrics_groups: AllMetricsGroups) -> Self {
+        let (
+            token_metrics,
+            policy_metrics,
+            cache_metrics,
+            http_metrics,
+            rate_limit_metrics,
+            security_metrics,
+            system_metrics,
+        ) = metrics_groups;
 
         Self {
             registry,
@@ -442,7 +466,13 @@ impl MetricsRegistry {
     ///
     /// # Returns
     /// A tuple containing all HTTP-related metrics.
-    fn create_http_metrics() -> (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge) {
+    fn create_http_metrics() -> (
+        IntCounterVec,
+        HistogramVec,
+        HistogramVec,
+        HistogramVec,
+        IntGauge,
+    ) {
         let http_requests_total = IntCounterVec::new(
             Opts::new("auth_http_requests_total", "Total HTTP requests"),
             &["method", "endpoint", "status_code", "client_id"],
@@ -681,7 +711,13 @@ impl MetricsRegistry {
         ),
         policy_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
         cache_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
-        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        http_metrics: &(
+            IntCounterVec,
+            HistogramVec,
+            HistogramVec,
+            HistogramVec,
+            IntGauge,
+        ),
         rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
         security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
         system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
@@ -719,17 +755,28 @@ impl MetricsRegistry {
         ),
         policy_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec),
         cache_metrics: &(IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),
-        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        http_metrics: &(
+            IntCounterVec,
+            HistogramVec,
+            HistogramVec,
+            HistogramVec,
+            IntGauge,
+        ),
         rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
         security_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
         system_metrics: &(IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec),
     ) -> Vec<Box<dyn prometheus::core::Collector>> {
         let mut all_metrics = Vec::with_capacity(28); // Pre-allocate based on known metric count
-        
-        Self::collect_core_metrics(&mut all_metrics, token_metrics, policy_metrics, cache_metrics);
+
+        Self::collect_core_metrics(
+            &mut all_metrics,
+            token_metrics,
+            policy_metrics,
+            cache_metrics,
+        );
         Self::collect_web_metrics(&mut all_metrics, http_metrics, rate_limit_metrics);
         Self::collect_security_system_metrics(&mut all_metrics, security_metrics, system_metrics);
-        
+
         all_metrics
     }
 
@@ -755,7 +802,13 @@ impl MetricsRegistry {
     /// Collect web-related metrics (HTTP requests, rate limiting)
     fn collect_web_metrics(
         all_metrics: &mut Vec<Box<dyn prometheus::core::Collector>>,
-        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        http_metrics: &(
+            IntCounterVec,
+            HistogramVec,
+            HistogramVec,
+            HistogramVec,
+            IntGauge,
+        ),
         rate_limit_metrics: &(IntCounterVec, IntCounterVec, HistogramVec),
     ) {
         all_metrics.extend(Self::collect_http_metrics(http_metrics));
@@ -819,7 +872,13 @@ impl MetricsRegistry {
 
     /// Collect HTTP metrics into boxed collectors
     fn collect_http_metrics(
-        http_metrics: &(IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge),
+        http_metrics: &(
+            IntCounterVec,
+            HistogramVec,
+            HistogramVec,
+            HistogramVec,
+            IntGauge,
+        ),
     ) -> Vec<Box<dyn prometheus::core::Collector>> {
         vec![
             Box::new(http_metrics.0.clone()),
@@ -1016,11 +1075,20 @@ fn is_valid_client_id(id: &str) -> bool {
 /// Normalize path for metrics to prevent cardinality explosion
 fn normalize_path_for_cardinality(path: &str) -> String {
     // Replace UUIDs and other variable parts with placeholders
-    let uuid_pattern = regex::Regex::new(
+    let uuid_pattern = if let Ok(pattern) = regex::Regex::new(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    )
-    .unwrap();
-    let numeric_pattern = regex::Regex::new(r"/\d+").unwrap();
+    ) {
+        pattern
+    } else {
+        warn!("Failed to compile UUID regex pattern, returning original path");
+        return path.to_string();
+    };
+    let numeric_pattern = if let Ok(pattern) = regex::Regex::new(r"/\d+") {
+        pattern
+    } else {
+        warn!("Failed to compile numeric regex pattern, using UUID replacement only");
+        return uuid_pattern.replace_all(path, "{uuid}").to_string();
+    };
 
     let normalized = uuid_pattern.replace_all(path, "{uuid}");
     let normalized = numeric_pattern.replace_all(&normalized, "/{id}");
@@ -1069,6 +1137,10 @@ impl MetricsHelper {
     }
 
     /// Record a token operation with error handling
+    ///
+    /// # Errors
+    ///
+    /// Returns the error from the operation if it fails.
     pub fn record_token_operation_result<F, R, E>(
         operation_type: &str,
         operation: F,
@@ -1156,7 +1228,7 @@ impl MetricsHelper {
     /// Update cache hit ratio
     pub fn update_cache_hit_ratio(cache_type: &str, hits: u64, total: u64) {
         if total > 0 {
-            let ratio = f64::from(u32::try_from(hits).unwrap_or(u32::MAX)) 
+            let ratio = f64::from(u32::try_from(hits).unwrap_or(u32::MAX))
                 / f64::from(u32::try_from(total).unwrap_or(u32::MAX));
             METRICS
                 .cache_hit_ratio
@@ -1183,9 +1255,9 @@ impl MetricsHelper {
         let gauge = METRICS
             .system_resources_gauge
             .with_label_values(&[resource_type, unit]);
-        
+
         gauge.reset();
-        
+
         // Avoid potential loop issues with very large values
         if value > 0 {
             let safe_value = i64::min(value, i64::from(i32::MAX));

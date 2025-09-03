@@ -16,6 +16,16 @@ pub struct MetricsCollector {
     prometheus_client: Option<PrometheusClient>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct AuditCounts {
+    total_events: u64,
+    successful_events: u64,
+    failed_events: u64,
+    blocked_events: u64,
+    unique_users: u64,
+    unique_ips: u64,
+}
+
 impl MetricsCollector {
     /// Create a new metrics collector
     ///
@@ -25,8 +35,17 @@ impl MetricsCollector {
     /// - Configuration validation fails
     /// - Network connectivity issues occur
     pub async fn new(config: &ComplianceConfig) -> ComplianceResult<Self> {
-        let prometheus_client = if let Some(url) = &config.data_sources.prometheus_url {
-            let client = PrometheusClient::new(url.clone());
+        let prometheus_client = Self::init_prometheus_client(config).await;
+        Ok(Self {
+            config: config.clone(),
+            prometheus_client,
+        })
+    }
+
+    #[allow(clippy::cognitive_complexity)]
+    async fn init_prometheus_client(config: &ComplianceConfig) -> Option<PrometheusClient> {
+        if let Some(url) = &config.data_sources.prometheus_url {
+            let client = PrometheusClient::new(url);
 
             // Test connectivity
             match client.health_check().await {
@@ -46,12 +65,7 @@ impl MetricsCollector {
         } else {
             debug!("No Prometheus URL configured");
             None
-        };
-
-        Ok(Self {
-            config: config.clone(),
-            prometheus_client,
-        })
+        }
     }
 
     /// Collect all available security metrics
@@ -142,14 +156,15 @@ impl MetricsCollector {
         let total_events = metrics
             .iter()
             .find(|m| m.name == "audit_total_events")
-            .map_or(0, |m| m.value.max(0.0) as u64);
+            .map_or(0, |m| Self::f64_to_u64_nonneg(m.value));
 
         let failed_events = metrics
             .iter()
             .find(|m| m.name == "audit_failed_events")
-            .map_or(0, |m| m.value.max(0.0) as u64);
+            .map_or(0, |m| Self::f64_to_u64_nonneg(m.value));
 
         if total_events > 0 {
+            #[allow(clippy::cast_precision_loss)]
             let success_rate =
                 ((total_events - failed_events) as f64 / total_events as f64) * 100.0;
             metrics.push(SecurityMetric {
@@ -177,6 +192,12 @@ impl MetricsCollector {
         since: DateTime<Utc>,
     ) -> ComplianceResult<Vec<SecurityMetric>> {
         let content = fs::read_to_string(log_path).await?;
+        let counts = Self::count_audit_entries(&content, since);
+        let now = Utc::now();
+        Ok(Self::build_audit_metrics(&counts, log_path, now))
+    }
+
+    fn count_audit_entries(content: &str, since: DateTime<Utc>) -> AuditCounts {
         let mut total_events = 0u64;
         let mut successful_events = 0u64;
         let mut failed_events = 0u64;
@@ -185,23 +206,25 @@ impl MetricsCollector {
         let mut unique_ips = std::collections::HashSet::new();
 
         for line in content.lines() {
-            if line.trim().is_empty() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
                 continue;
             }
 
-            match serde_json::from_str::<AuditLogEntry>(line) {
+            match serde_json::from_str::<AuditLogEntry>(trimmed) {
                 Ok(entry) => {
                     if entry.timestamp < since {
                         continue;
                     }
 
-                    total_events += 1;
-
+                    total_events = total_events.saturating_add(1);
                     match entry.result {
-                        AuditResult::Success => successful_events += 1,
-                        AuditResult::Failure => failed_events += 1,
-                        AuditResult::Blocked => blocked_events += 1,
-                        AuditResult::Warning => {} // Don't count warnings as failures
+                        AuditResult::Success => {
+                            successful_events = successful_events.saturating_add(1);
+                        }
+                        AuditResult::Failure => failed_events = failed_events.saturating_add(1),
+                        AuditResult::Blocked => blocked_events = blocked_events.saturating_add(1),
+                        AuditResult::Warning => {}
                     }
 
                     if let Some(user_id) = &entry.user_id {
@@ -214,17 +237,33 @@ impl MetricsCollector {
                 }
                 Err(e) => {
                     debug!("Failed to parse audit log line: {}", e);
-                    // Try alternative parsing formats here if needed
                 }
             }
         }
 
-        let now = Utc::now();
-        let metrics = vec![
+        AuditCounts {
+            total_events,
+            successful_events,
+            failed_events,
+            blocked_events,
+            unique_users: unique_users.len() as u64,
+            unique_ips: unique_ips.len() as u64,
+        }
+    }
+
+    fn build_audit_metrics(
+        counts: &AuditCounts,
+        log_path: &str,
+        now: DateTime<Utc>,
+    ) -> Vec<SecurityMetric> {
+        #[allow(clippy::cast_precision_loss)]
+        let to_f64 = |v: u64| v as f64;
+
+        vec![
             SecurityMetric {
                 name: "audit_total_events".to_string(),
-                value: total_events as f64,
-                threshold: 0.0, // No threshold for count metrics
+                value: to_f64(counts.total_events),
+                threshold: 0.0,
                 status: MetricStatus::Pass,
                 description: format!("Total audit events in {log_path}"),
                 timestamp: now,
@@ -232,7 +271,7 @@ impl MetricsCollector {
             },
             SecurityMetric {
                 name: "audit_successful_events".to_string(),
-                value: successful_events as f64,
+                value: to_f64(counts.successful_events),
                 threshold: 0.0,
                 status: MetricStatus::Pass,
                 description: format!("Successful audit events in {log_path}"),
@@ -241,9 +280,9 @@ impl MetricsCollector {
             },
             SecurityMetric {
                 name: "audit_failed_events".to_string(),
-                value: failed_events as f64,
-                threshold: 100.0, // Fail if more than 100 failures
-                status: if failed_events <= 100 {
+                value: to_f64(counts.failed_events),
+                threshold: 100.0,
+                status: if counts.failed_events <= 100 {
                     MetricStatus::Pass
                 } else {
                     MetricStatus::Fail
@@ -254,9 +293,9 @@ impl MetricsCollector {
             },
             SecurityMetric {
                 name: "audit_blocked_events".to_string(),
-                value: blocked_events as f64,
-                threshold: 50.0, // Warn if more than 50 blocked events
-                status: if blocked_events <= 50 {
+                value: to_f64(counts.blocked_events),
+                threshold: 50.0,
+                status: if counts.blocked_events <= 50 {
                     MetricStatus::Pass
                 } else {
                     MetricStatus::Warning
@@ -267,7 +306,7 @@ impl MetricsCollector {
             },
             SecurityMetric {
                 name: "audit_unique_users".to_string(),
-                value: unique_users.len() as f64,
+                value: to_f64(counts.unique_users),
                 threshold: 0.0,
                 status: MetricStatus::Pass,
                 description: format!("Unique users in audit events from {log_path}"),
@@ -276,9 +315,9 @@ impl MetricsCollector {
             },
             SecurityMetric {
                 name: "audit_unique_ips".to_string(),
-                value: unique_ips.len() as f64,
-                threshold: 1000.0, // Warn if more than 1000 unique IPs
-                status: if unique_ips.len() <= 1000 {
+                value: to_f64(counts.unique_ips),
+                threshold: 1000.0,
+                status: if counts.unique_ips <= 1000 {
                     MetricStatus::Pass
                 } else {
                     MetricStatus::Warning
@@ -287,9 +326,25 @@ impl MetricsCollector {
                 timestamp: now,
                 tags: HashMap::from([("log_file".to_string(), log_path.to_string())]),
             },
-        ];
+        ]
+    }
 
-        Ok(metrics)
+    #[allow(clippy::cast_precision_loss)]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    fn f64_to_u64_nonneg(v: f64) -> u64 {
+        if !v.is_finite() {
+            return 0;
+        }
+        let clamped = v.max(0.0).floor();
+        if clamped > u64::MAX as f64 {
+            u64::MAX
+        } else {
+            clamped as u64
+        }
     }
 
     /// Collect system-level security metrics
@@ -298,14 +353,10 @@ impl MetricsCollector {
         let _now = Utc::now();
 
         // Certificate expiration check
-        if let Ok(cert_metrics) = self.check_certificate_expiration().await {
-            metrics.extend(cert_metrics);
-        }
+        metrics.extend(Self::check_certificate_expiration());
 
         // Security policy compliance
-        if let Ok(policy_metrics) = self.check_security_policies().await {
-            metrics.extend(policy_metrics);
-        }
+        metrics.extend(Self::check_security_policies());
 
         // Service health check
         if let Ok(health_metrics) = self.check_service_health().await {
@@ -316,7 +367,7 @@ impl MetricsCollector {
     }
 
     /// Check certificate expiration status
-    async fn check_certificate_expiration(&self) -> ComplianceResult<Vec<SecurityMetric>> {
+    fn check_certificate_expiration() -> Vec<SecurityMetric> {
         let mut metrics = Vec::new();
         let now = Utc::now();
 
@@ -357,11 +408,11 @@ impl MetricsCollector {
             });
         }
 
-        Ok(metrics)
+        metrics
     }
 
     /// Check security policy compliance
-    async fn check_security_policies(&self) -> ComplianceResult<Vec<SecurityMetric>> {
+    fn check_security_policies() -> Vec<SecurityMetric> {
         let mut metrics = Vec::new();
         let now = Utc::now();
 
@@ -395,7 +446,7 @@ impl MetricsCollector {
             });
         }
 
-        Ok(metrics)
+        metrics
     }
 
     /// Check service health status
@@ -404,7 +455,7 @@ impl MetricsCollector {
         let now = Utc::now();
 
         // Example service health checks
-        let services = vec![
+        let services: Vec<(&str, &str)> = vec![
             ("auth-service", "http://localhost:8080/health"),
             ("policy-service", "http://localhost:8081/health"),
             ("threat-hunting", "http://localhost:8082/health"),
@@ -415,10 +466,11 @@ impl MetricsCollector {
             .build()?;
 
         for (service_name, health_url) in services {
-            let is_healthy = match client.get(health_url).send().await {
-                Ok(response) => response.status().is_success(),
-                Err(_) => false,
-            };
+            let is_healthy = client
+                .get(health_url)
+                .send()
+                .await
+                .is_ok_and(|response| response.status().is_success());
 
             metrics.push(SecurityMetric {
                 name: format!("service_health_{service_name}"),
@@ -523,12 +575,12 @@ mod tests {
             .iter()
             .find(|m| m.name == "audit_total_events")
             .unwrap();
-        assert_eq!(total_events.value, 2.0);
+        assert!((total_events.value - 2.0).abs() < f64::EPSILON);
 
         let failed_events = metrics
             .iter()
             .find(|m| m.name == "audit_failed_events")
             .unwrap();
-        assert_eq!(failed_events.value, 1.0);
+        assert!((failed_events.value - 1.0).abs() < f64::EPSILON);
     }
 }

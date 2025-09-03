@@ -25,8 +25,8 @@ async fn spawn_app(store: Arc<HybridStore>) -> String {
             auth_service::jwks_rotation::KeyRotationConfig::default(),
             Arc::new(InMemoryKeyStorage::new()),
         )
-            .await
-            .unwrap(),
+        .await
+        .unwrap(),
     );
 
     let app_state = AppState {
@@ -121,7 +121,7 @@ async fn token_flow_with_hybrid_store() {
 }
 
 #[tokio::test]
-#[ignore] // Requires a running postgres database and TEST_DATABASE_URL env var
+#[ignore = "Requires a running Postgres and TEST_DATABASE_URL"]
 async fn token_flow_with_sql_store() {
     let db_url = std::env::var("TEST_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://test:test@localhost/test".to_string());

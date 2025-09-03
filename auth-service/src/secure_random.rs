@@ -235,22 +235,32 @@ pub fn generate_secure_backup_codes(
     SECURE_RNG.generate_backup_codes(count)
 }
 
+/// # Errors
+/// Returns `crate::shared::error::AppError` if random byte generation fails
 pub fn generate_secure_pkce_verifier() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_pkce_verifier()
 }
 
+/// # Errors
+/// Returns `crate::shared::error::AppError` if random byte generation fails
 pub fn generate_secure_oauth_state() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_oauth_state()
 }
 
+/// # Errors
+/// Returns `crate::shared::error::AppError` if random byte generation fails
 pub fn generate_secure_oidc_nonce() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_oidc_nonce()
 }
 
+/// # Errors
+/// Returns `crate::shared::error::AppError` if random byte generation fails
 pub fn generate_secure_salt() -> Result<Vec<u8>, crate::shared::error::AppError> {
     SECURE_RNG.generate_salt()
 }
 
+/// # Errors
+/// Returns `crate::shared::error::AppError` if random byte generation fails
 pub fn generate_secure_api_key() -> Result<String, crate::shared::error::AppError> {
     SECURE_RNG.generate_api_key()
 }
@@ -271,15 +281,21 @@ mod tests {
         let rng = SecureRandomGenerator::new();
 
         // Test different token types
-        let auth_code = rng.generate_authorization_code().unwrap();
+        let auth_code = rng
+            .generate_authorization_code()
+            .expect("Test auth code generation should succeed");
         assert!(auth_code.starts_with("ac_"));
         assert!(auth_code.len() > 40);
 
-        let access_token = rng.generate_access_token().unwrap();
+        let access_token = rng
+            .generate_access_token()
+            .expect("Test access token generation should succeed");
         assert!(access_token.starts_with("tk_"));
         assert!(access_token.len() > 40);
 
-        let refresh_token = rng.generate_refresh_token().unwrap();
+        let refresh_token = rng
+            .generate_refresh_token()
+            .expect("Test refresh token generation should succeed");
         assert!(refresh_token.starts_with("rt_"));
         assert!(refresh_token.len() > 40);
     }
@@ -291,7 +307,9 @@ mod tests {
         // Generate multiple tokens and ensure they're unique
         let mut tokens = std::collections::HashSet::new();
         for _ in 0..1000 {
-            let token = rng.generate_access_token().unwrap();
+            let token = rng
+                .generate_access_token()
+                .expect("Test access token generation should succeed");
             assert!(tokens.insert(token), "Generated duplicate token");
         }
     }
@@ -299,7 +317,9 @@ mod tests {
     #[test]
     fn test_backup_codes() {
         let rng = SecureRandomGenerator::new();
-        let codes = rng.generate_backup_codes(10).unwrap();
+        let codes = rng
+            .generate_backup_codes(10)
+            .expect("Test backup codes generation should succeed");
 
         assert_eq!(codes.len(), 10);
         for code in &codes {
@@ -315,7 +335,9 @@ mod tests {
     #[test]
     fn test_pkce_verifier() {
         let rng = SecureRandomGenerator::new();
-        let verifier = rng.generate_pkce_verifier().unwrap();
+        let verifier = rng
+            .generate_pkce_verifier()
+            .expect("Test PKCE verifier generation should succeed");
 
         // PKCE verifier should be 128 characters (96 bytes base64url encoded)
         assert_eq!(verifier.len(), 128);
@@ -327,7 +349,9 @@ mod tests {
     #[test]
     fn test_totp_secret() {
         let rng = SecureRandomGenerator::new();
-        let secret = rng.generate_totp_secret().unwrap();
+        let secret = rng
+            .generate_totp_secret()
+            .expect("Test TOTP secret generation should succeed");
 
         // TOTP secret should be 160 bits (20 bytes)
         assert_eq!(secret.len(), 20);
@@ -336,8 +360,12 @@ mod tests {
     #[test]
     fn test_salt_generation() {
         let rng = SecureRandomGenerator::new();
-        let salt1 = rng.generate_salt().unwrap();
-        let salt2 = rng.generate_salt().unwrap();
+        let salt1 = rng
+            .generate_salt()
+            .expect("Test salt generation should succeed");
+        let salt2 = rng
+            .generate_salt()
+            .expect("Test salt generation should succeed");
 
         assert_eq!(salt1.len(), 32);
         assert_eq!(salt2.len(), 32);

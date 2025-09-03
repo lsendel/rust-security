@@ -1,4 +1,5 @@
 #![allow(clippy::unused_async)]
+#[cfg(feature = "enhanced-session-store")]
 use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -69,6 +70,7 @@ impl<T> CachedItem<T> {
 }
 
 /// Multi-tier cache implementation with Redis and in-memory fallback
+#[allow(clippy::struct_field_names)]
 pub struct Cache {
     config: CacheConfig,
     redis_client: Option<Client>,
@@ -128,8 +130,8 @@ impl Cache {
                     debug!(key = %key, "Cache hit (Redis)");
                     #[cfg(feature = "monitoring")]
                     {
-                        let _duration = std::time::Instant::now().elapsed();
-                        MetricsHelper::record_cache_operation("redis", "get", "hit", _duration);
+                        let duration = std::time::Instant::now().elapsed();
+                        MetricsHelper::record_cache_operation("redis", "get", "hit", duration);
                     }
                     Some(Some(data))
                 }
@@ -141,8 +143,8 @@ impl Cache {
                     warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
                     #[cfg(feature = "monitoring")]
                     {
-                        let _duration = std::time::Instant::now().elapsed();
-                        MetricsHelper::record_cache_operation("redis", "get", "error", _duration);
+                        let duration = std::time::Instant::now().elapsed();
+                        MetricsHelper::record_cache_operation("redis", "get", "error", duration);
                     }
                     None
                 }
@@ -206,10 +208,8 @@ impl Cache {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
         // Try Redis first if available
-        if let Some(redis_result) = self.try_redis_get(key, &full_key).await {
-            if let Some(data) = redis_result {
-                return Some(data);
-            }
+        if let Some(Some(data)) = self.try_redis_get(key, &full_key).await {
+            return Some(data);
         }
 
         // Fall back to memory cache
@@ -279,8 +279,8 @@ impl Cache {
         // Record cache set operation
         #[cfg(feature = "monitoring")]
         {
-            let _duration = start_time.elapsed();
-            MetricsHelper::record_cache_operation("memory", "set", "success", _duration);
+            let duration = start_time.elapsed();
+            MetricsHelper::record_cache_operation("memory", "set", "success", duration);
         }
 
         Ok(())

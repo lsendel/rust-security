@@ -4,13 +4,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Security level configuration for different environments
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SecurityLevel {
     /// Development - Enhanced security for development
     Development,
     /// Production - Strict security for production
     Production,
     /// Custom - User-defined security configuration
-    Custom(SecurityHeadersConfig),
+    Custom(Box<SecurityHeadersConfig>),
 }
 
 /// Configuration for security headers
@@ -67,7 +68,7 @@ impl SecurityLevel {
         match self {
             Self::Development => SecurityHeadersConfig::development(),
             Self::Production => SecurityHeadersConfig::production(),
-            Self::Custom(config) => config.clone(),
+            Self::Custom(config) => (*config.as_ref()).clone(),
         }
     }
 }

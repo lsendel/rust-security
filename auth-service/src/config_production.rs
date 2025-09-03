@@ -331,19 +331,27 @@ impl ConfigLoader {
         let content = std::fs::read_to_string(file_path)
             .with_context(|| format!("Failed to read config file: {file_path}"))?;
 
-        let file_config: ProductionConfig =
-            if file_path.ends_with(".yaml") || file_path.ends_with(".yml") {
-                serde_yaml::from_str(&content)
-                    .with_context(|| format!("Failed to parse YAML config: {file_path}"))?
-            } else if file_path.ends_with(".json") {
-                serde_json::from_str(&content)
-                    .with_context(|| format!("Failed to parse JSON config: {file_path}"))?
-            } else {
-                return Err(anyhow::anyhow!(
-                    "Unsupported config file format: {}",
-                    file_path
-                ));
-            };
+        let file_config: ProductionConfig = if std::path::Path::new(file_path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml"))
+            || std::path::Path::new(file_path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("yml"))
+        {
+            serde_yaml::from_str(&content)
+                .with_context(|| format!("Failed to parse YAML config: {file_path}"))?
+        } else if std::path::Path::new(file_path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
+            serde_json::from_str(&content)
+                .with_context(|| format!("Failed to parse JSON config: {file_path}"))?
+        } else {
+            return Err(anyhow::anyhow!(
+                "Unsupported config file format: {}",
+                file_path
+            ));
+        };
 
         // Merge file config with current config (environment variables take precedence)
         Self::merge_configs(config, file_config);

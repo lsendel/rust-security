@@ -15,11 +15,10 @@ use crate::middleware::security_enhanced::RateLimiter;
 // use crate::services::{AsyncOptimizer, AsyncOptimizerConfig, PasswordService};  // AsyncOptimizer disabled
 use crate::services::PasswordService;
 
-
 /// Performance benchmark for password hashing
 pub fn bench_password_hashing(c: &mut Criterion) {
     let service = PasswordService::new();
-    let password = "BenchmarkPassword123!";
+    let password = "benchmark_test_password";
 
     c.bench_function("password_hashing", |b| {
         b.iter(|| {
@@ -32,7 +31,7 @@ pub fn bench_password_hashing(c: &mut Criterion) {
 /// Performance benchmark for password verification
 pub fn bench_password_verification(c: &mut Criterion) {
     let service = PasswordService::new();
-    let password = "BenchmarkPassword123!";
+    let password = "benchmark_test_password";
     let hash = service.hash_password(password).unwrap();
 
     c.bench_function("password_verification", |b| {

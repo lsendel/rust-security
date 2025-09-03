@@ -4,7 +4,8 @@
     clippy::cast_sign_loss,
     clippy::significant_drop_tightening,
     clippy::or_fun_call,
-    clippy::unused_async
+    clippy::unused_async,
+    clippy::missing_errors_doc
 )]
 //! Comprehensive Performance Test Suite
 //!
@@ -400,9 +401,10 @@ impl PerformanceTestSuite {
         let fastest = benchmarks
             .iter()
             .max_by(|a, b| {
+                let ordering = std::cmp::Ordering::Equal;
                 a.operations_per_second
                     .partial_cmp(&b.operations_per_second)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .unwrap_or(ordering)
             })
             .map(|b| (b.name.clone(), b.operations_per_second));
 

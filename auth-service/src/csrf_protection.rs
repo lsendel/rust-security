@@ -118,7 +118,7 @@ impl CsrfToken {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        now > self.expires_at
+        now >= self.expires_at
     }
 
     /// Generate HMAC signature for the token
@@ -261,7 +261,7 @@ impl CsrfProtection {
     #[must_use]
     pub fn generate_cookie_header(&self, signed_token: &str) -> String {
         format!(
-            "{}={}; Path=/; SameSite={}{}{}{}",
+            "{}={}; Path=/; SameSite={}{}{}; Max-Age={}",
             self.config.cookie_name,
             signed_token,
             self.config.same_site_policy,
@@ -275,16 +275,16 @@ impl CsrfProtection {
             } else {
                 ""
             },
-            format!("; Max-Age={}", self.config.token_lifetime.as_secs())
+            self.config.token_lifetime.as_secs()
         )
     }
 
     /// Extract token from request headers or form data
     #[must_use]
-    pub fn extract_token_from_request(
+    pub fn extract_token_from_request<S: ::std::hash::BuildHasher>(
         &self,
-        headers: &HashMap<String, String>,
-        form_data: Option<&HashMap<String, String>>,
+        headers: &HashMap<String, String, S>,
+        form_data: Option<&HashMap<String, String, S>>,
     ) -> Option<(String, String)> {
         // Try header first
         if let Some(header_value) = headers.get(&self.config.header_name) {
@@ -347,12 +347,12 @@ pub struct TokenStats {
 }
 
 /// Middleware function for CSRF protection
-pub async fn csrf_middleware(
+pub async fn csrf_middleware<S: ::std::hash::BuildHasher + Send + Sync>(
     csrf: Arc<CsrfProtection>,
     method: &str,
     path: &str,
-    headers: &HashMap<String, String>,
-    form_data: Option<&HashMap<String, String>>,
+    headers: &HashMap<String, String, S>,
+    form_data: Option<&HashMap<String, String, S>>,
     session_id: Option<&str>,
 ) -> Result<(), CsrfError> {
     // Skip CSRF protection for safe methods
@@ -367,7 +367,7 @@ pub async fn csrf_middleware(
 
     // Extract and validate token
     let (token, signature) = csrf
-        .extract_token_from_request(headers, form_data)
+        .extract_token_from_request::<S>(headers, form_data)
         .ok_or(CsrfError::TokenMissing)?;
 
     csrf.validate_token(&token, &signature, session_id).await?;
@@ -479,7 +479,7 @@ mod tests {
     #[tokio::test]
     async fn test_token_cleanup() {
         let config = CsrfConfig {
-            token_lifetime: Duration::from_millis(1), // Very short lifetime
+            token_lifetime: Duration::from_secs(0), // Zero lifetime - token expires immediately
             ..CsrfConfig::default()
         };
 
@@ -488,8 +488,8 @@ mod tests {
         // Generate token
         let (_token, _) = csrf.generate_token(None).await.unwrap();
 
-        // Wait for expiration
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        // Token should be expired immediately since lifetime is 0
+        // No need to wait
 
         // Cleanup should remove expired token
         csrf.cleanup_expired_tokens().await;

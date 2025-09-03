@@ -241,7 +241,7 @@ impl QuantumJwtManager {
 
         // Generate ECDSA key pair using ring
         let private_key = self.generate_ecdsa_private_key(&algorithm)?;
-        let public_key = self.derive_ecdsa_public_key(&private_key, &algorithm)?;
+        let public_key = Self::derive_ecdsa_public_key(&private_key, &algorithm)?;
 
         Ok(ClassicalKeyPair {
             private_key,
@@ -305,7 +305,6 @@ impl QuantumJwtManager {
 
     /// Derive ECDSA public key from private key
     fn derive_ecdsa_public_key(
-        &self,
         private_key: &[u8],
         algorithm: &ClassicalAlgorithm,
     ) -> Result<Vec<u8>> {
@@ -368,7 +367,7 @@ impl QuantumJwtManager {
 
         // Create header
         let header = QuantumJwtHeader {
-            alg: self.get_hybrid_algorithm(key_pair.security_level)?,
+            alg: Self::get_hybrid_algorithm(key_pair.security_level)?,
             kid: current_key_id.clone(),
             pq_kid: format!("pq_{current_key_id}"),
             typ: "JWT".to_string(),
@@ -585,7 +584,7 @@ impl QuantumJwtManager {
     }
 
     /// Get hybrid algorithm for security level
-    fn get_hybrid_algorithm(&self, security_level: u8) -> Result<HybridAlgorithm> {
+    fn get_hybrid_algorithm(security_level: u8) -> Result<HybridAlgorithm> {
         match security_level {
             1 => Ok(HybridAlgorithm::Es256MlDsa44),
             3 => Ok(HybridAlgorithm::Es384MlDsa65),
@@ -595,6 +594,13 @@ impl QuantumJwtManager {
     }
 
     /// Rotate quantum keys
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Quantum key pair generation fails
+    /// - Key ID generation fails  
+    /// - Key store update operations fail
     pub async fn rotate_keys(&self) -> Result<()> {
         let new_key_pair = self
             .generate_quantum_keypair(self.config.default_security_level)
@@ -617,16 +623,21 @@ impl QuantumJwtManager {
 
     /// Get quantum readiness status
     pub async fn get_quantum_status(&self) -> QuantumStatus {
-        let key_store = self.key_store.read().await;
-        let key_count = key_store.len();
-        let current_key_id = self.current_key_id.read().await;
+        let key_count = {
+            let key_store = self.key_store.read().await;
+            key_store.len()
+        };
+        let current_key_id = {
+            let current_key_id = self.current_key_id.read().await;
+            current_key_id.clone()
+        };
 
         QuantumStatus {
             quantum_ready: true,
             hybrid_mode: self.config.hybrid_mode,
             security_level: self.config.default_security_level,
             active_keys: key_count,
-            current_key_id: current_key_id.clone(),
+            current_key_id,
             algorithms_supported: vec![
                 "ES256+ML-DSA-44".to_string(),
                 "ES384+ML-DSA-65".to_string(),

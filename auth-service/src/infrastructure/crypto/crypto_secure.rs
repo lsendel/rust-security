@@ -274,6 +274,10 @@ impl SecureCryptoManager {
 
             // Set new key
             *current_key = new_key;
+
+            // Explicitly drop locks to address clippy warning
+            drop(old_keys);
+            drop(current_key);
         }
 
         tracing::info!("Encryption key rotated successfully");
@@ -282,18 +286,22 @@ impl SecureCryptoManager {
 
     /// Check if key should be rotated
     pub async fn should_rotate_key(&self) -> bool {
-        let age = {
+        let created_at = {
             let current_key = self.current_key.read().await;
-            chrono::Utc::now() - current_key.created_at
+            current_key.created_at
         };
+        let age = chrono::Utc::now() - created_at;
         age > self.key_rotation_interval
     }
 
     /// Clean up old keys
     pub async fn cleanup_old_keys(&self, max_age: chrono::Duration) {
         let cutoff = chrono::Utc::now() - max_age;
-        let mut old_keys = self.old_keys.write().await;
-        old_keys.retain(|_, key| key.created_at > cutoff);
+        {
+            let mut old_keys = self.old_keys.write().await;
+            old_keys.retain(|_, key| key.created_at > cutoff);
+            drop(old_keys);
+        }
         tracing::info!("Cleaned up old encryption keys");
     }
 }

@@ -185,6 +185,9 @@ impl HealthChecker {
         let start = Instant::now();
         let mut metadata = HashMap::new();
 
+        // Ensure this remains truly async for concurrency orchestration
+        tokio::task::yield_now().await;
+
         // Simulate Redis check (replace with actual implementation)
         let is_healthy = fastrand::u32(1..=100) > 3; // 97% success rate
 
@@ -226,6 +229,9 @@ impl HealthChecker {
     async fn check_external_services(&self) -> Result<(String, ComponentHealth)> {
         let start = Instant::now();
         let mut metadata = HashMap::new();
+
+        // Ensure this remains truly async for concurrency orchestration
+        tokio::task::yield_now().await;
 
         // Simulate external services check (replace with actual implementation)
         let is_healthy = fastrand::u32(1..=100) > 10; // 90% success rate
@@ -301,8 +307,6 @@ impl HealthChecker {
 
         Ok(("system_resources".to_string(), health))
     }
-
-
 
     /// Get memory usage (simplified)
     fn get_memory_usage(&self) -> f64 {
@@ -490,6 +494,7 @@ mod tests {
             let stored_metrics = checker.metrics.read().await;
             assert_eq!(stored_metrics.memory_usage_mb, 256);
             assert!((stored_metrics.cpu_usage_percent - 25.0).abs() < f64::EPSILON);
+            drop(stored_metrics);
         }
     }
 }

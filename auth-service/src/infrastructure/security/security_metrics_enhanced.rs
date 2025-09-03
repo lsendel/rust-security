@@ -497,6 +497,7 @@ pub struct TokenRequestTimer {
 
 #[cfg(feature = "monitoring")]
 impl TokenRequestTimer {
+    #[must_use]
     pub fn start(identity_type: String) -> Self {
         Self {
             timer: std::time::Instant::now(),
@@ -525,6 +526,7 @@ pub struct BaselineAnalysisTimer {
 
 #[cfg(feature = "monitoring")]
 impl BaselineAnalysisTimer {
+    #[must_use]
     pub fn start(identity_type: String, analysis_type: String) -> Self {
         Self {
             timer: std::time::Instant::now(),
@@ -557,7 +559,11 @@ pub const fn record_identity_suspension(_identity_type: &str, _reason: &str) {}
 pub const fn record_credential_rotation(_identity_type: &str, _trigger: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub const fn record_jit_token_issued(_identity_type: &str, _scopes_count: usize, _lifetime_seconds: u64) {
+pub const fn record_jit_token_issued(
+    _identity_type: &str,
+    _scopes_count: usize,
+    _lifetime_seconds: u64,
+) {
 }
 
 #[cfg(not(feature = "monitoring"))]
@@ -567,7 +573,8 @@ pub const fn record_jit_token_validation(_identity_type: &str, _success: bool) {
 pub const fn record_token_binding_failure(_identity_type: &str, _binding_type: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub const fn record_behavioral_anomaly(_identity_type: &str, _anomaly_type: &str, _severity: &str) {}
+pub const fn record_behavioral_anomaly(_identity_type: &str, _anomaly_type: &str, _severity: &str) {
+}
 
 #[cfg(not(feature = "monitoring"))]
 pub const fn update_risk_score(_identity_id: &str, _identity_type: &str, _score: f64) {}
@@ -576,13 +583,23 @@ pub const fn update_risk_score(_identity_id: &str, _identity_type: &str, _score:
 pub const fn record_baseline_established(_identity_type: &str, _confidence: f32) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub const fn record_policy_violation(_identity_type: &str, _policy_type: &str, _violation_type: &str) {}
+pub const fn record_policy_violation(
+    _identity_type: &str,
+    _policy_type: &str,
+    _violation_type: &str,
+) {
+}
 
 #[cfg(not(feature = "monitoring"))]
 pub const fn record_auto_suspension(_identity_type: &str, _trigger_reason: &str) {}
 
 #[cfg(not(feature = "monitoring"))]
-pub const fn record_geographic_anomaly(_identity_type: &str, _source_country: &str, _suspicious: bool) {}
+pub const fn record_geographic_anomaly(
+    _identity_type: &str,
+    _source_country: &str,
+    _suspicious: bool,
+) {
+}
 
 #[cfg(not(feature = "monitoring"))]
 pub const fn record_request_rate_anomaly(_identity_type: &str, _rate_change_factor: f64) {}
@@ -592,7 +609,8 @@ pub struct TokenRequestTimer;
 
 #[cfg(not(feature = "monitoring"))]
 impl TokenRequestTimer {
-    #[must_use] pub fn start(_identity_type: String) -> Self {
+    #[must_use]
+    pub fn start(_identity_type: String) -> Self {
         Self
     }
     pub const fn finish(self, _success: bool) {}
@@ -603,7 +621,8 @@ pub struct BaselineAnalysisTimer;
 
 #[cfg(not(feature = "monitoring"))]
 impl BaselineAnalysisTimer {
-    #[must_use] pub fn start(_identity_type: String, _analysis_type: String) -> Self {
+    #[must_use]
+    pub fn start(_identity_type: String, _analysis_type: String) -> Self {
         Self
     }
     pub const fn finish(self) {}
@@ -623,8 +642,7 @@ mod tests {
             record_behavioral_anomaly("ai_agent", "request_rate", "high");
         }
 
-        // Test always passes - metrics recording should not panic
-        assert!(true);
+        // If no panic occurred while recording, test passes
     }
 
     #[test]
@@ -642,6 +660,6 @@ mod tests {
             timer.finish(true);
         }
 
-        assert!(true);
+        // If no panic occurred, test passes
     }
 }

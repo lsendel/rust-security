@@ -82,17 +82,22 @@ pub fn validate_jwt_secure(
     expected_token_type: TokenType,
 ) -> Result<SecureJwtClaims, crate::shared::error::AppError> {
     // Decode header first to check algorithm
-    let header =
-        decode_header(token).map_err(|e| crate::shared::error::AppError::InvalidToken(format!("Invalid JWT header: {e}")))?;
+    let header = decode_header(token).map_err(|e| {
+        crate::shared::error::AppError::InvalidToken(format!("Invalid JWT header: {e}"))
+    })?;
 
     // Prevent algorithm confusion attacks - ONLY RS256 allowed
     if header.alg != Algorithm::RS256 {
-        return Err(crate::shared::error::AppError::InvalidToken("Only RS256 algorithm is supported".to_string()));
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Only RS256 algorithm is supported".to_string(),
+        ));
     }
 
     // Check for critical header parameters
     if header.kid.is_none() {
-        return Err(crate::shared::error::AppError::InvalidToken("Missing key ID in JWT header".to_string()));
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Missing key ID in JWT header".to_string(),
+        ));
     }
 
     // Validate token structure and signature
@@ -119,18 +124,24 @@ fn validate_token_type(
     match expected {
         TokenType::AccessToken => {
             if claims.token_type.as_deref() != Some("access_token") {
-                return Err(crate::shared::error::AppError::InvalidToken("Expected access token".to_string()));
+                return Err(crate::shared::error::AppError::InvalidToken(
+                    "Expected access token".to_string(),
+                ));
             }
         }
         TokenType::IdToken => {
             // ID tokens must have nonce for security
             if claims.nonce.is_none() {
-                return Err(crate::shared::error::AppError::InvalidToken("ID token missing required nonce".to_string()));
+                return Err(crate::shared::error::AppError::InvalidToken(
+                    "ID token missing required nonce".to_string(),
+                ));
             }
         }
         TokenType::RefreshToken => {
             if claims.token_type.as_deref() != Some("refresh_token") {
-                return Err(crate::shared::error::AppError::InvalidToken("Expected refresh token".to_string()));
+                return Err(crate::shared::error::AppError::InvalidToken(
+                    "Expected refresh token".to_string(),
+                ));
             }
         }
     }
@@ -146,14 +157,18 @@ fn validate_token_freshness(
     // Check if token is not yet valid
     if let Some(nbf) = claims.nbf {
         if now < nbf {
-            return Err(crate::shared::error::AppError::InvalidToken("Token not yet valid".to_string()));
+            return Err(crate::shared::error::AppError::InvalidToken(
+                "Token not yet valid".to_string(),
+            ));
         }
     }
 
     // Check if token was issued in the future (clock skew protection)
     if claims.iat > now + 300 {
         // 5 minute tolerance
-        return Err(crate::shared::error::AppError::InvalidToken("Token issued in the future".to_string()));
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Token issued in the future".to_string(),
+        ));
     }
 
     // Check token age (prevent very old tokens)
@@ -163,7 +178,9 @@ fn validate_token_freshness(
         .unwrap_or(86400);
 
     if now - claims.iat > max_age {
-        return Err(crate::shared::error::AppError::InvalidToken("Token too old".to_string()));
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Token too old".to_string(),
+        ));
     }
 
     Ok(())
@@ -175,14 +192,16 @@ fn validate_token_structure(
 ) -> Result<(), crate::shared::error::AppError> {
     // Validate subject is not empty
     if claims.sub.is_empty() {
-        return Err(crate::shared::error::AppError::InvalidToken("Empty subject claim".to_string()));
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Empty subject claim".to_string(),
+        ));
     }
 
     // Validate issuer matches expected
     let expected_issuer = std::env::var("JWT_ISSUER").unwrap_or_default();
     if !expected_issuer.is_empty() && claims.iss != expected_issuer {
         return Err(crate::shared::error::AppError::InvalidToken(
-            "Invalid issuer".to_string()
+            "Invalid issuer".to_string(),
         ));
     }
 
@@ -190,7 +209,7 @@ fn validate_token_structure(
     let expected_audience = std::env::var("JWT_AUDIENCE").unwrap_or_default();
     if !expected_audience.is_empty() && claims.aud != expected_audience {
         return Err(crate::shared::error::AppError::InvalidToken(
-            "Invalid audience".to_string()
+            "Invalid audience".to_string(),
         ));
     }
 
@@ -198,7 +217,7 @@ fn validate_token_structure(
     if let Some(scope) = &claims.scope {
         if scope.len() > 1000 {
             return Err(crate::shared::error::AppError::InvalidToken(
-                "Scope too long".to_string()
+                "Scope too long".to_string(),
             ));
         }
 
@@ -218,7 +237,7 @@ fn validate_token_structure(
         for pattern in &dangerous_patterns {
             if scope_lower.contains(pattern) {
                 return Err(crate::shared::error::AppError::InvalidToken(
-                    "Invalid characters in scope".to_string()
+                    "Invalid characters in scope".to_string(),
                 ));
             }
         }

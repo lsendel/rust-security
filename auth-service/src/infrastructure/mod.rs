@@ -4,6 +4,7 @@
 
 pub mod cache;
 pub mod crypto;
+#[cfg(feature = "postgres")]
 pub mod database;
 pub mod http;
 pub mod monitoring;
@@ -13,6 +14,7 @@ pub mod storage;
 // Re-export main infrastructure components
 pub use cache::*;
 pub use crypto::*;
+#[cfg(feature = "postgres")]
 pub use database::*;
 pub use http::*;
 pub use monitoring::*;

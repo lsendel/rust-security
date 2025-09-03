@@ -24,17 +24,20 @@ impl Email {
     }
 
     /// Get the email as a string
-    #[must_use] pub fn as_str(&self) -> &str {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the email domain
-    #[must_use] pub fn domain(&self) -> &str {
+    #[must_use]
+    pub fn domain(&self) -> &str {
         self.0.split('@').nth(1).unwrap_or("")
     }
 
     /// Get the email username (part before @)
-    #[must_use] pub fn username(&self) -> &str {
+    #[must_use]
+    pub fn username(&self) -> &str {
         self.0.split('@').next().unwrap_or("")
     }
 
@@ -46,6 +49,11 @@ impl Email {
 
         if email.len() > 254 {
             return Err("Email is too long (maximum 254 characters)".to_string());
+        }
+
+        // Check for consecutive dots (not allowed)
+        if email.contains("..") {
+            return Err("Email cannot contain consecutive dots".to_string());
         }
 
         // RFC 5322 compliant email regex (simplified)
@@ -137,10 +145,7 @@ mod tests {
 
         for invalid_email in invalid_emails {
             let email = Email::new(invalid_email.to_string());
-            assert!(
-                email.is_err(),
-                "Email '{invalid_email}' should be invalid"
-            );
+            assert!(email.is_err(), "Email '{invalid_email}' should be invalid");
         }
     }
 

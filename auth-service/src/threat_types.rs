@@ -1,5 +1,4 @@
 use chrono::{DateTime, Datelike, Timelike, Utc};
-use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -370,7 +369,7 @@ pub struct UserBehaviorProfile {
     // Time-based patterns
     pub typical_login_hours: Vec<u8>,
     pub typical_days_of_week: Vec<u8>,
-    pub login_frequency_pattern: IndexMap<String, u32>,
+    pub login_frequency_pattern: HashMap<String, u32>,
     pub avg_session_duration_minutes: f64,
     pub session_duration_variance: f64,
 
@@ -751,8 +750,7 @@ impl ThreatSecurityEvent {
 
         let final_score =
             ((f64::from(score) * severity_multiplier) as i16 + outcome_modifier + mfa_modifier)
-                .max(0)
-                .min(100) as u8;
+                .clamp(0, 100) as u8;
 
         self.risk_score = Some(final_score);
     }
@@ -872,7 +870,7 @@ impl UserBehaviorProfile {
             last_updated: Utc::now(),
             typical_login_hours: Vec::new(),
             typical_days_of_week: Vec::new(),
-            login_frequency_pattern: IndexMap::new(),
+            login_frequency_pattern: HashMap::new(),
             avg_session_duration_minutes: 0.0,
             session_duration_variance: 0.0,
             typical_locations: HashSet::new(),

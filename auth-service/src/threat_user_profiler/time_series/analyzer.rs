@@ -95,7 +95,7 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Analyze a behavioral time series for patterns and anomalies
-    pub async fn analyze_series(
+    pub fn analyze_series(
         &self,
         series: &BehavioralTimeSeries,
     ) -> Result<SeriesStatistics, Box<dyn std::error::Error + Send + Sync>> {
@@ -138,7 +138,7 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Perform trend analysis on time series data
-    pub async fn analyze_trend(
+    pub fn analyze_trend(
         &self,
         series: &BehavioralTimeSeries,
     ) -> Result<TrendAnalysis, Box<dyn std::error::Error + Send + Sync>> {
@@ -173,7 +173,7 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Detect change points in behavioral patterns
-    pub async fn detect_change_points(
+    pub fn detect_change_points(
         &self,
         series: &BehavioralTimeSeries,
     ) -> Result<Vec<ChangePoint>, Box<dyn std::error::Error + Send + Sync>> {
@@ -235,7 +235,7 @@ impl TimeSeriesAnalyzer {
     }
 
     /// Analyze seasonality patterns in behavioral data
-    pub async fn analyze_seasonality(
+    pub fn analyze_seasonality(
         &self,
         series: &BehavioralTimeSeries,
     ) -> Result<SeasonalityAnalysis, Box<dyn std::error::Error + Send + Sync>> {
@@ -559,12 +559,12 @@ mod tests {
             statistics: None,
         };
 
-        let stats = analyzer.analyze_series(&series).await.unwrap();
+        let stats = analyzer.analyze_series(&series).unwrap();
         assert!(stats.mean > 0.0);
         assert!(stats.std_dev > 0.0);
         assert!(stats.trend_slope > 0.0); // Should detect positive trend
 
-        let trend = analyzer.analyze_trend(&series).await.unwrap();
+        let trend = analyzer.analyze_trend(&series).unwrap();
         assert!(matches!(trend.trend_direction, TrendDirection::Increasing));
     }
 }

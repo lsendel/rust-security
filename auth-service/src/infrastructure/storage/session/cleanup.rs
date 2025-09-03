@@ -139,16 +139,17 @@ impl SessionCleanupScheduler {
     /// Returns `CleanupError::AlreadyRunning` if the cleanup scheduler is already running.
     pub async fn start(&self) -> Result<(), CleanupError> {
         self.initialize_scheduler().await?;
-        
+
         let mut shutdown_receiver = self.setup_shutdown_channel().await;
         self.log_scheduler_startup().await;
-        
+
         let mut cleanup_interval = self.create_jittered_interval();
         cleanup_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        self.run_scheduler_loop(&mut cleanup_interval, &mut shutdown_receiver).await;
+        self.run_scheduler_loop(&mut cleanup_interval, &mut shutdown_receiver)
+            .await;
         self.finalize_scheduler_shutdown().await;
-        
+
         Ok(())
     }
 
@@ -194,7 +195,7 @@ impl SessionCleanupScheduler {
         let logger = crate::infrastructure::security::security_logging::SecurityLogger::new(
             crate::infrastructure::security::security_logging::SecurityLoggerConfig::default(),
         );
-        logger.log_event(event);
+        logger.log_event(&event);
     }
 
     /// Get current cleanup statistics
@@ -236,7 +237,9 @@ impl SessionCleanupScheduler {
         let mut rng = rand::thread_rng();
         let jitter = rng.gen_range(-jitter_amount..=jitter_amount);
 
-        let jittered_secs = (base_duration.as_secs() as f64 + jitter).max(0.0).min(u64::MAX as f64) as u64;
+        let jittered_secs = (base_duration.as_secs() as f64 + jitter)
+            .max(0.0)
+            .min(u64::MAX as f64) as u64;
         let clamped_secs = jittered_secs
             .max(self.config.min_interval_secs)
             .min(self.config.max_interval_secs);
@@ -304,7 +307,8 @@ impl SessionCleanupScheduler {
         &self,
         result: &mut CleanupCycleResult,
     ) -> Result<(), CleanupError> {
-        let mut _last_error = None;
+        // Track last error if needed in future; currently unused
+        // let mut last_error: Option<String> = None;
 
         for attempt in 1..=self.config.retry_attempts {
             match self.execute_single_cleanup(result).await {
@@ -319,7 +323,7 @@ impl SessionCleanupScheduler {
                     return Ok(());
                 }
                 Err(e) => {
-                    _last_error = Some(format!("{e}"));
+                    // last_error = Some(format!("{e}"));
                     warn!(
                         operation_id = result.operation_id,
                         attempt = attempt,
@@ -528,11 +532,11 @@ impl SessionCleanupScheduler {
     async fn log_scheduler_shutdown(&self) {
         let stats = self.stats.read().await;
         let shutdown_event = self.create_shutdown_event(&stats);
-        
+
         let logger = crate::infrastructure::security::security_logging::SecurityLogger::new(
             crate::infrastructure::security::security_logging::SecurityLoggerConfig::default(),
         );
-        logger.log_event(shutdown_event);
+        logger.log_event(&shutdown_event);
     }
 
     /// Create shutdown security event with statistics

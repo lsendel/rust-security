@@ -2,6 +2,7 @@ use chrono::Utc;
 use clap::{Arg, Command};
 use compliance_tools::{ComplianceError, MetricStatus, Result, SecurityMetric};
 use std::collections::HashMap;
+use tracing::{debug, info};
 
 // Unused dependencies (required by workspace but not used in this binary)
 use anyhow as _;
@@ -10,9 +11,9 @@ use common as _;
 use config as _;
 use csv as _;
 use dotenvy as _;
-use fastrand as _;
 use handlebars as _;
 use moka as _;
+#[cfg(feature = "prometheus-metrics")]
 use prometheus as _;
 use pulldown_cmark as _;
 use regex as _;
@@ -23,7 +24,6 @@ use sha2 as _;
 use tempfile as _;
 use tera as _;
 use thiserror as _;
-use tracing as _;
 use tracing_subscriber as _;
 use url as _;
 use uuid as _;
@@ -66,22 +66,20 @@ async fn main() -> Result<()> {
         .parse()
         .map_err(|_| ComplianceError::Configuration("Invalid interval value".to_string()))?;
 
-    println!("🔍 Security Metrics Collector v1.0.0");
-    println!("📊 Output format: {}", output_format);
-    println!("⏱️  Collection interval: {}s", interval);
+    info!("🔍 Security Metrics Collector v1.0.0");
+    info!("📊 Output format: {output_format}");
+    info!("⏱️  Collection interval: {interval}s");
 
     let collector = MetricsCollector::new();
 
-    // Main collection loop
     loop {
-        println!("🚀 Collecting security metrics...");
-
-        let metrics = collector.collect_metrics().await?;
+        debug!("🚀 Collecting security metrics...");
+        let metrics = collector.collect_metrics();
 
         match output_format.as_str() {
             "json" => output_json(&metrics)?,
-            "prometheus" => output_prometheus(&metrics)?,
-            "csv" => output_csv(&metrics)?,
+            "prometheus" => output_prometheus(&metrics),
+            "csv" => output_csv(&metrics),
             _ => {
                 return Err(ComplianceError::Configuration(
                     "Invalid output format".to_string(),
@@ -89,8 +87,7 @@ async fn main() -> Result<()> {
             }
         }
 
-        println!("✅ Collected {} metrics", metrics.len());
-
+        info!("✅ Collected {} metrics", metrics.len());
         tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
     }
 }
@@ -107,18 +104,17 @@ impl MetricsCollector {
             "security-metrics-collector".to_string(),
         );
         tags.insert("version".to_string(), "1.0.0".to_string());
-
         Self { tags }
     }
 
-    async fn collect_metrics(&self) -> Result<Vec<SecurityMetric>> {
+    fn collect_metrics(&self) -> Vec<SecurityMetric> {
         let now = Utc::now();
-        let mut metrics = Vec::new();
+        let mut metrics = Vec::with_capacity(5);
 
-        // Authentication metrics
+        let auth_requests = Self::get_auth_requests_count();
         metrics.push(SecurityMetric {
             name: "auth_requests_total".to_string(),
-            value: self.get_auth_requests_count().await?,
+            value: auth_requests,
             threshold: 1000.0,
             status: MetricStatus::Pass,
             description: "Total authentication requests in the last hour".to_string(),
@@ -126,21 +122,21 @@ impl MetricsCollector {
             tags: self.tags.clone(),
         });
 
-        // Failed authentication attempts
+        let auth_failures = Self::get_auth_failures_count();
         metrics.push(SecurityMetric {
             name: "auth_failures_total".to_string(),
-            value: self.get_auth_failures_count().await?,
+            value: auth_failures,
             threshold: 100.0,
-            status: self.evaluate_threshold(self.get_auth_failures_count().await?, 100.0),
+            status: Self::evaluate_threshold(auth_failures, 100.0),
             description: "Failed authentication attempts in the last hour".to_string(),
             timestamp: now,
             tags: self.tags.clone(),
         });
 
-        // Active sessions
+        let active_sessions = Self::get_active_sessions_count();
         metrics.push(SecurityMetric {
             name: "active_sessions".to_string(),
-            value: self.get_active_sessions_count().await?,
+            value: active_sessions,
             threshold: 10000.0,
             status: MetricStatus::Pass,
             description: "Currently active user sessions".to_string(),
@@ -148,32 +144,32 @@ impl MetricsCollector {
             tags: self.tags.clone(),
         });
 
-        // Rate limiting metrics
+        let rate_limit_hits = Self::get_rate_limit_hits();
         metrics.push(SecurityMetric {
             name: "rate_limit_hits_total".to_string(),
-            value: self.get_rate_limit_hits().await?,
+            value: rate_limit_hits,
             threshold: 500.0,
-            status: self.evaluate_threshold(self.get_rate_limit_hits().await?, 500.0),
+            status: Self::evaluate_threshold(rate_limit_hits, 500.0),
             description: "Rate limit violations in the last hour".to_string(),
             timestamp: now,
             tags: self.tags.clone(),
         });
 
-        // Security incidents
+        let security_incidents = Self::get_security_incidents();
         metrics.push(SecurityMetric {
             name: "security_incidents_total".to_string(),
-            value: self.get_security_incidents().await?,
+            value: security_incidents,
             threshold: 10.0,
-            status: self.evaluate_threshold(self.get_security_incidents().await?, 10.0),
+            status: Self::evaluate_threshold(security_incidents, 10.0),
             description: "Security incidents detected in the last hour".to_string(),
             timestamp: now,
             tags: self.tags.clone(),
         });
 
-        Ok(metrics)
+        metrics
     }
 
-    fn evaluate_threshold(&self, value: f64, threshold: f64) -> MetricStatus {
+    fn evaluate_threshold(value: f64, threshold: f64) -> MetricStatus {
         if value > threshold {
             MetricStatus::Fail
         } else if value > threshold * 0.8 {
@@ -183,43 +179,43 @@ impl MetricsCollector {
         }
     }
 
-    // Mock data collection methods - in real implementation these would query actual systems
-    async fn get_auth_requests_count(&self) -> Result<f64> {
-        // Simulate random metrics for demonstration
-        Ok(fastrand::f64() * 1200.0)
+    fn get_auth_requests_count() -> f64 {
+        fastrand::f64() * 1200.0
     }
 
-    async fn get_auth_failures_count(&self) -> Result<f64> {
-        Ok(fastrand::f64() * 150.0)
+    fn get_auth_failures_count() -> f64 {
+        fastrand::f64() * 150.0
     }
 
-    async fn get_active_sessions_count(&self) -> Result<f64> {
-        Ok(fastrand::f64() * 8000.0)
+    fn get_active_sessions_count() -> f64 {
+        fastrand::f64() * 8000.0
     }
 
-    async fn get_rate_limit_hits(&self) -> Result<f64> {
-        Ok(fastrand::f64() * 600.0)
+    fn get_rate_limit_hits() -> f64 {
+        fastrand::f64() * 600.0
     }
 
-    async fn get_security_incidents(&self) -> Result<f64> {
-        Ok(fastrand::f64() * 15.0)
+    fn get_security_incidents() -> f64 {
+        fastrand::f64() * 15.0
     }
 }
 
+#[allow(clippy::print_stdout)]
 fn output_json(metrics: &[SecurityMetric]) -> Result<()> {
     let json = serde_json::to_string_pretty(metrics).map_err(ComplianceError::Serialization)?;
-    println!("{}", json);
+    println!("{json}");
     Ok(())
 }
 
-fn output_prometheus(metrics: &[SecurityMetric]) -> Result<()> {
+#[allow(clippy::print_stdout)]
+fn output_prometheus(metrics: &[SecurityMetric]) {
     for metric in metrics {
         println!("# HELP {} {}", metric.name, metric.description);
         println!("# TYPE {} gauge", metric.name);
 
         let mut labels = Vec::new();
         for (key, value) in &metric.tags {
-            labels.push(format!("{}=\"{}\"", key, value));
+            labels.push(format!("{key}=\"{value}\""));
         }
         labels.push(format!("status=\"{:?}\"", metric.status));
 
@@ -231,10 +227,10 @@ fn output_prometheus(metrics: &[SecurityMetric]) -> Result<()> {
             metric.timestamp.timestamp()
         );
     }
-    Ok(())
 }
 
-fn output_csv(metrics: &[SecurityMetric]) -> Result<()> {
+#[allow(clippy::print_stdout)]
+fn output_csv(metrics: &[SecurityMetric]) {
     println!("name,value,threshold,status,description,timestamp");
     for metric in metrics {
         println!(
@@ -247,5 +243,4 @@ fn output_csv(metrics: &[SecurityMetric]) -> Result<()> {
             metric.timestamp.format("%Y-%m-%d %H:%M:%S")
         );
     }
-    Ok(())
 }

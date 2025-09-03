@@ -239,3 +239,24 @@ improve:
     just sbom || echo "⚠️ SBOM generation skipped/failed"
     just validate-security || echo "⚠️ Security validation reported issues"
     echo "✅ Improvement sweep complete"
+
+
+# Strict warning enforcement (opt-in for CI/local)
+build-werror:
+    RUSTFLAGS="-D warnings" cargo build --workspace --all-features
+
+clippy-strict:
+    cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::perf -W clippy::suspicious -W clippy::nursery
+
+ci-strict:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "🚦 Running strict CI checks (warnings-as-errors)..."
+    RUSTFLAGS="-D warnings" cargo build --workspace --all-features
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    if [ -d "user-portal" ]; then
+        (cd user-portal && npm ci --no-audit --no-fund --legacy-peer-deps)
+        (cd user-portal && npm run build)
+        (cd user-portal && npm run lint -- --max-warnings 0)
+    fi
+    echo "✅ Strict checks completed"

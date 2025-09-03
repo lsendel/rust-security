@@ -244,17 +244,21 @@ impl PerformanceMonitor {
             let p50 = percentile(&latencies, 0.5);
             let p95 = percentile(&latencies, 0.95);
             let p99 = percentile(&latencies, 0.99);
+            #[allow(clippy::cast_precision_loss)]
             let mean = latencies.iter().sum::<f64>() / latencies.len() as f64;
             (p50, p95, p99, mean)
         };
 
         let error_rate = if total_requests > 0 {
-            failed_requests as f64 / total_requests as f64
+            #[allow(clippy::cast_precision_loss)]
+            let rate = failed_requests as f64 / total_requests as f64;
+            rate
         } else {
             0.0
         };
 
         let availability = 1.0 - error_rate;
+        #[allow(clippy::cast_precision_loss)]
         let throughput = total_requests as f64 / self.config.collection_window.as_secs_f64();
 
         // Calculate per-endpoint metrics
@@ -283,6 +287,7 @@ impl PerformanceMonitor {
             let (mean_latency, p95_latency, slowest, fastest) = if endpoint_latencies.is_empty() {
                 (0.0, 0.0, 0.0, 0.0)
             } else {
+                #[allow(clippy::cast_precision_loss)]
                 let mean = endpoint_latencies.iter().sum::<f64>() / endpoint_latencies.len() as f64;
                 let p95 = percentile(&endpoint_latencies, 0.95);
                 let slowest = endpoint_latencies.iter().fold(0.0f64, |a, &b| a.max(b));
@@ -595,6 +600,11 @@ fn percentile(sorted_values: &[f64], p: f64) -> f64 {
         return 0.0;
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     let index = (p * (sorted_values.len() - 1) as f64).round() as usize;
     sorted_values[index.min(sorted_values.len() - 1)]
 }
@@ -607,9 +617,9 @@ mod tests {
     fn test_percentile_calculation() {
         let values = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
 
-        assert_eq!(percentile(&values, 0.5), 5.0); // P50
-        assert_eq!(percentile(&values, 0.95), 10.0); // P95
-        assert_eq!(percentile(&values, 0.99), 10.0); // P99
+        assert!((percentile(&values, 0.5) - 5.0).abs() < f64::EPSILON); // P50
+        assert!((percentile(&values, 0.95) - 10.0).abs() < f64::EPSILON); // P95
+        assert!((percentile(&values, 0.99) - 10.0).abs() < f64::EPSILON); // P99
     }
 
     #[tokio::test]

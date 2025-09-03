@@ -138,6 +138,7 @@ mod tests {
 
     #[derive(Debug, thiserror::Error)]
     #[allow(dead_code)]
+    #[allow(clippy::enum_variant_names)]
     enum MockAppError {
         #[error("Redis error")]
         RedisConnectionError { source: TestError },
@@ -160,6 +161,6 @@ mod tests {
     #[test]
     fn test_macro_syntax() {
         // Just testing that the macro syntax compiles
-        assert!(true);
+        // If control reaches here, macro expansion succeeded without panic
     }
 }

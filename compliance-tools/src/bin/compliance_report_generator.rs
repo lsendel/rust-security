@@ -1,6 +1,8 @@
 //! Compliance Report Generator
 //!
-//! A Rust-based replacement for the Python compliance_report_generator.py
+//! A Rust-based replacement for the Python `compliance_report_generator.py`
+
+#![allow(clippy::cast_possible_truncation, clippy::unnecessary_wraps, clippy::unused_async, clippy::needless_pass_by_ref_mut, clippy::case_sensitive_file_extension_comparisons, clippy::too_many_lines)]
 //! Generates comprehensive compliance reports for SOC 2, ISO 27001, GDPR, and other frameworks
 
 use anyhow::Result;
@@ -9,7 +11,7 @@ use clap::{Arg, Command};
 use compliance_tools::{
     prometheus_client::PrometheusClient,
     reporting::{AuditSummary, ComplianceReportData, ReportRenderer},
-    *,
+    ClassificationLevel, ComplianceConfig, ComplianceFramework, ReportFormat, MetricsCollector, ImplementationStatus, EffectivenessLevel, SecurityMetric, ComplianceControl, SecurityIncident, RiskLevel,
 };
 use std::path::PathBuf;
 use tracing::{error, info, warn};
@@ -23,6 +25,7 @@ use dotenvy as _;
 use fastrand as _;
 use handlebars as _;
 use moka as _;
+#[cfg(feature = "prometheus-metrics")]
 use prometheus as _;
 use pulldown_cmark as _;
 use regex as _;
@@ -37,6 +40,7 @@ use uuid as _;
 use walkdir as _;
 
 #[tokio::main]
+#[allow(clippy::cast_possible_truncation, clippy::unnecessary_wraps, clippy::unused_async, clippy::needless_pass_by_ref_mut, clippy::case_sensitive_file_extension_comparisons)]
 async fn main() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
@@ -232,7 +236,7 @@ impl ComplianceReporter {
             .data_sources
             .prometheus_url
             .as_ref()
-            .map(|url| PrometheusClient::new(url.clone()));
+            .map(|url| PrometheusClient::new(url.as_str()));
 
         let metrics_collector = MetricsCollector::new(&config).await?;
 
@@ -283,7 +287,7 @@ impl ComplianceReporter {
             .count() as u32;
 
         let compliance_score = if controls_assessed > 0 {
-            ((controls_assessed - issues_found) as f64 / controls_assessed as f64) * 100.0
+            (f64::from(controls_assessed - issues_found) / f64::from(controls_assessed)) * 100.0
         } else {
             0.0
         };

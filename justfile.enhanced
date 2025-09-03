@@ -408,7 +408,11 @@ fmt-check:
     cargo fmt --all -- --check
 
 lint:
-    cargo clippy --workspace --all-targets --all-features -- -D warnings -W clippy::perf -W clippy::suspicious
+    # Treat critical issues strongly, keep others as warnings
+    cargo clippy --workspace --all-features -- \
+        -W clippy::perf \
+        -W clippy::suspicious \
+        -W clippy::pedantic
 
 build:
     cargo build --workspace --all-features

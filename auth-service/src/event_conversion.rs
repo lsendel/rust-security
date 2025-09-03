@@ -1,14 +1,11 @@
 //! Event conversion utilities for bridging core security and threat detection systems
 
-#[cfg(feature = "threat-hunting")]
 use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
-#[cfg(feature = "threat-hunting")]
 use crate::threat_types::{
     EventOutcome, ThreatSecurityEvent, ThreatSecurityEventType, ThreatSeverity,
 };
 
 /// Convert `SecurityEventType` to `ThreatSecurityEventType`
-#[cfg(feature = "threat-hunting")]
 impl From<SecurityEventType> for ThreatSecurityEventType {
     fn from(event_type: SecurityEventType) -> Self {
         match event_type {
@@ -33,7 +30,6 @@ impl From<SecurityEventType> for ThreatSecurityEventType {
 }
 
 /// Convert `ViolationSeverity` to `ThreatSeverity`
-#[cfg(feature = "threat-hunting")]
 impl From<ViolationSeverity> for ThreatSeverity {
     fn from(severity: ViolationSeverity) -> Self {
         match severity {
@@ -46,7 +42,6 @@ impl From<ViolationSeverity> for ThreatSeverity {
 }
 
 /// Convert `SecurityEvent` to `ThreatSecurityEvent`
-#[cfg(feature = "threat-hunting")]
 impl From<&SecurityEvent> for ThreatSecurityEvent {
     fn from(event: &SecurityEvent) -> Self {
         Self {
@@ -80,7 +75,6 @@ impl From<&SecurityEvent> for ThreatSecurityEvent {
 }
 
 /// Conversion helper for batch operations
-#[cfg(feature = "threat-hunting")]
 #[must_use]
 pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEvent> {
     events.iter().map(std::convert::Into::into).collect()
@@ -88,18 +82,12 @@ pub fn convert_security_events(events: &[SecurityEvent]) -> Vec<ThreatSecurityEv
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "threat-hunting")]
     use super::*;
-    #[cfg(feature = "threat-hunting")]
     use crate::core::auth::AuthContext;
-    #[cfg(feature = "threat-hunting")]
-    use crate::core::security::{SecurityContext, SecurityLevel};
-    #[cfg(feature = "threat-hunting")]
+    use crate::core::security::{SecurityContext, SecurityFlags, SecurityLevel};
     use std::net::IpAddr;
-    #[cfg(feature = "threat-hunting")]
     use std::time::SystemTime;
 
-    #[cfg(feature = "threat-hunting")]
     #[test]
     fn test_event_type_conversion() {
         assert_eq!(
@@ -108,7 +96,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "threat-hunting")]
     #[test]
     fn test_severity_conversion() {
         assert_eq!(
@@ -117,7 +104,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "threat-hunting")]
     #[test]
     fn test_security_event_conversion() {
         let security_event = SecurityEvent {
@@ -130,7 +116,7 @@ mod tests {
                 security_level: SecurityLevel::High,
                 risk_score: 0.5,
                 threat_indicators: vec![],
-                flags: Default::default(),
+                flags: SecurityFlags::default(),
                 metadata: std::collections::HashMap::new(),
             },
             auth_context: Some(AuthContext {

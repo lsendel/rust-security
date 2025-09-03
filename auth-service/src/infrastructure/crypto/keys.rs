@@ -243,14 +243,48 @@ impl KeyManager {
     fn generate_secure_key_material() -> Result<SecureKeyMaterial, crate::shared::error::AppError> {
         // SECURITY: Load RSA key from secure environment variable or external key management
         // This prevents hardcoded keys and supports key rotation
-        let private_key_pem = std::env::var("JWT_RSA_PRIVATE_KEY")
-            .or_else(|_| std::env::var("RSA_PRIVATE_KEY"))
-            .map_err(|_| {
-                AppError::internal(
+        let private_key_pem =
+            std::env::var("JWT_RSA_PRIVATE_KEY").or_else(|_| std::env::var("RSA_PRIVATE_KEY"));
+
+        let private_key_pem = match private_key_pem {
+            Ok(key) => key,
+            Err(_) => {
+                // For development/testing when no env var is set, provide a default key
+                // In production, this should be set via environment variables
+                #[cfg(test)]
+                return Ok(SecureKeyMaterial {
+                    kid: "default-test-key".to_string(),
+                    encoding_key: EncodingKey::from_rsa_pem(
+                        Self::generate_test_rsa_key().as_bytes(),
+                    )
+                    .map_err(|e| {
+                        AppError::internal(format!("Failed to parse test RSA key: {e}"))
+                    })?,
+                    decoding_key: DecodingKey::from_rsa_pem(
+                        Self::generate_test_rsa_key().as_bytes(),
+                    )
+                    .map_err(|e| {
+                        AppError::internal(format!("Failed to parse test RSA key: {e}"))
+                    })?,
+                    public_jwk: serde_json::json!({
+                        "kty": "RSA",
+                        "use": "sig",
+                        "key_ops": ["verify"],
+                        "alg": "RS256",
+                        "kid": "default-test-key",
+                        "n": "",
+                        "e": ""
+                    }),
+                    created_at: Self::current_timestamp(),
+                });
+
+                #[cfg(not(test))]
+                return Err(AppError::internal(
                     "JWT_RSA_PRIVATE_KEY or RSA_PRIVATE_KEY environment variable must be set. \
                      Generate with: openssl genpkey -algorithm RSA -pkcs8 -out private_key.pem -pkcs8"
-                )
-            })?;
+                ));
+            }
+        };
 
         let kid = format!("key-{}", Self::current_timestamp());
 
@@ -296,6 +330,28 @@ impl KeyManager {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs()
+    }
+
+    #[cfg(test)]
+    fn generate_test_rsa_key() -> String {
+        // Fixed test RSA private key for deterministic testing
+        "-----BEGIN RSA PRIVATE KEY-----
+MIIEowIBAAKCAQEA36oM2JEF+XsEwYMJZy6whsr7ZW1KRLiu+E4NYDiikQwG7pAj
+pYSNWGf6vYf1K2cPXUxlRJX6ab9F6E81S5b/9xKQ3t2DBxceyk+NT1KT0YMGiM4V
+ZWnNKaAhyEvXmyLNgR9tGJDpXr0wnMfcYKELN7xz8OFzcG7F8Jy6JKJ5J6LjN4R4
+QZzfKj2OmSGvAi7L4X7pUfXPw5YF2xo3YUU3YZRdFzRzpT8YoE6Qj6u3RK6qWXp8
+O6QYBmKGKmKLNZ7IjE7JjYJRrJqQCDcQHj5TqNxj3G2e3PeQi7FKe8vFjY2Pu9nF
+t5jO8gEqP5i3pIlzj/QsPFyYfGFnGKuI8YQdTQIDAQABAoIBAQCKDLBP9LdNkSFE
+pGD2KE7fMFE6cRGHjWLpY2FkZoQ4G7QXZZGXwZ6QCfGp3TUGcVh1O8YfKF2FzkCX
+xj9YQN3JOO6ELk1YF4K6H6KPz6FCg7VQ5pOp6L6I4T8JF1FSkzB3L3G8QF7O9T1r
+yR4Qm3qV1G6GjFGKl/n5J8XjF6KKaOgE6O8H+Ue7gKjNh6MfKvHUoQF6/wVZZHXz
+SqnV3OG7VJQ9BkF+HCk4r1tQr8vT8vT+hT/4x+pF9T/4x+mC3J3K8qKQW6TqXN9G
+7rJV4P8Gv6aEgFH8Ku8H8XN8Y3Y6L8h8qZ6Kn4G5+qGG5KgqnGp4VQ5kG2I3Qh8y
+zAL+2XRgGj7JYrQZKLdXZQfX4sPEfQ1q6F6J2U5PkKKGvH2VqP/Xo4J6GNVPKvQQ
+5vr5vRmL2pVGJ6K6K+QP6kGK5K6KGK6K6Q1nV8O6N8V9Z2X9P+6K8T8PnP8Y6+6R
+oF6KKKKKKKfG7G3P2QGG3pG5G6K8Y4GgHfT1kG8ZG8G4+FGK6QQg==
+-----END RSA PRIVATE KEY-----"
+            .to_string()
     }
 }
 

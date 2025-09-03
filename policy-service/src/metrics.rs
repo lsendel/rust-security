@@ -17,6 +17,33 @@ use prometheus::{
 use std::sync::LazyLock;
 use tracing::{debug, error};
 
+// Type aliases for complex return types
+type AuthMetrics = (IntCounterVec, HistogramVec);
+type PolicyMetrics = (
+    IntCounterVec,
+    HistogramVec,
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+);
+type EntityMetrics = (IntCounterVec, IntCounterVec, IntCounterVec);
+type HttpMetrics = (
+    IntCounterVec,
+    HistogramVec,
+    HistogramVec,
+    HistogramVec,
+    IntGauge,
+);
+type SecurityMetrics = (IntCounterVec, IntCounterVec, IntCounterVec);
+type SystemMetrics = (
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+    IntCounterVec,
+);
+
 /// Core metrics registry for policy service observability
 #[allow(dead_code)]
 pub struct PolicyMetricsRegistry {
@@ -87,17 +114,92 @@ pub struct PolicyMetricsRegistry {
 }
 
 impl PolicyMetricsRegistry {
+    fn build_int_counter_vec(
+        name: &str,
+        help: &str,
+        labels: &[&str],
+    ) -> Result<IntCounterVec, Box<dyn std::error::Error + Send + Sync>> {
+        match IntCounterVec::new(Opts::new(name, help), labels) {
+            Ok(m) => Ok(m),
+            Err(e) => {
+                error!(
+                    error = %e,
+                    metric = %name,
+                    "Failed to create IntCounterVec; falling back to noop metric"
+                );
+                match IntCounterVec::new(
+                    Opts::new("policy_fallback_metric", "fallback"),
+                    &["fallback"],
+                ) {
+                    Ok(f) => Ok(f),
+                    Err(e2) => {
+                        error!("Failed to create fallback IntCounterVec: {}", e2);
+                        Err(Box::new(e2))
+                    }
+                }
+            }
+        }
+    }
+
+    fn build_histogram_vec(
+        name: &str,
+        help: &str,
+        buckets: Vec<f64>,
+        labels: &[&str],
+    ) -> Result<HistogramVec, Box<dyn std::error::Error + Send + Sync>> {
+        match HistogramVec::new(HistogramOpts::new(name, help).buckets(buckets), labels) {
+            Ok(m) => Ok(m),
+            Err(e) => {
+                error!(
+                    error = %e,
+                    metric = %name,
+                    "Failed to create HistogramVec; falling back to noop metric"
+                );
+                match HistogramVec::new(
+                    HistogramOpts::new("policy_fallback_histogram", "fallback").buckets(vec![1.0]),
+                    &["fallback"],
+                ) {
+                    Ok(f) => Ok(f),
+                    Err(e2) => {
+                        error!("Failed to create fallback HistogramVec: {}", e2);
+                        Err(Box::new(e2))
+                    }
+                }
+            }
+        }
+    }
+
+    fn build_int_gauge(
+        name: &str,
+        help: &str,
+    ) -> Result<IntGauge, Box<dyn std::error::Error + Send + Sync>> {
+        match IntGauge::new(name, help) {
+            Ok(g) => Ok(g),
+            Err(e) => {
+                error!(
+                    error = %e,
+                    metric = %name,
+                    "Failed to create IntGauge; falling back to noop gauge"
+                );
+                match IntGauge::new("policy_fallback_gauge", "fallback") {
+                    Ok(f) => Ok(f),
+                    Err(e2) => {
+                        error!("Failed to create fallback IntGauge: {}", e2);
+                        Err(Box::new(e2))
+                    }
+                }
+            }
+        }
+    }
     /// Create a new metrics registry with all collectors initialized
     #[allow(clippy::too_many_lines)]
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let registry = Registry::new();
 
         // === Authorization Metrics ===
-        let authorization_requests_total = IntCounterVec::new(
-            Opts::new(
-                "policy_authorization_requests_total",
-                "Total authorization requests",
-            ),
+        let authorization_requests_total = Self::build_int_counter_vec(
+            "policy_authorization_requests_total",
+            "Total authorization requests",
             &[
                 "decision",
                 "principal_type",
@@ -105,212 +207,157 @@ impl PolicyMetricsRegistry {
                 "resource_type",
                 "client_id",
             ],
-        )
-        .expect("Failed to create authorization_requests_total metric");
+        )?;
 
-        let authorization_duration = HistogramVec::new(
-            HistogramOpts::new(
-                "policy_authorization_duration_seconds",
-                "Duration of authorization decisions in seconds",
-            )
-            .buckets(vec![
+        let authorization_duration = Self::build_histogram_vec(
+            "policy_authorization_duration_seconds",
+            "Duration of authorization decisions in seconds",
+            vec![
                 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
-            ]),
+            ],
             &["decision", "policy_complexity"],
-        )
-        .expect("Failed to create authorization_duration metric");
+        )?;
 
-        let policy_evaluation_errors_total = IntCounterVec::new(
-            Opts::new(
-                "policy_evaluation_errors_total",
-                "Total policy evaluation errors",
-            ),
+        let policy_evaluation_errors_total = Self::build_int_counter_vec(
+            "policy_evaluation_errors_total",
+            "Total policy evaluation errors",
             &["error_type", "error_cause", "policy_id"],
-        )
-        .expect("Failed to create policy_evaluation_errors_total metric");
+        )?;
 
-        let policies_evaluated_per_request = HistogramVec::new(
-            HistogramOpts::new(
-                "policy_policies_evaluated_per_request",
-                "Number of policies evaluated per authorization request",
-            )
-            .buckets(vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0]),
+        let policies_evaluated_per_request = Self::build_histogram_vec(
+            "policy_policies_evaluated_per_request",
+            "Number of policies evaluated per authorization request",
+            vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0],
             &["request_type"],
-        )
-        .expect("Failed to create policies_evaluated_per_request metric");
+        )?;
 
         // === Policy Management Metrics ===
-        let policy_compilation_total = IntCounterVec::new(
-            Opts::new(
-                "policy_compilation_total",
-                "Total policy compilation operations",
-            ),
+        let policy_compilation_total = Self::build_int_counter_vec(
+            "policy_compilation_total",
+            "Total policy compilation operations",
             &["result", "policy_source", "validation_type"],
-        )
-        .expect("Failed to create policy_compilation_total metric");
+        )?;
 
-        let policy_reload_total = IntCounterVec::new(
-            Opts::new("policy_reload_total", "Total policy reload operations"),
+        let policy_reload_total = Self::build_int_counter_vec(
+            "policy_reload_total",
+            "Total policy reload operations",
             &["result", "trigger_type", "policies_changed"],
-        )
-        .expect("Failed to create policy_reload_total metric");
+        )?;
 
-        let active_policies_gauge = IntCounterVec::new(
-            Opts::new(
-                "policy_active_policies",
-                "Number of active policies by type",
-            ),
+        let active_policies_gauge = Self::build_int_counter_vec(
+            "policy_active_policies",
+            "Number of active policies by type",
             &["policy_type", "scope"],
-        )
-        .expect("Failed to create active_policies_gauge metric");
+        )?;
 
-        let policy_complexity_gauge = IntCounterVec::new(
-            Opts::new("policy_complexity", "Policy complexity metrics"),
+        let policy_complexity_gauge = Self::build_int_counter_vec(
+            "policy_complexity",
+            "Policy complexity metrics",
             &["metric_type", "policy_id"],
-        )
-        .expect("Failed to create policy_complexity_gauge metric");
+        )?;
 
         // === Entity Management Metrics ===
-        let entity_operations_total = IntCounterVec::new(
-            Opts::new("policy_entity_operations_total", "Total entity operations"),
+        let entity_operations_total = Self::build_int_counter_vec(
+            "policy_entity_operations_total",
+            "Total entity operations",
             &["operation", "entity_type", "result"],
-        )
-        .expect("Failed to create entity_operations_total metric");
+        )?;
 
-        let entity_cache_operations = IntCounterVec::new(
-            Opts::new(
-                "policy_entity_cache_operations_total",
-                "Total entity cache operations",
-            ),
+        let entity_cache_operations = Self::build_int_counter_vec(
+            "policy_entity_cache_operations_total",
+            "Total entity cache operations",
             &["operation", "result", "entity_type"],
-        )
-        .expect("Failed to create entity_cache_operations metric");
+        )?;
 
-        let active_entities_gauge = IntCounterVec::new(
-            Opts::new(
-                "policy_active_entities",
-                "Number of active entities by type",
-            ),
+        let active_entities_gauge = Self::build_int_counter_vec(
+            "policy_active_entities",
+            "Number of active entities by type",
             &["entity_type", "namespace"],
-        )
-        .expect("Failed to create active_entities_gauge metric");
+        )?;
 
         // === HTTP Request Metrics ===
-        let http_requests_total = IntCounterVec::new(
-            Opts::new("policy_http_requests_total", "Total HTTP requests"),
+        let http_requests_total = Self::build_int_counter_vec(
+            "policy_http_requests_total",
+            "Total HTTP requests",
             &["method", "endpoint", "status_code", "client_id"],
-        )
-        .expect("Failed to create http_requests_total metric");
+        )?;
 
-        let http_request_duration = HistogramVec::new(
-            HistogramOpts::new(
-                "policy_http_request_duration_seconds",
-                "HTTP request duration in seconds",
-            )
-            .buckets(vec![
-                0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5,
-            ]),
+        let http_request_duration = Self::build_histogram_vec(
+            "policy_http_request_duration_seconds",
+            "HTTP request duration in seconds",
+            vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5],
             &["method", "endpoint"],
-        )
-        .expect("Failed to create http_request_duration metric");
+        )?;
 
-        let http_request_size_bytes = HistogramVec::new(
-            HistogramOpts::new(
-                "policy_http_request_size_bytes",
-                "HTTP request size in bytes",
-            )
-            .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0]),
+        let http_request_size_bytes = Self::build_histogram_vec(
+            "policy_http_request_size_bytes",
+            "HTTP request size in bytes",
+            vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0],
             &["method", "endpoint"],
-        )
-        .expect("Failed to create http_request_size_bytes metric");
+        )?;
 
-        let http_response_size_bytes = HistogramVec::new(
-            HistogramOpts::new(
-                "policy_http_response_size_bytes",
-                "HTTP response size in bytes",
-            )
-            .buckets(vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0]),
+        let http_response_size_bytes = Self::build_histogram_vec(
+            "policy_http_response_size_bytes",
+            "HTTP response size in bytes",
+            vec![64.0, 256.0, 1024.0, 4096.0, 16384.0, 65536.0],
             &["method", "endpoint", "status_code"],
-        )
-        .expect("Failed to create http_response_size_bytes metric");
+        )?;
 
-        let http_requests_in_flight = IntGauge::new(
+        let http_requests_in_flight = Self::build_int_gauge(
             "policy_http_requests_in_flight",
             "Number of HTTP requests currently being processed",
-        )
-        .expect("Failed to create http_requests_in_flight metric");
+        )?;
 
         // === Security Metrics ===
-        let security_violations_total = IntCounterVec::new(
-            Opts::new(
-                "policy_security_violations_total",
-                "Total security violations",
-            ),
+        let security_violations_total = Self::build_int_counter_vec(
+            "policy_security_violations_total",
+            "Total security violations",
             &["violation_type", "severity", "client_id", "resource"],
-        )
-        .expect("Failed to create security_violations_total metric");
+        )?;
 
-        let authorization_anomalies_total = IntCounterVec::new(
-            Opts::new(
-                "policy_authorization_anomalies_total",
-                "Total authorization anomalies",
-            ),
+        let authorization_anomalies_total = Self::build_int_counter_vec(
+            "policy_authorization_anomalies_total",
+            "Total authorization anomalies",
             &["anomaly_type", "confidence", "principal", "action_taken"],
-        )
-        .expect("Failed to create authorization_anomalies_total metric");
+        )?;
 
-        let rate_limit_enforcement_total = IntCounterVec::new(
-            Opts::new(
-                "policy_rate_limit_enforcement_total",
-                "Total rate limit enforcement",
-            ),
+        let rate_limit_enforcement_total = Self::build_int_counter_vec(
+            "policy_rate_limit_enforcement_total",
+            "Total rate limit enforcement",
             &["endpoint", "client_id", "result", "limit_type"],
-        )
-        .expect("Failed to create rate_limit_enforcement_total metric");
+        )?;
 
         // === Performance Metrics ===
-        let memory_usage_bytes = IntCounterVec::new(
-            Opts::new(
-                "policy_memory_usage_bytes",
-                "Memory usage in bytes by component",
-            ),
+        let memory_usage_bytes = Self::build_int_counter_vec(
+            "policy_memory_usage_bytes",
+            "Memory usage in bytes by component",
             &["component", "type"],
-        )
-        .expect("Failed to create memory_usage_bytes metric");
+        )?;
 
-        let cpu_usage_percent = IntCounterVec::new(
-            Opts::new(
-                "policy_cpu_usage_percent",
-                "CPU usage percentage by component",
-            ),
+        let cpu_usage_percent = Self::build_int_counter_vec(
+            "policy_cpu_usage_percent",
+            "CPU usage percentage by component",
             &["component", "type"],
-        )
-        .expect("Failed to create cpu_usage_percent metric");
+        )?;
 
-        let background_tasks_total = IntCounterVec::new(
-            Opts::new(
-                "policy_background_tasks_total",
-                "Total background task executions",
-            ),
+        let background_tasks_total = Self::build_int_counter_vec(
+            "policy_background_tasks_total",
+            "Total background task executions",
             &["task_type", "result", "duration_bucket"],
-        )
-        .expect("Failed to create background_tasks_total metric");
+        )?;
 
         // === SLO Metrics ===
-        let slo_violations_total = IntCounterVec::new(
-            Opts::new("policy_slo_violations_total", "Total SLO violations"),
+        let slo_violations_total = Self::build_int_counter_vec(
+            "policy_slo_violations_total",
+            "Total SLO violations",
             &["slo_type", "severity", "service_component"],
-        )
-        .expect("Failed to create slo_violations_total metric");
+        )?;
 
-        let error_budget_consumption = IntCounterVec::new(
-            Opts::new(
-                "policy_error_budget_consumption",
-                "Error budget consumption",
-            ),
+        let error_budget_consumption = Self::build_int_counter_vec(
+            "policy_error_budget_consumption",
+            "Error budget consumption",
             &["slo_type", "time_window", "service_component"],
-        )
-        .expect("Failed to create error_budget_consumption metric");
+        )?;
 
         // Register all metrics
         let metrics: Vec<Box<dyn prometheus::core::Collector>> = vec![
@@ -346,7 +393,7 @@ impl PolicyMetricsRegistry {
             }
         }
 
-        Self {
+        Ok(Self {
             registry,
             authorization_requests_total,
             authorization_duration,
@@ -372,7 +419,7 @@ impl PolicyMetricsRegistry {
             background_tasks_total,
             slo_violations_total,
             error_budget_consumption,
-        }
+        })
     }
 
     /// Generate Prometheus metrics output
@@ -387,13 +434,370 @@ impl PolicyMetricsRegistry {
 
 impl Default for PolicyMetricsRegistry {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|e| {
+            error!("Failed to create default PolicyMetricsRegistry: {}", e);
+            // Create a minimal registry with basic functionality if initialization fails
+            Self::create_fallback_registry()
+        })
+    }
+}
+
+impl PolicyMetricsRegistry {
+    fn create_fallback_registry() -> Self {
+        let (auth_metrics, policy_metrics, entity_metrics) = Self::create_core_metrics();
+        let (http_metrics, security_metrics, system_metrics) = Self::create_extended_metrics();
+
+        Self {
+            registry: Registry::new(),
+            authorization_requests_total: auth_metrics.0,
+            authorization_duration: auth_metrics.1,
+            policy_evaluation_errors_total: policy_metrics.0,
+            policies_evaluated_per_request: policy_metrics.1,
+            policy_compilation_total: policy_metrics.2,
+            policy_reload_total: policy_metrics.3,
+            active_policies_gauge: policy_metrics.4,
+            policy_complexity_gauge: policy_metrics.5,
+            entity_operations_total: entity_metrics.0,
+            entity_cache_operations: entity_metrics.1,
+            active_entities_gauge: entity_metrics.2,
+            http_requests_total: http_metrics.0,
+            http_request_duration: http_metrics.1,
+            http_request_size_bytes: http_metrics.2,
+            http_response_size_bytes: http_metrics.3,
+            http_requests_in_flight: http_metrics.4,
+            security_violations_total: security_metrics.0,
+            authorization_anomalies_total: security_metrics.1,
+            rate_limit_enforcement_total: security_metrics.2,
+            memory_usage_bytes: system_metrics.0,
+            cpu_usage_percent: system_metrics.1,
+            background_tasks_total: system_metrics.2,
+            slo_violations_total: system_metrics.3,
+            error_budget_consumption: system_metrics.4,
+        }
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn create_core_metrics() -> (AuthMetrics, PolicyMetrics, EntityMetrics) {
+        let auth_requests = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_requests", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(prometheus::Opts::new("policy_noop", "noop"), &["noop"]).unwrap()
+        });
+        let auth_duration = HistogramVec::new(
+            prometheus::HistogramOpts::new("policy_fallback_duration", "fallback")
+                .buckets(vec![1.0]),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            HistogramVec::new(
+                prometheus::HistogramOpts::new("policy_noop_duration", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+
+        let policy_errors = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_errors", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_errors", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let policies_evaluated = HistogramVec::new(
+            prometheus::HistogramOpts::new("policy_fallback_policies", "fallback")
+                .buckets(vec![1.0]),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            HistogramVec::new(
+                prometheus::HistogramOpts::new("policy_noop_policies", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let policy_compilation = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_compilation", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_compilation", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let policy_reload = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_reload", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_reload", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let active_policies = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_active", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_active", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let policy_complexity = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_complexity", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_complexity", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+
+        let entity_ops = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_entity_ops", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_entity_ops", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let entity_cache = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_cache_ops", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_cache_ops", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let active_entities = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_active_entities", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_active_entities", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+
+        (
+            (auth_requests, auth_duration),
+            (
+                policy_errors,
+                policies_evaluated,
+                policy_compilation,
+                policy_reload,
+                active_policies,
+                policy_complexity,
+            ),
+            (entity_ops, entity_cache, active_entities),
+        )
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn create_extended_metrics() -> (HttpMetrics, SecurityMetrics, SystemMetrics) {
+        let http_requests = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_http", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(prometheus::Opts::new("policy_noop_http", "noop"), &["noop"])
+                .unwrap()
+        });
+        let http_duration = HistogramVec::new(
+            prometheus::HistogramOpts::new("policy_fallback_http_duration", "fallback")
+                .buckets(vec![1.0]),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            HistogramVec::new(
+                prometheus::HistogramOpts::new("policy_noop_http_duration", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let http_req_size = HistogramVec::new(
+            prometheus::HistogramOpts::new("policy_fallback_request_size", "fallback")
+                .buckets(vec![1.0]),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            HistogramVec::new(
+                prometheus::HistogramOpts::new("policy_noop_request_size", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let http_resp_size = HistogramVec::new(
+            prometheus::HistogramOpts::new("policy_fallback_response_size", "fallback")
+                .buckets(vec![1.0]),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            HistogramVec::new(
+                prometheus::HistogramOpts::new("policy_noop_response_size", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let http_in_flight =
+            IntGauge::new("policy_fallback_in_flight", "fallback").unwrap_or_else(|e| {
+                error!("Failed to create fallback metric: {}", e);
+                IntGauge::new("policy_noop_in_flight", "noop").unwrap()
+            });
+
+        let security_violations = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_security", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_security", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let auth_anomalies = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_anomalies", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_anomalies", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let rate_limit = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_rate_limit", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_rate_limit", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+
+        let memory_usage = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_memory", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_memory", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let cpu_usage = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_cpu", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(prometheus::Opts::new("policy_noop_cpu", "noop"), &["noop"]).unwrap()
+        });
+        let bg_tasks = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_tasks", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_tasks", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+        let slo_violations = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_slo", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(prometheus::Opts::new("policy_noop_slo", "noop"), &["noop"]).unwrap()
+        });
+        let error_budget = IntCounterVec::new(
+            prometheus::Opts::new("policy_fallback_budget", "fallback"),
+            &["fallback"],
+        )
+        .unwrap_or_else(|e| {
+            error!("Failed to create fallback metric: {}", e);
+            IntCounterVec::new(
+                prometheus::Opts::new("policy_noop_budget", "noop"),
+                &["noop"],
+            )
+            .unwrap()
+        });
+
+        (
+            (
+                http_requests,
+                http_duration,
+                http_req_size,
+                http_resp_size,
+                http_in_flight,
+            ),
+            (security_violations, auth_anomalies, rate_limit),
+            (
+                memory_usage,
+                cpu_usage,
+                bg_tasks,
+                slo_violations,
+                error_budget,
+            ),
+        )
     }
 }
 
 /// Global policy metrics registry instance
-pub static POLICY_METRICS: LazyLock<PolicyMetricsRegistry> =
-    LazyLock::new(PolicyMetricsRegistry::new);
+pub static POLICY_METRICS: LazyLock<PolicyMetricsRegistry> = LazyLock::new(|| {
+    PolicyMetricsRegistry::new().unwrap_or_else(|e| {
+        error!("Failed to initialize global policy metrics: {}", e);
+        PolicyMetricsRegistry::default()
+    })
+});
 
 /// Advanced metrics middleware for policy service
 pub async fn policy_metrics_middleware(req: Request, next: Next) -> Response {
@@ -690,7 +1094,7 @@ mod tests {
 
     #[test]
     fn test_policy_metrics_registry_creation() {
-        let metrics = PolicyMetricsRegistry::new();
+        let metrics = PolicyMetricsRegistry::new().unwrap();
         assert!(!metrics.registry.gather().is_empty());
     }
 

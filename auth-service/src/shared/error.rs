@@ -146,28 +146,49 @@ impl AppError {
     }
 
     /// Get the HTTP status code for this error
-    #[must_use] pub const fn status_code(&self) -> axum::http::StatusCode {
+    #[must_use]
+    pub const fn status_code(&self) -> axum::http::StatusCode {
         match self {
-            Self::Auth(_) | Self::Unauthorized(_) | Self::UnauthorizedClient(_) | 
-            Self::InvalidToken(_) | Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
-            
-            Self::NotFound(_) | Self::IdentityNotFound | Self::UserNotFound => axum::http::StatusCode::NOT_FOUND,
-            
-            Self::BadRequest(_) | Self::InvalidRequest { .. } | Self::Validation(_) | 
-            Self::ValidationError => axum::http::StatusCode::BAD_REQUEST,
-            
-            Self::Repository(_) | Self::Config(_) | Self::ConfigurationError(_) | 
-            Self::Internal(_) | Self::CryptographicError(_) | Self::TokenStoreError { .. } | 
-            Self::KeyGenerationError { .. } | Self::InternalError | Self::Crypto | 
-            Self::Session => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            
-            Self::PolicyDenied | Self::IdentitySuspended | Self::Forbidden { .. } | 
-            Self::UserInactive | Self::UserNotVerified => axum::http::StatusCode::FORBIDDEN,
-            
-            Self::RateLimitExceeded | Self::AnomalyDetected => axum::http::StatusCode::TOO_MANY_REQUESTS,
-            
-            Self::ServiceUnavailable { .. } | Self::CircuitBreakerOpen => axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            
+            Self::Auth(_)
+            | Self::Unauthorized(_)
+            | Self::UnauthorizedClient(_)
+            | Self::InvalidToken(_)
+            | Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
+
+            Self::NotFound(_) | Self::IdentityNotFound | Self::UserNotFound => {
+                axum::http::StatusCode::NOT_FOUND
+            }
+
+            Self::BadRequest(_)
+            | Self::InvalidRequest { .. }
+            | Self::Validation(_)
+            | Self::ValidationError => axum::http::StatusCode::BAD_REQUEST,
+
+            Self::Repository(_)
+            | Self::Config(_)
+            | Self::ConfigurationError(_)
+            | Self::Internal(_)
+            | Self::CryptographicError(_)
+            | Self::TokenStoreError { .. }
+            | Self::KeyGenerationError { .. }
+            | Self::InternalError
+            | Self::Crypto
+            | Self::Session => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+
+            Self::PolicyDenied
+            | Self::IdentitySuspended
+            | Self::Forbidden { .. }
+            | Self::UserInactive
+            | Self::UserNotVerified => axum::http::StatusCode::FORBIDDEN,
+
+            Self::RateLimitExceeded | Self::AnomalyDetected => {
+                axum::http::StatusCode::TOO_MANY_REQUESTS
+            }
+
+            Self::ServiceUnavailable { .. } | Self::CircuitBreakerOpen => {
+                axum::http::StatusCode::SERVICE_UNAVAILABLE
+            }
+
             Self::ApprovalRequired => axum::http::StatusCode::ACCEPTED,
             Self::TimeoutError => axum::http::StatusCode::REQUEST_TIMEOUT,
             Self::InsufficientDataForBaseline => axum::http::StatusCode::PRECONDITION_FAILED,
@@ -176,7 +197,8 @@ impl AppError {
     }
 
     /// Get a user-friendly error message
-    #[must_use] pub const fn user_message(&self) -> &str {
+    #[must_use]
+    pub const fn user_message(&self) -> &str {
         match self {
             Self::Auth(_) => "Authentication failed",
             Self::NotFound(_) => "Resource not found",

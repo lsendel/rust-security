@@ -52,8 +52,8 @@ handlebars = { workspace = true }
 # Configuration and environment
 dotenvy = { workspace = true }
 
-# Prometheus metrics
-prometheus = { workspace = true }
+# Prometheus metrics (optional; only used when prometheus-metrics feature is enabled)
+prometheus = { workspace = true, optional = true }
 
 # File system operations
 walkdir = { workspace = true }
@@ -88,8 +88,8 @@ moka = { workspace = true }
 # wiremock = { workspace = true }  # Currently unused
 
 [features]
-default = ["prometheus-metrics"]
-prometheus-metrics = []
+default = []
+prometheus-metrics = ["dep:prometheus"]
 # pdf-reports = ["printpdf"]  # Disabled until needed
 # excel-reports = ["dep:rust_xlsxwriter"]  # Disabled until needed
 # redis-cache = ["redis"]  # Disabled until needed

@@ -17,7 +17,7 @@ impl Scope {
     /// Returns an error if:
     /// - The scope is empty (`ScopeError::Empty`)
     /// - The scope is longer than 100 characters (`ScopeError::TooLong`)
-    /// - The scope contains invalid characters (only alphanumeric, underscore, 
+    /// - The scope contains invalid characters (only alphanumeric, underscore,
     ///   and hyphen are allowed) (`ScopeError::InvalidFormat`)
     pub fn new(scope: impl Into<String>) -> Result<Self, ScopeError> {
         let scope = scope.into();
@@ -30,10 +30,10 @@ impl Scope {
             return Err(ScopeError::TooLong);
         }
 
-        // Validate scope format (alphanumeric, underscore, hyphen)
+        // Validate scope format (alphanumeric, underscore, hyphen, colon)
         if !scope
             .chars()
-            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == ':')
         {
             return Err(ScopeError::InvalidFormat);
         }
@@ -42,22 +42,26 @@ impl Scope {
     }
 
     /// Get the scope as a string
-    #[must_use] pub fn as_str(&self) -> &str {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Get the scope as a string (consuming self)
-    #[must_use] pub fn into_string(self) -> String {
+    #[must_use]
+    pub fn into_string(self) -> String {
         self.0
     }
 
     /// Check if this scope includes read access
-    #[must_use] pub fn has_read(&self) -> bool {
+    #[must_use]
+    pub fn has_read(&self) -> bool {
         self.0 == "read" || self.0 == "read:write"
     }
 
     /// Check if this scope includes write access
-    #[must_use] pub fn has_write(&self) -> bool {
+    #[must_use]
+    pub fn has_write(&self) -> bool {
         self.0 == "write" || self.0 == "read:write"
     }
 }

@@ -4,6 +4,7 @@ use crate::{ComplianceError, ComplianceResult, MetricStatus, SecurityMetric};
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, error, info};
@@ -15,8 +16,12 @@ pub struct PrometheusClient {
 }
 
 impl PrometheusClient {
+    /// Create a new Prometheus client
+    ///
+    /// # Panics
+    /// Panics if the underlying HTTP client cannot be constructed.
     #[must_use]
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: &str) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
@@ -29,6 +34,9 @@ impl PrometheusClient {
     }
 
     /// Execute a Prometheus query
+    ///
+    /// # Errors
+    /// Returns an error if the HTTP request fails or the response indicates an error.
     pub async fn query(
         &self,
         query: &str,
@@ -65,6 +73,9 @@ impl PrometheusClient {
     }
 
     /// Execute a range query
+    ///
+    /// # Errors
+    /// Returns an error if the HTTP request fails or the response indicates an error.
     pub async fn query_range(
         &self,
         query: &str,
@@ -109,111 +120,16 @@ impl PrometheusClient {
     }
 
     /// Collect security metrics from Prometheus
+    ///
+    /// # Errors
+    /// Returns an error when any of the collection HTTP requests fail or return an error response.
     pub async fn collect_security_metrics(&self) -> ComplianceResult<Vec<SecurityMetric>> {
-        let mut metrics = Vec::new();
         let now = Utc::now();
-
-        // Define security metrics to collect
-        let metric_queries = vec![
-            (
-                "authentication_success_rate",
-                r"rate(auth_service_authentication_success_total[5m]) / (rate(auth_service_authentication_success_total[5m]) + rate(auth_service_authentication_failure_total[5m])) * 100",
-                95.0,
-                "Authentication success rate percentage",
-            ),
-            (
-                "failed_login_attempts",
-                "increase(auth_service_authentication_failure_total[1h])",
-                100.0,
-                "Failed login attempts in the last hour",
-            ),
-            (
-                "active_sessions",
-                "auth_service_active_sessions",
-                1000.0,
-                "Number of currently active sessions",
-            ),
-            (
-                "token_validation_errors",
-                "increase(auth_service_token_validation_errors_total[1h])",
-                50.0,
-                "Token validation errors in the last hour",
-            ),
-            (
-                "rate_limit_hits",
-                "increase(auth_service_rate_limit_exceeded_total[1h])",
-                200.0,
-                "Rate limit violations in the last hour",
-            ),
-            (
-                "mfa_success_rate",
-                r"rate(auth_service_mfa_success_total[5m]) / (rate(auth_service_mfa_success_total[5m]) + rate(auth_service_mfa_failure_total[5m])) * 100",
-                98.0,
-                "MFA success rate percentage",
-            ),
-            (
-                "threat_detections",
-                "increase(threat_hunting_patterns_detected_total[1h])",
-                10.0,
-                "Threat patterns detected in the last hour",
-            ),
-            (
-                "security_alerts",
-                "threat_hunting_active_threats",
-                5.0,
-                "Currently active security threats",
-            ),
-        ];
-
-        for (name, query, threshold, description) in metric_queries {
-            match self.query(query, Some(now)).await {
-                Ok(response) => {
-                    if let Some(result) = response.data.result.first() {
-                        if let Some(value_str) = result.value.get(1).and_then(|v| v.as_str()) {
-                            if let Ok(value) = value_str.parse::<f64>() {
-                                let status = if name.contains("rate") {
-                                    // For rates, higher is better
-                                    if value >= threshold {
-                                        MetricStatus::Pass
-                                    } else {
-                                        MetricStatus::Fail
-                                    }
-                                } else {
-                                    // For counts, lower is better
-                                    if value <= threshold {
-                                        MetricStatus::Pass
-                                    } else {
-                                        MetricStatus::Fail
-                                    }
-                                };
-
-                                metrics.push(SecurityMetric {
-                                    name: name.to_string(),
-                                    value,
-                                    threshold,
-                                    status,
-                                    description: description.to_string(),
-                                    timestamp: now,
-                                    tags: HashMap::new(),
-                                });
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to collect metric {}: {}", name, e);
-                    // Add a metric with unknown status
-                    metrics.push(SecurityMetric {
-                        name: name.to_string(),
-                        value: 0.0,
-                        threshold,
-                        status: MetricStatus::Unknown,
-                        description: format!("{description} (collection failed: {e})"),
-                        timestamp: now,
-                        tags: HashMap::new(),
-                    });
-                }
-            }
+        let defs = Self::metric_definitions();
+        let mut metrics = Vec::with_capacity(defs.len());
+        for def in &defs {
+            let metric = self.fetch_metric(now, def).await;
+            metrics.push(metric);
         }
 
         info!(
@@ -223,7 +139,122 @@ impl PrometheusClient {
         Ok(metrics)
     }
 
+    fn metric_definitions() -> Vec<MetricDef<'static>> {
+        vec![
+            MetricDef::new(
+                "authentication_success_rate",
+                r"rate(auth_service_authentication_success_total[5m]) / (rate(auth_service_authentication_success_total[5m]) + rate(auth_service_authentication_failure_total[5m])) * 100",
+                95.0,
+                true,
+                "Authentication success rate percentage",
+            ),
+            MetricDef::new(
+                "failed_login_attempts",
+                "increase(auth_service_authentication_failure_total[1h])",
+                100.0,
+                false,
+                "Failed login attempts in the last hour",
+            ),
+            MetricDef::new(
+                "active_sessions",
+                "auth_service_active_sessions",
+                1000.0,
+                false,
+                "Number of currently active sessions",
+            ),
+            MetricDef::new(
+                "token_validation_errors",
+                "increase(auth_service_token_validation_errors_total[1h])",
+                50.0,
+                false,
+                "Token validation errors in the last hour",
+            ),
+            MetricDef::new(
+                "rate_limit_hits",
+                "increase(auth_service_rate_limit_exceeded_total[1h])",
+                200.0,
+                false,
+                "Rate limit violations in the last hour",
+            ),
+            MetricDef::new(
+                "mfa_success_rate",
+                r"rate(auth_service_mfa_success_total[5m]) / (rate(auth_service_mfa_success_total[5m]) + rate(auth_service_mfa_failure_total[5m])) * 100",
+                98.0,
+                true,
+                "MFA success rate percentage",
+            ),
+            MetricDef::new(
+                "threat_detections",
+                "increase(threat_hunting_patterns_detected_total[1h])",
+                10.0,
+                false,
+                "Threat patterns detected in the last hour",
+            ),
+            MetricDef::new(
+                "security_alerts",
+                "threat_hunting_active_threats",
+                5.0,
+                false,
+                "Currently active security threats",
+            ),
+        ]
+    }
+
+    async fn fetch_metric(&self, now: DateTime<Utc>, def: &MetricDef<'_>) -> SecurityMetric {
+        match self.query(def.query, Some(now)).await {
+            Ok(response) => {
+                if let Some(result) = response.data.result.first() {
+                    if let Some(value_str) = result.value.get(1).and_then(|v| v.as_str()) {
+                        if let Ok(value) = value_str.parse::<f64>() {
+                            let status = if def.higher_is_better {
+                                if value >= def.threshold {
+                                    MetricStatus::Pass
+                                } else {
+                                    MetricStatus::Fail
+                                }
+                            } else if value <= def.threshold {
+                                MetricStatus::Pass
+                            } else {
+                                MetricStatus::Fail
+                            };
+
+                            return SecurityMetric {
+                                name: def.name.to_string(),
+                                value,
+                                threshold: def.threshold,
+                                status,
+                                description: def.description.clone().into_owned(),
+                                timestamp: now,
+                                tags: HashMap::new(),
+                            };
+                        }
+                    }
+                }
+                Self::unknown_metric(now, def, "no data")
+            }
+            Err(e) => {
+                error!("Failed to collect metric {}: {}", def.name, e);
+                Self::unknown_metric(now, def, &format!("collection failed: {e}"))
+            }
+        }
+    }
+
+    fn unknown_metric(now: DateTime<Utc>, def: &MetricDef<'_>, reason: &str) -> SecurityMetric {
+        SecurityMetric {
+            name: def.name.to_string(),
+            value: 0.0,
+            threshold: def.threshold,
+            status: MetricStatus::Unknown,
+            description: format!("{} ({reason})", def.description),
+            timestamp: now,
+            tags: HashMap::new(),
+        }
+    }
+
     /// Get available metrics from Prometheus
+    ///
+    /// # Errors
+    /// Returns an error if the HTTP request fails or the response indicates an error.
     pub async fn get_available_metrics(&self) -> ComplianceResult<Vec<String>> {
         let response = self
             .client
@@ -264,6 +295,9 @@ impl PrometheusClient {
     }
 
     /// Check if Prometheus is healthy
+    ///
+    /// # Errors
+    /// Returns an error if the HTTP request fails.
     pub async fn health_check(&self) -> ComplianceResult<bool> {
         let response = self
             .client
@@ -302,6 +336,33 @@ pub struct PrometheusResult {
     pub values: Option<Vec<Vec<serde_json::Value>>>,
 }
 
+#[derive(Debug, Clone)]
+struct MetricDef<'a> {
+    name: &'a str,
+    query: &'a str,
+    threshold: f64,
+    higher_is_better: bool,
+    description: Cow<'a, str>,
+}
+
+impl<'a> MetricDef<'a> {
+    const fn new(
+        name: &'a str,
+        query: &'a str,
+        threshold: f64,
+        higher_is_better: bool,
+        description: &'a str,
+    ) -> Self {
+        Self {
+            name,
+            query,
+            threshold,
+            higher_is_better,
+            description: Cow::Borrowed(description),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Tests temporarily disabled due to wiremock dependency removal
@@ -336,7 +397,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = PrometheusClient::new(mock_server.uri());
+        let client = PrometheusClient::new(&mock_server.uri());
         let _result = client.query("test_metric", None).await.unwrap();
 
         assert_eq!(result.status, "success");
@@ -367,7 +428,7 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = PrometheusClient::new(mock_server.uri());
+        let client = PrometheusClient::new(&mock_server.uri());
         let metrics = client.collect_security_metrics().await.unwrap();
 
         assert!(!metrics.is_empty());

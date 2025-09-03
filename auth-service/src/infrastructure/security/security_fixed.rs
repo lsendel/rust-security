@@ -159,7 +159,7 @@ impl std::str::FromStr for CodeChallengeMethod {
 pub fn validate_pkce_params(
     code_verifier: &str,
     code_challenge: &str,
-    method: CodeChallengeMethod,
+    method: &CodeChallengeMethod,
 ) -> Result<bool, SecurityError> {
     // Validate code verifier format
     if !code_verifier
@@ -223,10 +223,9 @@ pub fn verify_request_signature(
     let expected_signature = generate_request_signature(method, path, body, timestamp, secret)?;
 
     // Use constant-time comparison
-    use constant_time_eq::constant_time_eq;
     let expected_bytes = expected_signature.as_bytes();
     let provided_bytes = signature.as_bytes();
-    let eq = constant_time_eq(expected_bytes, provided_bytes);
+    let eq = constant_time_eq::constant_time_eq(expected_bytes, provided_bytes);
     Ok(eq)
 }
 
@@ -344,7 +343,7 @@ mod tests {
 
     #[test]
     fn test_request_signing() {
-        let secret = "test_secret_that_is_long_enough_for_security";
+        let secret = "test_security_secret";
         let timestamp = chrono::Utc::now().timestamp();
 
         let signature = generate_request_signature(

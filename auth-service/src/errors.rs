@@ -62,7 +62,8 @@ impl AppError {
     }
 
     /// Get the HTTP status code for this error
-    #[must_use] pub const fn status_code(&self) -> axum::http::StatusCode {
+    #[must_use]
+    pub const fn status_code(&self) -> axum::http::StatusCode {
         match self {
             Self::Auth(_) => axum::http::StatusCode::UNAUTHORIZED,
             Self::NotFound(_) => axum::http::StatusCode::NOT_FOUND,
@@ -76,7 +77,8 @@ impl AppError {
     }
 
     /// Get a user-friendly error message
-    #[must_use] pub const fn user_message(&self) -> &str {
+    #[must_use]
+    pub const fn user_message(&self) -> &str {
         match self {
             Self::Auth(_) => "Authentication failed",
             Self::NotFound(_) => "Resource not found",

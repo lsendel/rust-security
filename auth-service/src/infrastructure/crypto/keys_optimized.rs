@@ -87,9 +87,9 @@ impl OptimizedSecureKeyManager {
     }
 
     /// Non-blocking key generation with status tracking
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - RSA key generation fails due to insufficient entropy
     /// - Key serialization or encoding fails
@@ -117,15 +117,18 @@ impl OptimizedSecureKeyManager {
 
             match result {
                 Ok(new_key) => {
-                    let mut keys = self.keys.write().await;
+                    {
+                        let mut keys = self.keys.write().await;
 
-                    // Keep only recent keys for rotation
-                    keys.retain(|k| Self::now_unix() - k.created_at < 7200);
-                    keys.push(new_key);
+                        // Keep only recent keys for rotation
+                        keys.retain(|k| Self::now_unix() - k.created_at < 7200);
+                        keys.push(new_key);
 
-                    // Limit to 3 keys maximum
-                    if keys.len() > 3 {
-                        keys.remove(0);
+                        // Limit to 3 keys maximum
+                        if keys.len() > 3 {
+                            keys.remove(0);
+                        }
+                        drop(keys);
                     }
 
                     *self.status.write().await = KeyGenerationStatus::Available;
@@ -145,8 +148,12 @@ impl OptimizedSecureKeyManager {
 
     /// Get current JWKS with caching
     pub async fn get_jwks(&self) -> Value {
-        let keys = self.keys.read().await;
-        let jwk_keys: Vec<Value> = keys.iter().map(|k| k.public_jwk.clone()).collect();
+        let jwk_keys: Vec<Value> = {
+            let keys = self.keys.read().await;
+            let result = keys.iter().map(|k| k.public_jwk.clone()).collect();
+            drop(keys);
+            result
+        };
 
         serde_json::json!({
             "keys": jwk_keys
@@ -154,9 +161,9 @@ impl OptimizedSecureKeyManager {
     }
 
     /// Sign JWT with usage tracking
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - No keys are available for signing
     /// - Ed25519 signing operation fails
@@ -228,9 +235,9 @@ pub async fn get_optimized_jwks() -> Value {
 }
 
 /// Sign JWT using the global optimized key manager
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns an error if:
 /// - The global key manager is not available
 /// - JWT signing operations fail
@@ -242,9 +249,9 @@ pub async fn sign_jwt_optimized(
 }
 
 /// Ensure optimized key is available globally
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns an error if:
 /// - The underlying key manager fails to ensure key availability
 /// - Key generation operations fail
@@ -266,9 +273,9 @@ pub async fn get_optimized_key_stats() -> Vec<(String, u64, u64)> {
 }
 
 /// Initialize optimized keys on startup
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns an error if:
 /// - Initial key generation or availability checks fail
 /// - Cryptographic operations fail during startup
@@ -330,8 +337,8 @@ mod tests {
         let status = manager.get_status().await;
 
         match status {
-            KeyGenerationStatus::Available => assert!(true),
-            _ => assert!(false, "Expected Available status"),
+            KeyGenerationStatus::Available => {}
+            _ => panic!("Expected Available status"),
         }
     }
 }

@@ -102,19 +102,19 @@ pub async fn admin_auth_middleware(
     let admin_key = match extract_admin_key(&headers, &state).await {
         Ok(key) => key,
         Err(auth_error) => {
-            return handle_auth_failure(auth_error, method, path, &client_ip, &headers);
+            return handle_auth_failure(auth_error, method, path, client_ip.as_ref(), &headers);
         }
     };
 
     // Apply rate limiting per admin key
     #[cfg(feature = "rate-limiting")]
     if let Some(rate_limiter) = RATE_LIMITER.get() {
-        if let Err(_) = rate_limiter.check_rate_limit(&admin_key) {
+        if rate_limiter.check_rate_limit(&admin_key).is_err() {
             tracing::warn!(
                 admin_key = redact_log(&admin_key),
                 method = method,
                 path = path,
-                client_ip = client_ip.as_deref(),
+                client_ip = client_ip,
                 "Admin rate limit exceeded"
             );
 
@@ -151,7 +151,13 @@ pub async fn admin_auth_middleware(
             crate::infrastructure::security::security_logging::log_event(&event);
 
             let rate_limit_error = crate::shared::error::AppError::RateLimitExceeded;
-            return handle_auth_failure(rate_limit_error, method, path, &client_ip, &headers);
+            return handle_auth_failure(
+                rate_limit_error,
+                method,
+                path,
+                client_ip.as_ref(),
+                &headers,
+            );
         }
     }
 
@@ -203,14 +209,16 @@ pub async fn admin_auth_middleware(
                 if let Err(e) =
                     validate_request_with_replay_protection(&headers, &config, method, path).await
                 {
-                    return handle_auth_failure(e, method, path, &client_ip, &headers);
+                    return handle_auth_failure(e, method, path, client_ip.as_ref(), &headers);
                 }
             }
 
             // Proceed with the request
             Ok(next.run(request).await)
         }
-        Err(auth_error) => handle_auth_failure(auth_error, method, path, &client_ip, &headers),
+        Err(auth_error) => {
+            handle_auth_failure(auth_error, method, path, client_ip.as_ref(), &headers)
+        }
     }
 }
 
@@ -226,19 +234,21 @@ async fn extract_admin_key(
         .unwrap_or("");
 
     let token = auth.strip_prefix("Bearer ").ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken("Missing or malformed authorization header".to_string())
+        crate::shared::error::AppError::InvalidToken(
+            "Missing or malformed authorization header".to_string(),
+        )
     })?;
 
     if token.is_empty() {
-        return Err(crate::shared::error::AppError::InvalidToken("Empty bearer token".to_string()));
+        return Err(crate::shared::error::AppError::InvalidToken(
+            "Empty bearer token".to_string(),
+        ));
     }
 
     // Validate token and extract record
     #[cfg(feature = "enhanced-session-store")]
     let record = state.store.get_token_record(token).await?.ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken(
-            "Token not found or invalid".to_string()
-        )
+        crate::shared::error::AppError::InvalidToken("Token not found or invalid".to_string())
     })?;
 
     #[cfg(not(feature = "enhanced-session-store"))]
@@ -257,7 +267,7 @@ async fn extract_admin_key(
     // Check if token is active
     if !record.active {
         return Err(crate::shared::error::AppError::InvalidToken(
-            "Token is inactive".to_string()
+            "Token is inactive".to_string(),
         ));
     }
 
@@ -290,22 +300,20 @@ async fn require_admin_scope(
 
     let token = auth.strip_prefix("Bearer ").ok_or_else(|| {
         crate::shared::error::AppError::InvalidToken(
-            "Missing or malformed authorization header".to_string()
+            "Missing or malformed authorization header".to_string(),
         )
     })?;
 
     if token.is_empty() {
         return Err(crate::shared::error::AppError::InvalidToken(
-            "Empty bearer token".to_string()
+            "Empty bearer token".to_string(),
         ));
     }
 
     // Validate token and extract record
     #[cfg(feature = "enhanced-session-store")]
     let record = state.store.get_token_record(token).await?.ok_or_else(|| {
-        crate::shared::error::AppError::InvalidToken(
-            "Token not found or invalid".to_string()
-        )
+        crate::shared::error::AppError::InvalidToken("Token not found or invalid".to_string())
     })?;
 
     #[cfg(not(feature = "enhanced-session-store"))]
@@ -324,7 +332,7 @@ async fn require_admin_scope(
     // Check if token is active
     if !record.active {
         return Err(crate::shared::error::AppError::InvalidToken(
-            "Token is inactive".to_string()
+            "Token is inactive".to_string(),
         ));
     }
 
@@ -349,7 +357,7 @@ async fn validate_request_with_replay_protection(
 ) -> Result<(), crate::shared::error::AppError> {
     let Some(signing_secret) = &config.signing_secret else {
         return Err(crate::shared::error::AppError::ConfigurationError(
-            "Request signing is required but no signing secret is configured".to_string()
+            "Request signing is required but no signing secret is configured".to_string(),
         ));
     };
 
@@ -417,7 +425,7 @@ fn validate_request_signature(
 ) -> Result<(), crate::shared::error::AppError> {
     let Some(signing_secret) = &config.signing_secret else {
         return Err(crate::shared::error::AppError::ConfigurationError(
-            "Request signing is required but no signing secret is configured".to_string()
+            "Request signing is required but no signing secret is configured".to_string(),
         ));
     };
 
@@ -477,14 +485,14 @@ fn handle_auth_failure(
     auth_error: crate::shared::error::AppError,
     method: &str,
     path: &str,
-    client_ip: &Option<String>,
+    client_ip: Option<&String>,
     headers: &HeaderMap,
 ) -> Result<Response, impl IntoResponse> {
     tracing::warn!(
         error = %redact_log(&auth_error.to_string()),
         method = method,
         path = path,
-        client_ip = client_ip.as_deref(),
+        client_ip = client_ip,
         "Admin authentication failed"
     );
 
@@ -508,7 +516,7 @@ fn handle_auth_failure(
         outcome: "failure".to_string(),
         reason: Some("invalid_or_missing_admin_token".to_string()),
         correlation_id: extract_correlation_id(headers),
-        ip_address: client_ip.clone(),
+        ip_address: client_ip.cloned(),
         user_agent: extract_user_agent(headers),
         client_id: None,
         user_id: None,
@@ -533,10 +541,10 @@ fn handle_auth_failure(
 /// Handle signature validation failures with proper logging and response
 #[allow(dead_code)]
 fn handle_signature_failure(
-    error: crate::shared::error::AppError,
+    error: &crate::shared::error::AppError,
     method: &str,
     path: &str,
-    client_ip: &Option<String>,
+    client_ip: Option<&String>,
     headers: &HeaderMap,
 ) -> Result<Response, impl IntoResponse> {
     // Determine the appropriate status code based on error type
@@ -551,7 +559,7 @@ fn handle_signature_failure(
         error = %redact_log(&error.to_string()),
         method = method,
         path = path,
-        client_ip = client_ip.as_deref(),
+        client_ip = client_ip,
         "Admin request validation failed"
     );
 
@@ -572,7 +580,7 @@ fn handle_signature_failure(
         outcome: "failure".to_string(),
         reason: Some(reason.to_string()),
         correlation_id: extract_correlation_id(headers),
-        ip_address: client_ip.clone(),
+        ip_address: client_ip.cloned(),
         user_agent: extract_user_agent(headers),
         client_id: None,
         user_id: None,
@@ -607,7 +615,7 @@ fn calculate_hmac_sha256(
 
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
         crate::shared::error::AppError::CryptographicError(
-            "HMAC initialization failed: Invalid HMAC key".to_string()
+            "HMAC initialization failed: Invalid HMAC key".to_string(),
         )
     })?;
 

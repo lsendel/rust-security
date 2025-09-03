@@ -52,11 +52,9 @@ pub fn init_tracing(service_name: &str) -> Result<(), Box<dyn std::error::Error 
         )
         .install_simple()?;
     */
-
     // Configure tracing subscriber with multiple layers
     // Temporarily disabled due to OpenTelemetry version conflicts
     // let telemetry_layer = OpenTelemetryLayer::new(tracer);
-
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| match environment.as_str() {
             "production" => EnvFilter::new("info,auth_service=info,policy_service=info"),
@@ -423,7 +421,10 @@ pub async fn inject_request_context(
 
     // Record span attributes
     span.record("http.status_code", status_code);
-    span.record("request.duration_ms", u64::try_from(duration.as_millis()).unwrap_or(u64::MAX));
+    span.record(
+        "request.duration_ms",
+        u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+    );
 
     // Set OpenTelemetry status
     if status_code >= 400 {

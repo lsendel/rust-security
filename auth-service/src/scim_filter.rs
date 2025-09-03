@@ -1,5 +1,6 @@
 use regex::Regex;
 use std::collections::HashSet;
+use std::sync::LazyLock;
 use thiserror::Error;
 
 // SCIM Filter parsing structures, now public for sharing.
@@ -40,44 +41,50 @@ pub enum ScimFilterError {
     InvalidValue,
 }
 
-lazy_static::lazy_static! {
-    // Allowed SCIM attributes - whitelist approach for security
-    static ref ALLOWED_ATTRIBUTES: HashSet<&'static str> = {
-        let mut set = HashSet::new();
-        set.insert("userName");
-        set.insert("id");
-        set.insert("active");
-        set.insert("displayName");
-        set.insert("email");
-        set.insert("name.familyName");
-        set.insert("name.givenName");
-        set.insert("phoneNumber");
-        set
-    };
+// Allowed SCIM attributes - whitelist approach for security
+static ALLOWED_ATTRIBUTES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut set = HashSet::new();
+    set.insert("userName");
+    set.insert("id");
+    set.insert("active");
+    set.insert("displayName");
+    set.insert("email");
+    set.insert("name.familyName");
+    set.insert("name.givenName");
+    set.insert("phoneNumber");
+    set
+});
 
-    // SQL injection patterns - enhanced detection
-    static ref SQL_INJECTION_PATTERNS: Vec<Regex> = vec![
+// SQL injection patterns - enhanced detection
+static SQL_INJECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
         Regex::new(r"(?i)\b(select|insert|update|delete|drop|create|alter|exec|execute|union|script|declare|cursor|fetch|bulk|backup|restore)\b").unwrap(),
         Regex::new(r"(?i)(--|/\*|\*/|;|@@|@|\bxp_)").unwrap(),
         Regex::new(r"(?i)\b(or|and)\s+\d+\s*=\s*\d+").unwrap(),
         Regex::new(r"(?i)\b(or|and)\s+'[^']*'\s*=\s*'[^']*'").unwrap(),
         Regex::new(r"(?i)\bunion\s+(all\s+)?select").unwrap(),
-    ];
+    ]
+});
 
-    // XSS patterns - enhanced detection
-    static ref XSS_PATTERNS: Vec<Regex> = vec![
+// XSS patterns - enhanced detection
+static XSS_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
         Regex::new(r"(?i)<\s*script").unwrap(),
         Regex::new(r"(?i)javascript\s*:").unwrap(),
         Regex::new(r"(?i)on\w+\s*=").unwrap(),
         Regex::new(r"(?i)expression\s*\(").unwrap(),
         Regex::new(r"(?i)eval\s*\(").unwrap(),
-    ];
+    ]
+});
 
-    // Valid value pattern - alphanumeric, spaces, and common symbols
-    static ref VALID_VALUE_PATTERN: Regex = Regex::new(r"^[a-zA-Z0-9\s\.\-_@\+\(\)]*$").unwrap();
-}
+// Valid value pattern - alphanumeric, spaces, and common symbols
+static VALID_VALUE_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9\s\.\-_@\+\(\)]*$").unwrap());
 
 /// Enhanced SCIM filter parser with comprehensive security validation
+///
+/// # Errors
+/// Returns `ScimFilterError` when the filter is invalid, unsupported, or deemed malicious.
 pub fn parse_scim_filter(filter: &str) -> Result<ScimFilter, ScimFilterError> {
     // Length validation
     if filter.len() > 500 {

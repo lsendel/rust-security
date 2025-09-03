@@ -121,6 +121,7 @@ impl TestFixture {
     }
 
     /// Get access token with specific scope
+    #[allow(clippy::missing_panics_doc)]
     pub async fn get_access_token_with_scope(&self, scope: Option<&str>) -> String {
         let mut body = "grant_type=client_credentials".to_string();
         if let Some(s) = scope {

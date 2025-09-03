@@ -15,6 +15,7 @@ use tracing::{debug, info, warn};
 
 use crate::shared::error::AppError;
 
+#[cfg(feature = "postgres")]
 /// Configuration for database connection pooling
 #[derive(Debug, Clone)]
 pub struct ConnectionPoolConfig {
@@ -36,6 +37,7 @@ pub struct ConnectionPoolConfig {
     pub health_check_interval: Duration,
 }
 
+#[cfg(feature = "postgres")]
 impl Default for ConnectionPoolConfig {
     fn default() -> Self {
         Self {
@@ -52,6 +54,7 @@ impl Default for ConnectionPoolConfig {
 }
 
 /// Advanced `PostgreSQL` connection pool with performance optimizations
+#[cfg(feature = "postgres")]
 pub struct OptimizedPgPool {
     pool: PgPool,
     config: ConnectionPoolConfig,
@@ -59,6 +62,7 @@ pub struct OptimizedPgPool {
     prepared_statements: Arc<RwLock<std::collections::HashMap<String, String>>>,
 }
 
+#[cfg(feature = "postgres")]
 #[derive(Debug, Clone)]
 pub struct PoolStats {
     pub connections_created: u64,
@@ -86,8 +90,16 @@ impl Default for PoolStats {
     }
 }
 
+#[cfg(feature = "postgres")]
 impl OptimizedPgPool {
     /// Create a new optimized `PostgreSQL` connection pool
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Database connection fails
+    /// - Database pool creation fails
+    /// - Database settings optimization fails
     pub async fn new(config: ConnectionPoolConfig) -> Result<Self, AppError> {
         info!(
             "Creating optimized PostgreSQL connection pool with {} max connections",
@@ -131,6 +143,13 @@ impl OptimizedPgPool {
     }
 
     /// Get a connection from the pool with timing metrics
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Failed to acquire a database connection from the pool
+    /// - Pool is closed or unavailable
+    /// - Connection timeout exceeded
     pub async fn acquire(&self) -> Result<sqlx::pool::PoolConnection<sqlx::Postgres>, AppError> {
         let start_time = Instant::now();
 
@@ -147,15 +166,20 @@ impl OptimizedPgPool {
             * u128::from(stats.connections_acquired - 1))
             + acquire_time.as_nanos())
             / u128::from(stats.connections_acquired);
-        stats.acquire_time_avg = Duration::from_nanos(avg_nanos.min(u128::from(u64::MAX)) as u64);
+        // Protected by min check above
+        #[allow(clippy::cast_possible_truncation)]
+        let duration_nanos = avg_nanos.min(u128::from(u64::MAX)) as u64;
+        stats.acquire_time_avg = Duration::from_nanos(duration_nanos);
         stats.acquire_time_max = stats.acquire_time_max.max(acquire_time);
+        drop(stats); // Early drop to reduce lock contention
 
         debug!("Database connection acquired in {:?}", acquire_time);
         Ok(conn)
     }
 
     /// Get the underlying pool for direct access (use sparingly)
-    #[must_use] pub const fn pool(&self) -> &PgPool {
+    #[must_use]
+    pub const fn pool(&self) -> &PgPool {
         &self.pool
     }
 
@@ -165,6 +189,13 @@ impl OptimizedPgPool {
     }
 
     /// Prepare a statement for better performance
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Database connection acquisition fails
+    /// - Statement preparation fails due to invalid SQL syntax
+    /// - Database connection is lost during preparation
     pub async fn prepare_statement(&self, name: &str, query: &str) -> Result<(), AppError> {
         if !self.config.prepared_statements {
             return Ok(());
@@ -176,14 +207,24 @@ impl OptimizedPgPool {
         })?;
 
         // Cache the prepared statement name
-        let mut statements = self.prepared_statements.write().await;
-        statements.insert(name.to_string(), query.to_string());
+        {
+            let mut statements = self.prepared_statements.write().await;
+            statements.insert(name.to_string(), query.to_string());
+        } // statements lock is dropped here
 
         debug!("Prepared statement '{}' cached", name);
         Ok(())
     }
 
     /// Execute an optimized query with prepared statements
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Database query execution fails
+    /// - Query parameters are invalid or of wrong type
+    /// - Database connection is lost during execution
+    /// - Query timeout is exceeded
     pub async fn execute_optimized<'q, E, T>(
         &self,
         executor: E,
@@ -196,14 +237,8 @@ impl OptimizedPgPool {
     {
         let start_time = Instant::now();
 
-        // Use prepared statements if available
-        let result = if self.config.prepared_statements {
-            // For prepared statements, we'd need to implement a more complex caching mechanism
-            // For now, use direct execution
-            sqlx::query(query).execute(executor).await
-        } else {
-            sqlx::query(query).execute(executor).await
-        };
+        // Execute query (prepared statement optimization can be added later)
+        let result = sqlx::query(query).execute(executor).await;
 
         let execution_time = start_time.elapsed();
         debug!("Query executed in {:?}", execution_time);
@@ -278,20 +313,32 @@ impl OptimizedPgPool {
     }
 
     /// Get pool configuration for monitoring
-    #[must_use] pub const fn config(&self) -> &ConnectionPoolConfig {
+    #[must_use]
+    pub const fn config(&self) -> &ConnectionPoolConfig {
         &self.config
     }
 }
 
 /// Connection pool manager for different database operations
+#[cfg(feature = "postgres")]
+#[allow(clippy::struct_field_names)]
 pub struct DatabaseConnectionManager {
     auth_pool: OptimizedPgPool,
     session_pool: OptimizedPgPool,
     audit_pool: OptimizedPgPool,
 }
 
+#[cfg(feature = "postgres")]
 impl DatabaseConnectionManager {
     /// Create a new database connection manager with optimized pools
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Database connection pool initialization fails
+    /// - Database connection string is invalid
+    /// - Database server is unreachable
+    /// - Authentication with database fails
     pub async fn new(base_config: ConnectionPoolConfig) -> Result<Self, AppError> {
         // Auth database - high throughput, low latency
         let auth_config = ConnectionPoolConfig {
@@ -335,17 +382,20 @@ impl DatabaseConnectionManager {
     }
 
     /// Get auth database pool
-    #[must_use] pub const fn auth_pool(&self) -> &OptimizedPgPool {
+    #[must_use]
+    pub const fn auth_pool(&self) -> &OptimizedPgPool {
         &self.auth_pool
     }
 
     /// Get session database pool
-    #[must_use] pub const fn session_pool(&self) -> &OptimizedPgPool {
+    #[must_use]
+    pub const fn session_pool(&self) -> &OptimizedPgPool {
         &self.session_pool
     }
 
     /// Get audit database pool
-    #[must_use] pub const fn audit_pool(&self) -> &OptimizedPgPool {
+    #[must_use]
+    pub const fn audit_pool(&self) -> &OptimizedPgPool {
         &self.audit_pool
     }
 
@@ -424,14 +474,16 @@ pub struct DatabaseStats {
 
 impl DatabaseStats {
     /// Get total connections across all pools
-    #[must_use] pub const fn total_connections(&self) -> u64 {
+    #[must_use]
+    pub const fn total_connections(&self) -> u64 {
         self.auth_stats.connections_created
             + self.session_stats.connections_created
             + self.audit_stats.connections_created
     }
 
     /// Get average acquire time across all pools
-    #[must_use] pub fn avg_acquire_time(&self) -> Duration {
+    #[must_use]
+    pub fn avg_acquire_time(&self) -> Duration {
         let total_acquires = self.auth_stats.connections_acquired
             + self.session_stats.connections_acquired
             + self.audit_stats.connections_acquired;
@@ -442,8 +494,10 @@ impl DatabaseStats {
 
         let total_time = self.auth_stats.acquire_time_avg
             * u32::try_from(self.auth_stats.connections_acquired).unwrap_or(u32::MAX)
-            + self.session_stats.acquire_time_avg * u32::try_from(self.session_stats.connections_acquired).unwrap_or(u32::MAX)
-            + self.audit_stats.acquire_time_avg * u32::try_from(self.audit_stats.connections_acquired).unwrap_or(u32::MAX);
+            + self.session_stats.acquire_time_avg
+                * u32::try_from(self.session_stats.connections_acquired).unwrap_or(u32::MAX)
+            + self.audit_stats.acquire_time_avg
+                * u32::try_from(self.audit_stats.connections_acquired).unwrap_or(u32::MAX);
 
         total_time / u32::try_from(total_acquires).unwrap_or(u32::MAX)
     }

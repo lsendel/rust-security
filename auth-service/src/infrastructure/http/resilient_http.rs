@@ -71,10 +71,8 @@ impl ResilientHttpClient {
             // Enable secure TLS settings
             .https_only(true)
             .build()
-            .map_err(|e| {
-                crate::shared::error::AppError::ServiceUnavailable {
-                    reason: format!("Failed to create HTTP client: {e}")
-                }
+            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable {
+                reason: format!("Failed to create HTTP client: {e}"),
             })?;
 
         let circuit_breaker = CircuitBreaker::new(name, config.circuit_breaker.clone());
@@ -86,23 +84,28 @@ impl ResilientHttpClient {
         })
     }
 
-    #[must_use] pub fn get(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use]
+    pub fn get(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.get(url), &self.circuit_breaker, &self.config)
     }
 
-    #[must_use] pub fn post(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use]
+    pub fn post(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.post(url), &self.circuit_breaker, &self.config)
     }
 
-    #[must_use] pub fn put(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use]
+    pub fn put(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.put(url), &self.circuit_breaker, &self.config)
     }
 
-    #[must_use] pub fn delete(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use]
+    pub fn delete(&self, url: &str) -> ResilientRequestBuilder {
         ResilientRequestBuilder::new(self.client.delete(url), &self.circuit_breaker, &self.config)
     }
 
-    #[must_use] pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
+    #[must_use]
+    pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
         self.circuit_breaker.stats()
     }
 }
@@ -169,6 +172,15 @@ impl ResilientRequestBuilder {
         self
     }
 
+    /// Send the HTTP request with resilience features
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - All retry attempts are exhausted
+    /// - The request body cannot be cloned for retries
+    /// - Network connectivity issues persist
+    /// - The server responds with unrecoverable errors
     pub async fn send(self) -> Result<ResilientResponse, crate::shared::error::AppError> {
         let mut backoff = RetryBackoff::new(self.config.retry.clone());
 
@@ -176,7 +188,7 @@ impl ResilientRequestBuilder {
             // Clone request builder for retry attempts
             let request = self.request_builder.try_clone().ok_or_else(|| {
                 crate::shared::error::AppError::ServiceUnavailable {
-                    reason: "Cannot retry request with streaming body".to_string()
+                    reason: "Cannot retry request with streaming body".to_string(),
                 }
             })?;
 
@@ -191,7 +203,7 @@ impl ResilientRequestBuilder {
                 }
                 Err(CircuitBreakerError::Open) => {
                     return Err(crate::shared::error::AppError::ServiceUnavailable {
-                        reason: "HTTP circuit breaker is open".to_string()
+                        reason: "HTTP circuit breaker is open".to_string(),
                     });
                 }
                 Err(CircuitBreakerError::Timeout { timeout }) => {
@@ -210,7 +222,7 @@ impl ResilientRequestBuilder {
                 }
                 Err(CircuitBreakerError::TooManyRequests) => {
                     return Err(crate::shared::error::AppError::ServiceUnavailable {
-                        reason: "HTTP circuit breaker: too many requests".to_string()
+                        reason: "HTTP circuit breaker: too many requests".to_string(),
                     });
                 }
             }
@@ -218,7 +230,7 @@ impl ResilientRequestBuilder {
             // Try to get next delay for retry
             if backoff.next_delay().await.is_none() {
                 return Err(crate::shared::error::AppError::ServiceUnavailable {
-                    reason: "HTTP request failed after all retries".to_string()
+                    reason: "HTTP request failed after all retries".to_string(),
                 });
             }
         }
@@ -230,34 +242,58 @@ pub struct ResilientResponse {
 }
 
 impl ResilientResponse {
-    #[must_use] pub fn status(&self) -> reqwest::StatusCode {
+    #[must_use]
+    pub fn status(&self) -> reqwest::StatusCode {
         self.response.status()
     }
 
-    #[must_use] pub fn headers(&self) -> &reqwest::header::HeaderMap {
+    #[must_use]
+    pub fn headers(&self) -> &reqwest::header::HeaderMap {
         self.response.headers()
     }
 
-    #[must_use] pub fn url(&self) -> &reqwest::Url {
+    #[must_use]
+    pub fn url(&self) -> &reqwest::Url {
         self.response.url()
     }
 
+    /// Extract the response body as text
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The response body cannot be read as text
+    /// - Network connection is lost while reading
+    /// - Response contains invalid UTF-8 data
     pub async fn text(self) -> Result<String, crate::shared::error::AppError> {
-        self.response.text().await.map_err(|e| {
-            crate::shared::error::AppError::ServiceUnavailable {
-                reason: format!("Failed to read response text: {e}")
-            }
-        })
+        self.response
+            .text()
+            .await
+            .map_err(|e| crate::shared::error::AppError::ServiceUnavailable {
+                reason: format!("Failed to read response text: {e}"),
+            })
     }
 
+    /// Extract the response body as bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The response body cannot be read as bytes
+    /// - Network connection is lost while reading
+    /// - Response stream encounters errors
     pub async fn bytes(self) -> Result<Bytes, crate::shared::error::AppError> {
         self.response.bytes().await.map_err(|e| {
             crate::shared::error::AppError::ServiceUnavailable {
-                reason: format!("Failed to read response bytes: {e}")
+                reason: format!("Failed to read response bytes: {e}"),
             }
         })
     }
 
+    /// Parse response body as JSON
+    ///
+    /// # Errors
+    /// Returns `AppError::Validation` if the response body cannot be parsed as valid JSON
     pub async fn json<T: for<'de> Deserialize<'de>>(
         self,
     ) -> Result<T, crate::shared::error::AppError> {
@@ -268,13 +304,20 @@ impl ResilientResponse {
         })
     }
 
+    /// Check response status and return error for client/server errors
+    ///
+    /// # Errors  
+    /// Returns `AppError::ServiceUnavailable` if the response status indicates a client or server error
     pub fn error_for_status(self) -> Result<Self, crate::shared::error::AppError> {
         let status = self.response.status();
 
         if status.is_client_error() || status.is_server_error() {
             Err(crate::shared::error::AppError::ServiceUnavailable {
-                reason: format!("HTTP error {}: {}", status.as_u16(),
-                status.canonical_reason().unwrap_or("Unknown"))
+                reason: format!(
+                    "HTTP error {}: {}",
+                    status.as_u16(),
+                    status.canonical_reason().unwrap_or("Unknown")
+                ),
             })
         } else {
             Ok(self)
@@ -288,6 +331,10 @@ pub struct OidcHttpClient {
 }
 
 impl OidcHttpClient {
+    /// Create a new OIDC HTTP client configured for the specified provider
+    ///
+    /// # Errors
+    /// Returns `AppError::Validation` if the provider URL is invalid or cannot be parsed
     pub fn new(provider: &str) -> Result<Self, crate::shared::error::AppError> {
         let config = ResilientHttpConfig {
             circuit_breaker: CircuitBreakerConfig {
@@ -316,15 +363,18 @@ impl OidcHttpClient {
         Ok(Self { client })
     }
 
-    #[must_use] pub fn get(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use]
+    pub fn get(&self, url: &str) -> ResilientRequestBuilder {
         self.client.get(url)
     }
 
-    #[must_use] pub fn post(&self, url: &str) -> ResilientRequestBuilder {
+    #[must_use]
+    pub fn post(&self, url: &str) -> ResilientRequestBuilder {
         self.client.post(url)
     }
 
-    #[must_use] pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
+    #[must_use]
+    pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
         self.client.stats()
     }
 }

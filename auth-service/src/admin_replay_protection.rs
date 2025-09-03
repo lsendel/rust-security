@@ -93,9 +93,7 @@ impl ReplayProtection {
     fn validate_timestamp(&self, timestamp: u64) -> Result<(), crate::shared::error::AppError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| crate::shared::error::AppError::Internal(
-                "Time error".to_string()
-            ))?
+            .map_err(|_| crate::shared::error::AppError::Internal("Time error".to_string()))?
             .as_secs();
 
         // Check if timestamp is too old

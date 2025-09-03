@@ -175,9 +175,9 @@ impl KeyManagementService {
     }
 
     /// Initialize key management service
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Initial key generation fails
     /// - Database connection or storage operations fail
@@ -203,9 +203,9 @@ impl KeyManagementService {
     }
 
     /// Generate a new key pair
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - RSA key generation fails due to insufficient entropy
     /// - Key encoding or serialization fails
@@ -281,9 +281,9 @@ impl KeyManagementService {
     }
 
     /// Activate a key for signing
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - The specified key ID does not exist
     /// - The key is in a revoked state and cannot be activated
@@ -352,9 +352,9 @@ impl KeyManagementService {
     }
 
     /// Perform key rotation
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - New key generation fails
     /// - Key activation fails during the rotation process
@@ -388,9 +388,9 @@ impl KeyManagementService {
     }
 
     /// Revoke a key immediately
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - The specified key ID does not exist
     /// - Storage operations fail when updating key state
@@ -469,9 +469,9 @@ impl KeyManagementService {
     }
 
     /// Emergency key rotation
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - New key generation fails during emergency rotation
     /// - Key activation fails for the newly generated key
@@ -520,9 +520,9 @@ impl KeyManagementService {
     }
 
     /// Get current signing key
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - No active signing key is available
     /// - The active key is not found in storage
@@ -531,43 +531,51 @@ impl KeyManagementService {
     pub async fn get_signing_key(
         &self,
     ) -> Result<(String, EncodingKey), crate::shared::error::AppError> {
-        let active_key_id = self.active_key_id.read().await;
-        let kid = active_key_id
-            .as_ref()
-            .ok_or_else(|| AppError::internal("No active signing key available"))?;
+        let kid = {
+            let active_key_id = self.active_key_id.read().await;
+            active_key_id
+                .as_ref()
+                .ok_or_else(|| AppError::internal("No active signing key available"))?
+                .clone()
+        };
 
-        let keys = self.keys.read().await;
-        let key = keys
-            .get(kid)
-            .ok_or_else(|| AppError::internal(format!("Active key not found: {kid}")))?;
+        let (encoding_key_clone, kid_clone) = {
+            let keys = self.keys.read().await;
+            let key = keys
+                .get(&kid)
+                .ok_or_else(|| AppError::internal(format!("Active key not found: {kid}")))?;
 
-        if key.state != KeyState::Active {
-            return Err(AppError::internal("Active key is not in active state"));
-        }
+            if key.state != KeyState::Active {
+                return Err(AppError::internal("Active key is not in active state"));
+            }
 
-        let encoding_key = key
-            .encoding_key
-            .as_ref()
-            .ok_or_else(|| AppError::internal("Encoding key not available"))?;
+            let encoding_key = key
+                .encoding_key
+                .as_ref()
+                .ok_or_else(|| AppError::internal("Encoding key not available"))?;
 
-        let encoding_key_clone = encoding_key.clone();
-        let kid_clone = kid.clone();
+            let result = (encoding_key.clone(), kid.clone());
+            drop(keys);
+            result
+        };
 
         // Update usage statistics
-        drop(keys);
-        let mut keys = self.keys.write().await;
-        if let Some(key) = keys.get_mut(kid) {
-            key.usage_count += 1;
-            key.last_used_at = Some(Self::current_timestamp());
+        {
+            let mut keys = self.keys.write().await;
+            if let Some(key) = keys.get_mut(&kid_clone) {
+                key.usage_count += 1;
+                key.last_used_at = Some(Self::current_timestamp());
+            }
+            drop(keys);
         }
 
         Ok((kid_clone, encoding_key_clone))
     }
 
     /// Get decoding key for verification
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - The specified key ID does not exist
     /// - The key is in a revoked state and cannot be used for verification
@@ -588,20 +596,25 @@ impl KeyManagementService {
             ));
         }
 
-        key.decoding_key
+        let decoding_key = key
+            .decoding_key
             .as_ref()
-            .ok_or_else(|| AppError::internal("Decoding key not available"))
-            .cloned()
+            .ok_or_else(|| AppError::internal("Decoding key not available"))?
+            .clone();
+
+        drop(keys);
+        Ok(decoding_key)
     }
 
     /// Get JWKS document
     pub async fn get_jwks(&self) -> Value {
-        let keys = self.keys.read().await;
-        let jwk_keys: Vec<Value> = keys
-            .values()
-            .filter(|k| k.state != KeyState::Revoked && k.state != KeyState::Pending)
-            .map(|k| k.public_jwk.clone())
-            .collect();
+        let jwk_keys: Vec<Value> = {
+            let keys = self.keys.read().await;
+            keys.values()
+                .filter(|k| k.state != KeyState::Revoked && k.state != KeyState::Pending)
+                .map(|k| k.public_jwk.clone())
+                .collect()
+        };
 
         serde_json::json!({
             "keys": jwk_keys
@@ -610,11 +623,19 @@ impl KeyManagementService {
 
     /// Check if rotation is needed
     pub async fn needs_rotation(&self) -> bool {
-        let active_key_id = self.active_key_id.read().await;
-        if let Some(kid) = active_key_id.as_ref() {
-            let keys = self.keys.read().await;
-            if let Some(key) = keys.get(kid) {
-                let age = Self::current_timestamp() - key.created_at;
+        let kid = {
+            let active_key_id = self.active_key_id.read().await;
+            active_key_id.as_ref().cloned()
+        };
+
+        if let Some(kid) = kid {
+            let created_at = {
+                let keys = self.keys.read().await;
+                keys.get(&kid).map(|key| key.created_at)
+            };
+
+            if let Some(created_at) = created_at {
+                let age = Self::current_timestamp() - created_at;
                 return age > self.config.rotation_interval.as_secs();
             }
         }
@@ -632,38 +653,41 @@ impl KeyManagementService {
     }
 
     /// Clean up expired keys
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Storage operations fail during key cleanup
     /// - Lock acquisition fails for the keys storage
     async fn cleanup_expired_keys(&self) -> Result<(), crate::shared::error::AppError> {
-        let mut keys = self.keys.write().await;
-        let now = Self::current_timestamp();
-        let max_age = self.config.max_key_age.as_secs();
+        {
+            let mut keys = self.keys.write().await;
+            let now = Self::current_timestamp();
+            let max_age = self.config.max_key_age.as_secs();
 
-        keys.retain(|kid, key| {
-            let should_retain = match key.state {
-                KeyState::Revoked => false, // Always remove revoked keys
-                KeyState::Active => true,   // Never remove active key
-                _ => now - key.created_at < max_age,
-            };
+            keys.retain(|kid, key| {
+                let should_retain = match key.state {
+                    KeyState::Revoked => false, // Always remove revoked keys
+                    KeyState::Active => true,   // Never remove active key
+                    _ => now - key.created_at < max_age,
+                };
 
-            if !should_retain {
-                info!(kid = %redact_log(kid), state = ?key.state, age_hours = (now - key.created_at) / 3600, "Cleaning up expired key");
-            }
+                if !should_retain {
+                    info!(kid = %redact_log(kid), state = ?key.state, age_hours = (now - key.created_at) / 3600, "Cleaning up expired key");
+                }
 
-            should_retain
-        });
+                should_retain
+            });
+            drop(keys);
+        }
 
         Ok(())
     }
 
     /// Generate RSA key PEM string dynamically
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - RSA key generation fails due to insufficient entropy
     /// - Key serialization to PEM format fails
@@ -767,15 +791,25 @@ impl KeyManagementService {
 
     /// Get key management metrics
     pub async fn get_metrics(&self) -> KeyMetrics {
-        let metrics = self.metrics.read().await;
-        let mut result = metrics.clone();
+        let mut result = {
+            let metrics = self.metrics.read().await;
+            metrics.clone()
+        };
 
         // Calculate active key age
-        let active_key_id = self.active_key_id.read().await;
-        if let Some(kid) = active_key_id.as_ref() {
-            let keys = self.keys.read().await;
-            if let Some(key) = keys.get(kid) {
-                result.active_key_age = Some(Self::current_timestamp() - key.created_at);
+        let kid = {
+            let active_key_id = self.active_key_id.read().await;
+            active_key_id.as_ref().cloned()
+        };
+
+        if let Some(kid) = kid {
+            let created_at = {
+                let keys = self.keys.read().await;
+                keys.get(&kid).map(|key| key.created_at)
+            };
+
+            if let Some(created_at) = created_at {
+                result.active_key_age = Some(Self::current_timestamp() - created_at);
             }
         }
 

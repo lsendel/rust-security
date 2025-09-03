@@ -83,6 +83,7 @@ impl SecureKeyManager {
     }
 
     #[cfg(feature = "vault")]
+    #[must_use]
     pub fn with_vault(mut self, vault_client: VaultClient) -> Self {
         self.vault_client = Some(vault_client);
         self
@@ -142,7 +143,7 @@ impl SecureKeyManager {
 
         let secret: Value = kv2::read(vault_client, "kv", &secret_path)
             .await
-            .map_err(|e| KeyError::VaultError(format!("Failed to read from Vault: {}", e)))?;
+            .map_err(|e| KeyError::VaultError(format!("Failed to read from Vault: {e}")))?;
 
         secret
             .get("private_key")
@@ -155,14 +156,14 @@ impl SecureKeyManager {
 
     async fn load_from_secure_file(&self, path: &str) -> Result<String, KeyError> {
         // Validate file permissions and ownership for security
-        self.validate_file_security(path)?;
+        Self::validate_file_security(path)?;
 
         tokio::fs::read_to_string(path)
             .await
             .map_err(|e| KeyError::FileError(format!("Failed to read key file {path}: {e}")))
     }
 
-    fn validate_file_security(&self, path: &str) -> Result<(), KeyError> {
+    fn validate_file_security(path: &str) -> Result<(), KeyError> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -225,7 +226,7 @@ impl SecureKeyManager {
             .map_err(|e| KeyError::LoadingFailed(format!("Invalid decoding key: {e}")))?;
 
         // Extract public key components for JWK
-        let (n, e) = self.extract_public_key_components(&private_key_pem)?;
+        let (n, e) = Self::extract_public_key_components(&private_key_pem)?;
 
         let public_jwk = serde_json::json!({
             "kty": "RSA",
@@ -247,10 +248,7 @@ impl SecureKeyManager {
         })
     }
 
-    fn extract_public_key_components(
-        &self,
-        _private_key_pem: &str,
-    ) -> Result<(String, String), KeyError> {
+    fn extract_public_key_components(_private_key_pem: &str) -> Result<(String, String), KeyError> {
         // For development, use hardcoded components that match the dev key
         // In production, this should extract components from the actual key
         let modulus_hex = "DFAA0CD89105F97B04C18309672EB086CAFB656D4A44B8AEF84E0D6038A2910C06EE9023A5848D5867FABD87F52B670F5D4C654495FA69BF45E84F354B96FFF71290DEED830771C764B8D8F559373978D0816BA70B64C5C8FD292474B57C47114936B9A54881CEF99566DCFCF5E7422434E43E6C1CFE91ADE541307884A07737DD85A73E87C021AA44F719FB820470FA521F8ADE60A7F279E025CFB9F8EA72B4604C9813A5D396908138D2FA0DBE2EAE3161D778243EA16921F3E0CB7DA2CCD83ADC3BFC03FDC2A453ACEA3BE9E99EC8C155301696C28963ECD59C9ABBD60B9BC9B9B689024A49D7BB801329B50D09E03574FA3FD07803914A739C5380AD1BF1";
@@ -264,9 +262,9 @@ impl SecureKeyManager {
     }
 
     /// Ensure a valid key is available, generating one if needed
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Key loading from storage fails
     /// - Key generation operations fail
@@ -298,6 +296,7 @@ impl SecureKeyManager {
             }
 
             tracing::info!("Key rotation completed, {} keys active", keys.len());
+            drop(keys); // Early drop to reduce lock contention
         }
 
         Ok(())
@@ -318,8 +317,10 @@ fn now_unix() -> u64 {
 // Public API functions for compatibility with existing code
 
 pub async fn jwks_document() -> Value {
-    let keys = ACTIVE_KEYS.read().await;
-    let jwk_keys: Vec<Value> = keys.iter().map(|k| k.public_jwk.clone()).collect();
+    let jwk_keys: Vec<Value> = {
+        let keys = ACTIVE_KEYS.read().await;
+        keys.iter().map(|k| k.public_jwk.clone()).collect()
+    };
 
     serde_json::json!({
         "keys": jwk_keys
@@ -412,6 +413,14 @@ pub async fn get_key_sources() -> Vec<KeySource> {
     keys.iter().map(|k| k.source.clone()).collect()
 }
 
+/// Validate the current security posture
+///
+/// # Errors
+///
+/// Returns a vector of security issue strings if any security problems are detected:
+/// - Development keys used in production environment
+/// - Missing RSA private key configuration
+/// - Insecure key rotation settings
 pub async fn validate_security_posture() -> Result<(), Vec<String>> {
     let mut issues = Vec::new();
 
@@ -435,7 +444,7 @@ pub async fn validate_security_posture() -> Result<(), Vec<String>> {
 
     // Check file permissions if using file-based keys
     if let Ok(path) = std::env::var("RSA_PRIVATE_KEY_PATH") {
-        if let Err(e) = KEY_MANAGER.validate_file_security(&path) {
+        if let Err(e) = SecureKeyManager::validate_file_security(&path) {
             issues.push(format!("Key file security issue: {e}"));
         }
     }

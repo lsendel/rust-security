@@ -10,10 +10,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::SystemTime;
 
-#[cfg(feature = "threat-hunting")]
-use auth_service::{
-    event_conversion::convert_security_events,
-};
+use auth_service::event_conversion::convert_security_events;
 
 fn create_benchmark_event() -> SecurityEvent {
     SecurityEvent {

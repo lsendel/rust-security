@@ -402,21 +402,23 @@ static AUTH_FAILURE_TRACKER: std::sync::LazyLock<AuthFailureTracker> =
     std::sync::LazyLock::new(|| AuthFailureTracker::new(AuthFailureConfig::default()));
 
 /// Convenience function to log authentication failures
-pub fn log_auth_failure(
+pub fn log_auth_failure<S: ::std::hash::BuildHasher>(
     failure_type: AuthFailureType,
     client_id: Option<&str>,
     ip_address: Option<&str>,
     user_agent: Option<&str>,
     failure_reason: &str,
-    additional_context: Option<HashMap<String, Value>>,
+    additional_context: Option<HashMap<String, Value, S>>,
 ) {
+    let converted_context =
+        additional_context.map(|ctx| ctx.into_iter().collect::<HashMap<String, Value>>());
     AUTH_FAILURE_TRACKER.log_auth_failure(
         failure_type,
         client_id,
         ip_address,
         user_agent,
         failure_reason,
-        additional_context,
+        converted_context,
     );
 }
 

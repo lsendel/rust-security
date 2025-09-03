@@ -18,7 +18,8 @@ pub mod utils {
     use crate::services::PasswordService;
 
     /// Create a test user with valid data
-    #[must_use] pub fn create_test_user() -> User {
+    #[must_use]
+    pub fn create_test_user() -> User {
         let user_id = UserId::new();
         let email = Email::new("test@example.com".to_string()).unwrap();
         let password_hash =
@@ -28,19 +29,22 @@ pub mod utils {
     }
 
     /// Create a test password hash
-    #[must_use] pub fn create_test_password_hash() -> PasswordHash {
+    #[must_use]
+    pub fn create_test_password_hash() -> PasswordHash {
         let service = PasswordService::new();
         service.hash_password("TestPassword123!").unwrap()
     }
 
     /// Generate a random test email
-    #[must_use] pub fn random_email() -> Email {
+    #[must_use]
+    pub fn random_email() -> Email {
         let random_id = uuid::Uuid::new_v4().simple().to_string();
         Email::new(format!("test.{}@example.com", &random_id[..8])).unwrap()
     }
 
     /// Generate a random test user ID
-    #[must_use] pub fn random_user_id() -> UserId {
+    #[must_use]
+    pub fn random_user_id() -> UserId {
         UserId::new()
     }
 }
@@ -48,6 +52,7 @@ pub mod utils {
 /// Test configuration helpers
 pub mod config {
     // use crate::infrastructure::cache::advanced_cache::AdvancedCacheConfig; // Module not available
+    #[cfg(feature = "postgres")]
     use crate::infrastructure::database::connection_pool::ConnectionPoolConfig;
     use crate::middleware::security_enhanced::SecurityConfig;
     use std::time::Duration;
@@ -80,6 +85,7 @@ pub mod config {
     }*/
 
     /// Create test database configuration
+    #[cfg(feature = "postgres")]
     #[must_use]
     pub fn test_db_config() -> ConnectionPoolConfig {
         ConnectionPoolConfig {
@@ -364,9 +370,8 @@ pub mod mocks {
         async fn add_role(&self, id: &UserId, role: String) -> Result<(), RepositoryError> {
             let mut users = self.users.write().await;
             if let Some(user) = users.get_mut(&id.to_string()) {
-                if !user.roles.contains(&role) {
-                    user.roles.insert(role);
-                }
+                // Insert role if absent without redundant contains()
+                user.roles.insert(role);
                 Ok(())
             } else {
                 Err(RepositoryError::NotFound)
@@ -505,7 +510,10 @@ pub mod mocks {
                 .values()
                 .filter(|s| s.user_id == *user_id)
                 .count();
-            Ok(count as i64)
+            Ok(match i64::try_from(count) {
+                Ok(v) => v,
+                Err(_) => i64::MAX,
+            })
         }
 
         async fn extend_session(
@@ -605,8 +613,9 @@ pub mod mocks {
                 .await
                 .insert(token.token_hash.clone(), token.clone());
 
-            let mut user_tokens_map = self.user_tokens.write().await;
-            user_tokens_map
+            self.user_tokens
+                .write()
+                .await
                 .entry(token.user_id.as_str().to_string())
                 .or_insert_with(Vec::new)
                 .push(token.token_hash.clone());
@@ -625,20 +634,19 @@ pub mod mocks {
             self.tokens.write().await.remove(token_hash);
 
             // Also remove from user_tokens mapping
-            let mut user_tokens_map = self.user_tokens.write().await;
-            for token_hashes in user_tokens_map.values_mut() {
+            for token_hashes in self.user_tokens.write().await.values_mut() {
                 token_hashes.retain(|h| h != token_hash);
             }
             Ok(())
         }
 
         async fn delete_by_user_id(&self, user_id: &UserId) -> Result<(), TokenRepositoryError> {
-            let mut user_tokens_map = self.user_tokens.write().await;
-            if let Some(token_hashes) = user_tokens_map.remove(user_id.as_str()) {
+            if let Some(token_hashes) = self.user_tokens.write().await.remove(user_id.as_str()) {
                 let mut tokens = self.tokens.write().await;
                 for hash in token_hashes {
                     tokens.remove(&hash);
                 }
+                drop(tokens);
             }
             Ok(())
         }
@@ -685,6 +693,7 @@ pub mod mocks {
                 tokens.remove(&hash);
                 deleted_count += 1;
             }
+            drop(tokens);
 
             Ok(deleted_count)
         }
@@ -704,7 +713,8 @@ pub mod mocks {
         ) -> Result<i64, TokenRepositoryError> {
             let user_tokens = self.find_by_user_id(user_id).await?;
             let _now = Utc::now();
-            let active_count = user_tokens.iter().filter(|t| t.is_active()).count() as i64;
+            let active_count = i64::try_from(user_tokens.iter().filter(|t| t.is_active()).count())
+                .map_or(i64::MAX, |v| v);
             Ok(active_count)
         }
     }

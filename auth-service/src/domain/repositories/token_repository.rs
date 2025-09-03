@@ -208,7 +208,9 @@ mod tests {
 
         async fn exists_and_active(&self, token_hash: &str) -> Result<bool, TokenRepositoryError> {
             let tokens = self.tokens.read().unwrap();
-            tokens.get(token_hash).map_or_else(|| Ok(false), |token| Ok(token.is_active()))
+            tokens
+                .get(token_hash)
+                .map_or_else(|| Ok(false), |token| Ok(token.is_active()))
         }
 
         async fn count_active_by_user(

@@ -11,7 +11,7 @@ use tokio::runtime::Runtime;
 /*
 use auth_service::{
     jwt_secure::create_secure_jwt_validation,
-    rate_limit_secure::{RateLimitConfig, SecureRateLimiter},
+    security::rate_limiting::{RateLimitConfig, UnifiedRateLimiter},
     security::{
         generate_code_challenge, generate_code_verifier, generate_token_binding,
         verify_request_signature,
@@ -152,7 +152,7 @@ fn bench_request_signature_verification(c: &mut Criterion) {
     group.throughput(Throughput::Elements(1));
 
     group.bench_function("signature_verification", |b| {
-        let secret = "test-secret-key-that-is-long-enough-for-security";
+        let secret = "benchmark_security_test_secret";
         let timestamp = chrono::Utc::now().timestamp();
 
         // Pre-generate signature for verification
@@ -242,7 +242,7 @@ fn bench_security_validation_pipeline(c: &mut Criterion) {
         let config = RateLimitConfig::default();
         let limiter = SecureRateLimiter::new(config);
         let ip = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 1));
-        let secret = "test-secret-key-that-is-long-enough-for-security";
+        let secret = "benchmark_security_test_secret";
 
         b.iter(|| {
             rt.block_on(async {

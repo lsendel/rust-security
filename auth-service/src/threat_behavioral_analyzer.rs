@@ -1,6 +1,6 @@
 use crate::core::security::{SecurityEvent, SecurityEventType};
-#[cfg(feature = "threat-hunting")]
-use crate::threat_adapter::ThreatDetectionAdapter;
+// Threat hunting feature is disabled
+// use crate::threat_adapter::ThreatDetectionAdapter;
 use crate::threat_types::{
     AttackPhase, BusinessImpact, GeoLocation, IndicatorType, MitigationAction, ThreatIndicator,
     ThreatSeverity, ThreatSignature, ThreatType, UserBehaviorProfile,
@@ -352,7 +352,7 @@ impl AdvancedBehavioralThreatDetector {
         self.initialize_data_and_models().await?;
         
         // Start background tasks
-        self.start_background_tasks().await;
+        self.start_background_tasks();
 
         info!("Advanced Behavioral Threat Detector initialized successfully");
         Ok(())
@@ -374,7 +374,7 @@ impl AdvancedBehavioralThreatDetector {
     }
     
     /// Start all background processing tasks
-    async fn start_background_tasks(&self) {
+    fn start_background_tasks(&self) {
         self.start_event_processor();
         self.start_profile_updater();
         self.start_threat_correlator();
@@ -955,7 +955,7 @@ impl AdvancedBehavioralThreatDetector {
         };
 
         // Extract features for ML analysis
-        let features = self.extract_ml_features(event).await;
+        let features = self.extract_ml_features(event);
         if features.is_empty() {
             return Ok(threats);
         }
@@ -1223,7 +1223,7 @@ impl AdvancedBehavioralThreatDetector {
     }
 
     /// Extract ML features from security event
-    async fn extract_ml_features(&self, event: &SecurityEvent) -> Vec<f64> {
+    fn extract_ml_features(&self, event: &SecurityEvent) -> Vec<f64> {
         let mut features = Vec::new();
 
         // Time-based features
@@ -1382,14 +1382,14 @@ impl AdvancedBehavioralThreatDetector {
     }
 }
 
-#[cfg(feature = "threat-hunting")]
-#[async_trait::async_trait]
-impl ThreatDetectionAdapter for AdvancedBehavioralThreatDetector {
-    async fn process_security_event(
-        &self,
-        event: &SecurityEvent,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Use the existing analyze_event method directly
-        self.analyze_event(event.clone()).await.map(|_| ()) // Discard the Vec<ThreatSignature> result
-    }
-}
+// Threat hunting feature is disabled - entire impl block commented out
+// #[async_trait::async_trait]
+// impl ThreatDetectionAdapter for AdvancedBehavioralThreatDetector {
+//     async fn process_security_event(
+//         &self,
+//         event: &SecurityEvent,
+//     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+//         // Use the existing analyze_event method directly
+//         self.analyze_event(event.clone()).await.map(|_| ()) // Discard the Vec<ThreatSignature> result
+//     }
+// }

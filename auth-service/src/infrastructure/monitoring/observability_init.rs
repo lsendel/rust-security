@@ -62,6 +62,10 @@ impl EnhancedObservability {
         serde_json::json!({"alerts": []})
     }
 
+    /// Export metrics in Grafana-compatible format
+    ///
+    /// # Errors
+    /// Returns `String` error if metrics serialization fails or if there are internal data issues
     pub fn export_metrics_for_grafana(&self) -> Result<serde_json::Value, String> {
         Ok(serde_json::json!({"metrics": {}}))
     }
@@ -167,6 +171,10 @@ pub struct ObservabilitySystem {
 
 impl ObservabilitySystem {
     /// Initialize the complete observability system
+    ///
+    /// # Errors
+    /// Returns `AppError` if any observability component fails to initialize, such as
+    /// metric registries, tracing systems, or monitoring infrastructure
     pub async fn initialize() -> Result<Self, crate::shared::error::AppError> {
         info!("Initializing comprehensive observability system");
 
@@ -391,6 +399,11 @@ impl ObservabilitySystem {
     }
 
     /// Graceful shutdown of observability system
+    /// Shutdown the observability system and perform cleanup
+    ///
+    /// # Errors  
+    /// Returns error if cleanup of observability components fails, such as
+    /// flushing remaining metrics or closing monitoring connections
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down observability system");
 
@@ -458,9 +471,9 @@ mod tests {
     fn test_load_sli_config() {
         // Test with default values
         let config = ObservabilitySystem::load_sli_config();
-        assert_eq!(config.availability_target, 99.9);
+        assert!((config.availability_target - 99.9).abs() < f64::EPSILON);
         assert_eq!(config.latency_target_ms, 100);
-        assert_eq!(config.error_rate_target, 0.1);
+        assert!((config.error_rate_target - 0.1).abs() < f64::EPSILON);
     }
 
     #[tokio::test]

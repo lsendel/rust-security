@@ -2,6 +2,7 @@
 //!
 //! Provides security-related infrastructure including headers, logging, monitoring, and TLS.
 
+#[allow(clippy::module_inception)]
 pub mod security;
 pub mod security_fixed;
 pub mod security_headers;

@@ -69,7 +69,8 @@ impl Default for CryptoOptimized {
 }
 
 impl CryptoOptimized {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let argon2 = Argon2::default();
 
         Self {
@@ -98,9 +99,11 @@ impl CryptoOptimized {
         metrics.total_duration += operation_duration;
 
         if metrics.total_operations > 0 {
-            metrics.avg_operation_time = metrics.total_duration / u32::try_from(metrics.total_operations).unwrap_or(1);
+            metrics.avg_operation_time =
+                metrics.total_duration / u32::try_from(metrics.total_operations).unwrap_or(1);
             metrics.operations_per_second =
-                f64::from(u32::try_from(metrics.total_operations).unwrap_or(0)) / metrics.total_duration.as_secs_f64();
+                f64::from(u32::try_from(metrics.total_operations).unwrap_or(0))
+                    / metrics.total_duration.as_secs_f64();
         }
 
         // Update cache hit rate (simple moving average)
@@ -320,9 +323,11 @@ impl CryptoOptimized {
         // Use argon2 for secure password verification
         use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
-        PasswordHash::new(hash).is_ok_and(|parsed_hash| Argon2::default()
+        PasswordHash::new(hash).is_ok_and(|parsed_hash| {
+            Argon2::default()
                 .verify_password(password.as_bytes(), &parsed_hash)
-                .is_ok())
+                .is_ok()
+        })
     }
 
     /// Optimized key derivation using PBKDF2 with hardware acceleration
@@ -452,12 +457,14 @@ impl CryptoOptimized {
 }
 
 /// Public API for optimized cryptographic operations
-#[must_use] pub fn get_crypto_engine() -> &'static CryptoOptimized {
+#[must_use]
+pub fn get_crypto_engine() -> &'static CryptoOptimized {
     &CRYPTO_ENGINE
 }
 
 /// Hardware-accelerated JWT signature verification
-#[must_use] pub fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
+#[must_use]
+pub fn verify_jwt_signature_batch(tokens: &[String]) -> Vec<bool> {
     #[cfg(feature = "simd")]
     {
         CRYPTO_ENGINE.batch_validate_tokens(tokens)
@@ -505,7 +512,8 @@ pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
 }
 
 #[cfg(not(feature = "simd"))]
-#[must_use] pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
+#[must_use]
+pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
     use constant_time_eq::constant_time_eq;
     constant_time_eq(a, b)
 }
@@ -531,7 +539,9 @@ mod tests {
     #[test]
     fn test_token_format_validation() {
         let _engine = get_crypto_engine();
-        assert!(CryptoOptimized::validate_token_format("tk_valid_token_format_12345"));
+        assert!(CryptoOptimized::validate_token_format(
+            "tk_valid_token_format_12345"
+        ));
         assert!(!CryptoOptimized::validate_token_format("invalid"));
         assert!(!CryptoOptimized::validate_token_format(""));
     }

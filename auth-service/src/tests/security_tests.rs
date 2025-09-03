@@ -240,7 +240,7 @@ async fn test_jwt_security_properties() {
     // 7. None algorithm rejection
 
     // For now, we'll test basic JWT structure
-    let test_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    let test_token = "test.jwt.token";
 
     // Token should have 3 parts separated by dots
     let parts: Vec<&str> = test_token.split('.').collect();

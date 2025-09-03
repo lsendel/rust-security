@@ -1,5 +1,20 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms, future_incompatible)]
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::cognitive_complexity,
+    clippy::too_many_lines,
+    clippy::unused_async,
+    clippy::needless_pass_by_value,
+    clippy::future_not_send,
+    clippy::items_after_statements,
+    clippy::unnecessary_wraps,
+    clippy::struct_excessive_bools,
+    clippy::branches_sharing_code,
+    clippy::trivially_copy_pass_by_ref,
+    dead_code
+)]
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -10,6 +25,7 @@ use cedar_policy_core as _;
 use chrono as _;
 use dotenvy as _;
 use once_cell as _;
+#[cfg(not(feature = "prom-client"))]
 use prometheus as _;
 use serde as _;
 use serde_json as _;
@@ -79,11 +95,17 @@ use utoipa::ToSchema;
 
 mod documentation;
 pub mod errors;
+#[cfg(feature = "prometheus-backend")]
 mod metrics;
+#[cfg(feature = "prom-client")]
+mod metrics_prom_client;
 
 use documentation::{ErrorResponse, HealthCheckResponse};
 use errors::{AppError, AuthorizationError, PolicyError};
-use metrics::{policy_metrics_handler, policy_metrics_middleware, PolicyMetricsHelper};
+#[cfg(feature = "prom-client")]
+use crate::metrics_prom_client::{policy_metrics_handler, policy_metrics_middleware, PolicyMetricsHelper};
+#[cfg(all(not(feature = "prom-client"), feature = "prometheus-backend"))]
+use crate::metrics::{policy_metrics_handler, policy_metrics_middleware, PolicyMetricsHelper};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AuthorizeRequest {

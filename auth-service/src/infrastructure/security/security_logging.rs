@@ -360,7 +360,7 @@ impl SecurityLogger {
         Self { config }
     }
 
-    pub fn log_event(&self, event: SecurityEvent) {
+    pub fn log_event(&self, event: &SecurityEvent) {
         if self.config.enabled {
             // Apply security guardrails before logging
             let safe_description = SecurityLoggingGuard::redact_sensitive_data(&event.description);
@@ -388,7 +388,7 @@ impl SecurityLogger {
     /// Static method for backwards compatibility
     pub fn log_event_static(event: &SecurityEvent) {
         let logger = Self::default();
-        logger.log_event(event.clone());
+        logger.log_event(event);
     }
 }
 

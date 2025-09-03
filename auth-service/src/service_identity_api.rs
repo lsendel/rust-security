@@ -223,7 +223,14 @@ pub async fn request_jit_token(
     let token_response = TokenResponse {
         access_token: format!("jit_{}", jit_token.token_id), // In production, would be properly signed JWT
         token_type: "Bearer".to_string(),
-        expires_in: (jit_token.expires_at.timestamp() - jit_token.issued_at.timestamp()) as u64,
+        expires_in: {
+            let diff = jit_token.expires_at.timestamp() - jit_token.issued_at.timestamp();
+            if diff < 0 {
+                0
+            } else {
+                diff as u64
+            }
+        },
         scopes: jit_token.granted_scopes,
         token_id: jit_token.token_id.to_string(),
         refresh_token: None,

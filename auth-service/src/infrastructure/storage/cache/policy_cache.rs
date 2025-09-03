@@ -123,7 +123,7 @@ impl PolicyCache {
         }
 
         let key = Self::generate_cache_key(request);
-        let _policy_type = &request.action; // Used in metrics collection
+        // metrics-only variable
 
         if let Some(mut entry) = self.cache.get_mut(&key) {
             // Check if entry is still valid
@@ -148,10 +148,13 @@ impl PolicyCache {
                 // Record cache hit metrics
                 let _duration = start_time.elapsed();
                 #[cfg(feature = "monitoring")]
-                METRICS
-                    .policy_cache_operations
-                    .with_label_values(&["get", "hit", _policy_type])
-                    .inc();
+                {
+                    let policy_type = &request.action;
+                    METRICS
+                        .policy_cache_operations
+                        .with_label_values(&["get", "hit", policy_type])
+                        .inc();
+                }
                 #[cfg(feature = "monitoring")]
                 METRICS
                     .cache_operation_duration
@@ -181,10 +184,13 @@ impl PolicyCache {
         // Record cache miss metrics
         let _duration = start_time.elapsed();
         #[cfg(feature = "monitoring")]
-        METRICS
-            .policy_cache_operations
-            .with_label_values(&["get", "miss", _policy_type])
-            .inc();
+        {
+            let policy_type = &request.action;
+            METRICS
+                .policy_cache_operations
+                .with_label_values(&["get", "miss", policy_type])
+                .inc();
+        }
 
         None
     }

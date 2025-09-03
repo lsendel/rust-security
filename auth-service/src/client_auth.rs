@@ -62,12 +62,12 @@ impl ClientAuthenticator {
     pub fn register_client(
         &mut self,
         client_id: String,
-        client_secret: String,
+        client_secret: &str,
         metadata: ClientMetadata,
     ) -> Result<(), crate::shared::error::AppError> {
         // Validate client secret strength unless running in TEST_MODE to keep integration tests simple
         if std::env::var("TEST_MODE").ok().as_deref() != Some("1") {
-            self.validate_client_secret_strength(&client_secret)?;
+            self.validate_client_secret_strength(client_secret)?;
         }
 
         // Hash the client secret
@@ -143,7 +143,7 @@ impl ClientAuthenticator {
 
         // Ensure consistent timing (minimum duration to prevent timing attacks)
         let elapsed = start_time.elapsed();
-        let elapsed_millis = elapsed.as_millis().min(u64::MAX as u128) as u64;
+        let elapsed_millis = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
         if elapsed_millis < MIN_AUTH_DURATION_MS {
             std::thread::sleep(std::time::Duration::from_millis(
                 MIN_AUTH_DURATION_MS - elapsed_millis,
@@ -298,11 +298,7 @@ impl ClientAuthenticator {
                             .insert(client_id.to_string(), password_hash.to_string());
                         self.client_metadata.insert(client_id.to_string(), metadata);
                     } else {
-                        self.register_client(
-                            client_id.to_string(),
-                            client_secret.to_string(),
-                            metadata,
-                        )?;
+                        self.register_client(client_id.to_string(), client_secret, metadata)?;
                     }
                 }
             }
@@ -422,7 +418,7 @@ mod tests {
         // Strong secret should work
         let result = auth.register_client(
             "test_client".to_string(),
-            "very_strong_secret_with_mixed_chars_123!@#".to_string(),
+            "very_strong_secret_with_mixed_chars_123!@#",
             metadata,
         );
         assert!(result.is_ok());
@@ -435,19 +431,15 @@ mod tests {
 
         // Too short
         assert!(auth
-            .register_client(
-                "test_client".to_string(),
-                "short".to_string(),
-                metadata.clone()
-            )
+            .register_client("test_client".to_string(), "short", metadata.clone(),)
             .is_err());
 
         // All digits
         assert!(auth
             .register_client(
                 "test_client".to_string(),
-                "12345678901234567890123456789012".to_string(),
-                metadata.clone()
+                "12345678901234567890123456789012",
+                metadata.clone(),
             )
             .is_err());
 
@@ -455,8 +447,8 @@ mod tests {
         assert!(auth
             .register_client(
                 "test_client".to_string(),
-                "abcdefghijklmnopqrstuvwxyzabcdef".to_string(),
-                metadata
+                "abcdefghijklmnopqrstuvwxyzabcdef",
+                metadata,
             )
             .is_err());
     }
@@ -465,14 +457,15 @@ mod tests {
     fn test_client_authentication() {
         let mut auth = ClientAuthenticator::new();
         let metadata = ClientMetadata::default();
-        let secret = "very_strong_secret_with_mixed_chars_123!@#";
+        let secret = std::env::var("TEST_CLIENT_SECRET")
+            .unwrap_or_else(|_| "test_client_secret_for_unit_test".to_string());
 
-        auth.register_client("test_client".to_string(), secret.to_string(), metadata)
+        auth.register_client("test_client".to_string(), &secret, metadata)
             .unwrap();
 
         // Correct credentials
         assert!(auth
-            .authenticate_client("test_client", secret, None)
+            .authenticate_client("test_client", &secret, None)
             .unwrap());
 
         // Wrong credentials
@@ -482,7 +475,7 @@ mod tests {
 
         // Non-existent client
         assert!(!auth
-            .authenticate_client("unknown_client", secret, None)
+            .authenticate_client("unknown_client", &secret, None)
             .unwrap());
     }
 
@@ -493,7 +486,7 @@ mod tests {
 
         auth.register_client(
             "test_client".to_string(),
-            "very_strong_secret_with_mixed_chars_123!@#".to_string(),
+            "very_strong_secret_with_mixed_chars_123!@#",
             metadata,
         )
         .unwrap();

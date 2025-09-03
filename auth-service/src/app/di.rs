@@ -21,15 +21,24 @@ pub struct AppContainer {
 impl AppContainer {
     /// Create a new application container with mock repositories (for testing)
     ///
-    /// # Panics
-    /// 
-    /// Panics because mock repositories are not yet implemented. This function
-    /// always panics with a message indicating that mock repositories are not
-    /// available and suggesting to use `new_postgres` instead.
-    #[must_use] pub fn new_mock() -> Self {
-        // TODO: Implement proper mock repositories
-        // For now, we'll return an error indicating this is not implemented
-        panic!("Mock repositories not yet implemented - use new_postgres instead (redis temporarily disabled)");
+    /// This creates a fully functional container with mock implementations
+    /// of all services, suitable for unit testing and integration testing.
+    #[cfg(test)]
+    #[must_use]
+    pub fn new_mock() -> Self {
+        use crate::mocks::auth_service::MockAuthService;
+        use crate::mocks::health_checker::MockHealthChecker;
+        use crate::mocks::metrics_collector::MockMetricsCollector;
+        use crate::mocks::token_service::MockTokenService;
+        use crate::mocks::user_service::MockUserService;
+
+        Self {
+            user_service: Arc::new(MockUserService::new()),
+            auth_service: Arc::new(MockAuthService::new()),
+            token_service: Arc::new(MockTokenService::new()),
+            metrics_collector: Arc::new(MockMetricsCollector::new().into()),
+            health_checker: Arc::new(MockHealthChecker::new().into()),
+        }
     }
 
     /*
@@ -165,9 +174,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_container_creation() {
-        let _container = AppContainer::new_mock();
+        let container = AppContainer::new_mock();
 
-        // Verify services are created
-        assert!(true); // Basic smoke test
+        // Verify that the container was created successfully (smoke test)
+        // Services exist (Arc pointers are non-null)
+        // Just verify they can be accessed without panicking
+        let _user_service = &container.user_service;
+        let _auth_service = &container.auth_service; 
+        let _token_service = &container.token_service;
     }
 }

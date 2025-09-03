@@ -24,8 +24,8 @@ async fn spawn_app() -> String {
             auth_service::jwks_rotation::KeyRotationConfig::default(),
             Arc::new(InMemoryKeyStorage::new()),
         )
-            .await
-            .unwrap(),
+        .await
+        .unwrap(),
     );
 
     let app = app(AppState {

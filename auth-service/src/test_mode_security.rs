@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{error, info, warn};
 
+#[allow(clippy::cognitive_complexity)]
 static TEST_MODE_ENABLED: std::sync::LazyLock<AtomicBool> = std::sync::LazyLock::new(|| {
     let enabled = is_test_mode_raw();
     if enabled {
@@ -65,7 +66,8 @@ fn is_test_mode_raw() -> bool {
 }
 
 /// Check if we're running in a production environment
-fn is_production_environment() -> bool {
+#[must_use]
+pub fn is_production_environment() -> bool {
     // Check multiple common production environment indicators
     let rust_env = std::env::var("RUST_ENV").unwrap_or_default();
     let environment = std::env::var("ENVIRONMENT").unwrap_or_default();
@@ -146,6 +148,7 @@ pub fn validate_test_mode_security() -> Result<(), Vec<String>> {
 }
 
 /// Security audit logging for test mode violations
+#[allow(clippy::cognitive_complexity)]
 fn audit_log_security_violation() {
     // This would typically integrate with your security logging system
     error!("SECURITY_AUDIT: TEST_MODE_PRODUCTION_VIOLATION");

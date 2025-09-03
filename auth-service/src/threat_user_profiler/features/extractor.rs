@@ -422,7 +422,7 @@ mod tests {
     use crate::threat_user_profiler::types::GeoLocation;
     use chrono::Utc;
 
-    #[cfg(feature = "threat-hunting")]
+    
     #[tokio::test]
     async fn test_feature_extraction() {
         let config = BehavioralFeatureConfig::default();
@@ -455,7 +455,7 @@ mod tests {
             .unwrap();
 
         assert!(features.temporal_features.login_frequency >= 0.0);
-        assert!(features.location_features.unique_locations >= 0);
-        assert!(features.device_features.unique_devices >= 0);
+        assert!(features.location_features.unique_locations >= 1);
+        assert!(features.device_features.unique_devices >= 1);
     }
 }
