@@ -28,40 +28,24 @@ regex = "1.11"
 fancy-regex = "0.13"
 anyhow = "1.0.82"
 
-# Validation framework
-validator = { version = "0.20", features = ["derive"] }
-
 # Async runtime
 tokio = { version = "1.37", features = ["full"] }
-async-trait = "0.1"
 
 # Web framework integration
 axum = { version = "0.7.4", features = ["macros"] }
 http = "1.1"
 bytes = "1.8"
-
-# Security
-secrecy = "0.10"
-constant_time_eq = "0.3"
 zeroize = "1.8"
 
 # Performance
 dashmap = "6.1"
 rayon = { version = "1.10", optional = true }
-indexmap = "2.11"
 
 # String processing
 aho-corasick = "1.1"
 
-# Collections
-bloomfilter = "1.0"
-probabilistic-collections = "0.7"
-
 # Fuzzing dependencies
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
-
-# Rate limiting and DoS protection
-tower = { version = "0.4.13", features = ["util"] }
 
 # Metrics
 prometheus = { version = "0.14", optional = true }

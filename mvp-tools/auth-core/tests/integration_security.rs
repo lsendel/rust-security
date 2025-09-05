@@ -1,4 +1,4 @@
-#![cfg(feature = "compliance-tests")]
+#[cfg(feature = "compliance-tests")]
 
 use auth_core::prelude::*;
 use auth_core::{

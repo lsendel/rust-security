@@ -14,12 +14,8 @@ path = "main.rs"
 [dependencies]
 tokio = { workspace = true }
 reqwest = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-common = { path = "../common" }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

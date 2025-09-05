@@ -10,14 +10,14 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, decode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use mvp_tools::{
     policy::MvpPolicyEngine,
     validation::{validate_input, SecurityContext, ThreatLevel},
 };
 use serde::{Deserialize, Serialize};
-use base64::{Engine as _, engine::general_purpose};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
@@ -73,11 +73,11 @@ struct JwksResponse {
 /// JSON Web Key (JWK) for public key distribution
 #[derive(Debug, Serialize)]
 struct JsonWebKey {
-    kty: String,     // Key Type
-    alg: String,     // Algorithm
-    kid: String,     // Key ID
-    k: String,       // Key Value (base64url encoded)
-    
+    kty: String, // Key Type
+    alg: String, // Algorithm
+    kid: String, // Key ID
+    k: String,   // Key Value (base64url encoded)
+
     #[serde(rename = "use")]
     key_use: String, // Public Key Use
 }
@@ -117,14 +117,17 @@ pub struct AppState {
 impl AppState {
     pub fn new(jwt_secret: String) -> Self {
         let mut clients = HashMap::new();
-        
+
         // Add default MVP client
-        clients.insert("mvp-client".to_string(), OAuthClient {
-            id: "mvp-client".to_string(),
-            secret: "mvp-secret".to_string(), 
-            name: "MVP Test Client".to_string(),
-            scopes: vec!["read".to_string(), "write".to_string()],
-        });
+        clients.insert(
+            "mvp-client".to_string(),
+            OAuthClient {
+                id: "mvp-client".to_string(),
+                secret: "mvp-secret".to_string(),
+                name: "MVP Test Client".to_string(),
+                scopes: vec!["read".to_string(), "write".to_string()],
+            },
+        );
 
         Self {
             jwt_secret,
@@ -142,8 +145,11 @@ async fn oauth_token(
 ) -> Result<Json<TokenResponse>, (StatusCode, String)> {
     // Create security context for enhanced validation
     let client_ip = extract_client_ip(&headers);
-    let user_agent = headers.get("user-agent").and_then(|h| h.to_str().ok()).map(String::from);
-    
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(String::from);
+
     let security_ctx = SecurityContext::new()
         .with_request_id(Uuid::new_v4().to_string())
         .with_client_info(client_ip, user_agent)
@@ -154,7 +160,7 @@ async fn oauth_token(
         security_ctx.log_security_incident(&format!("Invalid grant_type: {}", e));
         return Err((StatusCode::BAD_REQUEST, "Invalid grant type".to_string()));
     }
-    
+
     if let Err(e) = validate_input(&req.client_id) {
         security_ctx.log_security_incident(&format!("Invalid client_id: {}", e));
         return Err((StatusCode::BAD_REQUEST, "Invalid client ID".to_string()));
@@ -162,23 +168,33 @@ async fn oauth_token(
 
     // Validate grant type
     if req.grant_type != "client_credentials" {
-        return Err((StatusCode::BAD_REQUEST, "Unsupported grant type".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Unsupported grant type".to_string(),
+        ));
     }
 
     // Authenticate client
     let clients = state.clients.read().await;
-    let client = clients.get(&req.client_id)
+    let client = clients
+        .get(&req.client_id)
         .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Invalid client".to_string()))?;
-    
+
     if client.secret != req.client_secret {
-        security_ctx.log_security_incident(&format!("Authentication failed for client: {}", req.client_id));
-        return Err((StatusCode::UNAUTHORIZED, "Invalid client credentials".to_string()));
+        security_ctx.log_security_incident(&format!(
+            "Authentication failed for client: {}",
+            req.client_id
+        ));
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "Invalid client credentials".to_string(),
+        ));
     }
 
     // Create JWT token
     let now = Utc::now();
     let exp = now + Duration::hours(1);
-    
+
     let claims = Claims {
         sub: req.client_id.clone(),
         client_id: req.client_id.clone(),
@@ -191,7 +207,13 @@ async fn oauth_token(
         &Header::new(Algorithm::HS256),
         &claims,
         &EncodingKey::from_secret(state.jwt_secret.as_ref()),
-    ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Token generation failed: {}", e)))?;
+    )
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Token generation failed: {}", e),
+        )
+    })?;
 
     info!("Token issued for client: {}", req.client_id);
 
@@ -223,7 +245,7 @@ async fn oauth_introspect(
     ) {
         Ok(token_data) => {
             let claims = token_data.claims;
-            
+
             Ok(Json(IntrospectResponse {
                 active: true,
                 client_id: Some(claims.client_id),
@@ -232,15 +254,13 @@ async fn oauth_introspect(
                 scope: claims.scope,
             }))
         }
-        Err(_) => {
-            Ok(Json(IntrospectResponse {
-                active: false,
-                client_id: None,
-                exp: None,
-                iat: None,
-                scope: None,
-            }))
-        }
+        Err(_) => Ok(Json(IntrospectResponse {
+            active: false,
+            client_id: None,
+            exp: None,
+            iat: None,
+            scope: None,
+        })),
     }
 }
 
@@ -272,23 +292,23 @@ async fn metrics() -> String {
 /// JWKS endpoint for public key distribution
 async fn jwks(State(state): State<AppState>) -> Json<JwksResponse> {
     // Generate a stable key ID from the JWT secret
-    let key_id = format!("mvp-key-{}", 
-        general_purpose::URL_SAFE_NO_PAD.encode(&state.jwt_secret.as_bytes()[..8]));
-    
+    let key_id = format!(
+        "mvp-key-{}",
+        general_purpose::URL_SAFE_NO_PAD.encode(&state.jwt_secret.as_bytes()[..8])
+    );
+
     // Encode the JWT secret as base64url for distribution as symmetric key
     let key_value = general_purpose::URL_SAFE_NO_PAD.encode(state.jwt_secret.as_bytes());
-    
+
     let jwk = JsonWebKey {
-        kty: "oct".to_string(),        // Octet sequence (symmetric key)
-        alg: "HS256".to_string(),      // HMAC using SHA-256
-        kid: key_id,                   // Key identifier
-        k: key_value,                  // Key value
-        key_use: "sig".to_string(),    // For signature verification
+        kty: "oct".to_string(),     // Octet sequence (symmetric key)
+        alg: "HS256".to_string(),   // HMAC using SHA-256
+        kid: key_id,                // Key identifier
+        k: key_value,               // Key value
+        key_use: "sig".to_string(), // For signature verification
     };
-    
-    Json(JwksResponse {
-        keys: vec![jwk],
-    })
+
+    Json(JwksResponse { keys: vec![jwk] })
 }
 
 /// Extract client IP from headers
@@ -334,11 +354,11 @@ async fn main() -> anyhow::Result<()> {
     // Start server
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
     let addr = format!("0.0.0.0:{}", port);
-    
+
     info!("🚀 MVP OAuth Service starting on {}", addr);
     info!("✅ Enhanced security validation enabled");
     info!("✅ Policy engine initialized");
-    
+
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
 
@@ -360,7 +380,12 @@ mod tests {
         let app = create_router(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -429,15 +454,22 @@ mod tests {
         // Step 1: Test health check
         let response = app
             .clone()
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
-        
+
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let health: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         assert_eq!(health["status"], "healthy");
         assert_eq!(health["service"], "mvp-oauth-service");
         assert_eq!(health["features"]["enhanced_validation"], true);
@@ -463,13 +495,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let token_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         assert_eq!(token_response["token_type"], "Bearer");
         assert_eq!(token_response["expires_in"], 3600);
-        
+
         let access_token = token_response["access_token"].as_str().unwrap();
         assert!(!access_token.is_empty());
 
@@ -485,17 +519,21 @@ mod tests {
                     .uri("/oauth/introspect")
                     .method("POST")
                     .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&introspect_request).unwrap()))
+                    .body(Body::from(
+                        serde_json::to_string(&introspect_request).unwrap(),
+                    ))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let introspect_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         assert_eq!(introspect_response["active"], true);
         assert_eq!(introspect_response["client_id"], "mvp-client");
     }
@@ -519,14 +557,16 @@ mod tests {
                     .uri("/oauth/token")
                     .method("POST")
                     .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&malicious_request).unwrap()))
+                    .body(Body::from(
+                        serde_json::to_string(&malicious_request).unwrap(),
+                    ))
                     .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        
+
         // Test invalid token introspection
         let invalid_introspect = serde_json::json!({
             "token": "malicious\x00token"
@@ -539,7 +579,9 @@ mod tests {
                     .uri("/oauth/introspect")
                     .method("POST")
                     .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&invalid_introspect).unwrap()))
+                    .body(Body::from(
+                        serde_json::to_string(&invalid_introspect).unwrap(),
+                    ))
                     .unwrap(),
             )
             .await
@@ -572,10 +614,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let introspect_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         assert_eq!(introspect_response["active"], false);
     }
 
@@ -585,15 +629,22 @@ mod tests {
         let app = create_router(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/metrics").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/metrics")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let metrics = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(metrics.contains("oauth_requests_total"));
         assert!(metrics.contains("# HELP"));
         assert!(metrics.contains("# TYPE"));
@@ -605,18 +656,25 @@ mod tests {
         let app = create_router(state);
 
         let response = app
-            .oneshot(Request::builder().uri("/.well-known/jwks.json").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/.well-known/jwks.json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let jwks: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         assert!(jwks["keys"].is_array());
         assert_eq!(jwks["keys"].as_array().unwrap().len(), 1);
-        
+
         let key = &jwks["keys"][0];
         assert_eq!(key["kty"], "oct");
         assert_eq!(key["alg"], "HS256");

@@ -212,7 +212,7 @@ let headers = propagation.inject_into_headers(&context);
 // Make HTTP request with context
 let client = reqwest::Client::new();
 let request = client
-    .post("http://policy-service:8081/evaluate")
+    .post("http://policy-service:8081/v1/authorize")
     .headers(headers.into())
     .json(&policy_request);
 ```

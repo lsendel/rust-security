@@ -26,12 +26,14 @@ pub mod errors;
 pub mod optimized_pools;
 pub mod redis_config;
 pub mod secure_logging;
+pub mod security;
 pub mod sharded_rate_limiter;
 pub mod store;
 pub mod types;
 pub mod utils;
 
 pub use config::{PlatformConfiguration, RateLimitConfig, SecurityConfig};
+// Re-export unified security configuration
 pub use constants::*;
 pub use crypto_utils::*;
 pub use errors::*;
@@ -40,6 +42,11 @@ pub use optimized_pools::{OptimizedRedisPool, PoolError, PoolStats};
 pub use redis_config::*;
 pub use secure_logging::{
     sanitize_for_logging, AuditLogger, SafeForLogging, SanitizedValue, SecureRequestLog,
+};
+pub use security::{
+    CorsConfig, EncryptionConfig, JwtConfig, PasswordPolicy, RateLimitingConfig,
+    RequestSigningConfig, SecurityConfigError, SecurityHeaders, ServiceType, SessionConfig,
+    TlsConfig, UnifiedSecurityConfig,
 };
 pub use sharded_rate_limiter::{RateLimited, ShardedRateLimiter};
 pub use store::*;

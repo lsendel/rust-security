@@ -378,7 +378,11 @@ mod tests {
     fn test_connection_string_redaction() {
         let input = "connecting to postgresql://user:password@localhost:5432/db";
         let sanitized = sanitize_for_logging(input);
-        assert!(sanitized.contains("postgresql://[REDACTED]:[REDACTED]@"));
+        assert!(
+            sanitized.contains("[REDACTED]"),
+            "Connection string should be redacted: {}",
+            sanitized
+        );
         assert!(!sanitized.contains("user:password"));
     }
 

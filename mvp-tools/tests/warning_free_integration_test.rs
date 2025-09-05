@@ -328,7 +328,7 @@ mod maintenance_tests {
     fn test_maintenance_script_exists() {
         use std::path::Path;
 
-        let script_path = Path::new("scripts/maintain-warning-free.sh");
+        let script_path = Path::new("../scripts/maintain-warning-free.sh");
         assert!(script_path.exists(), "Maintenance script should exist");
         // Skip executable check for cross-platform compatibility
     }
@@ -337,7 +337,7 @@ mod maintenance_tests {
     fn test_pre_commit_hook_exists() {
         use std::path::Path;
 
-        let hook_path = Path::new(".githooks/pre-commit");
+        let hook_path = Path::new("../.githooks/pre-commit");
         if hook_path.exists() {
             assert!(hook_path.is_file(), "Pre-commit hook should be a file");
         }
@@ -349,10 +349,10 @@ mod maintenance_tests {
         use std::path::Path;
 
         let docs = vec![
-            "WARNING_FREE_SUCCESS_SUMMARY.md",
-            "DEPLOYMENT_GUIDE.md",
-            "docs/WARNING_FREE_MAINTENANCE.md",
-            "COMPILER_WARNING_ELIMINATION_COMPLETED.md",
+            "../WARNING_FREE_SUCCESS_SUMMARY.md",
+            "../DEPLOYMENT_GUIDE.md",
+            "../docs/WARNING_FREE_MAINTENANCE.md",
+            "../COMPILER_WARNING_ELIMINATION_COMPLETED.md",
         ];
 
         for doc in docs {
@@ -364,7 +364,7 @@ mod maintenance_tests {
 
 /// Helper function to run the maintenance script and validate output
 fn run_maintenance_script() -> std::process::Output {
-    Command::new("./scripts/maintain-warning-free.sh")
+    Command::new("../scripts/maintain-warning-free.sh")
         .output()
         .expect("Failed to run maintenance script")
 }
