@@ -24,7 +24,7 @@ jobs:
   # ============================================================================
   # RELEASE VALIDATION
   # ============================================================================
-  
+
   validate-release:
     name: Validate Release
     runs-on: ubuntu-latest
@@ -46,16 +46,16 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
+
           # Check if prerelease
           if [[ "$VERSION" =~ -[a-zA-Z] ]]; then
             echo "is-prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is-prerelease=false" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "Release version: $VERSION"
 
       - name: Check if version exists
@@ -68,7 +68,7 @@ jobs:
   # ============================================================================
   # BUILD RELEASE ARTIFACTS
   # ============================================================================
-  
+
   build-artifacts:
     name: Build Release Artifacts
     runs-on: ${{ matrix.os }}
@@ -109,14 +109,14 @@ jobs:
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
           fi
-          
+
           cargo build --release --target ${{ matrix.target }} --bin auth-service
           cargo build --release --target ${{ matrix.target }} --bin policy-service
 
       - name: Create archive
         run: |
           mkdir -p dist
-          
+
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             cp target/${{ matrix.target }}/release/auth-service.exe dist/
             cp target/${{ matrix.target }}/release/policy-service.exe dist/
@@ -145,7 +145,7 @@ jobs:
   # ============================================================================
   # BUILD AND SIGN CONTAINER IMAGES
   # ============================================================================
-  
+
   build-containers:
     name: Build Container Images
     runs-on: ubuntu-latest
@@ -216,7 +216,7 @@ jobs:
   # ============================================================================
   # PACKAGE HELM CHARTS
   # ============================================================================
-  
+
   package-helm:
     name: Package Helm Charts
     runs-on: ubuntu-latest
@@ -235,13 +235,13 @@ jobs:
         run: |
           VERSION="${{ needs.validate-release.outputs.version }}"
           VERSION_NO_V="${VERSION#v}"
-          
+
           # Only update charts if they exist
           if [ -d "helm/auth-service" ]; then
             yq eval ".version = \"$VERSION_NO_V\"" -i helm/auth-service/Chart.yaml
             yq eval ".appVersion = \"$VERSION_NO_V\"" -i helm/auth-service/Chart.yaml
           fi
-          
+
           if [ -d "helm/policy-service" ]; then
             yq eval ".version = \"$VERSION_NO_V\"" -i helm/policy-service/Chart.yaml
             yq eval ".appVersion = \"$VERSION_NO_V\"" -i helm/policy-service/Chart.yaml
@@ -280,7 +280,7 @@ jobs:
   # ============================================================================
   # GENERATE RELEASE NOTES
   # ============================================================================
-  
+
   generate-release-notes:
     name: Generate Release Notes
     runs-on: ubuntu-latest
@@ -299,50 +299,50 @@ jobs:
         run: |
           VERSION="${{ needs.validate-release.outputs.version }}"
           PREV_VERSION=$(git tag --sort=-version:refname | grep -v "$VERSION" | head -n1)
-          
+
           if [[ -z "$PREV_VERSION" ]]; then
             PREV_VERSION=$(git rev-list --max-parents=0 HEAD)
           fi
-          
+
           # Generate changelog
           cat > release-notes.md << EOF
           ## What's Changed
-          
+
           $(git log --pretty=format:"* %s (%h)" ${PREV_VERSION}..HEAD | grep -v "Merge pull request")
-          
+
           ## Security Updates
-          
+
           * All dependencies updated to latest secure versions
           * Container images signed with Cosign
           * SBOM included with release artifacts
-          
+
           ## Breaking Changes
-          
+
           _No breaking changes in this release_
-          
+
           ## Installation
-          
+
           ### Container Images
           \`\`\`
           docker pull ghcr.io/${{ github.repository }}:$VERSION
           \`\`\`
-          
+
           ### Helm Charts
           \`\`\`
           helm repo add rust-security https://github.com/${{ github.repository }}/releases/download/$VERSION
           helm install auth-service rust-security/auth-service --version ${VERSION#v}
           \`\`\`
-          
+
           ### Binary Downloads
-          
+
           * [Linux x86_64](https://github.com/${{ github.repository }}/releases/download/$VERSION/rust-security-linux-x86_64.tar.gz)
           * [Linux ARM64](https://github.com/${{ github.repository }}/releases/download/$VERSION/rust-security-linux-aarch64.tar.gz)
           * [macOS x86_64](https://github.com/${{ github.repository }}/releases/download/$VERSION/rust-security-macos-x86_64.tar.gz)
           * [macOS ARM64](https://github.com/${{ github.repository }}/releases/download/$VERSION/rust-security-macos-aarch64.tar.gz)
-          
+
           **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_VERSION}...${VERSION}
           EOF
-          
+
           # Use proper output format for multiline strings
           {
             echo 'notes<<EOF'
@@ -359,7 +359,7 @@ jobs:
   # ============================================================================
   # CREATE GITHUB RELEASE
   # ============================================================================
-  
+
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
@@ -383,7 +383,7 @@ jobs:
   # ============================================================================
   # NOTIFY RELEASE
   # ============================================================================
-  
+
   notify-release:
     name: Notify Release
     runs-on: ubuntu-latest
@@ -397,18 +397,18 @@ jobs:
           status: ${{ job.status }}
           text: |
             🚀 **Release ${{ needs.validate-release.outputs.version }}** is now available!
-            
+
             📦 **Artifacts:**
             • Container images signed with Cosign
             • Multi-platform binaries (Linux, macOS)
             • Helm charts for Kubernetes deployment
             • Complete SBOM for supply chain security
-            
+
             🔗 **Links:**
             • [Release Notes](https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate-release.outputs.version }})
             • [Container Registry](https://ghcr.io/${{ github.repository }})
             • [Documentation](https://github.com/${{ github.repository }}/tree/${{ needs.validate-release.outputs.version }}/docs)
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          # webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           fields: repo,message,commit,author,action,eventName,ref,workflow
         continue-on-error: true
 

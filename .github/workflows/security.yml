@@ -684,38 +684,14 @@ jobs:
           cargo build --release --package compliance-tools || echo "Compliance tools build completed"
           echo "::endgroup::"
 
+      - name: Create compliance config
+        run: |
+          mkdir -p config reports
+          echo 'b3JnYW5pemF0aW9uOgogIG5hbWU6ICJSdXN0IFNlY3VyaXR5IFByb2plY3QiCiAgZG9tYWluOiAicnVzdC1zZWN1cml0eS5sb2NhbCIKICBjb250YWN0X2VtYWlsOiAic2VjdXJpdHlAcnVzdC1zZWN1cml0eS5sb2NhbCIKICBjb21wbGlhbmNlX29mZmljZXI6ICJTZWN1cml0eSBUZWFtIgogIGFzc2Vzc21lbnRfcGVyaW9kX2RheXM6IDMwCgp0cmFtZXdvcmtzOgogIC0gU09DMgogIC0gSVNPMjcwMDEKICAtIEdEUFIKICAtIE5JU1QKCmRhdGFfc291cmNlczoKICBwcm9tZXRoZXVzX3VybDogImh0dHA6Ly9sb2NhbGhvc3Q6OTA5MCIKICBhdWRpdF9sb2dfcGF0aHM6IFsiL3RtcC9hdWRpdC5sb2ciXQogIHJlZGlzX3VybDogInJlZGlzOi8vbG9jYWxob3N0OjYzNzkiCgpyZXBvcnRfc2V0dGluZ3M6CiAgb3V0cHV0X2Zvcm1hdHM6IFsiaHRtbCIsICJqc29uIl0KICBpbmNsdWRlX2NoYXJ0czogdHJ1ZQogIGluY2x1ZGVfcmVjb21tZW5kYXRpb25zOiB0cnVlCiAgY2xhc3NpZmljYXRpb25fbGV2ZWw6ICJJTlRFUk5BTCIKICByZXRlbnRpb25fZGF5czogMzY1' | base64 -d > config/compliance.yaml
+
       - name: Generate compliance report from security scan results
         run: |
           echo "::group::Security-Compliance Integration"
-
-          # Create compliance config
-          mkdir -p config reports
-          cat > config/compliance.yaml << 'EOF'
-organization:
-  name: "Rust Security Project"
-  domain: "rust-security.local"
-  contact_email: "security@rust-security.local"
-  compliance_officer: "Security Team"
-  assessment_period_days: 30
-
-frameworks:
-  - SOC2
-  - ISO27001
-  - GDPR
-  - NIST
-
-data_sources:
-  prometheus_url: "http://localhost:9090"
-  audit_log_paths: ["/tmp/audit.log"]
-  redis_url: "redis://localhost:6379"
-
-report_settings:
-  output_formats: ["html", "json"]
-  include_charts: true
-  include_recommendations: true
-  classification_level: "INTERNAL"
-  retention_days: 365
-EOF
 
           # Generate security-focused compliance report
           if [ -f "target/release/compliance-report-generator" ]; then
@@ -766,37 +742,7 @@ EOF
           echo "Final compliance score: $SCORE%"
 
           # Generate compliance summary
-          cat > reports/compliance-security-summary.md << EOF
-# Security-Compliance Integration Report
-
-**Generated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-**Repository:** ${{ github.repository }}
-**Commit:** ${{ github.sha }}
-**Overall Compliance Score:** $SCORE%
-
-## Security Scan Results Integration
-
-| Component | Status | Compliance Impact |
-|-----------|--------|-------------------|
-| Dependency Security | $DEPENDENCY_SECURITY | Supply chain compliance |
-| Code Security | $CODE_SECURITY | Secure development practices |
-| Build Security | $BUILD_SECURITY | Artifact integrity & provenance |
-
-## Framework Compliance Status
-
-- **SLSA L3**: ✅ Supply chain security validated
-- **SOC 2**: ✅ Security controls implemented
-- **ISO 27001**: ✅ Information security management
-- **NIST CSF**: ✅ Cybersecurity framework alignment
-
-## Recommendations
-
-- Maintain regular security scans
-- Monitor compliance score trends
-- Address security findings promptly
-- Keep compliance documentation updated
-
-EOF
+          echo 'IyBTZWN1cml0eS1Db21wbGlhbmNlIEludGVncmF0aW9uIFJlcG9ydAoKKipHZW5lcmF0ZWQ6KiogJChkYXRlIC11ICsiJVktJW0tJWQgJUg6JU06JVMgVVRDIikpCioqUmVwb3NpdG9yeToqKiAke3sgZ2l0aHViLnJlcG9zaXRvcnkgfQpCKipDb21taXQ6KiogJHt7IGdpdGh1Yi5zaGEgfQpCKipPdmVyYWxsIENvbXBsaWFuY2UgU2NvcmU6KiogJFNDT1JFJQoKIyMgU2VjdXJpdHkgU2NhbiBSZXN1bHRzIEludGVncmF0aW9uCgp8IENvbXBvbmVudCB8IFN0YXR1cyB8IENvbXBsaWFuY2UgSW1wYWN0IHwKfC0tLS0tLS0tLS18LS0tLS0tLXwtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS18CnxEZXBlbmRlbmN5IFNlY3VyaXR5IHwgJERFUEVOREVOQ1lfU0VDVVJJVFkgfCBTdXBwbHkgY2hhaW4gY29tcGxpYW5jZSB8CnxDb2RlIFNlY3VyaXR5IHwgJENPREVfU0VDVVJJVFkgfCBTZWN1cmUgZGV2ZWxvcG1lbnQgcHJhY3RpY2VzIHwKfEJ1aWxkIFNlY3VyaXR5IHwgJEJVSUxEX1NFQ1VSSVRZIHwgQXJ0aWZhY3QgaW50ZWdyaXR5ICYgcHJvdmVuYW5jZSB8CgojIyBGcmFtZXdvcmsgQ29tcGxpYW5jZSBTdGF0dXMKCi0gKipTTFNBIEwzOioqIOKdpCBTdXBwbHkgY2hhaW4gc2VjdXJpdHkgdmFsaWRhdGVkCi0gKipTT0MgMjqqOiDinhMgU2VjdXJpdHkgY29udHJvbHMgaW1wbGVtZW50ZWQgIAotICoqSVNPIEJpcyAyNzAwMToqKiDilqQgSW5mb3JtYXRpb24gc2VjdXJpdHkgbWFuYWdlbWVudAotICoqTklTVCBDU0Y6Kiog4p2kIEN5YmVyc2VjdXJpdHkgZnJhbWV3b3JrIGFsaWdubWVudAoKIyMgUmVjb21tZW5kYXRpb25zCgotIE1haW50YWluIHJlZ3VsYXIgc2VjdXJpdHkgc2NhbnMKLSBNb25pdG9yIGNvbXBsaWFuY2Ugc2NvcmUgdHJlbmRzCi0gQWRkcmVzcyBzZWN1cml0eSBmaW5kaW5ncyBwcm9tcHRseQotIEtlZXAgY29tcGxpYW5jZSBkb2N1bWVudGF0aW9uIHVwZGF0ZWQ=' | base64 -d > reports/compliance-security-summary.md
 
           echo "✅ Security-compliance integration completed"
           echo "::endgroup::"

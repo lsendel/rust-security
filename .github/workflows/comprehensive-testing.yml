@@ -95,12 +95,6 @@ jobs:
   policy-service:
     name: Policy Service (Isolated)
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
     services:
       redis:
         image: redis:7-alpine
@@ -129,6 +123,12 @@ jobs:
       DATABASE_URL: postgres://postgres:test_password@localhost:5432/test_db
       REDIS_URL: redis://localhost:6379
       RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build -p policy-service --all-features --locked
       - name: Test
@@ -139,10 +139,9 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.os }}-${{ matrix.rust }}-${{ matrix.features }}
+          key: ubuntu-latest-stable-default
 
       - name: Install test dependencies
-        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client redis-tools
@@ -178,7 +177,7 @@ jobs:
       - name: Configure feature set
         id: features
         run: |
-          case "${{ matrix.features }}" in
+          case "default" in
             "all")
               echo "cargo_features=--all-features" >> $GITHUB_OUTPUT
               ;;
@@ -199,7 +198,7 @@ jobs:
           REDIS_URL: redis://localhost:6379
           CONFIG_PATH: test-config/test.toml
         run: |
-          echo "🧪 Running unit tests with ${{ matrix.features }} features..."
+          echo "🧪 Running unit tests with default features..."
           if command -v cargo-nextest >/dev/null 2>&1; then
             cargo nextest run ${{ steps.features.outputs.cargo_features }} --workspace
           else
@@ -207,7 +206,6 @@ jobs:
           fi
 
       - name: Run integration tests
-        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
         env:
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
@@ -221,7 +219,6 @@ jobs:
           fi
 
       - name: Generate test coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable' && matrix.features == 'all'
         env:
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
@@ -231,7 +228,6 @@ jobs:
           cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable' && matrix.features == 'all'
         uses: codecov/codecov-action@v3
         with:
           files: lcov.info
@@ -536,17 +532,17 @@ jobs:
       - name: Run automated threat model tests
         run: |
           echo "🎯 Running automated threat model tests..."
-          
+
           # Run comprehensive security integration tests
           if [ -f "tests/comprehensive_security_integration_tests.rs" ]; then
             cargo test --test comprehensive_security_integration_tests -- --nocapture || echo "Comprehensive security tests completed"
           fi
-          
+
           # Run chaos engineering security tests
           if [ -f "tests/chaos_engineering_security_tests.rs" ]; then
             cargo test --test chaos_engineering_security_tests -- --nocapture || echo "Chaos engineering tests completed"
           fi
-          
+
           # Run threat-specific validation tests
           cargo test --workspace threat_model -- --nocapture || echo "Threat model tests completed"
           cargo test --workspace attack_simulation -- --nocapture || echo "Attack simulation tests completed"

@@ -32,7 +32,7 @@ jobs:
 
       - name: Check MVP compilation
         run: cargo check --workspace --no-default-features --features security-essential
-        
+
       - name: Check with all MVP features
         run: cargo check --workspace --features security-essential,redis-sessions,postgres,metrics,api-keys
 
@@ -136,7 +136,7 @@ jobs:
             test-type: unit
             test-command: "cargo test --workspace --lib --bins"
             test-threads: "4"
-          - os: ubuntu-latest  
+          - os: ubuntu-latest
             test-type: integration-shared
             test-command: "cargo test --workspace --test example_shared_integration_test"
             test-threads: "1"
@@ -295,6 +295,3 @@ jobs:
           fi
           echo "🎉 All CI checks passed!"
 
-      - name: Performance summary
-        if: needs.performance-tests.result == 'success'
-        run: echo "⚡ Performance tests passed"
