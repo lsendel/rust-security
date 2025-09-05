@@ -331,11 +331,13 @@ impl Default for ClientMetadata {
     }
 }
 
+#[cfg(feature = "api-keys")]
 use crate::api_key_store::ApiKeyStore;
 
 // ... (keep ClientAuthenticator and ClientMetadata structs}
 
 /// Authenticate a client using either the new API key store or the legacy client authenticator.
+#[cfg(feature = "api-keys")]
 pub async fn authenticate_client(
     api_key_store: &ApiKeyStore,
     legacy_authenticator: &ClientAuthenticator,
@@ -378,6 +380,18 @@ pub async fn authenticate_client(
     }
 
     // Fallback to legacy authenticator
+    legacy_authenticator.authenticate_client(client_id, client_secret, ip_address)
+}
+
+/// Authenticate a client using only the legacy client authenticator (when api-keys feature is disabled).
+#[cfg(not(feature = "api-keys"))]
+pub async fn authenticate_client(
+    legacy_authenticator: &ClientAuthenticator,
+    client_id: &str,
+    client_secret: &str,
+    ip_address: Option<&str>,
+) -> Result<bool, crate::shared::error::AppError> {
+    // Use only legacy authenticator when api-keys feature is disabled
     legacy_authenticator.authenticate_client(client_id, client_secret, ip_address)
 }
 

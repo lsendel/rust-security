@@ -1,0 +1,64 @@
+[package]
+name = "policy-service"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT OR Apache-2.0"
+description = "MVP Policy validation service with enhanced security"
+authors = ["Security Team"]
+repository = "https://github.com/lsendel/rust-security"
+readme = "README.md"
+keywords = ["policy", "authorization", "security", "mvp"]
+categories = ["web-programming::http-server", "authentication"]
+
+[dependencies]
+# Core MVP dependencies using workspace versions
+axum = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+url = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
+once_cell = { workspace = true }
+
+# Policy engine dependencies
+cedar-policy = { workspace = true }
+cedar-policy-core = { workspace = true }
+
+# HTTP and tower dependencies
+tower-http = { workspace = true, features = ["cors", "fs", "trace", "request-id"] }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+
+# Environment and configuration
+dotenvy = { workspace = true }
+
+# Optional metrics (MVP-compatible)
+prometheus = { workspace = true, optional = true }
+
+# Reference to workspace members
+common = { path = "../common" }
+
+[dev-dependencies]
+reqwest = { workspace = true, default-features = false, features = ["json", "native-tls"] }
+tempfile = { workspace = true }
+futures = { workspace = true }
+
+[lib]
+name = "policy_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "policy-service"
+path = "src/main.rs"
+
+[features]
+default = ["prom-client"]
+prometheus-backend = ["dep:prometheus"]
+prom-client = []
+mvp-essential = ["prom-client"]

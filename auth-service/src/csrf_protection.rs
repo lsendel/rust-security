@@ -142,17 +142,32 @@ impl CsrfToken {
         Ok(URL_SAFE_NO_PAD.encode(signature))
     }
 
-    /// Verify HMAC signature
+    /// Verify HMAC signature using constant-time comparison
+    ///
+    /// # Security
+    ///
+    /// Uses the `hmac` crate's built-in constant-time verification to prevent
+    /// timing attacks. This is more secure than custom implementations.
     ///
     /// # Errors
     ///
     /// Returns `CsrfError::InvalidSecretKey` if the secret key is invalid for HMAC
     pub fn verify(&self, signature: &str, secret_key: &[u8]) -> Result<bool, CsrfError> {
-        let expected_signature = self.sign(secret_key)?;
-        Ok(constant_time_eq(
-            signature.as_bytes(),
-            expected_signature.as_bytes(),
-        ))
+        // Create HMAC instance with the secret key
+        let mut mac =
+            HmacSha256::new_from_slice(secret_key).map_err(|_| CsrfError::InvalidSecretKey)?;
+
+        // Add the token data to HMAC
+        mac.update(self.token.as_bytes());
+        mac.update(self.expires_at.to_string().as_bytes());
+
+        // Decode the provided signature
+        let signature_bytes = URL_SAFE_NO_PAD
+            .decode(signature)
+            .map_err(|_| CsrfError::InvalidSignature)?;
+
+        // Use hmac's constant-time verification
+        Ok(mac.verify_slice(&signature_bytes).is_ok())
     }
 }
 
@@ -167,6 +182,8 @@ pub enum CsrfError {
     TokenExpired,
     #[error("CSRF token signature invalid")]
     SignatureInvalid,
+    #[error("Invalid signature format")]
+    InvalidSignature,
     #[error("Invalid secret key")]
     InvalidSecretKey,
     #[error("Token generation failed")]
@@ -376,19 +393,6 @@ pub async fn csrf_middleware<S: ::std::hash::BuildHasher + Send + Sync>(
     Ok(())
 }
 
-/// Constant-time string comparison to prevent timing attacks
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-
-    let mut result = 0u8;
-    for (x, y) in a.iter().zip(b.iter()) {
-        result |= x ^ y;
-    }
-    result == 0
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,12 +500,5 @@ mod tests {
 
         let stats = csrf.get_token_stats().await;
         assert_eq!(stats.active_tokens, 0);
-    }
-
-    #[test]
-    fn test_constant_time_eq() {
-        assert!(constant_time_eq(b"hello", b"hello"));
-        assert!(!constant_time_eq(b"hello", b"world"));
-        assert!(!constant_time_eq(b"hello", b"hello world"));
     }
 }

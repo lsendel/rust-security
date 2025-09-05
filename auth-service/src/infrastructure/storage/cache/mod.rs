@@ -27,6 +27,7 @@ use async_trait::async_trait;
 use std::fmt::Debug;
 
 // Error conversion imports
+#[cfg(feature = "redis-sessions")]
 use redis;
 use serde_json;
 
@@ -72,6 +73,7 @@ pub struct CacheStats {
 /// Common cache error type
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
+    #[cfg(feature = "redis-sessions")]
     #[error("Redis connection error: {0}")]
     RedisError(#[from] redis::RedisError),
     #[error("Serialization error: {0}")]

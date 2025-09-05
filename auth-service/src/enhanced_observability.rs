@@ -20,7 +20,7 @@ use tracing::Instrument;
 use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use crate::{
     business_metrics::BusinessMetricsRegistry, metrics::MetricsRegistry,
     security_metrics::SecurityMetrics,
@@ -138,15 +138,15 @@ pub struct EnhancedObservability {
     /// Active alerts
     alerts: Arc<RwLock<HashMap<String, Alert>>>,
     /// Metrics registry
-    #[cfg(feature = "monitoring")]
+    #[cfg(feature = "metrics")]
     metrics_registry: Arc<MetricsRegistry>,
     /// Security metrics
-    #[cfg(feature = "monitoring")]
+    #[cfg(feature = "metrics")]
     security_metrics: Arc<SecurityMetrics>,
     /// Business metrics
-    #[cfg(feature = "monitoring")]
+    #[cfg(feature = "metrics")]
     business_metrics: Arc<BusinessMetricsRegistry>,
-    #[cfg(not(feature = "monitoring"))]
+    #[cfg(not(feature = "metrics"))]
     business_metrics: Arc<crate::business_metrics::BusinessMetricsHelper>,
 }
 
@@ -192,14 +192,14 @@ impl Default for ObservabilityConfig {
 
 impl EnhancedObservability {
     /// Initialize enhanced observability system
-    #[cfg(feature = "monitoring")]
+    #[cfg(feature = "metrics")]
     #[instrument(skip_all)]
     pub async fn new(
         config: ObservabilityConfig,
         sli_config: SliConfig,
         metrics_registry: Arc<MetricsRegistry>,
         security_metrics: Arc<SecurityMetrics>,
-        #[cfg(feature = "monitoring")] business_metrics: Arc<BusinessMetricsRegistry>,
+        #[cfg(feature = "metrics")] business_metrics: Arc<BusinessMetricsRegistry>,
     ) -> Result<Self> {
         info!("Initializing enhanced observability system");
 
@@ -227,11 +227,11 @@ impl EnhancedObservability {
             performance_profiles: Arc::new(RwLock::new(HashMap::new())),
             health_status,
             alerts: Arc::new(RwLock::new(HashMap::new())),
-            #[cfg(feature = "monitoring")]
+            #[cfg(feature = "metrics")]
             metrics_registry,
-            #[cfg(feature = "monitoring")]
+            #[cfg(feature = "metrics")]
             security_metrics,
-            #[cfg(feature = "monitoring")]
+            #[cfg(feature = "metrics")]
             business_metrics,
         };
 
@@ -243,7 +243,7 @@ impl EnhancedObservability {
     }
 
     /// Initialize minimal observability system without monitoring features
-    #[cfg(not(feature = "monitoring"))]
+    #[cfg(not(feature = "metrics"))]
     #[instrument(skip_all)]
     pub async fn new_minimal(
         config: ObservabilityConfig,

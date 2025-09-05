@@ -186,6 +186,27 @@ pub enum IndicatorType {
     Other,
 }
 
+impl std::fmt::Display for IndicatorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            IndicatorType::IpAddress => "ip_address",
+            IndicatorType::Domain => "domain",
+            IndicatorType::Url => "url",
+            IndicatorType::FileHash => "file_hash",
+            IndicatorType::EmailAddress => "email_address",
+            IndicatorType::UserAgent => "user_agent",
+            IndicatorType::JwtToken => "jwt_token",
+            IndicatorType::SessionId => "session_id",
+            IndicatorType::DeviceFingerprint => "device_fingerprint",
+            IndicatorType::BehaviorPattern => "behavior_pattern",
+            IndicatorType::NetworkPattern => "network_pattern",
+            IndicatorType::TimePattern => "time_pattern",
+            IndicatorType::Other => "other",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 impl ThreatIndicator {
     #[must_use]
     pub fn new(

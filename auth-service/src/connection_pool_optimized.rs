@@ -2,7 +2,7 @@ use dashmap::DashMap;
 use deadpool_redis::{
     Config as RedisConfig, Connection as RedisConnection, Pool as RedisPool, Runtime,
 };
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 use bb8_redis::RedisConnectionManager;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -135,7 +135,7 @@ pub struct PoolStatistics {
 /// Optimized connection pool manager with security-focused features
 pub struct OptimizedConnectionPool {
     redis_pool: RedisPool,
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     bb8_pool: Arc<bb8::Pool<RedisConnectionManager>>,
     multiplexed_pool: Option<Arc<RwLock<Vec<redis::aio::MultiplexedConnection>>>>,
     config: ConnectionPoolConfig,
@@ -165,7 +165,7 @@ impl OptimizedConnectionPool {
         let redis_pool = redis_config.create_pool(Some(Runtime::Tokio1))?;
 
         // Create bb8 pool for high-concurrency operations
-        #[cfg(feature = "enhanced-session-store")]
+        #[cfg(feature = "redis-sessions")]
         let bb8_pool = {
             let manager = RedisConnectionManager::new(redis_url)?;
             Arc::new(
@@ -224,7 +224,7 @@ impl OptimizedConnectionPool {
 
         let pool = Self {
             redis_pool,
-            #[cfg(feature = "enhanced-session-store")]
+            #[cfg(feature = "redis-sessions")]
             bb8_pool,
             multiplexed_pool,
             config: config.clone(),
@@ -377,7 +377,7 @@ impl OptimizedConnectionPool {
         let mut stats = self.statistics.read().await.clone();
 
         // Update real-time statistics from bb8 pool
-        #[cfg(feature = "enhanced-session-store")]
+        #[cfg(feature = "redis-sessions")]
         {
             let pool_state = self.bb8_pool.state();
             stats.active_connections = pool_state.connections;
@@ -479,7 +479,7 @@ impl Clone for OptimizedConnectionPool {
     fn clone(&self) -> Self {
         Self {
             redis_pool: self.redis_pool.clone(),
-            #[cfg(feature = "enhanced-session-store")]
+            #[cfg(feature = "redis-sessions")]
             bb8_pool: self.bb8_pool.clone(),
             multiplexed_pool: self.multiplexed_pool.clone(),
             config: self.config.clone(),

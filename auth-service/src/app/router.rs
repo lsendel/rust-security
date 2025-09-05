@@ -6,7 +6,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use tower_http::cors::{Any, CorsLayer};
+use axum::http::{header, HeaderValue, Method};
+use tower_http::cors::CorsLayer;
 
 use crate::app::AppContainer;
 use crate::handlers;
@@ -14,10 +15,23 @@ use crate::handlers;
 
 /// Create the application router
 pub fn create_router(container: AppContainer) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // Secure CORS: default deny; allow only if ALLOWED_ORIGINS is set
+    let cors = match std::env::var("ALLOWED_ORIGINS") {
+        Ok(origins) if !origins.trim().is_empty() => {
+            let mut layer = CorsLayer::new()
+                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]);
+            for o in origins.split(',') {
+                if let Ok(origin) = o.trim().parse::<HeaderValue>() {
+                    layer = layer.allow_origin(origin);
+                }
+            }
+            layer
+        }
+        _ => CorsLayer::new()
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
+    };
 
     // Create metrics middleware
     // let metrics_middleware = MetricsMiddleware::new(container.metrics_collector.clone());  // Temporarily disabled

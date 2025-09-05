@@ -225,7 +225,7 @@ pub async fn admin_auth_middleware(
 /// Extract admin key from Bearer token for rate limiting and logging
 async fn extract_admin_key(
     headers: &HeaderMap,
-    state: &AppState,
+    _state: &AppState,
 ) -> Result<String, crate::shared::error::AppError> {
     // Extract bearer token
     let auth = headers
@@ -246,22 +246,22 @@ async fn extract_admin_key(
     }
 
     // Validate token and extract record
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     let record = state.store.get_token_record(token).await?.ok_or_else(|| {
         crate::shared::error::AppError::InvalidToken("Token not found or invalid".to_string())
     })?;
 
-    #[cfg(not(feature = "enhanced-session-store"))]
-    let record = crate::store::TokenRecord {
-        token: token.to_string(),
-        user_id: "admin".to_string(),
+    #[cfg(not(feature = "redis-sessions"))]
+    let record = common::TokenRecord {
         active: true,
-        expires_at: SystemTime::now() + std::time::Duration::from_secs(3600),
-        created_at: SystemTime::now(),
-        last_used: SystemTime::now(),
-        permissions: vec!["admin".to_string()],
-        metadata: std::collections::HashMap::new(),
         scope: Some("admin".to_string()),
+        client_id: Some("admin_client".to_string()),
+        exp: Some((SystemTime::now() + std::time::Duration::from_secs(3600))
+            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+        iat: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+        sub: Some("admin".to_string()),
+        token_binding: None,
+        mfa_verified: true,
     };
 
     // Check if token is active
@@ -290,7 +290,7 @@ async fn extract_admin_key(
 /// Enhanced admin scope validation
 async fn require_admin_scope(
     headers: &HeaderMap,
-    state: &AppState,
+    _state: &AppState,
 ) -> Result<(), crate::shared::error::AppError> {
     // Extract bearer token
     let auth = headers
@@ -311,22 +311,22 @@ async fn require_admin_scope(
     }
 
     // Validate token and extract record
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     let record = state.store.get_token_record(token).await?.ok_or_else(|| {
         crate::shared::error::AppError::InvalidToken("Token not found or invalid".to_string())
     })?;
 
-    #[cfg(not(feature = "enhanced-session-store"))]
-    let record = crate::store::TokenRecord {
-        token: token.to_string(),
-        user_id: "admin".to_string(),
+    #[cfg(not(feature = "redis-sessions"))]
+    let record = common::TokenRecord {
         active: true,
-        expires_at: SystemTime::now() + std::time::Duration::from_secs(3600),
-        created_at: SystemTime::now(),
-        last_used: SystemTime::now(),
-        permissions: vec!["admin".to_string()],
-        metadata: std::collections::HashMap::new(),
         scope: Some("admin".to_string()),
+        client_id: Some("admin_client".to_string()),
+        exp: Some((SystemTime::now() + std::time::Duration::from_secs(3600))
+            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+        iat: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
+        sub: Some("admin".to_string()),
+        token_binding: None,
+        mfa_verified: true,
     };
 
     // Check if token is active
@@ -769,8 +769,9 @@ mod tests {
             .unwrap()
             .as_secs();
 
+        let secret_key = config.signing_secret.as_ref().unwrap();
         let signature = ReplayProtection::create_signature(
-            "test_secret_key",
+            secret_key,
             "POST",
             "/admin/test",
             &nonce,

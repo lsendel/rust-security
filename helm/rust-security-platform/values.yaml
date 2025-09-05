@@ -14,7 +14,8 @@ authService:
   
   image:
     repository: your-org/rust-security-platform
-    tag: "latest"
+    # Avoid 'latest' in production; pin to a released tag
+    tag: "v0.1.0"
     pullPolicy: IfNotPresent
   
   service:
@@ -86,7 +87,8 @@ policyService:
 postgresql:
   enabled: true
   auth:
-    postgresPassword: "changeme"
+    # REQUIRED: set via externalSecret or Helm values at deploy time
+    postgresPassword: ""
     database: "rust_security"
   primary:
     persistence:
@@ -105,7 +107,8 @@ redis:
   enabled: true
   auth:
     enabled: true
-    password: "changeme"
+    # REQUIRED: set via externalSecret or Helm values at deploy time
+    password: ""
   master:
     persistence:
       enabled: true
@@ -129,7 +132,8 @@ monitoring:
   
   grafana:
     enabled: true
-    adminPassword: "changeme"
+    # REQUIRED: set via externalSecret or Helm values at deploy time
+    adminPassword: ""
     dashboards:
       enabled: true
 
@@ -137,9 +141,9 @@ monitoring:
 security:
   networkPolicies:
     enabled: true
-  
+  # PodSecurityPolicy is deprecated; use Pod Security Admission instead
   podSecurityPolicy:
-    enabled: true
+    enabled: false
   
   rbac:
     create: true
@@ -148,11 +152,23 @@ security:
     create: true
     annotations: {}
 
+  # Hardened defaults for pods/containers
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+
 # Configuration
 config:
   # JWT Configuration
   jwt:
-    secret: "your-jwt-secret-here"
+    # REQUIRED: set via external secret
+    secret: ""
     expirationHours: 24
   
   # OAuth Configuration

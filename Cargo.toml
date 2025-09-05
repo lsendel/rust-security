@@ -2,30 +2,17 @@
 edition = "2021"
 rust-version = "1.80"
 
-# Enhanced workspace with compliance tools enabled
+# MVP-focused workspace with 4 core crates
 [workspace]
 members = [
-    "auth-service",
-    "policy-service",
-    "common",
-    "compliance-tools"     # Re-enabled for compliance automation
+    "auth-service",        # Main Auth-as-a-Service (legacy - has compilation issues)
+    "mvp-oauth-service",   # Standalone MVP OAuth service (production ready)
+    "common",              # Shared utilities
+    "mvp-tools"            # Essential tooling only
 ]
 
-# Non-essential components remain excluded for stability
-exclude = [
-    "red-team-exercises",
-    "user-portal",
-    "security-platform",
-    "input-validation",
-    "chaos-engineering",
-    "security-testing",
-    # Moved to exclude - can be re-enabled in development
-    "auth-core",           # Functionality merged into auth-service
-    "api-contracts",       # OpenAPI specs - not needed for runtime
-    "examples",            # Development examples
-    "soar-integration",    # Advanced SOAR - experimental
-    "security-features"    # Experimental security features
-]
+# Enterprise components moved to /enterprise folder for post-MVP
+# All complex features archived for focused MVP development
 
 resolver = "2"
 
@@ -43,10 +30,10 @@ rust.unsafe_code = "forbid"
 clippy.all = { level = "warn", priority = -1 }
 clippy.pedantic = "allow"  # Too strict for production code
 clippy.nursery = "allow"   # Experimental lints
-clippy.cargo = "allow"  # Suppress cargo-related warnings including multiple crate versions
+clippy.cargo = "allow"  # Suppress cargo-related warnings
+clippy.multiple_crate_versions = "allow"  # Suppress dependency version conflicts
 
 # Specific allow rules for acceptable patterns in this codebase
-clippy.multiple_crate_versions = "allow"  # Transitive deps hard to control
 clippy.too_many_arguments = "allow"       # Complex APIs may need many params
 clippy.type_complexity = "allow"          # Complex types common in async code
 clippy.large_enum_variant = "allow"       # Large variants needed for error types
@@ -238,14 +225,20 @@ vaultrs = "0.7"
 # ===== WEB SERVER =====
 axum-server = "0.7"
 
+# ===== DEPENDENCY VERSION OVERRIDES =====
+# Force unified versions to resolve multiple crate version conflicts
+getrandom = "0.3"
+socket2 = "0.6"
+wasi = "0.14"
+
 [profile.dev]
-opt-level = 1
-debug = true
+opt-level = 0          # Disable optimization for faster builds
+debug = "line-tables-only"  # Faster debug info generation
 incremental = true
 split-debuginfo = "unpacked"
 overflow-checks = true
-# Faster builds in development
-codegen-units = 16
+# Reduce codegen units for faster linking
+codegen-units = 4
 
 [profile.release]
 opt-level = 3
@@ -259,11 +252,11 @@ overflow-checks = true
 rpath = false
 
 [profile.test]
-opt-level = 1
-debug = true
+opt-level = 0          # Disable optimization for faster test builds
+debug = "line-tables-only"  # Faster debug info generation
 incremental = true
-# Faster test compilation
-codegen-units = 8
+# Faster test compilation with fewer units
+codegen-units = 4
 overflow-checks = true
 
 [profile.bench]

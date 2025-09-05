@@ -84,6 +84,13 @@ impl PasswordService {
             ));
         }
 
+        // Enhanced password strength validation
+        if !self.is_password_strong_enough(password) {
+            return Err(AppError::Validation(
+                "Password does not meet strength requirements. Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character".to_string(),
+            ));
+        }
+
         // Generate random salt
         let mut salt = vec![0u8; self.config.salt_length];
         rand::thread_rng().fill(&mut salt[..]);
@@ -185,6 +192,24 @@ impl PasswordService {
         Ok(constant_time_compare_bytes(&computed_hash, &stored_hash))
     }
 
+    /// Check if a password meets strength requirements
+    fn is_password_strong_enough(&self, password: &str) -> bool {
+        // Check for at least one uppercase letter
+        let has_uppercase = password.chars().any(|c| c.is_uppercase());
+        
+        // Check for at least one lowercase letter  
+        let has_lowercase = password.chars().any(|c| c.is_lowercase());
+        
+        // Check for at least one digit
+        let has_digit = password.chars().any(|c| c.is_ascii_digit());
+        
+        // Check for at least one special character
+        let has_special = password.chars().any(|c| !c.is_alphanumeric());
+        
+        // All requirements must be met
+        has_uppercase && has_lowercase && has_digit && has_special
+    }
+
     /// Check if a password hash needs rehashing (e.g., due to parameter changes)
     #[must_use]
     pub fn needs_rehash(&self, hash: &PasswordHash) -> bool {
@@ -244,7 +269,7 @@ mod tests {
     #[test]
     fn test_password_hashing() {
         let service = PasswordService::new();
-        let password = "test_password_123";
+        let password = "StrongP@ssw0rd123!";
 
         let hash = service.hash_password(password).unwrap();
         assert!(hash.as_str().starts_with("$argon2id$"));
@@ -261,15 +286,18 @@ mod tests {
         // Short password should fail
         assert!(service.hash_password("short").is_err());
 
-        // Valid password should work
-        assert!(service.hash_password("valid_password_123").is_ok());
+        // Weak passwords should fail
+        assert!(service.hash_password("valid_password_123").is_err());
+        
+        // Valid strong password should work
+        assert!(service.hash_password("StrongP@ssw0rd123!").is_ok());
     }
 
     #[test]
     fn test_password_verification() {
         let service = PasswordService::new();
-        let password = "test_password_123";
-        let wrong_password = "wrong_password";
+        let password = "StrongP@ssw0rd123!";
+        let wrong_password = "Wr0ngP@ssw0rd!";
 
         // Hash the password
         let hash = service.hash_password(password).unwrap();
@@ -314,7 +342,7 @@ mod tests {
         };
 
         let service = PasswordService::with_config(config);
-        let hash = service.hash_password("test_password").unwrap();
+        let hash = service.hash_password("StrongP@ssw0rd123!").unwrap();
 
         // Verify the hash contains the custom parameters
         assert!(hash.as_str().contains("m=32768,t=2,p=2"));
@@ -326,16 +354,16 @@ mod tests {
 
         // Current format should not need rehash
         let current_hash =
-            PasswordHash::new("$argon2id$v=19$m=65536,t=3,p=4$test$hash".to_string()).unwrap();
+            PasswordHash::new("$argon2id$v=19$m=65536,t=3,p=4$testsalt$hash".to_string()).unwrap();
         assert!(!service.needs_rehash(&current_hash));
 
         // Different algorithm should need rehash
-        let old_hash = PasswordHash::new("$2b$12$test".to_string()).unwrap();
+        let old_hash = PasswordHash::new("$2b$12$LQH7rPZCXqOQKj7JTzZPue".to_string()).unwrap();
         assert!(service.needs_rehash(&old_hash));
 
         // Different parameters should need rehash
         let different_params =
-            PasswordHash::new("$argon2id$v=19$m=32768,t=2,p=2$test$hash".to_string()).unwrap();
+            PasswordHash::new("$argon2id$v=19$m=32768,t=2,p=2$testsalt$hash".to_string()).unwrap();
         assert!(service.needs_rehash(&different_params));
     }
 }

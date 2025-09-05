@@ -1,4 +1,6 @@
+#[cfg(feature = "redis-sessions")]
 use redis::aio::MultiplexedConnection;
+#[cfg(feature = "redis-sessions")]
 use redis::{Client, RedisError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -6,6 +8,7 @@ use thiserror::Error;
 /// Simple error type for token operations
 #[derive(Debug, Error)]
 pub enum TokenError {
+    #[cfg(feature = "redis-sessions")]
     #[error("Redis connection error: {0}")]
     Connection(#[from] RedisError),
     #[error("Token not found")]
@@ -23,10 +26,34 @@ pub struct TokenData {
 }
 
 /// Simple async Redis token storage for MVP
+#[cfg(feature = "redis-sessions")]
 pub struct AsyncTokenStorage {
     client: Client,
 }
 
+#[cfg(not(feature = "redis-sessions"))]
+pub struct AsyncTokenStorage;
+
+#[cfg(not(feature = "redis-sessions"))]
+impl AsyncTokenStorage {
+    pub fn new(_redis_url: &str) -> Result<Self, TokenError> {
+        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+    }
+
+    pub async fn store_token(&self, _token: &str, _data: &TokenData) -> Result<(), TokenError> {
+        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+    }
+
+    pub async fn get_token(&self, _token: &str) -> Result<Option<TokenData>, TokenError> {
+        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+    }
+
+    pub async fn delete_token(&self, _token: &str) -> Result<bool, TokenError> {
+        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+    }
+}
+
+#[cfg(feature = "redis-sessions")]
 impl AsyncTokenStorage {
     /// Create a new async token storage with simple Redis connection
     ///

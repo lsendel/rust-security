@@ -145,6 +145,7 @@ pub struct DatabaseConfig {
 /// Application error for dependency injection
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    #[cfg(feature = "postgres")]
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
     // #[error("Redis error: {0}")]
@@ -154,6 +155,7 @@ pub enum AppError {
 }
 
 /// Helper function to create `PostgreSQL` connection pool
+#[cfg(feature = "postgres")]
 #[allow(dead_code)] // TODO: Will be used when PostgreSQL implementation is completed
 fn create_postgres_pool(_config: &DatabaseConfig) -> Result<sqlx::PgPool, AppError> {
     // TODO: Implement PostgreSQL connection pool creation

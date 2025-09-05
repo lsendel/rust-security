@@ -1,4 +1,6 @@
 #![cfg(feature = "property-tests")]
+#![allow(clippy::multiple_crate_versions)]
+
 //! Enhanced Property-Based Testing Suite
 //!
 //! Comprehensive property-based tests for critical security components,

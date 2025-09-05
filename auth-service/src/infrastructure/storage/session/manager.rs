@@ -179,13 +179,17 @@ impl Session {
 /// Session manager with Redis backend
 pub struct SessionManager {
     config: SessionConfig,
+    #[cfg(feature = "redis-sessions")]
     redis_client: Option<redis::Client>,
+    #[cfg(not(feature = "redis-sessions"))]
+    redis_client: Option<()>,
     // Fallback in-memory store for when Redis is unavailable
     memory_store: Arc<RwLock<HashMap<String, Session>>>,
 }
 
 impl SessionManager {
     pub fn new(config: SessionConfig) -> Self {
+        #[cfg(feature = "redis-sessions")]
         let redis_client = if let Ok(redis_url) = std::env::var("REDIS_URL") {
             match redis::Client::open(redis_url) {
                 Ok(client) => {
@@ -199,6 +203,12 @@ impl SessionManager {
             }
         } else {
             info!("No Redis URL provided, using in-memory session store");
+            None
+        };
+
+        #[cfg(not(feature = "redis-sessions"))]
+        let redis_client = {
+            info!("Redis feature not enabled, using in-memory session store only");
             None
         };
 
@@ -288,6 +298,7 @@ impl SessionManager {
     ///
     /// Returns `SessionError` if both Redis and memory store access fail
     pub async fn get_session(&self, session_id: &str) -> Result<Option<Session>, SessionError> {
+        #[cfg(feature = "redis-sessions")]
         if let Some(client) = &self.redis_client {
             match self.get_session_from_redis(client, session_id).await {
                 Ok(session) => return Ok(session),
@@ -318,6 +329,7 @@ impl SessionManager {
     /// Returns `SessionError` if session deletion fails from storage
     pub async fn delete_session(&self, session_id: &str) -> Result<(), SessionError> {
         // Try Redis first
+        #[cfg(feature = "redis-sessions")]
         if let Some(client) = &self.redis_client {
             match self.delete_session_from_redis(client, session_id).await {
                 Ok(()) => {
@@ -468,6 +480,7 @@ impl SessionManager {
     /// Private helper methods
     async fn store_session(&self, session: &Session) -> Result<(), SessionError> {
         // Try Redis first
+        #[cfg(feature = "redis-sessions")]
         if let Some(client) = &self.redis_client {
             match self.store_session_to_redis(client, session).await {
                 Ok(()) => return Ok(()),
@@ -483,6 +496,7 @@ impl SessionManager {
         Ok(())
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn get_session_from_redis(
         &self,
         client: &redis::Client,
@@ -506,6 +520,7 @@ impl SessionManager {
         }
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn store_session_to_redis(
         &self,
         client: &redis::Client,
@@ -549,6 +564,7 @@ impl SessionManager {
         Ok(())
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn delete_session_from_redis(
         &self,
         client: &redis::Client,
@@ -579,6 +595,7 @@ impl SessionManager {
         let mut sessions = Vec::with_capacity(DEFAULT_SESSION_CAPACITY);
 
         // Try Redis first
+        #[cfg(feature = "redis-sessions")]
         if let Some(client) = &self.redis_client {
             match self.get_user_sessions_from_redis(client, user_id).await {
                 Ok(redis_sessions) => return Ok(redis_sessions),
@@ -599,6 +616,7 @@ impl SessionManager {
         Ok(sessions)
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn get_user_sessions_from_redis(
         &self,
         client: &redis::Client,
@@ -671,6 +689,7 @@ pub enum SessionError {
     NotFound,
     #[error("Session expired")]
     Expired,
+    #[cfg(feature = "redis-sessions")]
     #[error("Redis error: {0}")]
     Redis(#[from] redis::RedisError),
     #[error("Serialization error: {0}")]

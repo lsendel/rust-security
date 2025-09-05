@@ -1,5 +1,6 @@
 use crate::mfa::errors::{MfaError, MfaResult};
 use crate::mfa::totp_enhanced::EnhancedTotpConfig;
+#[cfg(feature = "redis-sessions")]
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

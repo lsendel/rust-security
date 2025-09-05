@@ -14,18 +14,8 @@ categories = ["web-programming::http-server", "authentication"]
 repository = "https://github.com/lsendel/rust-security"
 readme = "README.md"
 
-[lints.rust]
-unused_crate_dependencies = "allow"
-unused_imports = "warn"
-dead_code = "warn"
-unsafe_code = "forbid"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
-cargo = "warn"
-nursery = "warn"
-multiple_crate_versions = "allow"
+[lints]
+workspace = true
 
 [dependencies]
 axum = { workspace = true }
@@ -34,6 +24,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["json", "env-filter"] }
+log = "0.4"
 tracing-appender = "0.2"
 # lazy_static = "1.4"  # Using workspace version instead
 uuid = { workspace = true }
@@ -45,8 +36,9 @@ tower-http = { workspace = true }
 # bytes = { workspace = true }  # Unused - removed
 anyhow = { workspace = true }
 config = { workspace = true }
-dotenvy = { workspace = true }
+# dotenvy = { workspace = true }  # Unused - removed by cargo-machete
 redis = { workspace = true, optional = true }
+deadpool-redis = { workspace = true }
 utoipa = { workspace = true }
 # Swagger UI is optional; enable with `--features docs`
 # utoipa-swagger-ui = { workspace = true, optional = true }  # Unused
@@ -117,7 +109,7 @@ rustls = { workspace = true }
 rayon = { workspace = true }
 # High-performance async runtime
 # Connection pooling optimization
-deadpool-redis = { workspace = true, optional = true }
+# deadpool-redis dependency moved to main dependencies section above
 # bb8 = { workspace = true, optional = true }  # Unused - removed
 # bb8-redis = { workspace = true, optional = true }  # Unused - removed
 # Optimized serialization
@@ -136,7 +128,7 @@ petgraph = { workspace = true, optional = true }
 # Statistics and analytics
 # statrs = { workspace = true, optional = true }  # Removed due to workspace dependency issue
 # Advanced collections for threat correlation
-indexmap = { workspace = true }
+# indexmap = { workspace = true }  # Unused - removed by cargo-machete
 # Async channels and queues
 flume = { workspace = true, optional = true }
 # crossbeam = { workspace = true, optional = true }  # Unused
@@ -205,58 +197,27 @@ regex = { workspace = true }
 # Test utilities
 tempfile = { workspace = true }
 wiremock = { workspace = true }
+futures = { workspace = true }
 # Coverage and benchmarking in tests
 # tarpaulin = "0.30"  # Commented out - not available on crates.io
 
 [features]
-# ml-basic = ["threat-hunting"]  # Removed smartcore due to workspace issue
-# ml-enhanced = ["threat-hunting", "advanced-analytics", "petgraph"]  # Removed due to dependencies
-default = ["security-essential", "api-keys", "enhanced-session-store"]  # Crypto disabled by default for build stability
-# Core security features
+# MVP-focused feature set
+default = ["security-essential"]
 security-essential = ["crypto", "rate-limiting"]
-security-enhanced = ["security-essential", "zero-trust"]  # Removed post-quantum
-rate-limiting = ["dep:dashmap"]
-# Temporarily disabled due to version conflicts
-# audit-logging = ["tracing"]
-zero-trust = ["enhanced-session-store"]  # Removed threat-hunting
-# Database features
+redis-sessions = []  # Redis dependencies are now always enabled
 postgres = ["dep:sqlx"]
-
-# Development features
-fast-build = []  # Minimal feature set for fast development builds
-development = ["fast-build"]  # Removed docs feature
-property-tests = []  # Property-based testing features
-# docs = ["utoipa-swagger-ui"]  # Disabled - no swagger UI needed for now
-vault = ["vaultrs"]
-aws = ["aws-config", "aws-sdk-secretsmanager"]
-tracing = []  # Temporarily disabled OpenTelemetry dependencies
-benchmarks = []  # Removed pprof2 due to security vulnerability
-simd = []  # SIMD support removed due to packed_simd_2 compatibility issues
-performance = ["simd"]
-crypto = ["ed25519-dalek"]
-# profiling = []  # Removed pprof2 due to security vulnerability
-# Secrets management feature flags
-secrets-vault-aws = ["aws", "vault"]
-# Post-quantum cryptography feature flags
-post-quantum = []  # Empty feature to satisfy cfg checks
-soar = []  # Empty feature to satisfy cfg checks
-# hybrid-crypto = ["p256", "p384", "ed25519-dalek", "x25519-dalek"]  # Removed post-quantum
-# Threat hunting feature flags (no-op to satisfy cfg checks)
-threat-hunting = []
-# advanced-analytics = ["dep:memmap2", "dep:lz4_flex", "dep:probabilistic-collections"]  # Removed threat-hunting
-optimizations = []
-# Production feature sets
-production = ["security-enhanced", "secrets-vault-aws"]
-monitoring = ["tracing", "dep:prometheus"]
-
-# Service features
-# soar = ["dep:sqlx", "dep:lettre", "dep:tempfile", "dep:handlebars"]  # Disabled - tera and walkdir removed
+metrics = ["dep:prometheus"]
 api-keys = ["dep:sqlx"]
-enhanced-session-store = ["dep:redis", "dep:deadpool-redis"]
 
-# Complete feature sets
-# enterprise = ["production", "soar", "hybrid-crypto"]  # Removed threat-hunting
-# all-features = ["production", "development", "soar"]  # Removed advanced-analytics, enterprise
+# Core dependencies
+crypto = ["ed25519-dalek"]
+rate-limiting = ["dep:dashmap"]
+monitoring = []
+post-quantum = []
+simd = []
+vault = []
+soar = []
 
 # Build profiles are defined at workspace root
 

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header};
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -625,11 +625,13 @@ impl KeyStorage for InMemoryKeyStorage {
 }
 
 /// Redis-backed key storage for distributed environments
+#[cfg(feature = "redis-sessions")]
 pub struct RedisKeyStorage {
     client: redis::Client,
     key_prefix: String,
 }
 
+#[cfg(feature = "redis-sessions")]
 impl RedisKeyStorage {
     /// Create a new Redis key storage instance
     ///
@@ -647,6 +649,7 @@ impl RedisKeyStorage {
     }
 }
 
+#[cfg(feature = "redis-sessions")]
 #[async_trait::async_trait]
 impl KeyStorage for RedisKeyStorage {
     async fn store_key(&self, key: &CryptoKey) -> Result<(), crate::shared::error::AppError> {

@@ -19,42 +19,73 @@ use tracing::debug;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+/// Error types for threat intelligence operations
+#[derive(Debug, thiserror::Error)]
+pub enum ThreatIntelligenceError {
+    #[error("Redis connection error: {0}")]
+    Redis(#[from] redis::RedisError),
+    
+    #[error("HTTP request error: {0}")]
+    Http(#[from] reqwest::Error),
+    
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+    
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    
+    #[error("Cache operation failed: {message}")]
+    Cache { message: String },
+    
+    #[error("External API error: {api}: {message}")]
+    ExternalApi { api: String, message: String },
+    
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+    
+    #[error("Internal error: {0}")]
+    Internal(String),
+}
+
+/// Macro to create threat intelligence metrics counters
+#[cfg(feature = "monitoring")]
+macro_rules! create_threat_intel_counter {
+    ($name:ident, $metric_name:expr, $description:expr) => {
+        static $name: LazyLock<Counter> = LazyLock::new(|| {
+            register_counter!($metric_name, $description)
+                .expect(concat!("Failed to create ", stringify!($name), " counter"))
+        });
+    };
+}
+
 /// Prometheus metrics for threat intelligence
 #[cfg(feature = "monitoring")]
-static THREAT_INTEL_QUERIES: LazyLock<Counter> = LazyLock::new(|| {
-    register_counter!(
-        "threat_hunting_intel_queries_total",
-        "Total threat intelligence queries made"
-    )
-    .expect("Failed to create threat_intel_queries counter")
-});
+create_threat_intel_counter!(
+    THREAT_INTEL_QUERIES,
+    "threat_hunting_intel_queries_total",
+    "Total threat intelligence queries made"
+);
 
 #[cfg(feature = "monitoring")]
-static THREAT_INTEL_MATCHES: LazyLock<Counter> = LazyLock::new(|| {
-    register_counter!(
-        "threat_hunting_intel_matches_total",
-        "Total threat intelligence matches found"
-    )
-    .expect("Failed to create threat_intel_matches counter")
-});
+create_threat_intel_counter!(
+    THREAT_INTEL_MATCHES,
+    "threat_hunting_intel_matches_total",
+    "Total threat intelligence matches found"
+);
 
 #[cfg(feature = "monitoring")]
-static THREAT_INTEL_ERRORS: LazyLock<Counter> = LazyLock::new(|| {
-    register_counter!(
-        "threat_hunting_intel_errors_total",
-        "Total threat intelligence query errors"
-    )
-    .expect("Failed to create threat_intel_errors counter")
-});
+create_threat_intel_counter!(
+    THREAT_INTEL_ERRORS,
+    "threat_hunting_intel_errors_total",
+    "Total threat intelligence query errors"
+);
 
 #[cfg(feature = "monitoring")]
-static THREAT_INTEL_CACHE_HITS: LazyLock<Counter> = LazyLock::new(|| {
-    register_counter!(
-        "threat_hunting_intel_cache_hits_total",
-        "Total threat intelligence cache hits"
-    )
-    .expect("Failed to create threat_intel_cache_hits counter")
-});
+create_threat_intel_counter!(
+    THREAT_INTEL_CACHE_HITS,
+    "threat_hunting_intel_cache_hits_total",
+    "Total threat intelligence cache hits"
+);
 
 #[cfg(feature = "monitoring")]
 static THREAT_INTEL_RESPONSE_TIME: LazyLock<Histogram> = LazyLock::new(|| {
@@ -380,7 +411,7 @@ impl ThreatIntelligenceCorrelator {
     ///
     /// # Errors
     ///
-    /// Returns `Box<dyn std::error::Error + Send + Sync>` if:
+    /// Returns `ThreatIntelligenceError` if:
     /// - Loading cached indicators fails due to filesystem or deserialization errors
     /// - Background task initialization fails
     /// - Feed synchronization setup fails
@@ -390,7 +421,7 @@ impl ThreatIntelligenceCorrelator {
     /// # Panics
     ///
     /// This function does not panic under normal operation.
-    pub async fn initialize(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn initialize(&self) -> Result<(), ThreatIntelligenceError> {
         info!("Initializing Threat Intelligence Correlator");
 
         // Initialize Redis connection
@@ -428,7 +459,7 @@ impl ThreatIntelligenceCorrelator {
     }
 
     /// Load cached indicators from Redis
-    async fn load_cached_indicators(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn load_cached_indicators(&self) -> Result<(), ThreatIntelligenceError> {
         let redis_client = self.redis_client.lock().await;
         if let Some(ref client) = *redis_client {
             let config = self.config.read().await;
@@ -487,7 +518,7 @@ impl ThreatIntelligenceCorrelator {
     pub async fn check_indicators(
         &self,
         event: &SecurityEvent,
-    ) -> Result<Vec<ThreatIntelligenceMatch>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<ThreatIntelligenceMatch>, ThreatIntelligenceError> {
         let mut matches = Vec::new();
 
         // Extract indicators from the security event
@@ -574,10 +605,15 @@ impl ThreatIntelligenceCorrelator {
 
     /// Extract domain from user agent string
     fn extract_domain_from_user_agent(&self, user_agent: &str) -> Option<String> {
-        // Simplified domain extraction - in production, use regex
-        if user_agent.contains("http://") || user_agent.contains("https://") {
-            // Extract domain using regex or url parsing
-            // For now, return None
+        // Look for URLs in user agent and extract domains
+        if let Some(start_pos) = user_agent.find("http://").or_else(|| user_agent.find("https://")) {
+            let url_part = &user_agent[start_pos..];
+            if let Some(end_pos) = url_part.find(' ').or_else(|| url_part.find(')').or_else(|| url_part.find(';'))) {
+                let url_str = &url_part[..end_pos];
+                if let Ok(parsed_url) = url::Url::parse(url_str) {
+                    return parsed_url.host_str().map(|host| host.to_string());
+                }
+            }
         }
         None
     }
@@ -589,7 +625,7 @@ impl ThreatIntelligenceCorrelator {
         indicator_type: &IndicatorType,
     ) -> Option<ThreatIntelligenceMatch> {
         let cache = self.indicator_cache.read().await;
-        let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
+        let cache_key = format!("{}:{}", indicator_type, indicator);
 
         if let Some(cached_result) = cache.get(&cache_key) {
             let now = Utc::now();
@@ -680,7 +716,7 @@ impl ThreatIntelligenceCorrelator {
         result: Option<ThreatIntelligenceMatch>,
     ) {
         let mut cache = self.indicator_cache.write().await;
-        let cache_key = format!("{}:{}", indicator_type_to_string(indicator_type), indicator);
+        let cache_key = format!("{}:{}", indicator_type, indicator);
         let config = self.config.read().await;
 
         let cached_result = CachedResult {
@@ -867,7 +903,7 @@ impl ThreatIntelligenceCorrelator {
         indicator: &str,
         indicator_type: &IndicatorType,
         http_client: &Client,
-    ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<ThreatIntelligenceIndicator>, ThreatIntelligenceError> {
         #[cfg(feature = "monitoring")]
         let timer = THREAT_INTEL_RESPONSE_TIME.start_timer();
         #[cfg(not(feature = "monitoring"))]
@@ -897,7 +933,7 @@ impl ThreatIntelligenceCorrelator {
         indicator: &str,
         indicator_type: &IndicatorType,
         http_client: &Client,
-    ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<ThreatIntelligenceIndicator>, ThreatIntelligenceError> {
         if *indicator_type != IndicatorType::IpAddress {
             return Ok(None);
         }
@@ -978,7 +1014,7 @@ impl ThreatIntelligenceCorrelator {
         _indicator: &str,
         _indicator_type: &IndicatorType,
         _http_client: &Client,
-    ) -> Result<Option<ThreatIntelligenceIndicator>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Option<ThreatIntelligenceIndicator>, ThreatIntelligenceError> {
         // Simplified VirusTotal implementation
         // Would need proper API implementation based on indicator type
         warn!("VirusTotal integration not fully implemented");

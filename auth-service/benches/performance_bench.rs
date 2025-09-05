@@ -1,4 +1,6 @@
 #![cfg(feature = "benchmarks")]
+#![allow(clippy::multiple_crate_versions)]
+
 use auth_service::infrastructure::crypto::keys;
 use auth_service::storage::store::hybrid::TokenStore;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};

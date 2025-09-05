@@ -11,7 +11,7 @@
 //! The metrics are designed to be compatible with Prometheus and follow
 //! best practices for naming and labeling.
 
-#![cfg(feature = "monitoring")]
+#![cfg(feature = "metrics")]
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -23,57 +23,88 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
 };
 use std::sync::LazyLock;
 use tracing::{debug, error};
 
-/// Type alias for token-related metrics group
-type TokenMetricsGroup = (
-    IntCounterVec,
-    IntCounterVec,
-    IntCounterVec,
-    IntCounterVec,
-    HistogramVec,
-    IntCounterVec,
-);
-
-/// Type alias for policy-related metrics group
-type PolicyMetricsGroup = (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec);
-
-/// Type alias for cache-related metrics group
-type CacheMetricsGroup = (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec);
-
-/// Type alias for HTTP-related metrics group
-type HttpMetricsGroup = (
-    IntCounterVec,
-    HistogramVec,
-    HistogramVec,
-    HistogramVec,
-    IntGauge,
-);
-
-/// Type alias for rate limiting metrics group
-type RateLimitMetricsGroup = (IntCounterVec, IntCounterVec, HistogramVec);
-
-/// Type alias for security metrics group
-type SecurityMetricsGroup = (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec);
-
-/// Type alias for system metrics group
-type SystemMetricsGroup = (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec);
-
-/// Type alias for all metrics groups combined
+/// Type alias for all metrics groups tuple
 type AllMetricsGroups = (
-    TokenMetricsGroup,
-    PolicyMetricsGroup,
-    CacheMetricsGroup,
-    HttpMetricsGroup,
-    RateLimitMetricsGroup,
-    SecurityMetricsGroup,
-    SystemMetricsGroup,
+    (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec), // token_metrics
+    (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec), // policy_metrics
+    (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec), // cache_metrics
+    (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge), // http_metrics
+    (IntCounterVec, IntCounterVec, HistogramVec), // rate_limit_metrics
+    (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec), // security_metrics
+    (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec), // system_metrics
 );
+
+/// Token-related metrics group
+#[derive(Clone)]
+pub struct TokenMetrics {
+    pub issued: IntCounterVec,
+    pub validated: IntCounterVec,
+    pub revoked: IntCounterVec,
+    pub introspected: IntCounterVec,
+    pub operation_duration: HistogramVec,
+    pub errors: IntCounterVec,
+}
+
+/// Policy-related metrics group
+#[derive(Clone)]
+pub struct PolicyMetrics {
+    pub evaluations: IntCounterVec,
+    pub evaluation_duration: HistogramVec,
+    pub cache_hits: IntCounterVec,
+    pub cache_misses: IntCounterVec,
+}
+
+/// Cache-related metrics group
+#[derive(Clone)]
+pub struct CacheMetrics {
+    pub operations: IntCounterVec,
+    pub operation_duration: HistogramVec,
+    pub size: IntCounterVec,
+    pub cleanup_duration: HistogramVec,
+}
+
+/// HTTP-related metrics group
+#[derive(Clone)]
+pub struct HttpMetrics {
+    pub requests: IntCounterVec,
+    pub request_duration: HistogramVec,
+    pub response_size: HistogramVec,
+    pub request_size: HistogramVec,
+    pub active_connections: IntGauge,
+}
+
+/// Rate limiting metrics group
+#[derive(Clone)]
+pub struct RateLimitMetrics {
+    pub requests_allowed: IntCounterVec,
+    pub requests_denied: IntCounterVec,
+    pub bucket_fill_time: HistogramVec,
+}
+
+/// Security metrics group
+#[derive(Clone)]
+pub struct SecurityMetrics {
+    pub threats_detected: IntCounterVec,
+    pub auth_failures: IntCounterVec,
+    pub suspicious_activities: IntCounterVec,
+    pub policy_violations: IntCounterVec,
+}
+
+/// System metrics group
+#[derive(Clone)]
+pub struct SystemMetrics {
+    pub health_checks: IntCounterVec,
+    pub component_status: IntCounterVec,
+    pub resource_usage: IntCounterVec,
+    pub background_tasks: IntCounterVec,
+}
 
 /// Core metrics registry and collectors for comprehensive observability
 pub struct MetricsRegistry {

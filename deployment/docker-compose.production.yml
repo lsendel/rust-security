@@ -95,55 +95,6 @@ services:
     tmpfs:
       - /tmp
 
-  # Policy Service
-  policy-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.policy-service.production
-    ports:
-      - "8081:8081"
-    environment:
-      - RUST_LOG=info
-      - ENVIRONMENT=production
-    volumes:
-      - policy_logs:/var/log/policy-service
-      - ./policy-service/policies.cedar:/app/policies.cedar:ro
-      - ./policy-service/entities.json:/app/entities.json:ro
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    networks:
-      - auth_network
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /tmp
-
-  # Security Dashboard
-  dashboard:
-    build:
-      context: ./red-team-exercises/security-dashboard
-      dockerfile: Dockerfile.production
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - REACT_APP_AUTH_SERVICE_URL=http://auth-service:8080
-      - REACT_APP_POLICY_SERVICE_URL=http://policy-service:8081
-    depends_on:
-      - auth-service
-      - policy-service
-    networks:
-      - auth_network
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
 
   # Nginx reverse proxy for production
   nginx:
@@ -157,8 +108,6 @@ services:
       - nginx_logs:/var/log/nginx
     depends_on:
       - auth-service
-      - policy-service
-      - dashboard
     networks:
       - auth_network
     restart: unless-stopped
@@ -276,8 +225,6 @@ volumes:
   redis_data:
     driver: local
   auth_logs:
-    driver: local
-  policy_logs:
     driver: local
   nginx_logs:
     driver: local

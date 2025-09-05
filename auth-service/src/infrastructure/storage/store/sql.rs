@@ -1,13 +1,17 @@
+#[cfg(feature = "postgres")]
 use crate::scim_filter::{parse_scim_filter, ScimOperator};
 use anyhow::anyhow;
 use async_trait::async_trait;
+#[cfg(feature = "postgres")]
 use common::{hash_token, AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
+#[cfg(feature = "postgres")]
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info};
 
+#[cfg(feature = "postgres")]
 #[derive(Debug)]
 pub struct Migration {
     pub version: String,
@@ -15,11 +19,32 @@ pub struct Migration {
     pub queries: Vec<String>,
 }
 
+#[cfg(feature = "postgres")]
 #[derive(Clone)]
 pub struct SqlStore {
     pool: Arc<PgPool>,
 }
 
+#[cfg(not(feature = "postgres"))]
+#[derive(Clone)]
+pub struct SqlStore;
+
+#[cfg(not(feature = "postgres"))]
+impl SqlStore {
+    pub async fn new(_database_url: &str) -> Result<Self, Box<dyn StdError + Send + Sync>> {
+        Err("PostgreSQL support not enabled. Enable 'postgres' feature.".into())
+    }
+
+    pub async fn run_migrations(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        Err("PostgreSQL support not enabled. Enable 'postgres' feature.".into())
+    }
+
+    pub async fn cleanup_expired_data(&self) -> Result<(), Box<dyn StdError + Send + Sync>> {
+        Err("PostgreSQL support not enabled. Enable 'postgres' feature.".into())
+    }
+}
+
+#[cfg(feature = "postgres")]
 impl SqlStore {
     pub async fn new(database_url: &str) -> Result<Self, Box<dyn StdError + Send + Sync>> {
         info!("Initializing PostgreSQL connection pool");
@@ -303,6 +328,7 @@ impl SqlStore {
     }
 }
 
+#[cfg(feature = "postgres")]
 #[async_trait]
 impl Store for SqlStore {
     fn as_any(&self) -> &dyn std::any::Any {

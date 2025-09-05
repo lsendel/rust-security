@@ -1,5 +1,5 @@
 use anyhow::Result;
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use prometheus::{Counter, Histogram, IntGauge, Registry};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -263,7 +263,7 @@ impl PerformanceMonitor {
 
     /// Get Prometheus metrics for scraping
     pub fn get_prometheus_metrics(&self) -> String {
-        #[cfg(feature = "monitoring")]
+        #[cfg(feature = "metrics")]
 use prometheus::Encoder;
         let encoder = prometheus::TextEncoder::new();
         let metric_families = self.registry.gather();

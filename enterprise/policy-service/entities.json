@@ -1,0 +1,67 @@
+[
+  {
+    "uid": {"type": "User", "id": "alice"},
+    "attrs": {
+      "authenticated": true,
+      "role": "user",
+      "department": "engineering"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "User", "id": "admin"},
+    "attrs": {
+      "authenticated": true,
+      "role": "admin",
+      "clearance": "high"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "User", "id": "guest"},
+    "attrs": {
+      "authenticated": false,
+      "role": "guest"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Action", "id": "read"},
+    "attrs": {},
+    "parents": []
+  },
+  {
+    "uid": {"type": "Action", "id": "write"},
+    "attrs": {},
+    "parents": []
+  },
+  {
+    "uid": {"type": "Action", "id": "delete"},
+    "attrs": {},
+    "parents": []
+  },
+  {
+    "uid": {"type": "Resource", "id": "public-doc"},
+    "attrs": {
+      "sensitive": false,
+      "owner": "system"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Resource", "id": "private-doc"},
+    "attrs": {
+      "sensitive": true,
+      "owner": "alice"
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Resource", "id": "admin-doc"},
+    "attrs": {
+      "sensitive": true,
+      "owner": "admin"
+    },
+    "parents": []
+  }
+]

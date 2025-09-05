@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
-use deadpool_redis::{redis::AsyncCommands, Config, Pool, Runtime};
+use deadpool_redis::{redis::AsyncCommands, Config, Runtime};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
@@ -13,7 +13,10 @@ use tracing::{error, info, warn};
 #[derive(Clone)]
 pub struct HybridStore {
     // Redis connection pool with deadpool for high performance
-    redis_pool: Option<Pool>,
+    #[cfg(feature = "redis-sessions")]
+    redis_pool: Option<deadpool_redis::Pool>,
+    #[cfg(not(feature = "redis-sessions"))]
+    redis_pool: Option<()>,
     // In-memory stores for users/groups (will migrate to SQL in production)
     users: Arc<RwLock<HashMap<String, ScimUser>>>,
     groups: Arc<RwLock<HashMap<String, ScimGroup>>>,
@@ -26,7 +29,10 @@ pub struct HybridStore {
 
 impl HybridStore {
     pub async fn new() -> Self {
+        #[cfg(feature = "redis-sessions")]
         let redis_pool = Self::create_redis_pool().await;
+        #[cfg(not(feature = "redis-sessions"))]
+        let redis_pool = None;
 
         Self {
             redis_pool,
@@ -39,7 +45,7 @@ impl HybridStore {
         }
     }
 
-    async fn create_redis_pool() -> Option<Pool> {
+    async fn create_redis_pool() -> Option<deadpool_redis::Pool> {
         let redis_url = std::env::var("REDIS_URL").ok()?;
 
         info!("Initializing Redis connection pool");
@@ -67,6 +73,7 @@ impl HybridStore {
         }
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn get_redis_connection(&self) -> Option<deadpool_redis::Connection> {
         match &self.redis_pool {
             Some(pool) => match pool.get().await {
@@ -78,6 +85,11 @@ impl HybridStore {
             },
             None => None,
         }
+    }
+
+    #[cfg(not(feature = "redis-sessions"))]
+    async fn get_redis_connection(&self) -> Option<()> {
+        None
     }
 
     /// Get token record - inherent method for direct access
@@ -252,29 +264,32 @@ impl Store for HybridStore {
         let record_json = serde_json::to_string(record)?;
 
         // Store in Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("authcode:{code}");
-            // Use the simpler Redis interface
-            let result: Result<(), _> = {
-                let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
-                if set_result.is_ok() {
-                    conn.expire(&key, ttl_secs as i64).await
-                } else {
-                    set_result
-                }
-            };
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("authcode:{code}");
+                // Use the simpler Redis interface
+                let result: Result<(), _> = {
+                    let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
+                    if set_result.is_ok() {
+                        conn.expire(&key, ttl_secs as i64).await
+                    } else {
+                        set_result
+                    }
+                };
 
-            match result {
-                Ok(()) => {
-                    // Successfully stored in Redis, also store in memory as backup
-                    self.auth_codes
-                        .write()
-                        .await
-                        .insert(code.to_string(), record_json);
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!("Failed to store auth code in Redis: {}", e);
+                match result {
+                    Ok(()) => {
+                        // Successfully stored in Redis, also store in memory as backup
+                        self.auth_codes
+                            .write()
+                            .await
+                            .insert(code.to_string(), record_json);
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        warn!("Failed to store auth code in Redis: {}", e);
+                    }
                 }
             }
         }
@@ -293,20 +308,23 @@ impl Store for HybridStore {
         code: &str,
     ) -> Result<Option<AuthCodeRecord>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("authcode:{code}");
-            match conn.get::<_, Option<String>>(&key).await {
-                Ok(Some(json)) => {
-                    // Delete the key and remove from memory backup
-                    let _: Result<(), _> = conn.del(&key).await;
-                    self.auth_codes.write().await.remove(code);
-                    return Ok(Some(serde_json::from_str::<AuthCodeRecord>(&json)?));
-                }
-                Ok(None) => {
-                    // Not found in Redis, try memory fallback
-                }
-                Err(e) => {
-                    warn!("Failed to consume auth code from Redis: {}", e);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("authcode:{code}");
+                match conn.get::<_, Option<String>>(&key).await {
+                    Ok(Some(json)) => {
+                        // Delete the key and remove from memory backup
+                        let _: Result<(), _> = conn.del(&key).await;
+                        self.auth_codes.write().await.remove(code);
+                        return Ok(Some(serde_json::from_str::<AuthCodeRecord>(&json)?));
+                    }
+                    Ok(None) => {
+                        // Not found in Redis, try memory fallback
+                    }
+                    Err(e) => {
+                        warn!("Failed to consume auth code from Redis: {}", e);
+                    }
                 }
             }
         }
@@ -325,17 +343,20 @@ impl Store for HybridStore {
         token: &str,
     ) -> Result<Option<TokenRecord>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("token_record:{token}");
-            match conn.get::<_, Option<String>>(&key).await {
-                Ok(Some(json)) => {
-                    return Ok(Some(serde_json::from_str::<TokenRecord>(&json)?));
-                }
-                Ok(None) => {
-                    // Not found in Redis, try memory fallback
-                }
-                Err(e) => {
-                    warn!("Failed to get token record from Redis: {}", e);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("token_record:{token}");
+                match conn.get::<_, Option<String>>(&key).await {
+                    Ok(Some(json)) => {
+                        return Ok(Some(serde_json::from_str::<TokenRecord>(&json)?));
+                    }
+                    Ok(None) => {
+                        // Not found in Redis, try memory fallback
+                    }
+                    Err(e) => {
+                        warn!("Failed to get token record from Redis: {}", e);
+                    }
                 }
             }
         }
@@ -348,36 +369,39 @@ impl Store for HybridStore {
         &self,
         token: &str,
         record: &TokenRecord,
-        ttl_secs: Option<u64>,
+        _ttl_secs: Option<u64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let record_json = serde_json::to_string(record)?;
+        let _record_json = serde_json::to_string(record)?;
 
         // Store in Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("token_record:{token}");
-            let redis_result = if let Some(ttl) = ttl_secs {
-                {
-                    let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
-                    if set_result.is_ok() {
-                        let _: Result<(), _> = conn.expire(&key, ttl as i64).await;
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("token_record:{token}");
+                let redis_result = if let Some(ttl) = _ttl_secs {
+                    {
+                        let set_result = conn.set::<_, _, ()>(&key, &_record_json).await;
+                        if set_result.is_ok() {
+                            let _: Result<(), _> = conn.expire(&key, ttl as i64).await;
+                        }
+                        set_result
                     }
-                    set_result
-                }
-            } else {
-                conn.set::<_, _, ()>(&key, &record_json).await
-            };
+                } else {
+                    conn.set::<_, _, ()>(&key, &_record_json).await
+                };
 
-            match redis_result {
-                Ok(()) => {
-                    // Successfully stored in Redis, also store in memory as backup
-                    self.tokens
-                        .write()
-                        .await
-                        .insert(token.to_string(), record.clone());
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!("Failed to store token record in Redis: {}", e);
+                match redis_result {
+                    Ok(()) => {
+                        // Successfully stored in Redis, also store in memory as backup
+                        self.tokens
+                            .write()
+                            .await
+                            .insert(token.to_string(), _record_json);
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        warn!("Failed to store token record in Redis: {}", e);
+                    }
                 }
             }
         }
@@ -407,29 +431,32 @@ impl Store for HybridStore {
         &self,
         refresh_token: &str,
         access_token: &str,
-        ttl_secs: u64,
+        _ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("refresh_token:{refresh_token}");
-            let res = {
-                let set_result = conn.set::<_, _, ()>(&key, access_token).await;
-                if set_result.is_ok() {
-                    let _: Result<(), _> = conn.expire(&key, ttl_secs as i64).await;
-                }
-                set_result
-            };
-            match res {
-                Ok(()) => {
-                    // Successfully stored in Redis, also store in memory as backup
-                    self.refresh_tokens
-                        .write()
-                        .await
-                        .insert(refresh_token.to_string(), access_token.to_string());
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!("Failed to store refresh token in Redis: {}", e);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("refresh_token:{refresh_token}");
+                let res = {
+                    let set_result = conn.set::<_, _, ()>(&key, access_token).await;
+                    if set_result.is_ok() {
+                        let _: Result<(), _> = conn.expire(&key, _ttl_secs as i64).await;
+                    }
+                    set_result
+                };
+                match res {
+                    Ok(()) => {
+                        // Successfully stored in Redis, also store in memory as backup
+                        self.refresh_tokens
+                            .write()
+                            .await
+                            .insert(refresh_token.to_string(), access_token.to_string());
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        warn!("Failed to store refresh token in Redis: {}", e);
+                    }
                 }
             }
         }
@@ -450,19 +477,22 @@ impl Store for HybridStore {
         let mut access_token: Option<String> = None;
 
         // Try Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("refresh_token:{refresh_token}");
-            match conn.get::<_, Option<String>>(&key).await {
-                Ok(token) => {
-                    if token.is_some() {
-                        let _: Result<(), _> = conn.del(&key).await;
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("refresh_token:{refresh_token}");
+                match conn.get::<_, Option<String>>(&key).await {
+                    Ok(token) => {
+                        if token.is_some() {
+                            let _: Result<(), _> = conn.del(&key).await;
+                        }
+                        access_token = token;
+                        // Also remove from memory backup
+                        self.refresh_tokens.write().await.remove(refresh_token);
                     }
-                    access_token = token;
-                    // Also remove from memory backup
-                    self.refresh_tokens.write().await.remove(refresh_token);
-                }
-                Err(e) => {
-                    warn!("Failed to consume refresh token from Redis: {}", e);
+                    Err(e) => {
+                        warn!("Failed to consume refresh token from Redis: {}", e);
+                    }
                 }
             }
         }
@@ -479,16 +509,19 @@ impl Store for HybridStore {
                 .await
                 .insert(refresh_token.to_string(), ());
 
-            if let Some(mut conn) = self.get_redis_connection().await {
-                let key = format!("refresh_reused:{refresh_token}");
-                // Reuse detection window 10 minutes
-                let _: Result<(), _> = {
-                    let set_result = conn.set::<_, _, ()>(&key, 1).await;
-                    if set_result.is_ok() {
-                        let _: Result<(), _> = conn.expire(&key, 600i64).await;
-                    }
-                    set_result
-                };
+            #[cfg(feature = "redis-sessions")]
+            {
+                if let Some(mut conn) = self.get_redis_connection().await {
+                    let key = format!("refresh_reused:{refresh_token}");
+                    // Reuse detection window 10 minutes
+                    let _: Result<(), _> = {
+                        let set_result = conn.set::<_, _, ()>(&key, 1).await;
+                        if set_result.is_ok() {
+                            let _: Result<(), _> = conn.expire(&key, 600i64).await;
+                        }
+                        set_result
+                    };
+                }
             }
         }
 
@@ -500,12 +533,15 @@ impl Store for HybridStore {
         refresh_token: &str,
     ) -> Result<bool, Box<dyn StdError + Send + Sync>> {
         // Check Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let key = format!("refresh_reused:{refresh_token}");
-            match conn.exists::<_, bool>(&key).await {
-                Ok(exists) => return Ok(exists),
-                Err(e) => {
-                    warn!("Failed to check refresh token reuse in Redis: {}", e);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let key = format!("refresh_reused:{refresh_token}");
+                match conn.exists::<_, bool>(&key).await {
+                    Ok(exists) => return Ok(exists),
+                    Err(e) => {
+                        warn!("Failed to check refresh token reuse in Redis: {}", e);
+                    }
                 }
             }
         }
@@ -520,12 +556,14 @@ impl Store for HybridStore {
 
     // === Health Check ===
     async fn health_check(&self) -> Result<bool, Box<dyn StdError + Send + Sync>> {
-        if let Some(_conn) = self.get_redis_connection().await {
-            Ok(true) // Successfully got Redis connection
-        } else {
-            // In-memory store is always healthy, but Redis is unavailable
-            Ok(true)
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(_conn) = self.get_redis_connection().await {
+                return Ok(true); // Successfully got Redis connection
+            }
         }
+        // In-memory store is always healthy, but Redis is unavailable
+        Ok(true)
     }
 
     async fn get_metrics(&self) -> Result<common::StoreMetrics, Box<dyn StdError + Send + Sync>> {

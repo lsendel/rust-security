@@ -277,14 +277,13 @@ pub fn verify_request_signature(
 
     let message = format!("{method}\n{path}\n{body}\n{timestamp}");
     let key = hmac::Key::new(hmac::HMAC_SHA256, secret.as_bytes());
-    let expected_signature = hmac::sign(&key, message.as_bytes());
 
     let provided_signature = base64::engine::general_purpose::STANDARD
         .decode(signature)
         .map_err(|_| "Invalid signature format")?;
 
     // Use secure HMAC verification to prevent timing attacks
-    Ok(hmac::verify(&key, &provided_signature, expected_signature.as_ref()).is_ok())
+    Ok(hmac::verify(&key, message.as_bytes(), &provided_signature).is_ok())
 }
 
 /// Middleware for request signature validation

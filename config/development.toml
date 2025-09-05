@@ -45,15 +45,21 @@ salt_length = 32
 hash_length = 32
 
 [security.cors]
+# SECURITY: Use explicit origin whitelist instead of wildcards
+# Add your specific frontend domains here
 allowed_origins = ["http://localhost:3000", "http://localhost:8080"]
 allowed_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-allowed_headers = ["Content-Type", "Authorization", "X-Requested-With"]
-exposed_headers = []
-max_age = 86400
-allow_credentials = true
+allowed_headers = ["Content-Type", "Authorization", "X-Requested-With", "X-CSRF-Token"]
+exposed_headers = ["X-Request-ID"]
+max_age = 3600  # Reduced from 86400 (1 day) to 3600 (1 hour) for better security
+# SECURITY: Only enable credentials for same-origin or trusted origins
+# Consider setting to false if not needed for your application
+allow_credentials = false
 
 [jwt]
-secret = "development-jwt-secret-key-minimum-32-characters-long-for-security"
+# SECURITY: Remove hardcoded secret. Set JWT_SECRET environment variable instead.
+# Example: export JWT_SECRET="your-secure-randomly-generated-secret-key"
+secret = "${JWT_SECRET}"
 issuer = "http://localhost:8080"
 audience = ["api", "web-client", "mobile-app"]
 access_token_ttl = "1h"

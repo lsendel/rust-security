@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mvp-oauth:
+    build: 
+      context: ..
+      dockerfile: mvp-oauth-service/Dockerfile
+    container_name: mvp-oauth-service
+    ports:
+      - "3000:3000"
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-mvp-production-secret-key-change-in-production}
+      - PORT=3000
+      - RUST_LOG=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+
+  # Optional: Reverse proxy with TLS termination
+  nginx:
+    image: nginx:alpine
+    container_name: mvp-oauth-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - mvp-oauth
+    restart: unless-stopped
+    profiles:
+      - with-proxy

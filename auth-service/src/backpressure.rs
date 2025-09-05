@@ -1,11 +1,11 @@
 use axum::{extract::Request, middleware::Next, response::Response};
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use prometheus::{
     register_histogram, register_int_counter, register_int_gauge, Histogram, IntCounter, IntGauge,
 };
 use rand::RngCore;
 use std::collections::HashMap;
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use std::sync::LazyLock;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -119,14 +119,14 @@ impl BackpressureConfig {
 }
 
 // Metrics (feature-gated)
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[allow(dead_code)]
 static REQUESTS_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     register_int_counter!("auth_requests_total", "Total number of requests")
         .expect("Failed to create requests_total counter")
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[allow(dead_code)]
 static REQUESTS_REJECTED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     register_int_counter!(
@@ -136,7 +136,7 @@ static REQUESTS_REJECTED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     .unwrap()
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[allow(dead_code)]
 static CONCURRENT_REQUESTS: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!(
@@ -146,13 +146,13 @@ static CONCURRENT_REQUESTS: LazyLock<IntGauge> = LazyLock::new(|| {
     .unwrap()
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[allow(dead_code)]
 static REQUEST_BODY_SIZE: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!("auth_request_body_size_bytes", "Request body size in bytes").unwrap()
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 static REQUEST_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram!(
         "auth_request_duration_seconds",
@@ -161,14 +161,14 @@ static REQUEST_DURATION: LazyLock<Histogram> = LazyLock::new(|| {
     .unwrap()
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[allow(dead_code)]
 static QUEUE_DEPTH: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge!("auth_request_queue_depth", "Current request queue depth").unwrap()
 });
 
 // Metrics helper functions
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[inline]
 const fn inc_requests_total() {
     // TODO: Implement actual metrics increment
@@ -178,7 +178,7 @@ const fn inc_requests_total() {
 #[inline]
 const fn inc_requests_total() {}
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[inline]
 const fn inc_requests_rejected_total() {
     // TODO: Implement actual metrics increment
@@ -188,7 +188,7 @@ const fn inc_requests_rejected_total() {
 #[inline]
 const fn inc_requests_rejected_total() {}
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[inline]
 const fn inc_concurrent_requests() {
     // TODO: Implement actual metrics increment
@@ -198,7 +198,7 @@ const fn inc_concurrent_requests() {
 #[inline]
 const fn inc_concurrent_requests() {}
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[inline]
 const fn dec_concurrent_requests() {
     // TODO: Implement actual metrics decrement
@@ -208,7 +208,7 @@ const fn dec_concurrent_requests() {
 #[inline]
 const fn dec_concurrent_requests() {}
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[inline]
 const fn observe_request_body_size(_size: f64) {
     // TODO: Implement actual metrics observation
@@ -218,7 +218,7 @@ const fn observe_request_body_size(_size: f64) {
 #[inline]
 const fn observe_request_body_size(_size: f64) {}
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[inline]
 fn observe_request_duration(duration: f64) {
     REQUEST_DURATION.observe(duration);

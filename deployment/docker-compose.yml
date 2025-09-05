@@ -39,21 +39,6 @@ services:
       retries: 3
       start_period: 40s
 
-  policy-service:
-    build:
-      context: ./policy-service
-      dockerfile: Dockerfile
-    container_name: policy-service
-    ports:
-      - "8081:8080"
-    environment:
-      - RUST_LOG=${RUST_LOG:-debug,policy_service=trace}
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
 volumes:
   redis_data:

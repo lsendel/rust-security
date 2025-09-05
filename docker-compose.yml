@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Auth-as-a-Service MVP
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - JWT_SECRET=development-secret-key-32-chars-minimum
+      - EXTERNAL_BASE_URL=http://localhost:8080
+      - BIND_ADDRESS=0.0.0.0:8080
+      - ENABLE_METRICS=true
+      - ENABLE_API_KEYS=true  
+      - ENABLE_REDIS_SESSIONS=true
+      - ENABLE_POSTGRES=true
+      - DATABASE_URL=postgresql://authuser:authpass@postgres:5432/authdb
+      - REDIS_URL=redis://redis:6379
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_PER_MINUTE=100
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=authuser
+      - POSTGRES_PASSWORD=authpass
+      - POSTGRES_DB=authdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authuser -d authdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    ports:
+      - "6379:6379"
+
+  # Prometheus Metrics (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    profiles: ["monitoring"]
+
+volumes:
+  postgres_data:
+  redis_data:

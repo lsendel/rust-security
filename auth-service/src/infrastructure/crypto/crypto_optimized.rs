@@ -540,7 +540,7 @@ mod tests {
     fn test_token_format_validation() {
         let _engine = get_crypto_engine();
         assert!(CryptoOptimized::validate_token_format(
-            "tk_valid_token_format_12345"
+            "tk_valid_token_format_1234567890"
         ));
         assert!(!CryptoOptimized::validate_token_format("invalid"));
         assert!(!CryptoOptimized::validate_token_format(""));
@@ -566,9 +566,9 @@ mod tests {
     #[tokio::test]
     async fn test_batch_jwt_verification() {
         let tokens = vec![
-            "tk_valid_token_1".to_string(),
+            "tk_valid_token_1234567890123456789012".to_string(),
             "invalid_token".to_string(),
-            "tk_valid_token_2".to_string(),
+            "rt_valid_token_1234567890123456789012".to_string(),
         ];
 
         let results = verify_jwt_signature_batch(&tokens);

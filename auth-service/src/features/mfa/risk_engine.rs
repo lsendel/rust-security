@@ -1,5 +1,6 @@
 use crate::mfa::adaptive::{AuthContext, RiskAssessment, RiskFactor, ThreatLevel};
 use crate::mfa::errors::{MfaError, MfaResult};
+#[cfg(feature = "redis-sessions")]
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

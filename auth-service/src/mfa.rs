@@ -6,7 +6,7 @@ use hmac::{Hmac, Mac};
 use rand::RngCore;
 use redis;
 use serde::{Deserialize, Serialize};
-use sha1::Sha1;
+use sha2::Sha256;
 use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
@@ -23,7 +23,7 @@ use crate::mfa::crypto::SecretManager;
 // Re-export the comprehensive MFA modules
 // Note: comprehensive MFA modules exist in src/mfa/* but are not compiled by default here to keep build lean
 
-type HmacSha1 = Hmac<Sha1>;
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TotpRegisterRequest {
@@ -288,14 +288,18 @@ fn now_unix() -> u64 {
 fn hotp(secret: &[u8], counter: u64) -> u32 {
     let mut msg = [0u8; 8];
     msg.copy_from_slice(&counter.to_be_bytes());
-    let mut mac = HmacSha1::new_from_slice(secret).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC can take key of any size");
     mac.update(&msg);
     let hash = mac.finalize().into_bytes();
-    let offset = (hash[19] & 0x0f) as usize;
-    let bin_code: u32 = ((hash[offset] as u32 & 0x7f) << 24)
-        | ((hash[offset + 1] as u32) << 16)
-        | ((hash[offset + 2] as u32) << 8)
-        | (hash[offset + 3] as u32);
+    // Dynamic truncation per RFC 4226 using the last byte for offset
+    let offset = (hash[hash.len() - 1] & 0x0f) as usize;
+    // Ensure we don't overflow for larger digests (e.g., SHA-256)
+    let end = offset + 4;
+    let slice = if end <= hash.len() { &hash[offset..end] } else { &hash[hash.len() - 4..] };
+    let bin_code: u32 = ((slice[0] as u32 & 0x7f) << 24)
+        | ((slice[1] as u32) << 16)
+        | ((slice[2] as u32) << 8)
+        | (slice[3] as u32);
     bin_code
 }
 

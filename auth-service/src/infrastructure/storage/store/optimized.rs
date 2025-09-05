@@ -5,6 +5,7 @@
 use crate::IntrospectionRecord;
 use anyhow::Result;
 use dashmap::DashMap;
+#[cfg(feature = "redis-sessions")]
 use redis::aio::MultiplexedConnection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,6 +19,7 @@ pub enum OptimizedTokenStore {
     /// Optimized in-memory store using `DashMap` for better concurrency
     InMemory(Arc<DashMap<String, CachedTokenRecord>>),
     /// Optimized Redis store with hash-based storage and connection pooling
+    #[cfg(feature = "redis-sessions")]
     Redis(OptimizedRedisStore),
 }
 
@@ -29,6 +31,7 @@ pub struct CachedTokenRecord {
 }
 
 /// Optimized Redis store with connection pooling and batching
+#[cfg(feature = "redis-sessions")]
 #[derive(Clone)]
 pub struct OptimizedRedisStore {
     connection_pool: Arc<OnceCell<MultiplexedConnection>>,
@@ -64,6 +67,7 @@ impl CachedTokenRecord {
     }
 }
 
+#[cfg(feature = "redis-sessions")]
 impl OptimizedRedisStore {
     /// Create a new optimized Redis store
     ///
@@ -110,9 +114,15 @@ impl OptimizedTokenStore {
     /// # Errors
     ///
     /// Returns an error if Redis store creation fails
+    #[cfg(feature = "redis-sessions")]
     pub async fn new_redis(redis_url: &str) -> Result<Self> {
         let store = OptimizedRedisStore::new(redis_url).await?;
         Ok(Self::Redis(store))
+    }
+
+    #[cfg(not(feature = "redis-sessions"))]
+    pub async fn new_redis(_redis_url: &str) -> Result<Self> {
+        Err(anyhow::anyhow!("Redis support not enabled. Enable 'redis-sessions' feature."))
     }
 
     /// Get token record with optimized single operation
@@ -153,6 +163,7 @@ impl OptimizedTokenStore {
                     token_binding: None,
                 })
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let key = format!("token:{token}");
@@ -217,6 +228,7 @@ impl OptimizedTokenStore {
                 map.insert(token.to_string(), cached);
                 Ok(())
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let key = format!("token:{token}");
@@ -267,6 +279,7 @@ impl OptimizedTokenStore {
                 }
                 Ok(())
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let mut pipe = redis::pipe();
@@ -321,6 +334,7 @@ impl OptimizedTokenStore {
                 }
                 Ok(())
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let key = format!("token:{token}");
@@ -355,6 +369,7 @@ impl OptimizedTokenStore {
                 }
                 Ok(())
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
                 let mut pipe = redis::pipe();
@@ -395,6 +410,7 @@ impl OptimizedTokenStore {
 
                 Ok(removed_count)
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(_) => {
                 // Redis handles expiration automatically
                 Ok(0)
@@ -431,6 +447,7 @@ impl OptimizedTokenStore {
                     store_type: "in_memory".to_string(),
                 })
             }
+            #[cfg(feature = "redis-sessions")]
             Self::Redis(redis_store) => {
                 let mut conn = redis_store.get_connection().await?;
 

@@ -1,0 +1,240 @@
+name: Enhanced CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop, '**/fix-*', '**/feat-*' ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUST_LOG: warn
+
+jobs:
+  # Fast compilation check - runs first to fail fast
+  compilation-check:
+    name: "📦 Compilation Check"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: compilation-check-${{ hashFiles('Cargo.lock') }}
+
+      - name: Check MVP compilation
+        run: cargo check --workspace --no-default-features --features security-essential
+        
+      - name: Check with all MVP features
+        run: cargo check --workspace --features security-essential,redis-sessions,postgres,metrics,api-keys
+
+  # Code quality checks
+  code-quality:
+    name: "🔍 Code Quality"
+    runs-on: ubuntu-latest
+    needs: compilation-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: code-quality-${{ hashFiles('Cargo.lock') }}
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy check
+        run: cargo clippy --workspace --all-features -- -D warnings
+
+  # Matrix strategy for different test types
+  tests:
+    name: "🧪 Tests"
+    runs-on: ${{ matrix.os }}
+    needs: compilation-check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        test-type: [unit, integration-shared, security]
+        include:
+          - os: ubuntu-latest
+            test-type: unit
+            test-command: "cargo test --workspace --lib --bins"
+            test-threads: "4"
+          - os: ubuntu-latest  
+            test-type: integration-shared
+            test-command: "cargo test --workspace --test example_shared_integration_test"
+            test-threads: "1"
+          - os: ubuntu-latest
+            test-type: security
+            test-command: "cargo test --workspace security"
+            test-threads: "4"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: tests-${{ matrix.test-type }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install test dependencies
+        run: |
+          # Install any required dependencies for tests
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+
+      - name: Run ${{ matrix.test-type }} tests
+        env:
+          RUST_TEST_THREADS: ${{ matrix.test-threads }}
+          TEST_MODE: "1"
+          DISABLE_RATE_LIMIT: "1"
+        run: ${{ matrix.test-command }}
+        timeout-minutes: 15
+
+  # Performance and load tests (runs separately)
+  performance-tests:
+    name: "⚡ Performance Tests"
+    runs-on: ubuntu-latest
+    needs: [compilation-check, tests]
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'performance')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: performance-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run performance tests
+        env:
+          RUST_TEST_THREADS: "1"
+        run: cargo test --workspace --test '*performance*' --release
+        timeout-minutes: 10
+
+  # Security scanning
+  security-scan:
+    name: "🛡️ Security Scan"
+    runs-on: ubuntu-latest
+    needs: compilation-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install --force cargo-audit
+
+      - name: Run security audit
+        run: cargo audit
+
+      - name: Run dependency check
+        run: cargo tree --duplicates
+
+  # Documentation build
+  documentation:
+    name: "📚 Documentation"
+    runs-on: ubuntu-latest
+    needs: compilation-check
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: docs-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build documentation
+        run: cargo doc --workspace --all-features --no-deps
+
+      - name: Deploy documentation
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc
+
+  # Cleanup and optimization check
+  cleanup-check:
+    name: "🧹 Cleanup & Optimization"
+    runs-on: ubuntu-latest
+    needs: [tests, code-quality]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check for unused dependencies
+        run: |
+          cargo install --force cargo-machete
+          cargo machete
+
+      - name: Check build artifact size
+        run: |
+          cargo build --workspace --release
+          du -sh target/release/
+          ls -la target/release/ | head -10
+
+  # Final status check
+  ci-success:
+    name: "✅ CI Success"
+    runs-on: ubuntu-latest
+    needs: [compilation-check, code-quality, tests, security-scan]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          if [[ "${{ needs.compilation-check.result }}" != "success" ]]; then
+            echo "❌ Compilation check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.code-quality.result }}" != "success" ]]; then
+            echo "❌ Code quality check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.tests.result }}" != "success" ]]; then
+            echo "❌ Tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.security-scan.result }}" != "success" ]]; then
+            echo "❌ Security scan failed"
+            exit 1
+          fi
+          echo "🎉 All CI checks passed!"
+
+      - name: Performance summary
+        if: needs.performance-tests.result == 'success'
+        run: echo "⚡ Performance tests passed"

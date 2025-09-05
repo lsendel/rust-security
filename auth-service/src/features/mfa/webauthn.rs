@@ -1,6 +1,7 @@
 use crate::mfa::errors::{MfaError, MfaResult};
 use crate::mfa::storage::MfaStorage;
 use rand::RngCore;
+#[cfg(feature = "redis-sessions")]
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

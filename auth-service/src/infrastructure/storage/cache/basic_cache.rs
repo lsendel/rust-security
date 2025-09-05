@@ -1,10 +1,10 @@
 #![allow(clippy::unused_async)]
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use std::time::Instant;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
@@ -12,7 +12,7 @@ use tracing::{debug, info, warn};
 
 use super::CacheError;
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use crate::metrics::MetricsHelper;
 
 /// Cache configuration
@@ -73,7 +73,10 @@ impl<T> CachedItem<T> {
 #[allow(clippy::struct_field_names)]
 pub struct Cache {
     config: CacheConfig,
+    #[cfg(feature = "redis-sessions")]
     redis_client: Option<Client>,
+    #[cfg(not(feature = "redis-sessions"))]
+    redis_client: Option<()>,
     memory_cache: Arc<RwLock<HashMap<String, CachedItem<Vec<u8>>>>>,
 }
 
@@ -87,6 +90,7 @@ impl Cache {
     /// - Cache configuration is invalid
     /// - Memory allocation fails
     pub async fn new(config: CacheConfig) -> Result<Self, CacheError> {
+        #[cfg(feature = "redis-sessions")]
         let redis_client = if config.use_redis && config.redis_url.is_some() {
             match Client::open(config.redis_url.as_ref().unwrap().as_str()) {
                 Ok(client) => {
@@ -112,6 +116,14 @@ impl Cache {
             None
         };
 
+        #[cfg(not(feature = "redis-sessions"))]
+        let redis_client = {
+            if config.use_redis {
+                warn!("Redis feature not enabled, falling back to memory cache");
+            }
+            None
+        };
+
         Ok(Self {
             config,
             redis_client,
@@ -120,6 +132,7 @@ impl Cache {
     }
 
     /// Helper method to try getting data from Redis with monitoring
+    #[cfg(feature = "redis-sessions")]
     async fn try_redis_get<T>(&self, key: &str, full_key: &str) -> Option<Option<T>>
     where
         T: for<'de> Deserialize<'de>,
@@ -128,7 +141,7 @@ impl Cache {
             match self.get_from_redis(full_key).await {
                 Ok(Some(data)) => {
                     debug!(key = %key, "Cache hit (Redis)");
-                    #[cfg(feature = "monitoring")]
+                    #[cfg(feature = "metrics")]
                     {
                         let duration = std::time::Instant::now().elapsed();
                         MetricsHelper::record_cache_operation("redis", "get", "hit", duration);
@@ -141,7 +154,7 @@ impl Cache {
                 }
                 Err(e) => {
                     warn!(key = %key, error = %e, "Redis cache error, falling back to memory");
-                    #[cfg(feature = "monitoring")]
+                    #[cfg(feature = "metrics")]
                     {
                         let duration = std::time::Instant::now().elapsed();
                         MetricsHelper::record_cache_operation("redis", "get", "error", duration);
@@ -161,7 +174,7 @@ impl Cache {
     {
         if let Some(data) = self.get_from_memory(full_key).await {
             debug!(key = %key, "Cache hit (Memory)");
-            #[cfg(feature = "monitoring")]
+            #[cfg(feature = "metrics")]
             {
                 let duration = std::time::Instant::now().elapsed();
                 MetricsHelper::record_cache_operation("memory", "get", "hit", duration);
@@ -169,7 +182,7 @@ impl Cache {
             Some(data)
         } else {
             debug!(key = %key, "Cache miss (Memory)");
-            #[cfg(feature = "monitoring")]
+            #[cfg(feature = "metrics")]
             {
                 let duration = std::time::Instant::now().elapsed();
                 MetricsHelper::record_cache_operation("memory", "get", "miss", duration);
@@ -207,7 +220,8 @@ impl Cache {
     {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
-        // Try Redis first if available
+        // Try Redis first if available and feature is enabled
+        #[cfg(feature = "redis-sessions")]
         if let Some(Some(data)) = self.try_redis_get(key, &full_key).await {
             return Some(data);
         }
@@ -254,7 +268,7 @@ impl Cache {
     where
         T: Serialize,
     {
-        #[cfg(feature = "monitoring")]
+        #[cfg(feature = "metrics")]
         let start_time = Instant::now();
         let full_key = format!("{}{}", self.config.key_prefix, key);
         let ttl_seconds = ttl
@@ -263,7 +277,8 @@ impl Cache {
 
         let serialized = serde_json::to_vec(value)?;
 
-        // Set in Redis if available
+        // Set in Redis if available and feature is enabled
+        #[cfg(feature = "redis-sessions")]
         if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.set_in_redis(&full_key, &serialized, ttl_seconds).await {
                 warn!(key = %key, error = %e, "Failed to set in Redis cache");
@@ -277,7 +292,7 @@ impl Cache {
         debug!(key = %key, ttl = ttl_seconds, "Set in memory cache");
 
         // Record cache set operation
-        #[cfg(feature = "monitoring")]
+        #[cfg(feature = "metrics")]
         {
             let duration = start_time.elapsed();
             MetricsHelper::record_cache_operation("memory", "set", "success", duration);
@@ -309,7 +324,8 @@ impl Cache {
     pub async fn delete(&self, key: &str) -> Result<(), CacheError> {
         let full_key = format!("{}{}", self.config.key_prefix, key);
 
-        // Delete from Redis if available
+        // Delete from Redis if available and feature is enabled
+        #[cfg(feature = "redis-sessions")]
         if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.delete_from_redis(&full_key).await {
                 warn!(key = %key, error = %e, "Failed to delete from Redis cache");
@@ -330,6 +346,7 @@ impl Cache {
     /// Returns an error if cache clear operation fails
     pub async fn clear(&self) -> Result<(), CacheError> {
         // Clear Redis if available
+        #[cfg(feature = "redis-sessions")]
         if let Some(ref _client) = self.redis_client {
             if let Err(e) = self.clear_redis().await {
                 warn!(error = %e, "Failed to clear Redis cache");
@@ -370,6 +387,7 @@ impl Cache {
     }
 
     // Redis operations
+    #[cfg(feature = "redis-sessions")]
     async fn get_from_redis<T>(&self, key: &str) -> Result<Option<T>, CacheError>
     where
         T: for<'de> Deserialize<'de>,
@@ -386,6 +404,7 @@ impl Cache {
         Ok(None)
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn set_in_redis(
         &self,
         key: &str,
@@ -399,6 +418,7 @@ impl Cache {
         Ok(())
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn delete_from_redis(&self, key: &str) -> Result<(), CacheError> {
         if let Some(ref client) = self.redis_client {
             let mut conn = client.get_multiplexed_async_connection().await?;
@@ -407,6 +427,7 @@ impl Cache {
         Ok(())
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn clear_redis(&self) -> Result<(), CacheError> {
         if let Some(ref client) = self.redis_client {
             let mut conn = client.get_multiplexed_async_connection().await?;

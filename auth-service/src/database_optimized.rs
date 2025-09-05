@@ -1,7 +1,7 @@
 use dashmap::DashMap;
 use base64::{Engine as _, engine::general_purpose};
 use deadpool_redis::{Config as RedisConfig, Pool as RedisPool, Runtime};
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 use bb8_redis::RedisConnectionManager;
 use sha2::Digest;
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ use chrono;
 /// Optimized database operations with security constraints
 pub struct DatabaseOptimized {
     redis_pool: RedisPool,
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     connection_pool: Arc<bb8::Pool<RedisConnectionManager>>,
     query_cache: Arc<DashMap<String, CachedQuery>>,
     prepared_statements: Arc<RwLock<DashMap<String, String>>>,
@@ -92,7 +92,7 @@ impl DatabaseOptimized {
         let redis_pool = config.create_pool(Some(Runtime::Tokio1))?;
 
         // Setup bb8 Redis connection pool for high concurrency
-        #[cfg(feature = "enhanced-session-store")]
+        #[cfg(feature = "redis-sessions")]
         let connection_pool = {
             let manager = RedisConnectionManager::new(redis_url)?;
             Arc::new(
@@ -108,7 +108,7 @@ impl DatabaseOptimized {
 
         let instance = Self {
             redis_pool,
-            #[cfg(feature = "enhanced-session-store")]
+            #[cfg(feature = "redis-sessions")]
             connection_pool,
             query_cache: Arc::new(DashMap::new()),
             prepared_statements: Arc::new(RwLock::new(DashMap::new())),
@@ -140,7 +140,7 @@ impl DatabaseOptimized {
     }
 
     /// Get connection pool statistics (when enhanced-session-store feature is enabled)
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     pub fn get_connection_pool_stats(&self) -> String {
         let state = self.connection_pool.state();
         format!(
@@ -150,7 +150,7 @@ impl DatabaseOptimized {
     }
 
     /// Get a connection from the enhanced connection pool
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     pub async fn get_enhanced_connection(&self) -> Result<bb8::PooledConnection<RedisConnectionManager>, Box<dyn std::error::Error + Send + Sync>> {
         Ok(self.connection_pool.get().await?)
     }
@@ -666,7 +666,7 @@ mod tests {
         let config = RedisConfig::from_url("redis://localhost:6379");
         let redis_pool = config.create_pool(Some(Runtime::Tokio1)).unwrap();
 
-        #[cfg(feature = "enhanced-session-store")]
+        #[cfg(feature = "redis-sessions")]
         let connection_pool = {
             let manager = RedisConnectionManager::new("redis://localhost:6379").unwrap();
             Arc::new(bb8::Pool::builder().max_size(10).build_unchecked(manager))
@@ -674,7 +674,7 @@ mod tests {
 
         DatabaseOptimized {
             redis_pool,
-            #[cfg(feature = "enhanced-session-store")]
+            #[cfg(feature = "redis-sessions")]
             connection_pool,
             query_cache: Arc::new(DashMap::new()),
             prepared_statements: Arc::new(RwLock::new(DashMap::new())),

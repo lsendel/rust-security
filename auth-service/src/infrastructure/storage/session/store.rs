@@ -5,18 +5,39 @@
 //! Redis-first storage with in-memory fallback, and session security features.
 
 use async_trait::async_trait;
+#[cfg(feature = "redis-sessions")]
 use deadpool_redis::{redis::AsyncCommands, Config, Pool, Runtime};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
 // Note: Advanced connection pool would integrate with connection_pool_optimized when available
 // For now, we'll define basic structures to demonstrate the pattern
+
+/// Session validation errors for security binding checks
+#[derive(Error, Debug)]
+pub enum SessionValidationError {
+    #[error("IP address mismatch: session={session_ip}, request={request_ip}")]
+    IpAddressMismatch { session_ip: String, request_ip: String },
+    
+    #[error("User agent mismatch: session={session_ua}, request={request_ua}")]
+    UserAgentMismatch { session_ua: String, request_ua: String },
+    
+    #[error("Device fingerprint mismatch: session={session_fp}, request={request_fp}")]
+    DeviceFingerprintMismatch { session_fp: String, request_fp: String },
+    
+    #[error("Session expired")]
+    SessionExpired,
+    
+    #[error("Session not found")]
+    SessionNotFound,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionData {
@@ -83,6 +104,110 @@ impl SessionData {
         self.expires_at += additional_seconds;
         self.update_last_accessed();
     }
+
+    /// Validate session against current request context
+    /// 
+    /// # Security
+    /// 
+    /// This method performs critical security checks to prevent session hijacking:
+    /// - IP address binding validation 
+    /// - User agent consistency check
+    /// - Device fingerprint verification (if available)
+    /// 
+    /// # Arguments
+    /// 
+    /// * `current_ip` - The IP address of the current request
+    /// * `current_user_agent` - The user agent of the current request  
+    /// * `current_device_fingerprint` - Optional device fingerprint of current request
+    /// 
+    /// # Returns
+    /// 
+    /// Returns `Ok(())` if session is valid, `Err(SessionValidationError)` otherwise.
+    pub fn validate_request_context(
+        &self,
+        current_ip: Option<&str>,
+        current_user_agent: Option<&str>,
+        current_device_fingerprint: Option<&str>,
+    ) -> Result<(), SessionValidationError> {
+        // IP address binding validation
+        if let (Some(session_ip), Some(request_ip)) = (&self.ip_address, current_ip) {
+            if session_ip != request_ip {
+                return Err(SessionValidationError::IpAddressMismatch {
+                    session_ip: session_ip.clone(),
+                    request_ip: request_ip.to_string(),
+                });
+            }
+        }
+
+        // User agent consistency check (allow minor variations)
+        if let (Some(session_ua), Some(request_ua)) = (&self.user_agent, current_user_agent) {
+            if !self.is_user_agent_compatible(session_ua, request_ua) {
+                return Err(SessionValidationError::UserAgentMismatch {
+                    session_ua: session_ua.clone(),
+                    request_ua: request_ua.to_string(),
+                });
+            }
+        }
+
+        // Device fingerprint verification (strict match if available)
+        if let (Some(session_fp), Some(request_fp)) = (&self.device_fingerprint, current_device_fingerprint) {
+            if session_fp != request_fp {
+                return Err(SessionValidationError::DeviceFingerprintMismatch {
+                    session_fp: session_fp.clone(),
+                    request_fp: request_fp.to_string(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if user agent strings are compatible (allowing minor version differences)
+    fn is_user_agent_compatible(&self, session_ua: &str, request_ua: &str) -> bool {
+        // Exact match is always valid
+        if session_ua == request_ua {
+            return true;
+        }
+
+        // Extract browser and major version for compatibility check
+        let session_parts = self.extract_browser_info(session_ua);
+        let request_parts = self.extract_browser_info(request_ua);
+
+        // Same browser family and major version is acceptable
+        session_parts.0 == request_parts.0 && session_parts.1 == request_parts.1
+    }
+
+    /// Extract browser name and major version from user agent
+    fn extract_browser_info(&self, user_agent: &str) -> (String, String) {
+        // Simple parsing for common browsers
+        let ua_lower = user_agent.to_lowercase();
+        
+        if let Some(chrome_pos) = ua_lower.find("chrome/") {
+            let version_start = chrome_pos + 7;
+            let version_end = ua_lower[version_start..].find('.').unwrap_or(0) + version_start;
+            let major_version = &ua_lower[version_start..version_end];
+            return ("chrome".to_string(), major_version.to_string());
+        }
+        
+        if let Some(firefox_pos) = ua_lower.find("firefox/") {
+            let version_start = firefox_pos + 8;
+            let version_end = ua_lower[version_start..].find('.').unwrap_or(0) + version_start;
+            let major_version = &ua_lower[version_start..version_end];
+            return ("firefox".to_string(), major_version.to_string());
+        }
+        
+        if let Some(safari_pos) = ua_lower.find("version/") {
+            if ua_lower.contains("safari") {
+                let version_start = safari_pos + 8;
+                let version_end = ua_lower[version_start..].find('.').unwrap_or(0) + version_start;
+                let major_version = &ua_lower[version_start..version_end];
+                return ("safari".to_string(), major_version.to_string());
+            }
+        }
+
+        // Fallback: use the entire user agent as identifier
+        ("unknown".to_string(), user_agent.to_string())
+    }
 }
 
 /// Trait for session storage backends with comprehensive session management capabilities
@@ -115,6 +240,39 @@ pub trait SessionStore: Send + Sync {
         &self,
         session_id: &str,
     ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>>;
+
+    /// Securely retrieve and validate a session with request context binding
+    ///
+    /// # Security
+    ///
+    /// This method performs comprehensive security validation including:
+    /// - Session existence and expiration checks
+    /// - IP address binding validation
+    /// - User agent consistency verification  
+    /// - Device fingerprint matching (if available)
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID to retrieve
+    /// * `current_ip` - The IP address of the current request
+    /// * `current_user_agent` - The user agent of the current request
+    /// * `current_device_fingerprint` - Optional device fingerprint of current request
+    ///
+    /// # Errors
+    ///
+    /// Returns `SessionValidationError` if:
+    /// - Session does not exist or has expired
+    /// - IP address doesn't match the session
+    /// - User agent is incompatible with session  
+    /// - Device fingerprint doesn't match (if both are present)
+    /// - Storage backend errors occur
+    async fn get_validated_session(
+        &self,
+        session_id: &str,
+        current_ip: Option<&str>,
+        current_user_agent: Option<&str>,
+        current_device_fingerprint: Option<&str>,
+    ) -> Result<SessionData, SessionValidationError>;
     /// Update an existing session in the store
     ///
     /// # Errors
@@ -180,7 +338,10 @@ pub trait SessionStore: Send + Sync {
 
 #[derive(Clone)]
 pub struct RedisSessionStore {
-    redis_pool: Option<Pool>,
+    #[cfg(feature = "redis-sessions")]
+    redis_pool: Option<deadpool_redis::Pool>,
+    #[cfg(not(feature = "redis-sessions"))]
+    redis_pool: Option<()>,
     memory_fallback: Arc<RwLock<HashMap<String, SessionData>>>,
     user_sessions_index: Arc<RwLock<HashMap<String, Vec<String>>>>, // user_id -> session_ids
 }
@@ -203,6 +364,7 @@ impl RedisSessionStore {
         }
     }
 
+    #[cfg(feature = "redis-sessions")]
     async fn get_redis_connection(&self) -> Option<deadpool_redis::Connection> {
         match &self.redis_pool {
             Some(pool) => match pool.get().await {
@@ -214,6 +376,11 @@ impl RedisSessionStore {
             },
             None => None,
         }
+    }
+
+    #[cfg(not(feature = "redis-sessions"))]
+    async fn get_redis_connection(&self) -> Option<()> {
+        None
     }
 
     fn session_key(session_id: &str) -> String {
@@ -231,46 +398,53 @@ impl SessionStore for RedisSessionStore {
         &self,
         session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
-        let session_json = serde_json::to_string(session)?;
-        let ttl = session.expires_at - session.created_at;
+        let _session_json = serde_json::to_string(session)?;
+        let _ttl = if session.expires_at > session.created_at {
+            session.expires_at - session.created_at
+        } else {
+            1 // Minimum TTL for expired sessions
+        };
 
         // Store in Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = Self::session_key(&session.session_id);
-            let user_sessions_key = Self::user_sessions_key(&session.user_id);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let session_key = Self::session_key(&session.session_id);
+                let user_sessions_key = Self::user_sessions_key(&session.user_id);
 
-            // Store session data with TTL
-            let result1: Result<(), _> = {
-                let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
-                if set_result.is_ok() {
-                    conn.expire(&session_key, ttl as i64).await
-                } else {
-                    set_result
-                }
-            };
+                // Store session data with TTL
+                let result1: Result<(), _> = {
+                    let set_result = conn.set::<_, _, ()>(&session_key, &_session_json).await;
+                    if set_result.is_ok() {
+                        conn.expire(&session_key, _ttl as i64).await
+                    } else {
+                        set_result
+                    }
+                };
 
-            // Add to user sessions set
-            let result2: Result<(), _> = conn.sadd(&user_sessions_key, &session.session_id).await;
+                // Add to user sessions set
+                let result2: Result<(), _> = conn.sadd(&user_sessions_key, &session.session_id).await;
 
-            match (result1, result2) {
-                (Ok(()), Ok(())) => {
-                    // Successfully stored in Redis, also store in memory as backup
-                    self.memory_fallback
-                        .write()
-                        .await
-                        .insert(session.session_id.clone(), session.clone());
+                match (result1, result2) {
+                    (Ok(()), Ok(())) => {
+                        // Successfully stored in Redis, also store in memory as backup
+                        self.memory_fallback
+                            .write()
+                            .await
+                            .insert(session.session_id.clone(), session.clone());
 
-                    // Update user sessions index
-                    let mut user_sessions = self.user_sessions_index.write().await;
-                    user_sessions
-                        .entry(session.user_id.clone())
-                        .or_insert_with(Vec::new)
-                        .push(session.session_id.clone());
+                        // Update user sessions index
+                        let mut user_sessions = self.user_sessions_index.write().await;
+                        user_sessions
+                            .entry(session.user_id.clone())
+                            .or_insert_with(Vec::new)
+                            .push(session.session_id.clone());
 
-                    return Ok(());
-                }
-                _ => {
-                    warn!("Failed to store session in Redis");
+                        return Ok(());
+                    }
+                    _ => {
+                        warn!("Failed to store session in Redis");
+                    }
                 }
             }
         }
@@ -297,6 +471,7 @@ impl SessionStore for RedisSessionStore {
         session_id: &str,
     ) -> Result<Option<SessionData>, Box<dyn StdError + Send + Sync>> {
         // Try Redis first (primary storage)
+        #[cfg(feature = "redis-sessions")]
         if let Some(mut conn) = self.get_redis_connection().await {
             let session_key = Self::session_key(session_id);
             match conn.get::<_, Option<String>>(&session_key).await {
@@ -343,38 +518,68 @@ impl SessionStore for RedisSessionStore {
         }
     }
 
+    async fn get_validated_session(
+        &self,
+        session_id: &str,
+        current_ip: Option<&str>,
+        current_user_agent: Option<&str>,
+        current_device_fingerprint: Option<&str>,
+    ) -> Result<SessionData, SessionValidationError> {
+        // First retrieve the session
+        let session = self.get_session(session_id)
+            .await
+            .map_err(|e| {
+                error!("Session retrieval error for {}: {}", session_id, e);
+                SessionValidationError::SessionNotFound
+            })?;
+
+        let session = session.ok_or(SessionValidationError::SessionNotFound)?;
+
+        // Validate session context
+        session.validate_request_context(
+            current_ip,
+            current_user_agent, 
+            current_device_fingerprint,
+        )?;
+
+        Ok(session)
+    }
+
     async fn update_session(
         &self,
         session: &SessionData,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
-        let session_json = serde_json::to_string(session)?;
-        let ttl = if session.expires_at > session.last_accessed {
+        let _session_json = serde_json::to_string(session)?;
+        let _ttl = if session.expires_at > session.last_accessed {
             session.expires_at - session.last_accessed
         } else {
             1 // Minimum TTL to avoid immediate expiration
         };
 
         // Update in Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = Self::session_key(&session.session_id);
-            let res = {
-                let set_result = conn.set::<_, _, ()>(&session_key, &session_json).await;
-                if set_result.is_ok() {
-                    let _: Result<(), _> = conn.expire(&session_key, ttl as i64).await;
-                }
-                set_result
-            };
-            match res {
-                Ok(()) => {
-                    // Successfully updated in Redis, also update memory backup
-                    self.memory_fallback
-                        .write()
-                        .await
-                        .insert(session.session_id.clone(), session.clone());
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!("Failed to update session in Redis: {}", e);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let session_key = Self::session_key(&session.session_id);
+                let res = {
+                    let set_result = conn.set::<_, _, ()>(&session_key, &_session_json).await;
+                    if set_result.is_ok() {
+                        let _: Result<(), _> = conn.expire(&session_key, _ttl as i64).await;
+                    }
+                    set_result
+                };
+                match res {
+                    Ok(()) => {
+                        // Successfully updated in Redis, also update memory backup
+                        self.memory_fallback
+                            .write()
+                            .await
+                            .insert(session.session_id.clone(), session.clone());
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        warn!("Failed to update session in Redis: {}", e);
+                    }
                 }
             }
         }
@@ -391,21 +596,27 @@ impl SessionStore for RedisSessionStore {
         &self,
         session_id: &str,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
-        // Get session first to find user_id for index cleanup
-        let session = self.get_session(session_id).await?;
+        // Try to get session from memory storage first to avoid recursion with get_session
+        let session = {
+            let memory_store = self.memory_fallback.read().await;
+            memory_store.get(session_id).cloned()
+        };
 
         // Delete from Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let session_key = Self::session_key(session_id);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let session_key = Self::session_key(session_id);
 
-            if let Some(session_data) = &session {
-                let user_sessions_key = Self::user_sessions_key(&session_data.user_id);
+                if let Some(session_data) = &session {
+                    let user_sessions_key = Self::user_sessions_key(&session_data.user_id);
 
-                // Delete session and remove from user sessions set
-                let _: Result<(), _> = conn.del(&session_key).await;
-                let _: Result<(), _> = conn.srem(&user_sessions_key, session_id).await;
-            } else {
-                let _: Result<(), _> = conn.del(&session_key).await;
+                    // Delete session and remove from user sessions set
+                    let _: Result<(), _> = conn.del(&session_key).await;
+                    let _: Result<(), _> = conn.srem(&user_sessions_key, session_id).await;
+                } else {
+                    let _: Result<(), _> = conn.del(&session_key).await;
+                }
             }
         }
 
@@ -435,19 +646,22 @@ impl SessionStore for RedisSessionStore {
         let mut sessions = Vec::new();
 
         // Try Redis first (primary storage)
-        if let Some(mut conn) = self.get_redis_connection().await {
-            let user_sessions_key = Self::user_sessions_key(user_id);
-            match conn.smembers::<_, Vec<String>>(&user_sessions_key).await {
-                Ok(session_ids) => {
-                    for session_id in &session_ids {
-                        if let Ok(Some(session)) = self.get_session(session_id).await {
-                            sessions.push(session);
+        #[cfg(feature = "redis-sessions")]
+        {
+            if let Some(mut conn) = self.get_redis_connection().await {
+                let user_sessions_key = Self::user_sessions_key(user_id);
+                match conn.smembers::<_, Vec<String>>(&user_sessions_key).await {
+                    Ok(session_ids) => {
+                        for session_id in &session_ids {
+                            if let Ok(Some(session)) = self.get_session(session_id).await {
+                                sessions.push(session);
+                            }
                         }
+                        return Ok(sessions);
                     }
-                    return Ok(sessions);
-                }
-                Err(e) => {
-                    warn!("Failed to get user sessions from Redis: {}", e);
+                    Err(e) => {
+                        warn!("Failed to get user sessions from Redis: {}", e);
+                    }
                 }
             }
         }
@@ -534,14 +748,14 @@ pub async fn start_session_cleanup_task(session_store: Arc<dyn SessionStore>) {
 }
 
 /// Basic connection pool configuration for demonstration
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 #[derive(Debug, Clone)]
 pub struct BasicConnectionPoolConfig {
     pub max_connections: u32,
     pub connection_timeout: Duration,
 }
 
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 impl Default for BasicConnectionPoolConfig {
     fn default() -> Self {
         Self {
@@ -552,13 +766,13 @@ impl Default for BasicConnectionPoolConfig {
 }
 
 /// Basic connection pool manager for demonstration
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 pub struct BasicConnectionPoolManager {
     redis_pool: Option<Pool>,
     _config: BasicConnectionPoolConfig,
 }
 
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 impl BasicConnectionPoolManager {
     /// Create a new Redis connection pool manager
     ///
@@ -598,7 +812,7 @@ impl BasicConnectionPoolManager {
 
 /// Enhanced Redis session store with optimized connection pooling and resilience
 /// Temporarily disabled due to compilation issues - can be enabled in the future
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 #[derive(Clone)]
 pub struct EnhancedRedisSessionStore {
     pool_manager: Arc<BasicConnectionPoolManager>,
@@ -607,7 +821,7 @@ pub struct EnhancedRedisSessionStore {
     retry_config: RetryConfig,
 }
 
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 #[derive(Debug, Clone)]
 pub struct RetryConfig {
     pub max_retries: u32,
@@ -616,7 +830,7 @@ pub struct RetryConfig {
     pub exponential_base: f64,
 }
 
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
@@ -628,7 +842,7 @@ impl Default for RetryConfig {
     }
 }
 
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 impl EnhancedRedisSessionStore {
     /// Create a new enhanced Redis session store with optimized connection pooling
     ///
@@ -710,7 +924,7 @@ impl EnhancedRedisSessionStore {
 
 // Temporarily disabled due to lifetime parameter matching issues
 // Can be enabled once the exact trait signature is resolved
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 #[async_trait]
 impl SessionStore for EnhancedRedisSessionStore {
     async fn create_session(
@@ -781,6 +995,33 @@ impl SessionStore for EnhancedRedisSessionStore {
             let memory = self.memory_fallback.read().await;
             Ok(memory.get(session_id).cloned())
         }
+    }
+
+    async fn get_validated_session(
+        &self,
+        session_id: &str,
+        current_ip: Option<&str>,
+        current_user_agent: Option<&str>,
+        current_device_fingerprint: Option<&str>,
+    ) -> Result<SessionData, SessionValidationError> {
+        // First retrieve the session
+        let session = self.get_session(session_id)
+            .await
+            .map_err(|e| {
+                error!("Session retrieval error for {}: {}", session_id, e);
+                SessionValidationError::SessionNotFound
+            })?;
+
+        let session = session.ok_or(SessionValidationError::SessionNotFound)?;
+
+        // Validate session context
+        session.validate_request_context(
+            current_ip,
+            current_user_agent, 
+            current_device_fingerprint,
+        )?;
+
+        Ok(session)
     }
 
     async fn update_session(
@@ -951,7 +1192,7 @@ mod chaos_tests {
         assert!(retrieved.is_none());
     }
 
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     #[tokio::test]
     async fn test_retry_mechanism() {
         // This test would use the enhanced store with actual retry logic

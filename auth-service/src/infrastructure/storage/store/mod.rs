@@ -16,5 +16,8 @@ pub mod sql;
 
 // Re-export main store types
 pub use hybrid::HybridStore;
+
+#[cfg(feature = "redis-sessions")]
 pub use optimized::OptimizedRedisStore;
+
 pub use sql::SqlStore;

@@ -1,13 +1,20 @@
+#[cfg(feature = "redis-sessions")]
 use crate::circuit_breaker::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, RetryBackoff, RetryConfig,
     TimeoutConfig,
 };
+#[cfg(feature = "redis-sessions")]
 use crate::shared::error::AppError;
+#[cfg(feature = "redis-sessions")]
 use crate::pii_protection::redact_log;
+#[cfg(feature = "redis-sessions")]
 use redis::{aio::ConnectionManager, AsyncCommands};
+#[cfg(feature = "redis-sessions")]
 use std::time::Duration;
+#[cfg(feature = "redis-sessions")]
 use tokio::time::timeout;
 
+#[cfg(feature = "redis-sessions")]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ResilientRedisConfig {
     pub circuit_breaker: CircuitBreakerConfig,
@@ -17,6 +24,7 @@ pub struct ResilientRedisConfig {
     pub max_connection_lifetime: Duration,
 }
 
+#[cfg(feature = "redis-sessions")]
 impl Default for ResilientRedisConfig {
     fn default() -> Self {
         Self {
@@ -46,12 +54,14 @@ impl Default for ResilientRedisConfig {
     }
 }
 
+#[cfg(feature = "redis-sessions")]
 pub struct ResilientRedisClient {
     connection_manager: ConnectionManager,
     circuit_breaker: CircuitBreaker,
     config: ResilientRedisConfig,
 }
 
+#[cfg(feature = "redis-sessions")]
 impl ResilientRedisClient {
     /// Create a new resilient Redis client with circuit breaker and retry logic
     ///
@@ -285,6 +295,7 @@ impl ResilientRedisClient {
     }
 }
 
+#[cfg(feature = "redis-sessions")]
 pub struct ResilientPipeline {
     pipe: redis::Pipeline,
     connection_manager: ConnectionManager,
@@ -292,6 +303,7 @@ pub struct ResilientPipeline {
     config: ResilientRedisConfig,
 }
 
+#[cfg(feature = "redis-sessions")]
 impl ResilientPipeline {
     fn new(
         connection_manager: ConnectionManager,
@@ -393,7 +405,7 @@ impl ResilientPipeline {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "redis-sessions"))]
 mod tests {
     use super::*;
     use std::sync::Once;

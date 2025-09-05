@@ -112,6 +112,7 @@
     clippy::significant_drop_tightening,
     clippy::unused_async,
     clippy::too_many_lines,
+    clippy::multiple_crate_versions,
     clippy::match_same_arms,
     clippy::option_if_let_else,
     clippy::manual_let_else,
@@ -195,10 +196,12 @@ use std::sync::Arc;
 
 // New modular architecture
 pub mod app;
+pub mod billing;
 pub mod domain;
 pub mod handlers;
 pub mod infrastructure;
 pub mod middleware;
+pub mod monitoring;
 pub mod security;
 pub mod services;
 pub mod shared;
@@ -333,7 +336,7 @@ pub const MAX_REQUEST_BODY_SIZE: usize = constants::security::MAX_REQUEST_BODY_S
 /// ```
 #[derive(Clone)]
 pub struct AppState {
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     pub store: Arc<crate::infrastructure::storage::store::hybrid::HybridStore>,
     #[cfg(feature = "api-keys")]
     pub api_key_store: Arc<crate::api_key_store::ApiKeyStore>,

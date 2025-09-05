@@ -1,3 +1,4 @@
+#[cfg(feature = "redis-sessions")]
 use redis::{aio::ConnectionManager, AsyncCommands, RedisError};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;

@@ -1,4 +1,5 @@
 use crate::mfa::crypto::{CryptoError, EncryptedSecret, SecretManager};
+#[cfg(feature = "redis-sessions")]
 use redis::{aio::ConnectionManager, AsyncCommands, RedisError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

@@ -28,7 +28,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 
-#[cfg(feature = "enhanced-session-store")]
+#[cfg(feature = "redis-sessions")]
 use deadpool_redis::Pool as RedisPool;
 
 #[cfg(feature = "ed25519-dalek")]
@@ -247,7 +247,7 @@ pub struct UnifiedJwtManager {
     last_key_rotation: Arc<RwLock<DateTime<Utc>>>,
 
     // Optional Redis connection for distributed storage
-    #[cfg(feature = "enhanced-session-store")]
+    #[cfg(feature = "redis-sessions")]
     redis: Option<RedisPool>,
 
     // Random number generator for key generation
@@ -258,17 +258,17 @@ impl UnifiedJwtManager {
     /// Create a new JWT manager
     pub async fn new(
         config: JwtConfig,
-        #[cfg(feature = "enhanced-session-store")] redis_pool: Option<RedisPool>,
+        #[cfg(feature = "redis-sessions")] redis_pool: Option<RedisPool>,
     ) -> Result<Self, JwtError> {
-        #[cfg(not(feature = "enhanced-session-store"))]
-        let redis_pool: Option<()> = None;
+        #[cfg(not(feature = "redis-sessions"))]
+        let _redis_pool: Option<()> = None;
         let manager = Self {
             config,
             active_keys: Arc::new(RwLock::new(HashMap::new())),
             current_signing_key: Arc::new(RwLock::new(None)),
             metrics: Arc::new(RwLock::new(JwtMetrics::default())),
             last_key_rotation: Arc::new(RwLock::new(Utc::now())),
-            #[cfg(feature = "enhanced-session-store")]
+            #[cfg(feature = "redis-sessions")]
             redis: redis_pool,
             rng: ring::rand::SystemRandom::new(),
         };
@@ -507,6 +507,9 @@ impl UnifiedJwtManager {
             .kid
             .ok_or_else(|| JwtError::InvalidFormat("Missing key ID in token header".to_string()))?;
 
+        // SECURITY: Validate kid parameter to prevent injection and key confusion attacks
+        Self::validate_kid_parameter(&kid)?;
+
         // Get the decoding key
         let decoding_key = {
             let keys = self.active_keys.read().await;
@@ -620,11 +623,12 @@ static GLOBAL_JWT_MANAGER: std::sync::LazyLock<std::sync::RwLock<Option<Arc<Unif
 /// Initialize global JWT manager
 pub async fn initialize_global_jwt_manager(
     config: JwtConfig,
-    #[cfg(feature = "enhanced-session-store")] redis_pool: Option<RedisPool>,
+    #[cfg(feature = "redis-sessions")] redis_pool: Option<RedisPool>,
 ) -> Result<(), JwtError> {
-    #[cfg(not(feature = "enhanced-session-store"))]
-    let redis_pool = None;
+    #[cfg(feature = "redis-sessions")]
     let manager = UnifiedJwtManager::new(config, redis_pool).await?;
+    #[cfg(not(feature = "redis-sessions"))]
+    let manager = UnifiedJwtManager::new(config).await?;
     let mut global = GLOBAL_JWT_MANAGER.write().unwrap();
     *global = Some(Arc::new(manager));
     info!("Global JWT manager initialized");
@@ -662,6 +666,108 @@ pub async fn get_jwks_global() -> Result<Jwks, JwtError> {
         JwtError::ConfigurationError("Global JWT manager not initialized".to_string())
     })?;
     manager.get_jwks().await
+}
+
+impl UnifiedJwtManager {
+    /// Validate JWT kid parameter to prevent injection and key confusion attacks
+    ///
+    /// # Security
+    ///
+    /// This method performs comprehensive validation of the JWT kid (key ID) parameter:
+    /// - Ensures kid is not empty or whitespace only
+    /// - Validates length is within reasonable bounds (1-128 characters)
+    /// - Checks for invalid characters that could indicate injection attempts
+    /// - Prevents directory traversal and injection patterns
+    /// - Only allows alphanumeric characters, hyphens, underscores, and dots
+    ///
+    /// # Arguments
+    ///
+    /// * `kid` - The key ID parameter from the JWT header
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if kid is valid, `Err(JwtError)` otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns `JwtError::InvalidFormat` if:
+    /// - kid is empty or contains only whitespace
+    /// - kid is longer than 128 characters
+    /// - kid contains invalid characters
+    /// - kid contains potential injection patterns
+    fn validate_kid_parameter(kid: &str) -> Result<(), JwtError> {
+        // Check for empty or whitespace-only kid
+        if kid.trim().is_empty() {
+            return Err(JwtError::InvalidFormat(
+                "Key ID cannot be empty or whitespace only".to_string(),
+            ));
+        }
+
+        // Check length bounds (reasonable limits)
+        if kid.len() > 128 {
+            return Err(JwtError::InvalidFormat(format!(
+                "Key ID too long: {} characters (max 128)",
+                kid.len()
+            )));
+        }
+
+        // Check for valid characters only (alphanumeric, hyphen, underscore, dot)
+        // This prevents injection attempts and ensures key lookup safety
+        if !kid
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            return Err(JwtError::InvalidFormat(
+                "Key ID contains invalid characters. Only alphanumeric, '-', '_', '.' allowed"
+                    .to_string(),
+            ));
+        }
+
+        // Check for directory traversal patterns
+        if kid.contains("..") || kid.contains("//") {
+            return Err(JwtError::InvalidFormat(
+                "Key ID contains potential directory traversal pattern".to_string(),
+            ));
+        }
+
+        // Check for SQL injection patterns (though we're not using SQL for key lookup)
+        let kid_lower = kid.to_lowercase();
+        if kid_lower.contains("select")
+            || kid_lower.contains("union")
+            || kid_lower.contains("drop")
+            || kid_lower.contains("insert")
+            || kid_lower.contains("delete")
+            || kid_lower.contains("--")
+            || kid_lower.contains("/*")
+            || kid_lower.contains("*/")
+        {
+            return Err(JwtError::InvalidFormat(
+                "Key ID contains potential injection pattern".to_string(),
+            ));
+        }
+
+        // Check for XSS patterns (defense in depth)
+        if kid_lower.contains("script")
+            || kid_lower.contains("javascript")
+            || kid_lower.contains("onclick")
+            || kid_lower.contains("onload")
+            || kid_lower.contains("<")
+            || kid_lower.contains(">")
+        {
+            return Err(JwtError::InvalidFormat(
+                "Key ID contains potential XSS pattern".to_string(),
+            ));
+        }
+
+        // Check for null bytes and control characters
+        if kid.contains('\0') || kid.chars().any(|c| c.is_control()) {
+            return Err(JwtError::InvalidFormat(
+                "Key ID contains null bytes or control characters".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

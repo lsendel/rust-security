@@ -7,7 +7,7 @@ use crate::threat_types::{
 };
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 use flume::{unbounded, Receiver, Sender};
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 use prometheus::{register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram};
 use redis::aio::ConnectionManager;
 use serde_json;
@@ -25,7 +25,7 @@ use tokio::time::{interval, Duration as TokioDuration};
 use tracing::{error, info, warn};
 
 /// Prometheus metrics for behavioral analysis
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 static THREAT_PATTERNS_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_patterns_detected_total",
@@ -34,7 +34,7 @@ static THREAT_PATTERNS_DETECTED: std::sync::LazyLock<Counter> = std::sync::LazyL
     .expect("Failed to create threat_patterns_detected counter")
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 static BEHAVIORAL_ANOMALIES_DETECTED: std::sync::LazyLock<Counter> =
     std::sync::LazyLock::new(|| {
         register_counter!(
@@ -44,7 +44,7 @@ static BEHAVIORAL_ANOMALIES_DETECTED: std::sync::LazyLock<Counter> =
         .expect("Failed to create behavioral_anomalies_detected counter")
     });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 static ANALYSIS_DURATION: std::sync::LazyLock<Histogram> = std::sync::LazyLock::new(|| {
     register_histogram!(
         "threat_hunting_analysis_duration_seconds",
@@ -53,7 +53,7 @@ static ANALYSIS_DURATION: std::sync::LazyLock<Histogram> = std::sync::LazyLock::
     .expect("Failed to create analysis_duration histogram")
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 static ACTIVE_THREATS_GAUGE: std::sync::LazyLock<Gauge> = std::sync::LazyLock::new(|| {
     register_gauge!(
         "threat_hunting_active_threats",
@@ -62,7 +62,7 @@ static ACTIVE_THREATS_GAUGE: std::sync::LazyLock<Gauge> = std::sync::LazyLock::n
     .expect("Failed to create active_threats_gauge gauge")
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 #[allow(dead_code)]
 static ML_PREDICTIONS: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
@@ -72,7 +72,7 @@ static ML_PREDICTIONS: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|
     .expect("Failed to create ml_predictions counter")
 });
 
-#[cfg(feature = "monitoring")]
+#[cfg(feature = "metrics")]
 static USER_PROFILES_UPDATED: std::sync::LazyLock<Counter> = std::sync::LazyLock::new(|| {
     register_counter!(
         "threat_hunting_user_profiles_updated_total",
@@ -514,12 +514,12 @@ impl AdvancedBehavioralThreatDetector {
         }
 
         // Update Prometheus metrics
-        #[cfg(feature = "monitoring")]
+        #[cfg(feature = "metrics")]
         THREAT_PATTERNS_DETECTED.inc_by(threats_detected.len() as f64);
-        #[cfg(feature = "monitoring")]
+        #[cfg(feature = "metrics")]
         let _timer = ANALYSIS_DURATION.start_timer();
-        #[cfg(not(feature = "monitoring"))]
-        let _timer = || {}; // No-op timer when monitoring is disabled
+        #[cfg(not(feature = "metrics"))]
+        let _timer = || {}; // No-op timer when metrics is disabled
 
         // Store threats
         for threat in &threats_detected {
@@ -1014,7 +1014,7 @@ impl AdvancedBehavioralThreatDetector {
 
             threats.push(threat);
 
-            #[cfg(feature = "monitoring")]
+            #[cfg(feature = "metrics")]
             BEHAVIORAL_ANOMALIES_DETECTED.inc();
         }
 
@@ -1053,7 +1053,7 @@ impl AdvancedBehavioralThreatDetector {
 
                     let threat_event = crate::threat_types::ThreatSecurityEvent::from(&event);
                     profile.update_with_event(&threat_event);
-                    #[cfg(feature = "monitoring")]
+                    #[cfg(feature = "metrics")]
                     USER_PROFILES_UPDATED.inc();
                 }
 
@@ -1168,7 +1168,7 @@ impl AdvancedBehavioralThreatDetector {
                 }
 
                 // Update active threats gauge
-                #[cfg(feature = "monitoring")]
+                #[cfg(feature = "metrics")]
                 ACTIVE_THREATS_GAUGE.set(threats.len() as f64);
             }
         });

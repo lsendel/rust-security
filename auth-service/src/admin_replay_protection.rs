@@ -1,4 +1,5 @@
 use dashmap::DashMap;
+#[cfg(feature = "redis-sessions")]
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -10,7 +11,10 @@ use tracing::{error, warn};
 #[derive(Clone)]
 pub struct ReplayProtection {
     /// Redis client for distributed nonce storage
+    #[cfg(feature = "redis-sessions")]
     redis_client: Option<redis::Client>,
+    #[cfg(not(feature = "redis-sessions"))]
+    redis_client: Option<()>,
     /// In-memory fallback for nonce storage
     local_cache: Arc<DashMap<String, u64>>,
     /// Time window for request validity (seconds)
@@ -37,6 +41,7 @@ impl ReplayProtection {
     /// Create a new replay protection instance
     #[must_use]
     pub fn new(redis_url: Option<&str>, time_window: u64, max_clock_skew: u64) -> Self {
+        #[cfg(feature = "redis-sessions")]
         let redis_client = redis_url.and_then(|url| {
             redis::Client::open(url)
                 .map_err(|e| {
@@ -45,6 +50,14 @@ impl ReplayProtection {
                 })
                 .ok()
         });
+
+        #[cfg(not(feature = "redis-sessions"))]
+        let redis_client = {
+            if redis_url.is_some() {
+                warn!("Redis feature not enabled, using local cache only for replay protection");
+            }
+            None
+        };
 
         Self {
             redis_client,
@@ -124,6 +137,7 @@ impl ReplayProtection {
     /// Check if nonce has been used
     async fn is_nonce_used(&self, nonce: &str) -> Result<bool, crate::shared::error::AppError> {
         // Try Redis first
+        #[cfg(feature = "redis-sessions")]
         if let Some(client) = &self.redis_client {
             match self.check_redis_nonce(client, nonce).await {
                 Ok(used) => return Ok(used),
@@ -138,6 +152,7 @@ impl ReplayProtection {
     }
 
     /// Check Redis for nonce
+    #[cfg(feature = "redis-sessions")]
     async fn check_redis_nonce(
         &self,
         client: &redis::Client,
@@ -155,9 +170,10 @@ impl ReplayProtection {
         nonce: &str,
         timestamp: u64,
     ) -> Result<(), crate::shared::error::AppError> {
-        let expiry = self.time_window + self.max_clock_skew;
+        let _expiry = self.time_window + self.max_clock_skew;
 
         // Try Redis first
+        #[cfg(feature = "redis-sessions")]
         if let Some(client) = &self.redis_client {
             match self
                 .store_redis_nonce(client, nonce, timestamp, expiry)
@@ -182,6 +198,7 @@ impl ReplayProtection {
     }
 
     /// Store nonce in Redis with expiry
+    #[cfg(feature = "redis-sessions")]
     async fn store_redis_nonce(
         &self,
         client: &redis::Client,

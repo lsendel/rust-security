@@ -7,7 +7,8 @@ use std::collections::HashSet;
 use crate::domain::value_objects::{Email, PasswordHash, UserId};
 
 /// User entity representing a registered user in the system.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "postgres", derive(sqlx::FromRow))]
 pub struct User {
     pub id: UserId,
     pub email: Email,
