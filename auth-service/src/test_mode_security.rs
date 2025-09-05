@@ -73,7 +73,7 @@ pub fn is_production_environment() -> bool {
     let environment = std::env::var("ENVIRONMENT").unwrap_or_default();
     let app_env = std::env::var("APP_ENV").unwrap_or_default();
     let node_env = std::env::var("NODE_ENV").unwrap_or_default();
-    
+
     // Additional production detection methods
     let k8s_prod = std::env::var("KUBERNETES_NAMESPACE")
         .map(|ns| ns.contains("prod") || ns.contains("production"))
@@ -83,9 +83,11 @@ pub fn is_production_environment() -> bool {
         .unwrap_or(false);
 
     // SECURITY: Default to production if no environment is explicitly set (fail-safe)
-    let explicit_env_set = !rust_env.is_empty() || !environment.is_empty() || 
-                          !app_env.is_empty() || !node_env.is_empty();
-    
+    let explicit_env_set = !rust_env.is_empty()
+        || !environment.is_empty()
+        || !app_env.is_empty()
+        || !node_env.is_empty();
+
     rust_env == "production" ||
         environment == "production" ||
         app_env == "production" ||
@@ -289,11 +291,11 @@ mod tests {
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("ENVIRONMENT");
         std::env::remove_var("APP_ENV");
-        
+
         // Test the conditional execution functionality
         // Since the static variable is initialized based on startup environment,
         // we test the behavior as it would occur in practice
-        
+
         // If test mode is enabled (via environment at startup), should return Some
         if is_test_mode_raw() {
             let result = if_test_mode(|| 42);
@@ -303,15 +305,15 @@ mod tests {
             let result = if_test_mode(|| 42);
             assert_eq!(result, None);
         }
-        
+
         // Test production safety - set production and verify test mode is blocked
         std::env::set_var("RUST_ENV", "production");
         std::env::set_var("TEST_MODE", "1");
-        
+
         // Should be blocked in production regardless of TEST_MODE setting
         let _result = if_test_mode(|| 42);
         // This should be None due to production safety check
-        
+
         // Cleanup
         std::env::remove_var("RUST_ENV");
         std::env::remove_var("TEST_MODE");

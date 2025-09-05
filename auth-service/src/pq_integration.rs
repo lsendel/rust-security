@@ -583,6 +583,7 @@ pub async fn pq_health_check() -> Result<Json<serde_json::Value>, crate::shared:
 
 /// Create router with all post-quantum admin endpoints
 pub fn create_pq_admin_router() -> Router<AppState> {
+    use crate::admin_middleware::admin_auth_middleware;
     Router::new()
         .route("/config", get(get_pq_config))
         .route("/jwt/create", post(create_pq_jwt))
@@ -595,6 +596,7 @@ pub fn create_pq_admin_router() -> Router<AppState> {
         .route("/emergency/rollback", post(emergency_rollback))
         .route("/metrics", get(get_pq_metrics))
         .route("/health", get(pq_health_check))
+        .route_layer(axum::middleware::from_fn(admin_auth_middleware))
 )
 
 /// Middleware to check post-quantum prerequisites for endpoints

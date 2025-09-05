@@ -175,12 +175,21 @@ impl OptimizedServiceClient {
     }
 
     async fn execute_policy_request(&self, request: PolicyRequest) -> Result<PolicyResponse, ClientError> {
+        // Map generic PolicyRequest into policy-service authorize body
+        let body = serde_json::json!({
+            "request_id": Uuid::new_v4().to_string(),
+            "principal": {"type": "User", "id": request.principal},
+            "action": request.action,
+            "resource": {"type": "Resource", "id": request.resource},
+            "context": request.context,
+        });
+
         let response = self.client
-            .post(&format!("{}/evaluate", self.base_url))
+            .post(&format!("{}/v1/authorize", self.base_url))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .header("User-Agent", "rust-security-client/1.0")
-            .json(&request)
+            .json(&body)
             .send()
             .await
             .map_err(ClientError::RequestError)?;
@@ -189,12 +198,16 @@ impl OptimizedServiceClient {
             return Err(ClientError::HttpError(response.status().as_u16()));
         }
 
-        let policy_response: PolicyResponse = response
+        // Map { decision: "Allow"|"Deny" } -> PolicyResponse
+        #[derive(Deserialize)]
+        struct AuthzResp { decision: String }
+        let authz: AuthzResp = response
             .json()
             .await
             .map_err(ClientError::DeserializationError)?;
 
-        Ok(policy_response)
+        let decision = if authz.decision.eq_ignore_ascii_case("allow") { PolicyDecision::Allow } else { PolicyDecision::Deny };
+        Ok(PolicyResponse { decision, reasons: Vec::new(), obligations: Vec::new() })
     }
 
     async fn get_cached_response(&self, key: &str) -> Option<CachedResponse> {

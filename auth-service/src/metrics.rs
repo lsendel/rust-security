@@ -11,11 +11,10 @@
 //! The metrics are designed to be compatible with Prometheus and follow
 //! best practices for naming and labeling.
 
-#![cfg(feature = "metrics")]
-
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::warn;
+use prometheus::{Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder};
 
 use axum::{
     extract::{MatchedPath, Request},
@@ -23,20 +22,29 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-#[cfg(feature = "metrics")]
-use prometheus::{
-    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
-};
 use std::sync::LazyLock;
 use tracing::{debug, error};
 
 /// Type alias for all metrics groups tuple
 type AllMetricsGroups = (
-    (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec, HistogramVec, IntCounterVec), // token_metrics
+    (
+        IntCounterVec,
+        IntCounterVec,
+        IntCounterVec,
+        IntCounterVec,
+        HistogramVec,
+        IntCounterVec,
+    ), // token_metrics
     (IntCounterVec, HistogramVec, IntCounterVec, IntCounterVec), // policy_metrics
-    (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec), // cache_metrics
-    (IntCounterVec, HistogramVec, HistogramVec, HistogramVec, IntGauge), // http_metrics
-    (IntCounterVec, IntCounterVec, HistogramVec), // rate_limit_metrics
+    (IntCounterVec, HistogramVec, IntCounterVec, HistogramVec),  // cache_metrics
+    (
+        IntCounterVec,
+        HistogramVec,
+        HistogramVec,
+        HistogramVec,
+        IntGauge,
+    ), // http_metrics
+    (IntCounterVec, IntCounterVec, HistogramVec),                // rate_limit_metrics
     (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec), // security_metrics
     (IntCounterVec, IntCounterVec, IntCounterVec, IntCounterVec), // system_metrics
 );
@@ -400,7 +408,7 @@ impl MetricsRegistry {
                 "auth_policy_evaluation_total",
                 "Total policy evaluation operations",
             ),
-            &["policy_type", "resource", "action", "result"],
+            &["policy_type", "endpoint_group", "resource", "action", "result"],
         )
         .expect("Failed to create policy_evaluation_total metric");
 
@@ -1214,6 +1222,7 @@ impl MetricsHelper {
     /// Record a policy evaluation
     pub fn record_policy_evaluation(
         policy_type: &str,
+        endpoint_group: &str,
         resource: &str,
         action: &str,
         result: &str,
@@ -1221,7 +1230,7 @@ impl MetricsHelper {
     ) {
         METRICS
             .policy_evaluation_total
-            .with_label_values(&[policy_type, resource, action, result])
+            .with_label_values(&[policy_type, endpoint_group, resource, action, result])
             .inc();
 
         METRICS
@@ -1371,9 +1380,10 @@ macro_rules! record_cache_miss {
 
 #[macro_export]
 macro_rules! record_policy_evaluation {
-    ($policy_type:expr, $resource:expr, $action:expr, $result:expr, $duration:expr) => {
+    ($policy_type:expr, $endpoint_group:expr, $resource:expr, $action:expr, $result:expr, $duration:expr) => {
         $crate::metrics::MetricsHelper::record_policy_evaluation(
             $policy_type,
+            $endpoint_group,
             $resource,
             $action,
             $result,

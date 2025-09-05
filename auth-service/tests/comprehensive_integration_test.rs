@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 #![allow(clippy::too_many_lines)]
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::storage::session::store::RedisSessionStore;

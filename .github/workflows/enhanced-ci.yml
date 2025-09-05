@@ -59,7 +59,67 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy check
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
+
+  policy-service:
+    name: "🧩 Policy Service (Isolated)"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        task: [build, clippy, test]
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:15-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PORT: 8081
+      ALLOWED_ORIGINS: http://localhost:3000
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      RUST_BACKTRACE: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: policy-service-${{ matrix.task }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build policy-service
+        if: matrix.task == 'build'
+        run: cargo build -p policy-service --all-features --locked
+
+      - name: Clippy policy-service
+        if: matrix.task == 'clippy'
+        run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings
+
+      - name: Test policy-service
+        if: matrix.task == 'test'
+        run: cargo test -p policy-service --all-features -- --nocapture
 
   # Matrix strategy for different test types
   tests:

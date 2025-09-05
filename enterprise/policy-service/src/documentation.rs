@@ -2,7 +2,7 @@
 
 use utoipa::OpenApi;
 
-/// OpenAPI documentation for MVP Policy Service
+/// `OpenAPI` documentation for MVP Policy Service
 #[derive(OpenApi)]
 #[openapi(
     paths(

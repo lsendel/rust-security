@@ -2,10 +2,17 @@
 
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use zeroize::Zeroize;
 
 /// Password hash value object with validation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PasswordHash(String);
+
+impl Drop for PasswordHash {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 impl PasswordHash {
     /// Create a new password hash with validation

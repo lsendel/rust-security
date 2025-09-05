@@ -1043,12 +1043,13 @@ Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## Policy Simulation & Testing
 
-### POST /v1/evaluate/simulate
+### Simulation (Future)
 
-**Simulate policy evaluation for testing**
+The legacy simulation endpoint is not part of the current MVP. Policy decisions should be obtained via `POST /v1/authorize`.
 
 ```http
-POST /v1/evaluate/simulate
+# Placeholder; simulation API not available in MVP
+# POST /v1/authorize/simulate (future)
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
 

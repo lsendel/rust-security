@@ -7,7 +7,8 @@
 //! - Metrics collection
 //! - Failover support
 
-use crate::{constants, UnifiedRedisConfig};
+use crate::redis_config::UnifiedRedisConfig;
+use crate::constants;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -83,7 +84,7 @@ pub struct OptimizedRedisPool {
 /// Cached Redis connection with metadata
 struct CachedConnection {
     /// The actual Redis connection
-    connection: redis::aio::ConnectionManager,
+    connection: redis::aio::MultiplexedConnection,
     /// Last used timestamp
     last_used: Instant,
     /// Health status
@@ -123,15 +124,15 @@ impl OptimizedRedisPool {
         // Create Redis client
         let client = redis::Client::open(config.client_url()).map_err(PoolError::Redis)?;
 
-        // Test initial connection using connection manager
+        // Test initial connection using multiplexed connection
         let mut test_conn = client
-            .get_connection_manager()
+            .get_multiplexed_async_connection()
             .await
             .map_err(PoolError::Redis)?;
 
-        // Perform health check
-        redis::cmd("PING")
-            .query_async::<String>(&mut test_conn)
+        // Perform health check using INFO command instead of PING
+        let _: String = redis::cmd("INFO")
+            .query_async(&mut test_conn)
             .await
             .map_err(PoolError::Redis)?;
 
@@ -215,7 +216,7 @@ impl OptimizedRedisPool {
     }
 
     /// Try to get a connection from the cache
-    async fn try_get_cached_connection(&self) -> Option<redis::aio::ConnectionManager> {
+    async fn try_get_cached_connection(&self) -> Option<redis::aio::MultiplexedConnection> {
         let mut cache = self.connection_cache.write().await;
         let now = Instant::now();
 
@@ -244,10 +245,8 @@ impl OptimizedRedisPool {
     }
 
     /// Create a new Redis connection
-    async fn create_new_connection(&self) -> Result<redis::aio::ConnectionManager, PoolError> {
-        let connection = self
-            .client
-            .get_connection_manager()
+    async fn create_new_connection(&self) -> Result<redis::aio::MultiplexedConnection, PoolError> {
+        let connection = self.client.get_multiplexed_async_connection()
             .await
             .map_err(PoolError::Redis)?;
 
@@ -263,7 +262,7 @@ impl OptimizedRedisPool {
     }
 
     /// Return a connection to the cache for reuse
-    pub async fn return_connection(&self, connection: redis::aio::ConnectionManager) {
+    pub async fn return_connection(&self, connection: redis::aio::MultiplexedConnection) {
         // Limit cache size to prevent memory bloat
         const MAX_CACHE_SIZE: usize = 50;
 
@@ -328,7 +327,7 @@ impl OptimizedRedisPool {
         // Try to get a connection and ping Redis
         match self.get_connection().await {
             Ok(mut conn) => {
-                match redis::cmd("PING")
+                match redis::cmd("INFO")
                     .query_async::<String>(&mut conn.connection)
                     .await
                 {
@@ -337,7 +336,7 @@ impl OptimizedRedisPool {
                         HealthStatus::Healthy
                     }
                     Err(e) => {
-                        warn!("Redis ping failed: {}", e);
+                        warn!("Redis info failed: {}", e);
                         self.update_health_status(HealthStatus::Degraded).await;
                         HealthStatus::Degraded
                     }
@@ -405,7 +404,7 @@ impl Clone for OptimizedRedisPool {
 
 /// A pooled Redis connection that automatically returns to the pool when dropped
 pub struct PooledConnection {
-    pub connection: redis::aio::ConnectionManager,
+    pub connection: redis::aio::MultiplexedConnection,
     pool: std::sync::Weak<OptimizedRedisPool>,
     _permit: tokio::sync::OwnedSemaphorePermit,
     acquired_at: Instant,

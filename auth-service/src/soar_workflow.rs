@@ -719,18 +719,37 @@ impl WorkflowOrchestrator {
         context: HashMap<String, Value>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let instance_id = Uuid::new_v4().to_string();
+        
+        let execution_context = self.create_execution_context(&instance_id, &inputs, &context)?;
+        let instance = self.create_workflow_instance(&instance_id, &playbook, &inputs, &context);
+        
+        self.active_workflows.insert(instance_id.clone(), instance);
+        
+        let execution_request = self.create_execution_request(instance_id.clone(), playbook, inputs, context);
+        self.queue_execution_request(execution_request).await;
+        
+        self.publish_workflow_event(&instance_id, &playbook.id).await;
+        
+        info!("Queued workflow execution: {}", instance_id);
+        Ok(instance_id)
+    }
 
-        // Create execution context
-        let execution_context = ExecutionContext {
+    fn create_execution_context(
+        &self,
+        instance_id: &str,
+        inputs: &HashMap<String, Value>,
+        context: &HashMap<String, Value>,
+    ) -> Result<ExecutionContext, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(ExecutionContext {
             base_context: context.clone(),
             metadata: ExecutionMetadata {
-                execution_id: instance_id.clone(),
+                execution_id: instance_id.to_string(),
                 parent_workflow_id: None,
                 trigger: ExecutionTrigger {
                     trigger_type: TriggerType::ManualTrigger,
                     source: "api".to_string(),
                     timestamp: Utc::now(),
-                    data: serde_json::to_value(&inputs)?,
+                    data: serde_json::to_value(inputs)?,
                 },
                 priority: 5,
                 tags: vec!["manual".to_string()],
@@ -752,11 +771,18 @@ impl WorkflowOrchestrator {
                 },
                 metrics: HashMap::new(),
             },
-        };
+        })
+    }
 
-        // Create workflow instance
-        let instance = WorkflowInstance {
-            id: instance_id.clone(),
+    fn create_workflow_instance(
+        &self,
+        instance_id: &str,
+        playbook: &SecurityPlaybook,
+        inputs: &HashMap<String, Value>,
+        context: &HashMap<String, Value>,
+    ) -> WorkflowInstance {
+        WorkflowInstance {
+            id: instance_id.to_string(),
             playbook_id: playbook.id.clone(),
             status: WorkflowStatus::Pending,
             started_at: Utc::now(),
@@ -768,34 +794,39 @@ impl WorkflowOrchestrator {
             inputs: inputs.clone(),
             outputs: HashMap::new(),
             approval_requests: Vec::new(),
-        };
+        }
+    }
 
-        self.active_workflows.insert(instance_id.clone(), instance);
-
-        // Create execution request
-        let (response_tx, response_rx) = oneshot::channel();
-        let execution_request = WorkflowExecutionRequest {
-            instance_id: instance_id.clone(),
+    fn create_execution_request(
+        &self,
+        instance_id: String,
+        playbook: SecurityPlaybook,
+        inputs: HashMap<String, Value>,
+        context: HashMap<String, Value>,
+    ) -> WorkflowExecutionRequest {
+        let (response_tx, _response_rx) = oneshot::channel();
+        WorkflowExecutionRequest {
+            instance_id,
             playbook,
             inputs,
             context,
             response_tx,
-        };
-
-        // Queue for execution
-        {
-            let mut queue = self.execution_queue.write().await;
-            queue.push(execution_request, 5); // Default priority
         }
+    }
 
-        // Publish workflow triggered event
+    async fn queue_execution_request(&self, execution_request: WorkflowExecutionRequest) {
+        let mut queue = self.execution_queue.write().await;
+        queue.push(execution_request, 5); // Default priority
+    }
+
+    async fn publish_workflow_event(&self, instance_id: &str, playbook_id: &str) {
         let event = SoarEvent {
             id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
             event_type: SoarEventType::WorkflowTriggered,
             data: serde_json::json!({
                 "instance_id": instance_id,
-                "playbook_id": playbook.id,
+                "playbook_id": playbook_id,
                 "trigger": "manual"
             }),
             source: "workflow_orchestrator".to_string(),
@@ -805,9 +836,6 @@ impl WorkflowOrchestrator {
         if let Err(e) = self.event_publisher.send(event).await {
             warn!("Failed to publish workflow triggered event: {}", e);
         }
-
-        info!("Queued workflow execution: {}", instance_id);
-        Ok(instance_id)
     }
 
     /// Schedule a workflow for future execution

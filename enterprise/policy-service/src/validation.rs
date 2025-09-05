@@ -1,8 +1,7 @@
 //! Enhanced security validation for MVP policy service
 
-use crate::errors::{AppError, AuthorizationError};
-use std::collections::HashMap;
-use tracing::{warn, debug, error, info};
+use crate::errors::AuthorizationError;
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 /// Security configuration constants for MVP
@@ -50,23 +49,23 @@ impl SecurityContext {
             violation_type: ViolationType::InvalidInput,
         }
     }
-    
+
     pub fn with_threat_level(mut self, level: ThreatLevel) -> Self {
         self.threat_level = level;
         self
     }
-    
+
     pub fn with_violation_type(mut self, violation: ViolationType) -> Self {
         self.violation_type = violation;
         self
     }
-    
+
     pub fn with_client_info(mut self, ip: Option<String>, user_agent: Option<String>) -> Self {
         self.client_ip = ip;
         self.user_agent = user_agent;
         self
     }
-    
+
     /// Log security incident with full context
     pub fn log_security_incident(&self, message: &str) {
         match self.threat_level {
@@ -116,8 +115,8 @@ pub fn validate_authorization_input_with_context(
     client_ip: Option<String>,
     user_agent: Option<String>,
 ) -> Result<(), AuthorizationError> {
-    let mut security_ctx = SecurityContext::new(body.request_id.clone())
-        .with_client_info(client_ip, user_agent);
+    let mut security_ctx =
+        SecurityContext::new(body.request_id.clone()).with_client_info(client_ip, user_agent);
 
     // Enhanced request ID validation
     if let Err(e) = validate_request_id(&body.request_id) {
@@ -125,14 +124,15 @@ pub fn validate_authorization_input_with_context(
         security_ctx.log_security_incident("Invalid request ID format");
         return Err(e);
     }
-    
+
     // Enhanced action validation with threat detection
     let action = body.action.trim();
     if let Err(e) = validate_action_string(action) {
         // Check for high-risk injection patterns
-        if action.to_lowercase().contains("script") || 
-           action.to_lowercase().contains("eval") ||
-           action.to_lowercase().contains("exec") {
+        if action.to_lowercase().contains("script")
+            || action.to_lowercase().contains("eval")
+            || action.to_lowercase().contains("exec")
+        {
             security_ctx = security_ctx
                 .with_threat_level(ThreatLevel::High)
                 .with_violation_type(ViolationType::InjectionAttempt);
@@ -149,13 +149,13 @@ pub fn validate_authorization_input_with_context(
         security_ctx.log_security_incident("Invalid principal structure");
         return Err(e);
     }
-    
+
     if let Err(e) = validate_entity_structure(&body.resource, "resource") {
         security_ctx = security_ctx.with_violation_type(ViolationType::StructureAbuse);
         security_ctx.log_security_incident("Invalid resource structure");
         return Err(e);
     }
-    
+
     // Enhanced context validation
     if let Err(e) = validate_context_structure(&body.context) {
         security_ctx = security_ctx.with_violation_type(ViolationType::StructureAbuse);
@@ -201,14 +201,14 @@ fn validate_request_id(request_id: &str) -> Result<(), AuthorizationError> {
             reason: "Request ID cannot be empty".to_string(),
         });
     }
-    
+
     if request_id.len() > MAX_REQUEST_ID_LENGTH {
         warn!(request_id_len = request_id.len(), "Request ID too long");
         return Err(AuthorizationError::RequestFailed {
             reason: "Request ID too long".to_string(),
         });
     }
-    
+
     // Check for control characters and potential injection attacks
     if request_id.chars().any(|c| c.is_control()) {
         warn!("Request ID contains control characters");
@@ -216,7 +216,7 @@ fn validate_request_id(request_id: &str) -> Result<(), AuthorizationError> {
             reason: "Request ID contains invalid characters".to_string(),
         });
     }
-    
+
     Ok(())
 }
 
@@ -239,7 +239,7 @@ fn validate_action_string(action: &str) -> Result<(), AuthorizationError> {
 
     // Check for potential injection patterns
     let suspicious_patterns = [
-        "drop", "delete", "insert", "update", "select", "union", "exec", "script"
+        "drop", "delete", "insert", "update", "select", "union", "exec", "script",
     ];
     let action_lower = action.to_lowercase();
     for pattern in &suspicious_patterns {
@@ -266,14 +266,17 @@ fn validate_action_string(action: &str) -> Result<(), AuthorizationError> {
 }
 
 /// Validate entity structure with enhanced security checks
-fn validate_entity_structure(entity: &serde_json::Value, entity_type: &str) -> Result<(), AuthorizationError> {
+fn validate_entity_structure(
+    entity: &serde_json::Value,
+    entity_type: &str,
+) -> Result<(), AuthorizationError> {
     let obj = entity.as_object().ok_or_else(|| {
         warn!(entity_type = %entity_type, "Entity is not a JSON object");
         AuthorizationError::RequestFailed {
             reason: format!("{} must be a JSON object", entity_type),
         }
     })?;
-    
+
     // Validate required fields
     let entity_id = obj.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
         warn!(entity_type = %entity_type, "Entity missing id field");
@@ -281,14 +284,14 @@ fn validate_entity_structure(entity: &serde_json::Value, entity_type: &str) -> R
             reason: format!("{} missing required 'id' field", entity_type),
         }
     })?;
-    
+
     let type_field = obj.get("type").and_then(|v| v.as_str()).ok_or_else(|| {
         warn!(entity_type = %entity_type, "Entity missing type field");
         AuthorizationError::RequestFailed {
             reason: format!("{} missing required 'type' field", entity_type),
         }
     })?;
-    
+
     // Validate ID length
     if entity_id.len() > MAX_ENTITY_ID_LENGTH {
         warn!(entity_type = %entity_type, id_len = entity_id.len(), "Entity ID too long");
@@ -296,7 +299,7 @@ fn validate_entity_structure(entity: &serde_json::Value, entity_type: &str) -> R
             reason: format!("{} ID too long", entity_type),
         });
     }
-    
+
     // Check for control characters in ID
     if entity_id.chars().any(|c| c.is_control()) {
         warn!(entity_type = %entity_type, entity_id = %entity_id, "Entity ID contains control characters");
@@ -304,7 +307,7 @@ fn validate_entity_structure(entity: &serde_json::Value, entity_type: &str) -> R
             reason: format!("{} ID contains invalid characters", entity_type),
         });
     }
-    
+
     // Validate type field
     if type_field.is_empty() || type_field.len() > 64 {
         warn!(entity_type = %entity_type, type_len = type_field.len(), "Invalid entity type length");
@@ -312,7 +315,7 @@ fn validate_entity_structure(entity: &serde_json::Value, entity_type: &str) -> R
             reason: format!("{} type invalid", entity_type),
         });
     }
-    
+
     Ok(())
 }
 
@@ -324,7 +327,7 @@ fn validate_context_structure(context: &serde_json::Value) -> Result<(), Authori
             reason: "Context must be a JSON object".to_string(),
         }
     })?;
-    
+
     // Limit number of context keys to prevent DoS
     if obj.len() > MAX_CONTEXT_KEYS {
         warn!(context_keys = obj.len(), "Too many context keys");
@@ -332,7 +335,7 @@ fn validate_context_structure(context: &serde_json::Value) -> Result<(), Authori
             reason: "Too many context keys".to_string(),
         });
     }
-    
+
     // Validate each context key and value
     for (key, value) in obj {
         // Check key format
@@ -342,14 +345,14 @@ fn validate_context_structure(context: &serde_json::Value) -> Result<(), Authori
                 reason: "Invalid context key format".to_string(),
             });
         }
-        
+
         if key.chars().any(|c| c.is_control()) {
             warn!(key = %key, "Context key contains control characters");
             return Err(AuthorizationError::InvalidContext {
                 reason: "Context key contains invalid characters".to_string(),
             });
         }
-        
+
         // Check value size if it's a string
         if let Some(str_value) = value.as_str() {
             if str_value.len() > 4096 {
@@ -360,7 +363,7 @@ fn validate_context_structure(context: &serde_json::Value) -> Result<(), Authori
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -378,8 +381,8 @@ pub fn validate_json_structure(
     ) -> Result<(), AuthorizationError> {
         if current_depth > max_depth {
             warn!(
-                field_name = %field_name, 
-                depth = current_depth, 
+                field_name = %field_name,
+                depth = current_depth,
                 "JSON structure too deeply nested"
             );
             return Err(AuthorizationError::RequestFailed {
@@ -392,15 +395,15 @@ pub fn validate_json_structure(
                 // Limit object key count to prevent DoS
                 if obj.len() > 1000 {
                     warn!(
-                        field_name = %field_name, 
-                        key_count = obj.len(), 
+                        field_name = %field_name,
+                        key_count = obj.len(),
                         "JSON object has too many keys"
                     );
                     return Err(AuthorizationError::RequestFailed {
                         reason: format!("{} JSON object too large", field_name),
                     });
                 }
-                
+
                 for (key, val) in obj {
                     // Validate key format
                     if key.len() > 256 {
@@ -416,30 +419,34 @@ pub fn validate_json_structure(
                 // Limit array size to prevent DoS
                 if arr.len() > 1000 {
                     warn!(
-                        field_name = %field_name, 
-                        array_len = arr.len(), 
+                        field_name = %field_name,
+                        array_len = arr.len(),
                         "JSON array too large"
                     );
                     return Err(AuthorizationError::RequestFailed {
                         reason: format!("{} JSON array too large", field_name),
                     });
                 }
-                
+
                 for val in arr {
                     check_depth(val, field_name, current_depth + 1, max_depth)?;
                 }
             }
             serde_json::Value::String(s) => {
                 // Validate string length and content
-                if s.len() > 16384 { // 16KB max per string
+                if s.len() > 16384 {
+                    // 16KB max per string
                     warn!(field_name = %field_name, str_len = s.len(), "JSON string too long");
                     return Err(AuthorizationError::RequestFailed {
                         reason: format!("{} JSON string too long", field_name),
                     });
                 }
-                
+
                 // Check for suspicious patterns in strings
-                if s.contains('\0') || s.chars().any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+                if s.contains('\0')
+                    || s.chars()
+                        .any(|c| c.is_control() && c != '\n' && c != '\r' && c != '\t')
+                {
                     warn!(field_name = %field_name, "JSON string contains control characters");
                     return Err(AuthorizationError::RequestFailed {
                         reason: format!("{} JSON string contains invalid characters", field_name),
@@ -463,8 +470,8 @@ pub fn validate_json_structure(
 
     if json_str.len() > MAX_JSON_SIZE {
         warn!(
-            field_name = %field_name, 
-            size = json_str.len(), 
+            field_name = %field_name,
+            size = json_str.len(),
             max_size = MAX_JSON_SIZE,
             "JSON payload too large"
         );
@@ -479,7 +486,7 @@ pub fn validate_json_structure(
 /// Additional security utilities for input sanitization
 pub mod security_utils {
     use super::*;
-    
+
     /// Sanitize string input by removing dangerous characters
     pub fn sanitize_string(input: &str) -> String {
         input
@@ -487,23 +494,30 @@ pub mod security_utils {
             .filter(|&c| !c.is_control() || c == ' ' || c == '\t' || c == '\n' || c == '\r')
             .collect()
     }
-    
+
     /// Check if string contains potentially dangerous patterns
     pub fn contains_suspicious_patterns(input: &str) -> bool {
         let patterns = [
-            "<script", "javascript:", "data:", "vbscript:", "onload=", "onerror=",
-            "eval(", "setTimeout(", "setInterval(",
+            "<script",
+            "javascript:",
+            "data:",
+            "vbscript:",
+            "onload=",
+            "onerror=",
+            "eval(",
+            "setTimeout(",
+            "setInterval(",
         ];
-        
+
         let input_lower = input.to_lowercase();
         patterns.iter().any(|pattern| input_lower.contains(pattern))
     }
-    
+
     /// Validate IPv4/IPv6 address format
     pub fn is_valid_ip_address(addr: &str) -> bool {
         addr.parse::<std::net::IpAddr>().is_ok()
     }
-    
+
     /// Check if URL is safe (no dangerous schemes)
     pub fn is_safe_url(url: &str) -> bool {
         if let Ok(parsed) = Url::parse(url) {
@@ -518,20 +532,19 @@ pub mod security_utils {
 mod tests {
     use super::*;
     use serde_json::json;
-    use crate::models::AuthorizeRequest;
 
     #[test]
     fn test_validate_request_id() {
         // Valid request ID
         assert!(validate_request_id("req-12345").is_ok());
-        
+
         // Empty request ID
         assert!(validate_request_id("").is_err());
-        
+
         // Too long request ID
         let long_id = "a".repeat(200);
         assert!(validate_request_id(&long_id).is_err());
-        
+
         // Control characters
         assert!(validate_request_id("req\x00123").is_err());
     }
@@ -541,13 +554,13 @@ mod tests {
         // Valid actions
         assert!(validate_action_string("Document::read").is_ok());
         assert!(validate_action_string("read").is_ok());
-        
+
         // Empty action
         assert!(validate_action_string("").is_err());
-        
+
         // Control characters
         assert!(validate_action_string("read\x00").is_err());
-        
+
         // Too long action
         let long_action = "a".repeat(300);
         assert!(validate_action_string(&long_action).is_err());
@@ -561,19 +574,19 @@ mod tests {
             "id": "alice"
         });
         assert!(validate_entity_structure(&entity, "principal").is_ok());
-        
+
         // Missing type
         let entity = json!({
             "id": "alice"
         });
         assert!(validate_entity_structure(&entity, "principal").is_err());
-        
+
         // Missing id
         let entity = json!({
             "type": "User"
         });
         assert!(validate_entity_structure(&entity, "principal").is_err());
-        
+
         // Too long ID
         let entity = json!({
             "type": "User",
@@ -585,22 +598,24 @@ mod tests {
     #[test]
     fn test_security_utils() {
         use security_utils::*;
-        
+
         // Sanitize string
         let input = "Hello\x00World\x01!";
         let sanitized = sanitize_string(input);
         assert_eq!(sanitized, "HelloWorld!");
-        
+
         // Suspicious patterns
-        assert!(contains_suspicious_patterns("<script>alert('xss')</script>"));
+        assert!(contains_suspicious_patterns(
+            "<script>alert('xss')</script>"
+        ));
         assert!(contains_suspicious_patterns("javascript:alert('xss')"));
         assert!(!contains_suspicious_patterns("normal text"));
-        
+
         // IP validation
         assert!(is_valid_ip_address("192.168.1.1"));
         assert!(is_valid_ip_address("::1"));
         assert!(!is_valid_ip_address("not.an.ip"));
-        
+
         // URL validation
         assert!(is_safe_url("https://example.com"));
         assert!(is_safe_url("http://example.com"));

@@ -122,7 +122,9 @@ impl OptimizedTokenStore {
 
     #[cfg(not(feature = "redis-sessions"))]
     pub async fn new_redis(_redis_url: &str) -> Result<Self> {
-        Err(anyhow::anyhow!("Redis support not enabled. Enable 'redis-sessions' feature."))
+        Err(anyhow::anyhow!(
+            "Redis support not enabled. Enable 'redis-sessions' feature."
+        ))
     }
 
     /// Get token record with optimized single operation

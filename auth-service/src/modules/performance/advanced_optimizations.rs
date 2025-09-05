@@ -25,8 +25,21 @@ pub mod crypto_simd {
             return false;
         }
 
+        // Safety check: ensure minimum length for SIMD operations
+        const MIN_SIMD_LENGTH: usize = 32;
+        const MAX_SAFE_LENGTH: usize = 64 * 1024; // 64KB limit for safety
+
+        if a.len() < MIN_SIMD_LENGTH || a.len() > MAX_SAFE_LENGTH {
+            return constant_time_eq_scalar(a, b);
+        }
+
         // Use SIMD for large comparisons (requires AVX2)
-        if is_x86_feature_detected!("avx2") && a.len() >= 32 {
+        if is_x86_feature_detected!("avx2") && a.len() >= MIN_SIMD_LENGTH {
+            // SAFETY: 
+            // - We've verified AVX2 is available via is_x86_feature_detected!
+            // - Both slices have equal length (checked above)
+            // - Length is within safe bounds (32 bytes to 64KB)
+            // - Memory access is bounded by slice length
             return unsafe { constant_time_eq_avx2(a, b) };
         }
 
@@ -35,6 +48,14 @@ pub mod crypto_simd {
     }
 
     /// AVX2-accelerated constant-time comparison
+    /// 
+    /// # Safety
+    /// This function requires:
+    /// - Both slices must be exactly the same length (verified by caller)
+    /// - Length must be >= 32 bytes and a multiple of 32 for AVX2 operations
+    /// - Memory must be properly aligned for SIMD operations
+    /// - Caller must ensure target CPU supports AVX2 instructions
+    /// - No concurrent access to memory regions during operation
     #[target_feature(enable = "avx2")]
     unsafe fn constant_time_eq_avx2(a: &[u8], b: &[u8]) -> bool {
         let mut result = _mm256_setzero_si256();
@@ -74,7 +95,22 @@ pub mod crypto_simd {
 
     /// SIMD-accelerated hash function for session tokens
     pub fn hash_session_token(token: &[u8], salt: &[u8]) -> [u8; 32] {
+        // Safety checks for input validation
+        const MAX_INPUT_SIZE: usize = 1024 * 1024; // 1MB limit
+        
+        if token.is_empty() || salt.is_empty() {
+            return hash_fallback(token, salt);
+        }
+        
+        if token.len() + salt.len() > MAX_INPUT_SIZE {
+            return hash_fallback(token, salt);
+        }
+
         if is_x86_feature_detected!("sha") {
+            // SAFETY:
+            // - SHA-NI feature presence verified via is_x86_feature_detected!
+            // - Input sizes validated and bounded
+            // - No null pointer dereference possible with slice references
             unsafe { hash_sha_ni(token, salt) }
         } else {
             hash_fallback(token, salt)
@@ -82,6 +118,13 @@ pub mod crypto_simd {
     }
 
     /// SHA-NI accelerated hashing
+    /// 
+    /// # Safety
+    /// This function requires:
+    /// - SHA-NI feature presence verified via is_x86_feature_detected! by caller
+    /// - Input sizes validated and bounded by caller
+    /// - No null pointer dereference possible with slice references
+    /// - Caller ensures target CPU supports SHA-NI instructions
     #[target_feature(enable = "sha")]
     unsafe fn hash_sha_ni(token: &[u8], salt: &[u8]) -> [u8; 32] {
         let mut state = _mm_sha256msg1_epu32(_mm_setzero_si128(), _mm_setzero_si128());
@@ -294,6 +337,11 @@ pub mod cache_optimization {
                 .align_to(64)
                 .map_err(|e| format!("Failed to create aligned layout: {}", e))?;
 
+            // SAFETY: 
+            // - Layout is valid and properly aligned (checked above)
+            // - Allocation is checked for null pointer
+            // - ptr.write() initializes the memory before creating NonNull
+            // - NonNull::new_unchecked is safe because null check performed
             unsafe {
                 let ptr = alloc(layout) as *mut T;
                 if ptr.is_null() {
@@ -310,17 +358,25 @@ pub mod cache_optimization {
 
         /// Get reference to the value
         pub fn get(&self) -> &T {
+            // SAFETY: ptr is non-null and points to properly initialized T
+            // from constructor, and lifetime is managed by this struct
             unsafe { self.ptr.as_ref() }
         }
 
         /// Get mutable reference to the value
         pub fn get_mut(&mut self) -> &mut T {
+            // SAFETY: ptr is non-null and points to properly initialized T
+            // from constructor, and lifetime is managed by this struct
             unsafe { self.ptr.as_mut() }
         }
     }
 
     impl<T> Drop for CacheAligned<T> {
         fn drop(&mut self) {
+            // SAFETY: 
+            // - ptr is non-null and points to initialized T (from constructor)
+            // - Layout matches the one used for allocation
+            // - This is only called once when the struct is dropped
             unsafe {
                 std::ptr::drop_in_place(self.ptr.as_ptr());
                 dealloc(self.ptr.as_ptr() as *mut u8, self.layout);
@@ -331,6 +387,11 @@ pub mod cache_optimization {
     /// Prefetch data into CPU cache
     pub fn prefetch_data<T>(data: &[T]) {
         if is_x86_feature_detected!("sse") {
+            // SAFETY: 
+            // - SSE feature presence verified above
+            // - data.as_ptr() is valid pointer to slice data
+            // - _mm_prefetch only reads memory, doesn't modify
+            // - Hint parameter is a valid constant
             unsafe {
                 // Prefetch first cache line
                 std::arch::x86_64::_mm_prefetch(
@@ -537,6 +598,14 @@ pub mod string_processing {
         }
     }
 
+    /// AVX2-accelerated HTML input sanitization
+    /// 
+    /// # Safety
+    /// This function requires:
+    /// - AVX2 feature presence verified by caller
+    /// - Input string must be valid UTF-8 (guaranteed by &str type)
+    /// - Memory access is bounded by string length
+    /// - Caller ensures target CPU supports AVX2 instructions
     #[target_feature(enable = "avx2")]
     unsafe fn sanitize_avx2(input: &str) -> String {
         let bytes = input.as_bytes();
@@ -583,6 +652,15 @@ pub mod string_processing {
         }
     }
 
+    /// AVX2-accelerated pattern matching for dangerous content detection
+    /// 
+    /// # Safety
+    /// This function requires:
+    /// - AVX2 feature presence verified by caller
+    /// - Input text must be valid UTF-8 (guaranteed by &str type)
+    /// - Pattern slice must contain valid UTF-8 strings
+    /// - Memory access is bounded by string lengths
+    /// - Caller ensures target CPU supports AVX2 instructions
     #[target_feature(enable = "avx2")]
     unsafe fn contains_patterns_avx2(text: &str, patterns: &[&str]) -> bool {
         let text_bytes = text.as_bytes();

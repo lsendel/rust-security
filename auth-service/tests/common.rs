@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 use base64::Engine;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;

@@ -1,74 +1,49 @@
 # Repository Guidelines
 
 ## Architecture Overview
-```
-User (browser)
-  -> user-portal (Vite/React)
-      -> auth-service (Axum) -----> policy-service (Axum + Cedar)
-                      \            
-                       -> compliance-tools (reports/SBOM)
-Monitoring: Prometheus/Grafana + Alertmanager under monitoring/
-```
+- User interacts with `user-portal` (Vite/React), which authenticates via `auth-service` (Axum) and authorizes via `policy-service` (Axum + Cedar). `compliance-tools` produces reports/SBOM. Monitoring is under `monitoring/` (Prometheus/Grafana/Alertmanager).
 
 ## Project Structure & Module Organization
-- Rust services and libraries: `auth-service/`, `policy-service/`, `input-validation/`, `compliance-tools/`, `api-contracts/`.
-- Frontend (React/TS): `user-portal/` with tests under `src/components/__tests__/`.
-- Security/ops: `monitoring/`, `helm/`, `gitops/`, `zero-trust/`, `config/`, `api-specs/`.
-- Benchmarks and load tests: `benches/`, `load_test/`.
-- Policies and entities: `policy-service/policies.cedar`, `policy-service/entities.json`.
+- Rust crates: `auth-service/`, `policy-service/`, `input-validation/`, `compliance-tools/`, `api-contracts/`.
+- Frontend: `user-portal/` with tests in `src/components/__tests__/`.
+- Ops/Security: `monitoring/`, `helm/`, `gitops/`, `zero-trust/`, `config/`, `api-specs/`.
+- Performance: `benches/`, `load_test/`. Policies: `policy-service/policies.cedar`, `policy-service/entities.json`.
 
 ## Build, Test, and Development Commands
 - `just build`: Build all Rust crates (`cargo build --workspace --all-features`).
-- `just test`: Run all Rust tests with features and verbose output.
-- `just fmt` / `just fmt-check`: Format or verify formatting via rustfmt.
-- `just lint`: Run clippy with warnings treated as errors.
-- `just audit` / `just deny`: Dependency security checks (`cargo-audit`, `cargo-deny`).
-- `just coverage-report` / `just coverage-check baseline=70`: Generate and enforce coverage.
-- Frontend: `cd user-portal && npm run dev|test|build` (Vite + Vitest).
+- `just test`: Run all Rust tests with verbose output.
+- `just fmt` / `just fmt-check`: Format or verify via rustfmt.
+- `just lint`: Clippy with `-D warnings`.
+- `just audit` / `just deny`: Dependency security checks.
+- Frontend: `cd user-portal && npm run dev|test|build`.
 
 ## Run Locally (Services)
-- Auth Service: `CONFIG_DIR=config APP_ENV=development cargo run -p auth-service`
-- Policy Service: `CONFIG_DIR=config APP_ENV=development cargo run -p policy-service`
-- Frontend: `cd user-portal && npm install && npm run dev` (default: http://localhost:5173)
-- Notes: services read `config/{base,development,local}.toml`; env vars with prefix `AUTH__` override for auth-service.
-
-## Quick Checks
-- Auth health: `curl -s http://127.0.0.1:8080/health | jq .`
-- Auth status: `curl -s http://127.0.0.1:8080/api/v1/status | jq .`
-- Policy health: `curl -s http://127.0.0.1:8081/health | jq .`
-- Policy authorize:
-  `curl -sS -H 'Content-Type: application/json' -d '{"request_id":"dev-1","principal":{"type":"User","id":"alice"},"action":"Document::read","resource":{"type":"Document","id":"doc1"},"context":{}}' http://127.0.0.1:8081/v1/authorize`
-
-## Local .env Template
-```
-# Auth Service overrides (prefix AUTH__)
-AUTH__SERVER__PORT=8080
-AUTH__JWT__SECRET=change-me-at-least-32-chars-long
-AUTH__DATABASE__URL=sqlite::memory:
-AUTH__REDIS__URL=redis://localhost:6379
-AUTH__OAUTH__REDIRECT_BASE_URL=http://localhost:8080/auth/callback
-# Optional: tighten security
-AUTH__SECURITY__BCRYPT_COST=12
-```
+- Auth: `CONFIG_DIR=config APP_ENV=development cargo run -p auth-service` (health: `curl :8080/health`).
+- Policy: `CONFIG_DIR=config APP_ENV=development cargo run -p policy-service` (authorize endpoint `/v1/authorize`).
+- Frontend: `cd user-portal && npm install && npm run dev` (defaults to http://localhost:5173).
 
 ## Coding Style & Naming Conventions
-- Rust: 4-space indent, `rustfmt` enforced; `clippy` must pass with `-D warnings`.
-  - Modules/functions: `snake_case`; types/enums/traits: `CamelCase`; constants: `SCREAMING_SNAKE_CASE`.
-- TypeScript/React: Follow ESLint rules; 2-space indent; components in `PascalCase`.
-- Keep files focused; prefer small modules under `src/` with clear names (e.g., `metrics.rs`, `errors.rs`).
+- Rust: 4‑space indent; `rustfmt` enforced; Clippy clean with warnings as errors.
+- Rust naming: modules/functions `snake_case`; types/enums/traits `CamelCase`; constants `SCREAMING_SNAKE_CASE`.
+- TypeScript/React: ESLint rules, 2‑space indent; components in `PascalCase`.
 
 ## Testing Guidelines
-- Rust unit tests live next to code (`mod tests`); integration tests in `tests/*.rs`.
-- Benches in `benches/`; performance helpers in `load_test/`.
-- Frontend tests in `user-portal/src/components/__tests__/*.test.tsx`.
-- Run: `just test` (Rust); `cd user-portal && npm run test` (UI).
-- Coverage: `just coverage-report`; enforce baseline with `just coverage-check baseline=70`.
+- Rust unit tests inline; integration tests in `tests/*.rs`; benches in `benches/`.
+- UI tests: `user-portal/src/components/__tests__/*.test.tsx` (Vitest).
+- Coverage: `just coverage-report`; enforce with `just coverage-check baseline=70`.
 
 ## Commit & Pull Request Guidelines
-- Commits: Imperative mood, concise summary (e.g., "Refactor JWT handling"), wrap body at ~72 chars, reference files/areas (e.g., `policy-service:`) when useful.
-- PRs: Clear description, motivation, and scope; link issues; include test evidence and potential security/perf impact. For UI changes, add screenshots or GIFs.
+- Commits: imperative mood, concise (e.g., "Refactor JWT handling"); wrap body ~72 chars; prefix area when useful (e.g., `policy-service:`).
+- PRs: describe motivation/scope, link issues, include test evidence; note security/perf impact; add UI screenshots/GIFs for frontend changes.
 
 ## Security & Configuration Tips
-- Never commit secrets; prefer configs under `config/` and Helm values with external secrets.
-- Run `just validate-security` and `just ci-complete` before PRs.
-- Generate SBOMs with `just sbom-generate`; review `monitoring/` and `helm/` changes for operational impact.
+- Do not commit secrets; prefer `config/` and Helm external secrets.
+- Overrides: env vars like `AUTH__JWT__SECRET`, `AUTH__SERVER__PORT`. Local template in `.env`.
+- Before PRs: run `just validate-security` and `just ci-complete`. Generate SBOMs with `just sbom-generate`.
+
+## Policy Integration (Auth ↔ Policy Service)
+- Enable remote decisions: `ENABLE_REMOTE_POLICY=1` and set `POLICY_SERVICE_BASE_URL` (e.g., `http://127.0.0.1:8081`). Optional fail‑open: `POLICY_FAIL_OPEN=1`.
+- Auth gates (optional): profile (`/api/v1/auth/me`), OAuth (`/oauth/authorize`, `/oauth/token`), login, and all `/admin/*` endpoints (granular actions like `Admin::users_read`, `Admin::billing_update`).
+- Metrics: with `--features metrics`, Prometheus `/metrics` includes `auth_policy_evaluation_total{policy_type="remote",endpoint_group,resource,action,result}` and latency histogram.
+- Example Cedar allow (policy-service): allow admin metrics read
+  - principal: `Admin::<hashed-admin-key>`, action: `Admin::metrics_read`, resource: `AdminEndpoint::<path>`.

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::errors::{AppError, AuthorizationError};
-use crate::models::{AppState, AuthorizeRequest, AuthorizeResponse, PolicyConflict};
+use crate::models::{AppState, AuthorizeRequest, AuthorizeResponse};
 use crate::utils::{
     extract_action_type, extract_client_id_from_context, extract_entity_type, parse_entity,
 };
@@ -38,13 +38,9 @@ impl PolicyMetricsHelper {
             "Authorization metrics recorded"
         );
     }
-    
+
     pub fn record_policies_evaluated(_operation: &str, _count: f64) {
-        tracing::debug!(
-            operation = _operation,
-            count = _count,
-            "Policies evaluated"
-        );
+        tracing::debug!(operation = _operation, count = _count, "Policies evaluated");
     }
 }
 
@@ -65,7 +61,7 @@ impl PolicyMetricsHelper {
 /// with enhanced security validation.
 ///
 /// # Security Features
-/// 
+///
 /// - Enhanced input validation with threat detection
 /// - Client IP and User-Agent tracking
 /// - Comprehensive request sanitization
@@ -102,7 +98,7 @@ pub async fn authorize(
         .or_else(|| headers.get("x-real-ip"))
         .and_then(|h| h.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
-        
+
     let user_agent = headers
         .get("user-agent")
         .and_then(|h| h.to_str().ok())
@@ -112,20 +108,22 @@ pub async fn authorize(
     let validation_start = Instant::now();
     validate_authorization_input_with_context(&body, client_ip.clone(), user_agent.clone())?;
     let validation_duration = validation_start.elapsed();
-    
+
     // Record validation metrics with security context
     PolicyMetricsHelper::record_policies_evaluated("validation", validation_duration.as_secs_f64());
 
+    // Normalize action id to avoid parser issues with '::'
+    let normalized_action = body.action.trim().replace("::", "_");
     let action = cedar_policy::EntityUid::from_json(serde_json::json!({
         "type": "Action",
-        "id": body.action.trim()
+        "id": normalized_action
     }))
     .map_err(|e| AuthorizationError::InvalidAction {
         action: format!("{}: {}", body.action.trim(), e),
     })?;
 
     // Extract client_id from context before moving it
-    let client_id =
+    let client_identifier =
         extract_client_id_from_context(&body.context).unwrap_or_else(|| "unknown".to_string());
 
     let principal =
@@ -138,7 +136,16 @@ pub async fn authorize(
             details: e.to_string(),
         })?;
 
-    let context = cedar_policy::Context::from_json_value(body.context, None).map_err(|e| {
+    // Enrich context with normalized action name for policy matching
+    let mut enriched_ctx = body.context.clone();
+    if let Some(obj) = enriched_ctx.as_object_mut() {
+        obj.insert(
+            "action_name".to_string(),
+            serde_json::Value::String(normalized_action.clone()),
+        );
+    }
+
+    let context = cedar_policy::Context::from_json_value(enriched_ctx, None).map_err(|e| {
         AuthorizationError::InvalidContext {
             reason: e.to_string(),
         }
@@ -170,13 +177,16 @@ pub async fn authorize(
     let resource_type =
         extract_entity_type(&body.resource).unwrap_or_else(|| "unknown".to_string());
     let action_type = extract_action_type(&body.action);
+    
+    // Extract client_id from principal or use default
+    let _client_id = extract_client_id_from_context(&body.context).unwrap_or_else(|| "unknown".to_string());
 
     PolicyMetricsHelper::record_authorization_request(
         decision_str,
         &principal_type,
         &action_type,
         &resource_type,
-        &client_id,
+        &client_identifier,
         auth_duration,
         "mvp",
     );
@@ -229,16 +239,15 @@ pub async fn health_check() -> Json<serde_json::Value> {
 /// Metrics endpoint for MVP
 pub async fn get_metrics() -> impl axum::response::IntoResponse {
     // For MVP, return simple text metrics
-    let metrics = format!(
-        "# HELP policy_service_requests_total Total authorization requests\n\
+    let metrics = "# HELP policy_service_requests_total Total authorization requests\n\
          # TYPE policy_service_requests_total counter\n\
          policy_service_requests_total 0\n\
          \n\
          # HELP policy_service_up Service health status\n\
          # TYPE policy_service_up gauge\n\
          policy_service_up 1\n"
-    );
-    
+        .to_string();
+
     axum::response::Response::builder()
         .status(200)
         .header("content-type", "text/plain; charset=utf-8")
@@ -254,10 +263,10 @@ pub async fn metrics_middleware(
     let start = Instant::now();
     let method = req.method().clone();
     let uri = req.uri().clone();
-    
+
     let response = next.run(req).await;
     let duration = start.elapsed();
-    
+
     tracing::debug!(
         method = %method,
         uri = %uri,
@@ -265,6 +274,6 @@ pub async fn metrics_middleware(
         duration_ms = duration.as_millis(),
         "Request completed"
     );
-    
+
     response
 }

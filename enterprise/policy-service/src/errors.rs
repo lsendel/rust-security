@@ -13,12 +13,15 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Authorization error: {0}")]
     Authorization(#[from] AuthorizationError),
-    
+
     #[error("Policy error: {0}")]
     Policy(#[from] Box<PolicyError>),
-    
+
     #[error("IO error: {reason}: {source}")]
-    Io { reason: String, source: std::io::Error },
+    Io {
+        reason: String,
+        source: std::io::Error,
+    },
 }
 
 /// Authorization-specific errors
@@ -26,16 +29,16 @@ pub enum AppError {
 pub enum AuthorizationError {
     #[error("Invalid action: {action}")]
     InvalidAction { action: String },
-    
+
     #[error("Invalid principal: {details}")]
     InvalidPrincipal { details: String },
-    
+
     #[error("Invalid resource: {details}")]
     InvalidResource { details: String },
-    
+
     #[error("Invalid context: {reason}")]
     InvalidContext { reason: String },
-    
+
     #[error("Request failed: {reason}")]
     RequestFailed { reason: String },
 }
@@ -44,17 +47,18 @@ pub enum AuthorizationError {
 #[derive(Debug, Error)]
 pub enum PolicyError {
     #[error("Policy compilation failed")]
-    CompilationFailed { 
+    CompilationFailed {
         #[from]
-        source: cedar_policy::ParseErrors 
+        source: cedar_policy::ParseErrors,
     },
-    
+
     #[error("Policy validation failed: {reason}")]
     ValidationFailed { reason: String },
 }
 
 impl AppError {
     /// Create IO error with context
+    #[must_use]
     pub fn io(reason: &str, source: std::io::Error) -> Self {
         Self::Io {
             reason: reason.to_string(),
@@ -68,7 +72,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AppError::Authorization(auth_err) => match auth_err {
-                AuthorizationError::InvalidAction { .. } 
+                AuthorizationError::InvalidAction { .. }
                 | AuthorizationError::InvalidPrincipal { .. }
                 | AuthorizationError::InvalidResource { .. }
                 | AuthorizationError::InvalidContext { .. } => {
@@ -81,9 +85,10 @@ impl IntoResponse for AppError {
             AppError::Policy(policy_err) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, policy_err.to_string())
             }
-            AppError::Io { .. } => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
-            }
+            AppError::Io { .. } => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
         };
 
         let body = Json(json!({

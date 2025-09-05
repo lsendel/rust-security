@@ -196,7 +196,7 @@ curl -X POST http://localhost:8080/oauth2/token \
 curl http://localhost:8081/health
 
 # Evaluate policy
-curl -X POST http://localhost:8081/authorize \
+curl -X POST http://localhost:8081/v1/authorize \
   -H "Content-Type: application/json" \
   -d '{
     "principal": {"type": "User", "id": "alice"},

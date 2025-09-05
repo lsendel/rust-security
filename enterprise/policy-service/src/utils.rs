@@ -31,8 +31,13 @@ pub fn extract_client_id_from_context(context: &Value) -> Option<String> {
 }
 
 /// Parse entity from JSON value to Cedar EntityUid
-pub fn parse_entity(entity: &Value) -> Result<cedar_policy::EntityUid, cedar_policy::ParseErrors> {
-    cedar_policy::EntityUid::from_json(entity.clone())
+pub fn parse_entity(
+    entity: &Value,
+) -> Result<
+    cedar_policy::EntityUid,
+    Box<cedar_policy::entities_json_errors::JsonDeserializationError>,
+> {
+    cedar_policy::EntityUid::from_json(entity.clone()).map_err(Box::new)
 }
 
 /// Validate entity format for MVP
@@ -55,14 +60,14 @@ pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> Option<String> {
             }
         }
     }
-    
+
     // Try X-Real-IP
     if let Some(real_ip) = headers.get("x-real-ip") {
         if let Ok(ip_str) = real_ip.to_str() {
             return Some(ip_str.to_string());
         }
     }
-    
+
     // Try other common headers
     for header in ["cf-connecting-ip", "x-client-ip", "x-forwarded"] {
         if let Some(ip_header) = headers.get(header) {
@@ -71,7 +76,7 @@ pub fn extract_client_ip(headers: &axum::http::HeaderMap) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
 
@@ -94,13 +99,13 @@ mod tests {
             "type": "User",
             "id": "alice"
         });
-        
+
         assert_eq!(extract_entity_type(&entity), Some("User".to_string()));
-        
+
         let invalid_entity = json!({
             "id": "alice"
         });
-        
+
         assert_eq!(extract_entity_type(&invalid_entity), None);
     }
 
@@ -108,7 +113,10 @@ mod tests {
     fn test_extract_action_type() {
         assert_eq!(extract_action_type("Document::read"), "read");
         assert_eq!(extract_action_type("read"), "read");
-        assert_eq!(extract_action_type("User::update_profile"), "update_profile");
+        assert_eq!(
+            extract_action_type("User::update_profile"),
+            "update_profile"
+        );
     }
 
     #[test]
@@ -117,16 +125,16 @@ mod tests {
             "client_id": "web-app-v1.2",
             "timestamp": "2024-01-15T10:30:00Z"
         });
-        
+
         assert_eq!(
-            extract_client_id_from_context(&context), 
+            extract_client_id_from_context(&context),
             Some("web-app-v1.2".to_string())
         );
-        
+
         let context_no_client = json!({
             "timestamp": "2024-01-15T10:30:00Z"
         });
-        
+
         assert_eq!(extract_client_id_from_context(&context_no_client), None);
     }
 
@@ -136,13 +144,13 @@ mod tests {
             "type": "User",
             "id": "alice"
         });
-        
+
         assert!(validate_entity_format(&valid_entity));
-        
+
         let invalid_entity = json!({
             "id": "alice"
         });
-        
+
         assert!(!validate_entity_format(&invalid_entity));
     }
 
@@ -151,7 +159,7 @@ mod tests {
         let input = "Hello\x00World\x01!";
         let sanitized = sanitize_for_logging(input);
         assert_eq!(sanitized, "Hello_World_!");
-        
+
         let normal_input = "Hello World!";
         let sanitized_normal = sanitize_for_logging(normal_input);
         assert_eq!(sanitized_normal, "Hello World!");

@@ -21,13 +21,11 @@ serde_json = { workspace = true }
 
 # JWT and crypto
 jsonwebtoken = { workspace = true }
-rand = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 
 # Enhanced validation and policy engine
 mvp-tools = { path = "../mvp-tools" }
-common = { path = "../common" }
 
 # Logging and tracing
 tracing = { workspace = true }
@@ -35,7 +33,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 # Error handling
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 
 # Configuration
 uuid = { workspace = true, features = ["v4"] }
+
+# Security configuration (unified)
+common = { path = "../common" }

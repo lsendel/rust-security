@@ -26,6 +26,7 @@ use axum::extract::Path;
 use axum::routing::get;
 
 pub fn router() -> Router<AppState> {
+    use crate::admin_middleware::admin_auth_middleware;
     Router::new()
         .route("/", post(create_api_key).get(list_api_keys))
         .route("/:prefix", get(get_api_key).delete(revoke_api_key))

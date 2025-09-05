@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,7 +40,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy --all -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
 
       - name: Run tests
         run: cargo test --workspace --locked
@@ -52,3 +54,75 @@ jobs:
           name: test-logs
           path: target/debug
 
+  policy-service:
+    name: Policy Service (isolated)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        task: [build, clippy, test]
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:15-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PORT: 8081
+      ALLOWED_ORIGINS: http://localhost:3000
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      RUST_BACKTRACE: full
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Rust toolchain and components
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Build policy-service
+        if: matrix.task == 'build'
+        run: cargo build -p policy-service --all-features --locked
+
+      - name: Clippy policy-service
+        if: matrix.task == 'clippy'
+        run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings
+
+      - name: Test policy-service
+        if: matrix.task == 'test'
+        env:
+          RUST_BACKTRACE: full
+        run: cargo test -p policy-service --all-features -- --nocapture

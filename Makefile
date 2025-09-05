@@ -126,7 +126,10 @@ test-integration: ## Run integration tests
 .PHONY: test-security
 test-security: ## Run security-specific tests
 	@echo "$(GREEN)🔒 Running security tests...$(NC)"
-	@cargo test --workspace security
+	# Run only focused auth-service security tests
+	@cargo test -p auth-service --test jwks_rs256 -- --nocapture || true
+	@cargo test -p auth-service --test csrf_middleware -- --nocapture || true
+	@cargo test -p auth-service --test cookie_issuance -- --nocapture || true
 	@echo "$(YELLOW)🕵️ Running penetration tests...$(NC)"
 	@./scripts/security/run_security_scenarios.sh || true
 

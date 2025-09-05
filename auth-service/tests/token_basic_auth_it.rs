@@ -1,3 +1,5 @@
+#![cfg(all(feature = "full-integration", feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
+// cfg moved to top of file
 use auth_service::{app, AppState};
 use base64::Engine as _;
 use common::TokenRecord;
@@ -66,3 +68,4 @@ async fn token_with_basic_auth_header() {
     let v: serde_json::Value = res.json().await.unwrap();
     assert!(v.get("access_token").is_some());
 }
+// removed stray cfg

@@ -6,10 +6,10 @@
 //! - Performance bottleneck identification
 //! - Integration with external monitoring systems
 
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::time::interval;
 
 /// Memory usage statistics
@@ -96,22 +96,30 @@ impl HeapProfiler {
                         history.push(stats.clone());
 
                         // Cleanup old stats
-                        let retention_duration = Duration::from_secs(config.metrics_retention_hours * 3600);
-                        let cutoff = chrono::Utc::now() - chrono::Duration::from_std(retention_duration).unwrap();
+                        let retention_duration =
+                            Duration::from_secs(config.metrics_retention_hours * 3600);
+                        let cutoff = chrono::Utc::now()
+                            - chrono::Duration::from_std(retention_duration).unwrap();
                         history.retain(|s| s.timestamp > cutoff);
                     }
 
                     // Check for memory alerts
                     if stats.rss_bytes > config.alert_threshold_mb * 1024 * 1024 {
-                        tracing::warn!("🚨 Memory usage alert: {}MB RSS exceeds threshold of {}MB",
-                            stats.rss_bytes / (1024 * 1024), config.alert_threshold_mb);
+                        tracing::warn!(
+                            "🚨 Memory usage alert: {}MB RSS exceeds threshold of {}MB",
+                            stats.rss_bytes / (1024 * 1024),
+                            config.alert_threshold_mb
+                        );
                     }
 
                     // Log periodic stats
-                    if stats.timestamp.timestamp() % 300 == 0 { // Every 5 minutes
-                        tracing::info!("📊 Memory Stats: Heap: {}MB, RSS: {}MB",
+                    if stats.timestamp.timestamp() % 300 == 0 {
+                        // Every 5 minutes
+                        tracing::info!(
+                            "📊 Memory Stats: Heap: {}MB, RSS: {}MB",
                             stats.heap_used_bytes / (1024 * 1024),
-                            stats.rss_bytes / (1024 * 1024));
+                            stats.rss_bytes / (1024 * 1024)
+                        );
                     }
                 } else {
                     tracing::warn!("Failed to collect memory statistics");
@@ -119,8 +127,10 @@ impl HeapProfiler {
             }
         });
 
-        tracing::info!("🔍 Heap profiler started with {}s sampling interval",
-            self.config.sampling_interval.as_secs());
+        tracing::info!(
+            "🔍 Heap profiler started with {}s sampling interval",
+            self.config.sampling_interval.as_secs()
+        );
         Ok(())
     }
 
@@ -163,10 +173,11 @@ impl HeapProfiler {
         if increasing_trend {
             let first = &recent_stats[0];
             let last = &recent_stats[recent_stats.len() - 1];
-            let growth_rate = (last.heap_used_bytes - first.heap_used_bytes) as f64 /
-                (last.timestamp.timestamp() - first.timestamp.timestamp()) as f64;
+            let growth_rate = (last.heap_used_bytes - first.heap_used_bytes) as f64
+                / (last.timestamp.timestamp() - first.timestamp.timestamp()) as f64;
 
-            if growth_rate > 1024.0 { // More than 1KB/second growth
+            if growth_rate > 1024.0 {
+                // More than 1KB/second growth
                 indicators.push(MemoryLeakIndicator {
                     severity: LeakSeverity::High,
                     description: format!("Heap growing at {:.2}KB/s consistently", growth_rate / 1024.0),
@@ -192,7 +203,8 @@ impl HeapProfiler {
 
         // Calculate average over last hour
         let one_hour_ago = chrono::Utc::now() - chrono::Duration::hours(1);
-        let recent_stats: Vec<_> = history.iter()
+        let recent_stats: Vec<_> = history
+            .iter()
             .filter(|s| s.timestamp > one_hour_ago)
             .collect();
 
@@ -246,15 +258,17 @@ impl HeapProfiler {
 
         // Get heap info from status file
         let status = fs::read_to_string("/proc/self/status")?;
-        let heap_used = status.lines()
+        let heap_used = status
+            .lines()
             .find(|line| line.starts_with("VmData:"))
             .and_then(|line| line.split_whitespace().nth(1))
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0) * 1024; // Convert from KB to bytes
+            .unwrap_or(0)
+            * 1024; // Convert from KB to bytes
 
         Ok(MemoryStats {
             heap_used_bytes: heap_used,
-            heap_allocated_bytes: heap_used, // Approximation
+            heap_allocated_bytes: heap_used,   // Approximation
             stack_size_bytes: 8 * 1024 * 1024, // Typical stack size
             rss_bytes: rss_pages * page_size,
             virtual_memory_bytes: virtual_pages * page_size,
@@ -304,5 +318,3 @@ pub struct MemoryReport {
     pub stats_collected: usize,
     pub monitoring_duration_hours: i64,
 }
-
-

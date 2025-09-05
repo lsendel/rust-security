@@ -170,7 +170,8 @@ impl ReplayProtection {
         nonce: &str,
         timestamp: u64,
     ) -> Result<(), crate::shared::error::AppError> {
-        let _expiry = self.time_window + self.max_clock_skew;
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
+        let expiry = self.time_window + self.max_clock_skew;
 
         // Try Redis first
         #[cfg(feature = "redis-sessions")]

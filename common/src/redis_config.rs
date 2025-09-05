@@ -148,6 +148,13 @@ impl UnifiedRedisConfig {
         }
     }
 
+    /// Create configuration from environment variables
+    pub fn from_env() -> crate::crypto::CryptoResult<Self> {
+        let url = std::env::var("REDIS_URL")
+            .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+        Ok(Self::new(url))
+    }
+
     /// Create configuration for caching
     pub fn for_caching(url: impl Into<String>) -> Self {
         Self {
@@ -168,6 +175,7 @@ impl UnifiedRedisConfig {
             ..Default::default()
         }
     }
+
 
     /// Create configuration for threat profiling
     pub fn for_threat_profiling(url: impl Into<String>) -> Self {
@@ -268,7 +276,6 @@ impl UnifiedRedisConfig {
     }
 
     /// Get Redis connection configuration for deadpool
-    #[cfg(feature = "deadpool-redis")]
     #[must_use]
     pub fn to_deadpool_config(&self) -> deadpool_redis::Config {
         let mut config = deadpool_redis::Config::from_url(self.client_url());

@@ -58,9 +58,16 @@ pub fn create_mvp_router(_container: AppContainer) -> Router<AuthState> {
         .route("/metrics", get(mvp_metrics_endpoint))
 
         .layer(cors)
-        .with_state(AuthState::new(
-            std::env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret".to_string())
-        ))
+        .with_state({
+            let jwt_secret = std::env::var("JWT_SECRET")
+                .expect("JWT_SECRET environment variable is required");
+            
+            if jwt_secret.len() < 32 {
+                panic!("JWT_SECRET must be at least 32 characters for security");
+            }
+            
+            AuthState::new(jwt_secret)
+        })
 }
 
 /// MVP health check endpoint

@@ -6,10 +6,10 @@
 //! - Customer impact analysis
 //! - Integration with external monitoring services
 
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 
 /// SLA metrics and thresholds
@@ -83,7 +83,7 @@ pub struct CustomerImpact {
 pub enum ImpactSeverity {
     None,
     Low,      // < 1% customers affected
-    Medium,   // 1-10% customers affected  
+    Medium,   // 1-10% customers affected
     High,     // 10-50% customers affected
     Critical, // > 50% customers affected
 }
@@ -155,10 +155,10 @@ impl ProductionMonitor {
 
         // Start health check monitoring
         self.start_health_checks().await?;
-        
+
         // Start SLA monitoring
         self.start_sla_monitoring().await?;
-        
+
         // Start alert processing
         self.start_alert_processing().await?;
 
@@ -174,19 +174,19 @@ impl ProductionMonitor {
 
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(30));
-            
+
             while *is_running.lock().unwrap() {
                 interval.tick().await;
-                
+
                 // Check auth service health
                 let auth_health = Self::check_service_health("http://localhost:8080/health").await;
-                
+
                 // Check database health
                 let db_health = Self::check_database_health().await;
-                
+
                 // Check Redis health
                 let redis_health = Self::check_redis_health().await;
-                
+
                 // Update health check results
                 {
                     let mut checks = health_checks.lock().unwrap();
@@ -194,9 +194,10 @@ impl ProductionMonitor {
                     checks.insert("database".to_string(), db_health.clone());
                     checks.insert("redis".to_string(), redis_health.clone());
                 }
-                
+
                 // Generate alerts for failed health checks
-                Self::process_health_check_alerts(&alerts, &[auth_health, db_health, redis_health]).await;
+                Self::process_health_check_alerts(&alerts, &[auth_health, db_health, redis_health])
+                    .await;
             }
         });
 
@@ -212,19 +213,19 @@ impl ProductionMonitor {
 
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(60));
-            
+
             while *is_running.lock().unwrap() {
                 interval.tick().await;
-                
+
                 // Collect current metrics
                 let current_metrics = Self::collect_sla_metrics().await;
-                
+
                 // Update stored metrics
                 {
                     let mut stored_metrics = metrics.lock().unwrap();
                     *stored_metrics = current_metrics.clone();
                 }
-                
+
                 // Check for SLA violations
                 Self::check_sla_violations(&alerts, &config, &current_metrics).await;
             }
@@ -240,10 +241,10 @@ impl ProductionMonitor {
 
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(10));
-            
+
             while *is_running.lock().unwrap() {
                 interval.tick().await;
-                
+
                 // Process unresolved alerts
                 Self::process_alert_notifications(&alerts).await;
             }
@@ -255,11 +256,28 @@ impl ProductionMonitor {
     /// Check service health via HTTP endpoint
     async fn check_service_health(url: &str) -> HealthCheckResult {
         let start = Instant::now();
-        
-        match reqwest::get(url).await {
+        // Use a short-timeout client to avoid hanging health probes
+        let client = match reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .user_agent("auth-service-monitor/1.0")
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return HealthCheckResult {
+                    service: url.to_string(),
+                    healthy: false,
+                    response_time_ms: 0,
+                    last_check: Instant::now(),
+                    error_message: Some(format!("client build error: {}", e)),
+                }
+            }
+        };
+
+        match client.get(url).send().await {
             Ok(response) => {
                 let response_time = start.elapsed().as_millis() as u64;
-                
+
                 if response.status().is_success() {
                     HealthCheckResult {
                         service: url.to_string(),
@@ -284,7 +302,7 @@ impl ProductionMonitor {
                 response_time_ms: 0,
                 last_check: Instant::now(),
                 error_message: Some(e.to_string()),
-            }
+            },
         }
     }
 
@@ -332,9 +350,11 @@ impl ProductionMonitor {
                     id: uuid::Uuid::new_v4().to_string(),
                     alert_type,
                     severity: AlertSeverity::Critical,
-                    message: format!("{} is unhealthy: {}", 
-                        result.service, 
-                        result.error_message.as_deref().unwrap_or("Unknown error")),
+                    message: format!(
+                        "{} is unhealthy: {}",
+                        result.service,
+                        result.error_message.as_deref().unwrap_or("Unknown error")
+                    ),
                     timestamp: chrono::Utc::now(),
                     resolved: false,
                     customer_impact: CustomerImpact {
@@ -384,8 +404,10 @@ impl ProductionMonitor {
         if metrics.uptime_percent < config.uptime_target_percent {
             violations.push(AlertType::SlaViolation {
                 metric: "Uptime".to_string(),
-                threshold: format!("{}% (actual: {}%)", 
-                    config.uptime_target_percent, metrics.uptime_percent),
+                threshold: format!(
+                    "{}% (actual: {}%)",
+                    config.uptime_target_percent, metrics.uptime_percent
+                ),
             });
         }
 
@@ -440,7 +462,9 @@ impl ProductionMonitor {
     /// Process alert notifications
     async fn process_alert_notifications(alerts: &Arc<Mutex<Vec<ProductionAlert>>>) {
         let unresolved_alerts: Vec<ProductionAlert> = {
-            alerts.lock().unwrap()
+            alerts
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|alert| !alert.resolved)
                 .cloned()
@@ -449,13 +473,21 @@ impl ProductionMonitor {
 
         for alert in unresolved_alerts {
             // In production, send to Slack, PagerDuty, email, etc.
-            log::warn!("🚨 Production Alert: {} - {}", 
-                alert.severity as u8, alert.message);
-            
+            log::warn!(
+                "🚨 Production Alert: {} - {}",
+                alert.severity as u8,
+                alert.message
+            );
+
             // Log customer impact for high-severity alerts
-            if matches!(alert.severity, AlertSeverity::Critical | AlertSeverity::Emergency) {
-                log::error!("🔥 High-impact alert: {} customers potentially affected", 
-                    alert.customer_impact.affected_customers_estimated);
+            if matches!(
+                alert.severity,
+                AlertSeverity::Critical | AlertSeverity::Emergency
+            ) {
+                log::error!(
+                    "🔥 High-impact alert: {} customers potentially affected",
+                    alert.customer_impact.affected_customers_estimated
+                );
             }
         }
     }
@@ -466,13 +498,21 @@ impl ProductionMonitor {
         let metrics = self.metrics.lock().unwrap();
         let health_checks = self.health_checks.lock().unwrap();
 
-        let critical_alerts = alerts.iter()
-            .filter(|a| !a.resolved && matches!(a.severity, AlertSeverity::Critical | AlertSeverity::Emergency))
+        let critical_alerts = alerts
+            .iter()
+            .filter(|a| {
+                !a.resolved
+                    && matches!(
+                        a.severity,
+                        AlertSeverity::Critical | AlertSeverity::Emergency
+                    )
+            })
             .count();
 
-        let overall_health = if critical_alerts == 0 
-            && health_checks.values().all(|h| h.healthy) 
-            && metrics.uptime_percent >= self.config.uptime_target_percent {
+        let overall_health = if critical_alerts == 0
+            && health_checks.values().all(|h| h.healthy)
+            && metrics.uptime_percent >= self.config.uptime_target_percent
+        {
             SystemHealth::Healthy
         } else if critical_alerts > 0 {
             SystemHealth::Critical

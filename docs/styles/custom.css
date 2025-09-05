@@ -1,0 +1,230 @@
+/* Custom styles for Rust Security Platform documentation */
+
+:root {
+    --security-primary: #2c5aa0;
+    --security-secondary: #1e3a56;
+    --security-accent: #ff6b35;
+    --security-success: #28a745;
+    --security-warning: #ffc107;
+    --security-danger: #dc3545;
+    --security-code-bg: #f8f9fa;
+    --security-border: #dee2e6;
+}
+
+/* Enhanced code blocks */
+.hljs {
+    background: var(--security-code-bg) !important;
+    border: 1px solid var(--security-border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    position: relative;
+}
+
+/* Add copy button to code blocks */
+pre.playground {
+    position: relative;
+}
+
+pre.playground::before {
+    content: "📋 Click to copy";
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: var(--security-primary);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+pre.playground:hover::before {
+    opacity: 1;
+}
+
+/* Security-themed callouts */
+.security-note {
+    border-left: 4px solid var(--security-primary);
+    background: #f0f4ff;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.security-warning {
+    border-left: 4px solid var(--security-warning);
+    background: #fff9e6;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.security-danger {
+    border-left: 4px solid var(--security-danger);
+    background: #fff5f5;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.security-success {
+    border-left: 4px solid var(--security-success);
+    background: #f0fff4;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+/* Add icons to callouts */
+.security-note::before { content: "🔒 "; font-weight: bold; }
+.security-warning::before { content: "⚠️ "; font-weight: bold; }
+.security-danger::before { content: "🚨 "; font-weight: bold; }
+.security-success::before { content: "✅ "; font-weight: bold; }
+
+/* Enhanced navigation */
+.chapter-item {
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.chapter-item:hover {
+    background: var(--security-code-bg);
+    transform: translateX(2px);
+}
+
+/* Interactive code examples */
+.interactive-example {
+    border: 2px dashed var(--security-primary);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 8px;
+    position: relative;
+}
+
+.interactive-example::before {
+    content: "🚀 Interactive Example";
+    position: absolute;
+    top: -0.5rem;
+    left: 1rem;
+    background: white;
+    padding: 0 0.5rem;
+    color: var(--security-primary);
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+/* API method indicators */
+.api-method {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    margin-right: 0.5rem;
+}
+
+.api-method.get { background: var(--security-success); color: white; }
+.api-method.post { background: var(--security-primary); color: white; }
+.api-method.put { background: var(--security-warning); color: black; }
+.api-method.delete { background: var(--security-danger); color: white; }
+
+/* Status badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin: 0.25rem;
+}
+
+.status-badge.stable { background: var(--security-success); color: white; }
+.status-badge.beta { background: var(--security-warning); color: black; }
+.status-badge.experimental { background: var(--security-danger); color: white; }
+.status-badge.deprecated { background: #6c757d; color: white; }
+
+/* Table enhancements */
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    border: 1px solid var(--security-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+th {
+    background: var(--security-primary);
+    color: white;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--security-border);
+}
+
+tr:hover {
+    background: var(--security-code-bg);
+}
+
+/* Search enhancements */
+#searchbar {
+    border: 2px solid var(--security-primary);
+    border-radius: 8px;
+    padding: 0.5rem;
+}
+
+#searchbar:focus {
+    box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .interactive-example {
+        margin: 1rem -1rem;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+    
+    .api-method {
+        display: block;
+        margin: 0.25rem 0;
+        text-align: center;
+    }
+}
+
+/* Dark theme adjustments */
+.navy {
+    --security-code-bg: #1e2732;
+    --security-border: #3c4651;
+}
+
+.navy .hljs {
+    background: var(--security-code-bg) !important;
+}
+
+.navy .security-note {
+    background: #1a2332;
+    border-left-color: #4a90ff;
+}
+
+.navy .security-warning {
+    background: #2a2416;
+    border-left-color: #ffc107;
+}
+
+.navy .security-danger {
+    background: #2a1616;
+    border-left-color: #dc3545;
+}
+
+.navy .security-success {
+    background: #162a16;
+    border-left-color: #28a745;
+}

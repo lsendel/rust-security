@@ -8,21 +8,40 @@ on:
 jobs:
   clippy-core:
     runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Clippy (libs/bins)
-        run: cargo clippy --workspace --all-features -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
+        run: cargo clippy --workspace -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
 
   clippy-tests-informational:
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      RUST_BACKTRACE: 1
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Clippy (include tests)
-        run: cargo clippy --workspace --all-features --tests -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
+        run: cargo clippy --workspace --tests -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
+
+  policy-service-clippy:
+    name: Policy Service Clippy
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Clippy (policy-service, all targets)
+        run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings -W clippy::perf -W clippy::suspicious -W clippy::pedantic
+      - name: Clippy (policy-service, tests)
+        run: cargo clippy -p policy-service --all-features --tests -- -D warnings -W clippy::perf -W clippy::suspicious -W clippy::pedantic

@@ -5,9 +5,11 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use anyhow::Context;
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::{extract::Request, middleware::Next, response::Response};
+use common::security::UnifiedSecurityConfig;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod config;
 
@@ -16,13 +18,47 @@ use auth_service::infrastructure::security::security::{rate_limit, start_rate_li
 use auth_service::middleware::{
     initialize_threat_detection, threat_detection_middleware, threat_metrics,
 };
+use auth_service::middleware::csrf::csrf_protect;
 use auth_service::security_enhancements::ThreatDetector;
 use config::Config;
+// Initialize secure JWT key management
+use auth_service::infrastructure::crypto::keys::{initialize_keys, jwks_document};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Initialize logging
-    tracing_subscriber::fmt::init();
+    // SECURITY: Load and validate configuration before doing anything else
+    let config = auth_service::config_secure_validation::SecureConfig::from_env()
+        .context("Failed to load secure configuration")?;
+    
+    // Validate production readiness if in production
+    config.validate_production_ready()
+        .context("Configuration failed production readiness check")?;
+    
+    // Log security configuration status (without sensitive values)
+    config.log_security_status();
+    
+    // Initialize logging (structured in production, pretty in dev)
+    // Prefer production logging configuration when APP_ENV=production
+    if std::env::var("APP_ENV")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("production")
+    {
+        let _ = auth_service::production_logging::initialize_logging(
+            &auth_service::production_logging::LoggingConfig::production(),
+        );
+    } else if std::env::var("APP_ENV")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("development")
+    {
+        let _ = auth_service::production_logging::initialize_logging(
+            &auth_service::production_logging::LoggingConfig::development(),
+        );
+    } else {
+        // Fallback to a simple subscriber for local runs/tests
+        let _ = auth_service::production_logging::initialize_logging(
+            &auth_service::production_logging::LoggingConfig::default(),
+        );
+    }
 
     info!("🚀 Starting Rust Security Platform - Auth Service v2.0");
     info!("🔐 Enhanced with OAuth 2.0, User Registration, and JWT Authentication");
@@ -35,8 +71,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let config = Arc::new(config);
 
-    // Initialize authentication state
-    let auth_state = AuthState::new(config.jwt.secret.clone());
+    // Initialize signing keys for JWT (required for RS256 + JWKS)
+    if let Err(e) = initialize_keys().await {
+        return Err(anyhow::anyhow!(
+            "Failed to initialize JWT signing keys: {}. Set RSA key via RSA_PRIVATE_KEY or RSA_PRIVATE_KEY_PATH",
+            e
+        )
+        .into());
+    }
+
+    // SECURITY: Initialize authentication state with secure JWT secret from environment
+    let jwt_secret = std::env::var("JWT_SECRET").map_err(|_| {
+        anyhow::anyhow!(
+            "JWT_SECRET environment variable is required. Generate with: \
+            openssl rand -hex 32"
+        )
+    })?;
+
+    // Validate JWT secret strength
+    if jwt_secret.len() < 32 {
+        return Err(
+            anyhow::anyhow!("JWT_SECRET must be at least 32 characters long for security").into(),
+        );
+    }
+
+    info!("✅ JWKS key management initialized successfully");
+
+    let auth_state = AuthState::new(jwt_secret);
 
     // Initialize threat detection
     let threat_detector = ThreatDetector::new();
@@ -45,14 +106,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Initialize threat detection middleware
     initialize_threat_detection().await;
 
+    // SECURITY: Initialize test mode security checks
+    auth_service::test_mode_security::initialize_test_mode_security();
+
     // Start rate limiter cleanup task
     start_rate_limiter_cleanup();
 
+    // Background task to ensure signing key is rotated when needed
+    tokio::spawn(async move {
+        use std::time::Duration;
+        loop {
+            let _ = auth_service::infrastructure::crypto::keys::maybe_rotate().await;
+            tokio::time::sleep(Duration::from_secs(300)).await; // check every 5 minutes
+        }
+    });
+
     // Create comprehensive HTTP server with authentication endpoints
-    let app = axum::Router::new()
+    #[cfg_attr(not(feature = "metrics"), allow(unused_mut))]
+    let mut app = axum::Router::new()
         // Health and status endpoints
         .route("/health", axum::routing::get(health_check))
         .route("/api/v1/status", axum::routing::get(status))
+        // CSRF token endpoint
+        .route("/csrf/token", axum::routing::get(auth_service::middleware::csrf::issue_csrf_token))
         // Authentication endpoints
         .route(
             "/api/v1/auth/register",
@@ -95,7 +171,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Security middleware (order matters - apply innermost first)
         .layer(axum::middleware::from_fn(threat_detection_middleware))
         .layer(axum::middleware::from_fn(rate_limit))
+        .layer(axum::middleware::from_fn(csrf_protect))
         .layer(axum::middleware::from_fn(security_headers));
+
+    // Observability: expose Prometheus metrics and add request metrics middleware when enabled
+    #[cfg(feature = "metrics")]
+    {
+        use axum::routing::get;
+        use axum::response::IntoResponse as _;
+        // Add request metrics middleware
+        app = app.layer(axum::middleware::from_fn(
+            auth_service::metrics::metrics_middleware,
+        ));
+        // Expose /metrics endpoint only when explicitly allowed
+        app = app.route(
+            "/metrics",
+            get(|| async move {
+                if std::env::var("METRICS_PUBLIC").unwrap_or_else(|_| "false".to_string())
+                    == "true"
+                {
+                    auth_service::metrics::metrics_handler().into_response()
+                } else {
+                    axum::response::Response::builder()
+                        .status(axum::http::StatusCode::FORBIDDEN)
+                        .body(axum::body::Body::from("metrics disabled"))
+                        .unwrap()
+                }
+            }),
+        );
+        info!("   • Metrics: GET /metrics (gated)");
+    }
 
     let addr = config.server.bind_addr;
     info!("🌐 Auth service listening on {}", addr);
@@ -112,8 +217,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!("   • Service Identity: POST /service/identity/register");
     info!("   • JIT Token: POST /token/jit");
     info!("   • Threat Metrics: GET /security/threats/metrics");
-    info!("🔑 Demo credentials: demo@example.com / demo123");
-    info!("🔑 Demo OAuth client: demo-client / demo-secret");
+    #[cfg(feature = "metrics")]
+    info!("   • Prometheus Metrics: GET /metrics");
+    info!("🔑 Use registration endpoint to create users: POST /api/v1/auth/register");
+    info!("🔑 Use OAuth client registration for applications");
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
@@ -177,17 +284,7 @@ async fn status() -> axum::Json<serde_json::Value> {
             "policy-service": "✅ operational",
             "compliance-tools": "✅ operational"
         },
-        "demo_credentials": {
-            "user": {
-                "email": "demo@example.com",
-                "password": "demo123"
-            },
-            "oauth_client": {
-                "client_id": "demo-client",
-                "client_secret": "demo-secret",
-                "redirect_uri": "http://localhost:3000/callback"
-            }
-        }
+        "security_note": "No demo credentials - use proper registration endpoints for users and OAuth clients"
     }))
 }
 
@@ -198,22 +295,22 @@ async fn jwks_endpoint(
     use axum::http::HeaderMap;
     use axum::Json;
 
-    // JWKS functionality temporarily disabled for build compatibility
-    // Return empty JWKS for now
-    let empty_jwks = serde_json::json!({
-        "keys": []
-    });
+    // Produce JWKS from active key set
+    let jwks = jwks_document().await;
 
     let mut headers = HeaderMap::new();
     if let Ok(content_type) = "application/json".parse() {
         headers.insert("content-type", content_type);
     }
-    if let Ok(cache_control) = "public, max-age=3600".parse() {
+    // Cache for short period to allow rotation while avoiding thundering herd
+    if let Ok(cache_control) = "public, max-age=300".parse() {
         headers.insert("cache-control", cache_control);
     }
 
-    (headers, Json(empty_jwks))
+    (headers, Json(jwks))
 }
+
+// CSRF middleware moved to auth_service::middleware::csrf
 
 /// Service identity registration handler
 async fn service_identity_register(

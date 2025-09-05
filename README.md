@@ -1,11 +1,19 @@
 # 🔒 Rust Security Platform
 
 [![Warning Status](https://img.shields.io/badge/warnings-0-brightgreen)](WARNING_FREE_SUCCESS_SUMMARY.md)
+[![Security Status](https://img.shields.io/badge/security-vulnerabilities%20resolved-brightgreen)](SECURITY_FIXES_COMPLETED.md)
 [![Security](https://img.shields.io/badge/security-hardened-blue)](SECURITY_CONFIGURATION_GUIDE.md)
-[![Deployment](https://img.shields.io/badge/deployment-ready-green)](DEPLOYMENT_GUIDE.md)
+[![Deployment](https://img.shields.io/badge/deployment-production%20approved-brightgreen)](DEPLOYMENT_GUIDE.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://rustup.rs/)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-ready-blue.svg)](./k8s/)
+[![CI](https://github.com/lsendel/rust-security/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci.yml)
+[![Enhanced CI](https://github.com/lsendel/rust-security/actions/workflows/enhanced-ci.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/enhanced-ci.yml)
+[![Clippy](https://github.com/lsendel/rust-security/actions/workflows/ci-clippy.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci-clippy.yml)
+[![Comprehensive Testing](https://github.com/lsendel/rust-security/actions/workflows/comprehensive-testing.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/comprehensive-testing.yml)
+[![Clean Code](https://github.com/lsendel/rust-security/actions/workflows/clean-code.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/clean-code.yml)
+[![API Validation](https://github.com/lsendel/rust-security/actions/workflows/api-validation.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/api-validation.yml)
+[![CI Pipeline](https://github.com/lsendel/rust-security/actions/workflows/ci-pipeline.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci-pipeline.yml)
 
 **Enterprise-grade security platform built with Rust, featuring zero-trust architecture, post-quantum cryptography, and comprehensive threat detection capabilities.**
 
@@ -108,6 +116,26 @@ kubectl get pods -n rust-security
 - 🔐 [**Security Guide**](./docs/security/README.md) - Security features and best practices
 - 📊 [**Operations Guide**](./docs/operations/operations-guide.md) - Production operations and monitoring
 - 🔧 [**API Documentation**](./api-contracts/README.md) - Complete API reference
+
+## 🔌 Ports
+
+- Auth Service: `http://localhost:8080`
+- Policy Service: `http://localhost:8081`
+- Grafana: `http://localhost:3001`
+
+## 🧩 CI Status (Policy-Service Isolation)
+
+The following workflows include a dedicated job that builds, lints, and tests the `policy-service` in isolation for clear signal:
+
+| Workflow | Badge | Job |
+|---|---|---|
+| CI | [![CI](https://github.com/lsendel/rust-security/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci.yml) | `policy-service` (matrix: build/clippy/test) |
+| Enhanced CI | [![Enhanced CI](https://github.com/lsendel/rust-security/actions/workflows/enhanced-ci.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/enhanced-ci.yml) | `policy-service` (matrix) |
+| Clean Code | [![Clean Code](https://github.com/lsendel/rust-security/actions/workflows/clean-code.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/clean-code.yml) | `policy-service-clean` |
+| Clippy | [![Clippy](https://github.com/lsendel/rust-security/actions/workflows/ci-clippy.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci-clippy.yml) | `policy-service-clippy` |
+| Comprehensive Testing | [![Comprehensive Testing](https://github.com/lsendel/rust-security/actions/workflows/comprehensive-testing.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/comprehensive-testing.yml) | `policy-service` |
+| CI Pipeline | [![CI Pipeline](https://github.com/lsendel/rust-security/actions/workflows/ci-pipeline.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci-pipeline.yml) | `policy-service` |
+| API Validation | [![API Validation](https://github.com/lsendel/rust-security/actions/workflows/api-validation.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/api-validation.yml) | OAuth + Policy smoke |
 
 ### **Developer Resources**
 - 💻 [Development Guide](./docs/development/README.md)

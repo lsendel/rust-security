@@ -1,3 +1,5 @@
+#![cfg(all(feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
+// cfg moved to top of file
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::storage::session::store::RedisSessionStore;
 use auth_service::storage::store::hybrid::HybridStore;
@@ -205,3 +207,4 @@ async fn step_up_denied_then_allowed_after_mfa_session_verify() {
     let body2: AuthorizeResp = res2.json().await.unwrap();
     assert_eq!(body2.decision, "Allow");
 }
+// removed stray cfg

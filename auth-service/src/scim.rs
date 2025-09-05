@@ -75,11 +75,13 @@ pub struct ScimError {
 )
 
 pub fn router() -> Router<AppState> {
+    use crate::admin_middleware::admin_auth_middleware;
     Router::new()
         .route("/scim/v2/Users", post(create_user).get(list_users))
         .route("/scim/v2/Users/:id", get(get_user))
         .route("/scim/v2/Groups", post(create_group).get(list_groups))
         .route("/scim/v2/Groups/:id", get(get_group))
+        .route_layer(axum::middleware::from_fn(admin_auth_middleware))
     // Note: Bulk operations are complex and will be refactored separately.
     // .route("/scim/v2/Bulk", post(bulk_operations))
 )

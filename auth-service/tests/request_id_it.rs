@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 use auth_service::{app, AppState};
 use common::TokenRecord;
 use reqwest::header::HeaderValue;

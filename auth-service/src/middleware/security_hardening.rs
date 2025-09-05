@@ -2,7 +2,7 @@
 //!
 //! Implements comprehensive security features as specified in the MVP Week 4 plan:
 //! - Advanced rate limiting with DDoS protection
-//! - Threat detection and IP banning  
+//! - Threat detection and IP banning
 //! - Security headers enforcement
 //! - Request signing validation for admin endpoints
 
@@ -49,12 +49,11 @@ impl RateLimitState {
     fn add_request(&mut self) {
         let now = Instant::now();
         self.last_request = now;
-        
+
         // Clean old requests (older than 1 minute)
-        self.requests.retain(|&request_time| {
-            now.duration_since(request_time) < Duration::from_secs(60)
-        });
-        
+        self.requests
+            .retain(|&request_time| now.duration_since(request_time) < Duration::from_secs(60));
+
         self.requests.push(now);
     }
 
@@ -64,10 +63,11 @@ impl RateLimitState {
 
     fn increase_threat_score(&mut self, points: u32) {
         self.threat_score += points;
-        
+
         // Auto-block if threat score is too high
         if self.threat_score > 100 {
-            self.blocked_until = Some(Instant::now() + Duration::from_secs(300)); // 5 minutes
+            self.blocked_until = Some(Instant::now() + Duration::from_secs(300));
+            // 5 minutes
         }
     }
 }
@@ -107,7 +107,7 @@ impl SecurityHardening {
 
         // Add request and check rate limit
         state.add_request();
-        
+
         if state.should_rate_limit(self.config.rate_limit_per_minute) {
             state.increase_threat_score(10);
             return Err(SecurityViolation::RateLimited {
@@ -121,10 +121,15 @@ impl SecurityHardening {
     }
 
     /// Analyze request for threats
-    fn analyze_request_threats(&self, request: &Request, ip: IpAddr) -> Result<SecurityContext, SecurityViolation> {
+    fn analyze_request_threats(
+        &self,
+        request: &Request,
+        ip: IpAddr,
+    ) -> Result<SecurityContext, SecurityViolation> {
         let mut context = SecurityContext {
             client_ip: Some(ip),
-            user_agent: request.headers()
+            user_agent: request
+                .headers()
                 .get("User-Agent")
                 .and_then(|h| h.to_str().ok())
                 .map(|s| s.to_string()),
@@ -136,24 +141,28 @@ impl SecurityHardening {
 
         // Check for suspicious patterns
         self.detect_suspicious_patterns(request, &mut context)?;
-        
+
         // Check user agent
         self.validate_user_agent(request, &mut context)?;
-        
+
         // Check request size
         self.validate_request_size(request, &mut context)?;
 
         Ok(context)
     }
 
-    fn detect_suspicious_patterns(&self, request: &Request, context: &mut SecurityContext) -> Result<(), SecurityViolation> {
+    fn detect_suspicious_patterns(
+        &self,
+        request: &Request,
+        context: &mut SecurityContext,
+    ) -> Result<(), SecurityViolation> {
         let uri = request.uri().to_string();
         let method = request.method().as_str();
 
         // Common attack patterns
         let suspicious_patterns = [
             ("../", "Path traversal attempt"),
-            ("<script", "XSS attempt"), 
+            ("<script", "XSS attempt"),
             ("SELECT ", "SQL injection attempt"),
             ("DROP ", "SQL injection attempt"),
             ("../../", "Directory traversal"),
@@ -164,9 +173,11 @@ impl SecurityHardening {
 
         for (pattern, description) in &suspicious_patterns {
             if uri.contains(pattern) {
-                context.threat_indicators.push(format!("Suspicious pattern: {}", description));
+                context
+                    .threat_indicators
+                    .push(format!("Suspicious pattern: {}", description));
                 context.threat_level = ThreatLevel::High;
-                
+
                 return Err(SecurityViolation::SuspiciousPattern {
                     pattern: pattern.to_string(),
                     description: description.to_string(),
@@ -176,23 +187,35 @@ impl SecurityHardening {
         }
 
         // Check for excessive special characters (potential injection)
-        let special_char_count = uri.chars().filter(|&c| "';\"<>&|`${}[]()".contains(c)).count();
+        let special_char_count = uri
+            .chars()
+            .filter(|&c| "';\"<>&|`${}[]()".contains(c))
+            .count();
         if special_char_count > 10 {
-            context.threat_indicators.push("Excessive special characters".to_string());
+            context
+                .threat_indicators
+                .push("Excessive special characters".to_string());
             context.threat_level = ThreatLevel::Medium;
         }
 
         // Check for unusually long URIs (potential DoS)
         if uri.len() > 2048 {
-            context.threat_indicators.push("Unusually long URI".to_string());
+            context
+                .threat_indicators
+                .push("Unusually long URI".to_string());
             context.threat_level = ThreatLevel::Medium;
         }
 
         Ok(())
     }
 
-    fn validate_user_agent(&self, request: &Request, context: &mut SecurityContext) -> Result<(), SecurityViolation> {
-        let user_agent = request.headers()
+    fn validate_user_agent(
+        &self,
+        request: &Request,
+        context: &mut SecurityContext,
+    ) -> Result<(), SecurityViolation> {
+        let user_agent = request
+            .headers()
             .get("User-Agent")
             .and_then(|h| h.to_str().ok())
             .unwrap_or("");
@@ -200,7 +223,7 @@ impl SecurityHardening {
         // Check for suspicious or missing user agents
         let suspicious_agents = [
             "sqlmap",
-            "nikto", 
+            "nikto",
             "nmap",
             "gobuster",
             "dirbuster",
@@ -210,9 +233,11 @@ impl SecurityHardening {
 
         for &agent in &suspicious_agents {
             if user_agent.to_lowercase().contains(agent) {
-                context.threat_indicators.push(format!("Suspicious user agent: {}", agent));
+                context
+                    .threat_indicators
+                    .push(format!("Suspicious user agent: {}", agent));
                 context.threat_level = ThreatLevel::High;
-                
+
                 return Err(SecurityViolation::SuspiciousUserAgent {
                     user_agent: user_agent.to_string(),
                     detected_tool: agent.to_string(),
@@ -222,23 +247,31 @@ impl SecurityHardening {
 
         // Empty or very short user agents are suspicious
         if user_agent.len() < 10 {
-            context.threat_indicators.push("Suspicious user agent length".to_string());
+            context
+                .threat_indicators
+                .push("Suspicious user agent length".to_string());
             context.threat_level = ThreatLevel::Low;
         }
 
         Ok(())
     }
 
-    fn validate_request_size(&self, request: &Request, context: &mut SecurityContext) -> Result<(), SecurityViolation> {
+    fn validate_request_size(
+        &self,
+        request: &Request,
+        context: &mut SecurityContext,
+    ) -> Result<(), SecurityViolation> {
         if let Some(content_length) = request.headers().get("Content-Length") {
             if let Ok(length_str) = content_length.to_str() {
                 if let Ok(length) = length_str.parse::<usize>() {
                     const MAX_REQUEST_SIZE: usize = 1024 * 1024; // 1MB
-                    
+
                     if length > MAX_REQUEST_SIZE {
-                        context.threat_indicators.push("Request too large".to_string());
+                        context
+                            .threat_indicators
+                            .push("Request too large".to_string());
                         context.threat_level = ThreatLevel::Medium;
-                        
+
                         return Err(SecurityViolation::RequestTooLarge {
                             size: length,
                             max_size: MAX_REQUEST_SIZE,
@@ -254,7 +287,7 @@ impl SecurityHardening {
     fn add_security_headers(&self, mut response: Response) -> Response {
         let headers = response.headers_mut();
 
-        // Security headers for MVP
+        // Enhanced security headers for production
         let security_headers = [
             ("X-Content-Type-Options", "nosniff"),
             ("X-Frame-Options", "DENY"),
@@ -264,9 +297,15 @@ impl SecurityHardening {
             ("Cross-Origin-Embedder-Policy", "require-corp"),
             ("Cross-Origin-Opener-Policy", "same-origin"),
             ("Cross-Origin-Resource-Policy", "same-origin"),
-            ("Cache-Control", "no-store, no-cache, must-revalidate"),
+            (
+                "Cache-Control",
+                "no-store, no-cache, must-revalidate, private",
+            ),
             ("Pragma", "no-cache"),
             ("Expires", "0"),
+            // Additional security headers
+            ("X-DNS-Prefetch-Control", "off"),
+            ("X-Download-Options", "noopen"),
         ];
 
         for (name, value) in &security_headers {
@@ -280,16 +319,28 @@ impl SecurityHardening {
 
         // Content Security Policy for API
         if let Ok(csp_header) = HeaderValue::from_static(
-            "default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none';"
+            "default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none';",
         ) {
             headers.insert("Content-Security-Policy", csp_header);
         }
 
         // Strict Transport Security (if HTTPS)
-        if let Ok(hsts_header) = HeaderValue::from_static(
-            "max-age=31536000; includeSubDomains; preload"
-        ) {
+        if let Ok(hsts_header) =
+            HeaderValue::from_static("max-age=31536000; includeSubDomains; preload")
+        {
             headers.insert("Strict-Transport-Security", hsts_header);
+        }
+
+        // Permissions Policy (Feature Policy)
+        if let Ok(permissions_header) = HeaderValue::from_static(
+            "geolocation=(), microphone=(), camera=(), magnetometer=(), gyroscope=(), speaker=(), payment=()"
+        ) {
+            headers.insert("Permissions-Policy", permissions_header);
+        }
+
+        // Origin-Agent-Cluster (isolate origins)
+        if let Ok(origin_agent_header) = HeaderValue::from_static("1") {
+            headers.insert("Origin-Agent-Cluster", origin_agent_header);
         }
 
         response
@@ -336,8 +387,15 @@ impl SecurityViolation {
 
     fn to_error_message(&self) -> String {
         match self {
-            SecurityViolation::RateLimited { requests_per_minute, limit, .. } => {
-                format!("Rate limit exceeded: {}/{} requests per minute", requests_per_minute, limit)
+            SecurityViolation::RateLimited {
+                requests_per_minute,
+                limit,
+                ..
+            } => {
+                format!(
+                    "Rate limit exceeded: {}/{} requests per minute",
+                    requests_per_minute, limit
+                )
             }
             SecurityViolation::IpBlocked { reason, .. } => {
                 format!("IP blocked: {}", reason)
@@ -387,7 +445,9 @@ pub async fn security_hardening_middleware(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let security = container.security_hardening.as_ref()
+    let security = container
+        .security_hardening
+        .as_ref()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let client_ip = extract_client_ip(&request);
@@ -395,7 +455,7 @@ pub async fn security_hardening_middleware(
     // Check rate limits
     if let Err(violation) = security.check_rate_limit(client_ip) {
         log::warn!("Security violation from {}: {:?}", client_ip, violation);
-        
+
         return Err(violation.to_status_code());
     }
 
@@ -404,25 +464,33 @@ pub async fn security_hardening_middleware(
         Ok(security_context) => {
             // Log security context for monitoring
             if security_context.threat_level != ThreatLevel::Low {
-                log::warn!("Elevated threat level from {}: {:?}", client_ip, security_context);
+                log::warn!(
+                    "Elevated threat level from {}: {:?}",
+                    client_ip,
+                    security_context
+                );
             }
 
             // Continue with request processing
             let response = next.run(request).await;
-            
+
             // Add security headers to response
             Ok(security.add_security_headers(response))
         }
         Err(violation) => {
-            log::error!("Security violation blocked from {}: {:?}", client_ip, violation);
-            
+            log::error!(
+                "Security violation blocked from {}: {:?}",
+                client_ip,
+                violation
+            );
+
             // Increase threat score for this IP
             if let Ok(mut rate_limits) = security.rate_limits.write() {
                 if let Some(state) = rate_limits.get_mut(&client_ip) {
                     state.increase_threat_score(25);
                 }
             }
-            
+
             Err(violation.to_status_code())
         }
     }
@@ -435,12 +503,12 @@ mod tests {
     #[test]
     fn test_rate_limit_state() {
         let mut state = RateLimitState::new();
-        
+
         // Add requests within limit
         for _ in 0..10 {
             state.add_request();
         }
-        
+
         assert!(!state.should_rate_limit(100));
         assert!(state.should_rate_limit(5));
     }
@@ -448,9 +516,9 @@ mod tests {
     #[test]
     fn test_threat_score_blocking() {
         let mut state = RateLimitState::new();
-        
+
         assert!(!state.is_blocked());
-        
+
         state.increase_threat_score(150);
         assert!(state.is_blocked());
     }
@@ -459,14 +527,14 @@ mod tests {
     async fn test_suspicious_pattern_detection() {
         let config = AuthConfig::default();
         let security = SecurityHardening::new(config);
-        
+
         let request = Request::builder()
             .uri("http://localhost/oauth/token?test=../../../etc/passwd")
             .body(axum::body::Body::empty())
             .unwrap();
-            
+
         let ip = "127.0.0.1".parse().unwrap();
-        
+
         let result = security.analyze_request_threats(&request, ip);
         assert!(result.is_err());
     }

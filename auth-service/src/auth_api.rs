@@ -8,6 +8,7 @@
 //! - Session management
 
 use crate::domain::value_objects::PasswordHash;
+use crate::infrastructure::http::policy_client;
 use crate::services::password_service::{constant_time_compare, PasswordService};
 use axum::{
     extract::{Query, State},
@@ -26,8 +27,8 @@ use tracing::{info, warn};
 use uuid::Uuid;
 use validator::Validate;
 
-// JWKS functionality temporarily disabled for build compatibility
-// use auth_service::infrastructure::crypto::jwks_rotation::{InMemoryKeyStorage, JwksManager, KeyRotationConfig};
+// SECURITY: Re-enable JWKS functionality for production security
+use crate::infrastructure::crypto::keys::{current_signing_key, initialize_keys};
 
 // Import production environment detection for security
 use crate::test_mode_security::is_production_environment;
@@ -35,8 +36,7 @@ use crate::test_mode_security::is_production_environment;
 /// Application state for authentication
 #[derive(Clone)]
 pub struct AuthState {
-    pub jwt_secret: String, // Kept for backward compatibility during migration
-    // pub jwks_manager: Option<Arc<JwksManager>>, // New secure JWKS manager - temporarily disabled
+    pub jwt_secret: String, // Fallback for legacy compatibility only
     pub users: Arc<tokio::sync::RwLock<HashMap<String, User>>>,
     pub oauth_clients: Arc<tokio::sync::RwLock<HashMap<String, OAuthClient>>>,
     pub authorization_codes: Arc<tokio::sync::RwLock<HashMap<String, AuthorizationCode>>>,
@@ -197,55 +197,15 @@ impl AuthState {
     /// Create new auth state with JWKS manager for secure operations
     #[must_use]
     pub fn new_with_jwks(jwt_secret: String, _jwks_manager: Option<()>) -> Self {
-        // Temporarily disabled
-        let mut users = HashMap::new();
-        let mut oauth_clients = HashMap::new();
+        // SECURITY: Remove all demo credentials - they should never exist in production
+        let users = HashMap::new();
+        let oauth_clients = HashMap::new();
 
-        // Only create demo credentials in non-production environments for security
-        if !is_production_environment() {
-            warn!("Creating demo credentials - this should only happen in development/test environments");
-
-            // Create a demo user
-            let demo_user = User {
-                id: "demo-user-123".to_string(),
-                email: "demo@example.com".to_string(),
-                password_hash: {
-                    let demo_password = std::env::var("DEMO_USER_PASSWORD")
-                        .unwrap_or_else(|_| "demo123-change-in-production".to_string());
-                    PasswordService::new()
-                        .hash_password(&demo_password)
-                        .map_err(|e| warn!("Demo user password hashing failed: {}", e))
-                        .unwrap_or_else(|()| PasswordHash::new("invalid_hash".to_string()).unwrap())
-                        .as_str()
-                        .to_string()
-                },
-                name: "Demo User".to_string(),
-                created_at: Utc::now(),
-                last_login: None,
-                is_active: true,
-                roles: vec!["user".to_string()],
-            };
-            users.insert(demo_user.email.clone(), demo_user);
-
-            // Create a demo OAuth client with environment-configurable credentials
-            let demo_client = OAuthClient {
-                client_id: std::env::var("DEMO_CLIENT_ID")
-                    .unwrap_or_else(|_| "demo-client".to_string()),
-                client_secret: std::env::var("DEMO_CLIENT_SECRET")
-                    .unwrap_or_else(|_| "demo-secret-change-in-production".to_string()),
-                name: "Demo Application".to_string(),
-                redirect_uris: vec![std::env::var("DEMO_REDIRECT_URI")
-                    .unwrap_or_else(|_| "http://localhost:3000/callback".to_string())],
-                grant_types: vec!["authorization_code".to_string()],
-                response_types: vec!["code".to_string()],
-                created_at: Utc::now(),
-            };
-            oauth_clients.insert(demo_client.client_id.clone(), demo_client);
-        }
+        // SECURITY: Demo credentials completely removed - use proper user registration
+        // and OAuth client registration endpoints instead
 
         Self {
-            jwt_secret,
-            // jwks_manager: _jwks_manager, // Temporarily disabled
+            jwt_secret, // Fallback only - JWKS keys are preferred
             users: Arc::new(tokio::sync::RwLock::new(users)),
             oauth_clients: Arc::new(tokio::sync::RwLock::new(oauth_clients)),
             authorization_codes: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
@@ -258,18 +218,29 @@ impl AuthState {
 fn verify_password(password: &str, hash: &str) -> bool {
     let password_service = PasswordService::new();
 
-    // Try parsing as modern Argon2 hash first
+    // SECURITY: Only accept modern Argon2 password hashes
+    // Legacy SHA-256 hashes are no longer supported for security reasons
+    if !hash.starts_with("$argon2") {
+        tracing::warn!(
+            target: "security_audit",
+            "Password verification rejected: legacy hash format detected"
+        );
+        return false;
+    }
+
+    // Parse and verify Argon2 hash
     if let Ok(password_hash) = PasswordHash::new(hash.to_string()) {
         if let Ok(is_valid) = password_service.verify_password(password, &password_hash) {
             return is_valid;
         }
     }
 
-    // Fallback to legacy SHA-256 comparison for backward compatibility
-    // This will be removed after migration period
-    warn!("Using legacy SHA-256 password verification - hash should be migrated to Argon2id");
-    use common::hash_password_sha256;
-    constant_time_compare(&hash_password_sha256(password), hash)
+    // If parsing or verification fails, reject the login
+    tracing::warn!(
+        target: "security_audit", 
+        "Password verification failed: invalid Argon2 hash format"
+    );
+    false
 }
 
 fn generate_token() -> Result<String, ring::error::Unspecified> {
@@ -279,36 +250,20 @@ fn generate_token() -> Result<String, ring::error::Unspecified> {
     Ok(URL_SAFE_NO_PAD.encode(dest))
 }
 
-/// Create a JWT token for the given user using secure `EdDSA` or fallback to `HS256`
+/// Create a JWT token for the given user using secure JWKS-managed keys
 ///
 /// # Errors
 ///
 /// Returns `jsonwebtoken::errors::Error` if:
+/// - JWKS key loading fails
 /// - JWT encoding fails due to invalid key
 /// - Claims serialization fails
 /// - Header creation fails
-/// - JWKS manager is unavailable
-fn create_jwt_token_secure(
+async fn create_jwt_token_secure(
     user: &User,
     auth_state: &AuthState,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    // JWKS manager is temporarily disabled - use fallback JWT creation
-    // For now, fall back to standard JWT creation using jwt_secret
-    warn!(
-        "JWKS manager disabled, falling back to standard JWT for user: {}",
-        user.email
-    );
-    create_jwt_token_legacy(user, &auth_state.jwt_secret)
-}
-
-/// Legacy JWT token creation using HS256 (for backward compatibility)
-///
-/// WARNING: This method uses HS256 which is vulnerable to algorithm confusion attacks.
-/// This is only used as a fallback during migration.
-fn create_jwt_token_legacy(
-    user: &User,
-    jwt_secret: &str,
-) -> Result<String, jsonwebtoken::errors::Error> {
+    // Try to use JWKS-managed keys; fall back to HS256 using configured secret
     let claims = Claims {
         sub: user.id.clone(),
         email: user.email.clone(),
@@ -319,12 +274,15 @@ fn create_jwt_token_legacy(
         iss: "rust-security-platform".to_string(),
     };
 
-    let header = Header::new(Algorithm::HS256);
-    encode(
-        &header,
-        &claims,
-        &EncodingKey::from_secret(jwt_secret.as_ref()),
-    )
+    if let Ok((kid, encoding_key)) = current_signing_key().await {
+        let mut header = Header::new(Algorithm::RS256); // Prefer RS256 when JWKS is available
+        header.kid = Some(kid);
+        encode(&header, &claims, &encoding_key)
+    } else {
+        let encoding_key = EncodingKey::from_secret(auth_state.jwt_secret.as_bytes());
+        let header = Header::new(Algorithm::HS256);
+        encode(&header, &claims, &encoding_key)
+    }
 }
 
 // API Endpoints
@@ -344,14 +302,14 @@ fn create_jwt_token_legacy(
 pub async fn register(
     State(state): State<AuthState>,
     Json(request): Json<RegisterRequest>,
-) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(axum::http::HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Validate request
-    if let Err(errors) = request.validate() {
+    if let Err(_errors) = request.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "validation_error".to_string(),
-                error_description: format!("Validation failed: {errors:?}"),
+                error_description: "Invalid input provided".to_string(),
             }),
         ));
     }
@@ -395,7 +353,7 @@ pub async fn register(
     };
 
     // Generate JWT token using secure JWKS manager
-    let token = create_jwt_token_secure(&user, &state).map_err(|e| {
+    let token = create_jwt_token_secure(&user, &state).await.map_err(|e| {
         warn!("Token generation failed for user {}: {}", user.email, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -417,13 +375,70 @@ pub async fn register(
 
     info!("User registered successfully: {}", user_info.email);
 
-    Ok(Json(AuthResponse {
-        access_token: token,
-        token_type: "Bearer".to_string(),
-        expires_in: 86400, // 24 hours
-        refresh_token: None,
-        user: user_info,
-    }))
+    // Issue cookies: httpOnly access token and CSRF token (readable)
+    let mut headers = axum::http::HeaderMap::new();
+    let secure = if std::env::var("APP_ENV")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("development")
+    {
+        ""
+    } else {
+        " Secure;"
+    };
+    let access_cookie = format!(
+        "access_token={}; Path=/; HttpOnly;{} SameSite=Strict; Max-Age=86400",
+        token, secure
+    );
+    headers.append(
+        axum::http::header::SET_COOKIE,
+        access_cookie.parse().unwrap(),
+    );
+
+    // Generate CSRF token cookie (non-HttpOnly)
+    let csrf_token = {
+        let mut bytes = [0u8; 32];
+        ring::rand::SystemRandom::new()
+            .fill(&mut bytes)
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "internal_error".to_string(),
+                        error_description: "Failed to generate CSRF token".to_string(),
+                    }),
+                )
+            })?;
+        hex::encode(bytes)
+    };
+    let csrf_cookie = format!(
+        "csrf_token={}; Path=/;{} SameSite=Strict; Max-Age=86400",
+        csrf_token, secure
+    );
+    match csrf_cookie.parse() {
+        Ok(cookie_value) => {
+            headers.append(axum::http::header::SET_COOKIE, cookie_value);
+        }
+        Err(_) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "server_error".to_string(),
+                    error_description: "Failed to create secure cookie".to_string(),
+                }),
+            ));
+        }
+    }
+
+    Ok((
+        headers,
+        Json(AuthResponse {
+            access_token: token,
+            token_type: "Bearer".to_string(),
+            expires_in: 86400, // 24 hours
+            refresh_token: None,
+            user: user_info,
+        }),
+    ))
 }
 
 /// User login endpoint
@@ -441,14 +456,14 @@ pub async fn register(
 pub async fn login(
     State(state): State<AuthState>,
     Json(request): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(axum::http::HeaderMap, Json<AuthResponse>), (StatusCode, Json<ErrorResponse>)> {
     // Validate request
-    if let Err(errors) = request.validate() {
+    if let Err(_errors) = request.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "validation_error".to_string(),
-                error_description: format!("Validation failed: {errors:?}"),
+                error_description: "Invalid input provided".to_string(),
             }),
         ));
     }
@@ -477,7 +492,7 @@ pub async fn login(
             .insert(request.email.clone(), user.clone());
 
         // Generate JWT token using secure JWKS manager
-        let token = create_jwt_token_secure(&user, &state).map_err(|e| {
+        let token = create_jwt_token_secure(&user, &state).await.map_err(|e| {
             warn!("Token generation failed for user {}: {}", user.email, e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -497,13 +512,68 @@ pub async fn login(
 
         info!("User logged in successfully: {}", user.email);
 
-        Ok(Json(AuthResponse {
-            access_token: token,
-            token_type: "Bearer".to_string(),
-            expires_in: 86400, // 24 hours
-            refresh_token: None,
-            user: user_info,
-        }))
+        // Set cookies (access + CSRF)
+        let mut headers = axum::http::HeaderMap::new();
+        let secure = if std::env::var("APP_ENV")
+            .unwrap_or_default()
+            .eq_ignore_ascii_case("development")
+        {
+            ""
+        } else {
+            " Secure;"
+        };
+        let access_cookie = format!(
+            "access_token={}; Path=/; HttpOnly;{} SameSite=Strict; Max-Age=86400",
+            token, secure
+        );
+        headers.append(
+            axum::http::header::SET_COOKIE,
+            access_cookie.parse().unwrap(),
+        );
+        let csrf_token = {
+            let mut bytes = [0u8; 32];
+            ring::rand::SystemRandom::new()
+                .fill(&mut bytes)
+                .map_err(|_| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "internal_error".to_string(),
+                            error_description: "Failed to generate CSRF token".to_string(),
+                        }),
+                    )
+                })?;
+            hex::encode(bytes)
+        };
+        let csrf_cookie = format!(
+            "csrf_token={}; Path=/;{} SameSite=Strict; Max-Age=86400",
+            csrf_token, secure
+        );
+        match csrf_cookie.parse() {
+        Ok(cookie_value) => {
+            headers.append(axum::http::header::SET_COOKIE, cookie_value);
+        }
+        Err(_) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "server_error".to_string(),
+                    error_description: "Failed to create secure cookie".to_string(),
+                }),
+            ));
+        }
+    }
+
+        Ok((
+            headers,
+            Json(AuthResponse {
+                access_token: token,
+                token_type: "Bearer".to_string(),
+                expires_in: 86400, // 24 hours
+                refresh_token: None,
+                user: user_info,
+            }),
+        ))
     } else {
         Err((
             StatusCode::UNAUTHORIZED,
@@ -533,12 +603,12 @@ pub async fn authorize(
     Query(request): Query<AuthorizeRequest>,
 ) -> Result<Redirect, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
-    if let Err(errors) = request.validate() {
+    if let Err(_errors) = request.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "invalid_request".to_string(),
-                error_description: format!("Validation failed: {errors:?}"),
+                error_description: "Invalid input provided".to_string(),
             }),
         ));
     }
@@ -565,43 +635,59 @@ pub async fn authorize(
             ));
         }
 
-        // For demo purposes, auto-approve with demo user
-        let Ok(code) = generate_token() else {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "server_error".to_string(),
-                    error_description: "Failed to generate authorization code".to_string(),
-                }),
-            ));
-        };
+        // Optional remote policy check (client-level authorization for authorize step)
+        if std::env::var("ENABLE_REMOTE_POLICY")
+            .unwrap_or_else(|_| "0".to_string())
+            .eq("1")
         {
-            state.authorization_codes.write().await.insert(
-                code.clone(),
-                AuthorizationCode {
-                    code: code.clone(),
-                    client_id: request.client_id,
-                    user_id: "demo-user-123".to_string(),
-                    redirect_uri: request.redirect_uri.clone(),
-                    scope: request.scope.unwrap_or_else(|| "read".to_string()),
-                    created_at: Utc::now(),
-                    expires_at: Utc::now() + Duration::minutes(10),
-                    used: false,
-                },
-            );
-        }
-
-        let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
-        if let Some(state_param) = request.state {
-            use std::fmt::Write;
-            if write!(redirect_url, "&state={state_param}").is_err() {
-                return Err(oauth_error("server_error", "Failed to format redirect URL"));
+            let req_id = uuid::Uuid::new_v4().to_string();
+            let policy_base = std::env::var("POLICY_SERVICE_BASE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+            let payload = policy_client::PolicyAuthorizeRequest {
+                request_id: req_id.clone(),
+                principal: serde_json::json!({"type":"Client","id": request.client_id}),
+                action: "OAuth::authorize".to_string(),
+                resource: serde_json::json!({"type":"OAuthClient","id": request.client_id}),
+                context: serde_json::json!({}),
+            };
+            match policy_client::authorize_basic(&policy_base, &req_id, &payload).await {
+                Ok(decision) if decision.eq_ignore_ascii_case("allow") => {}
+                Ok(_decision) => {
+                    return Err((
+                        StatusCode::FORBIDDEN,
+                        Json(ErrorResponse {
+                            error: "forbidden".to_string(),
+                            error_description: "Access denied by policy".to_string(),
+                        }),
+                    ));
+                }
+                Err(e) => {
+                    let fail_open = std::env::var("POLICY_FAIL_OPEN")
+                        .unwrap_or_else(|_| "0".to_string())
+                        .eq("1");
+                    if !fail_open {
+                        return Err((
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(ErrorResponse {
+                                error: "policy_unavailable".to_string(),
+                                error_description: "Policy service unavailable".to_string(),
+                            }),
+                        ));
+                    }
+                    warn!(request_id = %req_id, error = %e, "Policy check failed; proceeding due to POLICY_FAIL_OPEN=1");
+                }
             }
         }
 
-        info!("Authorization code generated for client: {}", client.name);
-
-        Ok(Redirect::to(&redirect_url))
+        // SECURITY: OAuth authorization requires authenticated user
+        // In production, this endpoint should redirect to login page if user not authenticated
+        Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "access_denied".to_string(),
+                error_description: "User authentication required. This endpoint must be called by an authenticated user to authorize client access.".to_string(),
+            }),
+        ))
     } else {
         Err((
             StatusCode::BAD_REQUEST,
@@ -637,6 +723,50 @@ pub async fn token(
     validate_token_request(&request)?;
     let _client = authenticate_oauth_client(&state, &request).await?;
 
+    // Optional remote policy check: client-level check for token issuance
+    if std::env::var("ENABLE_REMOTE_POLICY")
+        .unwrap_or_else(|_| "0".to_string())
+        .eq("1")
+    {
+        let req_id = uuid::Uuid::new_v4().to_string();
+        let policy_base = std::env::var("POLICY_SERVICE_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+        let payload = policy_client::PolicyAuthorizeRequest {
+            request_id: req_id.clone(),
+            principal: serde_json::json!({"type":"Client","id": request.client_id}),
+            action: "OAuth::token".to_string(),
+            resource: serde_json::json!({"type":"OAuthClient","id": request.client_id}),
+            context: serde_json::json!({"grant_type": request.grant_type}),
+        };
+        match policy_client::authorize_basic(&policy_base, &req_id, &payload).await {
+            Ok(decision) if decision.eq_ignore_ascii_case("allow") => {}
+            Ok(_decision) => {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse {
+                        error: "forbidden".to_string(),
+                        error_description: "Access denied by policy".to_string(),
+                    }),
+                ));
+            }
+            Err(e) => {
+                let fail_open = std::env::var("POLICY_FAIL_OPEN")
+                    .unwrap_or_else(|_| "0".to_string())
+                    .eq("1");
+                if !fail_open {
+                    return Err((
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(ErrorResponse {
+                            error: "policy_unavailable".to_string(),
+                            error_description: "Policy service unavailable".to_string(),
+                        }),
+                    ));
+                }
+                warn!(request_id = %req_id, error = %e, "Policy check failed; proceeding due to POLICY_FAIL_OPEN=1");
+            }
+        }
+    }
+
     match request.grant_type.as_str() {
         "authorization_code" => handle_authorization_code_flow(&state, &request).await,
         _ => Err(oauth_error(
@@ -648,12 +778,12 @@ pub async fn token(
 
 /// Validate the incoming token request
 fn validate_token_request(request: &TokenRequest) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    if let Err(errors) = request.validate() {
+    if let Err(_errors) = request.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "invalid_request".to_string(),
-                error_description: format!("Validation failed: {errors:?}"),
+                error_description: "Invalid input provided".to_string(),
             }),
         ));
     }
@@ -690,7 +820,7 @@ async fn handle_authorization_code_flow(
 
     let (user_id, scope) = validate_and_consume_auth_code(state, code).await?;
     let user = find_user_by_id(state, &user_id).await?;
-    let access_token = generate_access_token(&user, state)?;
+    let access_token = generate_access_token(&user, state).await?;
 
     info!("Access token generated for user: {}", user.email);
 
@@ -744,14 +874,16 @@ async fn find_user_by_id(
 }
 
 /// Generate access token for user using secure JWKS manager
-fn generate_access_token(
+async fn generate_access_token(
     user: &User,
     auth_state: &AuthState,
 ) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
-    create_jwt_token_secure(user, auth_state).map_err(|e| {
-        warn!("Access token generation failed: {}", e);
-        oauth_error("server_error", "Failed to generate access token")
-    })
+    create_jwt_token_secure(user, auth_state)
+        .await
+        .map_err(|e| {
+            warn!("Access token generation failed: {}", e);
+            oauth_error("server_error", "Failed to generate access token")
+        })
 }
 
 /// Helper to create consistent `OAuth` error responses
@@ -859,6 +991,56 @@ pub async fn me(
     // Validate JWT token using secure JWKS manager or fallback
     let claims = validate_jwt_token(token, &state)?;
 
+    // Optional remote policy check: allow gating access to profile via policy-service
+    if std::env::var("ENABLE_REMOTE_POLICY")
+        .unwrap_or_else(|_| "0".to_string())
+        .eq("1")
+    {
+        let req_id = headers
+            .get("x-request-id")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let policy_base = std::env::var("POLICY_SERVICE_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+
+        let payload = policy_client::PolicyAuthorizeRequest {
+            request_id: req_id.clone(),
+            principal: serde_json::json!({"type":"User","id": claims.sub}),
+            action: "User::read_profile".to_string(),
+            resource: serde_json::json!({"type":"User","id": claims.sub}),
+            context: serde_json::json!({}),
+        };
+
+        match policy_client::authorize_basic(&policy_base, &req_id, &payload).await {
+            Ok(decision) if decision.eq_ignore_ascii_case("allow") => {}
+            Ok(_decision) => {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(ErrorResponse {
+                        error: "forbidden".to_string(),
+                        error_description: "Access denied by policy".to_string(),
+                    }),
+                ));
+            }
+            Err(e) => {
+                let fail_open = std::env::var("POLICY_FAIL_OPEN")
+                    .unwrap_or_else(|_| "0".to_string())
+                    .eq("1");
+                if !fail_open {
+                    return Err((
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(ErrorResponse {
+                            error: "policy_unavailable".to_string(),
+                            error_description: "Policy service unavailable".to_string(),
+                        }),
+                    ));
+                }
+                tracing::warn!(req_id = %req_id, error = %e, "Policy check failed; proceeding due to POLICY_FAIL_OPEN=1");
+            }
+        }
+    }
+
     Ok(Json(UserInfo {
         id: claims.sub,
         email: claims.email,
@@ -890,7 +1072,7 @@ mod tests {
         let auth_state = AuthState::new_with_jwks("fallback-secret".to_string(), None);
 
         // Create secure JWT token (should use EdDSA)
-        let result = create_jwt_token_secure(&user, &auth_state);
+        let result = create_jwt_token_secure(&user, &auth_state).await;
         assert!(result.is_ok(), "Secure JWT token creation should succeed");
 
         let token = result.expect("Test token creation should succeed");
@@ -923,7 +1105,7 @@ mod tests {
         let auth_state = AuthState::new("test-secret-key".to_string());
 
         // Create JWT token (should fallback to HS256)
-        let result = create_jwt_token_secure(&user, &auth_state);
+        let result = create_jwt_token_secure(&user, &auth_state).await;
         assert!(result.is_ok(), "Fallback JWT token creation should succeed");
 
         let token = result.expect("Test fallback token creation should succeed");
@@ -958,6 +1140,7 @@ mod tests {
 
         // Create secure token
         let token = create_jwt_token_secure(&user, &auth_state)
+            .await
             .expect("Test token creation should succeed");
 
         // Validate the token

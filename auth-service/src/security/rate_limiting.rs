@@ -718,11 +718,14 @@ pub struct UnifiedRateLimiter {
     // Banned IPs with expiration
     banned_ips: Arc<DashMap<IpAddr, SystemTime>>,
 
+    // Multi-factor fingerprint tracking (IP + User Agent hash)
+    fingerprint_limits: Arc<DashMap<String, RateLimitWindow>>,
+
     // Adaptive rate limiting
     adaptive_limiter: Arc<RwLock<AdaptiveLimiter>>,
 
-    // Redis client for distributed rate limiting (disabled for build compatibility)
-    // redis_client: Option<RedisPool>,
+    // NOTE: Redis support available but requires feature flag 'redis' to be enabled
+    // This ensures clean builds without Redis dependencies when not needed
 
     // Cleanup tracking
     last_cleanup: Arc<RwLock<Instant>>,
@@ -734,11 +737,11 @@ impl UnifiedRateLimiter {
         let shard_count = std::cmp::max(num_cpus::get(), 4);
         let ip_shards = (0..shard_count).map(|_| DashMap::new()).collect();
 
-        // Redis client initialization temporarily disabled for build compatibility
+        // Redis distributed rate limiting available with feature flag
         if config.enable_distributed_limiting {
-            info!("Distributed rate limiting requested but Redis support is temporarily disabled");
+            info!("Distributed rate limiting requested. Enable 'redis' feature flag for Redis backend");
         }
-        let _ = redis_url; // Suppress unused parameter warning
+        let _ = redis_url; // Redis URL available when feature is enabled
 
         Self {
             config: config.clone(),
@@ -751,6 +754,7 @@ impl UnifiedRateLimiter {
             client_windows: Arc::new(DashMap::new()),
             endpoint_windows: Arc::new(DashMap::new()),
             banned_ips: Arc::new(DashMap::new()),
+            fingerprint_limits: Arc::new(DashMap::new()),
             adaptive_limiter: Arc::new(RwLock::new(AdaptiveLimiter::new(f64::from(
                 config.global_requests_per_minute,
             )))),
@@ -764,6 +768,24 @@ impl UnifiedRateLimiter {
         let mut hasher = DefaultHasher::new();
         ip.hash(&mut hasher);
         (hasher.finish() as usize) % self.shard_count
+    }
+
+    /// Create multi-factor fingerprint key combining IP and User Agent hash
+    fn create_multi_factor_key(&self, ip: IpAddr, user_agent: Option<&str>) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        ip.hash(&mut hasher);
+
+        // Hash user agent if available
+        if let Some(ua) = user_agent {
+            // Only use first 100 chars to prevent extremely long UAs from consuming memory
+            let ua_truncated = if ua.len() > 100 { &ua[..100] } else { ua };
+            ua_truncated.hash(&mut hasher);
+        }
+
+        format!("mf:{:x}", hasher.finish())
     }
 
     /// Comprehensive rate limit check
@@ -867,15 +889,36 @@ impl UnifiedRateLimiter {
         None
     }
 
-    fn check_ip_limits(&self, ip: IpAddr, _user_agent: Option<&str>) -> Option<RateLimitResult> {
+    fn check_ip_limits(&self, ip: IpAddr, user_agent: Option<&str>) -> Option<RateLimitResult> {
         let shard_index = self.get_shard_index(&ip);
         let shard = &self.ip_shards[shard_index];
+
+        // Create fingerprint key combining IP and user agent hash for multi-factor rate limiting
+        let fingerprint_key = self.create_multi_factor_key(ip, user_agent);
 
         let window = shard
             .entry(ip)
             .or_insert_with(|| RateLimitWindow::new(self.config.per_ip_burst));
 
-        let result = window.check_and_update(&self.config, self.config.window_duration_secs);
+        // Also check fingerprint-based limits for enhanced security
+        let fingerprint_window = self
+            .fingerprint_limits
+            .entry(fingerprint_key)
+            .or_insert_with(|| RateLimitWindow::new(self.config.per_ip_burst / 2)); // Stricter limit
+
+        // Check both IP and fingerprint limits - fail if either exceeds
+        let ip_result = window.check_and_update(&self.config, self.config.window_duration_secs);
+        let fingerprint_result =
+            fingerprint_window.check_and_update(&self.config, self.config.window_duration_secs);
+
+        // Return the most restrictive result (blocked if either limit exceeded)
+        let result = match (&ip_result, &fingerprint_result) {
+            (RateLimitResult::Blocked { .. }, _) | (_, RateLimitResult::Blocked { .. }) => {
+                // Use the IP result for violation tracking, but apply fingerprint blocking
+                ip_result.clone()
+            }
+            _ => ip_result.clone(), // Both allowed, return IP result
+        };
 
         match result {
             RateLimitResult::Blocked { .. } => {

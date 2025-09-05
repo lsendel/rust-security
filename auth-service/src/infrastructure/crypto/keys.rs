@@ -233,6 +233,20 @@ impl KeyManager {
         })
     }
 
+    /// Get decoding key for a given kid
+    async fn get_decoding_key_by_kid(&self, kid: &str) -> Option<DecodingKey> {
+        let keys = self.keys.read().await;
+        keys.iter()
+            .find(|k| k.kid == kid)
+            .map(|k| k.decoding_key.clone())
+    }
+
+    /// Get all decoding keys (for fallback verification when kid is missing)
+    async fn get_all_decoding_keys(&self) -> Vec<DecodingKey> {
+        let keys = self.keys.read().await;
+        keys.iter().map(|k| k.decoding_key.clone()).collect()
+    }
+
     /// Get current key ID
     async fn get_current_kid(&self) -> Option<String> {
         let keys = self.keys.read().await;
@@ -360,7 +374,8 @@ Y9s8X6h3v7K8l8n5t6Y8Z7f3v1Y8K5t7Y8Z9f3v1Y9s8X6h3v7K8l8n5t6Y8Z7f
 3v7K8l8n5t6Y8Z7f3v1Y8K5t7Y8Z9f3v1Y9s8X6h3v7K8l8n5t6Y8Z7f3v1Y8K5t
 7Y8Z9f3v1Y9s8X6h3v7K8l8n5t6Y8Z7f3v1Y8K5t7Y8Z9f3v1Y9s8X6h3v7K8l8n
 5t6Y8Z7f3v1Y8K5t7Y8Z9f3v1Y9s8X6h3v7K8l8n5t6Y8Z7f3v1Y8K5t7Y8Z9f3v
------END RSA PRIVATE KEY-----"#.to_string()
+-----END RSA PRIVATE KEY-----"#
+            .to_string()
     }
 }
 
@@ -391,6 +406,16 @@ pub async fn current_signing_key() -> Result<(String, EncodingKey), crate::share
 /// Get current JWKS (alias for compatibility)
 pub async fn get_current_jwks() -> Value {
     jwks_document().await
+}
+
+/// Get a decoding key by key id (kid)
+pub async fn decoding_key_for_kid(kid: &str) -> Option<DecodingKey> {
+    KEY_MANAGER.get_decoding_key_by_kid(kid).await
+}
+
+/// Get all decoding keys currently active
+pub async fn all_decoding_keys() -> Vec<DecodingKey> {
+    KEY_MANAGER.get_all_decoding_keys().await
 }
 
 /// Ensure a key is available (for backward compatibility)
@@ -424,6 +449,12 @@ pub async fn maybe_rotate() -> Result<(), crate::shared::error::AppError> {
 #[instrument]
 pub async fn initialize_keys() -> Result<(), crate::shared::error::AppError> {
     KEY_MANAGER.initialize().await
+}
+
+// Test helpers to force rotation during unit tests
+#[cfg(test)]
+pub async fn test_force_rotate_key() -> Result<String, crate::shared::error::AppError> {
+    KEY_MANAGER.generate_and_store_key(false).await
 }
 
 #[cfg(test)]
@@ -473,7 +504,8 @@ QAECgYBiV5P5F5F9D5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D
 5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D5p8b3Y1z8D8Y1P5F5F
 5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i
 8V5P5F5F9D5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D5p8b3Y1
------END RSA PRIVATE KEY-----"#.to_string()
+-----END RSA PRIVATE KEY-----"#
+            .to_string()
     }
 
     #[tokio::test]
@@ -493,7 +525,7 @@ QAECgYBiV5P5F5F9D5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D
         let config = KeyConfig::default();
         let manager1 = KeyManager::new(config.clone());
         let manager2 = KeyManager::new(config);
-        
+
         assert_eq!(manager1.config.max_keys, manager2.config.max_keys);
     }
 
@@ -543,7 +575,12 @@ QAECgYBiV5P5F5F9D5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D
         let test_jwks = json!({
             "keys": []
         });
-        assert!(test_jwks.get("keys").unwrap().as_array().unwrap().is_empty());
+        assert!(test_jwks
+            .get("keys")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
@@ -559,7 +596,7 @@ QAECgYBiV5P5F5F9D5p8b3Y1z8D8Y1P5F5F5z3t8F1Y5F1F2p8Y8i8V5P5F5F9D
         // Test error handling logic without actual key operations
         let config = KeyConfig::default();
         let manager = KeyManager::new(config);
-        
+
         // Test that manager is created successfully
         assert_eq!(manager.config.max_keys, 3);
         assert_eq!(manager.config.retry_attempts, 3);

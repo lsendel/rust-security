@@ -16,6 +16,8 @@ jobs:
   lint-check:
     name: Lint & Format Check
     runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: 1
     steps:
     - uses: actions/checkout@v4
 
@@ -40,6 +42,58 @@ jobs:
 
     - name: Run clippy
       run: cargo clippy -- -D warnings
+
+  policy-service:
+    name: Policy Service (Isolated)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:15-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PORT: 8081
+      ALLOWED_ORIGINS: http://localhost:3000
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      RUST_BACKTRACE: 1
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    - name: Cache Cargo dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: Build policy-service
+      run: cargo build -p policy-service --all-features --locked
+    - name: Test policy-service
+      run: cargo test -p policy-service --all-features -- --nocapture
+    - name: Clippy policy-service
+      run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings
 
     - name: Check dependencies for security issues
       run: cargo audit

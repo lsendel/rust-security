@@ -48,7 +48,6 @@ fn create_benchmark_event() -> SecurityEvent {
     }
 }
 
-#[cfg(feature = "threat-hunting")]
 fn bench_single_conversion(c: &mut Criterion) {
     let event = create_benchmark_event();
 
@@ -61,7 +60,6 @@ fn bench_single_conversion(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "threat-hunting")]
 fn bench_batch_conversion(c: &mut Criterion) {
     let events: Vec<SecurityEvent> = (0..100).map(|_| create_benchmark_event()).collect();
 
@@ -73,10 +71,8 @@ fn bench_batch_conversion(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "threat-hunting")]
 fn bench_process_with_conversion(_c: &mut Criterion) {}
 
-#[cfg(not(feature = "threat-hunting"))]
 fn bench_no_feature(c: &mut Criterion) {
     let event = create_benchmark_event();
 
@@ -87,15 +83,12 @@ fn bench_no_feature(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "threat-hunting")]
 criterion_group!(
     benches,
     bench_single_conversion,
     bench_batch_conversion,
-    bench_process_with_conversion
+    bench_process_with_conversion,
+    bench_no_feature
 );
-
-#[cfg(not(feature = "threat-hunting"))]
-criterion_group!(benches, bench_no_feature);
 
 criterion_main!(benches);

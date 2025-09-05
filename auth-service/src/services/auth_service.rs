@@ -166,8 +166,8 @@ impl AuthServiceTrait for AuthService {
             user: UserInfo {
                 id: user.id.as_str().to_string(),
                 email: user.email.as_str().to_string(),
-                name: user.name.unwrap_or_default(),
-                roles: user.roles.into_iter().collect(),
+                name: user.name.clone().unwrap_or_default(),
+                roles: user.roles.clone().into_iter().collect(),
                 verified: user.email_verified,
                 last_login: user.last_login,
             },
@@ -211,8 +211,8 @@ impl AuthServiceTrait for AuthService {
         Ok(UserInfo {
             id: user.id.as_str().to_string(),
             email: user.email.as_str().to_string(),
-            name: user.name.unwrap_or_default(),
-            roles: user.roles.into_iter().collect(),
+            name: user.name.clone().unwrap_or_default(),
+            roles: user.roles.clone().into_iter().collect(),
             verified: user.email_verified,
             last_login: user.last_login,
         })
@@ -246,8 +246,8 @@ impl AuthServiceTrait for AuthService {
             user: UserInfo {
                 id: user.id.as_str().to_string(),
                 email: user.email.as_str().to_string(),
-                name: user.name.unwrap_or_default(),
-                roles: user.roles.into_iter().collect(),
+                name: user.name.clone().unwrap_or_default(),
+                roles: user.roles.clone().into_iter().collect(),
                 verified: user.email_verified,
                 last_login: user.last_login,
             },

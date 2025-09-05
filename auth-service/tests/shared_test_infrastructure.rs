@@ -1,5 +1,6 @@
+#![cfg(feature = "full-integration")]
 //! Shared test infrastructure to reduce integration test execution time
-//! 
+//!
 //! This module provides a singleton test server that can be shared across
 //! multiple integration tests, dramatically reducing test execution time.
 
@@ -33,10 +34,10 @@ impl SharedTestServer {
         if let Some(server) = SHARED_TEST_SERVER.get() {
             return server.clone();
         }
-        
+
         // Create the server instance
         let server = Arc::new(Self::create_server().await);
-        
+
         // Try to store it (this might fail if another thread created one first)
         if let Err(_existing) = SHARED_TEST_SERVER.set(server.clone()) {
             // Another thread beat us to it, use their instance
@@ -46,7 +47,7 @@ impl SharedTestServer {
             server
         }
     }
-    
+
     /// Create a new shared test server (called once)
     async fn create_server() -> Self {
         // Set test environment variables once
@@ -61,7 +62,10 @@ impl SharedTestServer {
         );
         std::env::set_var("GOOGLE_CLIENT_ID", "test-client-id");
         std::env::set_var("GOOGLE_CLIENT_SECRET", "test-client-secret");
-        std::env::set_var("GOOGLE_REDIRECT_URI", "http://localhost:8080/oauth/google/callback");
+        std::env::set_var(
+            "GOOGLE_REDIRECT_URI",
+            "http://localhost:8080/oauth/google/callback",
+        );
 
         // Bind to available port
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
@@ -150,7 +154,7 @@ impl SharedTestServer {
     pub async fn reset_test_state(&self) {
         // Clear any test-specific state that might interfere between tests
         // This is lighter than recreating the entire server
-        
+
         // Example: Clear authorization codes
         // Note: You might want to expose methods on AppState for this
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -229,10 +233,10 @@ macro_rules! shared_integration_test {
     ($test_name:ident, $test_body:block) => {
         #[tokio::test]
         async fn $test_name() {
-            use $crate::shared_test_infrastructure::{SharedTestServer, SharedTestHelpers};
-            
+            use $crate::shared_test_infrastructure::{SharedTestHelpers, SharedTestServer};
+
             let _server = SharedTestServer::instance().await;
-            
+
             $test_body
         }
     };
@@ -244,12 +248,12 @@ macro_rules! exclusive_integration_test {
     ($test_name:ident, $test_body:block) => {
         #[tokio::test]
         async fn $test_name() {
-            use $crate::shared_test_infrastructure::{SharedTestServer, SharedTestHelpers};
-            
+            use $crate::shared_test_infrastructure::{SharedTestHelpers, SharedTestServer};
+
             let server = SharedTestServer::instance().await;
             let _lock = server.exclusive_lock().await;
             server.reset_test_state().await;
-            
+
             $test_body
         }
     };
@@ -263,18 +267,18 @@ mod tests {
     async fn test_shared_server_creation() {
         let server1 = SharedTestServer::instance().await;
         let server2 = SharedTestServer::instance().await;
-        
+
         // Should be the same instance
         assert_eq!(server1.base_url(), server2.base_url());
-        
+
         // Should be able to make requests
         let response = server1
             .client()
-            .get(&format!("{}/health", server1.base_url()))
+            .get(format!("{}/health", server1.base_url()))
             .send()
             .await
             .unwrap();
-        
+
         assert!(response.status().is_success());
     }
 
@@ -282,7 +286,7 @@ mod tests {
     async fn test_token_generation() {
         let token = SharedTestHelpers::get_access_token().await;
         assert!(!token.is_empty());
-        
+
         let admin_token = SharedTestHelpers::get_admin_token().await;
         assert!(!admin_token.is_empty());
         assert_ne!(token, admin_token);

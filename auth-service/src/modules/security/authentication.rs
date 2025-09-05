@@ -160,9 +160,10 @@ impl JwtAuthenticator {
         }
     }
 
-    /// Generate JWT token
+    /// Generate JWT token (RS256 via JWKS key manager)
     fn generate_jwt(&self, user_id: &str, scope: &[String], expires_at: DateTime<Utc>) -> SecurityResult<String> {
-        use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+        use jsonwebtoken::{encode, Algorithm, Header};
+        use crate::infrastructure::crypto::keys::current_signing_key;
 
         let claims = serde_json::json!({
             "sub": user_id,
@@ -174,32 +175,46 @@ impl JwtAuthenticator {
             "jti": uuid::Uuid::new_v4().to_string(),
         });
 
-        let header = Header::new(Algorithm::HS256);
-        let key = EncodingKey::from_secret(&self.secret_key);
-
+        // Blocking on async in sync fn via block_on for simplicity inside this module
+        let (kid, key) = tokio::runtime::Handle::current().block_on(current_signing_key())
+            .map_err(|e| SecurityError::AuthenticationFailed { reason: format!("Key error: {}", e) })?;
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(kid);
         encode(&header, &claims, &key)
-            .map_err(|e| SecurityError::AuthenticationFailed {
-                reason: format!("JWT encoding failed: {}", e),
-            })
+            .map_err(|e| SecurityError::AuthenticationFailed { reason: format!("JWT encoding failed: {}", e) })
     }
 
     /// Verify JWT token
     fn verify_jwt(&self, token: &str) -> SecurityResult<serde_json::Value> {
-        use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+        use jsonwebtoken::{decode, Algorithm, Validation};
+        use crate::infrastructure::crypto::keys::{decoding_key_for_kid, all_decoding_keys};
 
-        let mut validation = Validation::new(Algorithm::HS256);
+        let header = jsonwebtoken::decode_header(token)
+            .map_err(|e| SecurityError::AuthenticationFailed { reason: format!("Invalid header: {}", e) })?;
+
+        let mut validation = Validation::new(Algorithm::RS256);
         validation.set_issuer(&[&self.issuer]);
         validation.set_audience(&self.audience);
         validation.validate_exp = true;
 
-        let key = DecodingKey::from_secret(&self.secret_key);
+        // Try by kid first
+        if let Some(kid) = header.kid.clone() {
+            if let Some(key) = tokio::runtime::Handle::current().block_on(decoding_key_for_kid(&kid)) {
+                let token_data = decode::<serde_json::Value>(token, &key, &validation)
+                    .map_err(|e| SecurityError::AuthenticationFailed { reason: format!("JWT verification failed: {}", e) })?;
+                return Ok(token_data.claims);
+            }
+        }
 
-        let token_data = decode::<serde_json::Value>(token, &key, &validation)
-            .map_err(|e| SecurityError::AuthenticationFailed {
-                reason: format!("JWT verification failed: {}", e),
-            })?;
+        // Fallback: try all known keys
+        let keys = tokio::runtime::Handle::current().block_on(all_decoding_keys());
+        for key in keys {
+            if let Ok(token_data) = decode::<serde_json::Value>(token, &key, &validation) {
+                return Ok(token_data.claims);
+            }
+        }
 
-        Ok(token_data.claims)
+        Err(SecurityError::AuthenticationFailed { reason: "No matching key for token".to_string() })
     }
 
     /// Generate secure token ID

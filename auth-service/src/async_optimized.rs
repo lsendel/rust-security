@@ -37,19 +37,27 @@ pub struct AsyncTokenStorage;
 #[cfg(not(feature = "redis-sessions"))]
 impl AsyncTokenStorage {
     pub fn new(_redis_url: &str) -> Result<Self, TokenError> {
-        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+        Err(TokenError::Serialization(
+            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
+        ))
     }
 
     pub async fn store_token(&self, _token: &str, _data: &TokenData) -> Result<(), TokenError> {
-        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+        Err(TokenError::Serialization(
+            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
+        ))
     }
 
     pub async fn get_token(&self, _token: &str) -> Result<Option<TokenData>, TokenError> {
-        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+        Err(TokenError::Serialization(
+            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
+        ))
     }
 
     pub async fn delete_token(&self, _token: &str) -> Result<bool, TokenError> {
-        Err(TokenError::Serialization("Redis support not enabled. Enable 'redis-sessions' feature.".to_string()))
+        Err(TokenError::Serialization(
+            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
+        ))
     }
 }
 

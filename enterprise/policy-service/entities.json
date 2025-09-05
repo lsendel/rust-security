@@ -9,6 +9,29 @@
     "parents": []
   },
   {
+    "uid": {"type": "Admin", "id": "alice_admin"},
+    "attrs": {
+      "roles": ["billing", "readonly"],
+      "mfa_verified": true
+    },
+    "parents": []
+  },
+  {
+    "uid": {"type": "Admin", "id": "bob_super"},
+    "attrs": {
+      "roles": ["superadmin"],
+      "mfa_verified": true
+    },
+    "parents": []
+  },
+  { "uid": { "type": "AdminEndpoint", "id": "/admin/metrics" }, "attrs": {}, "parents": [] },
+  { "uid": { "type": "AdminEndpoint", "id": "/admin/users/123" }, "attrs": {}, "parents": [] },
+  { "uid": { "type": "AdminEndpoint", "id": "/admin/billing" }, "attrs": {}, "parents": [] },
+  { "uid": { "type": "AdminEndpoint", "id": "/admin/keys/rotate" }, "attrs": {}, "parents": [] },
+  { "uid": { "type": "User", "id": "alice_user" }, "attrs": {"authenticated": true}, "parents": [] },
+  { "uid": { "type": "Client", "id": "mvp-client" }, "attrs": {}, "parents": [] },
+  { "uid": { "type": "OAuthClient", "id": "mvp-client" }, "attrs": {}, "parents": [] },
+  {
     "uid": {"type": "User", "id": "admin"},
     "attrs": {
       "authenticated": true,

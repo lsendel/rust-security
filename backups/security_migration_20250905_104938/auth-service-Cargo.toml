@@ -1,0 +1,263 @@
+[[bench]]
+name = "threat_conversion_bench"
+harness = false
+
+[package]
+name = "auth-service"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Enterprise-grade authentication service with zero-trust architecture"
+authors = ["Security Team"]
+keywords = ["authentication", "oauth2", "security", "zero-trust"]
+categories = ["web-programming::http-server", "authentication"]
+repository = "https://github.com/lsendel/rust-security"
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["json", "env-filter"] }
+log = "0.4"
+tracing-appender = "0.2"
+# Using workspace version instead
+uuid = { workspace = true }
+webpki-roots = { workspace = true }
+thiserror = { workspace = true }
+http = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+# Unused - removed
+anyhow = { workspace = true }
+config = { workspace = true }
+# Unused - removed by cargo-machete
+redis = { workspace = true }
+deadpool-redis = { workspace = true }
+utoipa = { workspace = true }
+# Swagger UI is optional; enable with `--features docs`
+# Unused
+# Security enhancements
+validator = { workspace = true }
+argon2 = { workspace = true }
+jsonwebtoken = { workspace = true }
+# RSA key generation for JWKS rotation - using latest secure version
+# Removed due to RUSTSEC-2023-0071
+ed25519-dalek = { workspace = true, optional = true }
+chrono = { workspace = true }
+hmac = { workspace = true }
+# Unused - removed
+data-encoding = { workspace = true }
+sha2 = { workspace = true }
+# TLS/HTTPS support
+# Secret management
+async-trait = { workspace = true }
+hex = { workspace = true }
+rand = { workspace = true }
+once_cell = { workspace = true }
+futures = { workspace = true }
+base64 = { workspace = true }
+constant_time_eq = { workspace = true }
+# Configuration file parsing
+toml = { workspace = true }
+# Additional dependencies for features
+serde_yaml = { workspace = true }
+# Common workspace dependency
+common = { path = "../common" }
+# SOAR optional dependencies
+sqlx = { workspace = true, features = ["postgres", "sqlite", "runtime-tokio-native-tls", "chrono", "uuid", "json", "migrate"], default-features = false, optional = true }
+handlebars = { workspace = true, optional = true }
+lettre = { workspace = true, optional = true }
+# Used in disabled SOAR feature
+tempfile = { workspace = true, optional = true }
+# Used in disabled SOAR feature
+# Updated to fix protobuf vulnerability RUSTSEC-2024-0437
+prometheus = { workspace = true, optional = true }
+urlencoding = { workspace = true }
+url = { workspace = true }
+reqwest = { workspace = true }
+regex = { workspace = true }
+# High-performance rate limiting
+dashmap = { workspace = true }
+num_cpus = { workspace = true }
+# OpenTelemetry for distributed tracing
+# SIMD and hardware acceleration (removed due to compatibility issues)
+ring = { workspace = true }
+zeroize = { workspace = true }
+unicode-normalization = "0.1"
+
+# Security modules dependencies
+# Duplicate removed
+
+# Additional missing dependencies identified during compilation
+# Unused - removed
+fastrand = { workspace = true }
+# Unused - removed
+rustls = { workspace = true }
+# Unused - removed
+rayon = { workspace = true }
+# High-performance async runtime
+# Connection pooling optimization
+# deadpool-redis dependency moved to main dependencies section above
+# Unused - removed
+# Unused - removed
+# Optimized serialization
+# Metrics and profiling
+# Removed due to RUSTSEC-2024-0408
+
+# Threat Hunting and ML Dependencies
+# Machine Learning and Data Analysis
+# Removed due to workspace dependency issue
+# Removed due to workspace dependency issue
+# Removed due to workspace dependency issue
+# Graph analysis for attack pattern detection
+petgraph = { workspace = true, optional = true }
+# Time series analysis
+# tsc gated under target-specific dependencies below
+# Statistics and analytics
+# Removed due to workspace dependency issue
+# Advanced collections for threat correlation
+# Unused - removed by cargo-machete
+# Async channels and queues
+flume = { workspace = true, optional = true }
+# Unused
+# Geospatial analysis for location anomalies
+# Used in disabled threat-hunting feature
+# Used in disabled threat-hunting feature
+# Enhanced time handling
+time = { workspace = true, optional = true }
+# Memory-mapped files for large datasets
+# Used in disabled advanced-analytics feature
+# Compression for data storage
+# Used in disabled advanced-analytics feature
+# IP address analysis
+# Unused
+# Enhanced string processing for log parsing
+# Unused
+# Unused
+# Bloom filters for efficient lookups
+# Unused
+# Probabilistic data structures
+# Used in disabled advanced-analytics
+# Lazy static for static variables
+lazy_static = { workspace = true }
+
+# Post-Quantum Cryptography dependencies
+# Removed due to workspace dependency issue
+# Removed due to workspace dependency issue
+# Hybrid cryptography support
+p256 = { workspace = true, optional = true }
+# Used in disabled hybrid-crypto feature
+# ed25519-dalek already included above
+# Unused
+# Certificate and PKI support for post-quantum
+# Unused
+# Unused
+# Unused
+# Performance and security utilities
+
+vaultrs = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
+aws-sdk-secretsmanager = { workspace = true, optional = true }
+# Commented out to reduce conflicts
+# Commented out to reduce conflicts
+# Commented out to reduce conflicts
+
+[dev-dependencies]
+criterion = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+hmac = { workspace = true }
+sha1 = { workspace = true }
+serde_json = { workspace = true }
+# Test dependencies
+uuid = { workspace = true }
+chrono = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
+# Property-based testing
+proptest = { workspace = true }
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }
+# Performance testing (using workspace version)
+tokio-test = { workspace = true }
+# Security testing
+regex = { workspace = true }
+# Test utilities
+tempfile = { workspace = true }
+wiremock = { workspace = true }
+# Coverage and benchmarking in tests
+# Commented out - not available on crates.io
+
+[features]
+# MVP-focused feature set
+default = ["security-essential"]
+security-essential = ["crypto", "rate-limiting"]
+full-integration = []
+redis-sessions = []  # Redis dependencies are now always enabled
+postgres = ["dep:sqlx"]
+metrics = ["dep:prometheus"]
+api-keys = ["dep:sqlx"]
+
+# Core dependencies
+crypto = ["ed25519-dalek"]
+rate-limiting = []
+monitoring = []
+post-quantum = []
+simd = []
+vault = []
+soar = []
+
+# Build profiles are defined at workspace root
+
+# [[bench]]
+# name = "performance_suite"
+# harness = false
+# required-features = ["benchmarks"]  # Disabled due to pprof2 removal
+
+[lib]
+name = "auth_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "auth-service"
+path = "src/main.rs"
+
+[[test]]
+name = "api_key_management_it"
+path = "tests/api_key_management_it.rs"
+required-features = ["full-integration", "api-keys", "redis-sessions", "crypto"]
+
+[[test]]
+name = "oidc_state_it"
+path = "tests/oidc_state_it.rs"
+required-features = ["full-integration", "api-keys", "redis-sessions", "crypto"]
+
+[[test]]
+name = "scim_basic_auth_it"
+path = "tests/scim_basic_auth_it.rs"
+required-features = ["full-integration", "api-keys", "redis-sessions", "crypto"]
+
+[[test]]
+name = "token_flow_it"
+path = "tests/token_flow_it.rs"
+required-features = ["full-integration", "api-keys", "redis-sessions", "crypto"]
+
+[[test]]
+name = "token_refresh_it"
+path = "tests/token_refresh_it.rs"
+required-features = ["full-integration", "api-keys", "redis-sessions", "crypto"]
+
+[[test]]
+name = "totp_it"
+path = "tests/totp_it.rs"
+required-features = ["full-integration", "api-keys", "redis-sessions", "crypto"]
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+# Time series counter uses x86-specific instructions; only include on x86_64 platforms.
+# Not a real crate, commented out

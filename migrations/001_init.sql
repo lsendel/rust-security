@@ -1,0 +1,2 @@
+-- Initial migration placeholder
+-- This file exists to satisfy sqlx::migrate! macro requirements

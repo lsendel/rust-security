@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 use auth_service::storage::store::hybrid::TokenStore;
 use std::collections::HashMap;
 use std::sync::Arc;

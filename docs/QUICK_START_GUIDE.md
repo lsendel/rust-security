@@ -617,7 +617,7 @@ permit (
 #### Test Policy Evaluation
 ```bash
 # Test authorization decision
-curl -X POST http://localhost:8081/api/v1/policies/evaluate \
+curl -X POST http://localhost:8081/v1/authorize \
   -H "Content-Type: application/json" \
   -d '{
     "principal": {"type": "User", "id": "alice"},

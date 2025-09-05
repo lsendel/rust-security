@@ -132,7 +132,7 @@ impl HybridStore {
         &self,
         token: &str,
         record: &crate::IntrospectionRecord,
-        ttl_secs: Option<u64>,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))] ttl_secs: Option<u64>,
     ) -> Result<(), crate::shared::error::AppError> {
         // Convert IntrospectionRecord to TokenRecord for storage
         let token_record = TokenRecord {
@@ -259,7 +259,8 @@ impl Store for HybridStore {
         &self,
         code: &str,
         record: &AuthCodeRecord,
-        ttl_secs: u64,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
+        _ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let record_json = serde_json::to_string(record)?;
 
@@ -272,7 +273,7 @@ impl Store for HybridStore {
                 let result: Result<(), _> = {
                     let set_result = conn.set::<_, _, ()>(&key, &record_json).await;
                     if set_result.is_ok() {
-                        conn.expire(&key, ttl_secs as i64).await
+                        conn.expire(&key, _ttl_secs as i64).await
                     } else {
                         set_result
                     }
@@ -369,6 +370,7 @@ impl Store for HybridStore {
         &self,
         token: &str,
         record: &TokenRecord,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
         _ttl_secs: Option<u64>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let _record_json = serde_json::to_string(record)?;
@@ -396,7 +398,7 @@ impl Store for HybridStore {
                         self.tokens
                             .write()
                             .await
-                            .insert(token.to_string(), _record_json);
+                            .insert(token.to_string(), record.clone());
                         return Ok(());
                     }
                     Err(e) => {
@@ -431,6 +433,7 @@ impl Store for HybridStore {
         &self,
         refresh_token: &str,
         access_token: &str,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
         _ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis first (primary storage)

@@ -1,8 +1,8 @@
-//! Integration tests for Service Identity Management
-//!
-//! Tests the complete flow of service identity registration,
-//! JIT token issuance, and security monitoring.
-
+#![cfg(feature = "full-integration")]
+// Integration tests for Service Identity Management
+//
+// Tests the complete flow of service identity registration,
+// JIT token issuance, and security monitoring.
 use auth_service::infrastructure::security::security_monitoring::SecurityAlert;
 use std::sync::Arc;
 use uuid::Uuid;

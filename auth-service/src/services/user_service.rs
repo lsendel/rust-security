@@ -110,7 +110,7 @@ impl UserServiceTrait for UserService {
         Ok(UserResponse {
             id: user.id.as_str().to_string(),
             email: user.email.as_str().to_string(),
-            name: user.name,
+            name: user.name.clone(),
             verified: user.email_verified,
             created_at: user.created_at,
         })
@@ -126,7 +126,7 @@ impl UserServiceTrait for UserService {
         Ok(UserResponse {
             id: user.id.as_str().to_string(),
             email: user.email.as_str().to_string(),
-            name: user.name,
+            name: user.name.clone(),
             verified: user.email_verified,
             created_at: user.created_at,
         })
@@ -168,7 +168,7 @@ impl UserServiceTrait for UserService {
         Ok(UserResponse {
             id: user.id.as_str().to_string(),
             email: user.email.as_str().to_string(),
-            name: user.name,
+            name: user.name.clone(),
             verified: user.email_verified,
             created_at: user.created_at,
         })

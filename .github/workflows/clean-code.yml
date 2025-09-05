@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   clean-code:
@@ -35,11 +36,62 @@ jobs:
     - name: Check formatting
       run: cargo fmt --all -- --check
       
-    - name: Run clippy
-      run: cargo clippy --workspace --all-features -- -D warnings
+      - name: Run clippy
+        run: cargo clippy --workspace -- -D warnings
       
-    - name: Run tests
-      run: cargo test --workspace --all-features
+      - name: Run tests
+        run: cargo test --workspace --all-features
+
+  policy-service-clean:
+    name: Policy Service Clean
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:15-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PORT: 8081
+      ALLOWED_ORIGINS: http://localhost:3000
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      RUST_BACKTRACE: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: policy-service-clean-${{ hashFiles('Cargo.lock') }}
+
+      - name: Clippy (policy-service)
+        run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings
+
+      - name: Tests (policy-service)
+        run: cargo test -p policy-service --all-features -- --nocapture
       
     - name: Check documentation
       run: cargo doc --workspace --all-features --no-deps

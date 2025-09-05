@@ -1,3 +1,4 @@
+#![cfg(all(feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::storage::session::store::RedisSessionStore;
 use auth_service::storage::store::hybrid::HybridStore;

@@ -174,7 +174,7 @@ const fn inc_requests_total() {
     // TODO: Implement actual metrics increment
     // METRICS.requests_total.inc();
 }
-#[cfg(not(feature = "monitoring"))]
+#[cfg(not(feature = "metrics"))]
 #[inline]
 const fn inc_requests_total() {}
 
@@ -184,7 +184,7 @@ const fn inc_requests_rejected_total() {
     // TODO: Implement actual metrics increment
     // METRICS.requests_rejected_total.inc();
 }
-#[cfg(not(feature = "monitoring"))]
+#[cfg(not(feature = "metrics"))]
 #[inline]
 const fn inc_requests_rejected_total() {}
 
@@ -194,7 +194,7 @@ const fn inc_concurrent_requests() {
     // TODO: Implement actual metrics increment
     // METRICS.concurrent_requests.inc();
 }
-#[cfg(not(feature = "monitoring"))]
+#[cfg(not(feature = "metrics"))]
 #[inline]
 const fn inc_concurrent_requests() {}
 
@@ -204,7 +204,7 @@ const fn dec_concurrent_requests() {
     // TODO: Implement actual metrics decrement
     // METRICS.concurrent_requests.dec();
 }
-#[cfg(not(feature = "monitoring"))]
+#[cfg(not(feature = "metrics"))]
 #[inline]
 const fn dec_concurrent_requests() {}
 
@@ -214,7 +214,7 @@ const fn observe_request_body_size(_size: f64) {
     // TODO: Implement actual metrics observation
     // METRICS.request_body_size.observe(size);
 }
-#[cfg(not(feature = "monitoring"))]
+#[cfg(not(feature = "metrics"))]
 #[inline]
 const fn observe_request_body_size(_size: f64) {}
 
@@ -223,7 +223,7 @@ const fn observe_request_body_size(_size: f64) {}
 fn observe_request_duration(duration: f64) {
     REQUEST_DURATION.observe(duration);
 }
-#[cfg(not(feature = "monitoring"))]
+#[cfg(not(feature = "metrics"))]
 #[inline]
 const fn observe_request_duration(_duration: f64) {}
 

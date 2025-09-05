@@ -36,12 +36,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('authToken');
-    if (storedToken) {
-      setToken(storedToken);
-      setIsAuthenticated(true);
-      // In a real app, you'd also fetch user info here
-    }
+    // Initialize CSRF cookie
+    fetch(`${AUTH_SERVICE_BASE_URL}/csrf/token`, { credentials: 'include' }).catch(() => {});
   }, []);
 
   const generateRandomString = (length: number) => {
@@ -87,8 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsAuthenticated(false);
     setUser(null);
     setToken(null);
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('refreshToken');
+    // Cookies are httpOnly; optionally call backend logout endpoint if available
     // In a real app, you would also call the /oauth/revoke endpoint
     window.location.href = '/';
   };
@@ -119,18 +114,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       );
 
-      const { access_token, refresh_token } = response.data;
+      // Backend sets httpOnly cookies; treat as authenticated
+      const { access_token } = response.data;
       setToken(access_token);
-      localStorage.setItem('authToken', access_token);
-      if (refresh_token) {
-        localStorage.setItem('refreshToken', refresh_token);
-      }
       setIsAuthenticated(true);
 
       // Fetch user info
-      const userinfoResponse = await axios.get(`${AUTH_SERVICE_BASE_URL}/oauth/userinfo`, {
-        headers: { Authorization: `Bearer ${access_token}` },
-      });
+      const userinfoResponse = await axios.get(`${AUTH_SERVICE_BASE_URL}/oauth/userinfo`, { withCredentials: true });
       setUser(userinfoResponse.data);
 
     } catch (error) {

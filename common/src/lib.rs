@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms, future_incompatible)]
+#![allow(elided_lifetimes_in_paths)]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
@@ -21,7 +22,9 @@
 
 pub mod config;
 pub mod constants;
+pub mod crypto;
 pub mod crypto_utils;
+pub mod database;
 pub mod errors;
 pub mod optimized_pools;
 pub mod redis_config;
@@ -36,6 +39,7 @@ pub use config::{PlatformConfiguration, RateLimitConfig, SecurityConfig};
 // Re-export unified security configuration
 pub use constants::*;
 pub use crypto_utils::*;
+pub use database::{DatabaseOperations, DatabaseOperationsBuilder, UnifiedDatabaseConfig, DatabaseError, DatabaseResult};
 pub use errors::*;
 use num_cpus as _;
 pub use optimized_pools::{OptimizedRedisPool, PoolError, PoolStats};

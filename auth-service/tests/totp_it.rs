@@ -1,3 +1,5 @@
+#![cfg(all(feature = "full-integration", feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
+// cfg moved to top of file
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::storage::session::store::RedisSessionStore;
 use auth_service::storage::store::hybrid::HybridStore;
@@ -204,3 +206,4 @@ async fn totp_backup_codes_flow() {
         .unwrap();
     assert!(!res2.verified);
 }
+// removed stray cfg

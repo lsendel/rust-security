@@ -1,0 +1,713 @@
+name: Security Testing Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Security testing configuration
+  SAST_ENABLED: true
+  DEPENDENCY_SCAN_ENABLED: true
+  SECRET_SCAN_ENABLED: true
+  CONTAINER_SCAN_ENABLED: true
+
+jobs:
+  # Static Application Security Testing (SAST)
+  sast-analysis:
+    name: Static Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-security-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install security tools
+      run: |
+        # Install cargo-audit for dependency vulnerability scanning
+        cargo install --locked cargo-audit
+        
+        # Install cargo-deny for license and security policy enforcement
+        cargo install --locked cargo-deny
+        
+        # Install semgrep for advanced static analysis
+        pip install semgrep
+
+    - name: Run Rust security lints
+      run: |
+        # Run Clippy with security-focused lints
+        cargo clippy --all-targets --all-features -- \
+          -W clippy::suspicious \
+          -W clippy::complexity \
+          -W clippy::perf \
+          -W clippy::correctness \
+          -W clippy::cargo \
+          -W clippy::nursery \
+          -W clippy::pedantic \
+          -D clippy::mem_forget \
+          -D clippy::todo \
+          -D clippy::unimplemented \
+          -D clippy::panic \
+          -D clippy::unwrap_used \
+          -D clippy::expect_used
+
+    - name: Audit Rust dependencies
+      run: |
+        # Check for known vulnerabilities in dependencies
+        cargo audit --deny warnings
+        
+        # Check for license and security policy violations
+        cargo deny check
+
+    - name: Run Semgrep security analysis
+      run: |
+        # Run comprehensive security rules
+        semgrep --config=auto --error --verbose \
+          --exclude="target/" \
+          --exclude="*/target/" \
+          --json --output=semgrep-results.json .
+
+    - name: Upload Semgrep results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: semgrep-results
+        path: semgrep-results.json
+
+    - name: Install and run Rust security analyzer
+      run: |
+        # Custom security checks for Rust code
+        cat > security-check.py << 'EOF'
+        #!/usr/bin/env python3
+        import os
+        import re
+        import sys
+        import json
+        
+        def find_security_issues():
+            issues = []
+            
+            # Patterns to detect potential security issues
+            patterns = {
+                'hardcoded_secret': r'(?i)(password|secret|token|key)\s*=\s*["\'][^"\']{8,}["\']',
+                'sql_injection': r'(?i)(execute|query|prepare)\s*\(\s*["\'].*\+.*["\']',
+                'command_injection': r'(?i)(command|execute|system|shell)\s*\(',
+                'unsafe_deserialization': r'(?i)(deserialize|from_str)\s*\(',
+                'weak_random': r'(?i)(rand::random|thread_rng)',
+                'insecure_temp': r'(?i)temp_dir|tmp_dir',
+            }
+            
+            for root, dirs, files in os.walk('.'):
+                # Skip target directories
+                dirs[:] = [d for d in dirs if d != 'target']
+                
+                for file in files:
+                    if file.endswith('.rs'):
+                        filepath = os.path.join(root, file)
+                        try:
+                            with open(filepath, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                
+                                for issue_type, pattern in patterns.items():
+                                    matches = re.finditer(pattern, content, re.MULTILINE)
+                                    for match in matches:
+                                        line_num = content[:match.start()].count('\n') + 1
+                                        issues.append({
+                                            'type': issue_type,
+                                            'file': filepath,
+                                            'line': line_num,
+                                            'match': match.group(),
+                                            'severity': 'high' if issue_type in ['hardcoded_secret', 'sql_injection'] else 'medium'
+                                        })
+                        except Exception as e:
+                            print(f"Error reading {filepath}: {e}")
+            
+            return issues
+        
+        def main():
+            issues = find_security_issues()
+            
+            if issues:
+                print(f"Found {len(issues)} potential security issues:")
+                for issue in issues:
+                    print(f"  {issue['severity'].upper()}: {issue['type']} in {issue['file']}:{issue['line']}")
+                    print(f"    {issue['match'][:100]}")
+                
+                # Write results to file
+                with open('custom-security-issues.json', 'w') as f:
+                    json.dump(issues, f, indent=2)
+                
+                # Fail if high severity issues found
+                high_severity = [i for i in issues if i['severity'] == 'high']
+                if high_severity:
+                    print(f"CRITICAL: Found {len(high_severity)} high-severity security issues!")
+                    sys.exit(1)
+            else:
+                print("No security issues found by custom analyzer")
+        
+        if __name__ == '__main__':
+            main()
+        EOF
+        
+        python3 security-check.py
+
+    - name: Upload custom security results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: custom-security-results
+        path: custom-security-issues.json
+
+  # Dependency vulnerability scanning
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+
+    - name: Install security tools
+      run: |
+        cargo install cargo-audit cargo-outdated
+
+    - name: Generate dependency report
+      run: |
+        # Create comprehensive dependency security report
+        echo "# Dependency Security Report" > dependency-report.md
+        echo "Generated on: $(date)" >> dependency-report.md
+        echo "" >> dependency-report.md
+        
+        echo "## Vulnerability Audit" >> dependency-report.md
+        cargo audit --format json > audit-results.json || true
+        
+        echo "## Outdated Dependencies" >> dependency-report.md
+        cargo outdated --format json > outdated-results.json || true
+        
+        # Check for deprecated dependencies
+        echo "## Dependency Analysis" >> dependency-report.md
+        cargo tree --duplicates >> dependency-report.md || true
+
+    - name: Upload dependency reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-reports
+        path: |
+          dependency-report.md
+          audit-results.json
+          outdated-results.json
+
+  # Secret scanning
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Run TruffleHog secret scan
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+    - name: Custom secret patterns
+      run: |
+        # Additional secret pattern detection
+        cat > secret-patterns.py << 'EOF'
+        #!/usr/bin/env python3
+        import os
+        import re
+        
+        # Custom patterns for this project
+        patterns = {
+            'rust_env_secret': r'std::env::var\(["\'][A-Z_]*(?:SECRET|KEY|TOKEN|PASSWORD)["\']',
+            'hardcoded_jwt': r'["\'][A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*["\']',
+            'api_key_pattern': r'["\'][A-Za-z0-9]{32,}["\']',
+            'database_url': r'["\'](?:postgres|mysql|redis)://[^\'"]+["\']',
+        }
+        
+        secrets_found = []
+        
+        for root, dirs, files in os.walk('.'):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'target']
+            
+            for file in files:
+                if file.endswith(('.rs', '.toml', '.yml', '.yaml', '.env')):
+                    filepath = os.path.join(root, file)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            
+                            for pattern_name, pattern in patterns.items():
+                                matches = re.finditer(pattern, content)
+                                for match in matches:
+                                    line_num = content[:match.start()].count('\n') + 1
+                                    secrets_found.append({
+                                        'file': filepath,
+                                        'line': line_num,
+                                        'pattern': pattern_name,
+                                        'match': match.group()[:50] + '...' if len(match.group()) > 50 else match.group()
+                                    })
+                    except Exception as e:
+                        print(f"Error reading {filepath}: {e}")
+        
+        if secrets_found:
+            print(f"Found {len(secrets_found)} potential secrets:")
+            for secret in secrets_found:
+                print(f"  {secret['file']}:{secret['line']} - {secret['pattern']}")
+                print(f"    {secret['match']}")
+        else:
+            print("No secrets detected by custom scanner")
+        EOF
+        
+        python3 secret-patterns.py
+
+  # Container security scanning
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: |
+        # Build the auth service container
+        docker build -t auth-service:security-test -f auth-service/Dockerfile .
+
+    - name: Install container scanning tools
+      run: |
+        # Install Trivy for container vulnerability scanning
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+
+    - name: Scan container for vulnerabilities
+      run: |
+        # Comprehensive container security scan
+        trivy image --format json --output trivy-results.json auth-service:security-test
+        trivy image --severity HIGH,CRITICAL auth-service:security-test
+
+    - name: Container configuration analysis
+      run: |
+        # Analyze Dockerfile for security best practices
+        cat > dockerfile-security.py << 'EOF'
+        #!/usr/bin/env python3
+        import re
+        
+        def analyze_dockerfile(dockerfile_path):
+            issues = []
+            
+            with open(dockerfile_path, 'r') as f:
+                lines = f.readlines()
+            
+            for i, line in enumerate(lines, 1):
+                line = line.strip()
+                
+                # Check for security issues
+                if line.startswith('USER root') or 'USER 0' in line:
+                    issues.append(f"Line {i}: Running as root user")
+                
+                if 'ADD http' in line.upper():
+                    issues.append(f"Line {i}: Using ADD with URL (prefer COPY)")
+                
+                if '--privileged' in line:
+                    issues.append(f"Line {i}: Privileged mode detected")
+                
+                if re.search(r'(?i)(password|secret|key)\s*=', line):
+                    issues.append(f"Line {i}: Possible hardcoded secret")
+                
+                if 'latest' in line and ('FROM' in line.upper()):
+                    issues.append(f"Line {i}: Using 'latest' tag (prefer specific versions)")
+            
+            return issues
+        
+        # Analyze all Dockerfiles
+        import os
+        for root, dirs, files in os.walk('.'):
+            for file in files:
+                if file == 'Dockerfile' or file.endswith('.dockerfile'):
+                    dockerfile_path = os.path.join(root, file)
+                    issues = analyze_dockerfile(dockerfile_path)
+                    
+                    if issues:
+                        print(f"\nSecurity issues in {dockerfile_path}:")
+                        for issue in issues:
+                            print(f"  - {issue}")
+                    else:
+                        print(f"\nNo security issues found in {dockerfile_path}")
+        EOF
+        
+        python3 dockerfile-security.py
+
+    - name: Upload container scan results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: container-security-results
+        path: trivy-results.json
+
+  # Integration security testing
+  integration-security:
+    name: Integration Security Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-integration-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Setup test environment
+      run: |
+        # Generate test JWT secret
+        export JWT_SECRET=$(openssl rand -hex 32)
+        echo "JWT_SECRET=$JWT_SECRET" >> $GITHUB_ENV
+        
+        # Generate test RSA keys
+        openssl genrsa -out test_key.pem 2048
+        export RSA_PRIVATE_KEY=$(cat test_key.pem | base64 -w 0)
+        echo "RSA_PRIVATE_KEY=$RSA_PRIVATE_KEY" >> $GITHUB_ENV
+        
+        # Set test configuration
+        echo "APP_ENV=test" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379" >> $GITHUB_ENV
+        echo "RATE_LIMIT_PER_IP_PER_MINUTE=1000" >> $GITHUB_ENV
+
+    - name: Run security integration tests
+      run: |
+        # Run security-focused integration tests
+        cargo test --package auth-service --test security_tests -- --nocapture
+        cargo test --package auth-service --test property_tests -- --nocapture
+
+    - name: Run penetration testing simulation
+      run: |
+        # Start the service in background
+        cargo run --bin auth-service &
+        SERVICE_PID=$!
+        
+        # Wait for service to start
+        sleep 10
+        
+        # Run basic penetration tests
+        cat > pentest.py << 'EOF'
+        #!/usr/bin/env python3
+        import requests
+        import time
+        import json
+        
+        BASE_URL = "http://localhost:3000"
+        
+        def test_rate_limiting():
+            """Test rate limiting protection"""
+            print("Testing rate limiting...")
+            
+            # Attempt rapid requests
+            for i in range(20):
+                try:
+                    response = requests.post(
+                        f"{BASE_URL}/api/v1/auth/login",
+                        json={"username": "test", "password": "test"},
+                        timeout=5
+                    )
+                    print(f"Request {i}: {response.status_code}")
+                    
+                    if response.status_code == 429:
+                        print("✓ Rate limiting is working")
+                        return True
+                except Exception as e:
+                    print(f"Request {i} failed: {e}")
+            
+            return False
+        
+        def test_sql_injection():
+            """Test for SQL injection vulnerabilities"""
+            print("Testing SQL injection protection...")
+            
+            payloads = [
+                "' OR '1'='1",
+                "'; DROP TABLE users; --",
+                "' UNION SELECT * FROM users --",
+            ]
+            
+            for payload in payloads:
+                try:
+                    response = requests.post(
+                        f"{BASE_URL}/api/v1/auth/login",
+                        json={"username": payload, "password": "test"},
+                        timeout=5
+                    )
+                    
+                    if response.status_code != 400:
+                        print(f"⚠ Potential SQL injection vulnerability with payload: {payload}")
+                        return False
+                except Exception:
+                    pass
+            
+            print("✓ SQL injection protection is working")
+            return True
+        
+        def test_csrf_protection():
+            """Test CSRF protection"""
+            print("Testing CSRF protection...")
+            
+            try:
+                # Try to access protected endpoint without CSRF token
+                response = requests.post(
+                    f"{BASE_URL}/api/v1/auth/register",
+                    json={"username": "test", "password": "test123"},
+                    timeout=5
+                )
+                
+                if response.status_code == 403:
+                    print("✓ CSRF protection is working")
+                    return True
+                else:
+                    print(f"⚠ CSRF protection may not be working: {response.status_code}")
+                    return False
+            except Exception as e:
+                print(f"CSRF test failed: {e}")
+                return False
+        
+        def test_security_headers():
+            """Test security headers"""
+            print("Testing security headers...")
+            
+            try:
+                response = requests.get(f"{BASE_URL}/health", timeout=5)
+                headers = response.headers
+                
+                required_headers = [
+                    'X-Frame-Options',
+                    'X-Content-Type-Options',
+                    'X-XSS-Protection',
+                    'Strict-Transport-Security',
+                    'Content-Security-Policy',
+                ]
+                
+                missing_headers = []
+                for header in required_headers:
+                    if header not in headers:
+                        missing_headers.append(header)
+                
+                if missing_headers:
+                    print(f"⚠ Missing security headers: {missing_headers}")
+                    return False
+                else:
+                    print("✓ All security headers present")
+                    return True
+                    
+            except Exception as e:
+                print(f"Security headers test failed: {e}")
+                return False
+        
+        def main():
+            print("Starting penetration testing simulation...")
+            
+            # Wait for service to be ready
+            for _ in range(30):
+                try:
+                    response = requests.get(f"{BASE_URL}/health", timeout=2)
+                    if response.status_code == 200:
+                        break
+                except:
+                    time.sleep(1)
+            else:
+                print("Service not ready, skipping tests")
+                return
+            
+            tests = [
+                test_security_headers,
+                test_csrf_protection,
+                test_sql_injection,
+                test_rate_limiting,
+            ]
+            
+            results = []
+            for test in tests:
+                try:
+                    result = test()
+                    results.append(result)
+                except Exception as e:
+                    print(f"Test {test.__name__} failed: {e}")
+                    results.append(False)
+            
+            passed = sum(results)
+            total = len(results)
+            print(f"\nPenetration test results: {passed}/{total} tests passed")
+            
+            if passed != total:
+                exit(1)
+        
+        if __name__ == '__main__':
+            main()
+        EOF
+        
+        python3 pentest.py
+        
+        # Kill the service
+        kill $SERVICE_PID || true
+
+    - name: Generate security test report
+      if: always()
+      run: |
+        echo "# Security Test Report" > security-test-report.md
+        echo "Generated on: $(date)" >> security-test-report.md
+        echo "" >> security-test-report.md
+        echo "## Test Results" >> security-test-report.md
+        echo "- SAST Analysis: Completed" >> security-test-report.md
+        echo "- Dependency Scan: Completed" >> security-test-report.md
+        echo "- Secret Scan: Completed" >> security-test-report.md
+        echo "- Container Scan: Completed" >> security-test-report.md
+        echo "- Integration Tests: Completed" >> security-test-report.md
+        echo "" >> security-test-report.md
+        echo "## Recommendations" >> security-test-report.md
+        echo "- Review all findings in artifact reports" >> security-test-report.md
+        echo "- Update dependencies with known vulnerabilities" >> security-test-report.md
+        echo "- Implement additional security controls as needed" >> security-test-report.md
+
+    - name: Upload security test report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-test-report
+        path: security-test-report.md
+
+  # Security test summary
+  security-summary:
+    name: Security Test Summary
+    runs-on: ubuntu-latest
+    needs: [sast-analysis, dependency-scan, secret-scan, container-scan, integration-security]
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Generate consolidated security report
+      run: |
+        echo "# Comprehensive Security Test Report" > SECURITY_REPORT.md
+        echo "Generated on: $(date)" >> SECURITY_REPORT.md
+        echo "" >> SECURITY_REPORT.md
+        
+        echo "## Job Status Summary" >> SECURITY_REPORT.md
+        echo "- SAST Analysis: ${{ needs.sast-analysis.result }}" >> SECURITY_REPORT.md
+        echo "- Dependency Scan: ${{ needs.dependency-scan.result }}" >> SECURITY_REPORT.md
+        echo "- Secret Scan: ${{ needs.secret-scan.result }}" >> SECURITY_REPORT.md
+        echo "- Container Scan: ${{ needs.container-scan.result }}" >> SECURITY_REPORT.md
+        echo "- Integration Security: ${{ needs.integration-security.result }}" >> SECURITY_REPORT.md
+        echo "" >> SECURITY_REPORT.md
+        
+        echo "## Critical Actions Required" >> SECURITY_REPORT.md
+        if [[ "${{ needs.sast-analysis.result }}" == "failure" ]]; then
+          echo "⚠️ SAST analysis found critical issues - Review semgrep and custom security results" >> SECURITY_REPORT.md
+        fi
+        
+        if [[ "${{ needs.dependency-scan.result }}" == "failure" ]]; then
+          echo "⚠️ Dependency vulnerabilities found - Update affected packages" >> SECURITY_REPORT.md
+        fi
+        
+        if [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
+          echo "🚨 SECRETS DETECTED - Remove or secure all detected secrets immediately" >> SECURITY_REPORT.md
+        fi
+        
+        if [[ "${{ needs.container-scan.result }}" == "failure" ]]; then
+          echo "⚠️ Container vulnerabilities found - Update base images and dependencies" >> SECURITY_REPORT.md
+        fi
+        
+        if [[ "${{ needs.integration-security.result }}" == "failure" ]]; then
+          echo "⚠️ Security integration tests failed - Review and fix security controls" >> SECURITY_REPORT.md
+        fi
+        
+        echo "" >> SECURITY_REPORT.md
+        echo "## Next Steps" >> SECURITY_REPORT.md
+        echo "1. Review all artifact reports for detailed findings" >> SECURITY_REPORT.md
+        echo "2. Prioritize fixes based on severity and exploitability" >> SECURITY_REPORT.md
+        echo "3. Update security documentation and runbooks" >> SECURITY_REPORT.md
+        echo "4. Schedule regular security reviews and testing" >> SECURITY_REPORT.md
+
+    - name: Upload consolidated report
+      uses: actions/upload-artifact@v4
+      with:
+        name: consolidated-security-report
+        path: SECURITY_REPORT.md
+
+    - name: Comment on PR with security results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('SECURITY_REPORT.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔒 Security Test Results\n\n${report}`
+          });

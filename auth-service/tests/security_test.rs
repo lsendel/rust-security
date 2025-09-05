@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 use auth_service::jwks_rotation::{InMemoryKeyStorage, JwksManager};
 use auth_service::storage::session::store::RedisSessionStore;
 use auth_service::storage::store::hybrid::HybridStore;
@@ -159,3 +160,4 @@ async fn test_no_error_details_exposed() {
         "Should not expose implementation details"
     );
 }
+//

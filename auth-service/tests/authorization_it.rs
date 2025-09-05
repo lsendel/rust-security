@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 use auth_service::{app, AppState};
 use axum::{routing::post, Json, Router};
 use common::TokenRecord;

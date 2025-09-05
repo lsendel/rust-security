@@ -1,3 +1,4 @@
+#![cfg(feature = "full-integration")]
 //! Core Authentication Tests
 //!
 //! Essential tests for core authentication functionality

@@ -285,32 +285,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
 
-  /v1/evaluate:
-    post:
-      tags:
-        - Evaluation
-      summary: Evaluate access
-      description: Evaluate if access should be granted based on policies
-      operationId: evaluateAccess
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EvaluationRequest'
-      responses:
-        '200':
-          description: Evaluation result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvaluationResponse'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
 
   /v1/authorize:
     post:

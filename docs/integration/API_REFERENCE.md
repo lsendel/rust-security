@@ -1039,7 +1039,7 @@ Content-Type: application/scim+json
 
 ### Evaluate Authorization Request
 
-**POST** `/api/v1/policies/evaluate`
+**POST** `/v1/authorize`
 
 Evaluates authorization request against all applicable policies.
 
@@ -1070,7 +1070,7 @@ interface Context {
 
 **Example Request:**
 ```http
-POST /api/v1/policies/evaluate HTTP/1.1
+POST /v1/authorize HTTP/1.1
 Host: policy.company.com
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...

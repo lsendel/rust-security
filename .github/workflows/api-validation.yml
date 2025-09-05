@@ -1,0 +1,261 @@
+name: API Consistency Validation
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  # Run weekly to catch API drift
+  schedule:
+    - cron: '0 3 * * 2'  # Every Tuesday at 3 AM UTC
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  api-consistency:
+    name: "🔍 API Consistency Check"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: api-validation-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run API consistency validation
+        run: |
+          ./scripts/validate-api-consistency.sh
+
+      - name: Upload API consistency report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: api-consistency-report
+          path: api-consistency-report.md
+
+  documentation-compilation:
+    name: "📚 Documentation Compilation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mdbook
+        run: |
+          cargo install mdbook --version "^0.4"
+
+      - name: Build documentation
+        run: |
+          if [ -f "scripts/build-docs.sh" ]; then
+            ./scripts/build-docs.sh
+          else
+            mdbook build
+          fi
+
+      - name: Upload built documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-documentation
+          path: book/
+
+  api-signature-check:
+    name: "🔧 API Signature Validation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate API documentation
+        run: |
+          cargo doc --workspace --all-features --no-deps --document-private-items
+
+      - name: Check for breaking changes
+        run: |
+          echo "🔍 Checking for potential API breaking changes..."
+          
+          # This is a placeholder for more sophisticated API compatibility checking
+          # You could integrate tools like:
+          # - cargo-semver-checks
+          # - rust-semverver
+          # - custom API diff tools
+          
+          echo "✅ API signature check placeholder completed"
+          
+          # Example of what this could check:
+          # - Public function signature changes
+          # - Struct field additions/removals  
+          # - Enum variant changes
+          # - Module visibility changes
+
+      - name: Validate public API matches documentation
+        run: |
+          echo "📋 Validating public API matches documentation examples..."
+          
+          # Check that public functions mentioned in docs actually exist
+          PUBLIC_FUNCTIONS=$(grep -r "pub fn" --include="*.rs" src/ | wc -l)
+          echo "Found $PUBLIC_FUNCTIONS public functions"
+          
+          # Check for undocumented public APIs
+          UNDOCUMENTED=$(cargo doc --workspace 2>&1 | grep -c "warning: missing documentation" || true)
+          echo "Found $UNDOCUMENTED undocumented items"
+          
+          if [ "$UNDOCUMENTED" -gt 10 ]; then
+            echo "⚠️ High number of undocumented public APIs: $UNDOCUMENTED"
+            echo "Consider adding documentation for public APIs"
+          fi
+
+  integration-test-validation:
+    name: "🧪 Integration Test Validation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+
+      - name: Run documentation example tests
+        run: |
+          echo "🧪 Running documentation example tests..."
+          
+          if [ -f "tests/documentation_examples.rs" ]; then
+            cargo test documentation_examples --verbose
+          else
+            echo "⚠️ Documentation example tests not found"
+          fi
+          
+          if [ -f "tests/doctest_examples.rs" ]; then
+            cargo test doctest_examples --verbose
+          else
+            echo "⚠️ Doctest example tests not found"  
+          fi
+
+      - name: Validate examples against live API (OAuth + Policy)
+        run: |
+          echo "🚀 Testing examples against live API..."
+          
+          # Start the MVP OAuth service in background for testing
+          cargo build --release -p mvp-oauth-service
+          ./target/release/mvp-oauth &
+          SERVER_PID=$!
+          
+          # Wait for server to start
+          sleep 3
+          
+          # Test health endpoint
+          if curl -f http://localhost:3000/health >/dev/null 2>&1; then
+            echo "✅ Health endpoint responding"
+          else
+            echo "❌ Health endpoint not responding"
+          fi
+          
+          # Test OAuth token endpoint with example from docs
+          if curl -f -X POST http://localhost:3000/oauth/token \
+               -H "Content-Type: application/json" \
+               -d '{"grant_type":"client_credentials","client_id":"mvp-client","client_secret":"mvp-secret"}' \
+               >/dev/null 2>&1; then
+            echo "✅ OAuth token endpoint working with documented examples"
+          else
+            echo "❌ OAuth token endpoint failed with documented examples"
+          fi
+
+          # Start the Policy service in background for testing
+          echo "🚀 Testing policy-service endpoints..."
+          cargo build --release -p policy-service
+          PORT=8081 ./target/release/policy-service &
+          POLICY_PID=$!
+          sleep 2
+
+          # Test policy health endpoint
+          if curl -f http://localhost:8081/health >/dev/null 2>&1; then
+            echo "✅ policy-service health endpoint responding"
+          else
+            echo "❌ policy-service health endpoint not responding"
+          fi
+
+          # Smoke test authorize endpoint with default MVP policies/entities
+          curl -f -X POST http://localhost:8081/v1/authorize \
+               -H "Content-Type: application/json" \
+               -d '{
+                     "request_id":"ci-smoke-1",
+                     "principal":{"type":"User","id":"mvp-user"},
+                     "action":"read",
+                     "resource":{"type":"Resource","id":"mvp-resource"},
+                     "context":{}
+                   }' >/dev/null 2>&1 && echo "✅ policy-service authorize smoke passed" || echo "❌ policy-service authorize smoke failed"
+          
+          # Clean up
+          kill $SERVER_PID || true
+          kill $POLICY_PID || true
+
+  report-generation:
+    name: "📊 Generate Validation Report"
+    runs-on: ubuntu-latest
+    needs: [api-consistency, documentation-compilation, api-signature-check, integration-test-validation]
+    if: always()
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+
+      - name: Generate comprehensive report
+        run: |
+          echo "📊 Generating comprehensive API validation report..."
+          
+          cat > validation-summary.md << 'EOF'
+          # API Validation Summary
+          
+          Generated on: $(date)
+          
+          ## Validation Results
+          
+          - **API Consistency**: ${{ needs.api-consistency.result }}
+          - **Documentation Build**: ${{ needs.documentation-compilation.result }}  
+          - **API Signatures**: ${{ needs.api-signature-check.result }}
+          - **Integration Tests**: ${{ needs.integration-test-validation.result }}
+          
+          ## Recommendations
+          
+          Based on the validation results:
+          
+          1. Keep documentation examples in sync with API changes
+          2. Run validation checks before major releases
+          3. Consider API versioning for breaking changes
+          4. Maintain comprehensive test coverage for examples
+          
+          ## Next Steps
+          
+          - Review any failed validation checks
+          - Update documentation for API changes
+          - Add missing test coverage for new APIs
+          EOF
+
+      - name: Upload final report
+        uses: actions/upload-artifact@v3
+        with:
+          name: validation-summary
+          path: validation-summary.md

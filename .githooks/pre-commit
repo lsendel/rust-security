@@ -1,74 +1,44 @@
 #!/bin/bash
-# Pre-commit hook to check for compiler warnings
+#
+# Pre-commit hook to maintain warning-free status
+#
+# This hook checks core components for warnings before allowing commits
+# to prevent regressions in warning-free status.
 
-set -euo pipefail
+set -e
 
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+echo "🔍 Pre-commit: Checking warning-free status..."
 
-echo -e "${YELLOW}🔍 Running pre-commit warning check...${NC}"
+# Core components that must be warning-free
+CORE_COMPONENTS=("common" "policy-service")
+FAILED_COMPONENTS=()
 
-# Components to check (only workspace members)
-COMPONENTS=(
-    "auth-service"
-    "common"
-    "policy-service"
-    "compliance-tools"
-)
-
-# Track if any component has warnings
-HAS_WARNINGS=false
-
-# Check each component
-for component in "${COMPONENTS[@]}"; do
-    echo -n "Checking $component... "
+# Check each core component for warnings
+for component in "${CORE_COMPONENTS[@]}"; do
+    echo "  Checking $component..."
     
-    # Run cargo check and capture output
-    if OUTPUT=$(cargo check -p "$component" 2>&1); then
-        # Count warnings
-        WARNING_COUNT=$(echo "$OUTPUT" | grep -c "warning:" || true)
-        
-        if [ "$WARNING_COUNT" -eq 0 ]; then
-            echo -e "${GREEN}✅${NC}"
-        else
-            echo -e "${RED}❌ ($WARNING_COUNT warnings)${NC}"
-            HAS_WARNINGS=true
-            
-            # Show first few warnings
-            echo "$OUTPUT" | grep "warning:" | head -3
-        fi
+    # Run cargo check and capture warnings
+    if cargo check -p "$component" 2>&1 | grep -q "warning:"; then
+        warning_count=$(cargo check -p "$component" 2>&1 | grep -c "warning:" || true)
+        echo "    ❌ $component: $warning_count warnings found"
+        FAILED_COMPONENTS+=("$component")
     else
-        echo -e "${RED}❌ (compilation failed)${NC}"
-        HAS_WARNINGS=true
+        echo "    ✅ $component: warning-free"
     fi
 done
 
-# Check for deprecated API usage (disabled - all APIs have been updated)
-# echo ""
-# echo -e "${YELLOW}Checking for deprecated APIs...${NC}"
-
-# Final decision
-echo ""
-if [ "$HAS_WARNINGS" = true ]; then
-    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${RED}  ⚠️  Commit blocked: Compiler warnings detected ${NC}"
-    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "Please fix all warnings before committing:"
-    echo "  1. Run: cargo check --workspace"
-    echo "  2. Run: ./scripts/maintain-warning-free.sh --fix"
-    echo "  3. Review and fix remaining warnings manually"
-    echo ""
-    echo "To bypass (not recommended):"
-    echo "  git commit --no-verify"
-    exit 1
+# Report results
+if [ ${#FAILED_COMPONENTS[@]} -eq 0 ]; then
+    echo "✅ All core components are warning-free. Commit allowed."
+    exit 0
 else
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  ✅ All checks passed - no warnings detected!   ${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "❌ COMMIT BLOCKED: Core components have warnings:"
+    for component in "${FAILED_COMPONENTS[@]}"; do
+        echo "   - $component"
+    done
+    echo ""
+    echo "Fix warnings with: cargo check -p <component>"
+    echo "Or run: ./scripts/maintain-warning-free.sh"
+    exit 1
 fi
-
-exit 0

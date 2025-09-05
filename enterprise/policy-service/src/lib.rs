@@ -18,41 +18,41 @@
 )]
 
 //! # MVP Policy Service
-//! 
+//!
 //! A lightweight, security-focused policy validation service designed for MVP deployment.
-//! 
+//!
 //! ## Features
-//! 
+//!
 //! - Enhanced security validation with threat detection
 //! - Cedar Policy Language support for authorization decisions
 //! - Comprehensive input sanitization and validation
 //! - Structured security logging and monitoring
 //! - MVP-focused architecture with essential features only
-//! 
+//!
 //! ## Security Features
-//! 
-//! - DoS protection (payload size, depth, complexity limits)
+//!
+//! - `DoS` protection (payload size, depth, complexity limits)
 //! - Injection attack prevention (SQL, XSS, script injection detection)
 //! - Control character filtering and input sanitization
 //! - Security context tracking with threat level classification
 //! - Client IP and User-Agent validation and logging
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! ```rust,no_run
 //! use policy_service::{load_policies_and_entities, app};
-//! 
+//!
 //! let app_state = load_policies_and_entities().expect("Failed to load policies");
 //! let router = app(app_state);
 //! ```
 
 // Module declarations - MVP essential modules only
+pub mod documentation;
 pub mod errors;
 pub mod handlers;
 pub mod models;
 pub mod utils;
 pub mod validation;
-pub mod documentation;
 
 // Optional metrics module based on features
 #[cfg(feature = "prometheus-backend")]
@@ -61,10 +61,10 @@ mod metrics;
 mod metrics_prom_client;
 
 // Re-export public API
+pub use documentation::ApiDoc;
 pub use handlers::{authorize, get_metrics, health_check};
 pub use models::{AppState, AuthorizeRequest, AuthorizeResponse, PolicyConflict};
 pub use utils::{extract_action_type, extract_client_id_from_context, extract_entity_type};
-pub use documentation::ApiDoc;
 
 /// Load policies and entities for MVP deployment
 ///
@@ -96,10 +96,9 @@ pub use documentation::ApiDoc;
 pub fn load_policies_and_entities() -> Result<std::sync::Arc<AppState>, errors::AppError> {
     // For MVP, use simple default policies if files don't exist
     let policies_path = concat!(env!("CARGO_MANIFEST_DIR"), "/policies.cedar");
-    let policies_str = std::fs::read_to_string(policies_path)
-        .unwrap_or_else(|_| {
-            // Default MVP policy - allow authenticated users basic access
-            r#"
+    let policies_str = std::fs::read_to_string(policies_path).unwrap_or_else(|_| {
+        // Default MVP policy - allow authenticated users basic access
+        r"
             permit(
                 principal,
                 action,
@@ -108,9 +107,10 @@ pub fn load_policies_and_entities() -> Result<std::sync::Arc<AppState>, errors::
                 principal has authenticated && 
                 principal.authenticated == true
             };
-            "#.to_string()
-        });
-    
+            "
+        .to_string()
+    });
+
     let policies = policies_str
         .parse::<cedar_policy::PolicySet>()
         .map_err(|e| {
@@ -120,10 +120,9 @@ pub fn load_policies_and_entities() -> Result<std::sync::Arc<AppState>, errors::
         })?;
 
     let entities_path = concat!(env!("CARGO_MANIFEST_DIR"), "/entities.json");
-    let entities_str = std::fs::read_to_string(entities_path)
-        .unwrap_or_else(|_| {
-            // Default MVP entities
-            r#"[
+    let entities_str = std::fs::read_to_string(entities_path).unwrap_or_else(|_| {
+        // Default MVP entities
+        r#"[
                 {
                     "uid": {"type": "User", "id": "mvp-user"},
                     "attrs": {"authenticated": true, "role": "user"},
@@ -139,9 +138,10 @@ pub fn load_policies_and_entities() -> Result<std::sync::Arc<AppState>, errors::
                     "attrs": {"public": true},
                     "parents": []
                 }
-            ]"#.to_string()
-        });
-    
+            ]"#
+        .to_string()
+    });
+
     let entities = cedar_policy::Entities::from_json_str(&entities_str, None).map_err(|e| {
         errors::AppError::Policy(Box::new(errors::PolicyError::ValidationFailed {
             reason: format!("Failed to parse entities: {e}"),
@@ -188,24 +188,56 @@ pub fn app(state: std::sync::Arc<AppState>) -> axum::Router {
         trace::TraceLayer,
     };
 
-    // Simple CORS configuration for MVP
+    // Secure CORS configuration: deny by default; allow only configured origins
     let cors = match std::env::var("ALLOWED_ORIGINS") {
         Ok(origins) if !origins.trim().is_empty() => {
             let mut layer = CorsLayer::new();
             for o in origins.split(',') {
-                if let Ok(origin) = o.trim().parse::<axum::http::HeaderValue>() {
+                let o = o.trim();
+                if o == "*" {
+                    tracing::warn!("Wildcard CORS origin (*) is not allowed; ignoring entry");
+                    continue;
+                }
+                if let Ok(origin) = o.parse::<axum::http::HeaderValue>() {
                     layer = layer.allow_origin(origin);
                 }
             }
             layer
         }
-        _ => CorsLayer::permissive(), // More permissive for MVP development
+        _ => {
+            // Deny all cross-origin requests by default; methods/headers allowed only for same-origin
+            CorsLayer::new()
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::CONTENT_TYPE,
+                ])
+        }
     };
 
     let mut router = Router::new()
         .route("/health", get(handlers::health_check))
         .route("/v1/authorize", post(handlers::authorize))
-        .route("/metrics", get(handlers::get_metrics))
+        // Expose metrics only when explicitly allowed
+        .route(
+            "/metrics",
+            get(|| async move {
+                use axum::response::IntoResponse as _;
+                if std::env::var("METRICS_PUBLIC").unwrap_or_else(|_| "false".to_string()) == "true"
+                {
+                    handlers::get_metrics().await.into_response()
+                } else {
+                    axum::response::Response::builder()
+                        .status(403)
+                        .body(axum::body::Body::from("metrics disabled"))
+                        .unwrap()
+                }
+            }),
+        )
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(cors)

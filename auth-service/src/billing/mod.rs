@@ -6,11 +6,11 @@
 //! - Invoice generation and payment processing
 //! - Integration with external billing services
 
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, NaiveDate, Datelike};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Pricing plans for the MVP Auth Service
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,65 +44,77 @@ impl PricingPlan {
     // Pricing constants for the free tier overage
     const FREE_TIER_UPGRADE_BASE_FEE: f64 = 29.0;
     const FREE_TIER_UPGRADE_PRICE_PER_1000: f64 = 0.012;
-    
+
     /// Get standard pricing plans
     pub fn get_standard_plans() -> HashMap<String, PricingPlan> {
         let mut plans = HashMap::new();
 
-        plans.insert("free".to_string(), PricingPlan::Free {
-            monthly_token_limit: 10_000,
-            features: vec![
-                "OAuth 2.0 Authentication".to_string(),
-                "JWT Token Management".to_string(),
-                "Basic Rate Limiting".to_string(),
-                "Community Support".to_string(),
-            ],
-        });
+        plans.insert(
+            "free".to_string(),
+            PricingPlan::Free {
+                monthly_token_limit: 10_000,
+                features: vec![
+                    "OAuth 2.0 Authentication".to_string(),
+                    "JWT Token Management".to_string(),
+                    "Basic Rate Limiting".to_string(),
+                    "Community Support".to_string(),
+                ],
+            },
+        );
 
-        plans.insert("starter".to_string(), PricingPlan::Starter {
-            monthly_base_fee: 29.0,
-            token_price_per_1000: 0.012, // $0.012 per 1000 tokens (vs Auth0's $0.023)
-            included_tokens: 100_000,
-            features: vec![
-                "OAuth 2.0 Authentication".to_string(),
-                "JWT Token Management".to_string(),
-                "Advanced Rate Limiting".to_string(),
-                "Threat Detection".to_string(),
-                "Email Support".to_string(),
-                "99.9% SLA".to_string(),
-            ],
-        });
+        plans.insert(
+            "starter".to_string(),
+            PricingPlan::Starter {
+                monthly_base_fee: 29.0,
+                token_price_per_1000: 0.012, // $0.012 per 1000 tokens (vs Auth0's $0.023)
+                included_tokens: 100_000,
+                features: vec![
+                    "OAuth 2.0 Authentication".to_string(),
+                    "JWT Token Management".to_string(),
+                    "Advanced Rate Limiting".to_string(),
+                    "Threat Detection".to_string(),
+                    "Email Support".to_string(),
+                    "99.9% SLA".to_string(),
+                ],
+            },
+        );
 
-        plans.insert("professional".to_string(), PricingPlan::Professional {
-            monthly_base_fee: 99.0,
-            token_price_per_1000: 0.010, // $0.010 per 1000 tokens
-            included_tokens: 500_000,
-            features: vec![
-                "All Starter Features".to_string(),
-                "Advanced Security Headers".to_string(),
-                "Memory Optimization".to_string(),
-                "Performance Monitoring".to_string(),
-                "Priority Support".to_string(),
-                "99.95% SLA".to_string(),
-                "Custom Rate Limits".to_string(),
-            ],
-        });
+        plans.insert(
+            "professional".to_string(),
+            PricingPlan::Professional {
+                monthly_base_fee: 99.0,
+                token_price_per_1000: 0.010, // $0.010 per 1000 tokens
+                included_tokens: 500_000,
+                features: vec![
+                    "All Starter Features".to_string(),
+                    "Advanced Security Headers".to_string(),
+                    "Memory Optimization".to_string(),
+                    "Performance Monitoring".to_string(),
+                    "Priority Support".to_string(),
+                    "99.95% SLA".to_string(),
+                    "Custom Rate Limits".to_string(),
+                ],
+            },
+        );
 
-        plans.insert("enterprise".to_string(), PricingPlan::Enterprise {
-            monthly_base_fee: 299.0,
-            token_price_per_1000: 0.008, // $0.008 per 1000 tokens
-            included_tokens: 2_000_000,
-            custom_sla: true,
-            features: vec![
-                "All Professional Features".to_string(),
-                "Custom SLA (99.99% available)".to_string(),
-                "Dedicated Support Engineer".to_string(),
-                "Custom Integration".to_string(),
-                "On-premise Deployment".to_string(),
-                "Advanced Analytics".to_string(),
-                "SOC 2 Compliance".to_string(),
-            ],
-        });
+        plans.insert(
+            "enterprise".to_string(),
+            PricingPlan::Enterprise {
+                monthly_base_fee: 299.0,
+                token_price_per_1000: 0.008, // $0.008 per 1000 tokens
+                included_tokens: 2_000_000,
+                custom_sla: true,
+                features: vec![
+                    "All Professional Features".to_string(),
+                    "Custom SLA (99.99% available)".to_string(),
+                    "Dedicated Support Engineer".to_string(),
+                    "Custom Integration".to_string(),
+                    "On-premise Deployment".to_string(),
+                    "Advanced Analytics".to_string(),
+                    "SOC 2 Compliance".to_string(),
+                ],
+            },
+        );
 
         plans
     }
@@ -110,28 +122,56 @@ impl PricingPlan {
     /// Calculate monthly cost for given usage
     pub fn calculate_monthly_cost(&self, tokens_used: u64) -> f64 {
         const TOKENS_PER_THOUSAND: f64 = 1000.0;
-        
+
         match self {
-            PricingPlan::Free { monthly_token_limit, .. } => {
+            PricingPlan::Free {
+                monthly_token_limit,
+                ..
+            } => {
                 if tokens_used <= *monthly_token_limit {
                     0.0
                 } else {
                     // Automatically upgrade to starter pricing for overage
                     let overage = tokens_used - monthly_token_limit;
-                    Self::FREE_TIER_UPGRADE_BASE_FEE + ((overage as f64 / TOKENS_PER_THOUSAND) * Self::FREE_TIER_UPGRADE_PRICE_PER_1000)
+                    Self::FREE_TIER_UPGRADE_BASE_FEE
+                        + ((overage as f64 / TOKENS_PER_THOUSAND)
+                            * Self::FREE_TIER_UPGRADE_PRICE_PER_1000)
                 }
             }
-            PricingPlan::Starter { monthly_base_fee, token_price_per_1000, included_tokens, .. } 
-            | PricingPlan::Professional { monthly_base_fee, token_price_per_1000, included_tokens, .. } 
-            | PricingPlan::Enterprise { monthly_base_fee, token_price_per_1000, included_tokens, .. } => {
-                Self::calculate_tiered_cost(tokens_used, *included_tokens, *monthly_base_fee, *token_price_per_1000)
+            PricingPlan::Starter {
+                monthly_base_fee,
+                token_price_per_1000,
+                included_tokens,
+                ..
             }
+            | PricingPlan::Professional {
+                monthly_base_fee,
+                token_price_per_1000,
+                included_tokens,
+                ..
+            }
+            | PricingPlan::Enterprise {
+                monthly_base_fee,
+                token_price_per_1000,
+                included_tokens,
+                ..
+            } => Self::calculate_tiered_cost(
+                tokens_used,
+                *included_tokens,
+                *monthly_base_fee,
+                *token_price_per_1000,
+            ),
         }
     }
-    
-    fn calculate_tiered_cost(tokens_used: u64, included_tokens: u64, base_fee: f64, price_per_1000: f64) -> f64 {
+
+    fn calculate_tiered_cost(
+        tokens_used: u64,
+        included_tokens: u64,
+        base_fee: f64,
+        price_per_1000: f64,
+    ) -> f64 {
         const TOKENS_PER_THOUSAND: f64 = 1000.0;
-        
+
         if tokens_used <= included_tokens {
             base_fee
         } else {
@@ -139,24 +179,42 @@ impl PricingPlan {
             base_fee + ((overage as f64 / TOKENS_PER_THOUSAND) * price_per_1000)
         }
     }
-    
+
     /// Get the number of tokens included in the plan
     pub fn get_included_tokens(&self) -> u64 {
         match self {
-            PricingPlan::Free { monthly_token_limit, .. } => *monthly_token_limit,
-            PricingPlan::Starter { included_tokens, .. } 
-            | PricingPlan::Professional { included_tokens, .. } 
-            | PricingPlan::Enterprise { included_tokens, .. } => *included_tokens,
+            PricingPlan::Free {
+                monthly_token_limit,
+                ..
+            } => *monthly_token_limit,
+            PricingPlan::Starter {
+                included_tokens, ..
+            }
+            | PricingPlan::Professional {
+                included_tokens, ..
+            }
+            | PricingPlan::Enterprise {
+                included_tokens, ..
+            } => *included_tokens,
         }
     }
-    
+
     /// Get the token price per 1000 tokens for overage charges
     pub fn get_token_price_per_1000(&self) -> f64 {
         match self {
             PricingPlan::Free { .. } => Self::FREE_TIER_UPGRADE_PRICE_PER_1000,
-            PricingPlan::Starter { token_price_per_1000, .. } 
-            | PricingPlan::Professional { token_price_per_1000, .. } 
-            | PricingPlan::Enterprise { token_price_per_1000, .. } => *token_price_per_1000,
+            PricingPlan::Starter {
+                token_price_per_1000,
+                ..
+            }
+            | PricingPlan::Professional {
+                token_price_per_1000,
+                ..
+            }
+            | PricingPlan::Enterprise {
+                token_price_per_1000,
+                ..
+            } => *token_price_per_1000,
         }
     }
 }
@@ -270,7 +328,9 @@ impl BillingSystem {
         plan_id: String,
         trial_days: Option<u32>,
     ) -> Result<CustomerSubscription, BillingError> {
-        let plan = self.pricing_plans.get(&plan_id)
+        let plan = self
+            .pricing_plans
+            .get(&plan_id)
             .ok_or_else(|| BillingError::InvalidPlan(plan_id.clone()))?
             .clone();
 
@@ -294,10 +354,16 @@ impl BillingSystem {
             metadata: HashMap::new(),
         };
 
-        self.subscriptions.lock().unwrap()
+        self.subscriptions
+            .lock()
+            .unwrap()
             .insert(customer_id.clone(), subscription.clone());
 
-        log::info!("Created subscription for customer {}: {}", customer_id, plan_id);
+        log::info!(
+            "Created subscription for customer {}: {}",
+            customer_id,
+            plan_id
+        );
         Ok(subscription)
     }
 
@@ -309,12 +375,18 @@ impl BillingSystem {
         quantity: u64,
     ) -> Result<(), BillingError> {
         // Verify customer has active subscription
-        let subscription = self.subscriptions.lock().unwrap()
+        let subscription = self
+            .subscriptions
+            .lock()
+            .unwrap()
             .get(&customer_id)
             .ok_or_else(|| BillingError::CustomerNotFound(customer_id.clone()))?
             .clone();
 
-        if !matches!(subscription.status, SubscriptionStatus::Active | SubscriptionStatus::Trialing) {
+        if !matches!(
+            subscription.status,
+            SubscriptionStatus::Active | SubscriptionStatus::Trialing
+        ) {
             return Err(BillingError::InactiveSubscription(customer_id));
         }
 
@@ -336,18 +408,23 @@ impl BillingSystem {
         customer_id: &str,
         month: NaiveDate,
     ) -> Result<MonthlyUsage, BillingError> {
-        let subscription = self.subscriptions.lock().unwrap()
+        let subscription = self
+            .subscriptions
+            .lock()
+            .unwrap()
             .get(customer_id)
             .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?
             .clone();
 
         let usage_records = self.usage_records.lock().unwrap();
-        
+
         // Filter records for this customer and month
-        let month_records: Vec<_> = usage_records.iter()
+        let month_records: Vec<_> = usage_records
+            .iter()
             .filter(|record| {
-                record.customer_id == customer_id &&
-                record.timestamp.date_naive().format("%Y-%m").to_string() == month.format("%Y-%m").to_string()
+                record.customer_id == customer_id
+                    && record.timestamp.date_naive().format("%Y-%m").to_string()
+                        == month.format("%Y-%m").to_string()
             })
             .collect();
 
@@ -386,7 +463,10 @@ impl BillingSystem {
         period_start: DateTime<Utc>,
         period_end: DateTime<Utc>,
     ) -> Result<Invoice, BillingError> {
-        let subscription = self.subscriptions.lock().unwrap()
+        let subscription = self
+            .subscriptions
+            .lock()
+            .unwrap()
             .get(customer_id)
             .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?
             .clone();
@@ -400,9 +480,15 @@ impl BillingSystem {
         // Base subscription fee
         let base_fee = match &subscription.plan {
             PricingPlan::Free { .. } => 0.0,
-            PricingPlan::Starter { monthly_base_fee, .. } => *monthly_base_fee,
-            PricingPlan::Professional { monthly_base_fee, .. } => *monthly_base_fee,
-            PricingPlan::Enterprise { monthly_base_fee, .. } => *monthly_base_fee,
+            PricingPlan::Starter {
+                monthly_base_fee, ..
+            } => *monthly_base_fee,
+            PricingPlan::Professional {
+                monthly_base_fee, ..
+            } => *monthly_base_fee,
+            PricingPlan::Enterprise {
+                monthly_base_fee, ..
+            } => *monthly_base_fee,
         };
 
         if base_fee > 0.0 {
@@ -452,11 +538,17 @@ impl BillingSystem {
             paid_at: None,
         };
 
-        self.invoices.lock().unwrap()
+        self.invoices
+            .lock()
+            .unwrap()
             .insert(invoice.id.clone(), invoice.clone());
 
-        log::info!("Generated invoice {} for customer {} - Amount: ${:.2}", 
-            invoice.id, customer_id, total_amount);
+        log::info!(
+            "Generated invoice {} for customer {} - Amount: ${:.2}",
+            invoice.id,
+            customer_id,
+            total_amount
+        );
 
         Ok(invoice)
     }
@@ -468,17 +560,22 @@ impl BillingSystem {
 
     /// Check if customer has active subscription
     pub fn is_customer_active(&self, customer_id: &str) -> bool {
-        self.subscriptions.lock().unwrap()
+        self.subscriptions
+            .lock()
+            .unwrap()
             .get(customer_id)
-            .map(|sub| matches!(sub.status, SubscriptionStatus::Active | SubscriptionStatus::Trialing))
+            .map(|sub| {
+                matches!(
+                    sub.status,
+                    SubscriptionStatus::Active | SubscriptionStatus::Trialing
+                )
+            })
             .unwrap_or(false)
     }
 
     /// Get customer subscription
     pub fn get_customer_subscription(&self, customer_id: &str) -> Option<CustomerSubscription> {
-        self.subscriptions.lock().unwrap()
-            .get(customer_id)
-            .cloned()
+        self.subscriptions.lock().unwrap().get(customer_id).cloned()
     }
 
     /// Update subscription status
@@ -488,7 +585,8 @@ impl BillingSystem {
         status: SubscriptionStatus,
     ) -> Result<(), BillingError> {
         let mut subscriptions = self.subscriptions.lock().unwrap();
-        let subscription = subscriptions.get_mut(customer_id)
+        let subscription = subscriptions
+            .get_mut(customer_id)
             .ok_or_else(|| BillingError::CustomerNotFound(customer_id.to_string()))?;
 
         subscription.status = status;

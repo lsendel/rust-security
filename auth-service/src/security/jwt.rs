@@ -778,7 +778,10 @@ mod tests {
     #[tokio::test]
     async fn test_jwt_creation_and_validation() {
         let config = JwtConfig::default();
+        #[cfg(feature = "redis-sessions")]
         let manager = UnifiedJwtManager::new(config, None).await.unwrap();
+        #[cfg(not(feature = "redis-sessions"))]
+        let manager = UnifiedJwtManager::new(config).await.unwrap();
 
         let claims = manager.create_standard_claims(
             "user123",
@@ -799,7 +802,10 @@ mod tests {
     #[tokio::test]
     async fn test_key_rotation() {
         let config = JwtConfig::default();
+        #[cfg(feature = "redis-sessions")]
         let manager = UnifiedJwtManager::new(config, None).await.unwrap();
+        #[cfg(not(feature = "redis-sessions"))]
+        let manager = UnifiedJwtManager::new(config).await.unwrap();
 
         let initial_jwks = manager.get_jwks().await.unwrap();
         let initial_key_count = initial_jwks.keys.len();
@@ -813,7 +819,10 @@ mod tests {
     #[tokio::test]
     async fn test_custom_claims() {
         let config = JwtConfig::default();
+        #[cfg(feature = "redis-sessions")]
         let manager = UnifiedJwtManager::new(config, None).await.unwrap();
+        #[cfg(not(feature = "redis-sessions"))]
+        let manager = UnifiedJwtManager::new(config).await.unwrap();
 
         let mut custom_claims = HashMap::new();
         custom_claims.insert("department".to_string(), json!("engineering"));
@@ -835,7 +844,10 @@ mod tests {
     #[tokio::test]
     async fn test_global_jwt_manager() {
         let config = JwtConfig::default();
+        #[cfg(feature = "redis-sessions")]
         initialize_global_jwt_manager(config, None).await.unwrap();
+        #[cfg(not(feature = "redis-sessions"))]
+        initialize_global_jwt_manager(config).await.unwrap();
 
         let manager = get_global_jwt_manager().unwrap();
         let claims = manager.create_standard_claims("test_user", None, None, None, None);

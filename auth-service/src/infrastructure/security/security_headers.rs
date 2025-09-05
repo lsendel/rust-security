@@ -80,8 +80,8 @@ impl SecurityHeadersConfig {
     pub fn development() -> Self {
         Self {
             csp: "default-src 'self'; \
-                  script-src 'self' 'unsafe-inline' 'unsafe-eval'; \
-                  style-src 'self' 'unsafe-inline'; \
+                  script-src 'self'; \
+                  style-src 'self'; \
                   connect-src 'self' ws: wss:; \
                   img-src 'self' data: blob:; \
                   font-src 'self'; \
@@ -118,7 +118,7 @@ impl SecurityHeadersConfig {
         Self {
             csp: "default-src 'none'; \
                   script-src 'self' 'strict-dynamic'; \
-                  style-src 'self' 'unsafe-inline'; \
+                  style-src 'self'; \
                   img-src 'self' data:; \
                   connect-src 'self'; \
                   font-src 'self'; \

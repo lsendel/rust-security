@@ -191,31 +191,48 @@ impl AuthServiceClient {
         let _permit = self.semaphore.acquire().await.map_err(|_| ClientError::RateLimited)?;
 
         // Execute through circuit breaker
-        self.circuit_breaker.call(async {
-            let batch_request = BatchPolicyRequest { requests };
-            
-            let response = self.policy_client
-                .post(&format!("{}/evaluate/batch", self.policy_base_url))
-                .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .header("User-Agent", "rust-security-auth/2.0")
-                .header("X-Batch-Size", batch_request.requests.len().to_string())
-                .json(&batch_request)
-                .send()
-                .await
-                .map_err(ClientError::RequestError)?;
+        // No batch endpoint on policy-service; fan-out individual authorize calls
+        self.circuit_breaker
+            .call(async {
+                let mut results = Vec::with_capacity(requests.len());
+                for req in requests {
+                    let body = serde_json::json!({
+                        "request_id": Uuid::new_v4().to_string(),
+                        "principal": {"type": "User", "id": req.principal},
+                        "action": req.action,
+                        "resource": {"type": "Resource", "id": req.resource},
+                        "context": req.context,
+                    });
 
-            if !response.status().is_success() {
-                return Err(ClientError::HttpError(response.status().as_u16()));
-            }
+                    let resp = self
+                        .policy_client
+                        .post(&format!("{}/v1/authorize", self.policy_base_url))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "rust-security-auth/2.0")
+                        .json(&body)
+                        .send()
+                        .await
+                        .map_err(ClientError::RequestError)?;
 
-            let batch_response: BatchPolicyResponse = response
-                .json()
-                .await
-                .map_err(ClientError::DeserializationError)?;
+                    if !resp.status().is_success() {
+                        return Err(ClientError::HttpError(resp.status().as_u16()));
+                    }
 
-            Ok(batch_response.responses)
-        }).await.map_err(ClientError::CircuitBreakerError)
+                    #[derive(Deserialize)]
+                    struct AuthzResp { decision: String }
+                    let a: AuthzResp = resp
+                        .json()
+                        .await
+                        .map_err(ClientError::DeserializationError)?;
+                    let decision = if a.decision.eq_ignore_ascii_case("allow") { PolicyDecision::Allow } else { PolicyDecision::Deny };
+                    // Provide minimal response mapping
+                    results.push(PolicyResponse { decision, reasons: Vec::new(), obligations: Vec::new(), evaluation_time_ms: 0 });
+                }
+                Ok(results)
+            })
+            .await
+            .map_err(ClientError::CircuitBreakerError)
     }
 
     async fn get_cached_response(&self, key: &str) -> Option<CachedResponse> {

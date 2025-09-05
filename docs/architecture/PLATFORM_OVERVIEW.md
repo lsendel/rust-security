@@ -189,7 +189,7 @@ GET  /admin/status             # Service status
 **Key Endpoints:**
 ```
 # Policy Evaluation
-POST /api/v1/policies/evaluate     # Evaluate authorization request
+POST /v1/authorize                 # Evaluate authorization request
 POST /api/v1/policies/batch        # Batch policy evaluation
 
 # Policy Management

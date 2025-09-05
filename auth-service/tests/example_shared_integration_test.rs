@@ -1,26 +1,27 @@
+#![cfg(feature = "full-integration")]
 //! Example of how to refactor existing integration tests to use shared infrastructure
-//! 
+//!
 //! This file demonstrates the performance improvement by using the shared test server
 //! instead of creating new app instances for each test.
 
 mod shared_test_infrastructure;
 
-use shared_test_infrastructure::{SharedTestServer, SharedTestHelpers};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::json;
+use shared_test_infrastructure::{SharedTestHelpers, SharedTestServer};
 
 // Example 1: Basic test using shared server (no exclusive lock needed)
 #[tokio::test]
 async fn test_health_endpoint_shared() {
     let server = SharedTestServer::instance().await;
-    
+
     let response = server
         .client()
-        .get(&format!("{}/health", server.base_url()))
+        .get(format!("{}/health", server.base_url()))
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 200);
 }
 
@@ -28,10 +29,10 @@ async fn test_health_endpoint_shared() {
 #[tokio::test]
 async fn test_oauth_token_endpoint_shared() {
     let server = SharedTestServer::instance().await;
-    
+
     let response = server
         .client()
-        .post(&format!("{}/oauth/token", server.base_url()))
+        .post(format!("{}/oauth/token", server.base_url()))
         .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
         .header(
             AUTHORIZATION,
@@ -41,9 +42,9 @@ async fn test_oauth_token_endpoint_shared() {
         .send()
         .await
         .unwrap();
-    
+
     assert_eq!(response.status(), 200);
-    
+
     let token_response: serde_json::Value = response.json().await.unwrap();
     assert!(token_response["access_token"].as_str().is_some());
     assert!(token_response["token_type"].as_str().is_some());
@@ -55,15 +56,15 @@ async fn test_oauth_token_endpoint_shared() {
 async fn test_protected_endpoint_shared() {
     let server = SharedTestServer::instance().await;
     let token = SharedTestHelpers::get_access_token().await;
-    
+
     let response = server
         .client()
-        .get(&format!("{}/oauth/introspect", server.base_url()))
+        .get(format!("{}/oauth/introspect", server.base_url()))
         .header(AUTHORIZATION, format!("Bearer {token}"))
         .send()
         .await
         .unwrap();
-    
+
     // Should work with valid token
     assert!(response.status().is_success() || response.status() == 401); // Depending on endpoint requirements
 }
@@ -74,12 +75,12 @@ async fn test_admin_operation_exclusive() {
     let server = SharedTestServer::instance().await;
     let _lock = server.exclusive_lock().await; // Ensure no other tests run concurrently
     server.reset_test_state().await;
-    
+
     let admin_token = SharedTestHelpers::get_admin_token().await;
-    
+
     let response = server
         .client()
-        .post(&format!("{}/admin/some_operation", server.base_url()))
+        .post(format!("{}/admin/some_operation", server.base_url()))
         .header(AUTHORIZATION, format!("Bearer {admin_token}"))
         .header(CONTENT_TYPE, "application/json")
         .json(&json!({
@@ -88,7 +89,7 @@ async fn test_admin_operation_exclusive() {
         .send()
         .await
         .unwrap();
-    
+
     // Test admin operation
     println!("Admin operation response: {}", response.status());
 }
@@ -97,35 +98,35 @@ async fn test_admin_operation_exclusive() {
 #[tokio::test]
 async fn test_concurrent_requests() {
     let server = SharedTestServer::instance().await;
-    
+
     // Spawn multiple concurrent requests
     let mut handles = Vec::new();
-    
+
     for i in 0..10 {
         let server = server.clone();
         let handle = tokio::spawn(async move {
             let token = SharedTestHelpers::get_access_token().await;
-            
+
             let response = server
                 .client()
-                .get(&format!("{}/health?id={}", server.base_url(), i))
+                .get(format!("{}/health?id={}", server.base_url(), i))
                 .header(AUTHORIZATION, format!("Bearer {token}"))
                 .send()
                 .await
                 .unwrap();
-            
+
             response.status().as_u16()
         });
         handles.push(handle);
     }
-    
+
     // Wait for all requests to complete
     let results: Vec<u16> = futures::future::join_all(handles)
         .await
         .into_iter()
         .map(|r| r.unwrap())
         .collect();
-    
+
     // All requests should succeed (or fail consistently)
     for status in results {
         assert!(status == 200 || status == 404); // Health might return 404, that's ok
@@ -136,25 +137,25 @@ async fn test_concurrent_requests() {
 #[tokio::test]
 async fn test_performance_comparison() {
     use std::time::Instant;
-    
+
     // Test with shared server (should be fast)
     let start = Instant::now();
     let server = SharedTestServer::instance().await;
-    
+
     for _ in 0..5 {
         let response = server
             .client()
-            .get(&format!("{}/health", server.base_url()))
+            .get(format!("{}/health", server.base_url()))
             .send()
             .await
             .unwrap();
         assert!(response.status().is_success() || response.status() == 404);
     }
-    
+
     let shared_duration = start.elapsed();
-    
+
     println!("Shared server 5 requests took: {:?}", shared_duration);
-    
+
     // This should be much faster than creating 5 separate app instances
     assert!(shared_duration.as_millis() < 1000); // Should be under 1 second
 }
@@ -176,30 +177,30 @@ exclusive_integration_test!(test_exclusive_with_macro, {
 #[cfg(test)]
 mod performance_tests {
     use super::*;
-    
+
     /// Benchmark the difference between shared vs individual servers
     /// Note: This is a demonstration - in real tests you'd use criterion for proper benchmarking
     #[tokio::test]
     #[ignore] // Ignore by default since it's a benchmark
     async fn benchmark_shared_vs_individual() {
         use std::time::Instant;
-        
+
         // Test shared server approach
         let start = Instant::now();
         for _ in 0..10 {
             let server = SharedTestServer::instance().await;
             let response = server
                 .client()
-                .get(&format!("{}/health", server.base_url()))
+                .get(format!("{}/health", server.base_url()))
                 .send()
                 .await
                 .unwrap();
             drop(response); // Ensure response is processed
         }
         let shared_time = start.elapsed();
-        
+
         println!("Shared server approach - 10 requests: {:?}", shared_time);
-        
+
         // Note: We can't easily test the "individual server" approach here
         // because it would require refactoring the existing spawn_app() function
         // But the performance difference should be dramatic:

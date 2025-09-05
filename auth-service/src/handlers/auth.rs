@@ -36,8 +36,10 @@
 
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::app::AppContainer;
+use crate::infrastructure::http::policy_client;
 use crate::security_enhancements::sanitization;
 use crate::services::auth_service::LoginRequest;
 use crate::services::user_service::RegisterRequest;
@@ -332,9 +334,45 @@ pub async fn login(
     let sanitized_email = sanitization::sanitize_input(&request.email);
 
     let login_req = LoginRequest {
-        email: sanitized_email,
+        email: sanitized_email.clone(),
         password: request.password, // Don't sanitize passwords
     };
+
+    // Optional remote policy gate with metrics
+    if std::env::var("ENABLE_REMOTE_POLICY")
+        .unwrap_or_else(|_| "0".to_string())
+        .eq("1")
+    {
+        let req_id = Uuid::new_v4().to_string();
+        let policy_base = std::env::var("POLICY_SERVICE_BASE_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+        let payload = policy_client::PolicyAuthorizeRequest {
+            request_id: req_id.clone(),
+            principal: serde_json::json!({"type":"User","id": sanitized_email}),
+            action: "Auth::login".to_string(),
+            resource: serde_json::json!({"type":"Auth","id": "login"}),
+            context: serde_json::json!({}),
+        };
+        match policy_client::authorize(&container, &policy_base, &req_id, &payload).await {
+            Ok(decision) if decision.eq_ignore_ascii_case("allow") => {}
+            Ok(decision) => {
+                return Err(crate::shared::error::AppError::Forbidden {
+                    reason: format!("Policy decision: {}", decision),
+                });
+            }
+            Err(e) => {
+                let fail_open = std::env::var("POLICY_FAIL_OPEN")
+                    .unwrap_or_else(|_| "0".to_string())
+                    .eq("1");
+                if !fail_open {
+                    return Err(crate::shared::error::AppError::ServiceUnavailable {
+                        reason: format!("Policy check failed: {}", e),
+                    });
+                }
+                tracing::warn!(request_id = %req_id, error = %e, "Login policy check failed; proceeding due to POLICY_FAIL_OPEN=1");
+            }
+        }
+    }
 
     let response = container.auth_service.login(login_req).await?;
 

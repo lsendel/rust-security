@@ -1,4 +1,4 @@
-#![cfg(feature = "benchmarks")]
+#![allow(dead_code)]
 #![allow(clippy::multiple_crate_versions)]
 
 use auth_service::infrastructure::crypto::keys;
@@ -98,7 +98,7 @@ fn bench_crypto_operations(c: &mut Criterion) {
 
     group.bench_function("token_binding_generation", |b| {
         b.iter(|| {
-            black_box(generate_token_binding(
+            let _ = black_box(generate_token_binding(
                 "192.168.1.1",
                 "Mozilla/5.0 (compatible; test)",
             ));

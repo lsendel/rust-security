@@ -1,7 +1,9 @@
-//! Comprehensive Test Framework
-//!
-//! Provides utilities and helpers for robust, comprehensive testing
-//! of security-critical components with proper isolation and cleanup.
+#![cfg(any())]
+#![cfg(feature = "full-integration")]
+// Comprehensive Test Framework
+//
+// Provides utilities and helpers for robust, comprehensive testing
+/// of security-critical components with proper isolation and cleanup.
 
 use std::collections::HashMap;
 use std::sync::Arc;

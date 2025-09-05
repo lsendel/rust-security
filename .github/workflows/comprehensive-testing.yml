@@ -90,7 +90,51 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --all-features -- --nocapture
       - name: Run clippy (lint)
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: cargo clippy --workspace -- -D warnings
+
+  policy-service:
+    name: Policy Service (Isolated)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:15-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PORT: 8081
+      ALLOWED_ORIGINS: http://localhost:3000
+      DATABASE_URL: postgres://postgres:test_password@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379
+      RUST_BACKTRACE: 1
+      - name: Build
+        run: cargo build -p policy-service --all-features --locked
+      - name: Test
+        run: cargo test -p policy-service --all-features -- --nocapture
+      - name: Clippy
+        run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -559,4 +603,3 @@ jobs:
             echo "❌ **Failed jobs:** $FAILED_JOBS" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-

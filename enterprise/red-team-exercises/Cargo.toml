@@ -29,52 +29,17 @@ tracing-subscriber = "0.3"
 
 # Security-focused dependencies with workspace versions
 base64 = { version = "1.0" }
-jsonwebtoken = { version = "9.3", optional = true }  # Keep local - uses newer ring for security
-sha2 = "0.10"  # Keep local for crypto consistency
-hmac = "0.12"  # Keep local for crypto consistency
 url = "2.5"  # Keep local version
-redis = "0.27"  # Updated to match workspace security improvements
-prometheus = "0.14"  # Keep local version
-hyper = { version = "1.5", features = ["server", "http1", "http2"] }  # Specific features instead of "full"
 urlencoding = "2.1"  # Keep local version
 async-trait = { version = "1.0" }
 
-# Optional dependencies with security fixes
-# pprof2 = { workspace = true, optional = true }  # Removed due to RUSTSEC-2024-0408 memory safety issue
-criterion = { version = "0.5.1", optional = true }
-
 # Command line and utilities
 clap = "4.0"
-futures = { version = "1.0" }
-pem = "3.0"  # Keep local version
-x509-parser = "0.17.0"  # Keep updated security version
 colored = "2.1.0"  # Keep compatible version
-indicatif = "0.17.8"  # Keep compatible version  
 tabular = "0.2"  # Keep local version
-hex = { version = "1.0" }
 
 # Integration dependencies with security focus
 config = { version = "1.0" }
-toml = "0.8.19"  # Keep for compatibility
-xml-rs = "0.8"  # Keep local version
-# elasticsearch = "8.5"  # Commented out alpha version - use stable if needed
-serde-xml-rs = { version = "0.6.0", optional = true }  # Keep compatible version
-
-# External service integrations (optional for security testing)
-rdkafka = { version = "0.36.2", optional = true }
-aws-sdk-s3 = { version = "1.0", optional = true }
-aws-config = { version = "1.0", optional = true }
-aws-sdk-sqs = { version = "1.0", optional = true }
-slack-morphism = { version = "2.14.0", optional = true }
-# teloxide = "0.12.2"  # Commented due to unmaintained proc-macro-error dependency
-webhook = { version = "2.1", optional = true }
-
-# Cryptography - security-focused selection
-ring = { version = "0.17", optional = true }  # Use stable version for consistency
-# rsa = "0.9.8"  # Removed due to RUSTSEC-2023-0071 - use ring or other alternatives
-
-# DNS resolution - security-focused DNS resolution
-hickory-resolver = { version = "0.24.1", optional = true }  # Replacement for trust-dns-resolver
 
 [features]
 # Default features for basic red team operations
@@ -114,7 +79,6 @@ codegen-units = 1
 
 # Development dependencies
 [dev-dependencies]
-criterion = { version = "1.0" }
 pretty_assertions = "1.4"
 tokio-test = { version = "1.0" }
 tempfile = { version = "1.0" }

@@ -5,11 +5,11 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{Datelike, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use chrono::{Datelike, NaiveDate, Utc};
 
-use crate::billing::{BillingSystem, BillingError, SubscriptionStatus};
+use crate::billing::{BillingError, BillingSystem, SubscriptionStatus};
 use crate::shared::error::AppError;
 
 /// Request to create a new subscription
@@ -125,11 +125,7 @@ pub async fn record_usage(
     Json(request): Json<RecordUsageRequest>,
 ) -> Result<StatusCode, AppError> {
     billing
-        .record_usage(
-            customer_id,
-            request.metric_name,
-            request.quantity,
-        )
+        .record_usage(customer_id, request.metric_name, request.quantity)
         .map_err(|e| AppError::BadRequest(format!("Failed to record usage: {}", e)))?;
 
     Ok(StatusCode::CREATED)
@@ -141,7 +137,8 @@ pub async fn get_usage(
     Path(customer_id): Path<String>,
     Query(query): Query<UsageQuery>,
 ) -> Result<Json<crate::billing::MonthlyUsage>, AppError> {
-    let month_str = query.month
+    let month_str = query
+        .month
         .unwrap_or_else(|| Utc::now().format("%Y-%m").to_string());
 
     let month = NaiveDate::parse_from_str(&format!("{}-01", month_str), "%Y-%m-%d")
@@ -167,7 +164,10 @@ pub async fn generate_invoice(
     } else {
         // Default to current month
         let now = Utc::now();
-        now.with_day(1).unwrap().with_time(chrono::NaiveTime::MIN).unwrap()
+        now.with_day(1)
+            .unwrap()
+            .with_time(chrono::NaiveTime::MIN)
+            .unwrap()
     };
 
     let period_end = if let Some(end_str) = query.period_end {
@@ -177,7 +177,11 @@ pub async fn generate_invoice(
     } else {
         // Default to end of current month
         let next_month = if period_start.month() == 12 {
-            period_start.with_year(period_start.year() + 1).unwrap().with_month(1).unwrap()
+            period_start
+                .with_year(period_start.year() + 1)
+                .unwrap()
+                .with_month(1)
+                .unwrap()
         } else {
             period_start.with_month(period_start.month() + 1).unwrap()
         };

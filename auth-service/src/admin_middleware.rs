@@ -15,6 +15,7 @@ use axum::{
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::OnceCell;
+use crate::infrastructure::http::policy_client;
 
 #[cfg(feature = "rate-limiting")]
 /// Global replay protection instance
@@ -213,6 +214,130 @@ pub async fn admin_auth_middleware(
                 }
             }
 
+            // Optional remote policy gate for admin endpoints
+            if std::env::var("ENABLE_REMOTE_POLICY")
+                .unwrap_or_else(|_| "0".to_string())
+                .eq("1")
+            {
+                let req_id = headers
+                    .get("x-request-id")
+                    .and_then(|h| h.to_str().ok())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                let policy_base = std::env::var("POLICY_SERVICE_BASE_URL")
+                    .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+                // Derive granular admin action from path
+                fn admin_action_for(path: &str, method: &str) -> String {
+                    // Users admin APIs (collection vs. single resource)
+                    if path.starts_with("/admin/users/") {
+                        // likely /admin/users/:id
+                        return match method {
+                            "GET" => "Admin::users_read_one".to_string(),
+                            "PUT" | "PATCH" => "Admin::users_update_one".to_string(),
+                            "DELETE" => "Admin::users_delete_one".to_string(),
+                            _ => format!("Admin::users_manage_one:{}", method),
+                        };
+                    }
+                    if path.starts_with("/admin/users") {
+                        return match method {
+                            "GET" => "Admin::users_read".to_string(),
+                            "POST" => "Admin::users_create".to_string(),
+                            "PUT" | "PATCH" => "Admin::users_update".to_string(),
+                            "DELETE" => "Admin::users_delete".to_string(),
+                            _ => format!("Admin::users_manage:{}", method),
+                        };
+                    }
+                    // Key rotation (non-PQ)
+                    if path.starts_with("/admin/keys/rotate") {
+                        return match method {
+                            "POST" | "PUT" => "Admin::keys_rotate".to_string(),
+                            _ => "Admin::keys_read".to_string(),
+                        };
+                    }
+                    // Metrics/Health
+                    if path.starts_with("/admin/metrics") {
+                        return "Admin::metrics_read".to_string();
+                    }
+                    if path.starts_with("/admin/health") {
+                        return "Admin::health_read".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/keys/rotate") {
+                        return "Admin::pq_keys_rotate".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/keys/stats") {
+                        return "Admin::pq_keys_stats".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/metrics") {
+                        return "Admin::pq_metrics".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/benchmark") {
+                        return "Admin::pq_benchmark".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/config") {
+                        return "Admin::pq_config".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/migration/phase") {
+                        return "Admin::pq_migration_phase".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/migration/timeline") {
+                        return "Admin::pq_migration_timeline".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/compliance/report") {
+                        return "Admin::pq_compliance_report".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/health") {
+                        return "Admin::pq_health".to_string();
+                    }
+                    if path.starts_with("/admin/post-quantum/emergency/rollback") {
+                        return "Admin::pq_emergency_rollback".to_string();
+                    }
+                    if path.starts_with("/admin/billing") {
+                        return match method {
+                            "GET" => "Admin::billing_read".to_string(),
+                            "DELETE" => "Admin::billing_delete".to_string(),
+                            _ => "Admin::billing_update".to_string(),
+                        };
+                    }
+                    // Default generic admin action with method
+                    format!("Admin::access:{}", method)
+                }
+
+                let payload = policy_client::PolicyAuthorizeRequest {
+                    request_id: req_id.clone(),
+                    principal: serde_json::json!({"type":"Admin","id": admin_key}),
+                    action: admin_action_for(path, method),
+                    resource: serde_json::json!({"type":"AdminEndpoint","id": path}),
+                    context: serde_json::json!({"method": method}),
+                };
+                match policy_client::authorize_basic(&policy_base, &req_id, &payload).await {
+                    Ok(decision) if decision.eq_ignore_ascii_case("allow") => {}
+                    Ok(decision) => {
+                        let err = crate::shared::error::AppError::Forbidden {
+                            reason: format!("Policy decision: {}", decision),
+                        };
+                        return handle_auth_failure(err, method, path, client_ip.as_ref(), &headers);
+                    }
+                    Err(e) => {
+                        let fail_open = std::env::var("POLICY_FAIL_OPEN")
+                            .unwrap_or_else(|_| "0".to_string())
+                            .eq("1");
+                        if !fail_open {
+                            let err = crate::shared::error::AppError::ServiceUnavailable {
+                                reason: format!("Policy check failed: {}", e),
+                            };
+                            return handle_auth_failure(
+                                err,
+                                method,
+                                path,
+                                client_ip.as_ref(),
+                                &headers,
+                            );
+                        }
+                        tracing::warn!(request_id = %req_id, error = %e, "Admin policy check failed; proceeding due to POLICY_FAIL_OPEN=1");
+                    }
+                }
+            }
+
             // Proceed with the request
             Ok(next.run(request).await)
         }
@@ -247,43 +372,38 @@ async fn extract_admin_key(
 
     // Validate token and extract record
     #[cfg(feature = "redis-sessions")]
-    let record = state.store.get_token_record(token).await?.ok_or_else(|| {
+    let record = _state.store.get_token_record(token).await?.ok_or_else(|| {
         crate::shared::error::AppError::InvalidToken("Token not found or invalid".to_string())
     })?;
 
     #[cfg(not(feature = "redis-sessions"))]
-    let record = common::TokenRecord {
-        active: true,
-        scope: Some("admin".to_string()),
-        client_id: Some("admin_client".to_string()),
-        exp: Some((SystemTime::now() + std::time::Duration::from_secs(3600))
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        iat: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        sub: Some("admin".to_string()),
-        token_binding: None,
-        mfa_verified: true,
-    };
+    return Err(crate::shared::error::AppError::ConfigurationError(
+        "Admin token validation backend is not configured".to_string(),
+    ));
 
-    // Check if token is active
-    if !record.active {
-        return Err(crate::shared::error::AppError::InvalidToken(
-            "Token is inactive".to_string(),
-        ));
-    }
-
-    // Check for admin scope
-    match record.scope {
-        Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
-            // Return a hash of the token for use as admin key (for privacy)
-            use sha2::{Digest, Sha256};
-            let mut hasher = Sha256::new();
-            hasher.update(token.as_bytes());
-            let result = hasher.finalize();
-            Ok(format!("admin_{}", hex::encode(&result[..8]))) // Use first 8 bytes as key
+    #[cfg(feature = "redis-sessions")]
+    {
+        // Check if token is active
+        if !record.active {
+            return Err(crate::shared::error::AppError::InvalidToken(
+                "Token is inactive".to_string(),
+            ));
         }
-        _ => Err(crate::shared::error::AppError::Forbidden {
-            reason: "Insufficient privileges: admin scope required".to_string(),
-        }),
+
+        // Check for admin scope
+        match record.scope {
+            Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
+                // Return a hash of the token for use as admin key (for privacy)
+                use sha2::{Digest, Sha256};
+                let mut hasher = Sha256::new();
+                hasher.update(token.as_bytes());
+                let result = hasher.finalize();
+                Ok(format!("admin_{}", hex::encode(&result[..8]))) // Use first 8 bytes as key
+            }
+            _ => Err(crate::shared::error::AppError::Forbidden {
+                reason: "Insufficient privileges: admin scope required".to_string(),
+            }),
+        }
     }
 }
 
@@ -312,39 +432,34 @@ async fn require_admin_scope(
 
     // Validate token and extract record
     #[cfg(feature = "redis-sessions")]
-    let record = state.store.get_token_record(token).await?.ok_or_else(|| {
+    let record = _state.store.get_token_record(token).await?.ok_or_else(|| {
         crate::shared::error::AppError::InvalidToken("Token not found or invalid".to_string())
     })?;
 
     #[cfg(not(feature = "redis-sessions"))]
-    let record = common::TokenRecord {
-        active: true,
-        scope: Some("admin".to_string()),
-        client_id: Some("admin_client".to_string()),
-        exp: Some((SystemTime::now() + std::time::Duration::from_secs(3600))
-            .duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        iat: Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64),
-        sub: Some("admin".to_string()),
-        token_binding: None,
-        mfa_verified: true,
-    };
+    return Err(crate::shared::error::AppError::ConfigurationError(
+        "Admin token validation backend is not configured".to_string(),
+    ));
 
-    // Check if token is active
-    if !record.active {
-        return Err(crate::shared::error::AppError::InvalidToken(
-            "Token is inactive".to_string(),
-        ));
-    }
-
-    // Check for admin scope
-    match record.scope {
-        Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
-            // Additional validation could be added here (e.g., token expiry, client validation)
-            Ok(())
+    #[cfg(feature = "redis-sessions")]
+    {
+        // Check if token is active
+        if !record.active {
+            return Err(crate::shared::error::AppError::InvalidToken(
+                "Token is inactive".to_string(),
+            ));
         }
-        _ => Err(crate::shared::error::AppError::Forbidden {
-            reason: "Insufficient privileges: admin scope required".to_string(),
-        }),
+
+        // Check for admin scope
+        match record.scope {
+            Some(ref scope_str) if scope_str.split_whitespace().any(|s| s == "admin") => {
+                // Additional validation could be added here (e.g., token expiry, client validation)
+                Ok(())
+            }
+            _ => Err(crate::shared::error::AppError::Forbidden {
+                reason: "Insufficient privileges: admin scope required".to_string(),
+            }),
+        }
     }
 }
 
@@ -392,6 +507,7 @@ async fn validate_request_with_replay_protection(
             })?;
 
     // Verify signature using SHA-256
+    #[cfg(feature = "rate-limiting")]
     if !ReplayProtection::verify_signature(
         signing_secret,
         method,
@@ -406,6 +522,7 @@ async fn validate_request_with_replay_protection(
     }
 
     // Apply replay protection
+    #[cfg(feature = "rate-limiting")]
     if let Some(replay_protection) = REPLAY_PROTECTION.get() {
         replay_protection
             .validate_request(nonce, timestamp, signature, signing_secret, method, path)

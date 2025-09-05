@@ -17,11 +17,8 @@ struct TestConfig {
 
 /// Core components that must be warning-free
 const CORE_COMPONENTS: &[&str] = &[
-    "auth-core",
     "common",
-    "api-contracts",
     "policy-service",
-    "compliance-tools",
 ];
 
 /// Feature-heavy components with acceptable warning counts

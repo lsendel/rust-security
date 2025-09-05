@@ -32,8 +32,9 @@ mod tests_internal_security {
         );
 
         // Should be base64 encoded
+        assert!(binding1.is_ok());
         assert!(base64::engine::general_purpose::STANDARD
-            .decode(&binding1)
+            .decode(&binding1.unwrap())
             .is_ok());
     }
 

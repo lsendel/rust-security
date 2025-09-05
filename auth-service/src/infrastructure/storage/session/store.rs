@@ -24,17 +24,26 @@ use uuid::Uuid;
 #[derive(Error, Debug)]
 pub enum SessionValidationError {
     #[error("IP address mismatch: session={session_ip}, request={request_ip}")]
-    IpAddressMismatch { session_ip: String, request_ip: String },
-    
+    IpAddressMismatch {
+        session_ip: String,
+        request_ip: String,
+    },
+
     #[error("User agent mismatch: session={session_ua}, request={request_ua}")]
-    UserAgentMismatch { session_ua: String, request_ua: String },
-    
+    UserAgentMismatch {
+        session_ua: String,
+        request_ua: String,
+    },
+
     #[error("Device fingerprint mismatch: session={session_fp}, request={request_fp}")]
-    DeviceFingerprintMismatch { session_fp: String, request_fp: String },
-    
+    DeviceFingerprintMismatch {
+        session_fp: String,
+        request_fp: String,
+    },
+
     #[error("Session expired")]
     SessionExpired,
-    
+
     #[error("Session not found")]
     SessionNotFound,
 }
@@ -106,22 +115,22 @@ impl SessionData {
     }
 
     /// Validate session against current request context
-    /// 
+    ///
     /// # Security
-    /// 
+    ///
     /// This method performs critical security checks to prevent session hijacking:
-    /// - IP address binding validation 
+    /// - IP address binding validation
     /// - User agent consistency check
     /// - Device fingerprint verification (if available)
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `current_ip` - The IP address of the current request
     /// * `current_user_agent` - The user agent of the current request  
     /// * `current_device_fingerprint` - Optional device fingerprint of current request
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// Returns `Ok(())` if session is valid, `Err(SessionValidationError)` otherwise.
     pub fn validate_request_context(
         &self,
@@ -150,7 +159,9 @@ impl SessionData {
         }
 
         // Device fingerprint verification (strict match if available)
-        if let (Some(session_fp), Some(request_fp)) = (&self.device_fingerprint, current_device_fingerprint) {
+        if let (Some(session_fp), Some(request_fp)) =
+            (&self.device_fingerprint, current_device_fingerprint)
+        {
             if session_fp != request_fp {
                 return Err(SessionValidationError::DeviceFingerprintMismatch {
                     session_fp: session_fp.clone(),
@@ -181,21 +192,21 @@ impl SessionData {
     fn extract_browser_info(&self, user_agent: &str) -> (String, String) {
         // Simple parsing for common browsers
         let ua_lower = user_agent.to_lowercase();
-        
+
         if let Some(chrome_pos) = ua_lower.find("chrome/") {
             let version_start = chrome_pos + 7;
             let version_end = ua_lower[version_start..].find('.').unwrap_or(0) + version_start;
             let major_version = &ua_lower[version_start..version_end];
             return ("chrome".to_string(), major_version.to_string());
         }
-        
+
         if let Some(firefox_pos) = ua_lower.find("firefox/") {
             let version_start = firefox_pos + 8;
             let version_end = ua_lower[version_start..].find('.').unwrap_or(0) + version_start;
             let major_version = &ua_lower[version_start..version_end];
             return ("firefox".to_string(), major_version.to_string());
         }
-        
+
         if let Some(safari_pos) = ua_lower.find("version/") {
             if ua_lower.contains("safari") {
                 let version_start = safari_pos + 8;
@@ -423,7 +434,8 @@ impl SessionStore for RedisSessionStore {
                 };
 
                 // Add to user sessions set
-                let result2: Result<(), _> = conn.sadd(&user_sessions_key, &session.session_id).await;
+                let result2: Result<(), _> =
+                    conn.sadd(&user_sessions_key, &session.session_id).await;
 
                 match (result1, result2) {
                     (Ok(()), Ok(())) => {
@@ -526,19 +538,17 @@ impl SessionStore for RedisSessionStore {
         current_device_fingerprint: Option<&str>,
     ) -> Result<SessionData, SessionValidationError> {
         // First retrieve the session
-        let session = self.get_session(session_id)
-            .await
-            .map_err(|e| {
-                error!("Session retrieval error for {}: {}", session_id, e);
-                SessionValidationError::SessionNotFound
-            })?;
+        let session = self.get_session(session_id).await.map_err(|e| {
+            error!("Session retrieval error for {}: {}", session_id, e);
+            SessionValidationError::SessionNotFound
+        })?;
 
         let session = session.ok_or(SessionValidationError::SessionNotFound)?;
 
         // Validate session context
         session.validate_request_context(
             current_ip,
-            current_user_agent, 
+            current_user_agent,
             current_device_fingerprint,
         )?;
 
@@ -1005,19 +1015,17 @@ impl SessionStore for EnhancedRedisSessionStore {
         current_device_fingerprint: Option<&str>,
     ) -> Result<SessionData, SessionValidationError> {
         // First retrieve the session
-        let session = self.get_session(session_id)
-            .await
-            .map_err(|e| {
-                error!("Session retrieval error for {}: {}", session_id, e);
-                SessionValidationError::SessionNotFound
-            })?;
+        let session = self.get_session(session_id).await.map_err(|e| {
+            error!("Session retrieval error for {}: {}", session_id, e);
+            SessionValidationError::SessionNotFound
+        })?;
 
         let session = session.ok_or(SessionValidationError::SessionNotFound)?;
 
         // Validate session context
         session.validate_request_context(
             current_ip,
-            current_user_agent, 
+            current_user_agent,
             current_device_fingerprint,
         )?;
 

@@ -196,16 +196,16 @@ impl PasswordService {
     fn is_password_strong_enough(&self, password: &str) -> bool {
         // Check for at least one uppercase letter
         let has_uppercase = password.chars().any(|c| c.is_uppercase());
-        
-        // Check for at least one lowercase letter  
+
+        // Check for at least one lowercase letter
         let has_lowercase = password.chars().any(|c| c.is_lowercase());
-        
+
         // Check for at least one digit
         let has_digit = password.chars().any(|c| c.is_ascii_digit());
-        
+
         // Check for at least one special character
         let has_special = password.chars().any(|c| !c.is_alphanumeric());
-        
+
         // All requirements must be met
         has_uppercase && has_lowercase && has_digit && has_special
     }
@@ -288,7 +288,7 @@ mod tests {
 
         // Weak passwords should fail
         assert!(service.hash_password("valid_password_123").is_err());
-        
+
         // Valid strong password should work
         assert!(service.hash_password("StrongP@ssw0rd123!").is_ok());
     }

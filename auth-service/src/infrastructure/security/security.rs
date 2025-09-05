@@ -12,47 +12,47 @@ use tower_http::limit::RequestBodyLimitLayer;
 const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
 
 /// Secure token binding salt - loaded from environment or generated
-static TOKEN_BINDING_SALT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    std::env::var("TOKEN_BINDING_SALT").unwrap_or_else(|_| {
-        use ring::rand::SystemRandom;
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+static TOKEN_BINDING_SALT: std::sync::LazyLock<Result<String, &'static str>> = std::sync::LazyLock::new(|| {
+    match std::env::var("TOKEN_BINDING_SALT") {
+        Ok(salt) if salt.len() >= 32 => Ok(salt),
+        Ok(_) => Err("TOKEN_BINDING_SALT environment variable must be at least 32 characters"),
+        Err(_) => {
+            use ring::rand::SystemRandom;
 
-        // Generate a cryptographically secure salt with proper error handling
-        let mut salt = [0u8; 32];
+            // Generate a cryptographically secure salt with proper error handling
+            let mut salt = [0u8; 32];
 
-        // Try multiple times with fallback to ensure we get entropy
-        for attempt in 0..3 {
-            if SystemRandom::new().fill(&mut salt).is_ok() {
-                return hex::encode(salt);
+            // Try multiple times before failing securely
+            for attempt in 0..5 {
+                if SystemRandom::new().fill(&mut salt).is_ok() {
+                    return Ok(hex::encode(salt));
+                }
+                tracing::warn!(
+                    "Salt generation attempt {} failed, retrying...",
+                    attempt + 1
+                );
+                // Brief delay between attempts
+                std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1)));
             }
-            tracing::warn!(
-                "Salt generation attempt {} failed, retrying...",
-                attempt + 1
-            );
-        }
 
-        // Final fallback: use a deterministic but still secure approach
-        tracing::error!("Failed to generate random salt after 3 attempts, using fallback");
-        let mut hasher = DefaultHasher::new();
-        std::process::id().hash(&mut hasher);
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-            .hash(&mut hasher);
-        format!("{:016x}", hasher.finish())
-    })
+            // SECURITY: Never use weak fallbacks - fail securely instead
+            tracing::error!("CRITICAL: Failed to generate secure random salt after 5 attempts");
+            Err("Cannot generate cryptographically secure token binding salt")
+        }
+    }
 });
 
 /// Generate a token binding value from client information using secure practices
-pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
+pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<String, &'static str> {
     use ring::hmac;
 
-    let salt = TOKEN_BINDING_SALT.as_bytes();
+    let salt = match TOKEN_BINDING_SALT.as_ref() {
+        Ok(salt) => salt,
+        Err(e) => return Err(*e),
+    };
 
     // Use HMAC-SHA256 for secure binding
-    let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
+    let key = hmac::Key::new(hmac::HMAC_SHA256, salt.as_bytes());
     let mut ctx = hmac::Context::with_key(&key);
 
     ctx.update(client_ip.as_bytes());
@@ -62,7 +62,7 @@ pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> String {
     ctx.update(&chrono::Utc::now().timestamp().to_be_bytes()); // Add timestamp
 
     let tag = ctx.sign();
-    base64::engine::general_purpose::STANDARD.encode(tag.as_ref())
+    Ok(base64::engine::general_purpose::STANDARD.encode(tag.as_ref()))
 }
 
 /// Validate token binding to ensure token is used from the same client
@@ -86,7 +86,10 @@ pub fn validate_token_binding(
     let now = chrono::Utc::now().timestamp();
 
     // Optimize validation using time windows instead of iterating all timestamps
-    let salt = TOKEN_BINDING_SALT.as_bytes();
+    let salt = match TOKEN_BINDING_SALT.as_ref() {
+        Ok(salt) => salt.as_bytes(),
+        Err(_) => return Ok(false), // Invalid salt configuration
+    };
     let key = hmac::Key::new(hmac::HMAC_SHA256, salt);
 
     // Check current time window and previous window (30-second windows for 5min total)

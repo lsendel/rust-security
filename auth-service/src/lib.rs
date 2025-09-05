@@ -192,6 +192,7 @@
 pub mod saml_service;
 
 use common::constants;
+use common::security::UnifiedSecurityConfig;
 use std::sync::Arc;
 
 // New modular architecture
@@ -215,6 +216,7 @@ pub mod performance_utils;
 
 // Security enhancements and threat detection
 pub mod security_enhancements;
+// pub mod threat_intelligence; // Temporarily disabled due to unresolved monitoring deps
 
 // Legacy modules (to be migrated)
 // pub mod auth_service_integration;  // Temporarily disabled - depends on threat modules
@@ -284,6 +286,7 @@ pub mod circuit_breaker;
 pub mod client_auth;
 pub mod config_production;
 pub mod config_secure;
+pub mod config_secure_validation;
 pub mod csrf_protection;
 pub mod error_handling;
 pub mod feature_flags;
@@ -299,6 +302,7 @@ pub mod security_tests;
 pub mod test_mode_security;
 
 // Metrics and monitoring modules
+#[cfg(feature = "metrics")]
 pub mod metrics;
 pub mod security_metrics;
 
@@ -347,6 +351,7 @@ pub struct AppState {
     pub authorization_codes: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
     pub policy_cache: Arc<crate::infrastructure::cache::policy_cache::PolicyCache>,
     pub backpressure_state: Arc<std::sync::RwLock<bool>>,
+    #[cfg(feature = "crypto")]
     pub jwks_manager: Arc<crate::infrastructure::crypto::jwks_rotation::JwksManager>,
 }
 
@@ -495,12 +500,34 @@ impl TokenCreationParams {
 }
 
 /// Get the signing key from the key manager
+#[cfg(feature = "crypto")]
 async fn get_signing_key(
     state: &AppState,
 ) -> Result<jsonwebtoken::EncodingKey, crate::shared::error::AppError> {
     state.jwks_manager.get_encoding_key().await.map_err(|e| {
         crate::shared::error::AppError::Internal(format!("Failed to get signing key: {e}"))
     })
+}
+
+/// Secure signing key when crypto feature is not enabled
+#[cfg(not(feature = "crypto"))]
+async fn get_signing_key(
+    _state: &AppState,
+) -> Result<jsonwebtoken::EncodingKey, crate::shared::error::AppError> {
+    // Require JWT_SECRET environment variable - no fallbacks
+    let secret = std::env::var("JWT_SECRET")
+        .map_err(|_| crate::shared::error::AppError::Configuration(
+            "JWT_SECRET environment variable is required".to_string()
+        ))?;
+    
+    // Validate secret strength
+    if secret.len() < 32 {
+        return Err(crate::shared::error::AppError::Configuration(
+            "JWT_SECRET must be at least 32 characters".to_string()
+        ));
+    }
+    
+    Ok(jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()))
 }
 
 /// Create a JWT token from claims

@@ -1,3 +1,4 @@
+#![cfg(all(feature = "full-integration", feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
 use auth_service::{app, AppState};
 use common::TokenRecord;
 use reqwest::Client;
@@ -101,3 +102,4 @@ async fn microsoft_callback_invalid_state_returns_400_like_error() {
         Some("invalid_state")
     );
 }
+// cfg moved to top of file

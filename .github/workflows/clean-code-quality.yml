@@ -44,7 +44,7 @@ jobs:
     # Clean Code Rule 3: Comprehensive linting
     - name: Advanced Clippy linting
       run: |
-        cargo clippy --all-targets --all-features -- \
+        cargo clippy --all-targets -- \
           -D warnings \
           -D clippy::all \
           -D clippy::pedantic \

@@ -1,3 +1,4 @@
+#![cfg(all(feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
 #![allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,

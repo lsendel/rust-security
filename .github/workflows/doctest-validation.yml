@@ -1,0 +1,171 @@
+name: Documentation Testing
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  # Run weekly to catch documentation rot
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday at 2 AM UTC
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  doctest-validation:
+    name: "📚 Documentation Test Validation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: doctest-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+          sudo systemctl start redis-server
+
+      - name: Run documentation tests (doctests)
+        run: |
+          echo "🔍 Running Rust documentation tests..."
+          cargo test --workspace --doc --all-features --no-fail-fast
+          echo "✅ All documentation tests passed"
+
+      - name: Validate documentation examples
+        run: |
+          echo "📋 Validating documentation examples..."
+          cargo test documentation_examples --all-features --no-fail-fast
+          cargo test doctest_examples --all-features --no-fail-fast
+          echo "✅ All documentation examples validated"
+
+      - name: Check for unused documentation
+        run: |
+          echo "🗂️ Checking for unused documentation files..."
+          # Find markdown files that might not be linked
+          find docs/ -name "*.md" -type f | while read file; do
+            basename=$(basename "$file")
+            if ! grep -r --include="*.md" --include="*.rs" "$basename" . >/dev/null 2>&1; then
+              echo "⚠️  Potentially unused documentation: $file"
+            fi
+          done
+
+      - name: Validate code examples in markdown
+        run: |
+          echo "🔧 Validating Rust code blocks in markdown..."
+          # Extract and validate Rust code blocks from markdown files
+          for file in $(find . -name "*.md" -not -path "./target/*" -not -path "./node_modules/*"); do
+            echo "Checking $file..."
+            # This is a simple check - could be enhanced with mdbook test
+            if grep -q '```rust' "$file"; then
+              echo "  📝 Found Rust examples in $file"
+            fi
+          done
+
+      - name: Generate documentation coverage report
+        run: |
+          echo "📊 Generating documentation coverage report..."
+          
+          # Count total Rust code examples
+          TOTAL_EXAMPLES=$(find . -name "*.md" -not -path "./target/*" -not -path "./node_modules/*" -exec grep -l '```rust' {} \; | wc -l)
+          
+          # Count files with tests
+          TESTED_EXAMPLES=$(find tests/ -name "*documentation*" -o -name "*doctest*" | wc -l)
+          
+          echo "📈 Documentation Coverage Summary:"
+          echo "   Total files with Rust examples: $TOTAL_EXAMPLES"
+          echo "   Files with corresponding tests: $TESTED_EXAMPLES"
+          
+          if [ $TOTAL_EXAMPLES -gt 0 ]; then
+            COVERAGE=$((TESTED_EXAMPLES * 100 / TOTAL_EXAMPLES))
+            echo "   Coverage percentage: $COVERAGE%"
+            
+            if [ $COVERAGE -lt 80 ]; then
+              echo "⚠️  Documentation test coverage is below 80%"
+              exit 1
+            else
+              echo "✅ Documentation test coverage is adequate"
+            fi
+          fi
+
+  example-compilation:
+    name: "🔧 Example Compilation"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Compile standalone examples
+        run: |
+          echo "🔨 Compiling standalone examples..."
+          
+          # Find and compile all example files
+          find . -path "*/examples/*.rs" -not -path "./target/*" | while read example; do
+            echo "Compiling $example..."
+            if ! cargo check --example "$(basename "$example" .rs)" 2>/dev/null; then
+              echo "⚠️  Failed to compile example: $example"
+            else
+              echo "✅ Successfully compiled: $example"
+            fi
+          done
+
+      - name: Check README examples
+        run: |
+          echo "📖 Checking README examples..."
+          
+          # This could be enhanced to extract and test README code blocks
+          if [ -f "README.md" ]; then
+            if grep -q '```bash' README.md; then
+              echo "📝 Found bash examples in README.md"
+            fi
+            if grep -q '```rust' README.md; then
+              echo "📝 Found Rust examples in README.md" 
+            fi
+          fi
+
+  api-consistency:
+    name: "🔍 API Consistency"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Check public API consistency
+        run: |
+          echo "🔍 Checking public API consistency with documentation..."
+          
+          # Generate documentation and check for broken links
+          cargo doc --workspace --all-features --no-deps
+          
+          echo "✅ Documentation generated successfully"
+
+      - name: Validate exported functions match documentation
+        run: |
+          echo "📋 Validating exported functions match documentation examples..."
+          
+          # This is a placeholder for more sophisticated API validation
+          # Could be enhanced to compare actual exports with documented examples
+          echo "✅ API validation placeholder completed"

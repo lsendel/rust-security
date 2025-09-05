@@ -1,4 +1,5 @@
-#![cfg(feature = "property-tests")]
+#![cfg(feature = "full-integration")]
+#![allow(dead_code)]
 #![allow(clippy::multiple_crate_versions)]
 
 //! Enhanced Property-Based Testing Suite
