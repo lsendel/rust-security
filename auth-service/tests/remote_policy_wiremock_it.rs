@@ -25,6 +25,8 @@ async fn login_respects_remote_policy_allow() {
     let body = r#"{"email":"user@example.com","password":"Secret123!"}"#;
     let resp = request(&app, Method::POST, "/api/v1/auth/login", Some(body)).await;
     assert_eq!(resp.status(), 200);
+    let received = mock_server.received_requests().await.unwrap();
+    assert!(received.iter().any(|r| r.url.path() == "/v1/authorize"));
 }
 
 #[tokio::test]
@@ -45,6 +47,8 @@ async fn login_respects_remote_policy_deny() {
     let body = r#"{"email":"user@example.com","password":"Secret123!"}"#;
     let resp = request(&app, Method::POST, "/api/v1/auth/login", Some(body)).await;
     assert_eq!(resp.status(), 403, "expected 403 Deny, got different");
+    let received = mock_server.received_requests().await.unwrap();
+    assert!(received.iter().any(|r| r.url.path() == "/v1/authorize"));
 }
 
 #[tokio::test]
@@ -66,4 +70,6 @@ async fn login_fail_open_on_remote_error_when_configured() {
     let body = r#"{"email":"user@example.com","password":"Secret123!"}"#;
     let resp = request(&app, Method::POST, "/api/v1/auth/login", Some(body)).await;
     assert_eq!(resp.status(), 200);
+    let received = mock_server.received_requests().await.unwrap();
+    assert!(received.iter().any(|r| r.url.path() == "/v1/authorize"));
 }

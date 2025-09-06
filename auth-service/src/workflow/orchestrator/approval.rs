@@ -232,7 +232,15 @@ impl AutoApprovalEngine {
             risk_assessor: Arc::new(RiskAssessor::new()),
         }
     }
+}
 
+impl Default for AutoApprovalEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AutoApprovalEngine {
     /// Evaluate if a request can be auto-approved
     pub async fn can_auto_approve(&self, request: &ApprovalRequest) -> bool {
         // Check if any rules match and allow auto-approval
@@ -294,6 +302,13 @@ impl RiskAssessor {
             scoring_rules: Arc::new(RwLock::new(Vec::new())),
         }
     }
+}
+
+impl Default for RiskAssessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
     /// Assess risk for an approval request
     pub async fn assess_risk(&self, _request: &ApprovalRequest) -> f64 {
