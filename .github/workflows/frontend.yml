@@ -1,0 +1,56 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - 'user-portal/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - 'user-portal/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: user-portal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: user-portal/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test
+        run: npm test -- --run --coverage --reporter=default
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifacts
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-portal-dist
+          path: user-portal/dist
+          if-no-files-found: warn

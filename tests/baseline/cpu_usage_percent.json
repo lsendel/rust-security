@@ -1,0 +1,10 @@
+{
+  "metric_name": "cpu_usage_percent",
+  "baseline_value": 25,
+  "tolerance": 0.20,
+  "created": "2025-09-05T22:18:42-04:00",
+  "last_updated": "2025-09-05T22:18:42-04:00",
+  "update_history": [],
+  "validation_count": 0,
+  "deviation_count": 0
+}

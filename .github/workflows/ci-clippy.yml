@@ -1,5 +1,12 @@
 name: CI - Lint & Clippy
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-clippy-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
   push:
@@ -15,6 +22,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
       - name: Clippy (libs/bins)
         run: cargo clippy --workspace -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
 
@@ -28,6 +41,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
       - name: Clippy (include tests)
         run: cargo clippy --workspace --tests -- -W clippy::perf -W clippy::suspicious -W clippy::pedantic
 
@@ -41,6 +60,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
       - name: Clippy (policy-service, all targets)
         run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings -W clippy::perf -W clippy::suspicious -W clippy::pedantic
       - name: Clippy (policy-service, tests)

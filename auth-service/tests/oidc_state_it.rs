@@ -1,4 +1,9 @@
-#![cfg(all(feature = "full-integration", feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
+#![cfg(all(
+    feature = "full-integration",
+    feature = "api-keys",
+    feature = "redis-sessions",
+    feature = "crypto"
+))]
 use auth_service::{app, AppState};
 use common::TokenRecord;
 use reqwest::Client;

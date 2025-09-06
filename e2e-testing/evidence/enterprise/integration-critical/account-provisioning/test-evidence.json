@@ -1,0 +1,385 @@
+{
+  "testName": "account-provisioning",
+  "testSuite": "integration-critical",
+  "startTime": "2025-09-05T22:06:01.431Z",
+  "endTime": "2025-09-05T22:06:01.847Z",
+  "duration": 416,
+  "status": "PASS",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "JIT Provisioning Setup",
+      "description": "Testing Just-In-Time account provisioning with external identity providers",
+      "timestamp": "2025-09-05T22:06:01.545Z",
+      "screenshot": "step-1-JIT-Provisioning-Setup-2025-09-05T22-06-01-545Z.png",
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 2,
+      "action": "JIT Account Creation",
+      "description": "Auto-provisioning account for john.doe@company.com from Google Workspace",
+      "timestamp": "2025-09-05T22:06:01.671Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "securityChecks": [
+        {
+          "type": "AUTHENTICATION",
+          "description": "JIT provisioning from Google Workspace",
+          "result": "PASS",
+          "details": "Account auto-created for john.doe@company.com with attributes: email, name, groups",
+          "evidence": "JIT provisioning successful from Google Workspace"
+        }
+      ],
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 3,
+      "action": "Attribute Mapping",
+      "description": "Mapping email from Google Workspace to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.674Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 4,
+      "action": "Attribute Mapping",
+      "description": "Mapping name from Google Workspace to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.677Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 5,
+      "action": "Attribute Mapping",
+      "description": "Mapping groups from Google Workspace to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.689Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 6,
+      "action": "JIT Account Creation",
+      "description": "Auto-provisioning account for jane.smith@enterprise.com from Azure AD",
+      "timestamp": "2025-09-05T22:06:01.720Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "securityChecks": [
+        {
+          "type": "AUTHENTICATION",
+          "description": "JIT provisioning from Azure AD",
+          "result": "PASS",
+          "details": "Account auto-created for jane.smith@enterprise.com with attributes: email, name, department, manager",
+          "evidence": "JIT provisioning successful from Azure AD"
+        }
+      ],
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 7,
+      "action": "Attribute Mapping",
+      "description": "Mapping email from Azure AD to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.725Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 8,
+      "action": "Attribute Mapping",
+      "description": "Mapping name from Azure AD to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.728Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 9,
+      "action": "Attribute Mapping",
+      "description": "Mapping department from Azure AD to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.730Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 10,
+      "action": "Attribute Mapping",
+      "description": "Mapping manager from Azure AD to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.734Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 11,
+      "action": "JIT Account Creation",
+      "description": "Auto-provisioning account for bob.wilson@startup.com from Okta",
+      "timestamp": "2025-09-05T22:06:01.737Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "securityChecks": [
+        {
+          "type": "AUTHENTICATION",
+          "description": "JIT provisioning from Okta",
+          "result": "PASS",
+          "details": "Account auto-created for bob.wilson@startup.com with attributes: email, name, role, location",
+          "evidence": "JIT provisioning successful from Okta"
+        }
+      ],
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 12,
+      "action": "Attribute Mapping",
+      "description": "Mapping email from Okta to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.739Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 13,
+      "action": "Attribute Mapping",
+      "description": "Mapping name from Okta to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.744Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 14,
+      "action": "Attribute Mapping",
+      "description": "Mapping role from Okta to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.746Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 15,
+      "action": "Attribute Mapping",
+      "description": "Mapping location from Okta to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.749Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 16,
+      "action": "JIT Account Creation",
+      "description": "Auto-provisioning account for alice.brown@government.gov from SAML IdP",
+      "timestamp": "2025-09-05T22:06:01.756Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "securityChecks": [
+        {
+          "type": "AUTHENTICATION",
+          "description": "JIT provisioning from SAML IdP",
+          "result": "PASS",
+          "details": "Account auto-created for alice.brown@government.gov with attributes: email, name, clearance, agency",
+          "evidence": "JIT provisioning successful from SAML IdP"
+        }
+      ],
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 17,
+      "action": "Attribute Mapping",
+      "description": "Mapping email from SAML IdP to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.791Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 18,
+      "action": "Attribute Mapping",
+      "description": "Mapping name from SAML IdP to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.794Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 19,
+      "action": "Attribute Mapping",
+      "description": "Mapping clearance from SAML IdP to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.796Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 20,
+      "action": "Attribute Mapping",
+      "description": "Mapping agency from SAML IdP to internal user profile",
+      "timestamp": "2025-09-05T22:06:01.803Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 792,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 21,
+      "action": "JIT Provisioning Validated",
+      "description": "Just-In-Time provisioning working correctly for all identity providers",
+      "timestamp": "2025-09-05T22:06:01.806Z",
+      "screenshot": "step-21-JIT-Provisioning-Validated-2025-09-05T22-06-01-806Z.png",
+      "networkLogs": []
+    }
+  ],
+  "summary": {
+    "totalSteps": 21,
+    "screenshotCount": 2,
+    "networkRequestCount": 0,
+    "securityCheckCount": 4,
+    "accessibilityIssueCount": 0
+  },
+  "environment": {
+    "browser": "chromium",
+    "viewport": "1280x720",
+    "userAgent": "Playwright Test Agent",
+    "platform": "darwin"
+  },
+  "businessMetrics": {
+    "userJourneyCompletion": true,
+    "criticalPathValidated": true,
+    "performanceSLAMet": true,
+    "securityRequirementsMet": true
+  }
+}

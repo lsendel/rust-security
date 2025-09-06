@@ -54,6 +54,14 @@ repos:
         files: Cargo\.(toml|lock)$
         pass_filenames: false
 
+      # Unsafe code detection
+      - id: cargo-geiger
+        name: Cargo Geiger (Unsafe Code Scanner)
+        entry: cargo geiger --deny-warnings
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
       # Unit tests (quick feedback)
       - id: cargo-test
         name: Cargo Test

@@ -1,5 +1,12 @@
 name: Enhanced CI Pipeline
 
+permissions:
+  contents: read
+
+concurrency:
+  group: enhanced-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, master, develop, '**/fix-*', '**/feat-*' ]
@@ -294,4 +301,3 @@ jobs:
             exit 1
           fi
           echo "🎉 All CI checks passed!"
-

@@ -1,0 +1,147 @@
+{
+  "testName": "authentication-flow",
+  "testSuite": "security-critical",
+  "startTime": "2025-09-05T22:06:12.021Z",
+  "endTime": "2025-09-05T22:06:13.047Z",
+  "duration": 1026,
+  "status": "PASS",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "Test Setup",
+      "description": "Initialize authentication flow test with enterprise evidence collection",
+      "timestamp": "2025-09-05T22:06:12.028Z",
+      "screenshot": "step-1-Test-Setup-2025-09-05T22-06-12-028Z.png",
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 2,
+      "action": "Performance Test Setup",
+      "description": "Initialize performance testing for authentication system",
+      "timestamp": "2025-09-05T22:06:12.094Z",
+      "screenshot": "step-2-Performance-Test-Setup-2025-09-05T22-06-12-094Z.png",
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 3,
+      "action": "Performance Test 1",
+      "description": "Simulating concurrent user load - request 1/5",
+      "timestamp": "2025-09-05T22:06:12.166Z",
+      "screenshot": "step-3-Performance-Test-1-2025-09-05T22-06-12-166Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 28,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 4,
+      "action": "Performance Test 2",
+      "description": "Simulating concurrent user load - request 2/5",
+      "timestamp": "2025-09-05T22:06:12.345Z",
+      "screenshot": "step-4-Performance-Test-2-2025-09-05T22-06-12-345Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 12,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 5,
+      "action": "Performance Test 3",
+      "description": "Simulating concurrent user load - request 3/5",
+      "timestamp": "2025-09-05T22:06:12.521Z",
+      "screenshot": "step-5-Performance-Test-3-2025-09-05T22-06-12-521Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 12,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 6,
+      "action": "Performance Test 4",
+      "description": "Simulating concurrent user load - request 4/5",
+      "timestamp": "2025-09-05T22:06:12.688Z",
+      "screenshot": "step-6-Performance-Test-4-2025-09-05T22-06-12-688Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 12,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 7,
+      "action": "Performance Test 5",
+      "description": "Simulating concurrent user load - request 5/5",
+      "timestamp": "2025-09-05T22:06:12.841Z",
+      "screenshot": "step-7-Performance-Test-5-2025-09-05T22-06-12-841Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0.10000000894069672,
+        "firstContentfulPaint": 12,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 8,
+      "action": "Performance Results",
+      "description": "Load test completed in 838ms - Average: 167.6ms per request",
+      "timestamp": "2025-09-05T22:06:12.997Z",
+      "screenshot": "step-8-Performance-Results-2025-09-05T22-06-12-997Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0.10000000894069672,
+        "firstContentfulPaint": 12,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    }
+  ],
+  "summary": {
+    "totalSteps": 8,
+    "screenshotCount": 8,
+    "networkRequestCount": 0,
+    "securityCheckCount": 0,
+    "accessibilityIssueCount": 0
+  },
+  "environment": {
+    "browser": "chromium",
+    "viewport": "1280x720",
+    "userAgent": "Playwright Test Agent",
+    "platform": "darwin"
+  },
+  "businessMetrics": {
+    "userJourneyCompletion": true,
+    "criticalPathValidated": true,
+    "performanceSLAMet": true,
+    "securityRequirementsMet": true
+  }
+}

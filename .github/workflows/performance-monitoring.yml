@@ -3,8 +3,6 @@ name: Performance Monitoring & Regression Detection
 on:
   push:
     branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
   schedule:
     - cron: '0 3 * * *'  # Daily at 3 AM
   workflow_dispatch:
@@ -32,6 +30,10 @@ permissions:
   pull-requests: write
   pages: write
   id-token: write
+
+concurrency:
+  group: performance-monitoring-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always

@@ -1,0 +1,166 @@
+name: PR On-Demand Security Scan
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  security-events: write
+
+concurrency:
+  group: pr-on-demand-security-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  run-security-scan:
+    name: Run security scan on PR head
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/security-scan')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize commenter
+        id: auth
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            let allowed = false;
+            let level = 'none';
+            if (commenter === 'github-actions[bot]') {
+              allowed = true;
+              level = 'bot';
+            } else {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: commenter,
+              });
+              level = data.permission;
+              allowed = ['admin','maintain','write'].includes(level);
+            }
+            core.setOutput('allowed', String(allowed));
+            core.setOutput('level', level);
+
+      - name: Deny unauthorized user
+        if: steps.auth.outputs.allowed != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ You are not authorized to run /security-scan. Maintainers only.'
+            });
+            core.setFailed('Unauthorized commenter');
+
+      - name: Extract PR metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('head_ref', pr.head.ref);
+            core.setOutput('head_repo', pr.head.repo.full_name);
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+
+      - name: Parse command options
+        id: opts
+        run: |
+          BODY=$(jq -r '.comment.body' <<<'${{ toJson(github.event) }}')
+          echo "Comment: $BODY"
+          if echo "$BODY" | grep -qiE '(full|iac|container)'; then
+            echo "full=true" >> $GITHUB_OUTPUT
+          else
+            echo "full=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install security tools
+        run: |
+          cargo install --locked cargo-audit
+          cargo install --locked cargo-deny || true
+
+      - name: Cargo audit
+        id: audit
+        continue-on-error: true
+        run: |
+          cargo audit --json > cargo-audit-results.json
+          cargo audit || true
+
+      - name: Cargo deny
+        id: deny
+        continue-on-error: true
+        run: |
+          cargo deny check || true
+
+      - name: Install IaC/container scanners (Trivy, Checkov)
+        if: steps.opts.outputs.full == 'true'
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.52.2
+          python3 -m pip install --upgrade pip
+          pip3 install checkov
+
+      - name: Run IaC scans (k8s/helm/terraform)
+        if: steps.opts.outputs.full == 'true'
+        continue-on-error: true
+        run: |
+          mkdir -p security-iac
+          if [ -d helm ]; then trivy config helm/ --format sarif --output security-iac/helm.sarif || true; fi
+          if [ -d k8s ]; then trivy config k8s/ --format sarif --output security-iac/k8s.sarif || true; fi
+          if [ -d terraform ] || rg -n "terraform" -S . >/dev/null 2>&1; then checkov -d . --framework terraform --output sarif --output-file security-iac/terraform.sarif || true; fi
+
+      - name: Run Dockerfile scans
+        if: steps.opts.outputs.full == 'true'
+        continue-on-error: true
+        run: |
+          mkdir -p security-iac
+          trivy config --file-patterns="Dockerfile*" . --format sarif --output security-iac/dockerfile.sarif || true
+
+      - name: Upload SARIF to Code Scanning
+        if: steps.opts.outputs.full == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: security-iac
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-security-results-${{ github.event.issue.number }}
+          path: |
+            cargo-audit-results.json
+            security-iac/**
+
+      - name: Comment results on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const full = `${{ steps.opts.outputs.full }}` === 'true';
+            const extra = full ? "\n- IaC/Dockerfile scans: included" : "";
+            const auditSummary = `Security scan completed.\n\n- cargo-audit: see artifact\n- cargo-deny: see logs${extra}\n\nArtifacts: pr-security-results-${{ github.event.issue.number }}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: auditSummary,
+            });

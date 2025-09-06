@@ -193,145 +193,112 @@ pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
     constant_time_eq(a.as_bytes(), b.as_bytes())
 }
 
-/// Hash input data with optional salt
-#[must_use]
-pub fn hash_with_salt(data: &[u8], salt: Option<&[u8]>) -> String {
-    let mut hasher_input = Vec::new();
-
-    if let Some(salt) = salt {
-        hasher_input.extend_from_slice(salt);
-        hasher_input.push(0xFF); // Separator
-    }
-
-    hasher_input.extend_from_slice(data);
-
-    let digest = digest::digest(&digest::SHA256, &hasher_input);
-    hex::encode(digest.as_ref())
-}
-
-/// Validate hash format (hex string)
-#[must_use]
-pub fn is_valid_hash(hash: &str) -> bool {
-    hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
-}
-
-/// Hash utilities for different data types
-pub trait Hashable {
-    fn hash(&self) -> String;
-    fn hash_with_salt(&self, salt: &[u8]) -> String;
-}
-
-impl Hashable for str {
-    fn hash(&self) -> String {
-        hash_token(self)
-    }
-
-    fn hash_with_salt(&self, salt: &[u8]) -> String {
-        hash_with_salt(self.as_bytes(), Some(salt))
-    }
-}
-
-impl Hashable for String {
-    fn hash(&self) -> String {
-        self.as_str().hash()
-    }
-
-    fn hash_with_salt(&self, salt: &[u8]) -> String {
-        self.as_str().hash_with_salt(salt)
-    }
-}
-
-impl Hashable for [u8] {
-    fn hash(&self) -> String {
-        let digest = digest::digest(&digest::SHA256, self);
-        hex::encode(digest.as_ref())
-    }
-
-    fn hash_with_salt(&self, salt: &[u8]) -> String {
-        hash_with_salt(self, Some(salt))
-    }
-}
-
-impl Hashable for Vec<u8> {
-    fn hash(&self) -> String {
-        self.as_slice().hash()
-    }
-
-    fn hash_with_salt(&self, salt: &[u8]) -> String {
-        self.as_slice().hash_with_salt(salt)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_hash_token() {
-        let token = "test_token";
-        let hash1 = hash_token(token);
-        let hash2 = hash_token(token);
-
-        assert_eq!(hash1, hash2);
-        assert_eq!(hash1.len(), 64); // SHA-256 produces 32 bytes = 64 hex chars
-        assert!(is_valid_hash(&hash1));
-    }
-
-    #[test]
-    fn test_secure_random() {
+    fn test_secure_random_generate_bytes() {
         let rng = SecureRandom::new();
+        let bytes = rng.generate_bytes(32).unwrap();
 
-        let bytes1 = rng.generate_bytes(32).unwrap();
+        assert_eq!(bytes.len(), 32);
+
+        // Generate another set to ensure randomness
         let bytes2 = rng.generate_bytes(32).unwrap();
-
-        assert_eq!(bytes1.len(), 32);
-        assert_eq!(bytes2.len(), 32);
-        assert_ne!(bytes1, bytes2); // Should be different
+        assert_ne!(bytes, bytes2);
     }
 
     #[test]
-    fn test_hmac_signature() {
-        let key = b"test_key_that_is_long_enough_for_hmac_security";
-        let data = b"test_data";
+    fn test_secure_random_generate_string() {
+        let rng = SecureRandom::new();
+        let string1 = rng.generate_string(16).unwrap();
+        let string2 = rng.generate_string(16).unwrap();
+
+        assert_ne!(string1, string2);
+        assert!(!string1.is_empty());
+        assert!(!string2.is_empty());
+    }
+
+    #[test]
+    fn test_secure_random_generate_session_id() {
+        let rng = SecureRandom::new();
+        let session_id1 = rng.generate_session_id().unwrap();
+        let session_id2 = rng.generate_session_id().unwrap();
+
+        assert_ne!(session_id1, session_id2);
+        assert!(!session_id1.is_empty());
+        assert!(!session_id2.is_empty());
+    }
+
+    #[test]
+    fn test_secure_random_generate_api_key() {
+        let rng = SecureRandom::new();
+        let api_key1 = rng.generate_api_key().unwrap();
+        let api_key2 = rng.generate_api_key().unwrap();
+
+        assert_ne!(api_key1, api_key2);
+        assert!(api_key1.starts_with("sk_"));
+        assert!(api_key2.starts_with("sk_"));
+        assert_eq!(api_key1.len(), 67); // "sk_" + 64 hex chars
+    }
+
+    #[test]
+    fn test_hash_functions() {
+        let input = "test_data";
+
+        let hash1 = hash_token(input);
+        let hash2 = hash_password_sha256(input);
+        let hash3 = hash_secret(input);
+        let hash4 = hash_backup_code(input);
+        let hash5 = hash_otp(input);
+        let hash6 = hash_user_agent(input);
+
+        // All should be the same (they all use SHA-256)
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1, hash3);
+        assert_eq!(hash1, hash4);
+        assert_eq!(hash1, hash5);
+        assert_eq!(hash1, hash6);
+
+        // Should be 64 characters (256 bits in hex)
+        assert_eq!(hash1.len(), 64);
+
+        // Different inputs should produce different hashes
+        let different_hash = hash_token("different_data");
+        assert_ne!(hash1, different_hash);
+    }
+
+    #[test]
+    fn test_hmac_signature_generation_and_verification() {
+        let key = b"this_is_a_very_secure_key_that_is_long_enough";
+        let data = b"hello world";
 
         let signature = generate_hmac_signature(key, data).unwrap();
+        assert!(!signature.is_empty());
+
+        // Verify signature
         assert!(verify_hmac_signature(key, data, &signature).unwrap());
 
-        // Test with wrong data
-        let wrong_data = b"wrong_data";
+        // Wrong signature should fail
+        let wrong_signature = vec![0u8; signature.len()];
+        assert!(!verify_hmac_signature(key, data, &wrong_signature).unwrap());
+
+        // Wrong data should fail
+        let wrong_data = b"wrong data";
         assert!(!verify_hmac_signature(key, wrong_data, &signature).unwrap());
     }
 
     #[test]
-    fn test_hmac_short_key() {
-        let short_key = b"short"; // Less than 32 bytes
-        let data = b"test_data";
+    fn test_hmac_with_short_key_fails() {
+        let short_key = b"short"; // Less than HMAC_KEY_MIN_SIZE
+        let data = b"test data";
 
         let result = generate_hmac_signature(short_key, data);
         assert!(matches!(result, Err(CryptoError::InvalidLength { .. })));
-    }
 
-    #[test]
-    fn test_constant_time_comparison() {
-        let a = "hello";
-        let b = "hello";
-        let c = "world";
-
-        assert!(constant_time_eq_str(a, b));
-        assert!(!constant_time_eq_str(a, c));
-    }
-
-    #[test]
-    fn test_hashable_trait() {
-        let data = "test_data";
-        let salt = b"test_salt";
-
-        let hash1 = data.hash();
-        let hash2 = data.hash_with_salt(salt);
-
-        assert_ne!(hash1, hash2);
-        assert!(is_valid_hash(&hash1));
-        assert!(is_valid_hash(&hash2));
+        let result = verify_hmac_signature(short_key, data, &[]);
+        assert!(matches!(result, Err(CryptoError::InvalidLength { .. })));
     }
 
     #[test]
@@ -343,19 +310,79 @@ mod tests {
         assert_eq!(salt2.len(), crypto::DEFAULT_SALT_LENGTH);
         assert_ne!(salt1, salt2);
 
-        let salt_hex = generate_salt_hex().unwrap();
-        assert_eq!(salt_hex.len(), crypto::DEFAULT_SALT_LENGTH * 2);
-        assert!(salt_hex.chars().all(|c| c.is_ascii_hexdigit()));
+        let salt_hex1 = generate_salt_hex().unwrap();
+        let salt_hex2 = generate_salt_hex().unwrap();
+
+        assert_eq!(salt_hex1.len(), crypto::DEFAULT_SALT_LENGTH * 2); // Hex is 2 chars per byte
+        assert_ne!(salt_hex1, salt_hex2);
     }
 
     #[test]
-    fn test_hash_validation() {
-        let valid_hash = "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
-        let invalid_hash = "not_a_hash";
-        let short_hash = "abc123";
+    fn test_constant_time_comparison() {
+        let a = b"secret_data";
+        let b = b"secret_data";
+        let c = b"different_data";
 
-        assert!(is_valid_hash(valid_hash));
-        assert!(!is_valid_hash(invalid_hash));
-        assert!(!is_valid_hash(short_hash));
+        assert!(constant_time_eq(a, b));
+        assert!(!constant_time_eq(a, c));
+
+        let str1 = "password123";
+        let str2 = "password123";
+        let str3 = "different_password";
+
+        assert!(constant_time_eq_str(str1, str2));
+        assert!(!constant_time_eq_str(str1, str3));
+    }
+
+    #[test]
+    fn test_secure_random_default() {
+        let rng = SecureRandom::default();
+        let bytes = rng.generate_bytes(16).unwrap();
+        assert_eq!(bytes.len(), 16);
+    }
+
+    #[test]
+    fn test_error_display() {
+        let error = CryptoError::RandomGenerationFailed;
+        assert_eq!(error.to_string(), "Random number generation failed");
+
+        let error = CryptoError::InvalidLength {
+            expected: 32,
+            actual: 16,
+        };
+        assert_eq!(
+            error.to_string(),
+            "Invalid input length: expected 32, got 16"
+        );
+
+        let error = CryptoError::EncryptionFailed("key error".to_string());
+        assert_eq!(error.to_string(), "Encryption failed: key error");
+    }
+
+    #[test]
+    fn test_hash_consistency() {
+        let input = "consistent_input";
+
+        // Hash should be consistent across multiple calls
+        let hash1 = hash_token(input);
+        let hash2 = hash_token(input);
+        assert_eq!(hash1, hash2);
+
+        // Same for other hash functions
+        let pass_hash1 = hash_password_sha256(input);
+        let pass_hash2 = hash_password_sha256(input);
+        assert_eq!(pass_hash1, pass_hash2);
+    }
+
+    #[test]
+    fn test_empty_input_handling() {
+        let empty = "";
+        let hash = hash_token(empty);
+        assert!(!hash.is_empty());
+        assert_eq!(hash.len(), 64); // SHA-256 always produces 64 hex chars
+
+        // Empty strings should hash to consistent values
+        let hash2 = hash_token(empty);
+        assert_eq!(hash, hash2);
     }
 }

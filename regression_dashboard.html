@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Regression Testing Dashboard</title>
+    <meta http-equiv="refresh" content="30">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .status-healthy { color: #27ae60; }
+        .status-degraded { color: #e74c3c; }
+        .card { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .metric { display: inline-block; margin: 10px; padding: 15px; background: #ecf0f1; border-radius: 5px; }
+        .alert-warning { background: #f39c12; color: white; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .alert-error { background: #e74c3c; color: white; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        .alert-info { background: #3498db; color: white; padding: 10px; margin: 5px 0; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #34495e; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 Regression Testing Dashboard</h1>
+            <p>Last Update: 2025-09-05T22:30:11.477303</p>
+            <p>System Status: <span class="status-degraded">DEGRADED</span></p>
+        </div>
+        
+        <div class="card">
+            <h2>📊 Performance Metrics</h2>
+            <div>
+                
+            <div class="metric">
+                <strong>Jwt Generation Ms</strong><br>
+                Baseline: 5<br>
+                Tolerance: 20.0%<br>
+                <span style="color: #27ae60">Deviation Rate: 0.0%</span>
+            </div>
+            
+            <div class="metric">
+                <strong>Throughput Rps</strong><br>
+                Baseline: 1000<br>
+                Tolerance: 10.0%<br>
+                <span style="color: #27ae60">Deviation Rate: 0.0%</span>
+            </div>
+            
+            <div class="metric">
+                <strong>Memory Usage Mb</strong><br>
+                Baseline: 256<br>
+                Tolerance: 15.0%<br>
+                <span style="color: #27ae60">Deviation Rate: 0.0%</span>
+            </div>
+            
+            <div class="metric">
+                <strong>Cpu Usage Percent</strong><br>
+                Baseline: 25<br>
+                Tolerance: 20.0%<br>
+                <span style="color: #27ae60">Deviation Rate: 0.0%</span>
+            </div>
+            
+            <div class="metric">
+                <strong>Auth Latency Ms</strong><br>
+                Baseline: 50<br>
+                Tolerance: 10.0%<br>
+                <span style="color: #27ae60">Deviation Rate: 0.0%</span>
+            </div>
+            
+            <div class="metric">
+                <strong>Db Query Time Ms</strong><br>
+                Baseline: 15<br>
+                Tolerance: 15.0%<br>
+                <span style="color: #27ae60">Deviation Rate: 0.0%</span>
+            </div>
+            
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>📈 Recent Test Results</h2>
+            <table>
+                <tr><th>Timestamp</th><th>Status</th><th>Tests</th></tr>
+                
+            <tr>
+                <td>2025-09-05T22:30:11</td>
+                <td style="color: #e74c3c">❌ FAIL</td>
+                <td>5</td>
+            </tr>
+            
+            </table>
+        </div>
+        
+        <div class="card">
+            <h2>🚨 Alerts</h2>
+            <p>No recent alerts</p>
+        </div>
+    </div>
+</body>
+</html>

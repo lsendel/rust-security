@@ -20,21 +20,21 @@
 //! - **Token Operations**: Secure token generation and validation
 //! - **Post-Quantum**: Future-ready post-quantum cryptography support
 
-pub mod jwt;
-pub mod passwords;
-pub mod keys;
 pub mod encryption;
+pub mod hashing;
+pub mod jwt;
+pub mod keys;
+pub mod passwords;
 pub mod random;
 pub mod tokens;
-pub mod hashing;
 
-pub use jwt::*;
-pub use passwords::*;
-pub use keys::*;
 pub use encryption::*;
+pub use hashing::*;
+pub use jwt::*;
+pub use keys::*;
+pub use passwords::*;
 pub use random::*;
 pub use tokens::*;
-pub use hashing::*;
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -45,28 +45,28 @@ use thiserror::Error;
 pub enum CryptoError {
     #[error("JWT error: {0}")]
     Jwt(#[from] JwtError),
-    
+
     #[error("Password error: {0}")]
     Password(#[from] PasswordError),
-    
+
     #[error("Key management error: {0}")]
     KeyManagement(#[from] KeyError),
-    
+
     #[error("Encryption error: {0}")]
     Encryption(#[from] EncryptionError),
-    
+
     #[error("Random generation error: {0}")]
     Random(#[from] RandomError),
-    
+
     #[error("Token error: {0}")]
     Token(#[from] TokenError),
-    
+
     #[error("Hashing error: {0}")]
     Hashing(#[from] HashingError),
-    
+
     #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
-    
+
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
 }
@@ -76,16 +76,16 @@ pub enum CryptoError {
 pub struct CryptoConfig {
     /// JWT configuration
     pub jwt: JwtConfig,
-    
+
     /// Password hashing configuration
     pub password: PasswordConfig,
-    
+
     /// Key management configuration
     pub key_management: KeyManagementConfig,
-    
+
     /// Encryption configuration
     pub encryption: EncryptionConfig,
-    
+
     /// Token generation configuration
     pub token: TokenConfig,
 }
@@ -94,7 +94,7 @@ pub struct CryptoConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum JwtAlgorithm {
     HS256,
-    HS384, 
+    HS384,
     HS512,
     RS256,
     RS384,
@@ -129,7 +129,7 @@ impl CryptoConfig {
             token: TokenConfig::from_env()?,
         })
     }
-    
+
     /// Validate the cryptographic configuration
     pub fn validate(&self) -> Result<(), CryptoError> {
         self.jwt.validate()?;
@@ -156,7 +156,7 @@ impl CryptoOperations {
     /// Initialize unified cryptographic operations
     pub async fn new(config: CryptoConfig) -> Result<Self, CryptoError> {
         config.validate()?;
-        
+
         Ok(Self {
             jwt: JwtOperations::new(config.jwt).await?,
             password: PasswordOperations::new(config.password)?,
@@ -167,37 +167,37 @@ impl CryptoOperations {
             hashing: HashingOperations::new(),
         })
     }
-    
+
     /// Get JWT operations
     pub fn jwt(&self) -> &JwtOperations {
         &self.jwt
     }
-    
+
     /// Get password operations
     pub fn password(&self) -> &PasswordOperations {
         &self.password
     }
-    
+
     /// Get key manager
     pub fn key_manager(&self) -> &KeyManager {
         &self.key_manager
     }
-    
+
     /// Get encryption operations
     pub fn encryption(&self) -> &EncryptionOperations {
         &self.encryption
     }
-    
+
     /// Get secure random
     pub fn random(&self) -> &SecureRandom {
         &self.random
     }
-    
+
     /// Get token operations
     pub fn token(&self) -> &TokenOperations {
         &self.token
     }
-    
+
     /// Get hashing operations
     pub fn hashing(&self) -> &HashingOperations {
         &self.hashing

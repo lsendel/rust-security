@@ -12,16 +12,16 @@ use serde::{Deserialize, Serialize};
 pub struct Migration {
     /// Migration version/ID
     pub version: String,
-    
+
     /// Migration name
     pub name: String,
-    
+
     /// SQL statements to apply (simplified)
     pub up_sql: Vec<String>,
-    
+
     /// Migration description
     pub description: Option<String>,
-    
+
     /// Applied timestamp
     pub applied_at: Option<DateTime<Utc>>,
 }
@@ -31,10 +31,10 @@ pub struct Migration {
 pub enum MigrationStatus {
     /// Migration is pending
     Pending,
-    
+
     /// Migration is applied
     Applied,
-    
+
     /// Migration failed
     Failed(String),
 }
@@ -53,12 +53,12 @@ impl MigrationManager {
             migrations: Vec::new(),
         }
     }
-    
+
     /// Add migration
     pub fn add_migration(&mut self, migration: Migration) {
         self.migrations.push(migration);
     }
-    
+
     /// Run migrations (simplified implementation)
     pub async fn migrate(&self) -> DatabaseResult<usize> {
         if let Some(_pg_pool) = self.pools.postgresql() {
@@ -70,10 +70,12 @@ impl MigrationManager {
             // 4. Record successful migrations
             Ok(0)
         } else {
-            Err(DatabaseError::ConfigurationError("PostgreSQL not configured".to_string()))
+            Err(DatabaseError::ConfigurationError(
+                "PostgreSQL not configured".to_string(),
+            ))
         }
     }
-    
+
     /// Get migration count
     pub fn migration_count(&self) -> usize {
         self.migrations.len()

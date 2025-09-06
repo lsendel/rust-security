@@ -259,8 +259,7 @@ impl Store for HybridStore {
         &self,
         code: &str,
         record: &AuthCodeRecord,
-        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
-        _ttl_secs: u64,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))] _ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         let record_json = serde_json::to_string(record)?;
 
@@ -370,8 +369,9 @@ impl Store for HybridStore {
         &self,
         token: &str,
         record: &TokenRecord,
-        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
-        _ttl_secs: Option<u64>,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))] _ttl_secs: Option<
+            u64,
+        >,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let _record_json = serde_json::to_string(record)?;
 
@@ -433,8 +433,7 @@ impl Store for HybridStore {
         &self,
         refresh_token: &str,
         access_token: &str,
-        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))]
-        _ttl_secs: u64,
+        #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))] _ttl_secs: u64,
     ) -> Result<(), Box<dyn StdError + Send + Sync>> {
         // Store in Redis first (primary storage)
         #[cfg(feature = "redis-sessions")]

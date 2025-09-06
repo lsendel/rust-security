@@ -12,35 +12,36 @@ use tower_http::limit::RequestBodyLimitLayer;
 const REQUEST_TIMESTAMP_WINDOW_SECONDS: i64 = 300; // 5 minutes
 
 /// Secure token binding salt - loaded from environment or generated
-static TOKEN_BINDING_SALT: std::sync::LazyLock<Result<String, &'static str>> = std::sync::LazyLock::new(|| {
-    match std::env::var("TOKEN_BINDING_SALT") {
-        Ok(salt) if salt.len() >= 32 => Ok(salt),
-        Ok(_) => Err("TOKEN_BINDING_SALT environment variable must be at least 32 characters"),
-        Err(_) => {
-            use ring::rand::SystemRandom;
+static TOKEN_BINDING_SALT: std::sync::LazyLock<Result<String, &'static str>> =
+    std::sync::LazyLock::new(|| {
+        match std::env::var("TOKEN_BINDING_SALT") {
+            Ok(salt) if salt.len() >= 32 => Ok(salt),
+            Ok(_) => Err("TOKEN_BINDING_SALT environment variable must be at least 32 characters"),
+            Err(_) => {
+                use ring::rand::SystemRandom;
 
-            // Generate a cryptographically secure salt with proper error handling
-            let mut salt = [0u8; 32];
+                // Generate a cryptographically secure salt with proper error handling
+                let mut salt = [0u8; 32];
 
-            // Try multiple times before failing securely
-            for attempt in 0..5 {
-                if SystemRandom::new().fill(&mut salt).is_ok() {
-                    return Ok(hex::encode(salt));
+                // Try multiple times before failing securely
+                for attempt in 0..5 {
+                    if SystemRandom::new().fill(&mut salt).is_ok() {
+                        return Ok(hex::encode(salt));
+                    }
+                    tracing::warn!(
+                        "Salt generation attempt {} failed, retrying...",
+                        attempt + 1
+                    );
+                    // Brief delay between attempts
+                    std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1)));
                 }
-                tracing::warn!(
-                    "Salt generation attempt {} failed, retrying...",
-                    attempt + 1
-                );
-                // Brief delay between attempts
-                std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1)));
-            }
 
-            // SECURITY: Never use weak fallbacks - fail securely instead
-            tracing::error!("CRITICAL: Failed to generate secure random salt after 5 attempts");
-            Err("Cannot generate cryptographically secure token binding salt")
+                // SECURITY: Never use weak fallbacks - fail securely instead
+                tracing::error!("CRITICAL: Failed to generate secure random salt after 5 attempts");
+                Err("Cannot generate cryptographically secure token binding salt")
+            }
         }
-    }
-});
+    });
 
 /// Generate a token binding value from client information using secure practices
 pub fn generate_token_binding(client_ip: &str, user_agent: &str) -> Result<String, &'static str> {

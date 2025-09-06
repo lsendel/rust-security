@@ -1,5 +1,12 @@
 name: Fast PR Checks
 
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-fast-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches: [main, develop]
@@ -31,24 +38,39 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Cache cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-pr-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-pr-
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
 
       - name: Fast compilation check
-        run: cargo check --workspace --profile dev-fast
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just build
+          else
+            cargo check --workspace --profile dev-fast
+          fi
 
       - name: Format check
-        run: cargo fmt --all -- --check
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just fmt-check
+          else
+            cargo fmt --all -- --check
+          fi
 
       - name: Clippy check
-        run: cargo clippy --workspace --all-targets -- -D warnings --allow clippy::too_many_arguments
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just lint
+          else
+            cargo clippy --workspace --all-targets -- -D warnings --allow clippy::too_many_arguments
+          fi
 
       - name: Security audit (fast)
         run: |
@@ -56,7 +78,12 @@ jobs:
           cargo audit --format json | jq -e '.vulnerabilities.found == false' || (echo "Security vulnerabilities found" && exit 1)
 
       - name: Run unit tests only
-        run: cargo test --workspace --lib --profile dev-fast
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just test
+          else
+            cargo test --workspace --lib --profile dev-fast
+          fi
 
   # Comprehensive checks for PRs (only if fast checks pass)
   pr-comprehensive:
@@ -72,16 +99,15 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target/debug
-          key: ${{ runner.os }}-cargo-pr-comp-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-pr-comp-
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
 
       - name: Run integration tests
         run: cargo test --workspace --test '*' --profile test
@@ -134,15 +160,15 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Cache cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-pr-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-pr-
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
 
       - name: Fast compilation check (policy-service)
         run: cargo check -p policy-service --profile dev-fast

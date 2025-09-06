@@ -52,7 +52,11 @@ pub async fn authorize(
                     .get("type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Unknown");
-                let endpoint_group = action.split("::").next().unwrap_or("unknown").to_lowercase();
+                let endpoint_group = action
+                    .split("::")
+                    .next()
+                    .unwrap_or("unknown")
+                    .to_lowercase();
                 crate::metrics::MetricsHelper::record_policy_evaluation(
                     "remote",
                     &endpoint_group,
@@ -71,7 +75,7 @@ pub async fn authorize(
     };
 
     #[cfg_attr(not(feature = "metrics"), allow(unused_variables))]
-            let elapsed = start.elapsed();
+    let elapsed = start.elapsed();
 
     // Record metrics in a minimal way via the infrastructure metrics collector
     container
@@ -96,7 +100,11 @@ pub async fn authorize(
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown");
-            let endpoint_group = action.split("::").next().unwrap_or("unknown").to_lowercase();
+            let endpoint_group = action
+                .split("::")
+                .next()
+                .unwrap_or("unknown")
+                .to_lowercase();
             crate::metrics::MetricsHelper::record_policy_evaluation(
                 "remote",
                 &endpoint_group,
@@ -130,7 +138,11 @@ pub async fn authorize(
             .get("type")
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown");
-        let endpoint_group = action.split("::").next().unwrap_or("unknown").to_lowercase();
+        let endpoint_group = action
+            .split("::")
+            .next()
+            .unwrap_or("unknown")
+            .to_lowercase();
         crate::metrics::MetricsHelper::record_policy_evaluation(
             "remote",
             &endpoint_group,
@@ -205,7 +217,11 @@ pub async fn authorize_basic(
                     .get("type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Unknown");
-                let endpoint_group = action.split("::").next().unwrap_or("unknown").to_lowercase();
+                let endpoint_group = action
+                    .split("::")
+                    .next()
+                    .unwrap_or("unknown")
+                    .to_lowercase();
                 crate::metrics::MetricsHelper::record_policy_evaluation(
                     "remote",
                     &endpoint_group,
@@ -221,7 +237,7 @@ pub async fn authorize_basic(
 
     if !resp.status().is_success() {
         #[cfg_attr(not(feature = "metrics"), allow(unused_variables))]
-            let elapsed = start.elapsed();
+        let elapsed = start.elapsed();
         #[cfg(feature = "metrics")]
         {
             let action = payload.action.as_str();
@@ -230,7 +246,11 @@ pub async fn authorize_basic(
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown");
-            let endpoint_group = action.split("::").next().unwrap_or("unknown").to_lowercase();
+            let endpoint_group = action
+                .split("::")
+                .next()
+                .unwrap_or("unknown")
+                .to_lowercase();
             crate::metrics::MetricsHelper::record_policy_evaluation(
                 "remote",
                 &endpoint_group,
@@ -245,7 +265,7 @@ pub async fn authorize_basic(
 
     let body: PolicyAuthorizeResponse = resp.json().await?;
     #[cfg_attr(not(feature = "metrics"), allow(unused_variables))]
-            let elapsed = start.elapsed();
+    let elapsed = start.elapsed();
 
     #[cfg(feature = "metrics")]
     {
@@ -260,7 +280,11 @@ pub async fn authorize_basic(
             .get("type")
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown");
-        let endpoint_group = action.split("::").next().unwrap_or("unknown").to_lowercase();
+        let endpoint_group = action
+            .split("::")
+            .next()
+            .unwrap_or("unknown")
+            .to_lowercase();
         crate::metrics::MetricsHelper::record_policy_evaluation(
             "remote",
             &endpoint_group,

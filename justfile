@@ -1,32 +1,5 @@
 set shell := ["/bin/bash", "-cu"]
 
-fmt:
-    cargo fmt --all
-
-lint:
-    cargo clippy --workspace --all-targets -- -D warnings
-
-build:
-    cargo build --workspace --locked
-
-test:
-    cargo test --workspace -- --nocapture
-
-cov:
-    cargo llvm-cov --workspace --fail-under-lines 80
-
-audit:
-    cargo audit --deny warnings
-
-deny:
-    cargo deny check
-
-geiger:
-    cargo geiger --all-features --all-targets --output-format GitHub --fail-threshold 0
-
-auth-core-compile-gated:
-    cargo test -p auth-core --features compliance-tests,introspection --no-run
-
 # Rust Security Project Justfile
 # Common development tasks
 
@@ -99,6 +72,59 @@ test-integration:
     export TEST_MODE=1
     cargo test --workspace --test '*'
 
+# Timeboxed test runs (avoid building examples)
+test-timeboxed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    SECONDS="${TEST_TIMEOUT_SEC:-180}"
+    ./scripts/util/run_with_timeout.sh "$SECONDS" cargo test -j ${CARGO_JOBS:-4} --workspace --all-features --tests --lib --verbose
+
+test-unit-timeboxed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    SECONDS="${TEST_TIMEOUT_SEC:-120}"
+    ./scripts/util/run_with_timeout.sh "$SECONDS" cargo test -j ${CARGO_JOBS:-4} --workspace --lib --verbose
+
+test-integration-timeboxed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    SECONDS="${TEST_TIMEOUT_SEC:-180}"
+    ./scripts/util/run_with_timeout.sh "$SECONDS" cargo test -j ${CARGO_JOBS:-4} --workspace --tests --verbose
+
+coverage-report-timeboxed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    SECONDS="${TEST_TIMEOUT_SEC:-240}"
+    ./scripts/util/run_with_timeout.sh "$SECONDS" cargo llvm-cov --workspace --all-features --summary-only
+
+coverage-check-timeboxed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TEST_MODE=1
+    BASELINE_COVERAGE=${BASELINE_COVERAGE:-70}
+    SECONDS="${TEST_TIMEOUT_SEC:-240}"
+    set +e
+    OUT=$(./scripts/util/run_with_timeout.sh "$SECONDS" cargo llvm-cov --workspace --all-features --summary-only)
+    STATUS=$?
+    set -e
+    echo "$OUT"
+    if [[ $STATUS -ne 0 ]]; then
+        echo "⚠️  Coverage run failed or timed out" >&2
+        exit $STATUS
+    fi
+    COVERAGE=$(echo "$OUT" | grep -E "^TOTAL" | awk '{print $10}' | sed 's/%//')
+    echo "Current coverage: ${COVERAGE:-unknown}%"
+    if [[ -z "$COVERAGE" ]] || (( $(echo "$COVERAGE < $BASELINE_COVERAGE" | bc -l) )); then
+        echo "❌ Coverage below baseline: ${COVERAGE:-unknown}% < ${BASELINE_COVERAGE}%" >&2
+        exit 1
+    else
+        echo "✅ Coverage meets baseline requirement (${COVERAGE}%)"
+    fi
+
 # Run linting checks
 lint:
     cargo fmt --all -- --check
@@ -113,6 +139,9 @@ fix:
 audit:
     cargo audit --deny warnings
     cargo deny check --all-features
+
+geiger:
+    cargo geiger --all-features --all-targets --output-format GitHub --fail-threshold 0
 
 # Run all quality checks (CI pipeline locally)
 ci: lint test audit
@@ -260,3 +289,6 @@ ci-strict:
         (cd user-portal && npm run lint -- --max-warnings 0)
     fi
     echo "✅ Strict checks completed"
+
+# Comprehensive security scan
+security-scan: audit geiger

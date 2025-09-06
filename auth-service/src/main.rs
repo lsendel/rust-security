@@ -15,10 +15,10 @@ mod config;
 
 use auth_service::auth_api::AuthState;
 use auth_service::infrastructure::security::security::{rate_limit, start_rate_limiter_cleanup};
+use auth_service::middleware::csrf::csrf_protect;
 use auth_service::middleware::{
     initialize_threat_detection, threat_detection_middleware, threat_metrics,
 };
-use auth_service::middleware::csrf::csrf_protect;
 use auth_service::security_enhancements::ThreatDetector;
 use config::Config;
 // Initialize secure JWT key management
@@ -29,14 +29,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // SECURITY: Load and validate configuration before doing anything else
     let config = auth_service::config_secure_validation::SecureConfig::from_env()
         .context("Failed to load secure configuration")?;
-    
+
     // Validate production readiness if in production
-    config.validate_production_ready()
+    config
+        .validate_production_ready()
         .context("Configuration failed production readiness check")?;
-    
+
     // Log security configuration status (without sensitive values)
     config.log_security_status();
-    
+
     // Initialize logging (structured in production, pretty in dev)
     // Prefer production logging configuration when APP_ENV=production
     if std::env::var("APP_ENV")
@@ -128,7 +129,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/health", axum::routing::get(health_check))
         .route("/api/v1/status", axum::routing::get(status))
         // CSRF token endpoint
-        .route("/csrf/token", axum::routing::get(auth_service::middleware::csrf::issue_csrf_token))
+        .route(
+            "/csrf/token",
+            axum::routing::get(auth_service::middleware::csrf::issue_csrf_token),
+        )
         // Authentication endpoints
         .route(
             "/api/v1/auth/register",
@@ -177,8 +181,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Observability: expose Prometheus metrics and add request metrics middleware when enabled
     #[cfg(feature = "metrics")]
     {
-        use axum::routing::get;
         use axum::response::IntoResponse as _;
+        use axum::routing::get;
         // Add request metrics middleware
         app = app.layer(axum::middleware::from_fn(
             auth_service::metrics::metrics_middleware,
@@ -187,8 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         app = app.route(
             "/metrics",
             get(|| async move {
-                if std::env::var("METRICS_PUBLIC").unwrap_or_else(|_| "false".to_string())
-                    == "true"
+                if std::env::var("METRICS_PUBLIC").unwrap_or_else(|_| "false".to_string()) == "true"
                 {
                     auth_service::metrics::metrics_handler().into_response()
                 } else {

@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # Test PostgreSQL Database
+  postgres-test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: authdb_test
+      POSTGRES_USER: authuser_test
+      POSTGRES_PASSWORD: authpass_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./config/init-test-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authuser_test -d authdb_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Test Redis
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - test-network
+
+  # Auth Service for Testing
+  auth-service-test:
+    build:
+      context: ../
+      dockerfile: auth-service/Dockerfile
+    environment:
+      - RUST_LOG=debug
+      - TEST_MODE=1
+      - JWT_SECRET=test-secret-key-32-characters-minimum
+      - DATABASE_URL=postgresql://authuser_test:authpass_test@postgres-test:5432/authdb_test
+      - REDIS_URL=redis://redis-test:6379
+      - BIND_ADDRESS=0.0.0.0:8080
+      - ENABLE_METRICS=true
+      - ENABLE_API_KEYS=true
+      - ENABLE_REDIS_SESSIONS=true
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - test-network
+
+  # Frontend for Testing
+  frontend-test:
+    build:
+      context: ../user-portal
+      dockerfile: Dockerfile
+    ports:
+      - "5174:3000"
+    environment:
+      - VITE_API_URL=http://auth-service-test:8080
+      - NODE_ENV=test
+    depends_on:
+      - auth-service-test
+    networks:
+      - test-network
+
+  # E2E Test Runner
+  e2e-tests:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.playwright
+    environment:
+      - BASE_URL=http://auth-service-test:8080
+      - FRONTEND_URL=http://frontend-test:3000
+      - API_BASE_URL=http://auth-service-test:8080
+      - DATABASE_URL=postgresql://authuser_test:authpass_test@postgres-test:5432/authdb_test
+      - REDIS_URL=redis://redis-test:6379
+      - CI=true
+      - PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+    volumes:
+      - ./reports:/app/reports
+      - ./evidence:/app/evidence
+      - ./tests:/app/tests:ro
+    depends_on:
+      auth-service-test:
+        condition: service_healthy
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    profiles: ["test"]
+
+  # Test Results Viewer (Optional)
+  test-viewer:
+    image: nginx:alpine
+    ports:
+      - "8082:80"
+    volumes:
+      - ./reports:/usr/share/nginx/html:ro
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+    profiles: ["viewer"]
+    networks:
+      - test-network
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+
+networks:
+  test-network:
+    driver: bridge

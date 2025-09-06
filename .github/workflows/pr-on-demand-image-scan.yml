@@ -1,0 +1,126 @@
+name: PR On-Demand Image Scan
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  security-events: write
+
+concurrency:
+  group: pr-on-demand-image-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  run-image-scan:
+    name: Build and scan Docker images for PR
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/image-scan')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize commenter
+        id: auth
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            let allowed = false;
+            let level = 'none';
+            if (commenter === 'github-actions[bot]') {
+              allowed = true;
+              level = 'bot';
+            } else {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: commenter,
+              });
+              level = data.permission;
+              allowed = ['admin','maintain','write'].includes(level);
+            }
+            core.setOutput('allowed', String(allowed));
+            core.setOutput('level', level);
+
+      - name: Deny unauthorized user
+        if: steps.auth.outputs.allowed != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ You are not authorized to run /image-scan. Maintainers only.'
+            });
+            core.setFailed('Unauthorized commenter');
+
+      - name: Extract PR metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('head_sha', pr.head.sha);
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.52.2
+
+      - name: Build and scan images
+        id: scan
+        run: |
+          set -euo pipefail
+          mkdir -p image-scan
+          shopt -s nullglob
+          files=( $(git ls-files | grep -E '(^|/)Dockerfile(\..*)?$' || true) )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No Dockerfiles found; scanning Dockerfile configs if any"
+            trivy config --file-patterns="Dockerfile*" . --format sarif --output image-scan/dockerfile-config.sarif || true
+          else
+            for df in "${files[@]}"; do
+              name="pr${{ github.event.issue.number }}-$(echo "$df" | tr '/.' '-')"
+              echo "Building image $name from $df"
+              docker build -f "$df" -t "$name" . || true
+              echo "Scanning image $name"
+              trivy image "$name" --format sarif --output "image-scan/${name}.sarif" || true
+            done
+          fi
+
+      - name: Upload SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: image-scan
+
+      - name: Upload image scan artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-image-scan-${{ github.event.issue.number }}
+          path: image-scan
+
+      - name: Comment results on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const msg = `🐳 Image scan completed. Artifacts: pr-image-scan-${{ github.event.issue.number }} (SARIF uploaded to Code Scanning).`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: msg,
+            });

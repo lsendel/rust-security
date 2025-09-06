@@ -1,0 +1,192 @@
+name: Enhanced Regression Testing
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - quick
+        - full
+        - security
+        - performance
+      parallel_jobs:
+        description: 'Parallel jobs'
+        required: false
+        default: '4'
+
+env:
+  CARGO_TERM_COLOR: always
+  MAX_PARALLEL_JOBS: ${{ github.event.inputs.parallel_jobs || '4' }}
+  REGRESSION_MODE: ${{ github.event.inputs.test_mode || 'full' }}
+
+jobs:
+  regression-quick:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Initialize baselines
+      run: make -f Makefile.regression regression-baseline-init
+    
+    - name: Run quick regression tests
+      run: make -f Makefile.regression regression-quick
+    
+    - name: Upload regression reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: regression-reports-quick
+        path: regression_reports/
+        retention-days: 7
+
+  regression-full:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    strategy:
+      matrix:
+        test_suite: [security, performance, database, api]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt, llvm-tools-preview
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq bc python3-pip
+        pip3 install numpy scipy
+        cargo install cargo-llvm-cov
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Initialize baselines
+      run: make -f Makefile.regression regression-baseline-init
+    
+    - name: Run regression test suite
+      run: |
+        export MAX_PARALLEL_JOBS=2
+        ./scripts/regression_orchestrator.sh ${{ matrix.test_suite }}
+    
+    - name: Generate analysis report
+      run: python3 scripts/regression_analyzer.py report regression_analysis_${{ matrix.test_suite }}.json
+    
+    - name: Upload regression artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: regression-artifacts-${{ matrix.test_suite }}
+        path: |
+          regression_reports/
+          regression_analysis_*.json
+          tests/baseline/
+        retention-days: 30
+
+  regression-analysis:
+    needs: [regression-full]
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install analysis dependencies
+      run: pip3 install numpy scipy matplotlib pandas
+    
+    - name: Consolidate reports
+      run: |
+        mkdir -p consolidated_reports
+        find artifacts/ -name "*.json" -exec cp {} consolidated_reports/ \;
+    
+    - name: Generate comprehensive analysis
+      run: |
+        python3 scripts/regression_analyzer.py report comprehensive_analysis.json
+        echo "## 📊 Regression Analysis Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Test suites executed: $(ls artifacts/ | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "- Analysis timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
+    
+    - name: Upload comprehensive report
+      uses: actions/upload-artifact@v3
+      with:
+        name: comprehensive-regression-analysis
+        path: comprehensive_analysis.json
+        retention-days: 90
+
+  performance-baseline-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq bc
+    
+    - name: Check performance baselines
+      run: |
+        ./scripts/baseline_manager.sh validate auth_latency_ms 45
+        ./scripts/baseline_manager.sh validate db_query_time_ms 12
+        ./scripts/baseline_manager.sh validate jwt_generation_ms 4
+    
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Performance baselines validated successfully'
+          })

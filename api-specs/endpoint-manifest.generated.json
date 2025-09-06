@@ -1,0 +1,860 @@
+{
+  "generated_at": "2025-09-05T21:10:50.099292Z",
+  "endpoints": [
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/",
+      "file": "auth-service/src/api_key_endpoints.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/.well-known/jwks.json",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/:prefix",
+      "file": "auth-service/src/api_key_endpoints.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/admin/revoke",
+      "file": "auth-service/src/app/mvp_router.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/endpoint",
+      "file": "auth-service/src/middleware/threat_detection.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/test",
+      "file": "auth-service/src/infrastructure/security/security_headers.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "file": "auth-service/src/app/router.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/v1/identities",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/identities",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/v1/identities/:id",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/identities/:id/baseline",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/v1/identities/:id/metrics",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/identities/:id/rotate",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "DELETE",
+      "path": "/api/v1/identities/:id/tokens",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/api/v1/status",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/api/v1/tokens/jit",
+      "file": "auth-service/src/service_identity_api.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/auth/login",
+      "file": "auth-service/src/handlers/auth.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/auth/logout",
+      "file": "auth-service/src/handlers/auth.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/auth/me",
+      "file": "auth-service/src/handlers/auth.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/auth/register",
+      "file": "auth-service/src/handlers/auth.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/benchmark",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/compliance/report",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/config",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/csrf/token",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/emergency/rollback",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/health",
+      "file": "auth-service/src/lib.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/health/detailed",
+      "file": "auth-service/src/app/router.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/internal/threat-metrics",
+      "file": "auth-service/src/middleware/threat_detection.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/jwks.json",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/jwt/create",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/keys/rotate",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/keys/stats",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/metrics",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/migration/phase",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/migration/timeline",
+      "file": "auth-service/src/pq_integration.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/oauth/authorize",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/oauth/introspect",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/oauth/token",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/observability/alerts",
+      "file": "auth-service/src/infrastructure/monitoring/observability_init.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/observability/dashboard",
+      "file": "auth-service/src/infrastructure/monitoring/observability_init.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/observability/profiles",
+      "file": "auth-service/src/infrastructure/monitoring/observability_init.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/observability/slo",
+      "file": "auth-service/src/infrastructure/monitoring/observability_init.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/reload",
+      "file": "auth-service/src/config_endpoints.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/rollback",
+      "file": "auth-service/src/config_endpoints.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/schema",
+      "file": "auth-service/src/config_endpoints.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/scim/Users",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/scim/Users",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/scim/v2/Bulk",
+      "file": "auth-service/src/scim.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/scim/v2/Groups",
+      "file": "auth-service/src/scim.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/scim/v2/Groups/:id",
+      "file": "auth-service/src/scim.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/scim/v2/Users",
+      "file": "auth-service/src/scim.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/scim/v2/Users/:id",
+      "file": "auth-service/src/scim.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/security/threats/metrics",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/service/identity/register",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/status",
+      "file": "auth-service/src/config_endpoints.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/test",
+      "file": "auth-service/src/infrastructure/security/security_headers.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/token/jit",
+      "file": "auth-service/src/main.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/2fa/enable",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/2fa/verify",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/login",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/password/confirm",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/password/reset",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/refresh",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/register",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/auth/sessions",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "DELETE",
+      "path": "/v1/auth/sessions/{sessionId}",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/auth/verify",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v1/oauth/introspect",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v1/oauth/token",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/v1/scim/Users",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v1/scim/Users",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/users/{userId}/permissions",
+      "file": "api-specs/auth-service.openapi.yaml"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v2/oauth/introspect",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v2/oauth/token",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/v2/scim/Users",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v2/scim/Users",
+      "file": "auth-service/src/api_versioning.rs"
+    },
+    {
+      "service": "auth-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/validate",
+      "file": "auth-service/src/config_endpoints.rs"
+    },
+    {
+      "service": "policy-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/health",
+      "file": "enterprise/policy-service/src/lib.rs"
+    },
+    {
+      "service": "policy-service",
+      "source": "code",
+      "method": "GET",
+      "path": "/metrics",
+      "file": "enterprise/policy-service/src/lib.rs"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/audit/logs",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "code",
+      "method": "POST",
+      "path": "/v1/authorize",
+      "file": "enterprise/policy-service/src/lib.rs"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/policies",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/policies",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "DELETE",
+      "path": "/v1/policies/{policyId}",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/policies/{policyId}",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "PUT",
+      "path": "/v1/policies/{policyId}",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/policies/{policyId}/activate",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/policies/{policyId}/deactivate",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/policies/{policyId}/rules",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/v1/templates",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "policy-service",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/v1/templates/{templateId}/apply",
+      "file": "api-specs/policy-service.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/ai-threat-detection/analysis/{jobId}",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/ai-threat-detection/analyze",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/auth/login",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/auth/logout",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/auth/me",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/auth/register",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/behavioral-analysis/evaluate",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/behavioral-analysis/users/{userId}/profile",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/health",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/metrics",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/mfa/totp/register",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/mfa/totp/verify",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/oauth/authorize",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/oauth/token",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/policy/authorize",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/policy/authorize/batch",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/scim/v2/Users",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/scim/v2/Users",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/soar/incidents",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/soar/incidents",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/soar/incidents/{incidentId}",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/soar/playbooks",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/soar/playbooks/{playbookId}/execute",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "GET",
+      "path": "/threat-intelligence/indicators",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/threat-intelligence/indicators",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/webauthn/register/begin",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    },
+    {
+      "service": "unknown",
+      "source": "openapi",
+      "method": "POST",
+      "path": "/webauthn/register/finish",
+      "file": "api-specs/complete-platform.openapi.yaml"
+    }
+  ],
+  "notes": "Sources include router code and OpenAPI specs; verify bases for nested routers."
+}

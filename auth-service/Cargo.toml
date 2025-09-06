@@ -92,6 +92,9 @@ regex = { workspace = true }
 tempfile = { workspace = true }
 proptest = "1.5"
 sha1 = "0.10"
+libc = "0.2"
+wiremock = "0.6"
+cfg-if = "1.0"
 
 [features]
 # MVP-focused feature set

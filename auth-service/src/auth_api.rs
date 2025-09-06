@@ -18,11 +18,14 @@ use axum::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{
+    decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::error;
 use tracing::{info, warn};
 use uuid::Uuid;
 use validator::Validate;
@@ -237,7 +240,7 @@ fn verify_password(password: &str, hash: &str) -> bool {
 
     // If parsing or verification fails, reject the login
     tracing::warn!(
-        target: "security_audit", 
+        target: "security_audit",
         "Password verification failed: invalid Argon2 hash format"
     );
     false
@@ -550,19 +553,19 @@ pub async fn login(
             csrf_token, secure
         );
         match csrf_cookie.parse() {
-        Ok(cookie_value) => {
-            headers.append(axum::http::header::SET_COOKIE, cookie_value);
+            Ok(cookie_value) => {
+                headers.append(axum::http::header::SET_COOKIE, cookie_value);
+            }
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "server_error".to_string(),
+                        error_description: "Failed to create secure cookie".to_string(),
+                    }),
+                ));
+            }
         }
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "server_error".to_string(),
-                    error_description: "Failed to create secure cookie".to_string(),
-                }),
-            ));
-        }
-    }
 
         Ok((
             headers,
@@ -833,31 +836,32 @@ async fn handle_authorization_code_flow(
     }))
 }
 
-/// Validate and consume authorization code
+/// Validate and consume authorization code (single-use, atomic operation)
 async fn validate_and_consume_auth_code(
     state: &AuthState,
     code: &str,
 ) -> Result<(String, String), (StatusCode, Json<ErrorResponse>)> {
-    let (user_id, scope) = {
-        let result: Result<(String, String), (StatusCode, Json<ErrorResponse>)> = {
-            let mut codes = state.authorization_codes.write().await;
-            if let Some(auth_code) = codes.get_mut(code) {
-                if auth_code.used || Utc::now() > auth_code.expires_at {
-                    return Err(oauth_error(
-                        "invalid_grant",
-                        "Authorization code expired or already used",
-                    ));
-                }
-                auth_code.used = true;
-                Ok((auth_code.user_id.clone(), auth_code.scope.clone()))
-            } else {
-                Err(oauth_error("invalid_grant", "Invalid authorization code"))
-            }
-        };
-        result?
-    };
+    let mut codes = state.authorization_codes.write().await;
 
-    Ok((user_id, scope))
+    // Remove the code atomically to prevent reuse
+    if let Some(auth_code) = codes.remove(code) {
+        // Check expiration after removal
+        if Utc::now() > auth_code.expires_at {
+            return Err(oauth_error("invalid_grant", "Authorization code expired"));
+        }
+
+        // Check if already used (should not happen with removal, but defense in depth)
+        if auth_code.used {
+            return Err(oauth_error(
+                "invalid_grant",
+                "Authorization code already used",
+            ));
+        }
+
+        Ok((auth_code.user_id, auth_code.scope))
+    } else {
+        Err(oauth_error("invalid_grant", "Invalid authorization code"))
+    }
 }
 
 /// Find user by ID
@@ -903,19 +907,45 @@ fn oauth_error(error: &str, description: &str) -> (StatusCode, Json<ErrorRespons
     )
 }
 
-/// Validate JWT token using secure JWKS manager or fallback to HS256
+/// Validate JWT token with strict algorithm enforcement
 ///
-/// This function tries `EdDSA` validation first, then falls back to `HS256` for backward compatibility
+/// This function enforces the configured algorithm without fallback to prevent algorithm confusion attacks
 fn validate_jwt_token(
     token: &str,
     auth_state: &AuthState,
 ) -> Result<Claims, (StatusCode, Json<ErrorResponse>)> {
-    // JWKS functionality temporarily disabled for build compatibility
+    // Parse the token header to verify algorithm matches expectation
+    let header = decode_header(token).map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid_token".to_string(),
+                error_description: "Malformed token header".to_string(),
+            }),
+        )
+    })?;
 
-    // Fallback to HS256 validation for backward compatibility
-    warn!("Falling back to legacy HS256 validation - consider migrating to EdDSA");
+    // Enforce algorithm matches expected algorithm (prevent algorithm confusion)
+    if header.alg != Algorithm::HS256 {
+        error!(
+            "Token algorithm mismatch: expected HS256, got {:?}",
+            header.alg
+        );
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid_token".to_string(),
+                error_description: "Token algorithm not supported".to_string(),
+            }),
+        ));
+    }
+
+    // Configure strict validation
     let mut validation = Validation::new(Algorithm::HS256);
-    validation.algorithms = vec![Algorithm::HS256];
+    validation.algorithms = vec![Algorithm::HS256]; // Only allow HS256
+    validation.required_spec_claims.insert("exp".to_string());
+    validation.required_spec_claims.insert("iat".to_string());
+    validation.required_spec_claims.insert("nbf".to_string());
 
     let token_data = decode::<Claims>(
         token,
@@ -923,7 +953,7 @@ fn validate_jwt_token(
         &validation,
     )
     .map_err(|e| {
-        warn!("Token validation failed completely: {}", e);
+        error!("Token validation failed: {}", e);
         (
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {

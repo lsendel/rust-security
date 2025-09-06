@@ -1,0 +1,214 @@
+{
+  "testName": "multi-tenant",
+  "testSuite": "integration-critical",
+  "startTime": "2025-09-05T22:06:09.884Z",
+  "endTime": "2025-09-05T22:06:10.011Z",
+  "duration": 127,
+  "status": "PASS",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "Billing Integration Setup",
+      "description": "Testing tenant billing and usage tracking integration",
+      "timestamp": "2025-09-05T22:06:09.885Z",
+      "screenshot": "step-1-Billing-Integration-Setup-2025-09-05T22-06-09-885Z.png",
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 2,
+      "action": "Usage Tracking",
+      "description": "Tracking: API calls per tenant",
+      "timestamp": "2025-09-05T22:06:09.942Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 3,
+      "action": "Usage Tracking",
+      "description": "Tracking: Storage usage per tenant",
+      "timestamp": "2025-09-05T22:06:09.944Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 4,
+      "action": "Usage Tracking",
+      "description": "Tracking: Compute resources consumed",
+      "timestamp": "2025-09-05T22:06:09.946Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 5,
+      "action": "Usage Tracking",
+      "description": "Tracking: Bandwidth utilization",
+      "timestamp": "2025-09-05T22:06:09.948Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 6,
+      "action": "Usage Tracking",
+      "description": "Tracking: Feature usage analytics",
+      "timestamp": "2025-09-05T22:06:09.949Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 7,
+      "action": "Billing Feature",
+      "description": "Testing: Usage-based billing calculation",
+      "timestamp": "2025-09-05T22:06:09.950Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 8,
+      "action": "Billing Feature",
+      "description": "Testing: Invoice generation",
+      "timestamp": "2025-09-05T22:06:09.952Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 9,
+      "action": "Billing Feature",
+      "description": "Testing: Payment processing integration",
+      "timestamp": "2025-09-05T22:06:09.954Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 10,
+      "action": "Billing Feature",
+      "description": "Testing: Billing dispute handling",
+      "timestamp": "2025-09-05T22:06:09.956Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 11,
+      "action": "Billing Feature",
+      "description": "Testing: Usage alerts and notifications",
+      "timestamp": "2025-09-05T22:06:09.959Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 12,
+      "action": "Billing and Usage Validated",
+      "description": "Tenant billing and usage tracking working accurately",
+      "timestamp": "2025-09-05T22:06:09.961Z",
+      "screenshot": "step-12-Billing-and-Usage-Validated-2025-09-05T22-06-09-961Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 60,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    }
+  ],
+  "summary": {
+    "totalSteps": 12,
+    "screenshotCount": 2,
+    "networkRequestCount": 0,
+    "securityCheckCount": 0,
+    "accessibilityIssueCount": 0
+  },
+  "environment": {
+    "browser": "chromium",
+    "viewport": "1280x720",
+    "userAgent": "Playwright Test Agent",
+    "platform": "darwin"
+  },
+  "businessMetrics": {
+    "userJourneyCompletion": true,
+    "criticalPathValidated": true,
+    "performanceSLAMet": true,
+    "securityRequirementsMet": true
+  }
+}

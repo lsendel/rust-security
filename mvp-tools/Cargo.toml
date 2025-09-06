@@ -1,6 +1,7 @@
 [package]
 name = "mvp-tools"
 version = "0.1.0"
+license = "MIT"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -22,6 +23,7 @@ log = { workspace = true }
 rand = { workspace = true }
 hex = { workspace = true }
 sha2 = { workspace = true }
+cargo-geiger = "0.13.0"
 
 # Optional features for different tools
 [features]

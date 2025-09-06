@@ -1,5 +1,12 @@
 name: Automated Threat Model Testing
 
+permissions:
+  contents: read
+
+concurrency:
+  group: threat-model-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, develop ]

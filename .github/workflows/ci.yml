@@ -1,10 +1,25 @@
 name: CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, master, develop, '**/fix-*', '**/feat-*' ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'user-portal/**'
   pull_request:
     branches: [ main, master, develop ]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'user-portal/**'
 
 jobs:
   ci:
@@ -15,35 +30,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install Rust toolchain and components
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
           components: rustfmt, clippy
 
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
+
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just fmt-check
+          else
+            cargo fmt --all -- --check
+          fi
 
       - name: Run clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just lint
+          else
+            cargo clippy --workspace -- -D warnings
+          fi
 
       - name: Run tests
-        run: cargo test --workspace --locked
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just test
+          else
+            cargo test --workspace --locked
+          fi
         env:
           RUST_BACKTRACE: full
 
@@ -57,6 +81,8 @@ jobs:
   policy-service:
     name: Policy Service (isolated)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         task: [build, clippy, test]
@@ -92,37 +118,83 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install Rust toolchain and components
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
           components: rustfmt, clippy
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just || true
+          fi
+
+  ci-beta:
+    name: CI (beta toolchain - check only)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (beta)
+        uses: dtolnay/rust-toolchain@beta
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo check
+        run: cargo check --workspace --locked
+
+  ci-os-smoke:
+    name: CI OS Smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo check (workspace)
+        run: cargo check --workspace --locked
 
       - name: Build policy-service
         if: matrix.task == 'build'
-        run: cargo build -p policy-service --all-features --locked
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just build
+          else
+            cargo build -p policy-service --all-features --locked
+          fi
 
       - name: Clippy policy-service
         if: matrix.task == 'clippy'
-        run: cargo clippy -p policy-service --all-targets --all-features -- -D warnings
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just lint
+          else
+            cargo clippy -p policy-service --all-targets --all-features -- -D warnings
+          fi
 
       - name: Test policy-service
         if: matrix.task == 'test'
         env:
           RUST_BACKTRACE: full
-        run: cargo test -p policy-service --all-features -- --nocapture
+        run: |
+          if command -v just >/dev/null 2>&1; then
+            just test
+          else
+            cargo test -p policy-service --all-features -- --nocapture
+          fi

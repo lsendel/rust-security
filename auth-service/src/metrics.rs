@@ -11,10 +11,12 @@
 //! The metrics are designed to be compatible with Prometheus and follow
 //! best practices for naming and labeling.
 
+use prometheus::{
+    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder,
+};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::warn;
-use prometheus::{Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, Opts, Registry, TextEncoder};
 
 use axum::{
     extract::{MatchedPath, Request},
@@ -408,7 +410,13 @@ impl MetricsRegistry {
                 "auth_policy_evaluation_total",
                 "Total policy evaluation operations",
             ),
-            &["policy_type", "endpoint_group", "resource", "action", "result"],
+            &[
+                "policy_type",
+                "endpoint_group",
+                "resource",
+                "action",
+                "result",
+            ],
         )
         .expect("Failed to create policy_evaluation_total metric");
 

@@ -123,10 +123,14 @@ mod tests {
 
     #[test]
     fn test_config_validation() {
-        let mut config = ApiConfig::default();
-        config
-            .service_endpoints
-            .insert("invalid".to_string(), "not-a-url".to_string());
+        let config = ApiConfig {
+            service_endpoints: {
+                let mut endpoints = std::collections::HashMap::new();
+                endpoints.insert("invalid".to_string(), "not-a-url".to_string());
+                endpoints
+            },
+            ..Default::default()
+        };
 
         assert!(validate_api_config(&config).is_err());
     }

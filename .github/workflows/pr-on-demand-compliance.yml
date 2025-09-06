@@ -1,0 +1,127 @@
+name: PR On-Demand Compliance
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-on-demand-compliance-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  run-compliance:
+    name: Run compliance on PR head
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/compliance-scan')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize commenter
+        id: auth
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            let allowed = false;
+            let level = 'none';
+            if (commenter === 'github-actions[bot]') {
+              allowed = true;
+              level = 'bot';
+            } else {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: commenter,
+              });
+              level = data.permission;
+              allowed = ['admin','maintain','write'].includes(level);
+            }
+            core.setOutput('allowed', String(allowed));
+            core.setOutput('level', level);
+
+      - name: Deny unauthorized user
+        if: steps.auth.outputs.allowed != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ You are not authorized to run /compliance-scan. Maintainers only.'
+            });
+            core.setFailed('Unauthorized commenter');
+
+      - name: Extract PR metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('head_ref', pr.head.ref);
+            core.setOutput('head_repo', pr.head.repo.full_name);
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build compliance tools (if present)
+        continue-on-error: true
+        run: |
+          cargo build --release -p compliance-tools || true
+
+      - name: Run compliance report (best effort)
+        continue-on-error: true
+        run: |
+          if [ -x target/release/compliance-report-generator ]; then
+            mkdir -p reports
+            target/release/compliance-report-generator --framework all --format html --output reports/pr-compliance.html || true
+          else
+            echo "compliance-report-generator not found; skipping custom report"
+          fi
+
+      - name: Upload compliance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-compliance-results-${{ github.event.issue.number }}
+          path: |
+            sbom.cyclonedx.json
+            reports/**
+
+      - name: Comment results on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const msg = `🏛️ Compliance run completed. Artifacts: pr-compliance-results-${{ github.event.issue.number }}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: msg,
+            });

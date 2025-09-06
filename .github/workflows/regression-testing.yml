@@ -1,0 +1,120 @@
+name: Regression Testing
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+
+jobs:
+  quick-regression:
+    name: Quick Regression Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy
+        override: true
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Run Quick Regression
+      run: |
+        make -f Makefile.regression regression-quick
+    
+    - name: Upload regression reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: quick-regression-reports
+        path: regression_reports/
+
+  full-regression:
+    name: Full Regression Suite
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy
+        override: true
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: e2e-testing/package-lock.json
+    
+    - name: Install E2E dependencies
+      run: cd e2e-testing && npm ci
+    
+    - name: Run Full Regression Suite
+      run: |
+        make -f Makefile.regression regression-full
+    
+    - name: Upload regression reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: full-regression-reports
+        path: regression_reports/
+
+  scheduled-regression:
+    name: Scheduled Regression
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy
+        override: true
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: e2e-testing/package-lock.json
+    
+    - name: Install E2E dependencies
+      run: cd e2e-testing && npm ci
+    
+    - name: Run Scheduled Regression
+      run: |
+        make -f Makefile.regression regression-full
+        make -f Makefile.regression regression-coverage
+    
+    - name: Upload regression reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: scheduled-regression-reports
+        path: |
+          regression_reports/
+          regression_coverage/

@@ -191,9 +191,15 @@ pub fn initialize_logging(config: &LoggingConfig) -> Result<()> {
                         .unwrap_or_else(|| std::path::Path::new(".")),
                     "auth-service.log",
                 );
-                let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
-
-                registry.with(layer.with_writer(file_writer)).init();
+                #[cfg(feature = "vault")]
+                {
+                    let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
+                    registry.with(layer.with_writer(file_writer)).init();
+                }
+                #[cfg(not(feature = "vault"))]
+                {
+                    registry.with(layer).init();
+                }
             } else {
                 registry.with(layer).init();
             }

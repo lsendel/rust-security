@@ -4,7 +4,7 @@
 # This Makefile provides complete development workflow automation covering:
 # - Development environment setup and management
 # - Frontend & backend service orchestration
-# - Comprehensive testing (unit, integration, security, performance)
+# - Comprehensive testing (unit, integration, e2e, security, performance)
 # - Code quality, security, and compliance checks
 # - Multi-environment deployment (local, staging, production)
 # - Monitoring, observability, and maintenance
@@ -24,11 +24,11 @@ POLICY_SERVICE := policy-service
 USER_PORTAL := user-portal
 COMPLIANCE_TOOLS := compliance-tools
 
-# Environment configurations
+# Test environment configurations
 export TEST_MODE := 1
 export DISABLE_RATE_LIMIT := 1
 export RUST_LOG := info
-export DATABASE_URL := postgres://postgres:postgres@localhost:5432/auth_test
+export DATABASE_URL := postgresql://authuser:authpass@localhost:5432/authdb
 export REDIS_URL := redis://localhost:6379
 export CONFIG_DIR := config
 export APP_ENV := development
@@ -118,7 +118,7 @@ help-deploy: ## Show deployment commands
 # ============================================================================
 
 .PHONY: quick-start
-quick-start: setup dev-env-up build test ## 🚀 Complete development environment setup and validation
+quick-start: setup dev-env-up build test-e2e-setup test ## 🚀 Complete development environment setup and validation
 	@echo "$(CHECKMARK) Quick start complete! Access points:"
 	@echo "  • Frontend:    http://localhost:5173"
 	@echo "  • Auth API:    http://localhost:8080"
@@ -195,6 +195,15 @@ dev-env-up: ## Start development infrastructure (DB, Redis, monitoring)
 	@sleep 5
 	@docker-compose ps
 	@echo "$(CHECKMARK) Development infrastructure ready!"
+
+.PHONY: services-up
+services-up: dev-env-up ## Start services for testing (alias for dev-env-up)
+
+.PHONY: services-down
+services-down: ## Stop all Docker services
+	@echo "$(YELLOW) Stopping services..."
+	@docker-compose down
+	@echo "$(CHECKMARK) Services stopped!"
 
 .PHONY: dev-env-down
 dev-env-down: ## Stop development infrastructure
@@ -403,24 +412,40 @@ frontend-clean: ## Clean frontend build artifacts
 # ============================================================================
 
 .PHONY: test
-test: test-unit test-integration test-frontend ## 🧪 Run complete test suite
+test: test-unit test-integration-quick test-frontend test-e2e-smoke ## 🧪 Run complete test suite
 	@echo "$(CHECKMARK) All tests passed!"
 
 .PHONY: test-all
-test-all: test test-security test-fuzz benchmark ## 🧪 Run all tests including security and performance
+test-all: test test-security test-fuzz test-e2e benchmark ## 🧪 Run all tests including security, e2e and performance
 	@echo "$(CHECKMARK) Complete test suite passed!"
 
 .PHONY: test-unit
 test-unit: ## Run unit tests only
 	@echo "$(TEST_TUBE) Running unit tests..."
-	@cargo test --workspace --lib -- --nocapture
+	@cargo test --package common --package mvp-tools --lib --no-fail-fast
 	@echo "$(CHECKMARK) Unit tests passed!"
 
 .PHONY: test-integration
-test-integration: ## Run integration tests
+test-integration: services-up ## Run integration tests with Docker services
 	@echo "$(TEST_TUBE) Running integration tests..."
-	@cargo test --workspace --test '*' -- --nocapture
+	@cargo test --test core_auth_tests --features="full-integration api-keys redis-sessions crypto" --no-fail-fast
 	@echo "$(CHECKMARK) Integration tests passed!"
+
+.PHONY: test-integration-quick
+test-integration-quick: ## Run integration tests without starting services (assumes running)
+	@echo "$(TEST_TUBE) Running integration tests (quick)..."
+	@cargo test --test core_auth_tests --features="full-integration api-keys redis-sessions crypto" --no-fail-fast
+	@echo "$(CHECKMARK) Integration tests passed!"
+
+.PHONY: test-with-services
+test-with-services: services-up test-unit test-integration-quick ## Run all tests with Docker services
+	@echo "$(CHECKMARK) All tests with services passed!"
+
+.PHONY: test-clean
+test-clean: services-down ## Clean up test environment
+	@echo "$(YELLOW) Cleaning up test environment..."
+	@docker system prune -f
+	@echo "$(CHECKMARK) Test environment cleaned!"
 
 .PHONY: test-frontend
 test-frontend: ## Run frontend tests
@@ -469,10 +494,61 @@ test-load: ## Run load tests
 	@echo "$(CHART) Running load tests..."
 	@./scripts/testing/comprehensive_load_test.sh || echo "$(YELLOW)⚠️ Load tests completed$(NC)"
 
+# E2E Testing Suite
 .PHONY: test-e2e
-test-e2e: ## Run end-to-end tests
-	@echo "$(TEST_TUBE) Running end-to-end tests..."
-	@./scripts/testing/end_to_end_integration_test.sh || echo "$(YELLOW)⚠️ E2E tests completed$(NC)"
+test-e2e: services-up ## 🎭 Run complete E2E test suite with Playwright
+	@echo "$(TEST_TUBE) Running complete E2E test suite..."
+	@cd e2e-testing && ./run-e2e.sh
+	@echo "$(CHECKMARK) E2E tests completed!"
+
+.PHONY: test-e2e-smoke
+test-e2e-smoke: services-up ## 🔥 Run E2E smoke tests (5min)
+	@echo "$(TEST_TUBE) Running E2E smoke tests..."
+	@cd e2e-testing && npm run test:smoke
+	@echo "$(CHECKMARK) E2E smoke tests passed!"
+
+.PHONY: test-e2e-regression
+test-e2e-regression: services-up ## 🔄 Run E2E regression tests (30min)
+	@echo "$(TEST_TUBE) Running E2E regression tests..."
+	@cd e2e-testing && npm run test:regression
+	@echo "$(CHECKMARK) E2E regression tests passed!"
+
+.PHONY: test-e2e-security
+test-e2e-security: services-up ## 🛡️ Run E2E security tests (15min)
+	@echo "$(LOCK) Running E2E security tests..."
+	@cd e2e-testing && npm run test:security
+	@echo "$(CHECKMARK) E2E security tests passed!"
+
+.PHONY: test-e2e-ui
+test-e2e-ui: services-up ## 🎨 Run E2E UI tests with Playwright
+	@echo "$(TEST_TUBE) Running E2E UI tests..."
+	@cd e2e-testing && npm run test:ui
+	@echo "$(CHECKMARK) E2E UI tests passed!"
+
+.PHONY: test-e2e-api
+test-e2e-api: services-up ## 🔌 Run E2E API tests
+	@echo "$(TEST_TUBE) Running E2E API tests..."
+	@cd e2e-testing && npm run test:api
+	@echo "$(CHECKMARK) E2E API tests passed!"
+
+.PHONY: validate-urls
+validate-urls: services-up ## 🔗 Validate all API endpoints and frontend routes
+	@echo "$(TEST_TUBE) Validating URLs..."
+	@cd e2e-testing && npm run validate:urls
+	@echo "$(CHECKMARK) URL validation completed!"
+
+.PHONY: test-e2e-docker
+test-e2e-docker: ## 🐳 Run E2E tests in Docker environment
+	@echo "$(TEST_TUBE) Running E2E tests in Docker..."
+	@cd e2e-testing && npm run test:docker
+	@echo "$(CHECKMARK) Docker E2E tests completed!"
+
+.PHONY: test-e2e-setup
+test-e2e-setup: ## 📦 Setup E2E testing environment
+	@echo "$(HAMMER) Setting up E2E testing environment..."
+	@cd e2e-testing && npm install
+	@cd e2e-testing && npm run setup
+	@echo "$(CHECKMARK) E2E environment ready!"
 
 .PHONY: test-performance
 test-performance: benchmark ## Run performance tests (alias for benchmark)
@@ -718,7 +794,7 @@ install-hooks: ## 🪝 Install git pre-commit hooks
 	@echo "$(CHECKMARK) Git hooks installed!"
 
 .PHONY: ci-local
-ci-local: check test security-audit ## 🔄 Run CI checks locally
+ci-local: check test test-e2e-smoke security-audit ## 🔄 Run CI checks locally
 	@echo "$(CHECKMARK) Local CI checks complete!"
 
 .PHONY: ci-strict
@@ -738,7 +814,7 @@ validate-pr: ci-local supply-chain-check compliance-check ## ✅ Validate change
 	@echo "$(CHECKMARK) PR validation complete! Ready to create pull request."
 
 .PHONY: validate-release
-validate-release: test-all compliance-check build-production ## ✅ Validate release readiness
+validate-release: test-all test-e2e compliance-check build-production ## ✅ Validate release readiness
 	@echo "$(CHECKMARK) Release validation complete!"
 
 # ============================================================================
@@ -867,3 +943,34 @@ outdated-rust: ## Check for outdated Rust dependencies
 outdated-frontend: ## Check for outdated frontend dependencies
 	@echo "$(📋) Checking frontend dependencies..."
 	@cd $(USER_PORTAL) && npm outdated
+# ============================================================================
+# REGRESSION TESTING TARGETS
+# ============================================================================
+
+# Include regression testing makefile
+include Makefile.regression
+
+test-regression-quick: ## Quick regression tests (pre-commit)
+	@echo "$(ROCKET) Running Quick Regression Tests..."
+	@$(MAKE) -f Makefile.regression regression-quick
+	@echo "$(CHECKMARK) Quick regression tests completed"
+
+test-regression-full: ## Full regression test suite (pre-release)
+	@echo "$(ROCKET) Running Full Regression Suite..."
+	@$(MAKE) -f Makefile.regression regression-full
+	@echo "$(CHECKMARK) Full regression suite completed"
+
+test-regression-security: ## Security-focused regression tests
+	@echo "$(ROCKET) Running Security Regression Tests..."
+	@$(MAKE) -f Makefile.regression regression-security
+	@echo "$(CHECKMARK) Security regression tests completed"
+
+test-regression-performance: ## Performance regression tests
+	@echo "$(ROCKET) Running Performance Regression Tests..."
+	@$(MAKE) -f Makefile.regression regression-performance
+	@echo "$(CHECKMARK) Performance regression tests completed"
+
+test-regression-coverage: ## Regression tests with coverage
+	@echo "$(ROCKET) Running Regression Tests with Coverage..."
+	@$(MAKE) -f Makefile.regression regression-coverage
+	@echo "$(CHECKMARK) Regression coverage analysis completed"

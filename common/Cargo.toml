@@ -37,6 +37,7 @@ bb8-redis = { workspace = true }
 redis = { workspace = true }
 # Rate limiting dependencies
 tokio = { workspace = true, features = ["sync", "time", "macros"] }
+futures = { workspace = true }
 # Logging
 tracing = { workspace = true }
 # System info

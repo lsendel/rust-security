@@ -1,0 +1,51 @@
+{
+  "last_update": "2025-09-05T22:30:11.477303",
+  "test_results": [
+    {
+      "timestamp": "2025-09-05T22:30:11.478028",
+      "success": false,
+      "duration": 0,
+      "test_count": 5
+    }
+  ],
+  "performance_metrics": {
+    "jwt_generation_ms": {
+      "baseline": 5,
+      "tolerance": 0.2,
+      "validations": 0,
+      "deviations": 0
+    },
+    "throughput_rps": {
+      "baseline": 1000,
+      "tolerance": 0.1,
+      "validations": 0,
+      "deviations": 0
+    },
+    "memory_usage_mb": {
+      "baseline": 256,
+      "tolerance": 0.15,
+      "validations": 0,
+      "deviations": 0
+    },
+    "cpu_usage_percent": {
+      "baseline": 25,
+      "tolerance": 0.2,
+      "validations": 0,
+      "deviations": 0
+    },
+    "auth_latency_ms": {
+      "baseline": 50,
+      "tolerance": 0.1,
+      "validations": 0,
+      "deviations": 0
+    },
+    "db_query_time_ms": {
+      "baseline": 15,
+      "tolerance": 0.15,
+      "validations": 0,
+      "deviations": 0
+    }
+  },
+  "alerts": [],
+  "system_status": "degraded"
+}

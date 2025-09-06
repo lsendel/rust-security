@@ -150,8 +150,8 @@ impl UnifiedRedisConfig {
 
     /// Create configuration from environment variables
     pub fn from_env() -> crate::crypto::CryptoResult<Self> {
-        let url = std::env::var("REDIS_URL")
-            .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+        let url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
         Ok(Self::new(url))
     }
 
@@ -175,7 +175,6 @@ impl UnifiedRedisConfig {
             ..Default::default()
         }
     }
-
 
     /// Create configuration for threat profiling
     pub fn for_threat_profiling(url: impl Into<String>) -> Self {
@@ -349,19 +348,28 @@ mod tests {
 
     #[test]
     fn test_config_validation() {
-        let mut config = UnifiedRedisConfig::default();
+        let config = UnifiedRedisConfig::default();
         assert!(config.validate().is_ok());
 
         // Test invalid URL
-        config.url = "invalid_url".to_string();
+        let config = UnifiedRedisConfig {
+            url: "invalid_url".to_string(),
+            ..Default::default()
+        };
         assert!(config.validate().is_err());
 
         // Test invalid pool size
-        config.url = "redis://localhost:6379".to_string();
-        config.max_connections = 0;
+        let config = UnifiedRedisConfig {
+            url: "redis://localhost:6379".to_string(),
+            max_connections: 0,
+            ..Default::default()
+        };
         assert!(config.validate().is_err());
 
-        config.max_connections = redis_constants::MAX_POOL_SIZE + 1;
+        let config = UnifiedRedisConfig {
+            max_connections: redis_constants::MAX_POOL_SIZE + 1,
+            ..Default::default()
+        };
         assert!(config.validate().is_err());
     }
 

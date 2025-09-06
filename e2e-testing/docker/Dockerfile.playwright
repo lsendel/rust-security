@@ -1,0 +1,27 @@
+# Playwright E2E Testing Dockerfile
+FROM mcr.microsoft.com/playwright:v1.40.1-jammy
+
+WORKDIR /app
+
+# Install Node.js dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy test configuration and utilities
+COPY playwright.config.ts ./
+COPY config/ ./config/
+COPY utils/ ./utils/
+COPY tests/ ./tests/
+
+# Install Playwright browsers (already included in base image)
+RUN npx playwright install-deps
+
+# Create directories for reports and evidence
+RUN mkdir -p reports evidence
+
+# Set environment variables for testing
+ENV NODE_ENV=test
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# Command to run tests
+CMD ["npm", "run", "test:coverage"]

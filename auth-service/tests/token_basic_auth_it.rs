@@ -1,4 +1,9 @@
-#![cfg(all(feature = "full-integration", feature = "api-keys", feature = "redis-sessions", feature = "crypto"))]
+#![cfg(all(
+    feature = "full-integration",
+    feature = "api-keys",
+    feature = "redis-sessions",
+    feature = "crypto"
+))]
 // cfg moved to top of file
 use auth_service::{app, AppState};
 use base64::Engine as _;

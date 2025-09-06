@@ -323,6 +323,8 @@ impl ErrorCategory {
             ErrorCategory::Transient
         } else if error_string.contains("configuration") || error_string.contains("invalid") {
             ErrorCategory::Configuration
+        } else if error_string.contains("dependency") || error_string.contains("service") {
+            ErrorCategory::Dependency
         } else {
             ErrorCategory::Unknown
         }
@@ -338,6 +340,19 @@ impl ErrorCategory {
             ErrorCategory::Dependency => RecoveryStrategy::CircuitBreaker,
             ErrorCategory::Permanent => RecoveryStrategy::Fail,
             ErrorCategory::Unknown => RecoveryStrategy::Retry,
+        }
+    }
+
+    /// Get a human-readable string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ErrorCategory::Transient => "transient",
+            ErrorCategory::Permanent => "permanent",
+            ErrorCategory::Throttling => "throttling",
+            ErrorCategory::Authentication => "authentication",
+            ErrorCategory::Configuration => "configuration",
+            ErrorCategory::Dependency => "dependency",
+            ErrorCategory::Unknown => "unknown",
         }
     }
 }
@@ -809,5 +824,405 @@ mod tests {
 
         // Should be available again
         assert!(manager.is_feature_available("test-feature").await);
+    }
+
+    #[test]
+    fn test_recovery_config_default() {
+        let config = RecoveryConfig::default();
+        assert_eq!(config.max_retry_attempts, 3);
+        assert_eq!(config.base_retry_delay, Duration::from_millis(100));
+        assert_eq!(config.max_retry_delay, Duration::from_secs(30));
+        assert_eq!(config.circuit_breaker_threshold, 5);
+        assert_eq!(config.circuit_breaker_timeout, Duration::from_secs(60));
+        assert_eq!(config.backoff_multiplier, 2.0);
+    }
+
+    #[test]
+    fn test_circuit_state_equality() {
+        assert_eq!(CircuitState::Closed, CircuitState::Closed);
+        assert_eq!(CircuitState::Open, CircuitState::Open);
+        assert_eq!(CircuitState::HalfOpen, CircuitState::HalfOpen);
+        assert_ne!(CircuitState::Closed, CircuitState::Open);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_half_open_recovery() {
+        let config = RecoveryConfig {
+            circuit_breaker_threshold: 2,
+            circuit_breaker_timeout: Duration::from_millis(10),
+            ..Default::default()
+        };
+        let cb = CircuitBreaker::new("test-service", config);
+
+        // Trigger failures to open circuit
+        cb.record_failure().await;
+        cb.record_failure().await;
+        assert_eq!(cb.get_state().await, CircuitState::Open);
+
+        // Wait for timeout
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Should transition to half-open and allow request
+        assert!(cb.can_proceed().await);
+        assert_eq!(cb.get_state().await, CircuitState::HalfOpen);
+
+        // Record successes to close circuit
+        cb.record_success().await;
+        cb.record_success().await;
+        cb.record_success().await;
+
+        assert_eq!(cb.get_state().await, CircuitState::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_retry_mechanism_max_attempts() {
+        let retry = RetryMechanism::new(RecoveryConfig {
+            max_retry_attempts: 2,
+            base_retry_delay: Duration::from_millis(1),
+            ..Default::default()
+        });
+
+        let attempt_count = Arc::new(AtomicU32::new(0));
+
+        let result = retry
+            .execute_with_retry(|| {
+                let attempt_count = attempt_count.clone();
+                async move {
+                    attempt_count.fetch_add(1, Ordering::SeqCst);
+                    Result::<(), &str>::Err("permanent failure")
+                }
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn test_bulkhead_resource_isolation() {
+        let bulkhead = Bulkhead::new("test-bulkhead", 1);
+        let start_times = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        let mut handles = vec![];
+
+        // Launch 3 operations that should be serialized
+        for _ in 0..3 {
+            let bulkhead = bulkhead.clone();
+            let start_times = start_times.clone();
+
+            let handle = tokio::spawn(async move {
+                bulkhead
+                    .execute(|| {
+                        let start_times = start_times.clone();
+                        async move {
+                            start_times.lock().unwrap().push(Instant::now());
+                            tokio::time::sleep(Duration::from_millis(20)).await;
+                        }
+                    })
+                    .await
+            });
+
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            let _ = handle.await;
+        }
+
+        // Verify operations were serialized (each started after previous finished)
+        let times = start_times.lock().unwrap();
+        assert_eq!(times.len(), 3);
+        // Due to serialization, there should be gaps between start times
+        assert!(times[1].duration_since(times[0]).as_millis() >= 15);
+    }
+
+    #[tokio::test]
+    async fn test_service_registry_failure_tracking() {
+        let registry = ServiceRegistry::new();
+        registry.register_service("test-service").await;
+
+        // Record failures
+        registry
+            .update_service_health("test-service", false, Duration::from_millis(100))
+            .await;
+        registry
+            .update_service_health("test-service", false, Duration::from_millis(200))
+            .await;
+
+        let status = registry.get_service_status("test-service").await.unwrap();
+        assert_eq!(status.consecutive_failures, 2);
+        assert!(status.healthy); // Still healthy, needs 3 failures
+
+        // Third failure should mark as unhealthy
+        registry
+            .update_service_health("test-service", false, Duration::from_millis(300))
+            .await;
+
+        let status = registry.get_service_status("test-service").await.unwrap();
+        assert!(!status.healthy);
+        assert_eq!(status.consecutive_failures, 3);
+    }
+
+    #[tokio::test]
+    async fn test_service_registry_get_all_statuses() {
+        let registry = ServiceRegistry::new();
+        registry.register_service("service1").await;
+        registry.register_service("service2").await;
+
+        let all_statuses = registry.get_all_service_statuses().await;
+        assert_eq!(all_statuses.len(), 2);
+        assert!(all_statuses.contains_key("service1"));
+        assert!(all_statuses.contains_key("service2"));
+    }
+
+    #[test]
+    fn test_error_category_classification_comprehensive() {
+        // Test timeout errors
+        let timeout_error = std::io::Error::new(std::io::ErrorKind::TimedOut, "operation timeout");
+        assert_eq!(
+            ErrorCategory::classify(&timeout_error),
+            ErrorCategory::Transient
+        );
+
+        // Test temporary errors
+        let temp_error = std::io::Error::new(std::io::ErrorKind::Other, "temporary failure");
+        assert_eq!(
+            ErrorCategory::classify(&temp_error),
+            ErrorCategory::Transient
+        );
+
+        // Test authentication errors
+        let auth_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "unauthorized access");
+        assert_eq!(
+            ErrorCategory::classify(&auth_error),
+            ErrorCategory::Authentication
+        );
+
+        let forbidden_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "forbidden resource");
+        assert_eq!(
+            ErrorCategory::classify(&forbidden_error),
+            ErrorCategory::Authentication
+        );
+
+        // Test throttling errors
+        let rate_limit_error = std::io::Error::new(std::io::ErrorKind::Other, "rate limit exceeded");
+        assert_eq!(
+            ErrorCategory::classify(&rate_limit_error),
+            ErrorCategory::Throttling
+        );
+
+        let throttled_error = std::io::Error::new(std::io::ErrorKind::Other, "request throttled");
+        assert_eq!(
+            ErrorCategory::classify(&throttled_error),
+            ErrorCategory::Throttling
+        );
+
+        // Test connection errors (should be Transient)
+        let connection_error = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "connection failed");
+        assert_eq!(
+            ErrorCategory::classify(&connection_error),
+            ErrorCategory::Transient
+        );
+
+        let network_error = std::io::Error::new(std::io::ErrorKind::Other, "network unavailable");
+        assert_eq!(
+            ErrorCategory::classify(&network_error),
+            ErrorCategory::Transient
+        );
+
+        // Test configuration errors
+        let config_error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "configuration missing");
+        assert_eq!(
+            ErrorCategory::classify(&config_error),
+            ErrorCategory::Configuration
+        );
+
+        let invalid_error = std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid parameter");
+        assert_eq!(
+            ErrorCategory::classify(&invalid_error),
+            ErrorCategory::Configuration
+        );
+
+        // Test dependency errors
+        let dependency_error = std::io::Error::new(std::io::ErrorKind::Other, "dependency unavailable");
+        assert_eq!(
+            ErrorCategory::classify(&dependency_error),
+            ErrorCategory::Dependency
+        );
+
+        let service_error = std::io::Error::new(std::io::ErrorKind::Other, "service down");
+        assert_eq!(
+            ErrorCategory::classify(&service_error),
+            ErrorCategory::Dependency
+        );
+
+        // Test unknown errors
+        let unknown_error = std::io::Error::new(std::io::ErrorKind::Other, "random error");
+        assert_eq!(
+            ErrorCategory::classify(&unknown_error),
+            ErrorCategory::Unknown
+        );
+    }
+
+    #[test]
+    fn test_error_category_as_str() {
+        assert_eq!(ErrorCategory::Transient.as_str(), "transient");
+        assert_eq!(ErrorCategory::Permanent.as_str(), "permanent");
+        assert_eq!(ErrorCategory::Throttling.as_str(), "throttling");
+        assert_eq!(ErrorCategory::Authentication.as_str(), "authentication");
+        assert_eq!(ErrorCategory::Configuration.as_str(), "configuration");
+        assert_eq!(ErrorCategory::Dependency.as_str(), "dependency");
+        assert_eq!(ErrorCategory::Unknown.as_str(), "unknown");
+    }
+
+    #[test]
+    fn test_recovery_strategies() {
+        assert_eq!(ErrorCategory::Transient.recovery_strategy(), RecoveryStrategy::Retry);
+        assert_eq!(ErrorCategory::Throttling.recovery_strategy(), RecoveryStrategy::Backoff);
+        assert_eq!(ErrorCategory::Authentication.recovery_strategy(), RecoveryStrategy::Fail);
+        assert_eq!(ErrorCategory::Configuration.recovery_strategy(), RecoveryStrategy::Fail);
+        assert_eq!(ErrorCategory::Dependency.recovery_strategy(), RecoveryStrategy::CircuitBreaker);
+        assert_eq!(ErrorCategory::Permanent.recovery_strategy(), RecoveryStrategy::Fail);
+        assert_eq!(ErrorCategory::Unknown.recovery_strategy(), RecoveryStrategy::Retry);
+    }
+
+    #[test]
+    fn test_degradation_level_as_str() {
+        assert_eq!(DegradationLevel::Full.as_str(), "full");
+        assert_eq!(DegradationLevel::Limited.as_str(), "limited");
+        assert_eq!(DegradationLevel::Degraded.as_str(), "degraded");
+    }
+
+    #[tokio::test]
+    async fn test_graceful_degradation_status() {
+        let manager = GracefulDegradationManager::new();
+
+        manager
+            .activate_degradation("feature1", DegradationLevel::Limited, "test")
+            .await;
+        manager
+            .activate_degradation("feature2", DegradationLevel::Full, "test")
+            .await;
+
+        let status = manager.get_degradation_status().await;
+        assert_eq!(status.len(), 2);
+
+        let feature1 = status.get("feature1").unwrap();
+        assert!(feature1.enabled);
+        assert_eq!(feature1.degradation_level, DegradationLevel::Limited);
+
+        let feature2 = status.get("feature2").unwrap();
+        assert!(!feature2.enabled);
+        assert_eq!(feature2.degradation_level, DegradationLevel::Full);
+    }
+
+    #[tokio::test]
+    async fn test_degraded_feature_equality() {
+        let manager = GracefulDegradationManager::new();
+        
+        manager
+            .activate_degradation("test", DegradationLevel::Degraded, "reason")
+            .await;
+
+        let status = manager.get_degradation_status().await;
+        let feature = status.get("test").unwrap();
+        
+        assert_eq!(feature.degradation_level, DegradationLevel::Degraded);
+        assert_ne!(feature.degradation_level, DegradationLevel::Full);
+        assert_ne!(feature.degradation_level, DegradationLevel::Limited);
+    }
+
+    #[test]
+    fn test_bulkhead_error_display() {
+        let error = BulkheadError::SemaphoreError;
+        assert_eq!(error.to_string(), "Failed to acquire semaphore permit");
+    }
+
+    #[tokio::test]
+    async fn test_error_recovery_orchestrator_creation() {
+        let config = RecoveryConfig::default();
+        let orchestrator = ErrorRecoveryOrchestrator::new(config);
+
+        // Test that we can register services
+        orchestrator.register_service("test-service").await;
+        orchestrator.add_circuit_breaker("test-service", RecoveryConfig::default()).await;
+        orchestrator.add_bulkhead("test-service", 5).await;
+
+        let health = orchestrator.get_system_health().await;
+        assert_eq!(health.overall_status, HealthStatus::Healthy);
+        assert!(health.service_statuses.contains_key("test-service"));
+        assert!(health.circuit_breaker_states.contains_key("test-service"));
+    }
+
+    #[tokio::test]
+    async fn test_system_health_degraded_status() {
+        let orchestrator = ErrorRecoveryOrchestrator::new(RecoveryConfig::default());
+        
+        // Register service and make it unhealthy
+        orchestrator.register_service("unhealthy-service").await;
+        orchestrator
+            .service_registry
+            .update_service_health("unhealthy-service", false, Duration::from_millis(100))
+            .await;
+        orchestrator
+            .service_registry
+            .update_service_health("unhealthy-service", false, Duration::from_millis(100))
+            .await;
+        orchestrator
+            .service_registry
+            .update_service_health("unhealthy-service", false, Duration::from_millis(100))
+            .await;
+
+        let health = orchestrator.get_system_health().await;
+        assert_eq!(health.overall_status, HealthStatus::Degraded);
+    }
+
+    #[tokio::test]
+    async fn test_system_health_with_open_circuit() {
+        let orchestrator = ErrorRecoveryOrchestrator::new(RecoveryConfig {
+            circuit_breaker_threshold: 1,
+            ..Default::default()
+        });
+        
+        // Add circuit breaker and make it open
+        orchestrator.add_circuit_breaker("test-service", RecoveryConfig {
+            circuit_breaker_threshold: 1,
+            ..Default::default()
+        }).await;
+
+        let circuit_breakers = orchestrator.circuit_breakers.read().await;
+        if let Some(cb) = circuit_breakers.get("test-service") {
+            cb.record_failure().await;
+        }
+        drop(circuit_breakers);
+
+        let health = orchestrator.get_system_health().await;
+        assert_eq!(health.overall_status, HealthStatus::Degraded);
+        assert_eq!(
+            health.circuit_breaker_states.get("test-service").unwrap(),
+            &CircuitState::Open
+        );
+    }
+
+    #[tokio::test]
+    async fn test_system_health_with_degraded_features() {
+        let orchestrator = ErrorRecoveryOrchestrator::new(RecoveryConfig::default());
+        
+        orchestrator
+            .degradation_manager
+            .activate_degradation("test-feature", DegradationLevel::Limited, "test")
+            .await;
+
+        let health = orchestrator.get_system_health().await;
+        assert_eq!(health.overall_status, HealthStatus::Degraded);
+        assert!(health.degraded_features.contains_key("test-feature"));
+    }
+
+    #[test]
+    fn test_health_status_equality() {
+        assert_eq!(HealthStatus::Healthy, HealthStatus::Healthy);
+        assert_eq!(HealthStatus::Degraded, HealthStatus::Degraded);
+        assert_eq!(HealthStatus::Unhealthy, HealthStatus::Unhealthy);
+        assert_ne!(HealthStatus::Healthy, HealthStatus::Degraded);
     }
 }

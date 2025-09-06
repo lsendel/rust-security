@@ -1,5 +1,13 @@
 name: Deployment Pipeline
 
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deployment-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main ]

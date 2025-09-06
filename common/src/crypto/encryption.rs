@@ -256,25 +256,41 @@ impl EncryptionOperations {
         Ok(key)
     }
 
-    // Simplified encryption implementation (placeholder)
+    // Secure AES-256-GCM encryption implementation
     fn encrypt_simple(&self, plaintext: &[u8]) -> CryptoResult<EncryptedData> {
-        // This is a placeholder implementation
-        // In a real implementation, you would use proper AEAD encryption
-        let mut nonce = vec![0u8; 12];
-        self.rng.fill(&mut nonce).map_err(|_| {
+        use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
+
+        // Generate a secure random nonce
+        let mut nonce_bytes = vec![0u8; 12];
+        self.rng.fill(&mut nonce_bytes).map_err(|_| {
             EncryptionError::EncryptionFailed("Nonce generation failed".to_string())
         })?;
 
-        // For now, just XOR with key (NOT SECURE - placeholder only)
-        let key_bytes = self.config.key.as_bytes();
+        // Prepare the key (ensure it's 32 bytes)
+        let mut key_bytes = [0u8; 32];
+        let config_key_bytes = self.config.key.as_bytes();
+        let copy_len = std::cmp::min(config_key_bytes.len(), 32);
+        key_bytes[..copy_len].copy_from_slice(&config_key_bytes[..copy_len]);
+
+        // Create the encryption key
+        let unbound_key = UnboundKey::new(&AES_256_GCM, &key_bytes)
+            .map_err(|_| EncryptionError::EncryptionFailed("Invalid encryption key".to_string()))?;
+        let key = LessSafeKey::new(unbound_key);
+
+        // Create nonce
+        let nonce = Nonce::try_assume_unique_for_key(&nonce_bytes)
+            .map_err(|_| EncryptionError::EncryptionFailed("Invalid nonce".to_string()))?;
+
+        // Encrypt the data
         let mut ciphertext = plaintext.to_vec();
-        for (i, byte) in ciphertext.iter_mut().enumerate() {
-            *byte ^= key_bytes[i % key_bytes.len()];
-        }
+        key.seal_in_place_append_tag(nonce, Aad::empty(), &mut ciphertext)
+            .map_err(|_| {
+                EncryptionError::EncryptionFailed("Encryption operation failed".to_string())
+            })?;
 
         Ok(EncryptedData {
             ciphertext,
-            nonce,
+            nonce: nonce_bytes,
             algorithm: self.config.algorithm.clone(),
             associated_data: None,
             created_at: chrono::Utc::now(),
@@ -282,17 +298,32 @@ impl EncryptionOperations {
     }
 
     fn decrypt_simple(&self, encrypted: &EncryptedData) -> CryptoResult<Vec<u8>> {
-        // This is a placeholder implementation
-        // In a real implementation, you would use proper AEAD decryption
-        let key_bytes = self.config.key.as_bytes();
-        let mut plaintext = encrypted.ciphertext.clone();
+        use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
 
-        // Reverse the XOR (NOT SECURE - placeholder only)
-        for (i, byte) in plaintext.iter_mut().enumerate() {
-            *byte ^= key_bytes[i % key_bytes.len()];
-        }
+        // Prepare the key (ensure it's 32 bytes)
+        let mut key_bytes = [0u8; 32];
+        let config_key_bytes = self.config.key.as_bytes();
+        let copy_len = std::cmp::min(config_key_bytes.len(), 32);
+        key_bytes[..copy_len].copy_from_slice(&config_key_bytes[..copy_len]);
 
-        Ok(plaintext)
+        // Create the decryption key
+        let unbound_key = UnboundKey::new(&AES_256_GCM, &key_bytes)
+            .map_err(|_| EncryptionError::DecryptionFailed("Invalid decryption key".to_string()))?;
+        let key = LessSafeKey::new(unbound_key);
+
+        // Create nonce from stored nonce
+        let nonce = Nonce::try_assume_unique_for_key(&encrypted.nonce)
+            .map_err(|_| EncryptionError::DecryptionFailed("Invalid nonce".to_string()))?;
+
+        // Decrypt the data
+        let mut ciphertext = encrypted.ciphertext.clone();
+        let plaintext = key
+            .open_in_place(nonce, Aad::empty(), &mut ciphertext)
+            .map_err(|_| {
+                EncryptionError::DecryptionFailed("Decryption operation failed".to_string())
+            })?;
+
+        Ok(plaintext.to_vec())
     }
 }
 

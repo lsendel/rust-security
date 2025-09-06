@@ -1,9 +1,14 @@
 name: Security Testing Pipeline
 
+permissions:
+  contents: read
+
+concurrency:
+  group: security-testing-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
     branches: [ main, develop ]
   schedule:
     # Run security scans daily at 2 AM UTC

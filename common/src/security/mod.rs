@@ -40,9 +40,14 @@ use validator::Validate;
 /// # Example
 /// ```rust
 /// use common::security::UnifiedSecurityConfig;
-///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # std::env::set_var("JWT_SECRET", "very-secure-secret-at-least-32-characters-long");
+/// # std::env::set_var("REQUEST_SIGNING_SECRET", "another-secure-secret-for-request-signing");
+/// # std::env::set_var("ENCRYPTION_KEY", "encryption-key-that-is-at-least-32-characters");
 /// let config = UnifiedSecurityConfig::from_env()?;
 /// assert!(config.validate().is_ok());
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Validate)]
 pub struct UnifiedSecurityConfig {
@@ -431,7 +436,7 @@ pub enum EncryptionAlgorithm {
 }
 
 // Custom validation functions
-fn validate_no_dev_secret(secret: &str) -> Result<(), validator::ValidationError> {
+pub fn validate_no_dev_secret(secret: &str) -> Result<(), validator::ValidationError> {
     if secret.contains("INSECURE_DEV_SECRET")
         || secret.contains("test_secret")
         || secret.contains("changeme")
@@ -475,5 +480,392 @@ impl Default for TlsVersion {
 impl Default for EncryptionAlgorithm {
     fn default() -> Self {
         Self::AES256GCM
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test default implementations for all configuration structs
+
+    #[test]
+    fn test_unified_security_config_default() {
+        let config = UnifiedSecurityConfig::default();
+
+        assert_eq!(
+            config.jwt.secret,
+            "REPLACE_IN_PRODUCTION_MIN_32_CHARS_REQUIRED"
+        );
+        assert_eq!(config.jwt.access_token_ttl_seconds, 900);
+        assert_eq!(config.jwt.refresh_token_ttl_seconds, 86400);
+        assert_eq!(config.jwt.algorithm, JwtAlgorithm::HS256);
+        assert_eq!(config.jwt.issuer, "rust-security-platform");
+        assert!(config.jwt.enable_token_binding);
+    }
+
+    #[test]
+    fn test_jwt_config_default() {
+        let config = JwtConfig::default();
+
+        assert_eq!(config.secret, "REPLACE_IN_PRODUCTION_MIN_32_CHARS_REQUIRED");
+        assert_eq!(config.access_token_ttl_seconds, 900); // 15 minutes
+        assert_eq!(config.refresh_token_ttl_seconds, 86400); // 24 hours
+        assert_eq!(config.algorithm, JwtAlgorithm::HS256);
+        assert_eq!(config.issuer, "rust-security-platform");
+        assert!(config.audience.is_none());
+        assert!(config.enable_token_binding);
+    }
+
+    #[test]
+    fn test_request_signing_config_default() {
+        let config = RequestSigningConfig::default();
+
+        assert_eq!(config.secret, "REPLACE_IN_PRODUCTION_MIN_32_CHARS_REQUIRED");
+        assert_eq!(config.timestamp_window_seconds, 300); // 5 minutes
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_session_config_default() {
+        let config = SessionConfig::default();
+
+        assert_eq!(config.ttl_seconds, 3600); // 1 hour
+        assert_eq!(config.rotation_interval_seconds, 900); // 15 minutes
+        assert!(config.secure_cookies);
+        assert_eq!(config.storage_backend, SessionStorage::Hybrid);
+    }
+
+    #[test]
+    fn test_rate_limiting_config_default() {
+        let config = RateLimitingConfig::default();
+
+        assert!(config.enabled);
+        assert_eq!(config.requests_per_minute_per_ip, 60);
+        assert_eq!(config.oauth_requests_per_minute, 10);
+        assert_eq!(config.admin_requests_per_minute, 5);
+        assert_eq!(config.burst_size, 10);
+        assert_eq!(config.ban_threshold, 1000);
+        assert_eq!(config.ban_duration_seconds, 3600); // 1 hour
+    }
+
+    #[test]
+    fn test_security_headers_default() {
+        let config = SecurityHeaders::default();
+
+        assert!(config.enabled);
+        assert_eq!(config.hsts_max_age_seconds, 31536000); // 1 year
+        assert!(config.content_type_options_nosniff);
+        assert_eq!(config.frame_options, FrameOptions::Deny);
+        assert!(config.xss_protection);
+        assert_eq!(
+            config.referrer_policy,
+            ReferrerPolicy::StrictOriginWhenCrossOrigin
+        );
+        assert!(config.content_security_policy.is_none());
+    }
+
+    #[test]
+    fn test_cors_config_default() {
+        let config = CorsConfig::default();
+
+        assert!(config.allowed_origins.is_empty());
+        assert_eq!(config.allowed_methods, vec!["GET", "POST", "OPTIONS"]);
+        assert_eq!(
+            config.allowed_headers,
+            vec!["Content-Type", "Authorization"]
+        );
+        assert!(!config.allow_credentials);
+        assert_eq!(config.max_age_seconds, 3600); // 1 hour
+    }
+
+    #[test]
+    fn test_password_policy_default() {
+        let config = PasswordPolicy::default();
+
+        assert_eq!(config.min_length, 12);
+        assert!(config.require_uppercase);
+        assert!(config.require_lowercase);
+        assert!(config.require_numbers);
+        assert!(config.require_special_chars);
+    }
+
+    #[test]
+    fn test_argon2_config_default() {
+        let config = Argon2Config::default();
+
+        assert_eq!(config.memory_cost, 65536); // 64MB
+        assert_eq!(config.time_cost, 3);
+        assert_eq!(config.parallelism, 4);
+    }
+
+    #[test]
+    fn test_tls_config_default() {
+        let config = TlsConfig::default();
+
+        assert!(config.enabled);
+        assert!(config.cert_path.is_none());
+        assert!(config.key_path.is_none());
+        assert_eq!(config.min_version, TlsVersion::TLSv1_3);
+        assert!(config.cipher_suites.is_empty());
+    }
+
+    #[test]
+    fn test_encryption_config_default() {
+        let config = EncryptionConfig::default();
+
+        assert_eq!(config.key, "REPLACE_IN_PRODUCTION_MIN_32_CHARS_REQUIRED");
+        assert_eq!(
+            config.token_binding_salt,
+            "default-salt-change-in-production"
+        );
+        assert_eq!(config.algorithm, EncryptionAlgorithm::AES256GCM);
+    }
+
+    // Test enum defaults
+
+    #[test]
+    fn test_jwt_algorithm_default() {
+        assert_eq!(JwtAlgorithm::default(), JwtAlgorithm::HS256);
+    }
+
+    #[test]
+    fn test_session_storage_default() {
+        assert_eq!(SessionStorage::default(), SessionStorage::Hybrid);
+    }
+
+    #[test]
+    fn test_frame_options_default() {
+        assert_eq!(FrameOptions::default(), FrameOptions::Deny);
+    }
+
+    #[test]
+    fn test_referrer_policy_default() {
+        assert_eq!(
+            ReferrerPolicy::default(),
+            ReferrerPolicy::StrictOriginWhenCrossOrigin
+        );
+    }
+
+    #[test]
+    fn test_tls_version_default() {
+        assert_eq!(TlsVersion::default(), TlsVersion::TLSv1_3);
+    }
+
+    #[test]
+    fn test_encryption_algorithm_default() {
+        assert_eq!(
+            EncryptionAlgorithm::default(),
+            EncryptionAlgorithm::AES256GCM
+        );
+    }
+
+    // Test validation functions
+
+    #[test]
+    fn test_validate_no_dev_secret_valid() {
+        assert!(validate_no_dev_secret("secure-production-secret-32-chars").is_ok());
+        assert!(validate_no_dev_secret("another-valid-secret-key-for-production").is_ok());
+    }
+
+    #[test]
+    fn test_validate_no_dev_secret_invalid() {
+        assert!(validate_no_dev_secret("INSECURE_DEV_SECRET").is_err());
+        assert!(validate_no_dev_secret("test_secret").is_err());
+        assert!(validate_no_dev_secret("changeme").is_err());
+        assert!(validate_no_dev_secret("dev").is_err());
+        assert!(validate_no_dev_secret("contains_test_secret_here").is_err());
+        assert!(validate_no_dev_secret("INSECURE_DEV_SECRET_example").is_err());
+    }
+
+    // Test special configuration methods
+
+    #[test]
+    fn test_development_config() {
+        let config = UnifiedSecurityConfig::development();
+
+        assert_eq!(config.jwt.secret, "development-jwt-secret-32-chars-min");
+        assert_eq!(config.jwt.access_token_ttl_seconds, 3600); // 1 hour for dev
+        assert_eq!(
+            config.request_signing.secret,
+            "development-request-signing-secret-32-chars"
+        );
+        assert!(!config.request_signing.enabled); // Disabled in dev
+        assert!(!config.session.secure_cookies); // Allow non-HTTPS
+        assert!(!config.rate_limiting.enabled); // Disabled for dev
+        assert!(!config.tls.enabled); // Allow HTTP
+        assert_eq!(
+            config.encryption.key,
+            "development-encryption-key-32-chars-minimum"
+        );
+        assert_eq!(config.cors.allowed_origins, vec!["http://localhost:3000"]);
+        assert!(config.cors.allow_credentials);
+    }
+
+    #[test]
+    fn test_testing_config() {
+        let config = UnifiedSecurityConfig::testing();
+
+        assert_eq!(
+            config.jwt.secret,
+            "test-jwt-secret-32-characters-minimum-length"
+        );
+        assert_eq!(config.jwt.access_token_ttl_seconds, 60); // 1 minute for tests
+        assert_eq!(config.jwt.refresh_token_ttl_seconds, 300); // 5 minutes
+        assert_eq!(config.request_signing.timestamp_window_seconds, 60);
+        assert!(config.request_signing.enabled); // Test security features
+        assert_eq!(config.session.ttl_seconds, 300); // 5 minutes
+        assert_eq!(config.session.storage_backend, SessionStorage::Memory);
+        assert!(!config.session.secure_cookies); // Allow HTTP in tests
+        assert!(config.rate_limiting.enabled); // Test rate limiting
+        assert_eq!(config.rate_limiting.requests_per_minute_per_ip, 1000);
+        assert_eq!(config.password_policy.argon2.memory_cost, 32768); // Faster
+        assert_eq!(config.password_policy.argon2.time_cost, 2);
+        assert!(!config.tls.enabled); // Allow HTTP in tests
+        assert_eq!(config.cors.allowed_origins, vec!["*"]); // Allow all for tests
+        assert_eq!(config.headers.hsts_max_age_seconds, 3600); // 1 hour
+    }
+
+    // Test enum variants
+
+    #[test]
+    fn test_jwt_algorithm_variants() {
+        let algorithms = [
+            JwtAlgorithm::HS256,
+            JwtAlgorithm::HS384,
+            JwtAlgorithm::HS512,
+            JwtAlgorithm::RS256,
+            JwtAlgorithm::RS384,
+            JwtAlgorithm::RS512,
+            JwtAlgorithm::ES256,
+            JwtAlgorithm::ES384,
+            JwtAlgorithm::ES512,
+        ];
+
+        for algorithm in &algorithms {
+            // Just test that they can be created and compared
+            assert_eq!(*algorithm, algorithm.clone());
+        }
+    }
+
+    #[test]
+    fn test_session_storage_variants() {
+        let storages = [
+            SessionStorage::Memory,
+            SessionStorage::Redis,
+            SessionStorage::Database,
+            SessionStorage::Hybrid,
+        ];
+
+        for storage in &storages {
+            assert_eq!(*storage, storage.clone());
+        }
+    }
+
+    #[test]
+    fn test_frame_options_variants() {
+        let options = [
+            FrameOptions::Deny,
+            FrameOptions::SameOrigin,
+            FrameOptions::AllowFrom("https://example.com".to_string()),
+        ];
+
+        for option in &options {
+            assert_eq!(*option, option.clone());
+        }
+    }
+
+    #[test]
+    fn test_tls_version_variants() {
+        let versions = [TlsVersion::TLSv1_2, TlsVersion::TLSv1_3];
+
+        for version in &versions {
+            assert_eq!(*version, version.clone());
+        }
+    }
+
+    #[test]
+    fn test_encryption_algorithm_variants() {
+        let algorithms = [
+            EncryptionAlgorithm::AES256GCM,
+            EncryptionAlgorithm::ChaCha20Poly1305,
+        ];
+
+        for algorithm in &algorithms {
+            assert_eq!(*algorithm, algorithm.clone());
+        }
+    }
+
+    // Test struct creation and basic functionality
+
+    #[test]
+    fn test_jwt_config_creation() {
+        let config = JwtConfig {
+            secret: "test-secret-32-characters-minimum".to_string(),
+            access_token_ttl_seconds: 1800,
+            refresh_token_ttl_seconds: 7200,
+            algorithm: JwtAlgorithm::HS512,
+            issuer: "test-issuer".to_string(),
+            audience: Some(vec!["test-audience".to_string()]),
+            enable_token_binding: false,
+        };
+
+        assert_eq!(config.secret, "test-secret-32-characters-minimum");
+        assert_eq!(config.access_token_ttl_seconds, 1800);
+        assert_eq!(config.algorithm, JwtAlgorithm::HS512);
+        assert!(!config.enable_token_binding);
+    }
+
+    #[test]
+    fn test_security_headers_creation() {
+        let headers = SecurityHeaders {
+            enabled: false,
+            hsts_max_age_seconds: 63072000,
+            content_type_options_nosniff: false,
+            frame_options: FrameOptions::SameOrigin,
+            xss_protection: false,
+            referrer_policy: ReferrerPolicy::NoReferrer,
+            content_security_policy: Some("default-src 'self'".to_string()),
+        };
+
+        assert!(!headers.enabled);
+        assert_eq!(headers.hsts_max_age_seconds, 63072000);
+        assert_eq!(headers.frame_options, FrameOptions::SameOrigin);
+        assert_eq!(headers.referrer_policy, ReferrerPolicy::NoReferrer);
+        assert_eq!(
+            headers.content_security_policy,
+            Some("default-src 'self'".to_string())
+        );
+    }
+
+    #[test]
+    fn test_cors_config_creation() {
+        let cors = CorsConfig {
+            allowed_origins: vec![
+                "https://api.example.com".to_string(),
+                "https://app.example.com".to_string(),
+            ],
+            allowed_methods: vec![
+                "GET".to_string(),
+                "POST".to_string(),
+                "PUT".to_string(),
+                "DELETE".to_string(),
+            ],
+            allowed_headers: vec![
+                "Content-Type".to_string(),
+                "Authorization".to_string(),
+                "X-API-Key".to_string(),
+            ],
+            allow_credentials: true,
+            max_age_seconds: 7200,
+        };
+
+        assert_eq!(cors.allowed_origins.len(), 2);
+        assert!(cors
+            .allowed_origins
+            .contains(&"https://api.example.com".to_string()));
+        assert_eq!(cors.allowed_methods.len(), 4);
+        assert!(cors.allow_credentials);
+        assert_eq!(cors.max_age_seconds, 7200);
     }
 }

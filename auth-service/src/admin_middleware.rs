@@ -1,5 +1,6 @@
 #[cfg(feature = "rate-limiting")]
 use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
+use crate::infrastructure::http::policy_client;
 use crate::infrastructure::security::security_logging::{
     SecurityEvent, SecurityEventType, SecuritySeverity,
 };
@@ -15,7 +16,6 @@ use axum::{
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::OnceCell;
-use crate::infrastructure::http::policy_client;
 
 #[cfg(feature = "rate-limiting")]
 /// Global replay protection instance
@@ -315,7 +315,13 @@ pub async fn admin_auth_middleware(
                         let err = crate::shared::error::AppError::Forbidden {
                             reason: format!("Policy decision: {}", decision),
                         };
-                        return handle_auth_failure(err, method, path, client_ip.as_ref(), &headers);
+                        return handle_auth_failure(
+                            err,
+                            method,
+                            path,
+                            client_ip.as_ref(),
+                            &headers,
+                        );
                     }
                     Err(e) => {
                         let fail_open = std::env::var("POLICY_FAIL_OPEN")

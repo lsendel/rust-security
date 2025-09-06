@@ -1,0 +1,230 @@
+# Enhanced Regression Testing Makefile for Rust Security Platform
+
+.PHONY: regression-quick regression-full regression-security regression-performance regression-baseline regression-analyze regression-parallel
+
+# Configuration
+REGRESSION_MODE ?= full
+MAX_PARALLEL_JOBS ?= 4
+BASELINE_RETENTION_DAYS ?= 30
+
+# Quick regression test (pre-commit) - Enhanced with parallel execution
+regression-quick:
+	@echo "🚀 Running Quick Regression Tests (Parallel)..."
+	@export MAX_PARALLEL_JOBS=2 && ./scripts/regression_orchestrator.sh quick
+	@./scripts/baseline_manager.sh validate auth_latency_ms 45
+	@echo "✅ Quick regression tests completed"
+
+# Full regression test suite (pre-release) - Enhanced orchestration
+regression-full:
+	@echo "🔄 Running Full Enhanced Regression Test Suite..."
+	@./scripts/regression_orchestrator.sh full
+	@./scripts/regression_analyzer.py report
+	@./scripts/baseline_manager.sh report
+	@echo "📊 Full regression testing completed"
+
+# Security-focused regression with enhanced analysis
+regression-security:
+	@echo "🔒 Running Enhanced Security Regression Tests..."
+	@./scripts/regression_orchestrator.sh security
+	@cargo audit --json > regression_reports/security_audit_$(shell date +%Y%m%d_%H%M%S).json
+	@./scripts/security-vulnerability-scan.sh --detailed
+	@echo "🛡️ Security regression tests completed"
+
+# Performance regression with intelligent baseline management
+regression-performance:
+	@echo "⚡ Running Enhanced Performance Regression Tests..."
+	@./scripts/regression_orchestrator.sh performance
+	@./scripts/baseline_manager.sh validate auth_latency_ms 50
+	@./scripts/baseline_manager.sh validate db_query_time_ms 15
+	@./scripts/baseline_manager.sh validate jwt_generation_ms 5
+	@./scripts/baseline_manager.sh validate memory_usage_mb 256
+	@echo "📈 Performance regression tests completed"
+
+# Parallel regression testing with custom job count
+regression-parallel:
+	@echo "🔄 Running Parallel Regression Tests ($(MAX_PARALLEL_JOBS) jobs)..."
+	@export MAX_PARALLEL_JOBS=$(MAX_PARALLEL_JOBS) && ./scripts/regression_orchestrator.sh $(REGRESSION_MODE)
+	@echo "✅ Parallel regression testing completed"
+
+# Advanced regression analysis with trend detection
+regression-analyze:
+	@echo "📊 Running Advanced Regression Analysis..."
+	@./scripts/regression_analyzer.py analyze auth_latency 7
+	@./scripts/regression_analyzer.py analyze db_query_time 7
+	@./scripts/regression_analyzer.py analyze jwt_generation 7
+	@./scripts/regression_analyzer.py analyze memory_usage 7
+	@./scripts/regression_analyzer.py report regression_analysis_$(shell date +%Y%m%d_%H%M%S).json
+	@echo "🔍 Advanced analysis completed"
+
+# Smart baseline management
+regression-baseline-init:
+	@echo "🚀 Initializing Smart Baselines..."
+	@./scripts/baseline_manager.sh init
+	@echo "✅ Baselines initialized"
+
+regression-baseline-update:
+	@echo "📝 Smart Baseline Update..."
+	@read -p "Metric name: " metric && \
+	read -p "New value: " value && \
+	read -p "Force update? (y/N): " force && \
+	if [ "$$force" = "y" ] || [ "$$force" = "Y" ]; then \
+		./scripts/baseline_manager.sh update $$metric $$value force; \
+	else \
+		./scripts/baseline_manager.sh update $$metric $$value; \
+	fi
+
+regression-baseline-report:
+	@echo "📋 Generating Baseline Report..."
+	@./scripts/baseline_manager.sh report
+	@echo "✅ Baseline report generated"
+
+# Regression testing with coverage analysis
+regression-coverage:
+	@echo "📊 Running Regression Tests with Enhanced Coverage..."
+	@cargo llvm-cov clean --workspace
+	@cargo llvm-cov --workspace --html --output-dir regression_coverage \
+		--ignore-filename-regex="tests/" \
+		--ignore-filename-regex="benches/"
+	@./scripts/regression_orchestrator.sh full
+	@echo "📋 Enhanced coverage report: regression_coverage/html/index.html"
+
+# Continuous regression monitoring
+regression-monitor:
+	@echo "👁️  Starting Continuous Regression Monitoring..."
+	@./scripts/monitor_regression.sh --continuous --interval 300
+	@echo "📊 Monitoring started (5-minute intervals)"
+
+# Regression test maintenance
+regression-maintenance:
+	@echo "🧹 Running Regression Test Maintenance..."
+	@./scripts/baseline_manager.sh cleanup $(BASELINE_RETENTION_DAYS)
+	@find regression_reports/ -name "*.log" -mtime +7 -delete
+	@find regression_reports/ -name "*.json" -mtime +30 -delete
+	@echo "✅ Maintenance completed"
+
+# Regression test validation (pre-CI)
+regression-validate:
+	@echo "✅ Validating Regression Test Setup..."
+	@./scripts/regression_orchestrator.sh quick
+	@./scripts/baseline_manager.sh validate auth_latency_ms 50
+	@./scripts/regression_analyzer.py analyze auth_latency 1
+	@echo "🎯 Validation completed - Ready for CI"
+
+# Emergency regression rollback
+regression-rollback:
+	@echo "🔄 Emergency Regression Rollback..."
+	@read -p "Rollback to timestamp (YYYYMMDD_HHMMSS): " timestamp && \
+	if [ -d "tests/baseline/archive" ]; then \
+		find tests/baseline/archive -name "*_$$timestamp.json" -exec cp {} tests/baseline/ \; && \
+		echo "✅ Rollback completed to $$timestamp"; \
+	else \
+		echo "❌ No archive found for $$timestamp"; \
+	fi
+
+# Comprehensive regression report
+regression-report-comprehensive:
+	@echo "📊 Generating Comprehensive Regression Report..."
+	@./scripts/regression_orchestrator.sh full
+	@./scripts/regression_analyzer.py report comprehensive_report_$(shell date +%Y%m%d_%H%M%S).json
+	@./scripts/baseline_manager.sh report
+	@echo "📋 Comprehensive report generated"
+
+# Clean all regression artifacts
+regression-clean:
+	@echo "🧹 Cleaning All Regression Artifacts..."
+	@rm -rf regression_reports/
+	@rm -rf regression_coverage/
+	@rm -rf tests/baseline/archive/
+	@echo "✅ All regression artifacts cleaned"
+
+# Advanced monitoring and detection
+regression-dashboard:
+	@echo "📊 Starting Regression Dashboard..."
+	@python3 scripts/regression_dashboard.py generate
+	@echo "🌐 Dashboard available at: regression_dashboard.html"
+
+regression-dashboard-live:
+	@echo "🔴 Starting Live Regression Dashboard..."
+	@python3 scripts/regression_dashboard.py start 60
+	@echo "📊 Live monitoring started (60-second intervals)"
+
+regression-performance-detect:
+	@echo "🔍 Running Performance Regression Detection..."
+	@python3 scripts/performance_detector.py batch medium
+	@echo "📈 Performance analysis completed"
+
+regression-performance-report:
+	@echo "📋 Generating Performance Regression Report..."
+	@python3 scripts/performance_detector.py report performance_regression_$(shell date +%Y%m%d_%H%M%S).json high
+	@echo "📊 High-sensitivity performance report generated"
+
+# CI/CD integration helpers
+regression-ci-quick:
+	@echo "🚀 CI Quick Regression Check..."
+	@export MAX_PARALLEL_JOBS=2 && ./scripts/regression_orchestrator.sh quick
+	@python3 scripts/performance_detector.py batch low
+	@echo "✅ CI quick check completed"
+
+regression-ci-full:
+	@echo "🔄 CI Full Regression Suite..."
+	@export MAX_PARALLEL_JOBS=4 && ./scripts/regression_orchestrator.sh full
+	@python3 scripts/performance_detector.py report ci_performance_report.json medium
+	@python3 scripts/regression_analyzer.py report ci_analysis_report.json
+	@echo "📊 CI full suite completed"
+
+# Status and health checks
+regression-health-check:
+	@echo "🏥 Regression System Health Check..."
+	@./scripts/baseline_manager.sh validate auth_latency_ms 50 || echo "⚠️ Auth latency baseline check failed"
+	@python3 scripts/performance_detector.py batch low | jq -r '.overall_status' | \
+		(read status; if [ "$$status" = "healthy" ]; then echo "✅ Performance status: healthy"; else echo "❌ Performance status: $$status"; fi)
+	@python3 scripts/regression_dashboard.py status
+	@echo "🎯 Health check completed"
+# Help target with comprehensive information
+regression-help:
+	@echo "🔄 Enhanced Regression Testing Framework"
+	@echo "========================================"
+	@echo ""
+	@echo "📋 Basic Commands:"
+	@echo "  regression-quick              - Quick pre-commit tests (parallel)"
+	@echo "  regression-full               - Complete enhanced test suite"
+	@echo "  regression-security           - Security-focused tests with analysis"
+	@echo "  regression-performance        - Performance tests with baselines"
+	@echo ""
+	@echo "🚀 Advanced Commands:"
+	@echo "  regression-parallel           - Parallel execution (set MAX_PARALLEL_JOBS)"
+	@echo "  regression-analyze            - Advanced trend analysis"
+	@echo "  regression-coverage           - Tests with enhanced coverage"
+	@echo "  regression-monitor            - Continuous monitoring"
+	@echo ""
+	@echo "📊 Monitoring & Detection:"
+	@echo "  regression-dashboard          - Generate static dashboard"
+	@echo "  regression-dashboard-live     - Start live monitoring dashboard"
+	@echo "  regression-performance-detect - Run performance regression detection"
+	@echo "  regression-performance-report - Generate detailed performance report"
+	@echo ""
+	@echo "🏥 Health & Status:"
+	@echo "  regression-health-check       - Complete system health check"
+	@echo "  regression-ci-quick           - CI-optimized quick check"
+	@echo "  regression-ci-full            - CI-optimized full suite"
+	@echo ""
+	@echo "🔧 Baseline Management:"
+	@echo "  regression-baseline-init      - Initialize smart baselines"
+	@echo "  regression-baseline-update    - Smart baseline updates"
+	@echo "  regression-baseline-report    - Generate baseline report"
+	@echo ""
+	@echo "🧹 Maintenance:"
+	@echo "  regression-maintenance        - Cleanup old artifacts"
+	@echo "  regression-validate           - Pre-CI validation"
+	@echo "  regression-rollback           - Emergency rollback"
+	@echo "  regression-clean              - Clean all artifacts"
+	@echo ""
+	@echo "⚙️  Configuration Variables:"
+	@echo "  MAX_PARALLEL_JOBS=N           - Set parallel job count (default: 4)"
+	@echo "  REGRESSION_MODE=mode          - Set test mode (quick/full/security/performance)"
+	@echo "  BASELINE_RETENTION_DAYS=N     - Archive retention (default: 30)"
+	@echo ""
+	@echo "📖 Examples:"
+	@echo "  make -f Makefile.regression regression-quick"
+	@echo "  MAX_PARALLEL_JOBS=8 make -f Makefile.regression regression-parallel"
+	@echo "  make -f Makefile.regression regression-dashboard-live"

@@ -7,8 +7,8 @@
 //! - Metrics collection
 //! - Failover support
 
-use crate::redis_config::UnifiedRedisConfig;
 use crate::constants;
+use crate::redis_config::UnifiedRedisConfig;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -246,7 +246,9 @@ impl OptimizedRedisPool {
 
     /// Create a new Redis connection
     async fn create_new_connection(&self) -> Result<redis::aio::MultiplexedConnection, PoolError> {
-        let connection = self.client.get_multiplexed_async_connection()
+        let connection = self
+            .client
+            .get_multiplexed_async_connection()
             .await
             .map_err(PoolError::Redis)?;
 

@@ -105,7 +105,7 @@ pub fn sanitize_for_logging(input: &str) -> String {
 }
 
 /// Sanitize Bearer tokens in Authorization headers
-fn sanitize_bearer_tokens(input: &str) -> String {
+pub fn sanitize_bearer_tokens(input: &str) -> String {
     regex::Regex::new(r"(?i)bearer\s+[^\s]+").map_or_else(
         |_| input.to_string(),
         |re| re.replace_all(input, "Bearer [REDACTED]").to_string(),
@@ -113,7 +113,7 @@ fn sanitize_bearer_tokens(input: &str) -> String {
 }
 
 /// Sanitize connection strings with credentials
-fn sanitize_connection_strings(input: &str) -> String {
+pub fn sanitize_connection_strings(input: &str) -> String {
     regex::Regex::new(r"(?i)(postgresql|mysql|redis)://([^:]+):([^@]+)@").map_or_else(
         |_| input.to_string(),
         |re| {
@@ -124,7 +124,7 @@ fn sanitize_connection_strings(input: &str) -> String {
 }
 
 /// Sanitize JSON-like fields
-fn sanitize_json_fields(input: &str) -> String {
+pub fn sanitize_json_fields(input: &str) -> String {
     regex::Regex::new(r#""([^"]*(?:password|secret|token|key)[^"]*)"\s*:\s*"([^"]*)""#).map_or_else(
         |_| input.to_string(),
         |re| re.replace_all(input, r#""$1":"[REDACTED]""#).to_string(),
@@ -430,5 +430,168 @@ mod tests {
             true,
             Some(&sanitized),
         );
+    }
+
+    // Test individual sanitization functions (now that they're public)
+
+    #[test]
+    fn test_sanitize_bearer_tokens_individual() {
+        let input = "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.payload.signature";
+        let sanitized = sanitize_bearer_tokens(input);
+        assert_eq!(sanitized, "Authorization: Bearer [REDACTED]");
+    }
+
+    #[test]
+    fn test_sanitize_bearer_tokens_case_insensitive() {
+        let input = "authorization: BEARER eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.payload.signature";
+        let sanitized = sanitize_bearer_tokens(input);
+        assert_eq!(sanitized, "authorization: Bearer [REDACTED]");
+    }
+
+    #[test]
+    fn test_sanitize_bearer_tokens_no_match() {
+        let input = "Authorization: Basic dXNlcjpwYXNzd29yZA==";
+        let sanitized = sanitize_bearer_tokens(input);
+        assert_eq!(sanitized, input); // Should be unchanged
+    }
+
+    #[test]
+    fn test_sanitize_connection_strings_postgresql() {
+        let input = "postgresql://username:password123@localhost:5432/database";
+        let sanitized = sanitize_connection_strings(input);
+        assert_eq!(
+            sanitized,
+            "postgresql://[REDACTED]:[REDACTED]@localhost:5432/database"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_connection_strings_mysql() {
+        let input = "mysql://root:mysqlpass@database-server:3306/mydb";
+        let sanitized = sanitize_connection_strings(input);
+        assert_eq!(
+            sanitized,
+            "mysql://[REDACTED]:[REDACTED]@database-server:3306/mydb"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_connection_strings_redis() {
+        let input = "redis://user:redispass@redis-server:6379/0";
+        let sanitized = sanitize_connection_strings(input);
+        assert_eq!(
+            sanitized,
+            "redis://[REDACTED]:[REDACTED]@redis-server:6379/0"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_connection_strings_case_insensitive() {
+        let input = "POSTGRESQL://admin:secret@server:5432/db";
+        let sanitized = sanitize_connection_strings(input);
+        assert_eq!(
+            sanitized,
+            "POSTGRESQL://[REDACTED]:[REDACTED]@server:5432/db"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_connection_strings_no_credentials() {
+        let input = "postgresql://localhost:5432/database";
+        let sanitized = sanitize_connection_strings(input);
+        assert_eq!(sanitized, input); // Should be unchanged if no credentials
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_password() {
+        let input = r#"{"user": "john", "password": "secret123", "role": "admin"}"#;
+        let sanitized = sanitize_json_fields(input);
+        assert_eq!(
+            sanitized,
+            r#"{"user": "john", "password":"[REDACTED]", "role": "admin"}"#
+        );
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_secret() {
+        let input = r#"{"api_secret": "sk_12345", "config": "value"}"#;
+        let sanitized = sanitize_json_fields(input);
+        assert_eq!(
+            sanitized,
+            r#"{"api_secret":"[REDACTED]", "config": "value"}"#
+        );
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_token() {
+        let input = r#"{"access_token": "jwt_token_here", "expires": 3600}"#;
+        let sanitized = sanitize_json_fields(input);
+        assert_eq!(
+            sanitized,
+            r#"{"access_token":"[REDACTED]", "expires": 3600}"#
+        );
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_key() {
+        let input = r#"{"encryption_key": "aes_key_value", "algorithm": "AES-256"}"#;
+        let sanitized = sanitize_json_fields(input);
+        assert_eq!(
+            sanitized,
+            r#"{"encryption_key":"[REDACTED]", "algorithm": "AES-256"}"#
+        );
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_multiple() {
+        let input = r#"{"user": "john", "password": "pass123", "api_key": "key456", "email": "john@example.com"}"#;
+        let sanitized = sanitize_json_fields(input);
+        // Both password and api_key should be redacted
+        assert!(sanitized.contains(r#""password":"[REDACTED]""#));
+        assert!(sanitized.contains(r#""api_key":"[REDACTED]""#));
+        assert!(sanitized.contains(r#""email": "john@example.com""#)); // Non-sensitive preserved
+        assert!(!sanitized.contains("pass123"));
+        assert!(!sanitized.contains("key456"));
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_no_sensitive() {
+        let input = r#"{"user": "john", "email": "john@example.com", "role": "user"}"#;
+        let sanitized = sanitize_json_fields(input);
+        assert_eq!(sanitized, input); // Should be unchanged
+    }
+
+    #[test]
+    fn test_sanitize_json_fields_nested() {
+        let input = r#"{"auth": {"username": "user", "password": "secret"}, "config": "value"}"#;
+        let sanitized = sanitize_json_fields(input);
+        assert!(sanitized.contains(r#""password":"[REDACTED]""#));
+        assert!(!sanitized.contains("secret"));
+        assert!(sanitized.contains(r#""config": "value""#)); // Non-sensitive preserved
+    }
+
+    // Test that the static patterns work correctly
+
+    #[test]
+    fn test_secret_patterns_loaded() {
+        // Test that the lazy static SECRET_PATTERNS is loaded correctly
+        assert!(!SECRET_PATTERNS.is_empty());
+    }
+
+    #[test]
+    fn test_sensitive_field_names_loaded() {
+        // Test that the lazy static SENSITIVE_FIELD_NAMES is loaded correctly
+        assert!(!SENSITIVE_FIELD_NAMES.is_empty());
+        assert!(SENSITIVE_FIELD_NAMES.contains("password"));
+        assert!(SENSITIVE_FIELD_NAMES.contains("secret"));
+        assert!(SENSITIVE_FIELD_NAMES.contains("token"));
+    }
+
+    #[test]
+    fn test_secure_logging_config_default() {
+        let config = SecureLoggingConfig::default();
+        assert!(config.paranoid_mode);
+        assert!(config.custom_redaction_patterns.is_empty());
+        assert!(!config.external_logging);
     }
 }

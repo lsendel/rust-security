@@ -52,5 +52,8 @@ async fn test_jwks_document_remains_available() {
         .and_then(|k| k.as_array())
         .map(|a| a.len())
         .unwrap_or(0);
-    assert!(len1 >= 1, "JWKS should remain available with at least one key");
+    assert!(
+        len1 >= 1,
+        "JWKS should remain available with at least one key"
+    );
 }

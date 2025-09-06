@@ -1,179 +1,160 @@
-#[cfg(feature = "redis-sessions")]
-use redis::aio::MultiplexedConnection;
-#[cfg(feature = "redis-sessions")]
-use redis::{Client, RedisError};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
+//! Optimized async operations for the auth service
+//!
+//! This module provides performance-optimized async utilities specifically
+//! designed for authentication and authorization workflows.
 
-/// Simple error type for token operations
-#[derive(Debug, Error)]
-pub enum TokenError {
-    #[cfg(feature = "redis-sessions")]
-    #[error("Redis connection error: {0}")]
-    Connection(#[from] RedisError),
-    #[error("Token not found")]
-    NotFound,
-    #[error("Serialization error: {0}")]
-    Serialization(String),
+use futures::future::{BoxFuture, FutureExt};
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::{Mutex, Semaphore};
+
+/// Async operation pool with intelligent batching
+pub struct AsyncOperationPool<T, R> {
+    semaphore: Arc<Semaphore>,
+    pending_operations: Arc<Mutex<VecDeque<PendingOperation<T, R>>>>,
+    batch_size: usize,
+    batch_timeout: Duration,
 }
 
-/// Simple token storage data
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenData {
-    pub user_id: String,
-    pub expires_at: u64,
-    pub permissions: Vec<String>,
+struct PendingOperation<T, R> {
+    input: T,
+    sender: tokio::sync::oneshot::Sender<R>,
+    created_at: Instant,
 }
 
-/// Simple async Redis token storage for MVP
-#[cfg(feature = "redis-sessions")]
-pub struct AsyncTokenStorage {
-    client: Client,
-}
-
-#[cfg(not(feature = "redis-sessions"))]
-pub struct AsyncTokenStorage;
-
-#[cfg(not(feature = "redis-sessions"))]
-impl AsyncTokenStorage {
-    pub fn new(_redis_url: &str) -> Result<Self, TokenError> {
-        Err(TokenError::Serialization(
-            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
-        ))
-    }
-
-    pub async fn store_token(&self, _token: &str, _data: &TokenData) -> Result<(), TokenError> {
-        Err(TokenError::Serialization(
-            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
-        ))
-    }
-
-    pub async fn get_token(&self, _token: &str) -> Result<Option<TokenData>, TokenError> {
-        Err(TokenError::Serialization(
-            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
-        ))
-    }
-
-    pub async fn delete_token(&self, _token: &str) -> Result<bool, TokenError> {
-        Err(TokenError::Serialization(
-            "Redis support not enabled. Enable 'redis-sessions' feature.".to_string(),
-        ))
-    }
-}
-
-#[cfg(feature = "redis-sessions")]
-impl AsyncTokenStorage {
-    /// Create a new async token storage with simple Redis connection
-    ///
-    /// # Errors
-    ///
-    /// Returns `TokenError` if Redis client creation fails
-    pub fn new(redis_url: &str) -> Result<Self, TokenError> {
-        let client = Client::open(redis_url)?;
-        Ok(Self { client })
-    }
-
-    /// Store a token with associated data
-    ///
-    /// # Errors
-    ///
-    /// Returns `TokenError` if:
-    /// - Redis connection fails
-    /// - Token data serialization fails
-    /// - Store operation fails
-    pub async fn store_token(&self, token: &str, data: &TokenData) -> Result<(), TokenError> {
-        let mut conn = self.get_connection().await?;
-
-        let json_data =
-            serde_json::to_string(data).map_err(|e| TokenError::Serialization(e.to_string()))?;
-
-        redis::cmd("SET")
-            .arg(format!("token:{token}"))
-            .arg(&json_data)
-            .arg("EX")
-            .arg(3600) // 1 hour expiration
-            .query_async::<()>(&mut conn)
-            .await?;
-
-        Ok(())
-    }
-
-    /// Get token data
-    ///
-    /// # Errors
-    ///
-    /// Returns `TokenError` if:
-    /// - Redis connection fails
-    /// - Token data deserialization fails
-    /// - Get operation fails
-    pub async fn get_token(&self, token: &str) -> Result<Option<TokenData>, TokenError> {
-        let mut conn = self.get_connection().await?;
-
-        let result: Option<String> = redis::cmd("GET")
-            .arg(format!("token:{token}"))
-            .query_async(&mut conn)
-            .await?;
-
-        match result {
-            Some(json_data) => {
-                let data: TokenData = serde_json::from_str(&json_data)
-                    .map_err(|e| TokenError::Serialization(e.to_string()))?;
-                Ok(Some(data))
-            }
-            None => Ok(None),
+impl<T, R> AsyncOperationPool<T, R>
+where
+    T: Clone + Send + 'static,
+    R: Send + 'static,
+{
+    pub fn new(max_concurrent: usize, batch_size: usize, batch_timeout: Duration) -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(max_concurrent)),
+            pending_operations: Arc::new(Mutex::new(VecDeque::new())),
+            batch_size,
+            batch_timeout,
         }
     }
 
-    /// Delete a token
-    ///
-    /// # Errors
-    ///
-    /// Returns `TokenError` if:
-    /// - Redis connection fails
-    /// - Delete operation fails
-    pub async fn delete_token(&self, token: &str) -> Result<bool, TokenError> {
-        let mut conn = self.get_connection().await?;
+    /// Execute operation with intelligent batching
+    pub async fn execute<F, Fut>(
+        &self,
+        input: T,
+        operation: F,
+    ) -> Result<R, Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: FnOnce(Vec<T>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Vec<R>> + Send,
+    {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
 
-        let deleted: i32 = redis::cmd("DEL")
-            .arg(format!("token:{token}"))
-            .query_async(&mut conn)
-            .await?;
+        // Add to pending operations
+        {
+            let mut pending = self.pending_operations.lock().await;
+            pending.push_back(PendingOperation {
+                input,
+                sender,
+                created_at: Instant::now(),
+            });
 
-        Ok(deleted > 0)
+            // Trigger batch processing if conditions are met
+            if pending.len() >= self.batch_size {
+                self.process_batch(operation).await;
+            }
+        }
+
+        // Wait for result
+        receiver.await.map_err(|e| e.into())
     }
 
-    /// Get an async Redis connection
-    async fn get_connection(&self) -> Result<MultiplexedConnection, TokenError> {
-        self.client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(TokenError::Connection)
+    async fn process_batch<F, Fut>(&self, operation: F)
+    where
+        F: FnOnce(Vec<T>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Vec<R>> + Send,
+    {
+        let _permit = self.semaphore.acquire().await.unwrap();
+
+        let batch = {
+            let mut pending = self.pending_operations.lock().await;
+            let batch_size = std::cmp::min(self.batch_size, pending.len());
+            (0..batch_size)
+                .map(|_| pending.pop_front().unwrap())
+                .collect::<Vec<_>>()
+        };
+
+        if batch.is_empty() {
+            return;
+        }
+
+        let inputs: Vec<T> = batch.iter().map(|op| op.input.clone()).collect();
+        let senders: Vec<_> = batch.into_iter().map(|op| op.sender).collect();
+
+        // Execute batch operation
+        let results = operation(inputs).await;
+
+        // Send results back
+        for (sender, result) in senders.into_iter().zip(results.into_iter()) {
+            let _ = sender.send(result);
+        }
     }
 }
 
-/// Utility function to create token data
-#[must_use]
-pub const fn create_token_data(
-    user_id: String,
-    expires_at: u64,
-    permissions: Vec<String>,
-) -> TokenData {
-    TokenData {
-        user_id,
-        expires_at,
-        permissions,
+/// Smart retry mechanism with exponential backoff
+pub struct SmartRetry {
+    max_attempts: usize,
+    base_delay: Duration,
+    max_delay: Duration,
+    backoff_multiplier: f64,
+}
+
+impl Default for SmartRetry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Check if token is expired
-#[must_use]
-pub fn is_token_expired(data: &TokenData) -> bool {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+impl SmartRetry {
+    pub fn new() -> Self {
+        Self {
+            max_attempts: 3,
+            base_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(30),
+            backoff_multiplier: 2.0,
+        }
+    }
 
-    data.expires_at < now
+    pub async fn execute<F, Fut, T, E>(&self, operation: F) -> Result<T, E>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<T, E>>,
+        E: std::fmt::Debug,
+    {
+        let mut attempt = 0;
+        let mut delay = self.base_delay;
+
+        loop {
+            match operation().await {
+                Ok(result) => return Ok(result),
+                Err(error) => {
+                    attempt += 1;
+
+                    if attempt >= self.max_attempts {
+                        return Err(error);
+                    }
+
+                    tokio::time::sleep(delay).await;
+
+                    delay = std::cmp::min(
+                        Duration::from_millis(
+                            (delay.as_millis() as f64 * self.backoff_multiplier) as u64,
+                        ),
+                        self.max_delay,
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -181,48 +162,25 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_token_storage_basic_operations() {
-        // This test would need a running Redis instance
-        // For now, we'll just test token data creation and expiration
+    async fn test_smart_retry() {
+        let retry = SmartRetry::new();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 
-        let token_data = create_token_data(
-            "user123".to_string(),
-            9_999_999_999, // Far future
-            vec!["read".to_string(), "write".to_string()],
-        );
+        let result = retry
+            .execute(|| {
+                let attempts = std::sync::Arc::clone(&attempts);
+                async move {
+                    let current = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                    if current < 3 {
+                        Err("temporary error")
+                    } else {
+                        Ok("success")
+                    }
+                }
+            })
+            .await;
 
-        assert_eq!(token_data.user_id, "user123");
-        assert!(!is_token_expired(&token_data));
-
-        let expired_data = create_token_data(
-            "user123".to_string(),
-            1, // Far past
-            vec!["read".to_string()],
-        );
-
-        assert!(is_token_expired(&expired_data));
-    }
-
-    #[test]
-    fn test_token_expiration() {
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let valid_data = create_token_data(
-            "user1".to_string(),
-            current_time + 3600, // 1 hour from now
-            vec!["read".to_string()],
-        );
-
-        let expired_data = create_token_data(
-            "user2".to_string(),
-            current_time - 3600, // 1 hour ago
-            vec!["read".to_string()],
-        );
-
-        assert!(!is_token_expired(&valid_data));
-        assert!(is_token_expired(&expired_data));
+        assert_eq!(result, Ok("success"));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
     }
 }

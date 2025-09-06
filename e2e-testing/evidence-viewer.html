@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E2E Test Evidence Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .evidence-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .evidence-section h2 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .screenshot-item {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            background: #fafafa;
+        }
+        .screenshot-item img {
+            width: 100%;
+            height: auto;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .screenshot-item img:hover {
+            transform: scale(1.05);
+        }
+        .screenshot-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        .file-list {
+            list-style: none;
+            padding: 0;
+        }
+        .file-list li {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 3px;
+            border-left: 4px solid #007bff;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 E2E Test Evidence Viewer</h1>
+        
+        <div class="evidence-section">
+            <h2>📊 Test Status</h2>
+            <p><span class="status success">✅ Screenshots Generated Successfully</span></p>
+            <p><span class="status info">📸 4 New Screenshots Created</span></p>
+            <p><span class="status success">✅ Evidence Collection Working</span></p>
+        </div>
+
+        <div class="evidence-section">
+            <h2>📸 Latest Screenshots</h2>
+            <div class="screenshot-grid">
+                <div class="screenshot-item">
+                    <img src="evidence/screenshot-validation/local-test-page-2025-09-05T18-08-25-099Z.png" 
+                         alt="Local Test Page" onclick="window.open(this.src)">
+                    <div class="screenshot-info">
+                        <strong>Local Test Page</strong><br>
+                        Size: 272KB<br>
+                        Dimensions: 1280x720<br>
+                        Generated: Sep 5, 2025 14:08
+                    </div>
+                </div>
+                
+                <div class="screenshot-item">
+                    <img src="evidence/screenshot-validation/httpbin-html-2025-09-05T18-08-27-330Z.png" 
+                         alt="HTTPBin HTML" onclick="window.open(this.src)">
+                    <div class="screenshot-info">
+                        <strong>HTTPBin HTML Page</strong><br>
+                        Size: 186KB<br>
+                        Dimensions: 1280x720<br>
+                        Generated: Sep 5, 2025 14:08
+                    </div>
+                </div>
+                
+                <div class="screenshot-item">
+                    <img src="evidence/screenshot-validation/example-com-test-2025-09-05T18-08-25-836Z.png" 
+                         alt="Example.com" onclick="window.open(this.src)">
+                    <div class="screenshot-info">
+                        <strong>Example.com</strong><br>
+                        Size: 24KB<br>
+                        Dimensions: 1280x720<br>
+                        Generated: Sep 5, 2025 14:08
+                    </div>
+                </div>
+                
+                <div class="screenshot-item">
+                    <img src="evidence/screenshot-validation/httpbin-json-2025-09-05T18-08-27-924Z.png" 
+                         alt="HTTPBin JSON" onclick="window.open(this.src)">
+                    <div class="screenshot-info">
+                        <strong>HTTPBin JSON Response</strong><br>
+                        Size: 33KB<br>
+                        Dimensions: 1280x720<br>
+                        Generated: Sep 5, 2025 14:08
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="evidence-section">
+            <h2>📁 Evidence Files</h2>
+            <ul class="file-list">
+                <li>📸 evidence/screenshot-validation/local-test-page-2025-09-05T18-08-25-099Z.png (272KB)</li>
+                <li>📸 evidence/screenshot-validation/httpbin-html-2025-09-05T18-08-27-330Z.png (186KB)</li>
+                <li>📸 evidence/screenshot-validation/httpbin-json-2025-09-05T18-08-27-924Z.png (33KB)</li>
+                <li>📸 evidence/screenshot-validation/example-com-test-2025-09-05T18-08-25-836Z.png (24KB)</li>
+                <li>📄 evidence/working-e2e/result-*.json (Test results)</li>
+                <li>📊 reports/html-report/index.html (Playwright report)</li>
+                <li>📋 reports/validation/url-validation-report.html (URL validation)</li>
+            </ul>
+        </div>
+
+        <div class="evidence-section">
+            <h2>🔍 Validation Results</h2>
+            <p><strong>Screenshot Generation:</strong> ✅ Working perfectly</p>
+            <p><strong>File Sizes:</strong> ✅ All images > 20KB (valid content)</p>
+            <p><strong>Image Format:</strong> ✅ Valid PNG files (1280x720)</p>
+            <p><strong>Evidence Collection:</strong> ✅ Automatic saving to local disk</p>
+            <p><strong>Volume Mapping:</strong> ✅ Docker volumes mapped correctly</p>
+        </div>
+    </div>
+</body>
+</html>

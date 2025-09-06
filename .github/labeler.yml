@@ -1,0 +1,36 @@
+security-scan:
+  - any: ["Cargo.lock", "security/**", "security-vulnerability-reports/**", "zero-trust/**"]
+  - changed-files:
+      - any-glob-to-any-file: ["Dockerfile*", "**/Dockerfile*", "k8s/**", "helm/**"]
+
+performance-scan:
+  - any: ["benches/**", "load_test/**"]
+  - changed-files:
+      - any-glob-to-any-file: ["**/*performance*.rs", "**/*bench*.rs"]
+
+compliance-scan:
+  - any: ["compliance-tools/**", "config/**"]
+
+api-validate:
+  - any: ["api-specs/*.openapi.yaml", "api-contracts/**", "docs/API_DOCUMENTATION.md"]
+
+frontend-validate:
+  - any: ["user-portal/**"]
+
+image-scan:
+  - any: ["Dockerfile*", "**/Dockerfile*", "helm/**", "k8s/**"]
+
+docs:
+  - any: ["docs/**", "**/*.md"]
+
+release:
+  - any: [".github/workflows/release.yml", "CHANGELOG.md", "Cargo.toml"]
+
+deployment:
+  - any: [".github/workflows/deployment.yml", "helm/**", "gitops/**", "k8s/**"]
+
+rust:
+  - any: ["**/*.rs", "Cargo.toml", "Cargo.lock"]
+
+ci:
+  - any: [".github/workflows/**"]

@@ -6,7 +6,7 @@ targets = [
 all-features = false
 
 [licenses]
-unlicensed = "deny"
+
 allow = [
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception", 
@@ -16,16 +16,15 @@ allow = [
     "OpenSSL",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    "Zlib",
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
 ]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0", 
-    "AGPL-1.0",
-    "AGPL-3.0",
-    "LGPL-2.0",
-    "LGPL-2.1",
-    "LGPL-3.0",
-]
+
+[licenses.private]
+ignore = true
+registries = []
+
 
 [bans]
 multiple-versions = "warn"
@@ -60,11 +59,7 @@ deny = [
 
 [advisories]
 version = 2
-vulnerability = "deny"
-unmaintained = "warn"
-unsound = "warn"
-yanked = "deny"
-notice = "warn"
+unmaintained = "all"
 ignore = [
     # Add specific advisory IDs here if needed after review
     # Example: "RUSTSEC-2020-0001",

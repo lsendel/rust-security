@@ -1,0 +1,128 @@
+name: PR On-Demand API Validation
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-on-demand-api-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  run-api-validation:
+    name: Run API validation on PR head
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/api-validate')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize commenter
+        id: auth
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            let allowed = false;
+            let level = 'none';
+            if (commenter === 'github-actions[bot]') {
+              allowed = true;
+              level = 'bot';
+            } else {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: commenter,
+              });
+              level = data.permission;
+              allowed = ['admin','maintain','write'].includes(level);
+            }
+            core.setOutput('allowed', String(allowed));
+            core.setOutput('level', level);
+
+      - name: Deny unauthorized user
+        if: steps.auth.outputs.allowed != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '⚠️ You are not authorized to run /api-validate. Maintainers only.'
+            });
+            core.setFailed('Unauthorized commenter');
+
+      - name: Extract PR metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('head_sha', pr.head.sha);
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+
+      - name: Setup Node (for Spectral)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Lint OpenAPI specs with Spectral
+        continue-on-error: true
+        run: |
+          npx -y @stoplight/spectral-cli lint "api-specs/*.openapi.yaml" || true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: API consistency script (if present)
+        id: api_consistency
+        continue-on-error: true
+        run: |
+          if [ -x scripts/validate-api-consistency.sh ]; then
+            ./scripts/validate-api-consistency.sh || true
+          else
+            echo "No scripts/validate-api-consistency.sh found; skipping"
+          fi
+
+      - name: Build docs (rust)
+        continue-on-error: true
+        run: |
+          cargo doc --workspace --all-features --no-deps --document-private-items || true
+
+      - name: Upload API validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-api-validation-${{ github.event.issue.number }}
+          path: |
+            api-consistency-report.md
+            target/doc/**
+
+      - name: Comment results on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const msg = `🔍 API validation run completed. Artifacts: pr-api-validation-${{ github.event.issue.number }}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: msg,
+            });

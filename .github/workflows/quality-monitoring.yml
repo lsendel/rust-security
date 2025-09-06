@@ -1,5 +1,12 @@
 name: Continuous Quality Monitoring
 
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-monitoring-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   schedule:
     # Run quality monitoring every 6 hours
@@ -37,14 +44,8 @@ jobs:
       with:
         components: rustfmt, clippy
         
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target/
-        key: ${{ runner.os }}-quality-${{ hashFiles('**/Cargo.lock') }}
+    - name: Cargo cache
+      uses: Swatinem/rust-cache@v2
         
     - name: Install quality analysis tools
       run: |

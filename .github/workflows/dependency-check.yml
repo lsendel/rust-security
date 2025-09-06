@@ -4,6 +4,10 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: dependency-check-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, develop ]
@@ -43,6 +47,12 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-
+    - name: Install just
+      run: |
+        if ! command -v just >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install -y just || true
+        fi
           
     - name: Install audit tools
       run: |

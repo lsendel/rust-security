@@ -1,0 +1,50 @@
+{
+  "name": "rust-security-e2e-testing",
+  "version": "1.0.0",
+  "description": "Comprehensive E2E testing suite for Rust Security Platform",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test tests/api --project=api",
+    "test:ui": "playwright test tests/ui --project=ui",
+    "test:frontend": "playwright test tests/frontend --project=frontend",
+    "test:coverage": "playwright test --reporter=html,json,junit",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:docker": "docker-compose up --build --abort-on-container-exit",
+    "test:smoke": "playwright test tests/api/working-e2e.spec.ts --project=api --reporter=list",
+    "test:regression": "playwright test tests/api --project=api --reporter=list",
+    "test:security": "playwright test tests/api/working-e2e.spec.ts -g 'Security' --project=api --reporter=list",
+    "test:all": "./run-e2e.sh",
+    "report": "playwright show-report",
+    "generate:report": "node utils/generate-test-plan.js",
+    "validate:urls": "node utils/url-validator.js",
+    "install:browsers": "playwright install",
+    "setup": "npm run install:browsers && npm run validate:urls"
+  },
+  "keywords": [
+    "playwright",
+    "e2e",
+    "testing",
+    "api-testing",
+    "ui-testing",
+    "security",
+    "rust"
+  ],
+  "author": "Security Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.1",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "allure-playwright": "^2.10.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "fs-extra": "^11.2.0"
+  }
+}

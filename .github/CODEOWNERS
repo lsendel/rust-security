@@ -1,27 +1,35 @@
-# Code ownership and default reviewers
-# Syntax: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# CODEOWNERS
 
-# Default owners for everything
-*       @your-org/engineering-leads
+# Global owners
+*                              @zamaz/regularUser @zamaz/superuser @lsendel
 
-# Rust code
-*.rs    @your-org/rust-reviewers
-/src/   @your-org/rust-reviewers
-/auth-service/ @your-org/rust-reviewers
-/policy-service/ @your-org/rust-reviewers
+# Rust code owners
+*.rs                           @zamaz/regularUser @zamaz/superuser @lsendel
+Cargo.toml                     @zamaz/regularUser @zamaz/superuser @lsendel
+Cargo.lock                     @zamaz/regularUser @zamaz/superuser @lsendel
 
-# GitHub workflows
-/.github/workflows/ @your-org/devops
+# Frontend
+/user-portal/**                @zamaz/regularUser @zamaz/superuser @lsendel
 
-# Helm charts and k8s manifests
-/helm/  @your-org/platform
-/k8s/   @your-org/platform
+# Workflows and CI
+/.github/workflows/**          @zamaz/regularUser @zamaz/admin @zamaz/superuser @lsendel
+/.github/workflows/deployment.yml @zamaz/admin @zamaz/superuser @zamaz/sri @lsendel
+/.github/workflows/release.yml    @zamaz/admin @zamaz/superuser @zamaz/sri @lsendel
 
-# Documentation
-/docs/  @your-org/docs
-*.md    @your-org/docs
+# Policies and API specs
+/policy-service/**             @zamaz/regularUser @zamaz/admin @zamaz/superuser @lsendel
+/auth-service/**               @zamaz/regularUser @zamaz/admin @zamaz/superuser @lsendel
+/api-specs/**                  @zamaz/regularUser @zamaz/admin @zamaz/superuser @lsendel
 
-# Security policies and supply-chain
-SECURITY.md @your-org/security
-supply-chain-security.yml @your-org/security
-/.github/workflows/supply-chain-security.yml @your-org/security
+# Docs
+/docs/**                       @zamaz/regularUser @zamaz/superuser @lsendel
+
+# SRE / Infra / Security
+/helm/**                       @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/gitops/**                     @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/monitoring/**                 @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/zero-trust/**                 @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/config/**                     @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/security/**                   @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/security-vulnerability-reports/** @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel
+/Dockerfile*                   @zamaz/sri @zamaz/admin @zamaz/superuser @lsendel

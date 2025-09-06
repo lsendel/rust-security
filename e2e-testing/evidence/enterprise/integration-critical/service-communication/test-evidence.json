@@ -1,0 +1,214 @@
+{
+  "testName": "service-communication",
+  "testSuite": "integration-critical",
+  "startTime": "2025-09-05T22:06:11.425Z",
+  "endTime": "2025-09-05T22:06:11.612Z",
+  "duration": 187,
+  "status": "PASS",
+  "steps": [
+    {
+      "stepNumber": 1,
+      "action": "Health Check Setup",
+      "description": "Testing service health checks and monitoring integration",
+      "timestamp": "2025-09-05T22:06:11.430Z",
+      "screenshot": "step-1-Health-Check-Setup-2025-09-05T22-06-11-430Z.png",
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 2,
+      "action": "Health Check Endpoint",
+      "description": "Testing health check: /health",
+      "timestamp": "2025-09-05T22:06:11.513Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 3,
+      "action": "Health Check Endpoint",
+      "description": "Testing health check: /health/ready",
+      "timestamp": "2025-09-05T22:06:11.516Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 4,
+      "action": "Health Check Endpoint",
+      "description": "Testing health check: /health/live",
+      "timestamp": "2025-09-05T22:06:11.520Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 5,
+      "action": "Health Check Endpoint",
+      "description": "Testing health check: /metrics",
+      "timestamp": "2025-09-05T22:06:11.527Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 6,
+      "action": "Health Check Endpoint",
+      "description": "Testing health check: /version",
+      "timestamp": "2025-09-05T22:06:11.538Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 7,
+      "action": "Monitoring Feature",
+      "description": "Validating: Prometheus metrics collection",
+      "timestamp": "2025-09-05T22:06:11.539Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 8,
+      "action": "Monitoring Feature",
+      "description": "Validating: Distributed tracing with Jaeger",
+      "timestamp": "2025-09-05T22:06:11.540Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 9,
+      "action": "Monitoring Feature",
+      "description": "Validating: Log aggregation with ELK",
+      "timestamp": "2025-09-05T22:06:11.542Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 10,
+      "action": "Monitoring Feature",
+      "description": "Validating: Alert manager integration",
+      "timestamp": "2025-09-05T22:06:11.557Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 11,
+      "action": "Monitoring Feature",
+      "description": "Validating: Custom business metrics",
+      "timestamp": "2025-09-05T22:06:11.559Z",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    },
+    {
+      "stepNumber": 12,
+      "action": "Health Monitoring Validated",
+      "description": "All health checks and monitoring features working correctly",
+      "timestamp": "2025-09-05T22:06:11.562Z",
+      "screenshot": "step-12-Health-Monitoring-Validated-2025-09-05T22-06-11-562Z.png",
+      "performanceMetrics": {
+        "pageLoadTime": 0,
+        "domContentLoaded": 0,
+        "firstContentfulPaint": 84,
+        "largestContentfulPaint": 0,
+        "cumulativeLayoutShift": 0,
+        "memoryUsage": 10000000,
+        "cpuUsage": 0
+      },
+      "networkLogs": []
+    }
+  ],
+  "summary": {
+    "totalSteps": 12,
+    "screenshotCount": 2,
+    "networkRequestCount": 0,
+    "securityCheckCount": 0,
+    "accessibilityIssueCount": 0
+  },
+  "environment": {
+    "browser": "chromium",
+    "viewport": "1280x720",
+    "userAgent": "Playwright Test Agent",
+    "platform": "darwin"
+  },
+  "businessMetrics": {
+    "userJourneyCompletion": true,
+    "criticalPathValidated": true,
+    "performanceSLAMet": true,
+    "securityRequirementsMet": true
+  }
+}

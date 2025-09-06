@@ -1,0 +1,29 @@
+name: PR Command Help
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  help:
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/ci-help')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post help comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `Available CI commands:\n\n- /security-scan [full] — runs cargo-audit/deny. With 'full', also runs IaC/Dockerfile scans (Trivy/Checkov).\n- /performance-scan — runs performance tests/benches and uploads results.\n- /compliance-scan — generates SBOM and compliance artifacts.\n- /api-validate — validates OpenAPI specs with Spectral and builds Rust docs.\n\nOnly maintainers/collaborators (write+) may invoke these commands.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+

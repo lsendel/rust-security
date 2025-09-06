@@ -26,6 +26,8 @@ pub mod crypto;
 pub mod crypto_utils;
 pub mod database;
 pub mod errors;
+#[cfg(test)]
+pub mod mocks;
 pub mod optimized_pools;
 pub mod redis_config;
 pub mod secure_logging;
@@ -39,7 +41,10 @@ pub use config::{PlatformConfiguration, RateLimitConfig, SecurityConfig};
 // Re-export unified security configuration
 pub use constants::*;
 pub use crypto_utils::*;
-pub use database::{DatabaseOperations, DatabaseOperationsBuilder, UnifiedDatabaseConfig, DatabaseError, DatabaseResult};
+pub use database::{
+    DatabaseError, DatabaseOperations, DatabaseOperationsBuilder, DatabaseResult,
+    UnifiedDatabaseConfig,
+};
 pub use errors::*;
 use num_cpus as _;
 pub use optimized_pools::{OptimizedRedisPool, PoolError, PoolStats};
@@ -62,3 +67,5 @@ pub use utils::{current_timestamp, format_duration, generate_correlation_id, val
 
 // Import once_cell to satisfy unused dependency warning
 use once_cell as _;
+pub mod memory_optimization;
+pub mod performance_utils;

@@ -1,0 +1,10 @@
+{
+  "metric_name": "db_query_time_ms",
+  "baseline_value": 15,
+  "tolerance": 0.15,
+  "created": "2025-09-05T22:18:42-04:00",
+  "last_updated": "2025-09-05T22:18:42-04:00",
+  "update_history": [],
+  "validation_count": 0,
+  "deviation_count": 0
+}

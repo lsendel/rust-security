@@ -340,24 +340,32 @@ impl ShardedRateLimiter {
 
     /// Get statistics about the rate limiter
     pub async fn get_stats(&self) -> RateLimiterStats {
-        let mut stats = RateLimiterStats::default();
+        let mut total_keys = 0;
+        let mut total_requests = 0;
+        let mut blocked_keys = 0;
+        let mut expired_entries = 0;
 
         for shard in &self.shards {
             let shard_read = shard.read().await;
-            stats.total_keys += shard_read.len();
+            total_keys += shard_read.len();
 
             for entry in shard_read.values() {
-                stats.total_requests += u64::from(entry.count);
+                total_requests += u64::from(entry.count);
                 if entry.would_exceed_limit() {
-                    stats.blocked_keys += 1;
+                    blocked_keys += 1;
                 }
                 if entry.should_reset() {
-                    stats.expired_entries += 1;
+                    expired_entries += 1;
                 }
             }
         }
 
-        stats
+        RateLimiterStats {
+            total_keys,
+            total_requests,
+            blocked_keys,
+            expired_entries,
+        }
     }
 }
 

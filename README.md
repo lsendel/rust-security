@@ -7,13 +7,13 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://rustup.rs/)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-ready-blue.svg)](./k8s/)
-[![CI](https://github.com/lsendel/rust-security/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci.yml)
-[![Enhanced CI](https://github.com/lsendel/rust-security/actions/workflows/enhanced-ci.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/enhanced-ci.yml)
-[![Clippy](https://github.com/lsendel/rust-security/actions/workflows/ci-clippy.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci-clippy.yml)
-[![Comprehensive Testing](https://github.com/lsendel/rust-security/actions/workflows/comprehensive-testing.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/comprehensive-testing.yml)
-[![Clean Code](https://github.com/lsendel/rust-security/actions/workflows/clean-code.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/clean-code.yml)
-[![API Validation](https://github.com/lsendel/rust-security/actions/workflows/api-validation.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/api-validation.yml)
-[![CI Pipeline](https://github.com/lsendel/rust-security/actions/workflows/ci-pipeline.yml/badge.svg?branch=main)](https://github.com/lsendel/rust-security/actions/workflows/ci-pipeline.yml)
+[![CI](https://github.com/zamaz/rust-security/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/ci.yml)
+[![Enhanced CI](https://github.com/zamaz/rust-security/actions/workflows/enhanced-ci.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/enhanced-ci.yml)
+[![Frontend CI](https://github.com/zamaz/rust-security/actions/workflows/frontend.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/frontend.yml)
+[![Clippy](https://github.com/zamaz/rust-security/actions/workflows/ci-clippy.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/ci-clippy.yml)
+[![Clean Code](https://github.com/zamaz/rust-security/actions/workflows/clean-code.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/clean-code.yml)
+[![API Validation](https://github.com/zamaz/rust-security/actions/workflows/api-validation.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/api-validation.yml)
+[![Security](https://github.com/zamaz/rust-security/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/zamaz/rust-security/actions/workflows/security.yml)
 
 **Enterprise-grade security platform built with Rust, featuring zero-trust architecture, post-quantum cryptography, and comprehensive threat detection capabilities.**
 
@@ -111,11 +111,17 @@ kubectl get pods -n rust-security
 ## 📖 Documentation
 
 ### **Quick Links**
-- 🚀 [**Getting Started**](./docs/getting-started.md) - Your first 15 minutes
-- 🏗️ [**Architecture Overview**](./docs/architecture/README.md) - System design and components
-- 🔐 [**Security Guide**](./docs/security/README.md) - Security features and best practices
-- 📊 [**Operations Guide**](./docs/operations/operations-guide.md) - Production operations and monitoring
-- 🔧 [**API Documentation**](./api-contracts/README.md) - Complete API reference
+- 🚀 [**Getting Started**](./docs/01-introduction/README.md) - Your first 15 minutes
+- 🏗️ [**Architecture Overview**](./docs/02-core-concepts/README.md) - System design and components
+- 🔐 [**Security Guide**](./docs/04-security/README.md) - Security features and best practices
+- 🔧 [**API Documentation**](./docs/03-api-reference/README.md) - Complete API reference
+- 📚 [**Documentation Index**](./docs/INDEX.md) - Complete documentation index
+
+### **For Different Roles**
+- 👨‍💻 [**Developers**](./docs/01-introduction/developer-setup.md) - Development setup and contribution
+- 👮 [**Security Teams**](./docs/04-security/threat-model.md) - Security documentation and threat model
+- 👷 [**Operators**](./docs/01-introduction/deployment.md) - Deployment and operations guide
+- 🔌 [**Integrators**](./docs/01-introduction/integration.md) - Integration with existing systems
 
 ## 🔌 Ports
 

@@ -1,0 +1,164 @@
+{
+  "api": {
+    "public": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "expectedStatus": 200,
+        "description": "Health check endpoint"
+      },
+      {
+        "method": "GET",
+        "path": "/version",
+        "expectedStatus": 200,
+        "description": "Version information"
+      },
+      {
+        "method": "GET",
+        "path": "/metrics",
+        "expectedStatus": 200,
+        "description": "Prometheus metrics"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/register",
+        "expectedStatus": [400, 422],
+        "description": "User registration (should fail without valid data)"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/login",
+        "expectedStatus": [400, 401],
+        "description": "User login (should fail without valid credentials)"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/refresh",
+        "expectedStatus": [400, 401],
+        "description": "Token refresh (should fail without valid token)"
+      },
+      {
+        "method": "GET",
+        "path": "/oauth/authorize",
+        "expectedStatus": [200, 302, 400],
+        "description": "OAuth authorization endpoint"
+      },
+      {
+        "method": "POST",
+        "path": "/oauth/token",
+        "expectedStatus": [400, 401],
+        "description": "OAuth token exchange"
+      }
+    ],
+    "protected": [
+      {
+        "method": "GET",
+        "path": "/user/profile",
+        "expectedStatus": 401,
+        "description": "User profile (should require authentication)"
+      },
+      {
+        "method": "PUT",
+        "path": "/user/profile",
+        "expectedStatus": 401,
+        "description": "Update profile (should require authentication)"
+      },
+      {
+        "method": "POST",
+        "path": "/user/change-password",
+        "expectedStatus": 401,
+        "description": "Change password (should require authentication)"
+      },
+      {
+        "method": "POST",
+        "path": "/api-keys",
+        "expectedStatus": 401,
+        "description": "Create API key (should require authentication)"
+      },
+      {
+        "method": "GET",
+        "path": "/api-keys",
+        "expectedStatus": 401,
+        "description": "List API keys (should require authentication)"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api-keys/test-key-id",
+        "expectedStatus": 401,
+        "description": "Delete API key (should require authentication)"
+      },
+      {
+        "method": "POST",
+        "path": "/auth/logout",
+        "expectedStatus": 401,
+        "description": "Logout (should require authentication)"
+      }
+    ],
+    "admin": [
+      {
+        "method": "GET",
+        "path": "/admin/users",
+        "expectedStatus": [401, 403],
+        "description": "List users (admin only)"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/users",
+        "expectedStatus": [401, 403],
+        "description": "Create user (admin only)"
+      },
+      {
+        "method": "DELETE",
+        "path": "/admin/users/test-id",
+        "expectedStatus": [401, 403],
+        "description": "Delete user (admin only)"
+      }
+    ]
+  },
+  "frontend": {
+    "public": [
+      {
+        "path": "/",
+        "expectedStatus": 200,
+        "description": "Home page"
+      },
+      {
+        "path": "/login",
+        "expectedStatus": 200,
+        "description": "Login page"
+      },
+      {
+        "path": "/register",
+        "expectedStatus": 200,
+        "description": "Registration page"
+      },
+      {
+        "path": "/forgot-password",
+        "expectedStatus": 200,
+        "description": "Password reset page"
+      }
+    ],
+    "protected": [
+      {
+        "path": "/dashboard",
+        "expectedStatus": [200, 302],
+        "description": "User dashboard (may redirect if not authenticated)"
+      },
+      {
+        "path": "/profile",
+        "expectedStatus": [200, 302],
+        "description": "User profile page"
+      },
+      {
+        "path": "/settings",
+        "expectedStatus": [200, 302],
+        "description": "User settings page"
+      },
+      {
+        "path": "/api-keys",
+        "expectedStatus": [200, 302],
+        "description": "API keys management page"
+      }
+    ]
+  }
+}

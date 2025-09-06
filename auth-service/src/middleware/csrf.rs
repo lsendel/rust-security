@@ -1,11 +1,12 @@
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::{extract::Request, middleware::Next, response::Response};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, Method};
 
 /// Issue a CSRF token and set cookie
-pub async fn issue_csrf_token() -> Result<(HeaderMap, axum::Json<serde_json::Value>), (StatusCode, &'static str)> {
+pub async fn issue_csrf_token(
+) -> Result<(HeaderMap, axum::Json<serde_json::Value>), (StatusCode, &'static str)> {
     use ring::rand::{SecureRandom, SystemRandom};
     let mut bytes = [0u8; 32];
-    
+
     // Try multiple times before failing
     let mut attempts = 0;
     loop {
@@ -16,21 +17,39 @@ pub async fn issue_csrf_token() -> Result<(HeaderMap, axum::Json<serde_json::Val
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 continue;
             }
-            Err(_) => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to generate secure CSRF token")),
+            Err(_) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to generate secure CSRF token",
+                ))
+            }
         }
     }
-    
+
     let token = hex::encode(bytes);
     let mut headers = HeaderMap::new();
-    let secure = if std::env::var("APP_ENV").unwrap_or_default().eq_ignore_ascii_case("development") { "" } else { " Secure;" };
-    let cookie = format!("csrf_token={}; Path=/;{} SameSite=Strict; Max-Age=3600", token, secure);
-    
+    let secure = if std::env::var("APP_ENV")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("development")
+    {
+        ""
+    } else {
+        " Secure;"
+    };
+    let cookie = format!(
+        "csrf_token={}; Path=/;{} SameSite=Strict; Max-Age=3600",
+        token, secure
+    );
+
     match HeaderValue::from_str(&cookie) {
         Ok(cookie_value) => {
             headers.insert(axum::http::header::SET_COOKIE, cookie_value);
             Ok((headers, axum::Json(serde_json::json!({"csrf": token}))))
         }
-        Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to create secure cookie header")),
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create secure cookie header",
+        )),
     }
 }
 
@@ -83,4 +102,3 @@ pub async fn csrf_protect(request: Request, next: Next) -> Response {
 
     next.run(request).await
 }
-

@@ -1,10 +1,15 @@
 name: 🏛️ Compliance & Standards Automation
 
+permissions:
+  contents: read
+
+concurrency:
+  group: compliance-automation-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
   schedule:
     - cron: '0 4 * * *'  # Daily compliance check at 4 AM UTC
   workflow_dispatch:
