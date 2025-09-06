@@ -868,7 +868,7 @@ impl SecurityTestRunner {
             .filter(|f| f.severity == VulnerabilitySeverity::High)
             .count();
 
-        report.push_str(&format!("## Executive Summary\n\n"));
+        report.push_str("## Executive Summary\n\n");
         report.push_str(&format!("- **Total Tests**: {}\n", total_tests));
         report.push_str(&format!(
             "- **Passed Tests**: {} ({:.1}%)\n",
@@ -962,7 +962,7 @@ impl SecurityTestRunner {
                             for evidence in &finding.evidence {
                                 report.push_str(&format!("- {}\n", evidence));
                             }
-                            report.push_str("\n");
+                            report.push('\n');
                         }
 
                         report.push_str(&format!("**Remediation**: {}\n\n", finding.remediation));

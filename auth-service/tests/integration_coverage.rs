@@ -40,10 +40,10 @@ async fn test_app_error_display() {
 
 #[tokio::test]
 async fn test_health_checker_creation() {
-    let _checker = HealthChecker::new();
+    let checker = HealthChecker::new();
     // Basic test that the health checker can be created
     // The actual health check methods might require more setup
-    assert!(true); // Placeholder - health checker was created successfully
+    assert!(!checker.check_health().await.unwrap().components.is_empty()); // Health checker was created and can perform basic checks
 }
 
 #[tokio::test]
@@ -51,5 +51,6 @@ async fn test_input_validator_creation() {
     let _validator = InputValidator::new(1024 * 1024); // 1MB max body size
                                                        // Basic test that the input validator can be created
                                                        // Individual validation methods would need to be tested with proper setup
-    assert!(true); // Placeholder - validator was created successfully
+                                                       // Validator was created successfully - actual validation methods would be tested separately
+                                                       // No assertion needed for basic creation test
 }

@@ -2,11 +2,13 @@ use axum::http::Method;
 use serde_json::json;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+use serial_test::serial;
 
 mod harness;
 use harness::{make_auth_router, request};
 
 #[tokio::test]
+#[serial]
 async fn login_respects_remote_policy_allow() {
     let mock_server = MockServer::start().await;
 
@@ -30,6 +32,7 @@ async fn login_respects_remote_policy_allow() {
 }
 
 #[tokio::test]
+#[serial]
 async fn login_respects_remote_policy_deny() {
     let mock_server = MockServer::start().await;
 
@@ -52,6 +55,7 @@ async fn login_respects_remote_policy_deny() {
 }
 
 #[tokio::test]
+#[serial]
 async fn login_fail_open_on_remote_error_when_configured() {
     let mock_server = MockServer::start().await;
 

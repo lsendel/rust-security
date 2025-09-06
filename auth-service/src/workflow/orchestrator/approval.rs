@@ -310,6 +310,7 @@ impl Default for RiskAssessor {
     }
 }
 
+impl RiskAssessor {
     /// Assess risk for an approval request
     pub async fn assess_risk(&self, _request: &ApprovalRequest) -> f64 {
         // Simplified risk assessment - in a real implementation, this would be more complex

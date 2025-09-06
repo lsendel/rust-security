@@ -980,7 +980,7 @@ pub mod automated_remediation {
         policies: HashMap<String, SecurityPolicy>,
         compliance_cache: HashMap<String, PolicyCompliance>,
         auto_enforce: bool,
-        enforcement_history: std::cell::RefCell<Vec<PolicyEnforcement>>,
+        enforcement_history: std::sync::Mutex<Vec<PolicyEnforcement>>,
         policy_engine: PolicyEngine,
     }
 
@@ -1200,7 +1200,7 @@ pub mod automated_remediation {
                 policies: HashMap::new(),
                 compliance_cache: HashMap::new(),
                 auto_enforce: false,
-                enforcement_history: std::cell::RefCell::new(Vec::new()),
+                enforcement_history: std::sync::Mutex::new(Vec::new()),
                 policy_engine: PolicyEngine::new(),
             }
         }
@@ -1448,7 +1448,8 @@ pub mod automated_remediation {
             };
 
             self.enforcement_history
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .push(enforcement.clone());
 
             Ok(enforcement)

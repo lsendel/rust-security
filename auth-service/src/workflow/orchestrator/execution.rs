@@ -63,7 +63,6 @@ pub struct PriorityItem<T> {
     pub queued_at: DateTime<Utc>,
 }
 
-
 /// Workflow execution request
 #[derive(Debug, Clone)]
 pub struct WorkflowExecutionRequest {

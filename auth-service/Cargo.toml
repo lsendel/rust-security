@@ -95,6 +95,7 @@ sha1 = "0.10"
 libc = "0.2"
 wiremock = "0.6"
 cfg-if = "1.0"
+serial_test = "2.0"
 
 [features]
 # MVP-focused feature set

@@ -241,7 +241,15 @@ impl LoadTestSuite {
             config: PerformanceTestConfig::default(),
         }
     }
+}
 
+impl Default for LoadTestSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LoadTestSuite {
     /// Add a scenario to the suite
     pub fn add_scenario(mut self, name: &str, scenario: LoadTestScenario) -> Self {
         self.scenarios.push((name.to_string(), scenario));
@@ -291,7 +299,7 @@ impl LoadTestSuite {
     pub fn generate_suite_report(&self, results: &[(String, PerformanceMetrics)]) -> String {
         let mut report = String::from("# Load Test Suite Report\n\n");
 
-        report.push_str(&format!("## Configuration\n"));
+        report.push_str("## Configuration\n");
         report.push_str(&format!("- Concurrency: {}\n", self.config.concurrency));
         report.push_str(&format!(
             "- Total Operations: {}\n",
