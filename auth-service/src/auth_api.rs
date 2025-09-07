@@ -1116,6 +1116,7 @@ async fn validate_jwt_token(
     Ok(claims)
 }
 
+#[cfg(feature = "user-auth")]
 /// Get current user info with secure token validation
 ///
 /// # Errors
@@ -1229,6 +1230,7 @@ pub async fn me(
     }))
 }
 
+#[cfg(feature = "user-auth")]
 /// Logout endpoint - blacklists the current JWT token
 ///
 /// # Errors

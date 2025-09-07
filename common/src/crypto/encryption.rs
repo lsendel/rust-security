@@ -1,9 +1,43 @@
-//! Unified Encryption/Decryption Operations
+'''//! Unified Encryption/Decryption Operations
 //!
-//! Simplified encryption module that consolidates functionality while ensuring compilation.
-//! Provides AES-256-GCM encryption using a simplified approach.
+//! This module provides a unified interface for encryption and decryption operations.
+//! It is designed to be a single point of entry for all cryptographic functions
+//! that involve symmetric encryption.
+//!
+//! ## Features
+//!
+//! - AES-256-GCM encryption and decryption.
+//! - Configuration management for encryption keys and algorithms.
+//! - Loading configuration from environment variables.
+//! - Validation of configuration to prevent common security mistakes.
+//!
+//! ## Limitations
+//!
+//! - **ChaCha20Poly1305 is not fully implemented.** The `ChaCha20Poly1305` algorithm
+//!   is defined in the `EncryptionAlgorithm` enum, but the actual implementation
+//!   currently falls back to AES-256-GCM. This is a placeholder and should not be
+//!   used in production with the expectation of using ChaCha20Poly1305.
+//! - **Post-quantum cryptography is not implemented.** The `PqEncryption` algorithm
+//!   is behind a feature flag and is not implemented.
+//!
+//! ## Usage
+//!
+//! ```rust,ignore
+//! use rust_security::common::crypto::encryption::{EncryptionConfig, EncryptionOperations};
+//!
+//! let config = EncryptionConfig {
+//!     key: "ThisIsASecure32ByteKeyForTesting1234".to_string(),
+//!     ..Default::default()
+//! };
+//! let ops = EncryptionOperations::new(config).unwrap();
+//! let plaintext = b"Hello, World!";
+//! let encrypted = ops.encrypt(plaintext, None).unwrap();
+//! let decrypted = ops.decrypt(&encrypted, None).unwrap();
+//! assert_eq!(plaintext, decrypted.as_slice());
+//! ```
 
 use super::*;
+'''
 use crate::security::UnifiedSecurityConfig;
 use base64::Engine;
 use ring::rand::{SecureRandom, SystemRandom};
@@ -342,9 +376,10 @@ impl std::str::FromStr for EncryptionAlgorithm {
     }
 }
 
-#[cfg(test)]
+'''#[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn test_encryption_operations_creation() {
@@ -388,4 +423,92 @@ mod tests {
 
         assert_eq!(plaintext, decrypted);
     }
-}
+
+    #[test]
+    fn test_decryption_with_wrong_key() {
+        let config1 = EncryptionConfig {
+            key: "ThisIsASecure32ByteKeyForTesting1234".to_string(),
+            ..Default::default()
+        };
+        let ops1 = EncryptionOperations::new(config1).unwrap();
+        let plaintext = b"Hello, World!";
+        let encrypted = ops1.encrypt(plaintext, None).unwrap();
+
+        let config2 = EncryptionConfig {
+            key: "ThisIsADifferent32ByteKeyForTestin5".to_string(),
+            ..Default::default()
+        };
+        let ops2 = EncryptionOperations::new(config2).unwrap();
+        let decrypted = ops2.decrypt(&encrypted, None);
+        assert!(decrypted.is_err());
+    }
+
+    #[test]
+    fn test_decryption_with_tampered_ciphertext() {
+        let config = EncryptionConfig {
+            key: "ThisIsASecure32ByteKeyForTesting1234".to_string(),
+            ..Default::default()
+        };
+        let ops = EncryptionOperations::new(config).unwrap();
+        let plaintext = b"Hello, World!";
+        let mut encrypted = ops.encrypt(plaintext, None).unwrap();
+        encrypted.ciphertext[0] ^= 0xff; // Flip a bit
+
+        let decrypted = ops.decrypt(&encrypted, None);
+        assert!(decrypted.is_err());
+    }
+
+    #[test]
+    fn test_invalid_key_length() {
+        let config = EncryptionConfig {
+            key: "shortkey".to_string(),
+            ..Default::default()
+        };
+        let ops = EncryptionOperations::new(config);
+        assert!(ops.is_err());
+    }
+
+    #[test]
+    fn test_insecure_default_key() {
+        let config = EncryptionConfig {
+            key: "REPLACE_WITH_32_BYTE_KEY_IN_PROD_1234".to_string(),
+            ..Default::default()
+        };
+        let ops = EncryptionOperations::new(config);
+        assert!(ops.is_err());
+    }
+
+    #[test]
+    fn test_config_from_env() {
+        env::set_var("ENCRYPTION_ALGORITHM", "aes-256-gcm");
+        env::set_var("ENCRYPTION_KEY", "ThisIsASecure32ByteKeyForTesting1234");
+        env::set_var("ENCRYPTION_KEY_ROTATION", "true");
+        env::set_var("ENCRYPTION_KEY_ROTATION_INTERVAL", "3600");
+
+        let config = EncryptionConfig::from_env().unwrap();
+        assert_eq!(config.algorithm, EncryptionAlgorithm::Aes256Gcm);
+        assert_eq!(config.key, "ThisIsASecure32ByteKeyForTesting1234");
+        assert!(config.enable_key_rotation);
+        assert_eq!(config.key_rotation_interval, 3600);
+
+        env::remove_var("ENCRYPTION_ALGORITHM");
+        env::remove_var("ENCRYPTION_KEY");
+        env::remove_var("ENCRYPTION_KEY_ROTATION");
+        env::remove_var("ENCRYPTION_KEY_ROTATION_INTERVAL");
+    }
+
+    #[test]
+    fn test_chacha20poly1305_is_ok() {
+        let config = EncryptionConfig {
+            key: "ThisIsASecure32ByteKeyForTesting1234".to_string(),
+            algorithm: EncryptionAlgorithm::ChaCha20Poly1305,
+            ..Default::default()
+        };
+        let ops = EncryptionOperations::new(config).unwrap();
+        let plaintext = b"Hello, World!";
+        let encrypted = ops.encrypt(plaintext, None);
+        assert!(encrypted.is_ok());
+        let decrypted = ops.decrypt(&encrypted.unwrap(), None);
+        assert!(decrypted.is_ok());
+    }
+}''
