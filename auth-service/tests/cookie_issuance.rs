@@ -20,7 +20,7 @@ async fn register_sets_cookies_when_keys_available() {
         name: "User".to_string(),
     };
 
-    let (headers, json) = auth_service::auth_api::register(State(state), axum::Json(req))
+    let (headers, json) = auth_service::auth_api::register(axum::Extension(state), axum::Json(req))
         .await
         .expect("register ok");
     let cookies: Vec<_> = headers

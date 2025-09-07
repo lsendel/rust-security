@@ -1,6 +1,6 @@
 #![allow(clippy::unused_async)]
 #[cfg(feature = "monitoring")]
-use crate::security_metrics::SECURITY_METRICS;
+use crate::infrastructure::monitoring::security_metrics::SECURITY_METRICS;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

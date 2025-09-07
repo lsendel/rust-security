@@ -1,4 +1,4 @@
-use crate::circuit_breaker::{
+use crate::infrastructure::circuit_breaker::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, RetryBackoff, RetryConfig,
     TimeoutConfig,
 };
@@ -105,7 +105,7 @@ impl ResilientHttpClient {
     }
 
     #[must_use]
-    pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
+    pub fn stats(&self) -> crate::infrastructure::circuit_breaker::CircuitBreakerStats {
         self.circuit_breaker.stats()
     }
 }
@@ -306,7 +306,7 @@ impl ResilientResponse {
 
     /// Check response status and return error for client/server errors
     ///
-    /// # Errors  
+    /// # Errors
     /// Returns `AppError::ServiceUnavailable` if the response status indicates a client or server error
     pub fn error_for_status(self) -> Result<Self, crate::shared::error::AppError> {
         let status = self.response.status();
@@ -374,7 +374,7 @@ impl OidcHttpClient {
     }
 
     #[must_use]
-    pub fn stats(&self) -> crate::circuit_breaker::CircuitBreakerStats {
+    pub fn stats(&self) -> crate::infrastructure::circuit_breaker::CircuitBreakerStats {
         self.client.stats()
     }
 }

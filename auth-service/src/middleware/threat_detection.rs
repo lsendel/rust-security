@@ -464,3 +464,78 @@ mod tests {
         assert_eq!(metrics.threats_detected, 0);
     }
 }
+
+/// Threat Intelligence Integration (consolidated from threat_intelligence.rs)
+/// Global threat intelligence service instance
+static THREAT_INTELLIGENCE_SERVICE: std::sync::Mutex<Option<std::sync::Arc<ThreatIntelligenceService>>> = std::sync::Mutex::new(None);
+
+/// Initialize the global threat intelligence service
+pub fn initialize_threat_intelligence_service() {
+    // TODO: Implement proper threat intelligence service initialization
+    // This would integrate with external threat intelligence feeds
+    tracing::info!("🧠 Threat intelligence service placeholder initialized");
+}
+
+/// Get the global threat intelligence service
+pub fn get_threat_intelligence_service() -> Option<std::sync::Arc<ThreatIntelligenceService>> {
+    let service = THREAT_INTELLIGENCE_SERVICE.lock().unwrap();
+    service.clone()
+}
+
+/// Threat intelligence middleware for authentication events
+pub async fn threat_intelligence_middleware(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Result<axum::response::Response, axum::http::StatusCode> {
+    let uri = request.uri().path().to_string();
+    let method = request.method().clone();
+    let headers = request.headers().clone();
+
+    // Extract client information
+    let client_ip = extract_client_ip(&headers);
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    // For now, we'll analyze after the request to avoid blocking
+    let response = next.run(request).await;
+
+    // Analyze request for threat patterns (async task)
+    if get_threat_intelligence_service().is_some() {
+        tokio::spawn(async move {
+            analyze_request_for_threats(
+                uri,
+                method.to_string(),
+                client_ip,
+                user_agent,
+                response.status().as_u16(),
+            ).await;
+        });
+    }
+
+    Ok(response)
+}
+
+/// Analyze request for threats (placeholder implementation)
+async fn analyze_request_for_threats(
+    _uri: String,
+    _method: String,
+    _client_ip: Option<String>,
+    _user_agent: Option<String>,
+    _status_code: u16,
+) {
+    // TODO: Implement actual threat analysis
+    // This would integrate with ML models and threat intelligence feeds
+    tracing::debug!("Threat analysis placeholder - request analyzed");
+}
+
+/// Placeholder struct for ThreatIntelligenceService
+/// This would be implemented with actual threat intelligence integration
+pub struct ThreatIntelligenceService;
+
+impl ThreatIntelligenceService {
+    pub fn new() -> Self {
+        Self
+    }
+}

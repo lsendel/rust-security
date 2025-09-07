@@ -346,13 +346,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_env_secrets_provider() {
-        env::set_var("TEST_JWT_SECRET", "this_is_a_test_secret_that_is_long_enough_32_chars");
+        env::set_var("TEST_JWT_SECRET", "production_secure_jwt_key_32_chars_minimum_length");
         
         let provider = EnvSecretsProvider::new("TEST".to_string());
         let secret = provider.get_secret("JWT_SECRET").await.unwrap();
         
         assert_eq!(secret.name, "JWT_SECRET");
-        assert_eq!(secret.value, "this_is_a_test_secret_that_is_long_enough_32_chars");
+        assert_eq!(secret.value, "production_secure_jwt_key_32_chars_minimum_length");
     }
 
     #[tokio::test]

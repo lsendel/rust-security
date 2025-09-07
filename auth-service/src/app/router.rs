@@ -13,23 +13,24 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::{self, TraceLayer};
 
 use crate::app::AppContainer;
-use crate::auth_api::AuthState;
+use crate::application::auth::auth_api::AuthState;
 use crate::backpressure::{
     adaptive_body_limit_middleware, backpressure_middleware, create_backpressure_middleware,
     BackpressureConfig,
 };
-use crate::config::{Config, CorsConfig};
 use crate::handlers;
 use crate::infrastructure::http::policy_client;
 use crate::middleware::request_id_middleware;
 use axum::extract::Extension;
+use common::config::PlatformConfiguration;
+use common::security::CorsConfig;
 use std::sync::Arc;
 // use crate::modules::monitoring::{HealthChecker, MetricsCollector, MetricsMiddleware};  // Modules temporarily disabled
 
 /// Create CORS layer from configuration
 fn create_cors_layer_from_config(cors_config: &CorsConfig) -> CorsLayer {
     let mut layer = CorsLayer::new();
-    
+
     // Configure allowed origins
     if !cors_config.allowed_origins.is_empty() {
         for origin in &cors_config.allowed_origins {
@@ -38,40 +39,45 @@ fn create_cors_layer_from_config(cors_config: &CorsConfig) -> CorsLayer {
             }
         }
     }
-    
+
     // Configure allowed methods
-    let methods: Vec<Method> = cors_config.allowed_methods
+    let methods: Vec<Method> = cors_config
+        .allowed_methods
         .iter()
         .filter_map(|method| method.parse().ok())
         .collect();
     if !methods.is_empty() {
         layer = layer.allow_methods(methods);
     }
-    
+
     // Configure allowed headers
-    let headers: Vec<header::HeaderName> = cors_config.allowed_headers
+    let headers: Vec<header::HeaderName> = cors_config
+        .allowed_headers
         .iter()
         .filter_map(|header| header.parse().ok())
         .collect();
     if !headers.is_empty() {
         layer = layer.allow_headers(headers);
     }
-    
+
     // Configure exposed headers
-    if !cors_config.exposed_headers.is_empty() {
-        let exposed: Vec<header::HeaderName> = cors_config.exposed_headers
+    if !cors_config.allowed_headers.is_empty() {
+        let exposed: Vec<header::HeaderName> = cors_config
+            .allowed_headers
             .iter()
             .filter_map(|header| header.parse().ok())
             .collect();
         layer = layer.expose_headers(exposed);
     }
-    
+
     // Configure credentials and max age
     if cors_config.allow_credentials {
         layer = layer.allow_credentials(true);
     }
-    
-    layer.max_age(std::time::Duration::from_secs(cors_config.max_age))
+
+    layer.max_age(std::time::Duration::from_secs(
+        cors_config.max_age_seconds.into(),
+    ))
 }
 
 /// Legacy CORS layer for backward compatibility
@@ -96,7 +102,10 @@ fn create_cors_layer() -> CorsLayer {
 }
 
 /// Shared configuration for HTTP tracing
-fn create_trace_layer() -> TraceLayer<tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>, fn(&axum::http::Request<axum::body::Body>) -> tracing::Span> {
+fn create_trace_layer() -> TraceLayer<
+    tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>,
+    fn(&axum::http::Request<axum::body::Body>) -> tracing::Span,
+> {
     TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
         let method = request.method().clone();
         let path = request.uri().path().to_string();
@@ -121,13 +130,12 @@ pub fn create_router(container: AppContainer) -> Router {
 }
 
 /// Create the application router using AppContainer with optional config
-pub fn create_router_with_config(container: AppContainer, config: Option<Arc<Config>>) -> Router {
-    // Shared configuration
-    let cors = if let Some(config) = &config {
-        create_cors_layer_from_config(&config.security.cors)
-    } else {
-        create_cors_layer() // Legacy fallback
-    };
+pub fn create_router_with_config(
+    container: AppContainer,
+    _config: Option<Arc<PlatformConfiguration>>,
+) -> Router {
+    // Shared configuration - using legacy CORS for now since Config doesn't have security field
+    let cors = create_cors_layer(); // Legacy fallback
     let bp_config = BackpressureConfig::from_env();
     let (timeout_layer, bp_state) = create_backpressure_middleware(&bp_config);
     let trace_layer = create_trace_layer();
@@ -166,16 +174,15 @@ pub fn create_router_with_auth_state(auth_state: AuthState) -> Router {
 }
 
 /// Create a router using `AuthState` and config
-pub fn create_router_with_auth_state_and_config(auth_state: AuthState, config: Option<Arc<Config>>) -> Router {
+pub fn create_router_with_auth_state_and_config(
+    auth_state: AuthState,
+    _config: Option<Arc<PlatformConfiguration>>,
+) -> Router {
     use axum::routing::{get, post};
     use axum::{middleware::from_fn, Router};
 
-    // Shared configuration
-    let cors = if let Some(config) = &config {
-        create_cors_layer_from_config(&config.security.cors)
-    } else {
-        create_cors_layer() // Legacy fallback
-    };
+    // Shared configuration - using legacy CORS for now since Config doesn't have security field
+    let cors = create_cors_layer(); // Legacy fallback
     let bp_config = BackpressureConfig::from_env();
     let (timeout_layer, bp_state) = create_backpressure_middleware(&bp_config);
     let trace_layer = create_trace_layer();
@@ -192,16 +199,16 @@ pub fn create_router_with_auth_state_and_config(auth_state: AuthState, config: O
             get(crate::middleware::csrf::issue_csrf_token),
         )
         // Auth endpoints
-        .route("/api/v1/auth/register", post(crate::auth_api::register))
-        .route("/api/v1/auth/login", post(crate::auth_api::login))
-        .route("/api/v1/auth/me", get(crate::auth_api::me))
-        .route("/api/v1/auth/logout", post(crate::auth_api::logout))
+        .route("/api/v1/auth/register", post(crate::application::auth::auth_api::register))
+        .route("/api/v1/auth/login", post(crate::application::auth::auth_api::login))
+        .route("/api/v1/auth/me", get(crate::application::auth::auth_api::me))
+        .route("/api/v1/auth/logout", post(crate::application::auth::auth_api::logout))
         // JWKS endpoints
         .route("/.well-known/jwks.json", get(jwks_endpoint))
         .route("/jwks.json", get(jwks_endpoint))
         // OAuth 2.0 endpoints
-        .route("/oauth/authorize", get(crate::auth_api::authorize))
-        .route("/oauth/token", post(crate::auth_api::token))
+        .route("/oauth/authorize", get(crate::application::auth::auth_api::authorize))
+        .route("/oauth/token", post(crate::application::auth::auth_api::token))
         // Security monitoring
         .route(
             "/security/threats/metrics",

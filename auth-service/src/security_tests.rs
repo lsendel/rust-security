@@ -8,6 +8,7 @@ mod tests_internal_security {
         SecureSessionConfig, SecureSessionManager, SessionError,
     };
     use crate::jwt_secure::create_secure_jwt_validation;
+use common::crypto::{JwtConfig, JwtAlgorithm};
     use crate::security::rate_limiting::{RateLimitConfig, UnifiedRateLimiter};
     use crate::validation_secure::*;
 
@@ -291,7 +292,19 @@ mod tests_internal_security {
         // and verify they are rejected
 
         // Mock test - in real implementation, would use actual JWT tokens
-        let validation = create_secure_jwt_validation();
+        let jwt_config = JwtConfig {
+            secret: "test_secret_key_32_characters_long".to_string(),
+            issuer: "test-issuer".to_string(),
+            audience: Some(vec!["test-audience".to_string()]),
+            access_token_ttl: 3600,
+            refresh_token_ttl: 3600,
+            algorithm: common::crypto::JwtAlgorithm::RS256,
+            key_rotation_interval: 3600,
+            token_binding: false,
+            max_keys: 3,
+            enable_jwks: true,
+        };
+        let validation = create_secure_jwt_validation(&jwt_config);
         assert_eq!(validation.algorithms, vec![jsonwebtoken::Algorithm::RS256]);
     }
 

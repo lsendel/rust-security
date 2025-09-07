@@ -13,7 +13,7 @@ use tracing::info;
 #[cfg(feature = "monitoring")]
 use crate::metrics::MetricsRegistry;
 #[cfg(feature = "monitoring")]
-use crate::security_metrics::SecurityMetrics;
+use crate::infrastructure::monitoring::security_metrics::SecurityMetrics;
 
 /// Enhanced observability system (stub implementation)
 #[derive(Debug, Clone)]

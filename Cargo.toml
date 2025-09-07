@@ -70,7 +70,7 @@ sha2 = "0.10"
 aes = "0.8"
 aes-gcm = "0.10"
 argon2 = "0.5"
-bcrypt = "0.16"
+bcrypt = "0.15"
 chacha20poly1305 = "0.10"
 ring = "0.17"
 hmac = "0.12"
@@ -179,6 +179,13 @@ vaultrs = "0.7"
 
 # ===== WEB SERVER =====
 axum-server = "0.7"
+
+# ===== ADDITIONAL DEPENDENCIES =====
+petgraph = "0.6"
+# bcrypt = "0.15"  # Duplicate removed - defined above in cryptography section
+ipnetwork = "0.20"
+derive_more = "0.99"
+lazy_static = "1.5"
 
 [profile.dev]
 opt-level = 0          # Disable optimization for faster builds

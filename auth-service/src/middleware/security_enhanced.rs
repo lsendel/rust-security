@@ -585,4 +585,94 @@ mod tests {
         let ip = middleware.extract_client_ip(&request);
         assert_eq!(ip, "198.51.100.2");
     }
+
+    #[test]
+    fn test_ip_based_rate_limiting() {
+        // TODO: Add IP-based rate limiting tests from security_hardening.rs
+    }
+}
+
+/// IP-based rate limiting state (consolidated from security_hardening.rs)
+#[derive(Debug, Clone)]
+struct IpRateLimitState {
+    requests: Vec<Instant>,
+    blocked_until: Option<Instant>,
+    threat_score: u32,
+    last_request: Instant,
+}
+
+impl IpRateLimitState {
+    fn new() -> Self {
+        Self {
+            requests: Vec::new(),
+            blocked_until: None,
+            threat_score: 0,
+            last_request: Instant::now(),
+        }
+    }
+
+    fn is_blocked(&self) -> bool {
+        self.blocked_until
+            .map(|blocked_until| Instant::now() < blocked_until)
+            .unwrap_or(false)
+    }
+
+    fn add_request(&mut self) {
+        let now = Instant::now();
+        self.requests
+            .retain(|&time| now.duration_since(time) < Duration::from_secs(60));
+        self.requests.push(now);
+        self.last_request = now;
+    }
+
+    fn should_rate_limit(&self, limit_per_minute: u32) -> bool {
+        self.requests.len() > limit_per_minute as usize
+    }
+
+    fn increase_threat_score(&mut self, points: u32) {
+        self.threat_score = self.threat_score.saturating_add(points);
+        if self.threat_score > 100 {
+            self.blocked_until = Some(Instant::now() + Duration::from_secs(300));
+            // 5 minutes
+        }
+    }
+}
+
+/// Consolidated security violations (from security_hardening.rs)
+#[derive(Debug)]
+enum ConsolidatedSecurityViolation {
+    RateLimited {
+        ip: std::net::IpAddr,
+        requests_per_minute: u32,
+        limit: u32,
+    },
+    IpBlocked {
+        ip: std::net::IpAddr,
+        reason: String,
+    },
+    SuspiciousPattern {
+        pattern: String,
+        description: String,
+        uri: String,
+    },
+    SuspiciousUserAgent {
+        user_agent: String,
+        detected_tool: String,
+    },
+    RequestTooLarge {
+        size: usize,
+        max_size: usize,
+    },
+}
+
+impl ConsolidatedSecurityViolation {
+    fn to_status_code(&self) -> StatusCode {
+        match self {
+            ConsolidatedSecurityViolation::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            ConsolidatedSecurityViolation::IpBlocked { .. } => StatusCode::FORBIDDEN,
+            ConsolidatedSecurityViolation::SuspiciousPattern { .. } => StatusCode::BAD_REQUEST,
+            ConsolidatedSecurityViolation::SuspiciousUserAgent { .. } => StatusCode::BAD_REQUEST,
+            ConsolidatedSecurityViolation::RequestTooLarge { .. } => StatusCode::PAYLOAD_TOO_LARGE,
+        }
+    }
 }

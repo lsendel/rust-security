@@ -4,7 +4,7 @@ use crate::infrastructure::security::security_logging::{
 };
 use crate::pii_protection::redact_log;
 #[cfg(feature = "monitoring")]
-use crate::security_metrics::SECURITY_METRICS;
+use crate::infrastructure::monitoring::security_metrics::SECURITY_METRICS;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;

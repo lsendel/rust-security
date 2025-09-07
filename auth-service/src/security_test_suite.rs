@@ -22,6 +22,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tokio::time::{sleep, timeout};
+    use crate::domain::value_objects::password_hash::PasswordHash;
 
     /// Helper function to create a test user
     fn create_test_user(id: &str, email: &str) -> User {
@@ -38,8 +39,8 @@ mod tests {
     }
 
     /// Helper function to create test auth state
-    fn create_test_auth_state() -> AuthState {
-        AuthState::new("test_secret_key_32_characters_long".to_string())
+    fn create_test_auth_state() -> crate::auth::types::AuthState {
+        crate::auth::types::AuthState::new("test_secret_key_32_characters_long".to_string())
     }
 
     /// Test suite for PKCE implementation
@@ -543,7 +544,7 @@ mod tests {
                     .body(Body::empty())
                     .unwrap();
 
-                match limiter.check_rate_limit(&req).await {
+                match limiter.check_rate_limit(req).await {
                     RateLimitDecision::Allow => allowed_count += 1,
                     RateLimitDecision::RateLimit { .. } => rate_limited_count += 1,
                     RateLimitDecision::Block { .. } => {}
@@ -601,8 +602,16 @@ mod tests {
             // Login endpoint should be rate limited quickly
             let mut login_allowed = 0;
             for _ in 0..5 {
+                let login_req_clone = Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/login")
+                    .header("user-agent", "test-agent")
+                    .header("x-forwarded-for", "192.168.1.1")
+                    .body(Body::empty())
+                    .unwrap();
+                
                 if matches!(
-                    limiter.check_rate_limit(&login_req).await,
+                    limiter.check_rate_limit(login_req_clone).await,
                     RateLimitDecision::Allow
                 ) {
                     login_allowed += 1;
@@ -612,8 +621,16 @@ mod tests {
             // General endpoint should be more lenient
             let mut general_allowed = 0;
             for _ in 0..5 {
+                let general_req_clone = Request::builder()
+                    .method("GET")
+                    .uri("/api/general")
+                    .header("user-agent", "test-agent")
+                    .header("x-forwarded-for", "192.168.1.1")
+                    .body(Body::empty())
+                    .unwrap();
+                
                 if matches!(
-                    limiter.check_rate_limit(&general_req).await,
+                    limiter.check_rate_limit(general_req_clone).await,
                     RateLimitDecision::Allow
                 ) {
                     general_allowed += 1;
@@ -649,12 +666,25 @@ mod tests {
                 .unwrap();
 
             // First request might establish the pattern
-            limiter.check_rate_limit(&suspicious_req).await;
+            let suspicious_req_first = Request::builder()
+                .method("GET")
+                .uri("/.env") // Suspicious path
+                .header("x-forwarded-for", "192.168.1.100")
+                .body(Body::empty())
+                .unwrap();
+            limiter.check_rate_limit(suspicious_req_first).await;
 
             // Subsequent requests should face stricter limits due to risk assessment
             let mut blocked_or_limited = 0;
             for _ in 0..5 {
-                match limiter.check_rate_limit(&suspicious_req).await {
+                let suspicious_req_clone = Request::builder()
+                    .method("GET")
+                    .uri("/.env") // Suspicious path
+                    .header("x-forwarded-for", "192.168.1.100")
+                    .body(Body::empty())
+                    .unwrap();
+                
+                match limiter.check_rate_limit(suspicious_req_clone).await {
                     RateLimitDecision::Allow => {}
                     RateLimitDecision::RateLimit { .. } | RateLimitDecision::Block { .. } => {
                         blocked_or_limited += 1;
@@ -691,7 +721,7 @@ mod tests {
                     .body(Body::empty())
                     .unwrap();
 
-                limiter.check_rate_limit(&req).await;
+                limiter.check_rate_limit(req).await;
             }
 
             let stats = limiter.get_stats();
@@ -724,7 +754,7 @@ mod tests {
                     .body(Body::empty())
                     .unwrap();
 
-                limiter.check_rate_limit(&req).await;
+                limiter.check_rate_limit(req).await;
             }
 
             let stats = limiter.get_stats();
@@ -738,6 +768,7 @@ mod tests {
     /// Integration tests combining multiple security features
     mod integration_tests {
         use super::*;
+        use crate::auth::types::{AuthorizeRequest, OAuthClient};
 
         #[tokio::test]
         async fn test_complete_authentication_flow_with_security_features() {
@@ -748,6 +779,7 @@ mod tests {
             let challenge = auth_state.pkce_manager.compute_s256_challenge(&verifier);
 
             let _auth_request = AuthorizeRequest {
+                response_type: "code".to_string(),
                 client_id: "test_client".to_string(),
                 redirect_uri: "https://example.com/callback".to_string(),
                 scope: Some("read".to_string()),
@@ -762,9 +794,9 @@ mod tests {
                 client_secret: "client_secret".to_string(),
                 name: "Test OAuth Client".to_string(),
                 redirect_uris: vec!["https://example.com/callback".to_string()],
-                grant_types: vec!["authorization_code".to_string()],
                 response_types: vec!["code".to_string()],
-                created_at: Utc::now(),
+                grant_types: vec!["authorization_code".to_string()],
+                scope: vec!["read".to_string()],
             };
 
             auth_state
@@ -838,7 +870,7 @@ mod tests {
                     .body(Body::empty())
                     .unwrap();
 
-                let decision = rate_limiter.check_rate_limit(&req).await;
+                        let decision = rate_limiter.check_rate_limit(req).await;
                 responses.push((i, path, decision));
 
                 // Small delay between requests
@@ -913,7 +945,7 @@ mod tests {
                     .body(Body::empty())
                     .unwrap();
 
-                match rate_limiter.check_rate_limit(&req).await {
+                match rate_limiter.check_rate_limit(req).await {
                     RateLimitDecision::Allow => {}
                     _ => {
                         all_allowed = false;
@@ -948,19 +980,17 @@ mod tests {
             let mut handles = Vec::new();
             for i in 0..num_requests {
                 let limiter = Arc::clone(&rate_limiter);
+                let req = Request::builder()
+                    .method("GET")
+                    .uri("/api/test")
+                    .header("user-agent", "load-test-agent")
+                    .header(
+                        "x-forwarded-for",
+                        format!("192.168.{}.{}", i / 256, i % 256),
+                    )
+                    .body(axum::body::Body::from("")).unwrap();
                 let handle = tokio::spawn(async move {
-                    let req = Request::builder()
-                        .method("GET")
-                        .uri("/api/test")
-                        .header("user-agent", "load-test-agent")
-                        .header(
-                            "x-forwarded-for",
-                            format!("192.168.{}.{}", i / 256, i % 256),
-                        )
-                        .body(reqwest::Body::from(""))
-                        .unwrap();
-
-                    limiter.check_rate_limit(&req).await
+                    limiter.check_rate_limit(req).await
                 });
                 handles.push(handle);
             }

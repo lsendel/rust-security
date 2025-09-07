@@ -53,6 +53,9 @@ argon2 = { workspace = true }
 # Memory zeroing for security
 zeroize = { workspace = true, features = ["derive"] }
 
+[dev-dependencies]
+proptest = "1.4"
+
 [features]
 default = []
 post-quantum = []

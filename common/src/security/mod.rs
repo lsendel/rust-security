@@ -683,9 +683,14 @@ mod tests {
 
     #[test]
     fn test_development_config() {
+        // Set required environment variables for development config
+        std::env::set_var("JWT_SECRET", "secure_jwt_secret_key_32_chars_minimum");
+        std::env::set_var("REQUEST_SIGNING_SECRET", "development-request-signing-secret-32-chars");
+        std::env::set_var("ENCRYPTION_KEY", "development-encryption-key-32-chars-minimum");
+        
         let config = UnifiedSecurityConfig::development();
 
-        assert_eq!(config.jwt.secret, "development-jwt-secret-32-chars-min");
+        assert_eq!(config.jwt.secret, "secure_jwt_secret_key_32_chars_minimum");
         assert_eq!(config.jwt.access_token_ttl_seconds, 3600); // 1 hour for dev
         assert_eq!(
             config.request_signing.secret,

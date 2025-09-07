@@ -91,6 +91,9 @@ pub enum AppError {
     #[error("Validation error")]
     ValidationError,
 
+    #[error("Validator error: {0}")]
+    ValidatorError(#[from] validator::ValidationError),
+
     #[error("Internal error")]
     InternalError,
 
@@ -193,6 +196,7 @@ impl AppError {
             Self::TimeoutError => axum::http::StatusCode::REQUEST_TIMEOUT,
             Self::InsufficientDataForBaseline => axum::http::StatusCode::PRECONDITION_FAILED,
             Self::ExternalService => axum::http::StatusCode::BAD_GATEWAY,
+            Self::ValidatorError(_) => axum::http::StatusCode::BAD_REQUEST,
         }
     }
 
@@ -235,6 +239,7 @@ impl AppError {
             Self::UserNotVerified => "User account not verified",
             Self::Crypto => "Cryptographic operation failed",
             Self::Session => "Session error",
+            Self::ValidatorError(_) => "Validation failed",
         }
     }
 }

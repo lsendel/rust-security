@@ -1,12 +1,14 @@
 //! Domain Entities
 //!
-//! Core business entities representing the domain model.
+//! Core business entities that represent the domain model.
+//! These entities contain business logic and are independent of infrastructure.
 
 pub mod oauth_client;
 pub mod session;
 pub mod token;
 pub mod user;
 
+// Re-export entities
 pub use oauth_client::OAuthClient;
 pub use session::Session;
 pub use token::{Token, TokenType};

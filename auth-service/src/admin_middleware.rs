@@ -1,11 +1,11 @@
 #[cfg(feature = "rate-limiting")]
 use crate::admin_replay_protection::{AdminRateLimiter, ReplayProtection};
+use crate::application::state::app_state::AppState;
 use crate::infrastructure::http::policy_client;
 use crate::infrastructure::security::security_logging::{
     SecurityEvent, SecurityEventType, SecuritySeverity,
 };
 use crate::pii_protection::redact_log;
-use crate::AppState;
 use axum::{
     body::Body,
     extract::{Request, State},

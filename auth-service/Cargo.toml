@@ -69,12 +69,17 @@ zeroize = { workspace = true, features = ["derive"] }
 fastrand = { workspace = true }
 rustls = { workspace = true }
 rayon = { workspace = true }
-flume = { workspace = true, optional = true }
+flume = { workspace = true }
 time = { workspace = true, optional = true }
 p256 = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-secretsmanager = { workspace = true, optional = true }
 vaultrs = { workspace = true, optional = true }
+bcrypt = { workspace = true }
+ipnetwork = { workspace = true }
+petgraph = { workspace = true }
+derive_more = { workspace = true }
+lazy_static = { workspace = true }
 tracing-appender = { workspace = true, optional = true }
 
 # Post-quantum cryptography dependencies
@@ -105,22 +110,26 @@ serial_test = "2.0"
 
 [features]
 # MVP-focused feature set
-default = ["security-essential", "vault"]
+default = ["security-essential", "vault", "user-auth", "oauth", "jwt-auth", "postgres", "api-keys", "metrics", "redis-sessions"]
 security-essential = ["crypto", "rate-limiting"]
 full-integration = []
 redis-sessions = []  # Redis dependencies are now always enabled
 postgres = ["dep:sqlx"]
 metrics = ["dep:prometheus"]
 api-keys = ["dep:sqlx"]
+# Authentication features
+user-auth = []
+oauth = []
+jwt-auth = []
 
 # Core dependencies
 crypto = ["ed25519-dalek"]
 rate-limiting = []
 monitoring = []
 post-quantum = [
-    "dep:pqcrypto-dilithium", 
-    "dep:pqcrypto-kyber", 
-    "dep:pqcrypto-sphincsplus", 
+    "dep:pqcrypto-dilithium",
+    "dep:pqcrypto-kyber",
+    "dep:pqcrypto-sphincsplus",
     "dep:pqcrypto-traits"
 ]
 hybrid-crypto = ["crypto", "post-quantum", "dep:p256"]

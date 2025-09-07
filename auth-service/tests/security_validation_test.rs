@@ -3,6 +3,7 @@
 //! This module contains security-focused tests that validate the fixes
 //! implemented in the code review process.
 
+use axum::Extension;
 use auth_service::auth_api::AuthState;
 use auth_service::auth_api::*;
 use chrono::Utc;
@@ -216,7 +217,7 @@ async fn test_security_no_panic_on_invalid_cookies() {
 
     // This should not panic even if cookie creation fails internally
     // (The implementation should handle cookie parsing errors gracefully)
-    let result = login(axum::extract::State(auth_state), axum::Json(request)).await;
+    let result = login(Extension(auth_state), axum::Json(request)).await;
 
     // The test mainly ensures no panic occurs during execution
     // The result might be an error due to password hashing, but no panic should occur
@@ -259,7 +260,7 @@ async fn test_security_integration_full_flow() {
     };
 
     let register_result = register(
-        axum::extract::State(auth_state.clone()),
+        Extension(auth_state.clone()),
         axum::Json(register_request),
     )
     .await;
@@ -273,7 +274,7 @@ async fn test_security_integration_full_flow() {
     };
 
     let login_result = login(
-        axum::extract::State(auth_state.clone()),
+        Extension(auth_state.clone()),
         axum::Json(login_request),
     )
     .await;

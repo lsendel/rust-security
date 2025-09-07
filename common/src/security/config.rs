@@ -532,7 +532,7 @@ mod tests {
 
         let config = UnifiedSecurityConfig::from_env().unwrap();
 
-        // Verify JWT defaults
+        // Verify JWT defaults (from_env uses standard defaults regardless of environment)
         assert_eq!(config.jwt.access_token_ttl_seconds, 900);
         assert_eq!(config.jwt.refresh_token_ttl_seconds, 86400);
         assert_eq!(config.jwt.algorithm, JwtAlgorithm::HS256);

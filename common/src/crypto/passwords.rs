@@ -676,4 +676,119 @@ mod tests {
         // Generated password should meet strength requirements
         assert!(ops.validate_password_strength(&password).is_ok());
     }
+
+    #[cfg(test)]
+    mod property_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn test_password_hash_verify_roundtrip(
+                password in "[a-zA-Z0-9!@#$%^&*()_+]{8,64}"
+            ) {
+                let config = PasswordConfig::default();
+                let ops = PasswordOperations::new(config)?;
+
+                let hash = ops.hash_password(&password)?;
+                let is_valid = ops.verify_password(&password, &hash)?;
+
+                prop_assert!(is_valid);
+            }
+
+            #[test] 
+            fn test_different_passwords_different_hashes(
+                password1 in "[a-zA-Z0-9!@#$%^&*()_+]{8,32}",
+                password2 in "[a-zA-Z0-9!@#$%^&*()_+]{8,32}"
+            ) {
+                prop_assume!(password1 != password2);
+                
+                let config = PasswordConfig::default();
+                let ops = PasswordOperations::new(config)?;
+
+                let hash1 = ops.hash_password(&password1)?;
+                let hash2 = ops.hash_password(&password2)?;
+
+                // Different passwords should produce different hashes
+                prop_assert_ne!(hash1, hash2);
+                
+                // Each password should only verify against its own hash
+                prop_assert!(ops.verify_password(&password1, &hash1)?);
+                prop_assert!(ops.verify_password(&password2, &hash2)?);
+                prop_assert!(!ops.verify_password(&password1, &hash2)?);
+                prop_assert!(!ops.verify_password(&password2, &hash1)?);
+            }
+
+            #[test]
+            fn test_same_password_different_salt_different_hash(
+                password in "[a-zA-Z0-9!@#$%^&*()_+]{12,32}"
+            ) {
+                let config = PasswordConfig::default();
+                let ops = PasswordOperations::new(config)?;
+
+                let hash1 = ops.hash_password(&password)?;
+                let hash2 = ops.hash_password(&password)?;
+
+                // Same password with different salts should produce different hashes
+                prop_assert_ne!(hash1, hash2);
+                
+                // Both should verify correctly
+                prop_assert!(ops.verify_password(&password, &hash1)?);
+                prop_assert!(ops.verify_password(&password, &hash2)?);
+            }
+
+            #[test]
+            fn test_password_generation_properties(
+                length in 8u8..=128u8
+            ) {
+                let config = PasswordConfig::default();
+                let ops = PasswordOperations::new(config)?;
+
+                let password = ops.generate_secure_password(length as usize)?;
+
+                // Generated password should have correct length
+                prop_assert_eq!(password.len(), length as usize);
+                
+                // Should meet strength requirements
+                prop_assert!(ops.validate_password_strength(&password).is_ok());
+                
+                // Should contain required character types for minimum security
+                if length >= 8 {
+                    let has_upper = password.chars().any(|c| c.is_ascii_uppercase());
+                    let has_lower = password.chars().any(|c| c.is_ascii_lowercase());
+                    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+                    
+                    // At least some character diversity (not all same type)
+                    prop_assert!(has_upper || has_lower || has_digit);
+                }
+            }
+
+            #[test]
+            fn test_password_strength_validation_properties(
+                base_password in "[a-zA-Z]{4,20}",
+                suffix in "[0-9]{1,4}",
+                special_chars in "[!@#$%^&*()_+]{0,8}"
+            ) {
+                let password = format!("{}{}{}", base_password, suffix, special_chars);
+                let config = PasswordConfig::default();
+                let ops = PasswordOperations::new(config)?;
+
+                let result = ops.validate_password_strength(&password);
+
+                // Validation should be consistent 
+                let result2 = ops.validate_password_strength(&password);
+                prop_assert_eq!(result.is_ok(), result2.is_ok());
+
+                // Password with sufficient length and diversity should pass
+                if password.len() >= 8 && !password.is_empty() {
+                    // Most generated passwords should be reasonably strong
+                    if password.chars().any(|c| c.is_ascii_uppercase()) &&
+                       password.chars().any(|c| c.is_ascii_lowercase()) &&
+                       password.chars().any(|c| c.is_ascii_digit()) {
+                        prop_assert!(result.is_ok());
+                    }
+                }
+            }
+        }
+    }
 }

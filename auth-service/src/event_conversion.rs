@@ -1,7 +1,7 @@
 //! Event conversion utilities for bridging core security and threat detection systems
 
 use crate::core::security::{SecurityEvent, SecurityEventType, ViolationSeverity};
-use crate::threat_types::{
+use crate::security::threat_detection::threat_types::{
     EventOutcome, ThreatSecurityEvent, ThreatSecurityEventType, ThreatSeverity,
 };
 

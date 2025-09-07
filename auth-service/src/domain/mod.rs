@@ -1,12 +1,15 @@
 //! Domain Layer
 //!
-//! Contains domain entities, value objects, and repository interfaces.
+//! This module contains the core business logic and domain entities.
+//! Following Domain-Driven Design principles, this layer is independent
+//! of infrastructure and presentation concerns.
 
 pub mod entities;
-pub mod repositories;
 pub mod value_objects;
+pub mod repositories;
+pub mod services;
 
-// Re-export main types for convenience
+// Re-export commonly used domain types
 pub use entities::*;
-pub use repositories::*;
 pub use value_objects::*;
+pub use services::*;

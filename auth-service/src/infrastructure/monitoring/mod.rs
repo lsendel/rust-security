@@ -6,7 +6,16 @@ pub mod observability;
 pub mod observability_init;
 pub mod tracing_config;
 // pub mod tracing_instrumentation;  // Temporarily disabled due to missing observability module
+pub mod metrics;
+pub mod non_human_monitoring;
 pub mod performance_monitoring;
+pub mod security_logging_enhanced;
+pub mod security_metrics;
+
+// Re-export with expected name
+pub mod security_logging {
+    pub use super::security_logging_enhanced::*;
+}
 
 use std::collections::HashMap;
 use std::sync::Arc;

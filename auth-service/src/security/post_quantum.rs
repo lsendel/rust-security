@@ -47,6 +47,33 @@ pub enum PostQuantumError {
     HybridOperationFailed(String),
 }
 
+/// Classical algorithms for hybrid crypto
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ClassicalAlgorithm {
+    Rsa2048,
+    EcdsaP256,
+    Ed25519,
+}
+
+/// Migration modes for transitioning to PQ crypto
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MigrationMode {
+    ClassicalOnly,
+    Hybrid,
+    PostQuantumOnly,
+}
+
+/// Performance optimization modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PerformanceMode {
+    Speed,
+    Size,
+    Balanced,
+}
+
+/// Post-quantum algorithms (alias for compatibility)
+pub type PQAlgorithm = PostQuantumAlgorithm;
+
 /// Security levels for post-quantum cryptography
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecurityLevel {
@@ -881,6 +908,51 @@ pub struct MigrationPhase {
     pub description: String,
     pub duration_days: u32,
     pub actions: Vec<String>,
+}
+
+/// Post-quantum configuration structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PQConfig {
+    pub migration_mode: MigrationMode,
+    pub performance_mode: PerformanceMode,
+    pub security_level: SecurityLevel,
+    pub classical_algorithm: ClassicalAlgorithm,
+    pub pq_algorithm: PQAlgorithm,
+    pub enable_migration_mode: bool,
+    pub enable_hybrid_mode: bool,
+}
+
+impl Default for PQConfig {
+    fn default() -> Self {
+        Self {
+            migration_mode: MigrationMode::Hybrid,
+            performance_mode: PerformanceMode::Balanced,
+            security_level: SecurityLevel::Level3,
+            classical_algorithm: ClassicalAlgorithm::Ed25519,
+            pq_algorithm: PQAlgorithm::Dilithium(DilithiumVariant::Dilithium3),
+            enable_migration_mode: true,
+            enable_hybrid_mode: true,
+        }
+    }
+}
+
+/// Post-quantum configuration (alias for compatibility)
+pub type PostQuantumConfig = PQConfig;
+
+/// Post-quantum crypto manager
+#[derive(Debug)]
+pub struct PQCryptoManager {
+    config: PQConfig,
+}
+
+impl PQCryptoManager {
+    pub fn new(config: PQConfig) -> Result<Self, PostQuantumError> {
+        Ok(Self { config })
+    }
+
+    pub fn config(&self) -> &PQConfig {
+        &self.config
+    }
 }
 
 #[cfg(test)]

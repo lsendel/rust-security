@@ -11,6 +11,7 @@
 //! - **Performance**: Optimized for high-throughput scenarios
 
 pub mod basic_cache;
+pub mod general_cache;
 pub mod intelligent_cache;
 pub mod policy_cache;
 pub mod token_cache;

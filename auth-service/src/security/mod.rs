@@ -16,6 +16,7 @@ pub mod jwt;
 #[cfg(feature = "post-quantum")]
 pub mod post_quantum;
 pub mod rate_limiting;
+pub mod threat_detection;
 
 // Re-export rate limiting functionality
 pub use rate_limiting::{
@@ -45,3 +46,6 @@ pub use post_quantum::{
     MigrationHelper, PostQuantumAlgorithm, PostQuantumConfig, PostQuantumError, PostQuantumKeyPair,
     PostQuantumMetrics, PostQuantumService, PostQuantumSignature, SecurityLevel,
 };
+
+// Re-export threat detection functionality
+pub use threat_detection::*;

@@ -332,7 +332,7 @@ impl Default for ClientMetadata {
 }
 
 #[cfg(feature = "api-keys")]
-use crate::api_key_store::ApiKeyStore;
+use crate::application::api::api_key_store::ApiKeyStore;
 
 // ... (keep ClientAuthenticator and ClientMetadata structs}
 

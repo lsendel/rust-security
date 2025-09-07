@@ -2,7 +2,9 @@
 // Optimized token store implementation
 // This file contains performance-optimized versions of the token store operations
 
-use crate::IntrospectionRecord;
+// IntrospectionRecord moved to application layer - using placeholder for now
+// TODO: Move IntrospectionRecord to appropriate application layer module
+use crate::infrastructure::storage::store::hybrid::IntrospectionRecord;
 use anyhow::Result;
 use dashmap::DashMap;
 #[cfg(feature = "redis-sessions")]

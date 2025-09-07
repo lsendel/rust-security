@@ -13,7 +13,7 @@ use rand::RngCore;
 use tower_http::cors::CorsLayer;
 
 use crate::app::AppContainer;
-use crate::auth_api::AuthState;
+use crate::application::auth::auth_api::AuthState;
 use crate::handlers;
 
 /// Generate a cryptographically secure random secret for JWT signing
@@ -53,8 +53,11 @@ pub fn create_mvp_router(_container: AppContainer) -> Router<AuthState> {
 
     Router::new()
         // === Core OAuth2 Endpoints ===
-        .route("/oauth/token", post(crate::auth_api::token))
-        // .route("/oauth/introspect", post(crate::auth_api::introspect)) // TODO: Implement introspect endpoint
+        .route(
+            "/oauth/token",
+            post(crate::application::auth::auth_api::token),
+        )
+        // .route("/oauth/introspect", post(crate::application::auth::auth_api::introspect)) // TODO: Implement introspect endpoint
         // === Administrative Endpoints ===
         // .route("/admin/revoke", post(handlers::admin::revoke_token)) // TODO: Implement admin handlers
         // === Discovery Endpoints ===

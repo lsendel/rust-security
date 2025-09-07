@@ -1,11 +1,32 @@
 use async_trait::async_trait;
 use common::{AuthCodeRecord, ScimGroup, ScimUser, Store, TokenRecord};
 use deadpool_redis::{redis::AsyncCommands, Config, Runtime};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
+
+// Temporary placeholder - IntrospectionRecord should be moved to application layer
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntrospectionRecord {
+    pub token: String,
+    pub active: bool,
+    pub scope: Option<String>,
+    pub client_id: Option<String>,
+    pub username: Option<String>,
+    pub exp: Option<i64>,
+    pub iat: Option<i64>,
+    pub nbf: Option<i64>,
+    pub sub: Option<String>,
+    pub aud: Option<String>,
+    pub iss: Option<String>,
+    pub jti: Option<String>,
+    pub mfa_verified: bool,
+    pub token_type: Option<String>,
+    pub token_binding: Option<String>,
+}
 
 // This new struct encapsulates all storage logic.
 // It maintains the original behavior: in-memory for users/groups,
@@ -96,12 +117,12 @@ impl HybridStore {
     pub async fn get_token_record(
         &self,
         token: &str,
-    ) -> Result<Option<crate::IntrospectionRecord>, crate::shared::error::AppError> {
+    ) -> Result<Option<IntrospectionRecord>, crate::shared::error::AppError> {
         // Try to get from the Store trait implementation and convert
         match Store::get_token_record(self, token).await {
             Ok(Some(token_record)) => {
                 // Convert TokenRecord to IntrospectionRecord
-                Ok(Some(crate::IntrospectionRecord {
+                Ok(Some(IntrospectionRecord {
                     token: token.to_string(),
                     active: true,
                     scope: token_record.scope,
@@ -131,7 +152,7 @@ impl HybridStore {
     pub async fn set_token_record(
         &self,
         token: &str,
-        record: &crate::IntrospectionRecord,
+        record: &IntrospectionRecord,
         #[cfg_attr(not(feature = "redis-sessions"), allow(unused_variables))] ttl_secs: Option<u64>,
     ) -> Result<(), crate::shared::error::AppError> {
         // Convert IntrospectionRecord to TokenRecord for storage

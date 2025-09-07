@@ -220,10 +220,36 @@ jobs:
         
     - name: Generate test coverage report
       run: |
+        # Install coverage tools
         cargo install cargo-tarpaulin --locked
+        cargo install cargo-llvm-cov --locked
+        
+        # Generate coverage with tarpaulin (primary)
         cargo tarpaulin --verbose --all-features --workspace --timeout 120 \
           --exclude-files="tests/*" \
-          --out Xml --output-dir coverage/
+          --out Xml --out Html --output-dir coverage/
+          
+        # Fallback to llvm-cov if tarpaulin fails
+        if [ $? -ne 0 ]; then
+          echo "Tarpaulin failed, trying llvm-cov..."
+          cargo llvm-cov --workspace --lcov --output-path coverage/lcov.info || true
+        fi
+        
+        # Ensure minimum coverage threshold (85%)
+        if [ -f coverage/cobertura.xml ]; then
+          python3 -c "
+import xml.etree.ElementTree as ET
+tree = ET.parse('coverage/cobertura.xml')
+root = tree.getroot()
+coverage = float(root.get('line-rate', '0')) * 100
+print(f'Coverage: {coverage:.1f}%')
+if coverage < 85:
+    print(f'Coverage {coverage:.1f}% is below minimum 85%')
+    exit(1)
+else:
+    print(f'Coverage {coverage:.1f}% meets minimum threshold')
+"
+        fi
           
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
